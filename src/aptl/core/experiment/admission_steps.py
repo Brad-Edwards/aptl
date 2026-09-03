@@ -1,5 +1,5 @@
 """Cross-artifact identity joins, per-condition planning-only feasibility,
-and source-set projection for ACES experiment admission (ADR-047
+and source-set projection for RAES experiment admission (ADR-047
 "Experiment-controller boundary", Stage 5 / EXP-002 / issue #438).
 
 Split out of :mod:`aptl.core.experiment.admission` to keep that module
@@ -15,21 +15,28 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from aces_backend_protocols.manifest import BackendManifest
-from aces_contracts.contracts import ExperimentCaptureSpecModel, ExperimentReferenceModel, ExperimentTaskModel
-from aces_contracts.experiment_spec import ExperimentSpecModel
-from aces_sdl import SDLInstantiationError
-from aces_sdl.canonical import SDLCanonicalDigest, canonical_instantiated_sdl_digest
-from aces_sdl.instantiate import instantiate_scenario
-from aces_sdl.scenario import InstantiatedScenario, Scenario
+from raes_backend_protocols.manifest import BackendManifest
+from raes_contracts.contracts import ExperimentCaptureSpecModel, ExperimentReferenceModel, ExperimentTaskModel
+from raes_contracts.experiment_spec import ExperimentSpecModel
+from raes import SDLInstantiationError
+from raes.canonical import SDLCanonicalDigest, canonical_instantiated_sdl_digest
+from raes.instantiate import instantiate_scenario
+from raes.scenario import InstantiatedScenario, Scenario
 
 from aptl.core.experiment.admission_artifacts import ResolvedArtifactSource
 from aptl.core.experiment.apparatus import plan_condition_feasibility, require_feasible_plan
-from aptl.core.experiment.errors import AdmissionRejection, diagnostic, normalize_aces_failure
+from aptl.core.experiment.errors import AdmissionRejection, diagnostic, normalize_raes_failure
 from aptl.core.experiment.policy import AdmissionPolicy
 from aptl.core.experiment.resolver import ResolvedArtifact
 from aptl.core.experiment.spec_loading import load_capture_spec
+
+if TYPE_CHECKING:
+    from aptl.core.experiment.bindings import (
+        AdmittedConditionBindings,
+        ParticipantManifestMap,
+    )
 
 _ADDRESS_TASK_REF = "task_ref"
 _ADDRESS_SCENARIO_REF = "intended_scenario_ref"
@@ -223,14 +230,18 @@ def _instantiate_for_digest(
         return instantiate_scenario(scenario, parameters)
     except SDLInstantiationError as exc:
         raise AdmissionRejection(
-            normalize_aces_failure(exc, address=address, code=_CODE_CONDITION_INSTANTIATION_FAILED)
+            normalize_raes_failure(exc, address=address, code=_CODE_CONDITION_INSTANTIATION_FAILED)
         ) from exc
 
 
 def _plan_conditions(
-    spec: ExperimentSpecModel, scenario: Scenario, *, backend_manifest: BackendManifest
+    spec: ExperimentSpecModel,
+    scenario: Scenario,
+    *,
+    backend_manifest: BackendManifest,
+    admitted_bindings: Mapping[str, AdmittedConditionBindings] | None = None,
 ) -> tuple[dict[str, str], str | None]:
-    """Run the planning-only ACES reference processor over every unique
+    """Run the planning-only RAES reference processor over every unique
     condition binding (flat allocation: one empty binding) and derive each
     binding's canonical instantiated-scenario digest.
 
@@ -248,7 +259,19 @@ def _plan_conditions(
         allocation = spec.run_plan.allocation
         for condition_id in allocation.compared_conditions:
             assignment = allocation.condition_assignments[condition_id]
-            parameters = {p.name: p.value for p in assignment.required_parameters}
+            condition_bindings = (
+                admitted_bindings.get(condition_id)
+                if admitted_bindings is not None
+                else None
+            )
+            parameters = (
+                dict(condition_bindings.scenario_parameters)
+                if condition_bindings is not None
+                else {
+                    parameter.name: parameter.value
+                    for parameter in assignment.required_parameters
+                }
+            )
             address = f"run_plan.allocation.condition_assignments.{condition_id}"
 
             result = plan_condition_feasibility(scenario, parameters, backend_manifest=backend_manifest)
@@ -300,14 +323,20 @@ class CaptureResolution:
 
 def _build_source_set_projection(
     *,
+    experiment_root: ResolvedArtifact,
     task: TaskResolution,
     scenario: ScenarioResolution,
     capture: CaptureResolution,
     flat_instantiated_digest: str | None,
+    binding_descriptor_digest: str | None,
+    participant_manifests: ParticipantManifestMap,
 ) -> dict[str, object]:
     """Build the deterministic source-set projection dict that admission hashes into source_set_digest."""
     projection: dict[str, object] = {
-        "schema": "aptl-experiment-source-set/v1",
+        "schema": "aptl-experiment-source-set/v2",
+        "experiment_authoring_input": {
+            "resolved_digest": experiment_root.digest,
+        },
         "task": {
             "task_id": task.task.task_id,
             "task_version": task.task.task_version,
@@ -327,7 +356,20 @@ def _build_source_set_projection(
             }
             for capture_spec, artifact in zip(capture.specs, capture.artifacts, strict=True)
         },
+        "participant_manifests": [
+            {
+                "participant_address": key[0],
+                "implementation_name": key[1],
+                "implementation_version": key[2],
+                "manifest_version": key[3],
+                "manifest_ref": binding.manifest_ref,
+                "manifest_digest": binding.manifest_digest,
+            }
+            for key, binding in sorted(participant_manifests.items())
+        ],
     }
     if flat_instantiated_digest is not None:
         projection["flat_instantiated_scenario_digest"] = flat_instantiated_digest
+    if binding_descriptor_digest is not None:
+        projection["binding_descriptor_digest"] = binding_descriptor_digest
     return projection

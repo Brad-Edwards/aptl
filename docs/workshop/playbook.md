@@ -1,11 +1,11 @@
 # Workshop Playbook
 
-A facilitator guide for an introductory, hands-on cyber workshop built on APTL
-and the full TechVault range. The audience is undergraduate and graduate
-computer-science students with little or no prior security background. Students
-run their own lab and drive it with their own AI agent over MCP. The guided
-portion (sections 1 to 10) runs about 60 minutes, followed by open play
-(section 11).
+A facilitator guide for an introductory, hands-on cyber workshop built on
+APTL's `guided-purple` participant profile. The audience is undergraduate and
+graduate computer-science students with little or no prior security
+background. Students run the bounded TechVault attack-detect-investigate loop
+and drive it with their own AI agent over MCP. The guided portion (sections 1
+to 10) runs about 60 minutes, followed by bounded open play (section 11).
 
 The times below are estimates for a beginner cohort, not measurements from a
 live group. The companion [Lab Walkthrough](walkthrough.md) gives the exact
@@ -13,16 +13,19 @@ commands and agent prompts for every hands-on step.
 
 ## Before you start
 
-Students, beforehand: complete the per-OS prerequisites in the
-[Lab Walkthrough](walkthrough.md), boot the lab with `aptl lab start`, confirm
-health with `aptl lab status`, and wire the agent to the lab's MCP servers.
-Facilitator: bring your own lab up and open the dashboards on the projector.
+For an appliance release produced by issue #823, staging and qualification
+happen before delivery. Students use only its participant surface. For a
+developer preview, complete the prerequisites in the
+[Lab Walkthrough](walkthrough.md), start the `techvault-attacker-target`
+scenario with the profile config, confirm health, and register exactly the
+three profile MCP servers. Facilitators can use management access for support,
+but management commands are not part of participant acceptance.
 
 If students cannot run Docker locally, use the
 [Emergency Workshop Rollout Runbook](emergency-rollout.md) to prepare a
-short-lived hosted fleet. Treat that path as a contingency: prove every host
-with the same walkthrough before students use it, and tear down cloud resources
-immediately after the event.
+short-lived legacy developer-host fleet. That is an unqualified contingency,
+not the sealed participant appliance or hosted-seat contract. Tear down its
+cloud resources immediately after the event.
 
 ## 1. Intro (about 5 min)
 
@@ -30,8 +33,9 @@ Set the frame and the hook.
 
 - Introduce yourself and the plan: a whirlwind tour of security by doing it.
 - The hook: in the next hour you attack a company, then catch yourself doing it.
-- Safety: this is an isolated range on your own machine. Nothing leaves it, and
-  you can break it and reset with `aptl lab stop -v`.
+- Safety: this is an isolated range. `aptl lab stop -v` performs the clean
+  inner reset measured by this profile; an appliance release may additionally
+  offer disposable-seat replacement.
 - The agenda in one line: range, agents, attacks, defense, do both, purple.
 
 ## 2. Cyber ranges (about 5 min)
@@ -44,7 +48,7 @@ Explain what a range is, why they exist, and what you learn from one.
   range gives real repetitions at no risk.
 - What you learn: which attacks are noisy versus quiet, whether detections
   work, and how analysts (and now agents) actually operate.
-- Show `aptl lab status` and name the parts: an enterprise, a SOC, and an
+- Show `aptl lab status` and name the parts: a monitored victim, Wazuh, and an
   attacker box.
 
 ## 3. Agents in cyber (about 5 min)
@@ -65,45 +69,40 @@ Attacks are a sequence, and defenders try to catch each step.
 - Walk the chain plainly: reconnaissance, then gaining access, then acting on
   the objective such as stealing data or moving laterally.
 - Each step leaves traces that the defensive side can detect.
-- Preview: students run reconnaissance and an access step against TechVault,
+- Preview: students generate failed authentication attempts against TechVault,
   then go find the traces.
 
 ## 5. Offensive tools (about 5 min)
 
 Meet the attacker's toolbox on the Kali box before using it.
 
-- Kali is the red-team host, loaded with real tools: `nmap` for reconnaissance,
-  `smbclient` for file shares, `curl` and web tooling for web attacks, and
-  `msfconsole` for exploitation.
+- Kali is the red-team host. The required profile uses its standard shell and
+  SSH tooling to generate a bounded, noisy authentication attack.
 - The agent reaches these through the `kali_run_command` MCP tool, which runs
   real commands on Kali and returns the output.
-- Kali sits on the TechVault networks, so it can reach the internal and DMZ
-  hosts.
+- Kali reaches the monitored victim through the TechVault internal network.
 
 ## 6. Attack, hands-on (about 12 min)
 
-Students drive their agent through reconnaissance and one attack. Let students
-phrase the prompts their own way. The examples below are starting points, and
-all are verified to work.
+Students first prove the real Kali backend, then generate one bounded attack.
+Let students phrase the prompts their own way.
 
-Reconnaissance prompt:
+Backend prompt:
 
-> Use the Kali tools to scan the TechVault internal network and list the hosts
-> and open services you find.
+> Use the Kali tool to run `id`.
 
-Expect the domain controller (ports 445 and 53), the database (port 5432), the
-file server (port 445), the victim host (port 22), and the web application.
+Expect `uid=1000(kali)`.
 
-Then pick an attack, any or all of these:
+Attack prompt:
 
-- File share: connect to the file server `files.techvault.local` anonymously
-  and list its shares.
-- Web application: probe the TechVault web application for SQL injection.
-- Victim: attempt an SSH brute-force against the victim host, which is
-  deliberately noisy.
+> From Kali, make several failed SSH login attempts with made-up usernames
+> against the monitored victim.
 
-Narrate as students go. Ask which kill-chain step each action maps to, and
-which actions are loud.
+The failed authentication attempts are deliberately noisy and produce Wazuh
+rule 5710 alerts.
+
+Narrate as students go. Ask which kill-chain step the action maps to and why it
+is loud.
 
 Facilitator watch-fors: if an agent refuses, remind it that this is an
 authorized lab and rephrase the request as a security exercise. If an agent
@@ -123,16 +122,16 @@ The defender's job, and where it happens.
 
 Meet the TechVault SOC and what each tool does.
 
-- Wazuh is the SIEM and host-based detection layer. Agents on hosts feed
-  alerts.
-- Suricata is network intrusion detection and watches traffic.
-- MISP is threat intelligence and tracks known-bad indicators.
-- TheHive and Cortex provide case management and automated analysis of
-  observables.
-- Shuffle is the SOAR layer and automates response.
-- The agent reaches these through MCP tools as well, such as `indexer_query`
-  for Wazuh alerts. The dashboards give the human view, and Wazuh serves its
-  dashboard on `https://localhost:443`.
+- Wazuh is the SIEM and host-based detection layer. Its agent on the victim
+  feeds alerts to the manager and indexer.
+- The agent reaches the same alert through the `indexer_query` and
+  `wazuh_query_alerts` MCP tools.
+- The Wazuh dashboard supplies the required human view. The supported
+  participant appliance projects that capability through its participant
+  route rather than exposing the operator control plane.
+- OpenTelemetry, Tempo, and Grafana are required supporting services and are
+  included in the resource budget, but they are not additional participant
+  investigation tools.
 
 ## 9. Investigate, hands-on (about 12 min)
 
@@ -144,16 +143,15 @@ Find-it prompt:
 > Query the SOC (Wazuh) for alerts caused by our activity against TechVault in
 > the last few minutes. What fired, and from where?
 
-Expect an SSH-brute alert sourced from the Kali IP address and a SQL-injection
-alert.
+Expect an SSH authentication alert sourced from Kali.
 
 Explain-it prompt:
 
 > Pull the details of the top alert and explain in plain English what it
 > detected.
 
-Human view: open the Wazuh dashboard and find the same events. As a stretch
-goal, check MISP for known-bad indicators and open a case in TheHive.
+Human view: open the participant Wazuh dashboard projection and find the same
+rule 5710 event.
 
 Debrief: you attacked, the SOC saw it, and your agent investigated. That is the
 loop.
@@ -169,10 +167,15 @@ Name what the students just did, and why it matters.
 
 ## 11. Play (open)
 
-Let students loose on the full lab.
+Let students explore within the bounded profile.
 
-- Try a different attack and check whether the SOC catches it.
-- Try to do something the SOC misses, then discuss why coverage has gaps.
+- Vary the SSH usernames or timing and compare the alerts.
+- Try a different action against the victim and check whether Wazuh sees it.
 - Ask your agent to summarize every alert it caused, ranked by severity.
 - Two-person purple: one student drives red, one drives blue, and they race the
   loop.
+
+SMB enumeration, web SQL injection, MISP, TheHive, Cortex, Shuffle, and
+Suricata exercises belong to the full `techvault-operational` research stack.
+They are optional follow-on material, not a fallback required to complete this
+profile.

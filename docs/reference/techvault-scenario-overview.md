@@ -1,6 +1,6 @@
 # TechVault Scenario Overview
 
-TechVault is APTL's default scenario: an [ACES SDL](../sdl/index.md)-authored,
+TechVault is APTL's default scenario: an [RAES SDL](../sdl/index.md)-authored,
 multi-tier enterprise range for a fictional company. It is built as a live-fire
 purple-team environment, with intentionally vulnerable enterprise targets on one
 side, a production-grade SOC stack on the other, and a Kali attacker positioned
@@ -10,11 +10,11 @@ This page summarizes what the running range actually contains. For the fictional
 company backstory and OSINT-facing persona detail, see the
 [TechVault Company Profile](techvault-company-profile.md). For the authoring
 boundary and curated startup slices, see
-[Curated ACES Variants](../sdl/techvault-curated-variants.md).
+[Curated RAES Variants](../sdl/techvault-curated-variants.md).
 
 ## Where the scenario is defined
 
-- `scenarios/techvault-operational.sdl.yaml` is the canonical ACES SDL that
+- `scenarios/techvault-operational.sdl.yaml` is the canonical RAES SDL that
   public startup boots by default (nodes, vulnerabilities, accounts, content,
   and relationships).
 - `scenarios/catalog.json` registers the operational default plus the four
@@ -119,5 +119,12 @@ than the scenario name:
 | `techvault-observability-core` | OTEL collector, Tempo, Grafana | `otel` |
 
 Select a variant with `aptl lab start --scenario <catalog id>`. See
-[Curated ACES Variants](../sdl/techvault-curated-variants.md) for the full
+[Curated RAES Variants](../sdl/techvault-curated-variants.md) for the full
 authoring and proof detail.
+
+The versioned [Guided Purple Participant Profile](participant-profile.md)
+binds `techvault-attacker-target` to one supported workshop narrative, strict
+config, participant surface, readiness suite, and qualification budget. The
+curated scenario remains general RAES content; it is not renamed or forked for
+an event. The full `techvault-operational` stack remains the broader developer
+and research path.

@@ -86,6 +86,14 @@ nav:
     - RNG-001 Ephemeral Environments Preflight: architecture/rng-001-ephemeral-environments-preflight.md
     - DEP-003 Ephemeral Lifecycle Policy Preflight: architecture/dep-003-ephemeral-lifecycle-preflight.md
     - GRC Boundary Surface Vocabulary Preflight: architecture/grc-boundary-surface-vocabulary-preflight.md
+    - "Issue #557 Participant Implementation Binding Preflight": architecture/issue-557-participant-implementation-binding-preflight.md
+    - "Issue #821 In-Appliance Participant Workbench Preflight": architecture/issue-821-participant-workbench-preflight.md
+    - "Issue #823 Versioned Disposable Lab Appliance Preflight": architecture/issue-823-versioned-disposable-appliance-preflight.md
+    - "Issue #845 RAES Hard-Rename Preflight": architecture/issue-845-raes-hard-rename-preflight.md
+    - "Issue #866 TechVault Component Realization Preflight": architecture/issue-866-techvault-realization-contract-preflight.md
+    - "Issue #874 Scenario-Bundle Realization Roots Preflight": architecture/issue-874-scenario-bundle-realization-roots-preflight.md
+    - "Issue #878 Scenario Verification Plugin Seam Preflight": architecture/issue-878-scenario-verification-plugin-seam-preflight.md
+    - "Issue #905 Lab Lifecycle Robustness Preflight": architecture/issue-905-lab-lifecycle-robustness-preflight.md
   - Deployment: deployment.md
   - Components:
     - Wazuh SIEM: components/wazuh-siem.md
@@ -97,26 +105,33 @@ nav:
     - Reverse Engineering Container: components/reverse-engineering-container.md
     - MCP Integration: components/mcp-integration.md
     - MCP Smoke-Test Protocol: components/mcp-smoke-test-protocol.md
+    - Participant Workbench: components/participant-workbench.md
+    - Appliance Network Boundary: components/appliance-boundary.md
   - Scenarios:
     - Authoring Boundary: sdl/index.md
-    - Curated ACES Variants: sdl/techvault-curated-variants.md
-  - ACES:
-    - TechVault Static Validation Preflight: aces/techvault-static-validation-preflight.md
-    - TechVault Static Validation Gate: aces/techvault-static-validation-gate.md
-    - TechVault Live Validation Preflight: aces/techvault-live-validation-preflight.md
-    - TechVault Live Validation Gate: aces/techvault-live-validation-gate.md
-    - TechVault Curated Live Validation Preflight: aces/techvault-curated-live-validation-preflight.md
-    - TechVault Curated Live Validation Gate: aces/techvault-curated-live-validation-gate.md
-    - Paper Scenario Realization: aces/paper-scenario-realization.md
+    - Curated RAES Variants: sdl/techvault-curated-variants.md
+  - RAES:
+    - APP-1 Appliance Boundary Materialization Preflight: raes/app-1-appliance-boundary-materialization-preflight.md
+    - TechVault Static Validation Preflight: raes/techvault-static-validation-preflight.md
+    - TechVault Static Validation Gate: raes/techvault-static-validation-gate.md
+    - TechVault Live Validation Preflight: raes/techvault-live-validation-preflight.md
+    - TechVault Live Validation Gate: raes/techvault-live-validation-gate.md
+    - TechVault Curated Live Validation Preflight: raes/techvault-curated-live-validation-preflight.md
+    - TechVault Curated Live Validation Gate: raes/techvault-curated-live-validation-gate.md
+    - Bounded Participant Agency Readiness: raes/bounded-participant-agency-readiness.md
   - Testing:
     - Smoke Test Plan: testing/smoke-test-plan.md
     - Property-Based Parser Tests: testing/property-based-parser-tests.md
   - Reference:
     - Red Team Taxonomy: red-team-taxonomy.md
+    - Guided Purple Participant Profile: reference/participant-profile.md
+    - Disposable Appliance Release: reference/appliance-release.md
+    - Appliance Seat Launcher: reference/appliance-seat-launcher.md
     - TechVault Scenario Overview: reference/techvault-scenario-overview.md
     - TechVault Company Profile: reference/techvault-company-profile.md
     - TechVault OSINT Readiness: reference/techvault-osint-readiness.md
     - Experiment Runs: reference/experiment-runs.md
+    - Portable Evidence Bundle Export: reference/evidence-bundle-export.md
     - SOC Feature Spec: specs/soc-feature-spec.md
     - Web GUI Design Specification: specs/web-gui-design.md
     - Web GUI Design Preflight Guardrails: specs/web-gui-design-preflight.md
@@ -159,7 +174,7 @@ nav:
     - ADR-032 Conversation Surface Hardening: adrs/adr-032-conversation-surface-hardening.md
     - ADR-033 Agent Reasoning Trace Boundary: adrs/adr-033-agent-reasoning-trace-boundary.md
     - ADR-034 Lab-Managed SOC TLS CA: adrs/adr-034-lab-managed-soc-tls-ca.md
-    - ADR-035 ACES SDL Adoption: adrs/adr-035-aces-sdl-adoption.md
+    - ADR-035 RAES SDL Adoption: adrs/adr-035-raes-sdl-adoption.md
     - ADR-036 Snapshot Endpoint Registry: adrs/adr-036-snapshot-endpoint-registry.md
     - ADR-037 Docker Compose Backend Cohesion: adrs/adr-037-docker-compose-backend-cohesion.md
     - ADR-038 Docs Style Lint and Published Site: adrs/adr-038-docs-style-lint-and-published-site.md
@@ -168,12 +183,15 @@ nav:
     - ADR-041 Kali Capture Sidecar Ownership Boundary: adrs/adr-041-kali-capture-sidecar-ownership-boundary.md
     - ADR-042 Sidecar-Owned PTY Master: adrs/adr-042-sidecar-owned-pty-master.md
     - ADR-043 Suricata Runtime Config Ownership Boundary: adrs/adr-043-suricata-runtime-config-ownership-boundary.md
-    - ADR-044 ACES-Aligned Run Reproducibility Record: adrs/adr-044-aces-aligned-run-reproducibility-record.md
+    - ADR-044 RAES-Aligned Run Reproducibility Record: adrs/adr-044-raes-aligned-run-reproducibility-record.md
     - ADR-045 Ephemeral Lifecycle Policy Enforcement: adrs/adr-045-ephemeral-lifecycle-policy-enforcement.md
-    - ADR-046 Dynamic ACES Scenario Realization: adrs/adr-046-dynamic-aces-scenario-realization.md
-    - ADR-047 ACES Experiment Admission and Trial-Plan Boundary: adrs/adr-047-aces-experiment-admission-and-trial-plan-boundary.md
+    - ADR-046 Dynamic RAES Scenario Realization: adrs/adr-046-dynamic-raes-scenario-realization.md
+    - ADR-047 RAES Experiment Admission and Trial-Plan Boundary: adrs/adr-047-raes-experiment-admission-and-trial-plan-boundary.md
     - ADR-048 APTL Image-Free, Placement-Based Realization Envelope: adrs/adr-048-image-free-placement-realization.md
     - ADR-049 Sealed Disposable Lab Appliance: adrs/adr-049-sealed-disposable-lab-appliance.md
+    - ADR-051 Component-Level RAES Realization: adrs/adr-051-component-level-raes-realization.md
+    - ADR-052 Configured Participant Credential Sourcing: adrs/adr-052-configured-participant-credential-sourcing.md
+    - ADR-053 Pack-Backend Deployment-Serving Interaction Seam: adrs/adr-053-pack-backend-deployment-serving-interaction-seam.md
 
 extra:
   social:

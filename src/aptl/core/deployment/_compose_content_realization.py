@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from pathlib import Path
 
 from aptl.core.content_seed import build_content_volume_seeds
 from aptl.core.deployment.realization import DeploymentContentRealization
@@ -28,6 +29,21 @@ _CONTENT_DIRECTORY_EXIT = 11
 _CONTENT_MISSING_EXIT = 12
 
 
+def _host_path_kind(source: str) -> str | None:
+    """Return a host path's filesystem kind, or ``None`` when it does not exist.
+
+    A plain stat: the path is never created as a side effect of the observation,
+    so an unrealized bind source still discloses nothing.
+    """
+
+    host_path = Path(source)
+    if host_path.is_file():
+        return "file"
+    if host_path.is_dir():
+        return "directory"
+    return None
+
+
 class ComposeRealizationContentMixin:
     """Realize typed scenario content placements through Docker Compose."""
 
@@ -36,12 +52,17 @@ class ComposeRealizationContentMixin:
         content: Sequence[DeploymentContentRealization],
         *,
         seeder_image: str,
+        scenario_root: Path,
     ) -> None:
-        """Materialize typed content placements via the ADR-043 seed seam."""
+        """Materialize typed content placements via the ADR-043 seed seam.
+
+        Content sources are scenario-declared inputs; they resolve against
+        ``scenario_root`` (the bundle root), not the engine checkout (#874).
+        """
 
         if not content:
             return
-        seeds = build_content_volume_seeds(self._project_dir, content)
+        seeds = build_content_volume_seeds(scenario_root, content)
         self.seed_named_volumes(seeds, seeder_image=seeder_image)
 
     def observe_content_type(
@@ -85,6 +106,7 @@ class ComposeRealizationContentMixin:
             [
                 "docker",
                 "run",
+                *(["--pull=never"] if self._offline_staged else []),
                 "--rm",
                 "--user",
                 "0:0",
@@ -99,6 +121,66 @@ class ComposeRealizationContentMixin:
                 script,
                 "aptl-content-probe",
                 destination,
+            ],
+            timeout=_CONTENT_PROBE_TIMEOUT,
+        )
+        return {
+            _CONTENT_FILE_EXIT: "file",
+            _CONTENT_DIRECTORY_EXIT: "directory",
+        }.get(result.returncode)
+
+    def observe_bind_source_type(self, source: str) -> str | None:
+        """Classify a realized bind-mount source's kind on the Docker host.
+
+        Content delivered to an image node is a read-only bind, so the kind the
+        container sees at the destination is the kind of this source. The probe
+        is the same one :meth:`observe_content_type` uses -- a throwaway,
+        network-less container that mounts the path read-only and communicates
+        only an exit-code class -- so no binary from the observed container's
+        image runs and no bytes are read. That matters for a distroless image
+        (which has no ``test``) and for a run-to-completion node that has already
+        exited (which cannot be exec'd into at all).
+
+        ``--mount`` is used rather than ``-v`` deliberately: ``-v`` *creates* a
+        missing source as an empty directory, which would fabricate a
+        ``directory`` observation for a path that was never realized. ``--mount``
+        fails instead, and a failed probe observes nothing.
+        """
+
+        if not source.startswith("/"):
+            return None
+        # When bind sources are visible to the daemon they are on this same host
+        # (``supports_local_artifacts``), and APTL wrote them, so the kind is a
+        # direct host stat: no throwaway container per bind, and no dependency on
+        # a heavy image starting under the load of a just-booted range (which
+        # timed out the probe). A missing path returns None -- the stat never
+        # creates it -- so an unrealized bind still discloses nothing.
+        if getattr(self, "supports_local_artifacts", False):
+            return _host_path_kind(source)
+        script = (
+            f'if [ -f "$1" ]; then exit {_CONTENT_FILE_EXIT}; fi; '
+            f'if [ -d "$1" ]; then exit {_CONTENT_DIRECTORY_EXIT}; fi; '
+            f"exit {_CONTENT_MISSING_EXIT}"
+        )
+        result = self._run(
+            [
+                "docker",
+                "run",
+                *(["--pull=never"] if self._offline_staged else []),
+                "--rm",
+                "--user",
+                "0:0",
+                "--network",
+                "none",
+                "--entrypoint",
+                "/bin/sh",
+                "--mount",
+                f"type=bind,src={source},dst=/probe,readonly",
+                CONTENT_SEEDER_IMAGE,
+                "-c",
+                script,
+                "aptl-bind-source-probe",
+                "/probe",
             ],
             timeout=_CONTENT_PROBE_TIMEOUT,
         )

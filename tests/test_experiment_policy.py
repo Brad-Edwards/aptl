@@ -1,7 +1,7 @@
 """Tests for ``aptl.core.experiment.policy`` (ADR-047 admission policy and
 allocation-ordering resolution).
 
-``allocation_method`` is FREE TEXT in the ACES contract
+``allocation_method`` is FREE TEXT in the RAES contract
 (``ExperimentRunAllocationPlanModel.allocation_method: NonEmptyString``) —
 never evaluated, only mapped through a small controller-owned, versioned
 table to a supported :class:`OrderingKind`. An unmapped value fails closed.

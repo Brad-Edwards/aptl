@@ -12,6 +12,7 @@ from typer.testing import CliRunner
 
 from aptl.cli.main import app
 from aptl.core import lifecycle_enforce as le
+from aptl.core.lifecycle_policy import LifecycleBusyError
 from aptl.core.lab_types import LabResult, StartupOutcome
 
 
@@ -35,7 +36,8 @@ class TestEnforceCommand:
 
     def test_success_prints_message(self, runner, monkeypatch):
         monkeypatch.setattr(
-            le, "enforce_once",
+            le,
+            "enforce_once",
             lambda *a, **k: LabResult(success=True, message="lifecycle: no action (x)"),
         )
         result = runner.invoke(app, ["lab", "enforce"])
@@ -56,9 +58,12 @@ class TestEnforceCommand:
 
     def test_failure_exits_nonzero(self, runner, monkeypatch):
         monkeypatch.setattr(
-            le, "enforce_once",
+            le,
+            "enforce_once",
             lambda *a, **k: LabResult(
-                success=False, message="lifecycle: teardown (ttl_exceeded)", error="boom"
+                success=False,
+                message="lifecycle: teardown (ttl_exceeded)",
+                error="boom",
             ),
         )
         result = runner.invoke(app, ["lab", "enforce"])
@@ -66,7 +71,7 @@ class TestEnforceCommand:
 
     def test_busy_exits_nonzero(self, runner, monkeypatch):
         def raise_busy(*a, **k):
-            raise le.LifecycleBusyError("locked")
+            raise LifecycleBusyError("locked")
 
         monkeypatch.setattr(le, "enforce_once", raise_busy)
         result = runner.invoke(app, ["lab", "enforce"])

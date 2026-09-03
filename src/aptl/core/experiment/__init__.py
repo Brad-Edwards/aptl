@@ -1,4 +1,4 @@
-"""ACES experiment admission input layer (ADR-047, EXP-002 / issue #438).
+"""RAES experiment admission input layer (ADR-047, EXP-002 / issue #438).
 
 Deliberately empty. Downstream code imports the concrete submodules
 directly (``aptl.core.experiment.errors``, ``.policy``, ``.resolver``,

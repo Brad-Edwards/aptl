@@ -1,4 +1,4 @@
-"""Static gate for the ACES paper scenario realization (#573, #691).
+"""Static gate for the RAES paper scenario realization (#573, #691).
 
 Issue #691 remodels the paper scenario's evidence surfaces off content
 placement (ADR-046 Paper Scenario Evidence Modeling Addendum):
@@ -6,7 +6,7 @@ placement (ADR-046 Paper Scenario Evidence Modeling Addendum):
 - participant output is owned by the observation boundary and carried by the
   runtime participant-observation envelope — it is neither `content` nor an
   evidence requirement;
-- Wazuh corroboration and negative boundary checks are authored ACES
+- Wazuh corroboration and negative boundary checks are authored RAES
   `evidence_requirements` (capture intent, not proof of capture);
 - the participant runtime binding rides the compiled behavior specification's
   `x-aptl:participant-runtime-binding` governed extension, not planted content;
@@ -22,26 +22,36 @@ brief) rather than enshrining the prior six fail-closed rejections.
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from aces_processor.compiler import compile_runtime_model
-from aces_runtime.manager import RuntimeManager
-from aces_sdl import parse_sdl_file
+from raes_processor.compiler import compile_runtime_model
+from raes_runtime.manager import RuntimeManager
+from raes import parse_sdl_file
 
-from aptl.backends.aces import create_aptl_runtime_target
-from aptl.backends.aces_participant_actions import (
+from aptl.backends.raes import create_aptl_runtime_target
+from aptl.backends.raes_participant_actions import (
     participant_action_specs_from_runtime_model,
     _action_snapshot_entries,
 )
-from aptl.backends.aces_participant_bindings import (
+from aptl.backends.raes_participant_bindings import (
     _BINDING_EXTENSION_KEY,
     _BINDING_SCHEMA,
 )
-from aptl.backends.aces_profiles import select_backend_profiles
-from aptl.backends.aces_realization import interpret_provisioning_plan
+from aptl.backends.raes_profiles import select_backend_profiles
+from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
 from aptl.core.deployment.realization import DeploymentContentRealization
+from aptl.core.scenario_bundle import project_tree_bundle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PAPER_SCENARIO = PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
+
+
+def _bundle():
+    """The in-tree bundle for the paper scenario (issue #874).
+
+    Its root is the project directory these calls previously passed as
+    ``project_dir``, so the gate's realization is unchanged.
+    """
+    return project_tree_bundle(PROJECT_ROOT, PAPER_SCENARIO)
 
 
 def _paper_plan():
@@ -55,24 +65,34 @@ def _paper_plan():
         project_dir=PROJECT_ROOT,
         config=config,
         backend=MagicMock(),
+        bundle=_bundle(),
     )
     return scenario, model, RuntimeManager(target).plan(scenario), config
 
 
-def _assert_paper_scoring_chain_is_not_supported(plan) -> None:
-    # ADR-073 removes the deprecated `metrics`/`evaluations`/`tlos`/`goals`/
-    # `scoring` chain from the authored SDL surface entirely, so the planner no
-    # longer emits diagnostics for it. Objective success is now authored via
-    # `propositions:`/`assertions:` (consumed structurally by
-    # `objectives.*.success.assertions`), but APTL's evaluator manifest
-    # deliberately narrows its declared runtime-evaluated surface to
-    # `conditions`/`objectives` only (issue #749) -- it does not claim to
-    # evaluate raw `propositions`/`assertions` sections itself.
+def _assert_paper_scoring_chain_admitted_not_projected(plan) -> None:
+    # ADR-069 §3 assigns the backend evaluator the job of projecting
+    # objective/proposition/terminal-condition facts, so APTL declares the
+    # `propositions`/`assertions` sections (issue #889 supersedes the #749
+    # narrowing, which was an under-declaration: APTL already evaluates
+    # objectives, which are composed of these). The paper's boolean observed-
+    # state scoring chain is therefore admitted with no evaluator diagnostics.
+    #
+    # But APTL projects a proposition-truth result only for an assertion it can
+    # genuinely corroborate: the ADR-088 service-materialization readback on the
+    # `api_response` channel. The paper's propositions are evidenced on the
+    # participant/`log` channels APTL does not yet project from, so APTL
+    # fabricates no truth for them -- their truth stays unresolved. (RAES's
+    # plan-time admission does not yet check a proposition's evidence channels
+    # against the evaluator's supported set; that granularity gap is filed
+    # upstream, and is why admission alone cannot bound this.)
+    from raes_contracts.runtime_state import RuntimeSnapshot
+
+    from aptl.backends._raes_proposition_truth import project_proposition_truth_results
+
     diagnostics = {(d.code, d.address) for d in plan.diagnostics}
-    assert diagnostics == {
-        ("evaluator.unsupported-section", "evaluation.propositions"),
-        ("evaluator.unsupported-section", "evaluation.assertions"),
-    }
+    assert diagnostics == set()
+    assert project_proposition_truth_results(plan.evaluation, RuntimeSnapshot()) == {}
 
 
 def test_paper_scenario_compiles_with_participant_runtime_artifacts():
@@ -92,7 +112,7 @@ def test_paper_scenario_compiles_with_participant_runtime_artifacts():
     assert binding["schema_version"] == _BINDING_SCHEMA
     assert binding["command"]["argv"][:2] == ["bash", "-lc"]
 
-    # Evidence surfaces are authored ACES evidence requirements, not content.
+    # Evidence surfaces are authored RAES evidence requirements, not content.
     # `objective-truth-evidence` is added by the ADR-073 migration: an
     # observed-state proposition must cite at least one evidence requirement,
     # so the compiled objective-success surface gets its own requirement id.
@@ -113,20 +133,20 @@ def test_paper_scenario_compiles_with_participant_runtime_artifacts():
         "participant.observation-boundary.paper-agent-view"
         in model.observation_boundaries
     )
-    _assert_paper_scoring_chain_is_not_supported(plan)
+    _assert_paper_scoring_chain_admitted_not_projected(plan)
     assert not (
-        PROJECT_ROOT / "src/aptl/backends/aces_paper_participant_actions.py"
+        PROJECT_ROOT / "src/aptl/backends/raes_paper_participant_actions.py"
     ).exists()
 
 
 def test_paper_scenario_content_surface_realizes_with_no_rejection():
     _scenario, _model, plan, config = _paper_plan()
-    _assert_paper_scoring_chain_is_not_supported(plan)
+    _assert_paper_scoring_chain_admitted_not_projected(plan)
 
     realization = interpret_provisioning_plan(
         plan=plan.provisioning,
-        project_dir=PROJECT_ROOT,
         config=config,
+        bundle=_bundle(),
     )
 
     # #691: every remaining content placement must lower to a typed
@@ -149,7 +169,7 @@ def test_paper_scenario_content_surface_realizes_with_no_rejection():
     task_brief = content_placements[0].content
     assert isinstance(task_brief, DeploymentContentRealization)
     assert task_brief.content_name == "task-brief"
-    assert task_brief.volume_suffix == "kali_operations"
+    assert task_brief.volume_suffix == ""
     assert task_brief.dest_relpath == "scenario/task.md"
     assert task_brief.source_kind == "inline-text"
 
@@ -201,7 +221,7 @@ def test_paper_observation_boundary_hides_evaluator_and_negative_surfaces():
     specs = participant_action_specs_from_runtime_model(
         model,
         provisioning_plan=plan.provisioning,
-        project_dir=PROJECT_ROOT,
+        bundle=_bundle(),
         config=config,
     )
     spec = specs["participant.behavior.paper-agent"]

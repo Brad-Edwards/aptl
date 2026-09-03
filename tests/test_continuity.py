@@ -726,7 +726,8 @@ class TestAuditAndRevert:
         first = audit_and_revert(backend, ["victim"], kali_ips=kali_ips)
         second = audit_and_revert(backend, ["victim"], kali_ips=kali_ips)
 
-        assert first.events == [] and second.events == []
+        assert first.events == []
+        assert second.events == []
         # Each invocation does exactly one audit call per target; no
         # phantom delete attempts.
         assert all(c.cmd[:2] == ["iptables", "-S"] for c in backend.calls)
@@ -979,7 +980,7 @@ class TestDefaultTargets:
             "aptl-dns",
         }
 
-    def test_every_default_target_has_net_admin(self) -> None:
+    def test_every_default_target_has_net_admin(self, tmp_path) -> None:
         # Drift guard: if anyone removes NET_ADMIN from one of the default
         # targets, this test fails before the audit silently breaks in
         # production. webapp/fileshare/dns are realized generically from
@@ -987,21 +988,22 @@ class TestDefaultTargets:
         # capability grant lives in runtime.linux_capabilities.add, not
         # compose cap_add; ad is still Compose-managed, so its grant is
         # still checked there.
-        from aces_sdl import parse_sdl_file
+        from raes import parse_sdl_file
 
         from aptl.core.continuity import default_targets
 
+        from tests.helpers import techvault_scenario_path
+
         compose_text = (PROJECT_ROOT / "docker-compose.yml").read_text()
-        scenario = parse_sdl_file(
-            PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
-        )
+        scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
 
         for target in default_targets():
             node_name = target.removeprefix("aptl-")
             node = scenario.nodes.get(node_name)
             if node is not None and node.runtime is not None:
                 caps = node.runtime.linux_capabilities
-                assert caps is not None and "CAP_NET_ADMIN" in caps.add, (
+                assert caps is not None
+                assert "CAP_NET_ADMIN" in caps.add, (
                     f"{target}'s SDL node must declare "
                     "runtime.linux_capabilities.add: [CAP_NET_ADMIN]; iptables "
                     "audit will fail there otherwise. Either add the "
@@ -1152,4 +1154,5 @@ class TestContinuityIntegration:
         first = audit_and_revert(backend, [_LIVE_TARGET], kali_ips=kali_ips)
         second = audit_and_revert(backend, [_LIVE_TARGET], kali_ips=kali_ips)
 
-        assert first.events == [] and second.events == []
+        assert first.events == []
+        assert second.events == []

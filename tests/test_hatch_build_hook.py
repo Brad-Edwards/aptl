@@ -47,7 +47,8 @@ def _load_hatch_build() -> ModuleType:
     spec = importlib.util.spec_from_file_location(
         "hatch_build", REPO_ROOT / "hatch_build.py"
     )
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -229,3 +230,6 @@ def test_built_wheel_has_both_package_and_bundle(tmp_path: Path) -> None:
         for s in ("soc_certs", "lab-ssh", "wazuh_indexer_ssl_certs")
     )
     assert not any(n.endswith(".pyc") for n in names)
+    # Pack-specific serving providers are separate distributions and must not
+    # leak into the aptl-labs core wheel.
+    assert not any("aptl_techvault_pack_interaction" in n for n in names)

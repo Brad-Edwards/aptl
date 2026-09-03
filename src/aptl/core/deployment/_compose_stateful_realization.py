@@ -1,4 +1,4 @@
-"""Docker Compose bindings for ACES stateful realization resources."""
+"""Docker Compose bindings for RAES stateful realization resources."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ from pathlib import Path
 
 import yaml
 
-from aptl.core.certs import ensure_ssl_certs
+from aptl.core.certs import CertResult, ensure_ssl_certs
+from aptl.core.soc_ca import derive_soc_service_certs, ensure_soc_certs
 from aptl.core.credentials import (
     RENDERED_MANAGER_RELPATH,
     _atomic_write_secure,
@@ -16,11 +17,13 @@ from aptl.core.credentials import (
     sync_manager_config,
 )
 from aptl.core.deployment._compose_stateful_constants import (
+    CERTIFICATE_PROVENANCE,
     CERTIFICATE_ROOT_RELPATH,
     MIN_OVERRIDE_COMPOSE_VERSION,
+    SOC_CERT_PROFILE,
+    SOC_CERTS_ROOT_RELPATH,
     STATEFUL_OVERRIDE_RELPATH,
-    WAZUH_INDEXER_SERVICE,
-    WAZUH_MANAGER_SERVICE,
+    WAZUH_MANAGER_CONFIG_PROVENANCES,
 )
 from aptl.core.deployment._compose_stateful_graph import (
     compose_version,
@@ -32,35 +35,30 @@ from aptl.core.deployment._compose_stateful_model import (
     effective_stateful_model_errors as _effective_stateful_model_errors,
     stateful_override_payload,
 )
+from aptl.core.deployment._compose_stateful_readiness import (
+    ComposeStatefulReadinessMixin,
+    _load_stateful_env,
+)
 from aptl.core.deployment._compose_stateful_services import StatefulDumper
+from aptl.core.deployment._flag_signing_keys import (
+    FLAG_SIGNING_PROFILE_V2,
+    realize_flag_signing_keys,
+)
+from aptl.core.deployment._ssh_key_bundle import realize_ssh_key_bundle
 from aptl.core.deployment._stateful_certificates import validate_certificate_bundle
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
-    DeploymentNodeRealization,
     DeploymentRealizationSpec,
 )
-from aptl.core.env import (
-    EnvVars,
-    env_vars_from_dict,
-    find_placeholder_env_values,
-    load_dotenv,
-)
 from aptl.core.lab_types import LabResult
-from aptl.core.services import check_indexer_ready, check_manager_api_ready
 
 artifact_source_path = _artifact_source_path
 effective_stateful_model_errors = _effective_stateful_model_errors
 
 
-class ComposeStatefulRealizationMixin:
+class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
     """Validate and bind typed stateful resources before Compose startup."""
-
-    @property
-    def authenticated_readiness(self) -> dict[str, bool]:
-        """Return non-secret authenticated readiness observed this realization."""
-
-        return dict(getattr(self, "_stateful_authenticated_readiness", {}))
 
     def _validate_stateful_realization(
         self,
@@ -77,11 +75,16 @@ class ComposeStatefulRealizationMixin:
     def _write_stateful_realization_override(
         self,
         realization: DeploymentRealizationSpec,
+        scenario_root: Path,
     ) -> Path | None:
-        """Persist the stateful Compose override when resources require one."""
+        """Persist the stateful Compose override when resources require one.
+
+        The generated override is scenario-local; it is written under
+        ``scenario_root`` (the bundle root).
+        """
 
         return write_stateful_override(
-            self._project_dir,
+            scenario_root,
             self.project_name,
             realization,
         )
@@ -103,131 +106,94 @@ class ComposeStatefulRealizationMixin:
             error="Docker Compose 2.24.4 or later is required for stateful service ownership.",
         )
 
-    def _stateful_teardown_compose_files(self) -> tuple[Path, ...] | None:
-        """Return the persisted generated model so ``down -v`` owns its volumes."""
-
-        override = _canonical_generated_path(
-            self._project_dir,
-            STATEFUL_OVERRIDE_RELPATH,
-        )
-        if not override.is_file():
-            return None
-        return (self._project_dir / "docker-compose.yml", override)
-
     def _realize_stateful_prerequisites(
         self,
         realization: DeploymentRealizationSpec,
+        scenario_root: Path,
     ) -> LabResult | None:
-        """Materialize and verify every declared generated artifact."""
+        """Materialize and verify every declared generated artifact.
+
+        Generated artifacts land under ``scenario_root`` (the bundle root); the
+        operator credential source stays the control-plane ``project_dir/.env``.
+        """
 
         failure: LabResult | None = None
         for artifact in realization.generated_artifacts:
-            failure = (
-                self._realize_certificate_bundle(artifact)
-                if artifact.generator == "certificate_bundle"
-                else self._realize_rendered_config(artifact)
-            )
+            failure = self._realize_one_generated_artifact(artifact, scenario_root)
             if failure is not None:
                 break
         return failure
 
-    def _verify_stateful_authenticated_readiness(
+    def _realize_one_generated_artifact(
         self,
-        realization: DeploymentRealizationSpec,
+        artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
     ) -> LabResult | None:
-        """Authenticate to realized Wazuh APIs after container health settles."""
+        """Materialize one generated artifact, dispatched by generator kind."""
 
-        services = {
-            consumer.service_name
-            for artifact in realization.generated_artifacts
-            for consumer in artifact.consumers
-            if consumer.service_name in {WAZUH_INDEXER_SERVICE, WAZUH_MANAGER_SERVICE}
-        }
-        results: dict[str, bool] = {}
-        env: EnvVars | None = None
-        if services:
-            env, _placeholder_input = _load_stateful_env(self._project_dir)
-        failure: LabResult | None = None
-        if services and env is None:
-            failure = LabResult(
+        realizer = {
+            "certificate_bundle": self._realize_certificate_bundle,
+            "rendered_config": self._realize_rendered_config,
+            "ssh_key_bundle": self._realize_ssh_key_bundle,
+        }.get(artifact.generator)
+        if realizer is None:
+            return LabResult(
                 success=False,
-                error="Authenticated Wazuh readiness credentials are unavailable.",
+                error=(
+                    f"Generated artifact {artifact.address} has unsupported "
+                    f"generator {artifact.generator!r}."
+                ),
             )
-        elif services and env is not None:
-            nodes = {node.service_name: node for node in realization.nodes}
-            results = self._authenticated_readiness_results(services, nodes, env)
-        self._stateful_authenticated_readiness = results
-        if failure is None and results and not all(results.values()):
-            failure = LabResult(
+        return realizer(artifact, scenario_root)
+
+    @staticmethod
+    def _realize_ssh_key_bundle(
+        artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Generate the declared SSH key bundle under its owner-only staging root.
+
+        The staging root is the artifact's canonical source path; only a
+        consumer's selected, non-producer-private outputs are bind-mounted from
+        it, so the generated control-plane key never reaches a node.
+        """
+
+        staging_root = artifact_source_path(scenario_root, artifact)
+        try:
+            _canonical_generated_path(
+                scenario_root, staging_root.relative_to(scenario_root.resolve())
+            )
+        except ValueError:
+            return LabResult(
                 success=False,
-                error="Authenticated Wazuh readiness validation failed.",
+                error="SSH key bundle path failed containment validation.",
             )
-        return failure
-
-    def _authenticated_readiness_results(
-        self,
-        services: set[str],
-        nodes: dict[str | None, DeploymentNodeRealization],
-        env: EnvVars,
-    ) -> dict[str, bool]:
-        """Return authenticated readiness for each graph-owned Wazuh service."""
-
-        checks = (
-            (WAZUH_INDEXER_SERVICE, 9200),
-            (WAZUH_MANAGER_SERVICE, 55000),
-        )
-        return {
-            service: self._authenticated_service_ready(
-                service,
-                port,
-                nodes.get(service),
-                env,
+        error = realize_ssh_key_bundle(artifact, staging_root)
+        if error is not None:
+            return LabResult(
+                success=False,
+                error=f"SSH key bundle generation failed: {error}",
             )
-            for service, port in checks
-            if service in services
-        }
-
-    def _authenticated_service_ready(
-        self,
-        service: str,
-        container_port: int,
-        node: DeploymentNodeRealization | None,
-        env: EnvVars,
-    ) -> bool:
-        """Probe one graph-owned Wazuh API with the configured credentials."""
-
-        info: object = None
-        if node is not None and node.container_name:
-            try:
-                info = self.container_inspect(node.container_name)
-            except (BackendTimeoutError, OSError):
-                info = None
-        port = _published_host_port(info, container_port)
-        ready = False
-        if port is not None:
-            url = f"https://localhost:{port}"
-            if service == WAZUH_INDEXER_SERVICE:
-                ready = check_indexer_ready(
-                    url,
-                    env.indexer_username,
-                    env.indexer_password,
-                )
-            else:
-                ready = check_manager_api_ready(
-                    url,
-                    env.api_username,
-                    env.api_password,
-                )
-        return ready
+        return None
 
     def _realize_rendered_config(
         self,
         artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
     ) -> LabResult | None:
-        """Render the admitted manager config through ADR-028's writer."""
+        """Render an admitted ``rendered_config`` artifact, dispatched by provenance.
+
+        The rendered config is a scenario-local generated artifact written under
+        ``scenario_root``. Two producer profiles are implemented: the wazuh
+        cluster manager config (ADR-028; credential from the control-plane
+        ``project_dir/.env``) and the per-node flag-signing keys (#875).
+        """
+
+        if artifact.provenance == FLAG_SIGNING_PROFILE_V2:
+            return self._realize_flag_signing_keys(artifact, scenario_root)
 
         unsupported_binding = (
-            artifact.provenance != "config/wazuh_cluster/wazuh_manager.conf"
+            artifact.provenance not in WAZUH_MANAGER_CONFIG_PROVENANCES
             or len(artifact.outputs) != 1
             or artifact.outputs[0].path != RENDERED_MANAGER_RELPATH.name
         )
@@ -256,7 +222,7 @@ class ComposeStatefulRealizationMixin:
             else:
                 try:
                     output = sync_manager_config(
-                        self._project_dir,
+                        scenario_root,
                         env.wazuh_cluster_key,
                     )
                 except (OSError, ValueError) as exc:
@@ -276,53 +242,109 @@ class ComposeStatefulRealizationMixin:
             )
         return failure
 
+    @staticmethod
+    def _realize_flag_signing_keys(
+        artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Generate the per-node flag-signing keys under their staging root.
+
+        The staging root is the artifact's canonical source path; the mount
+        model binds only each consumer's own selected key, and the
+        producer-private seed is never mounted into a node.
+        """
+
+        staging_root = artifact_source_path(scenario_root, artifact)
+        try:
+            _canonical_generated_path(
+                scenario_root, staging_root.relative_to(scenario_root.resolve())
+            )
+        except ValueError:
+            return LabResult(
+                success=False,
+                error="Flag-signing key path failed containment validation.",
+            )
+        error = realize_flag_signing_keys(artifact, staging_root)
+        if error is not None:
+            return LabResult(
+                success=False,
+                error=f"Flag-signing key generation failed: {error}",
+            )
+        return None
+
     def _realize_certificate_bundle(
         self,
         artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
     ) -> LabResult | None:
-        """Generate and cryptographically validate a certificate bundle."""
+        """Generate and cryptographically validate a certificate bundle.
 
-        failure: LabResult | None = None
+        The bundle is a scenario-local generated artifact: it is produced under
+        ``scenario_root`` and read back from there (issue #874).
+        """
+
+        if artifact.provenance == SOC_CERT_PROFILE:
+            return self._realize_soc_certificate_bundle(artifact, scenario_root)
         try:
-            _canonical_generated_path(self._project_dir, CERTIFICATE_ROOT_RELPATH)
+            _canonical_generated_path(scenario_root, CERTIFICATE_ROOT_RELPATH)
         except ValueError:
-            failure = LabResult(
+            return LabResult(
                 success=False,
                 error="Certificate artifact path failed containment validation.",
             )
-        result = None
-        if failure is None:
-            result = ensure_ssl_certs(
-                self._project_dir,
-                run_command=self._run_certificate_command,
+        result = ensure_ssl_certs(
+            scenario_root,
+            run_command=self._run_certificate_command,
+        )
+        return _certificate_bundle_failure(artifact, scenario_root, result)
+
+    @staticmethod
+    def _realize_soc_certificate_bundle(
+        artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Generate the SOC CA + per-service certs (techvault:soc-certificate-profile/v1).
+
+        APTL issues the SOC CA and each service certificate through the same
+        ``ensure_soc_certs`` generator the in-tree lab uses (config/soc_certs);
+        nothing is accepted from the pack. Every declared output must be present
+        afterwards or the run fails closed (issue #875).
+        """
+
+        try:
+            _canonical_generated_path(scenario_root, SOC_CERTS_ROOT_RELPATH)
+        except ValueError:
+            return LabResult(
+                success=False,
+                error="SOC certificate path failed containment validation.",
             )
-            if not result.success:
-                failure = LabResult(
-                    success=False,
-                    error="Certificate artifact generation failed.",
-                )
-        if (
-            failure is None
-            and result is not None
-            and any(
-                not (result.certs_dir / output.path).is_file()
-                for output in artifact.outputs
-            )
-        ):
+        # Derive the service certificate set from the SDL-declared bundle outputs
+        # rather than a hardcoded registry, so APTL never decides the range's SOC
+        # service identity (issue #875, SDL-authority class remediation).
+        services = derive_soc_service_certs(
+            tuple(output.path for output in artifact.outputs)
+        )
+        result = ensure_soc_certs(scenario_root, services=services)
+        failure: LabResult | None = None
+        if not result.success:
             failure = LabResult(
                 success=False,
-                error=(
-                    f"Generated artifact {artifact.address} is missing declared output."
-                ),
+                error=f"SOC certificate generation failed: {result.error}",
             )
-        if failure is None and result is not None:
-            errors = validate_certificate_bundle(
-                result.certs_dir,
-                artifact.outputs,
-                self._project_dir / artifact.provenance,
-            )
-            if errors:
-                failure = LabResult(success=False, error=errors[0])
+        else:
+            missing = [
+                output.path
+                for output in artifact.outputs
+                if not (result.certs_dir / output.path).is_file()
+            ]
+            if missing:
+                failure = LabResult(
+                    success=False,
+                    error=(
+                        f"SOC certificate bundle {artifact.name} is missing declared "
+                        f"output(s): {missing}."
+                    ),
+                )
         return failure
 
     def _run_certificate_command(
@@ -339,64 +361,69 @@ class ComposeStatefulRealizationMixin:
             raise subprocess.TimeoutExpired(command, timeout) from exc
 
 
+def _certificate_bundle_failure(
+    artifact: DeploymentGeneratedArtifactRealization,
+    scenario_root: Path,
+    result: CertResult,
+) -> LabResult | None:
+    """Return the first failure in a generated certificate bundle, or ``None``.
+
+    The cryptographic bundle validator reads the in-tree provenance file
+    (config/certs.yml). An env-pack declares its bundle by profile identity
+    (techvault:wazuh-*-certificate-profile/v1), not a provenance document, so it
+    is validated by generator success + declared-output presence; the cert
+    generator issues the material itself, it is not accepted from the pack
+    (issue #875).
+    """
+
+    failure: LabResult | None = None
+    if not result.success:
+        failure = LabResult(
+            success=False,
+            error="Certificate artifact generation failed.",
+        )
+    elif any(
+        not (result.certs_dir / output.path).is_file() for output in artifact.outputs
+    ):
+        failure = LabResult(
+            success=False,
+            error=(
+                f"Generated artifact {artifact.address} is missing declared output."
+            ),
+        )
+    elif artifact.provenance == CERTIFICATE_PROVENANCE:
+        errors = validate_certificate_bundle(
+            result.certs_dir,
+            artifact.outputs,
+            scenario_root / artifact.provenance,
+        )
+        if errors:
+            failure = LabResult(success=False, error=errors[0])
+    return failure
+
+
 def write_stateful_override(
-    project_dir: Path,
+    scenario_root: Path,
     project_name: str,
     realization: DeploymentRealizationSpec,
 ) -> Path | None:
-    """Atomically write the contained Compose stateful-resource override."""
+    """Atomically write the contained Compose stateful-resource override.
+
+    The override is a scenario-local generated artifact, written under
+    ``scenario_root`` (the bundle root), not the engine checkout (issue #874).
+    """
 
     override_path: Path | None = None
     if realization.generated_artifacts or realization.persistent_volumes:
-        payload = stateful_override_payload(project_dir, project_name, realization)
+        payload = stateful_override_payload(scenario_root, project_name, realization)
         override_path = _canonical_generated_path(
-            project_dir,
+            scenario_root,
             STATEFUL_OVERRIDE_RELPATH,
         )
         _ensure_secure_dir(override_path.parent)
-        _canonical_generated_path(project_dir, STATEFUL_OVERRIDE_RELPATH)
+        _canonical_generated_path(scenario_root, STATEFUL_OVERRIDE_RELPATH)
         _atomic_write_secure(
             override_path,
             yaml.dump(payload, Dumper=StatefulDumper, sort_keys=True),
         )
     return override_path
-
-
-def _load_stateful_env(project_dir: Path) -> tuple[EnvVars | None, bool]:
-    """Load typed credentials and report whether placeholders caused rejection."""
-
-    env: EnvVars | None = None
-    placeholder_input = False
-    try:
-        raw_env = load_dotenv(project_dir / ".env")
-        placeholder_input = bool(find_placeholder_env_values(raw_env))
-        if not placeholder_input:
-            env = env_vars_from_dict(raw_env)
-    except (OSError, ValueError):
-        env = None
-    return env, placeholder_input
-
-
-def _published_host_port(info: object, container_port: int) -> int | None:
-    """Read one TCP host binding from container inspect output."""
-
-    port: int | None = None
-    if isinstance(info, dict):
-        network_settings = info.get("NetworkSettings")
-        ports = (
-            network_settings.get("Ports")
-            if isinstance(network_settings, dict)
-            else None
-        )
-        bindings = (
-            ports.get(f"{container_port}/tcp") if isinstance(ports, dict) else None
-        )
-        binding = bindings[0] if isinstance(bindings, list) and bindings else None
-        value = binding.get("HostPort") if isinstance(binding, dict) else None
-        try:
-            candidate = int(value)
-        except (TypeError, ValueError):
-            candidate = 0
-        if 1 <= candidate <= 65535:
-            port = candidate
-    return port

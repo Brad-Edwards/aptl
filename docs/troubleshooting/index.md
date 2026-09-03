@@ -211,23 +211,26 @@ Symptom on a machine that has run an older aptl-labs release before the
 `org.aptl.realization.network=true` label was introduced:
 
 ```
-Lab start failed: ACES runtime handoff failed: ...
+Lab start failed: RAES runtime handoff failed: ...
   Existing network aptl_aptl-dmz does not match realized network dmz-net:
   label org.aptl.realization.network expected 'true', found ''.
 ```
 
-The stale networks were created without the label the current version
-expects. `aptl lab stop` (graceful) does not always remove them. Remove
-by name and retry:
+The stale networks were created without the realization label the current
+version expects. Current APTL teardown removes all networks carrying the
+validated Compose project label, including older networks without the newer
+realization label. Use the project-scoped reset and retry:
 
 ```bash
 aptl lab stop
-docker network ls --filter name=aptl \
-  --format '{{.Name}}\t{{.Labels}}' \
-  | awk '/org\.aptl\.realization\.network=true/{next} $1 ~ /^aptl_aptl-/ {print $1}' \
-  | xargs -r docker network rm
 aptl lab start
 ```
+
+If stop reports `lifecycle-owner-busy`, another start/stop/clean/kill or policy
+operation still owns the project; wait for it to exit before retrying. If stop
+reports a cleanup-verification or observation failure, restore the configured
+local/SSH Docker connection and run stop again. Do not use a daemon-wide prune:
+APTL cleanup is deliberately bounded by the validated project labels.
 
 Tracked in [#722](https://github.com/Brad-Edwards/aptl/issues/722).
 

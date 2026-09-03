@@ -14,152 +14,71 @@ callers must not route control-plane secrets through them.
 """
 
 import json
-import re
+import os
 import shutil
+import threading
+from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
-from typing import Any, Protocol, TypedDict
+from typing import Any, Iterator, Protocol
 
-import rfc8785
+try:
+    import fcntl
+except ModuleNotFoundError:
+    # Windows has no POSIX flock; the per-run lock becomes in-process only.
+    fcntl = None
 
+from aptl.core.runstore_internals import (
+    _LOCK_REGISTRY,
+    _LOCK_REGISTRY_GUARD,
+    RunManifest,
+    RunStoreConflictError,
+    SealedRunError,
+    SecretInvariantError,
+    _assert_no_secret_drift,
+    _canonicalize_payload,
+    _HeldLock,
+    _safe_default,
+    _validate_id,
+    _validate_relative_path,
+    resolve_active_run_dir,
+)
 from aptl.utils.logging import get_logger
-from aptl.utils.pathsafe import create_exclusive_nofollow, read_contained_nofollow
+from aptl.utils.pathsafe import (
+    REASON_BASE_DIR_UNAVAILABLE,
+    REASON_NOT_FOUND,
+    PathContainmentError,
+    create_exclusive_nofollow,
+    open_dir_contained_nofollow,
+    read_contained_nofollow,
+)
 from aptl.utils.redaction import redact
 
+__all__ = [
+    "LocalRunStore",
+    "RunManifest",
+    "RunStorageBackend",
+    "RunStoreConflictError",
+    "SEAL_MARKER_RELPATH",
+    "SealedRunError",
+    "SecretInvariantError",
+    "resolve_active_run_dir",
+]
+
+#: Store-relative directory holding per-attempt finalization locks (store-owned,
+#: no-follow). Skipped by ``list_runs`` since it carries no ``manifest.json``.
+_LOCKS_DIR = "locks"
+
+#: Run-relative path of the ADR-050 atomic seal marker. Defined here — the store
+#: owns seal-state enforcement — and re-exported by
+#: :mod:`aptl.core.archival.layout` so the archival package has one source of
+#: truth without the store importing the archival package (which would cycle).
+SEAL_MARKER_RELPATH = "seal.json"
+
+#: Containment reasons that mean "no seal marker is present" rather than an
+#: error: the run directory, or the whole run store, does not exist yet.
+_UNSEALED_REASONS = frozenset({REASON_NOT_FOUND, REASON_BASE_DIR_UNAVAILABLE})
+
 log = get_logger("runstore")
-
-
-class SecretInvariantError(ValueError):
-    """Raised by :meth:`LocalRunStore.create_json_once` when applying the
-    shared secret-classification policy (:mod:`aptl.utils.redaction`) would
-    change the payload.
-
-    ADR-047 "Persistence and state model": the create-once operation must
-    preserve semantic bytes exactly. It must never silently persist a
-    payload that differs from what was approved for execution, so a
-    payload containing identity-bearing secret-shaped content is rejected
-    outright rather than redacted-and-written.
-    """
-
-
-class RunStoreConflictError(ValueError):
-    """Raised by the create-once persistence paths (``create_json_once`` and
-    the run-scoped / content-addressed extensions in
-    :mod:`aptl.core.evidence.content_store`) when the target already exists
-    with bytes that differ from those being written.
-
-    A byte-identical existing payload is treated as idempotent success
-    (ADR-047); only a genuine mismatch is an error.
-    """
-
-
-# OBS-003: run / session identifiers become directory components, so they
-# must be filesystem-safe. ``trace_id`` from ``trace-context.json`` is hex
-# (matches the pattern by construction), but ``session_id`` is produced
-# by the MCP server and could in principle drift. Reject anything that
-# could break out of the runs/ tree.
-# Allow leading `_` so the `_unbound` sentinel (used when MCP servers run
-# outside an active scenario context) survives validation. No traversal
-# vector — `_` is just a filename character. `\w` is `[A-Za-z0-9_]`
-# (SonarCloud S6353 — concise character class).
-_ID_RE = re.compile(r"^\w[\w.-]*$")
-
-
-def _validate_id(value: str, kind: str) -> str:
-    """Reject anything that could break out of the ``runs/`` tree.
-
-    Returns the value unchanged when it matches the canonical id
-    contract (``^\\w[\\w.-]*$`` AND does not contain ``..``); raises
-    ``ValueError`` otherwise. ``kind`` is included in the error
-    message so callers see e.g. ``invalid trace_id: '../escape'``.
-    """
-    if not isinstance(value, str) or not _ID_RE.fullmatch(value):
-        raise ValueError(f"invalid {kind}: {value!r}")
-    if ".." in value:
-        # `..` survives the character-class regex (dots are allowed for
-        # e.g. semantic-version-shaped ids) but is the canonical
-        # path-traversal segment. Reject defensively.
-        raise ValueError(f"invalid {kind} (contains '..'): {value!r}")
-    return value
-
-
-def _validate_relative_path(relative_path: str) -> str:
-    """Reject relative paths that could escape a run directory."""
-    if not isinstance(relative_path, str) or not relative_path:
-        raise ValueError(f"invalid relative_path: {relative_path!r}")
-    if Path(relative_path).is_absolute():
-        raise ValueError(f"invalid relative_path (absolute): {relative_path!r}")
-    parts = PurePosixPath(relative_path.replace("\\", "/")).parts
-    if ".." in parts:
-        raise ValueError(
-            f"invalid relative_path (contains '..'): {relative_path!r}"
-        )
-    return relative_path
-
-
-def _canonicalize_payload(payload: object) -> tuple[bytes, object]:
-    """Return ``(RFC 8785 canonical bytes, JSON-round-tripped structure)``
-    for :meth:`LocalRunStore.create_json_once`.
-
-    The round-tripped structure is what is actually compared and
-    persisted: a tuple normalizes to a list, and any value that is not
-    already JSON-serializable is a caller bug, not something to silently
-    stringify — ``create_json_once`` payloads are structured plan/trial
-    projections, not free-form archive data, so (unlike :func:`_safe_default`
-    below) no ``default=str`` escape hatch is offered here.
-    """
-    try:
-        raw = json.dumps(payload)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"create_json_once payload is not JSON-serializable: {exc}") from exc
-    normalized = json.loads(raw)
-    return rfc8785.dumps(normalized), normalized
-
-
-def _assert_no_secret_drift(normalized: object) -> None:
-    """Reject ``normalized`` if the shared :func:`redact` policy would
-    change it at all (ADR-047 create-once secret invariant).
-
-    Reuses the exact production :func:`redact` — the same classification
-    :func:`aptl.utils.redaction.is_sensitive_key` and
-    :func:`aptl.utils.redaction.is_secret_shaped_value` are built from — so
-    this can never silently drift out of lockstep with what actually gets
-    redacted elsewhere.
-    """
-    if redact(normalized) != normalized:
-        raise SecretInvariantError(
-            "create_json_once payload contains identity-bearing content "
-            "the shared secret-classification policy (aptl.utils.redaction) "
-            "would change; rejecting rather than silently persisting a "
-            "payload that differs from what was approved for execution"
-        )
-
-
-def _safe_default(obj: object) -> str:
-    """``json.dumps`` ``default`` hook that stringifies AND redacts.
-
-    Plain ``default=str`` would let any non-JSON-serializable value
-    (an exception, a custom object, a ``Path`` whose ``__str__``
-    contains an unexpected token) reach disk after :func:`redact`
-    has already returned the structure — bypassing the redaction
-    contract. Routing the produced string back through ``redact``
-    closes that escape hatch (ADR-029).
-    """
-    return redact(str(obj))
-
-
-class RunManifest(TypedDict):
-    """Metadata manifest for a single experiment run."""
-
-    run_id: str
-    scenario_id: str
-    scenario_name: str
-    started_at: str
-    finished_at: str
-    duration_seconds: float
-    trace_id: str
-    config_snapshot: dict[str, Any]
-    containers: list[str]
-    flags_captured: int
 
 
 class RunStorageBackend(Protocol):
@@ -178,6 +97,13 @@ class RunStorageBackend(Protocol):
     def append_jsonl(
         self, run_id: str, relative_path: str, records: list[dict[str, Any]]
     ) -> None: ...
+
+    def create_run_json_once(
+        self,
+        run_id: str,
+        relative_path: str,
+        payload: object,
+    ) -> Path: ...
 
     def copy_file(self, run_id: str, relative_path: str, source: Path) -> None: ...
 
@@ -226,11 +152,142 @@ class LocalRunStore:
         log.info("Created run directory: %s", run_dir)
         return run_dir
 
+    def is_sealed(self, run_id: str) -> bool:
+        """Return whether the run's ADR-050 seal marker has been committed.
+
+        Read no-follow: a missing marker (or missing run directory) is
+        ``False``; any other containment failure propagates.
+        """
+        safe_run_id = _validate_id(run_id, "run_id")
+        try:
+            read_contained_nofollow(
+                self._base_dir, f"{safe_run_id}/{SEAL_MARKER_RELPATH}"
+            )
+        except PathContainmentError as exc:
+            if exc.reason in _UNSEALED_REASONS:
+                return False
+            raise
+        return True
+
+    def read_seal_marker(self, run_id: str) -> dict[str, Any] | None:
+        """Return the parsed seal marker for ``run_id``, or ``None`` if unsealed."""
+        safe_run_id = _validate_id(run_id, "run_id")
+        try:
+            raw = read_contained_nofollow(
+                self._base_dir, f"{safe_run_id}/{SEAL_MARKER_RELPATH}"
+            )
+        except PathContainmentError as exc:
+            if exc.reason in _UNSEALED_REASONS:
+                return None
+            raise
+        return json.loads(raw)
+
+    def commit_seal_marker(self, run_id: str, marker: object) -> Path:
+        """Atomically publish the seal marker create-once (the archive commit point).
+
+        This is the ONLY path allowed to write the reserved marker: it holds the
+        per-run lock and writes create-once WITHOUT the sealed-state rejection
+        (the marker is what makes the run sealed). An identical marker is
+        idempotent; a differing marker raises :class:`RunStoreConflictError`.
+        Once it returns, every other mutation path refuses.
+        """
+        with self.finalization_lock(run_id):
+            return self._create_run_json_once_raw(run_id, SEAL_MARKER_RELPATH, marker)
+
+    def read_run_json(self, run_id: str, relative_path: str) -> Any | None:
+        """Return a parsed run-relative JSON file (no-follow), or ``None`` if absent."""
+        safe_run_id = _validate_id(run_id, "run_id")
+        safe_rel = _validate_relative_path(relative_path)
+        try:
+            raw = read_contained_nofollow(self._base_dir, f"{safe_run_id}/{safe_rel}")
+        except PathContainmentError as exc:
+            if exc.reason in _UNSEALED_REASONS:
+                return None
+            raise
+        return json.loads(raw)
+
+    @contextmanager
+    def finalization_lock(self, run_id: str) -> Iterator[None]:
+        """Hold the store-owned exclusive per-run lock (reentrant per thread).
+
+        The archival coordinator holds this across compose, verification, and
+        marker publication so two finalizers of the same attempt cannot race
+        (ADR-050 "per-attempt finalization exclusion"). Every run-directory
+        mutation acquires it too, so a producer cannot pass a sealed-state check
+        and then interleave a write with the seal commit. Nesting within one
+        thread reuses a single ``flock``; a different thread or process blocks
+        until release. The lock file lives in a store-owned ``locks/`` directory
+        opened descriptor-relative and no-follow, so an attacker-swapped
+        ``locks`` symlink cannot redirect it.
+        """
+        safe_run_id = _validate_id(run_id, "run_id")
+        key = (str(self._base_dir), safe_run_id, threading.get_ident())
+        with _LOCK_REGISTRY_GUARD:
+            held = _LOCK_REGISTRY.get(key)
+            if held is not None:
+                held.depth += 1
+                reused = True
+            else:
+                reused = False
+        if not reused:
+            # Without POSIX flock (Windows) the lock is in-process only; the
+            # registry still provides per-thread reentrancy + mutual exclusion.
+            lock_fd = self._open_run_lock_fd(safe_run_id) if fcntl is not None else -1
+            if fcntl is not None:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            with _LOCK_REGISTRY_GUARD:
+                _LOCK_REGISTRY[key] = _HeldLock(fd=lock_fd, depth=1)
+        try:
+            yield
+        finally:
+            with _LOCK_REGISTRY_GUARD:
+                entry = _LOCK_REGISTRY[key]
+                entry.depth -= 1
+                if entry.depth == 0:
+                    if fcntl is not None:
+                        fcntl.flock(entry.fd, fcntl.LOCK_UN)
+                        os.close(entry.fd)
+                    del _LOCK_REGISTRY[key]
+
+    def _open_run_lock_fd(self, safe_run_id: str) -> int:
+        self._base_dir.mkdir(parents=True, exist_ok=True)
+        dir_fd = open_dir_contained_nofollow(self._base_dir, _LOCKS_DIR, create=True)
+        try:
+            return os.open(
+                f"{safe_run_id}.lock",
+                os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC,
+                0o600,
+                dir_fd=dir_fd,
+            )
+        finally:
+            os.close(dir_fd)
+
+    def _reject_if_sealed(self, run_id: str, relative_path: str) -> None:
+        """Refuse a mutable write to a sealed run or the reserved marker path.
+
+        The seal marker path is reserved from every generic writer (ADR-050 /
+        codex security finding): only :meth:`commit_seal_marker` may publish it,
+        so a compromised collector or sidecar cannot forge a marker or race the
+        seal commit through ``write_json`` / ``append_jsonl`` / ``copy_file``.
+        """
+        if _validate_relative_path(relative_path).replace("\\", "/") == SEAL_MARKER_RELPATH:
+            raise SealedRunError(
+                f"{SEAL_MARKER_RELPATH!r} is the reserved seal marker path; only "
+                "the seal-commit path may write it"
+            )
+        if self.is_sealed(run_id):
+            raise SealedRunError(
+                f"run {run_id!r} is sealed; its archive is immutable — a "
+                "correction is a new run version, not an in-place write"
+            )
+
     def write_file(self, run_id: str, relative_path: str, data: bytes) -> None:
-        target = self._resolve_run_target(run_id, relative_path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(data)
-        log.debug("Wrote %d bytes to %s", len(data), target)
+        with self.finalization_lock(run_id):
+            self._reject_if_sealed(run_id, relative_path)
+            target = self._resolve_run_target(run_id, relative_path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            log.debug("Wrote %d bytes to %s", len(data), target)
 
     def write_json(self, run_id: str, relative_path: str, obj: object) -> None:
         # Redact at the persistence boundary (ADR-029) so individual
@@ -264,23 +321,70 @@ class LocalRunStore:
         """
         if not records:
             return
-        target = self._resolve_run_target(run_id, relative_path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        # Redact each record at the persistence boundary (ADR-029).
-        lines = [
-            json.dumps(redact(r), separators=(",", ":"), default=_safe_default)
-            for r in records
-        ]
-        chunk = ("\n".join(lines) + "\n").encode("utf-8")
-        with open(target, "ab") as fh:
-            fh.write(chunk)
-        log.debug("Appended %d JSONL records to %s", len(records), target)
+        with self.finalization_lock(run_id):
+            self._reject_if_sealed(run_id, relative_path)
+            target = self._resolve_run_target(run_id, relative_path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            # Redact each record at the persistence boundary (ADR-029).
+            lines = [
+                json.dumps(redact(r), separators=(",", ":"), default=_safe_default)
+                for r in records
+            ]
+            chunk = ("\n".join(lines) + "\n").encode("utf-8")
+            with open(target, "ab") as fh:
+                fh.write(chunk)
+            log.debug("Appended %d JSONL records to %s", len(records), target)
+
+    def create_run_json_once(
+        self,
+        run_id: str,
+        relative_path: str,
+        payload: object,
+    ) -> Path:
+        """Atomically publish one immutable, run-scoped JSON artifact.
+
+        Holds the per-run lock and rechecks seal state while holding it, so a
+        create-once write cannot add a file to (or forge the marker of) a run
+        that is being, or has been, sealed by another writer.
+        """
+        with self.finalization_lock(run_id):
+            self._reject_if_sealed(run_id, relative_path)
+            return self._create_run_json_once_raw(run_id, relative_path, payload)
+
+    def _create_run_json_once_raw(
+        self, run_id: str, relative_path: str, payload: object
+    ) -> Path:
+        """The unguarded create-once write (canonical, no-follow, atomic).
+
+        Callers MUST already hold :meth:`finalization_lock` and have applied the
+        appropriate sealed-state policy — only :meth:`commit_seal_marker` may use
+        it to write the reserved marker.
+        """
+        safe_run_id = _validate_id(run_id, "run_id")
+        safe_relpath = _validate_relative_path(relative_path).replace("\\", "/")
+        contained_relpath = f"{safe_run_id}/{safe_relpath}"
+        canonical, normalized = _canonicalize_payload(payload)
+        _assert_no_secret_drift(normalized)
+        self._base_dir.mkdir(parents=True, exist_ok=True)
+        target = self._base_dir / safe_run_id / PurePosixPath(safe_relpath)
+        try:
+            create_exclusive_nofollow(self._base_dir, contained_relpath, canonical)
+        except FileExistsError:
+            existing = read_contained_nofollow(self._base_dir, contained_relpath)
+            if existing != canonical:
+                raise RunStoreConflictError(
+                    "create_run_json_once target already exists with "
+                    f"different content: {safe_relpath}"
+                ) from None
+        return target
 
     def copy_file(self, run_id: str, relative_path: str, source: Path) -> None:
-        target = self._resolve_run_target(run_id, relative_path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
-        log.debug("Copied %s -> %s", source, target)
+        with self.finalization_lock(run_id):
+            self._reject_if_sealed(run_id, relative_path)
+            target = self._resolve_run_target(run_id, relative_path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+            log.debug("Copied %s -> %s", source, target)
 
     def create_json_once(self, namespace: str, name: str, payload: object) -> Path:
         """Create-once, canonical, no-follow, atomic persistence for a
@@ -381,49 +485,3 @@ class LocalRunStore:
             / "sessions"
             / f"{_validate_id(session_id, 'session_id')}.jsonl"
         )
-
-
-# ---------------------------------------------------------------------------
-# OBS-003: cross-process run-dir resolution.
-# ---------------------------------------------------------------------------
-
-
-def resolve_active_run_dir(state_dir: Path) -> Path | None:
-    """Resolve the active scenario's run directory from ``trace-context.json``.
-
-    ``state_dir`` is the APTL state directory (typically ``.aptl/`` at
-    the repo root, or wherever ``APTL_STATE_DIR`` points). The function
-    reads ``state_dir/trace-context.json`` (the same file the MCP
-    servers read for trace correlation) and returns
-    ``state_dir/runs/<trace_id>``.
-
-    Returns ``None`` cleanly when:
-    - the trace-context file is absent (no scenario active),
-    - the file is malformed JSON,
-    - the file is missing ``trace_id``, or
-    - ``trace_id`` contains characters that could break out of the
-      ``runs/`` tree (defence in depth — Python writes hex; this
-      catches a tampered file).
-
-    Callers decide what to do with ``None`` (write to an ``_unbound``
-    sentinel, skip capture, or log).
-    """
-    ctx_file = state_dir / "trace-context.json"
-    if not ctx_file.exists():
-        return None
-    # Single return on the failure path (SonarCloud S1142 — at most
-    # 3 returns per function): build a `resolved` local and let
-    # every error branch fall through to the final `return None`.
-    resolved: Path | None = None
-    try:
-        data = json.loads(ctx_file.read_text(encoding="utf-8"))
-        trace_id = data.get("trace_id") if isinstance(data, dict) else None
-        if isinstance(trace_id, str):
-            try:
-                _validate_id(trace_id, "trace_id")
-                resolved = state_dir / "runs" / trace_id
-            except ValueError:
-                log.warning("trace-context.json contained unsafe trace_id; ignoring")
-    except (json.JSONDecodeError, OSError) as exc:
-        log.debug("trace-context.json unreadable: %s", exc)
-    return resolved

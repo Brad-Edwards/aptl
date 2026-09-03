@@ -24,6 +24,7 @@ from aptl.core.deployment.backend import DeploymentBackend
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
+    DeploymentAclRealization,
     DeploymentContentRealization,
     DeploymentGeneratedArtifactOutput,
     DeploymentGeneratedArtifactRealization,
@@ -44,6 +45,7 @@ __all__ = [
     "DeploymentBackend",
     "DockerComposeBackend",
     "DeploymentAccountRealization",
+    "DeploymentAclRealization",
     "DeploymentContentRealization",
     "DeploymentGeneratedArtifactOutput",
     "DeploymentGeneratedArtifactRealization",
@@ -59,7 +61,12 @@ __all__ = [
 ]
 
 
-def get_backend(config: AptlConfig, project_dir: Path) -> DeploymentBackend:
+def get_backend(
+    config: AptlConfig,
+    project_dir: Path,
+    *,
+    offline_staged: bool = False,
+) -> DeploymentBackend:
     """Create a deployment backend from configuration.
 
     Reads ``config.deployment.provider`` to select the backend:
@@ -84,9 +91,14 @@ def get_backend(config: AptlConfig, project_dir: Path) -> DeploymentBackend:
         return DockerComposeBackend(
             project_dir=project_dir,
             project_name=project_name,
+            offline_staged=offline_staged,
         )
 
     if provider == "ssh-compose":
+        if offline_staged:
+            raise ValueError(
+                "offline staged appliance start requires local guest Docker Compose"
+            )
         dep = config.deployment
         if not dep.ssh_host:
             raise ValueError("deployment.ssh_host is required for ssh-compose provider")

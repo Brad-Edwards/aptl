@@ -70,11 +70,11 @@ export interface KillActionResponse {
 export type ScenarioMode = 'red' | 'blue' | 'purple';
 export type ScenarioDifficulty = 'beginner' | 'intermediate' | 'advanced' | 'expert';
 
-/** Whether a catalog entry resolved and its ACES SDL projected cleanly.
+/** Whether a catalog entry resolved and its RAES SDL projected cleanly.
  *
  *  Mirrors `aptl.api.schemas.ScenarioValidationState`. Distinct from lab
  *  readiness, container health, objective completion, and scoring: `valid`
- *  means only that the catalog entry and its ACES projection loaded/validated.
+ *  means only that the catalog entry and its RAES projection loaded/validated.
  *  `detail` carries a redacted user-facing reason when `valid` is `false`.
  */
 export interface ScenarioValidation {
@@ -87,7 +87,7 @@ export interface ScenarioValidation {
  *  Mirrors `aptl.api.schemas.ScenarioSummaryResponse`: catalog-owned id/name/
  *  description, the narrow catalog metadata extension (mode/difficulty/
  *  estimated_minutes/tags), plus required containers and validation projected
- *  from the ACES SDL. The internal catalog `path` locator is never exposed.
+ *  from the RAES SDL. The internal catalog `path` locator is never exposed.
  */
 export interface ScenarioSummary {
 	id: string;

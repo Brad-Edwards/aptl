@@ -32,7 +32,7 @@ def image_free_violations(realization: DeploymentRealizationSpec) -> list[str]:
     for node in realization.nodes:
         if not node.os:
             continue
-        if node.runtime is not None:
+        if node.runtime is not None and _declares_any_state(node.runtime):
             violations.extend(_runtime_coherence_violations(node))
         elif node.address not in imaged_addresses:
             violations.append(
@@ -42,6 +42,38 @@ def image_free_violations(realization: DeploymentRealizationSpec) -> list[str]:
             )
 
     return violations
+
+
+# Every runtime dimension APTL can realize. A node that populates none of them
+# has declared nothing, whatever the presence of a ``runtime`` block suggests.
+_DECLARABLE_DIMENSIONS = (
+    "packages",
+    "software_components",
+    "service_manager_units",
+    "local_identity",
+    "identity_authorities",
+    "filesystem_inventory",
+    "mounts",
+    "environment",
+    "forwarding_agents",
+    "network_detection_engines",
+    "security_monitoring_managers",
+    "service_listeners",
+    "processes",
+    "scheduled_jobs",
+)
+
+
+def _declares_any_state(runtime: object) -> bool:
+    """Whether a runtime block actually declares something to realize.
+
+    ``runtime:`` being present is not a declaration. An empty block satisfies a
+    "is there a runtime object" test while saying nothing about what the node
+    contains, which is exactly the hollow node this gate exists to reject: right
+    name, right ports, none of the behaviour.
+    """
+
+    return any(getattr(runtime, name, None) for name in _DECLARABLE_DIMENSIONS)
 
 
 def _runtime_coherence_violations(node: DeploymentNodeRealization) -> list[str]:

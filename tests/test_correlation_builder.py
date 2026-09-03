@@ -1,10 +1,10 @@
 """Tests for ``aptl.core.correlation.builder`` (OBS-002 Stage 2, issue #447).
 
 Fixtures mirror the REAL APTL run-archive shapes read from
-``aptl.backends.aces_repro`` (the ``aptl.run-record/v1`` manifest and its
-embedded ``RuntimeSnapshot``), ``aptl.backends.aces_participant_actions``
+``aptl.backends.raes_repro`` (the ``aptl.run-record/v1`` manifest and its
+embedded ``RuntimeSnapshot``), ``aptl.backends.raes_participant_actions``
 (``ParticipantBehaviorHistoryEventModel``-shaped behavior events), and
-``aptl.backends.aces_orchestrator``/``aptl.core.runtime.workflow_engine``
+``aptl.backends.raes_orchestrator``/``aptl.core.runtime.workflow_engine``
 (``WorkflowExecutionState``/``WorkflowHistoryEvent``-shaped orchestration
 records) — not an invented local schema.
 
@@ -38,7 +38,7 @@ from aptl.core.correlation.identity import bind_attempt_ref
 from aptl.core.correlation.models import AssociationMethod, ClockContext
 
 # ---------------------------------------------------------------------------
-# Fixture builders — shaped like the real ACES/APTL archive records.
+# Fixture builders — shaped like the real RAES/APTL archive records.
 # ---------------------------------------------------------------------------
 
 _PARTICIPANT_ADDRESS = "participant.behavior.techvault.kali-victim-ssh-probe"
@@ -56,7 +56,7 @@ def _behavior_event(
     **overrides: object,
 ) -> dict[str, object]:
     """Build a dict shaped like ``ParticipantBehaviorHistoryEventModel``
-    (verified fields: ``aces_contracts.contracts.py:1433``)."""
+    (verified fields: ``raes_contracts.contracts.py:1433``)."""
     base: dict[str, object] = {
         "event_type": event_type,
         "timestamp": timestamp,
@@ -90,7 +90,7 @@ def _attempted_and_observed(
 ) -> tuple[dict[str, object], dict[str, object]]:
     """One red-team-attempted / blue-observed event pair for one action —
     mirrors ``_action_attempted_event``/``_observation_event`` in
-    ``aces_participant_actions.py``."""
+    ``raes_participant_actions.py``."""
     attempted = _behavior_event(
         event_type="action_attempted",
         timestamp=attempted_at,
@@ -123,7 +123,7 @@ def _runtime_snapshot(
     evaluation_results: dict[str, dict[str, object]] | None = None,
 ) -> dict[str, object]:
     """Build a dict shaped like ``_snapshot_payload(RuntimeSnapshot)``
-    (verified: ``aces_runtime.control_plane_store._snapshot_payload``)."""
+    (verified: ``raes_runtime.control_plane_store._snapshot_payload``)."""
     return {
         "participant_episode_results": episode_results or {},
         "participant_episode_history": episode_history or {},
@@ -139,20 +139,37 @@ def _manifest(
     evidence_references: list[dict[str, object]] | None = None,
     planned_trial_id: str | None = None,
     disclosure_refs: list[str] | None = None,
+    schema_version: str = "aptl.run-record/v2",
 ) -> dict[str, object]:
-    """Build a dict shaped like the ``aptl.run-record/v1`` manifest
-    (verified: ``aces_repro.build_reproducibility_record``)."""
+    """Build a dict shaped like the ``aptl.run-record`` manifest
+    (verified: ``raes_repro.build_reproducibility_record``).
+
+    ``schema_version`` selects the contract-section spelling: v2 records (what
+    APTL writes today) use ``raes``; v1 archives already on disk use ``raes``.
+    Tests exercise both so the compatibility path in
+    ``aptl.core.correlation._extract.contract_section`` stays covered.
+    """
     realization: dict[str, object] = {}
     if planned_trial_id is not None:
         realization["planned_trial_id"] = planned_trial_id
     if disclosure_refs is not None:
         realization["disclosure_refs"] = list(disclosure_refs)
+    section = "aces" if schema_version == "aptl.run-record/v1" else "raes"
     return {
-        "schema_version": "aptl.run-record/v1",
+        "schema_version": schema_version,
         "run_id": run_id,
-        "aces": {"runtime_snapshot": runtime_snapshot, "realization": realization},
+        section: {"runtime_snapshot": runtime_snapshot, "realization": realization},
         "backend_evidence": {"evidence_references": evidence_references or []},
     }
+
+
+def _section(manifest: dict[str, object]) -> dict[str, object]:
+    """Return a built manifest's contract section regardless of schema version."""
+    for key in ("raes", "aces"):
+        value = manifest.get(key)
+        if isinstance(value, dict):
+            return value
+    raise AssertionError("manifest carries no contract section")
 
 
 def _workflow_history_event(
@@ -188,7 +205,7 @@ def _orchestration_record(
     trusts it."""
     return {
         "result": {
-            "state_schema_version": "aces-workflow-state/v1",
+            "state_schema_version": "raes-workflow-state/v1",
             "workflow_status": workflow_status,
             "run_id": "workflow-internal-deadbeefdeadbeefdeadbeefdeadbeef",
             "started_at": started_at,
@@ -238,7 +255,9 @@ _EPISODE_ID = "episode-e2e-1"
 _ACTION_ID = "participant.behavior.techvault.kali-victim-ssh-probe.aaaa1111"
 
 
-def _minimal_run(**evaluation_kwargs) -> tuple[dict[str, object], dict[str, dict[str, object]]]:
+def _minimal_run(
+    *, schema_version: str = "aptl.run-record/v2", **evaluation_kwargs
+) -> tuple[dict[str, object], dict[str, dict[str, object]]]:
     attempted, observed = _attempted_and_observed(
         episode_id=_EPISODE_ID,
         action_instance_id=_ACTION_ID,
@@ -261,7 +280,9 @@ def _minimal_run(**evaluation_kwargs) -> tuple[dict[str, object], dict[str, dict
         },
         evaluation_results=evaluation_results,
     )
-    manifest = _manifest(run_id=_RUN_ID, runtime_snapshot=snapshot)
+    manifest = _manifest(
+        run_id=_RUN_ID, runtime_snapshot=snapshot, schema_version=schema_version
+    )
     orchestration = _orchestration_record(
         address="runtime_apply_orchestration",
         started_at="2026-01-01T00:00:00Z",
@@ -378,7 +399,7 @@ class TestAssociationMethods:
 
     def test_declared_rule_links_planned_trial_to_run_when_present(self):
         manifest, orchestration = _minimal_run()
-        manifest["aces"]["realization"]["planned_trial_id"] = "planned-trial-1"
+        _section(manifest)["realization"]["planned_trial_id"] = "planned-trial-1"
         proj = _build(manifest, orchestration)
         run_ref = bind_attempt_ref(_RUN_ID)
         planned_ref = bind_attempt_ref("planned-trial-1")
@@ -692,7 +713,7 @@ class TestRestarts:
 class TestReorderedIngestion:
     def test_reordering_the_behavior_event_list_does_not_change_the_digest(self):
         manifest, orchestration = _minimal_run()
-        events = manifest["aces"]["runtime_snapshot"]["participant_behavior_history"][
+        events = _section(manifest)["runtime_snapshot"]["participant_behavior_history"][
             _PARTICIPANT_ADDRESS
         ]
         proj_forward = _build(manifest, orchestration)
@@ -700,8 +721,8 @@ class TestReorderedIngestion:
             run_id=_RUN_ID,
             runtime_snapshot=_runtime_snapshot(
                 behavior_history={_PARTICIPANT_ADDRESS: list(reversed(events))},
-                episode_results=manifest["aces"]["runtime_snapshot"]["participant_episode_results"],
-                evaluation_results=manifest["aces"]["runtime_snapshot"]["evaluation_results"],
+                episode_results=_section(manifest)["runtime_snapshot"]["participant_episode_results"],
+                evaluation_results=_section(manifest)["runtime_snapshot"]["evaluation_results"],
             ),
         )
         proj_backward = _build(reversed_manifest, orchestration)
@@ -842,7 +863,7 @@ class TestFuzzOrderIndependence:
         rng = random.Random(seed)
         manifest, orchestration = _minimal_run()
         events = list(
-            manifest["aces"]["runtime_snapshot"]["participant_behavior_history"][_PARTICIPANT_ADDRESS]
+            _section(manifest)["runtime_snapshot"]["participant_behavior_history"][_PARTICIPANT_ADDRESS]
         )
         shuffled_events = list(events)
         rng.shuffle(shuffled_events)
@@ -850,8 +871,8 @@ class TestFuzzOrderIndependence:
             run_id=_RUN_ID,
             runtime_snapshot=_runtime_snapshot(
                 behavior_history={_PARTICIPANT_ADDRESS: shuffled_events},
-                episode_results=manifest["aces"]["runtime_snapshot"]["participant_episode_results"],
-                evaluation_results=manifest["aces"]["runtime_snapshot"]["evaluation_results"],
+                episode_results=_section(manifest)["runtime_snapshot"]["participant_episode_results"],
+                evaluation_results=_section(manifest)["runtime_snapshot"]["evaluation_results"],
             ),
         )
         baseline = _build(manifest, orchestration)
@@ -865,3 +886,60 @@ class TestFuzzOrderIndependence:
         first = _build(manifest, orchestration)
         second = _build(manifest, orchestration)
         assert first.canonical_bytes == second.canonical_bytes
+
+
+class TestRunRecordSchemaCompatibility:
+    """A v1 archive (contract section spelled ``raes``) must correlate exactly
+    like the v2 record APTL writes today (spelled ``raes``).
+
+    The RAES rename bumped the run record to ``aptl.run-record/v2`` and renamed
+    the section. Archives written before that bump are still on disk, and
+    ``aptl.core.correlation._extract.contract_section`` is the single place that
+    keeps them readable. Without this test the fallback is dead code that nobody
+    would notice breaking - correlation would silently degrade to an empty
+    projection for every historical run rather than fail loudly.
+    """
+
+    def test_v1_and_v2_records_produce_identical_projections(self):
+        v1_manifest, orchestration = _minimal_run(schema_version="aptl.run-record/v1")
+        v2_manifest, _ = _minimal_run(schema_version="aptl.run-record/v2")
+        assert "aces" in v1_manifest
+        assert "raes" not in v1_manifest
+        assert "raes" in v2_manifest
+        assert "aces" not in v2_manifest
+
+        v1_projection = _build(v1_manifest, orchestration)
+        v2_projection = _build(v2_manifest, orchestration)
+
+        assert v1_projection.canonical_bytes == v2_projection.canonical_bytes
+
+    def test_v1_record_contributes_its_snapshot_derived_nodes(self):
+        """Guards the exact failure mode a silent fallback would hide.
+
+        Reading a v1 archive through the v2 key alone returns ``{}`` — the build
+        still succeeds and still emits orchestration-derived nodes, so a bare
+        "projection is non-empty" assertion passes while every participant
+        episode/action node has silently vanished. Comparing against a record
+        whose contract section is genuinely absent pins the snapshot's real
+        contribution.
+        """
+        v1_manifest, orchestration = _minimal_run(schema_version="aptl.run-record/v1")
+        sectionless = {
+            key: value for key, value in v1_manifest.items() if key != "aces"
+        }
+
+        v1_nodes = len(_build(v1_manifest, orchestration).nodes)
+        sectionless_nodes = len(_build(sectionless, orchestration).nodes)
+
+        assert sectionless_nodes < v1_nodes
+
+    def test_planned_trial_and_disclosures_read_from_a_v1_record(self):
+        v1_manifest, orchestration = _minimal_run(schema_version="aptl.run-record/v1")
+        _section(v1_manifest)["realization"]["planned_trial_id"] = "planned-trial-1"
+        projection = _build(v1_manifest, orchestration)
+        run_ref = bind_attempt_ref(_RUN_ID)
+        declared = _edges_by_method(projection, AssociationMethod.DECLARED_RULE)
+        assert any(
+            e.rule_id == "admitted-plan-binding" and e.target_ref == run_ref
+            for e in declared
+        )

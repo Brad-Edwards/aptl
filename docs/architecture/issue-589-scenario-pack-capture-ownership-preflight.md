@@ -1,7 +1,7 @@
 # Issue #589 RAES Scenario-Pack Capture Workflow Ownership Preflight
 
 This note records the APTL-side boundary for RAES scenario packs. RAES is the
-renamed ACES project; existing `aces_*` package, module, and CLI names remain
+renamed RAES project; existing `raes_*` package, module, and CLI names remain
 technical compatibility identifiers. This is guidance, not an implementation
 plan. No new ADR is needed: ADR-035 establishes RAES as the scenario authoring
 surface, ADR-046 removes APTL's capture-inventory and parity-inventory surfaces,
@@ -15,7 +15,7 @@ There are four distinct owners. Their contracts must not be conflated.
 | Concern | Owner | APTL boundary |
 | --- | --- | --- |
 | Portable attack-path, workflow, capture, evidence, and inventory semantics | RAES | APTL consumes the published RAES SDL, contract models, compiler, planner, diagnostics, and controlled vocabulary. It does not mirror them in an APTL schema or taxonomy. |
-| Environment-pack format, templates, schemas, validation, release tooling, and adoption guidance | `RAESystem/env-packs` | The companion repository defines how an RAES environment pack is shaped and validated. It does not own the particular experiment, scenario, or execution a downstream user creates with that format. |
+| Environment-pack format, templates, schemas, validation, release tooling, and adoption guidance | `OpenRAE/env-packs` | The companion repository defines how a RAES environment pack is shaped and validated. It does not own the particular experiment, scenario, or execution a downstream user creates with that format. |
 | Particular scenario content, experiment design, and execution choices | Downstream scenario or experiment owner | The downstream owner chooses and authors the specific RAES scenario or experiment within the published format and capability constraints. It cannot use that choice to select APTL container names, Compose fragments, host paths, `.env` keys, credentials, shell commands, collector implementations, or backend-specific persistence paths. |
 | Runtime realization, lab lifecycle, source acquisition, backend observation, and APTL-local evidence persistence | APTL | APTL lowers an admitted RAES execution plan through the existing runtime target and `DeploymentBackend`, then records backend evidence through the existing snapshot/run-store boundaries. |
 
@@ -27,7 +27,7 @@ Specifically:
   participant execution, and observed runtime effects through its declared
   backend capabilities. APTL must not recreate a pack-specific attack-path
   executor, static scenario branch, or local semantic model.
-- **Environment-pack format:** `RAESystem/env-packs` owns the reusable pack
+- **Environment-pack format:** `OpenRAE/env-packs` owns the reusable pack
   format, templates, schemas, validation, release tooling, and adoption
   guidance. It does not select a particular scenario, experiment, participant,
   or execution for a downstream user.
@@ -54,9 +54,9 @@ Specifically:
 
 This note is the APTL reference follow-up for issue #589. The cross-repository
 follow-ups already named by the issue remain the authorities for their scopes:
-[RAES #629](https://github.com/RAESystem/rae/issues/629) for semantic
+[RAES #629](https://github.com/OpenRAE/rae/issues/629) for semantic
 capture/inventory ownership and
-[env-packs #138](https://github.com/RAESystem/env-packs/issues/138) for the
+[env-packs #138](https://github.com/OpenRAE/env-packs/issues/138) for the
 environment-pack format reference. There is no APTL asset migration to create:
 the former APTL capture/parity surfaces were intentionally removed under
 #690/#757.
@@ -68,9 +68,9 @@ execution must pass every applicable layer below.
 
 | Layer | Required passage |
 | --- | --- |
-| Pack/artifact ingress | A project-contained scenario continues through `scenario_catalog` containment and `aces_sdl.parse_sdl_file`. Any future non-local pack resolver must use ADR-047's bounded, digest-pinned, no-follow authorized-resolver contract; a pack reference is never an ambient path, URL, command, or import search. |
+| Pack/artifact ingress | A project-contained scenario continues through `scenario_catalog` containment and `raes.parse_sdl_file`. Any future non-local pack resolver must use ADR-047's bounded, digest-pinned, no-follow authorized-resolver contract; a pack reference is never an ambient path, URL, command, or import search. |
 | RAES shape and semantics | Use RAES SDL/experiment/capture public models, semantic compilation, planner diagnostics, controlled vocabularies, and `RuntimeModel`/`ExecutionPlan`. Do not add Pydantic/dataclass mirrors or locally restate capture/inventory validation. |
-| Capability and runtime handoff | Build on `create_aptl_manifest()`, `create_aptl_runtime_target()`, `start_aces_scenario()`, and the RAES conformance path. A pack requirement outside the truthful manifest/planner capability is a diagnostic before runtime side effects, never an APTL fallback. |
+| Capability and runtime handoff | Build on `create_aptl_manifest()`, `create_aptl_runtime_target()`, `start_raes_scenario()`, and the RAES conformance path. A pack requirement outside the truthful manifest/planner capability is a diagnostic before runtime side effects, never an APTL fallback. |
 | Lab and OS effects | Keep container, Docker/Compose, host, network, image, and command effects behind `DeploymentBackend` and the existing `_LAB_START_STEPS` lifecycle. Pack data must not reach raw Docker, shell construction, `curl`, SSH, process argv, or a host filesystem path. |
 | Capture source authority | Match declared RAES requirements through the code-owned `CollectorRegistry` and immutable `CaptureBinding`; trusted composition in `core.evidence.adapters.wiring` selects a source adapter. Preserve ADR-041/042 Kali isolation and sidecar ownership, existing SOC clients/`curl_safe`, MCP boundaries, limits, clocks, visibility, and failure outcomes. |
 | Config and secrets | Durable non-secret apparatus settings remain strict `AptlConfig`; runtime secrets remain `EnvVars`, placeholder validation, and generated-config owners. No pack may select an environment variable, secret, credential source, host path, or backend provider. Control-plane secrets stay out of SDL, pack metadata, argv, logs, diagnostics, snapshots, and run records per ADR-029. |
@@ -99,7 +99,7 @@ or a second evidence/workflow state machine.
 
 Avoid these anti-patterns:
 
-- reviving `docs/aces/inventory/`, a parity ledger, `aces-inventory`,
+- reviving `docs/raes/inventory/`, a parity ledger, `raes-inventory`,
   `runtime-observed:` content, or an APTL-owned capture runner for scenario
   pack inventory;
 - treating `RangeSnapshot`, a healthy Compose service, or a collector's empty

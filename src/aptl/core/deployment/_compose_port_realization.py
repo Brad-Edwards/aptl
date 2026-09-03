@@ -106,12 +106,18 @@ def write_port_override(
     caller adds no override file and the checked-in compose stack is untouched.
     """
 
+    # Only an image-backed node becomes a Compose service. An image-free node
+    # publishes its ports through its own ``docker run -p`` in the generic
+    # materializer, and a node with no image is not a Compose service at all;
+    # emitting a ports-only service with no image makes ``docker compose config``
+    # reject the whole project (issue #875).
+    imaged = {image.address for image in realization.images}
     services = {
         node.service_name: {
             "ports": [compose_port_entry(binding) for binding in node.published_ports]
         }
         for node in realization.nodes
-        if node.published_ports and node.service_name
+        if node.published_ports and node.service_name and node.address in imaged
     }
     if not services:
         return None

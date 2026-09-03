@@ -4,7 +4,7 @@ These are runtime models for describing attack procedures, NOT part
 of the SDL specification. They define attack steps with MITRE technique
 mappings and OCSF-aligned expected detection expectations.
 
-ACES owns scenario orchestration semantics after the SDL cutover. These local
+RAES owns scenario orchestration semantics after the SDL cutover. These local
 models remain narrow support types for APTL's runtime helpers and tests.
 """
 

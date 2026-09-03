@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aptl-techvault-verifier"
+version = "0.1.0"
+description = "Semantic verification for the TechVault scenario on the APTL backend."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Brad Edwards", email = "brad@autarchy.ai" }]
+dependencies = []
+
+# The seam. APTL core registers nothing in this group; a scenario gains
+# verification by installing a distribution like this one.
+[project.entry-points."aptl.scenario_verifiers"]
+techvault = "aptl_techvault_verifier:verifier"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aptl_techvault_verifier"]

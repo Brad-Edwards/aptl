@@ -1,7 +1,7 @@
 <script lang="ts">
-	// A declarative ACES experiment objective projected by the backend. Legacy
+	// A declarative RAES experiment objective projected by the backend. Legacy
 	// per-objective scoring, team, alert queries, and hints are not part of the
-	// ACES objective shape; hint reveal (v1, local-only) belongs to a future
+	// RAES objective shape; hint reveal (v1, local-only) belongs to a future
 	// hints-bearing block, not this projection.
 	interface Props {
 		name: string;

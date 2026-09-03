@@ -719,7 +719,8 @@ class TestWazuhActiveResponseSource:
             f"Wrapper failed to short-circuit on whitelisted 172.20.4.30; "
             f"rc={result.returncode}, stderr={result.stderr[:200]}"
         )
-        assert log.exists() and "SKIPPED for whitelisted 172.20.4.30" in log.read_text(), (
+        assert log.exists()
+        assert "SKIPPED for whitelisted 172.20.4.30" in log.read_text(), (
             f"Log file missing or no SKIPPED entry; contents: "
             f"{log.read_text() if log.exists() else '<no file>'}"
         )
@@ -793,3 +794,29 @@ class TestWazuhActiveResponseSource:
             "Dockerfile AR-extras contract violated:\n  "
             + "\n  ".join(violations)
         )
+
+
+def test_continuity_audit_targets_declare_iptables(tmp_path):
+    """Every audit target must actually carry the tool the audit runs.
+
+    The scenario grants CAP_NET_ADMIN to these nodes precisely so
+    `aptl lab continuity-audit` can inspect and clear active-response DROPs on
+    their INPUT chain. Granting the capability without declaring the package
+    leaves the audit unable to run at all, which reads as "no drops found".
+    """
+    from raes.parser import parse_sdl_file
+
+    from aptl.core.continuity import default_targets
+    from tests.helpers import techvault_scenario_path
+
+    scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
+    # `ad` installs iptables in its own component image rather than declaring a
+    # package, so it is satisfied by its build rather than by runtime packages.
+    generically_materialized = {"webapp", "fileshare", "dns"}
+
+    for container in default_targets():
+        node = container.removeprefix("aptl-")
+        if node not in generically_materialized:
+            continue
+        packages = {p.name for p in scenario.nodes[node].runtime.packages}
+        assert "iptables" in packages, f"{node} audit target cannot run iptables"

@@ -1,4 +1,4 @@
-"""Private probe / helper functions for the ACES live validation gate.
+"""Private probe / helper functions for the RAES live validation gate.
 
 These support the check implementations in ``_live_gate_checks`` (SCN-010F /
 #323); the split keeps each module under the file-size budget. This module is
@@ -19,18 +19,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from aces_contracts.planning import (
-    ChangeAction,
-    PlannedResource,
-    ProvisioningPlan,
-    ProvisionOp,
-    RuntimeDomain,
-)
-from aces_runtime.manager import RuntimeManager
-from aces_sdl.scenario import Scenario
+from raes_runtime.manager import RuntimeManager
+from raes.scenario import Scenario
 
-from aptl.backends.aces import create_aptl_runtime_target
-from aptl.backends.aces_realization import interpret_provisioning_plan
+from aptl.backends.raes import create_aptl_runtime_target, resolve_scenario_bundle
+from aptl.backends.raes_artifact_availability import artifact_availability_for_scenario
+from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.collectors import collect_suricata_eve, collect_wazuh_alerts
 from aptl.core.deployment import get_backend
 from aptl.core.lab import clean_boot_lab
@@ -42,9 +36,9 @@ from aptl.utils.redaction import redact
 from aptl.validation.techvault_live_gate import LiveGateCheck
 
 if TYPE_CHECKING:
-    from aces_contracts.diagnostics import Diagnostic
+    from raes_contracts.diagnostics import Diagnostic
 
-    from aptl.backends.aces_realization_model import AptlRealization
+    from aptl.backends.raes_realization_model import AptlRealization
     from aptl.core.config import AptlConfig
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.lab_types import LabResult
@@ -92,18 +86,36 @@ def _find_container(
 
 def _compute_realization(
     scenario: Scenario, project_dir: Path, config: "AptlConfig"
-) -> tuple["AptlRealization | None", list[str]]:
+) -> tuple[AptlRealization | None, list[str]]:
     """Interpret the scenario's provisioning plan, returning (realization, diags)."""
     try:
         backend = get_backend(config, project_dir)
+        # Config-driven bundle: the configured env-pack when selected, else the
+        # in-tree scenario (issue #875). Scenario content anchors to the bundle
+        # root; component build contexts always resolve from the engine checkout
+        # (an env-pack ships none), so component_root stays project_dir (ADR-051).
+        bundle = resolve_scenario_bundle(project_dir, None, config)
         target = create_aptl_runtime_target(
-            project_dir=project_dir, config=config, backend=backend
+            project_dir=project_dir, config=config, backend=backend, bundle=bundle
         )
-        execution_plan = RuntimeManager(target).plan(scenario)
+        # Gather artifact availability at the backend trust boundary before
+        # planning, exactly as `aptl lab start` does (`_plan_scenario`): the image
+        # policy trusts a node's source image only against verified availability,
+        # so a real-backend plan without it rejects every imaged node as
+        # ``untrusted-image``.
+        availability = artifact_availability_for_scenario(
+            scenario, backend, scenario_root=bundle.root, component_root=project_dir
+        )
+        execution_plan = RuntimeManager(target).plan(
+            scenario, artifact_availability=availability
+        )
         realization = interpret_provisioning_plan(
-            plan=execution_plan.provisioning, project_dir=project_dir, config=config
+            plan=execution_plan.provisioning,
+            config=config,
+            bundle=bundle,
+            component_root=project_dir,
         )
-    # broad-except: ACES planning/interpretation surfaces diverse error types.
+    # broad-except: RAES planning/interpretation surfaces diverse error types.
     except Exception as exc:
         return None, [redact(f"realization interpretation raised: {exc}")]
 
@@ -113,7 +125,7 @@ def _compute_realization(
         if _severity(d) == "error"
     ]
     if not realization.nodes:
-        errors.append("realization produced no ACES nodes (no model to instantiate)")
+        errors.append("realization produced no RAES nodes (no model to instantiate)")
     return realization, errors
 
 
@@ -222,6 +234,41 @@ def _ping_from_kali(backend: "DeploymentBackend", ip: str) -> bool:
     return result.returncode == 0
 
 
+def _ssh_reachable_from_kali(backend: "DeploymentBackend", ip: str) -> bool:
+    """Return whether Kali can open a TCP connection to ``ip`` on port 22."""
+    try:
+        result = backend.container_exec(
+            _KALI_CONTAINER,
+            ["nc", "-z", "-w", "3", ip, "22"],
+            timeout=15,
+        )
+    # broad-except: backend exec surfaces diverse transport errors.
+    except Exception as exc:
+        log.warning("ssh probe failed for %s: %s", ip, redact(str(exc)))
+        return False
+    return result.returncode == 0
+
+
+def _prioritise_ssh_targets(
+    backend: "DeploymentBackend", targets: list[tuple[str, str]]
+) -> list[tuple[str, str]]:
+    """Order targets so hosts actually exposing SSH are probed first.
+
+    The generator proves host monitoring through failed SSH authentication, so a
+    target with no listener produces no auth event and no alert however many
+    times it is tried. Taking an arbitrary slice of reachable containers can
+    therefore probe only hosts that cannot answer, which reads as a broken
+    detection path when the path is fine.
+
+    This stays scenario-generic: it asks which reachable hosts expose the service
+    whose failed auth is being generated, rather than naming any node.
+    """
+
+    listening = [target for target in targets if _ssh_reachable_from_kali(backend, target[1])]
+    remaining = [target for target in targets if target not in listening]
+    return listening + remaining
+
+
 def _collect_until_evidence(
     backend: "DeploymentBackend",
     start_iso: str,
@@ -230,6 +277,7 @@ def _collect_until_evidence(
     indexer_url: str,
     indexer_auth: tuple[str, str],
     sleep_fn: Callable[[float], None] = time.sleep,
+    regenerate: Callable[[], None] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Poll for a post-trigger Wazuh alert until the window elapses.
 
@@ -238,12 +286,21 @@ def _collect_until_evidence(
     returned summary, but only a Wazuh alert ends the poll: a sensor-only event
     does not prove the realized Wazuh ingestion path. ``sleep_fn`` is injectable
     so tests can skip the real poll wait without patching ``time.sleep``.
+
+    ``regenerate`` re-drives the trigger on each poll. Host monitoring on a
+    freshly booted range becomes ready some seconds after the containers report
+    healthy, and a trigger fired once before that happens is simply lost: the
+    events never reach the SIEM and no amount of later polling can recover them.
+    Re-driving makes the check ask whether the path works within the window
+    rather than whether it happened to be ready at one instant.
     """
     steps = max(1, window_seconds // _POLL_STEP_SECONDS)
     eve: list[dict[str, Any]] = []
     alerts: list[dict[str, Any]] = []
     for _ in range(steps):
         sleep_fn(_POLL_STEP_SECONDS)
+        if regenerate is not None:
+            regenerate()
         now = _now_iso()
         eve = collect_suricata_eve(start_iso, now, backend)
         alerts = collect_wazuh_alerts(
@@ -268,7 +325,7 @@ def _generate_event(
     """
     first_ip = targets[0][1]
     _exec_kali(backend, ["nmap", "-Pn", "-T4", "-p", "22,80,443,445", first_ip], 120)
-    for _name, ip in targets[:_MAX_EVENT_TARGETS]:
+    for _name, ip in _prioritise_ssh_targets(backend, targets)[:_MAX_EVENT_TARGETS]:
         for _attempt in range(3):
             _exec_kali(
                 backend,
@@ -364,14 +421,14 @@ def _wazuh_correlation_summary(alert: dict[str, Any]) -> dict[str, str]:
 def _missing_manifest_keys(manifest: Mapping[str, Any]) -> list[str]:
     """Confirm the manifest carries the audit-required surfaces."""
     diagnostics: list[str] = []
-    provenance = manifest.get("aces_provenance", {})
+    provenance = manifest.get("raes_provenance", {})
     realization = provenance.get("realization") or {}
     if not realization.get("nodes"):
         diagnostics.append(
-            "manifest carries no ACES realization nodes (cannot audit interpretation)"
+            "manifest carries no RAES realization nodes (cannot audit interpretation)"
         )
     if not provenance.get("selected_profiles"):
-        diagnostics.append("manifest carries no ACES-selected profiles")
+        diagnostics.append("manifest carries no RAES-selected profiles")
     if not manifest.get("validation", {}).get("checks"):
         diagnostics.append("manifest carries no validation evidence")
     if not manifest.get("snapshot"):
@@ -408,68 +465,3 @@ def _default_run_store(project_dir: Path, config: "AptlConfig") -> LocalRunStore
     if not local_path.is_absolute():
         local_path = project_dir / local_path
     return LocalRunStore(local_path)
-
-
-def _distinct_profile_nodes(
-    nodes: Sequence[Mapping[str, Any]],
-) -> tuple[str, str] | None:
-    """Pick two node names whose realized profiles differ."""
-    seen: list[tuple[str, frozenset[str]]] = []
-    for node in nodes:
-        name = _node_primary_name(node)
-        profiles = frozenset(node.get("profiles", ()))
-        if not name or not profiles:
-            continue
-        for other_name, other_profiles in seen:
-            if other_profiles != profiles:
-                return other_name, name
-        seen.append((name, profiles))
-    return None
-
-
-def _node_primary_name(node: Mapping[str, Any]) -> str:
-    """Return a usable node name from the realization node record."""
-    aliases = node.get("aliases") or ()
-    return str(aliases[0]) if aliases else str(node.get("name", ""))
-
-
-def _variation_diagnostics(
-    first: "AptlRealization", second: "AptlRealization"
-) -> list[str]:
-    """Confirm two interpretations are error-free and distinct."""
-    diagnostics: list[str] = []
-    for label, realization in (("first", first), ("second", second)):
-        errors = [d for d in realization.diagnostics if _severity(d) == "error"]
-        if errors:
-            diagnostics.append(f"{label} variation node failed to realize")
-    if not diagnostics and first.details() == second.details():
-        diagnostics.append("distinct declared nodes collapsed to one realization")
-    return diagnostics
-
-
-def _single_node_plan(node_name: str) -> ProvisioningPlan:
-    """Build a single-node ACES provisioning plan for ``node_name``."""
-    address = f"provision.node.{node_name}"
-    resource = PlannedResource(
-        address=address,
-        domain=RuntimeDomain.PROVISIONING,
-        resource_type="node",
-        payload={
-            "name": node_name,
-            "node_name": node_name,
-            "node_type": "vm",
-            "os_family": "linux",
-            "spec": {"node": {"name": node_name}, "infrastructure": {}},
-        },
-    )
-    return ProvisioningPlan(
-        resources={address: resource},
-        operations=[
-            ProvisionOp(
-                action=ChangeAction.CREATE,
-                address=address,
-                resource_type="node",
-                payload=resource.payload,
-            )
-        ],
-    )

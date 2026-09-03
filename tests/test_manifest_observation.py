@@ -9,17 +9,17 @@ matter:
   evidence contracts (turning them on without a backed capability is the exact
   dishonesty the registry prevents).
 * CONTRACT-COMPLETE WHEN ON — when a real registration turns the projection on,
-  ACES's ``observation_capability_contract_gaps`` invariant must be clean,
+  RAES's ``observation_capability_contract_gaps`` invariant must be clean,
   which requires the capture-spec/evidence-record/derived-measure/experiment-run
   contracts in the manifest's ``supported_contract_versions``.
 """
 
 from __future__ import annotations
 
-from aces_backend_protocols.capabilities import observation_capability_contract_gaps
+from raes_backend_protocols.capabilities import observation_capability_contract_gaps
 
-import aptl.backends.aces_manifest as aces_manifest
-from aptl.backends.aces_manifest import create_aptl_manifest
+import aptl.backends.raes_manifest as raes_manifest
+from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.core.experiment.capture_registry import (
     OBSERVATION_EVIDENCE_CONTRACTS,
     CaptureLimits,
@@ -69,7 +69,7 @@ class TestBackedDefault:
         assert OBSERVATION_EVIDENCE_CONTRACTS <= supported
 
     def test_default_manifest_has_no_observation_contract_gaps(self):
-        from aces_backend_protocols.capabilities import observation_capability_contract_gaps
+        from raes_backend_protocols.capabilities import observation_capability_contract_gaps
 
         assert observation_capability_contract_gaps(create_aptl_manifest()) == ()
 
@@ -77,7 +77,7 @@ class TestBackedDefault:
 class TestPopulatedProjection:
     def test_a_populated_registry_turns_observation_on(self, monkeypatch):
         monkeypatch.setattr(
-            aces_manifest, "DEFAULT_COLLECTOR_REGISTRY", CollectorRegistry((_registration(),))
+            raes_manifest, "DEFAULT_COLLECTOR_REGISTRY", CollectorRegistry((_registration(),))
         )
         manifest = create_aptl_manifest()
 
@@ -86,17 +86,17 @@ class TestPopulatedProjection:
 
     def test_turning_observation_on_adds_the_required_contracts(self, monkeypatch):
         monkeypatch.setattr(
-            aces_manifest, "DEFAULT_COLLECTOR_REGISTRY", CollectorRegistry((_registration(),))
+            raes_manifest, "DEFAULT_COLLECTOR_REGISTRY", CollectorRegistry((_registration(),))
         )
         manifest = create_aptl_manifest()
 
         assert OBSERVATION_EVIDENCE_CONTRACTS <= manifest.supported_contract_versions
 
     def test_the_populated_manifest_has_no_observation_contract_gaps(self, monkeypatch):
-        # The ACES invariant: a declared observation's required contracts must
+        # The RAES invariant: a declared observation's required contracts must
         # all be present in supported_contract_versions.
         monkeypatch.setattr(
-            aces_manifest, "DEFAULT_COLLECTOR_REGISTRY", CollectorRegistry((_registration(),))
+            raes_manifest, "DEFAULT_COLLECTOR_REGISTRY", CollectorRegistry((_registration(),))
         )
         manifest = create_aptl_manifest()
 

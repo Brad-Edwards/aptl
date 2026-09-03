@@ -1,4 +1,4 @@
-"""Artifact-source implementations for ACES experiment admission (ADR-047
+"""Artifact-source implementations for RAES experiment admission (ADR-047
 "Experiment-controller boundary", Stage 5 / EXP-002 / issue #438).
 
 Split out of :mod:`aptl.core.experiment.admission` to keep that module
@@ -14,27 +14,34 @@ through:
 
 * :class:`MappingArtifactSource` — a simple in-memory mapping, for tests.
 * :func:`build_associated_artifact_source` — the production binding, via an
-  ACES associated-artifact manifest anchored to the authoring-input spec.
+  RAES associated-artifact manifest anchored to the authoring-input spec.
 """
 
 from __future__ import annotations
 
 import io
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from aces_contracts.associated_artifacts import (
+from raes_contracts.associated_artifacts import (
     AssociatedArtifactManifestModel,
     AssociatedArtifactValidationLimits,
     load_associated_artifact_manifest_json,
     validate_associated_artifact_manifest,
 )
-from aces_contracts.contracts import ExperimentReferenceModel
-from aces_contracts.experiment_spec import ExperimentSpecModel
+from raes_contracts.contracts import (
+    ExperimentReferenceModel,
+    ParticipantImplementationBindingTargetModel,
+)
+from raes_contracts.experiment_spec import ExperimentSpecModel
 
-from aptl.core.experiment.errors import AdmissionRejection, diagnostic, normalize_aces_failure
+from aptl.core.experiment.errors import AdmissionRejection, diagnostic, normalize_raes_failure
+from aptl.core.experiment.bindings import (
+    ParticipantManifestBinding,
+    ParticipantManifestMap,
+)
 from aptl.core.experiment.policy import AdmissionPolicy
 from aptl.core.experiment.resolver import (
     ProjectContainedResolver,
@@ -42,6 +49,7 @@ from aptl.core.experiment.resolver import (
     ResolvedArtifact,
     parse_locator,
 )
+from aptl.core.experiment.spec_loading import load_participant_manifest
 
 _CODE_ARTIFACT_SOURCE_UNRESOLVED = "aptl.experiment-admission.artifact-source-unresolved"
 _CODE_ASSOCIATED_ARTIFACT_MANIFEST_INVALID = "aptl.experiment-admission.associated-artifact-manifest-invalid"
@@ -52,6 +60,8 @@ class ResolvedArtifactSource(Protocol):
     ``intended_scenario_ref`` (or ``task.scenario_ref``)/``capture_spec_refs``
     through — never a raw path admission could reopen.
     """
+
+    participant_manifests: ParticipantManifestMap
 
     def artifact_for(self, ref: ExperimentReferenceModel) -> ResolvedArtifact:
         """Return the bound artifact for ref's reference identity, or raise AdmissionRejection."""
@@ -74,12 +84,13 @@ def _unresolved(ref: ExperimentReferenceModel) -> AdmissionRejection:
 @dataclass(frozen=True)
 class MappingArtifactSource:
     """A simple in-memory :class:`ResolvedArtifactSource` (``ref_id ->
-    ResolvedArtifact``) for tests — no filesystem, no ACES associated-
+    ResolvedArtifact``) for tests — no filesystem, no RAES associated-
     artifact manifest. Production admission uses
     :func:`build_associated_artifact_source` instead.
     """
 
     artifacts: Mapping[str, ResolvedArtifact]
+    participant_manifests: ParticipantManifestMap = field(default_factory=dict)
 
     def artifact_for(self, ref: ExperimentReferenceModel) -> ResolvedArtifact:
         """Return the mapped artifact for ref.ref_id, or raise the unresolved rejection."""
@@ -87,6 +98,81 @@ class MappingArtifactSource:
             return self.artifacts[ref.ref_id]
         except KeyError:
             raise _unresolved(ref) from None
+
+
+def _expected_participant_manifest_keys(
+    spec: ExperimentSpecModel,
+) -> set[tuple[str, str, str, str]]:
+    """Return participant manifest identities explicitly required by bindings."""
+
+    descriptors = spec.binding_descriptors
+    if descriptors is None:
+        return set()
+    return {
+        (
+            target.participant_address,
+            target.implementation_name,
+            target.implementation_version,
+            target.manifest_version,
+        )
+        for descriptor in descriptors.descriptors
+        if isinstance(
+            (target := descriptor.target),
+            ParticipantImplementationBindingTargetModel,
+        )
+    }
+
+
+def _resolved_participant_manifests(
+    *,
+    spec: ExperimentSpecModel,
+    manifest: AssociatedArtifactManifestModel,
+    artifacts: Mapping[str, ResolvedArtifact],
+    policy: AdmissionPolicy,
+) -> dict[tuple[str, str, str, str], ParticipantManifestBinding]:
+    """Resolve unique expected participant manifests from validated artifacts."""
+
+    expected = _expected_participant_manifest_keys(spec)
+    expected_identities = {(name, version, schema) for _, name, version, schema in expected}
+    candidates: dict[
+        tuple[str, str, str],
+        ParticipantManifestBinding,
+    ] = {}
+    for artifact_id, artifact_ref in manifest.artifacts.items():
+        if artifact_ref.role != "manifest":
+            continue
+        resolved = artifacts[artifact_id]
+        model = load_participant_manifest(resolved.data, policy=policy)
+        if model is None:
+            continue
+        identity = (
+            model.identity.name,
+            model.identity.version,
+            model.schema_version,
+        )
+        if identity not in expected_identities:
+            continue
+        if identity in candidates:
+            raise AdmissionRejection(
+                (
+                    diagnostic(
+                        _CODE_ASSOCIATED_ARTIFACT_MANIFEST_INVALID,
+                        "associated_artifact_manifest.artifacts",
+                        "multiple participant manifests resolve the same implementation identity",
+                    ),
+                )
+            )
+        candidates[identity] = ParticipantManifestBinding(
+            manifest=model,
+            manifest_ref=artifact_id,
+            manifest_digest=resolved.digest,
+        )
+
+    return {
+        key: candidates[(key[1], key[2], key[3])]
+        for key in expected
+        if (key[1], key[2], key[3]) in candidates
+    }
 
 
 def build_associated_artifact_source(
@@ -97,11 +183,11 @@ def build_associated_artifact_source(
 ) -> ResolvedArtifactSource:
     """Build the production :class:`ResolvedArtifactSource`.
 
-    The ADR-blessed binding: an ACES associated-artifact manifest anchored
+    The ADR-blessed binding: a RAES associated-artifact manifest anchored
     to the authoring-input ``spec`` (``parent_ref.ref_kind ==
     "authoring-input"``) binds each artifact's ``artifact_id`` -> a
     project-relative ``uri`` plus declared ``size_bytes``/``checksum`` — by
-    APTL convention, ``artifact_id`` IS the ACES reference's ``ref_id`` it
+    APTL convention, ``artifact_id`` IS the RAES reference's ``ref_id`` it
     binds (``spec.task_ref.ref_id``, ``spec.intended_scenario_ref.ref_id``
     or ``task.scenario_ref.ref_id``, each ``capture_spec_refs[].ref_id``).
     Every declared artifact is resolved via :class:`ProjectContainedResolver`
@@ -111,7 +197,7 @@ def build_associated_artifact_source(
     handed back — a validation failure anywhere rejects the whole source,
     never a partial binding.
 
-    ``spec`` must already be the ACES-validated authoring-input model (the
+    ``spec`` must already be the RAES-validated authoring-input model (the
     controller parses ``experiment_root.data`` once to build this source,
     before ``admit_experiment`` parses the same bytes again as its own step
     1 — a harmless repeat of one pure, deterministic public loader call,
@@ -131,7 +217,7 @@ def build_associated_artifact_source(
         )
     except (ValueError, TypeError) as exc:
         raise AdmissionRejection(
-            normalize_aces_failure(
+            normalize_raes_failure(
                 exc,
                 address="associated_artifact_manifest",
                 code=_CODE_ASSOCIATED_ARTIFACT_MANIFEST_INVALID,
@@ -141,8 +227,8 @@ def build_associated_artifact_source(
     resolved_by_artifact_id: dict[str, ResolvedArtifact] = {}
     readers: dict[str, io.BytesIO] = {}
     for artifact_id, artifact_ref in manifest.artifacts.items():
-        # ACES requires `uri` to be an absolute URI (a scheme is mandatory —
-        # see `aces_contracts.contracts._validate_associated_artifact_uri`),
+        # RAES requires `uri` to be an absolute URI (a scheme is mandatory —
+        # see `raes_contracts.contracts._validate_associated_artifact_uri`),
         # so a project-relative binding is authored as `file:<relative
         # path>`. `parse_locator` extracts and re-validates the relative
         # path (scheme/traversal/NUL-byte checks); the declared
@@ -175,4 +261,13 @@ def build_associated_artifact_source(
     if errors:
         raise AdmissionRejection(errors)
 
-    return MappingArtifactSource(artifacts=resolved_by_artifact_id)
+    participant_manifests = _resolved_participant_manifests(
+        spec=spec,
+        manifest=manifest,
+        artifacts=resolved_by_artifact_id,
+        policy=policy,
+    )
+    return MappingArtifactSource(
+        artifacts=resolved_by_artifact_id,
+        participant_manifests=participant_manifests,
+    )

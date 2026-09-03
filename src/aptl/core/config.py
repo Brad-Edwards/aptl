@@ -3,19 +3,42 @@
 Uses Pydantic v2 for validation. Config is loaded from aptl.json files.
 """
 
+import hashlib
 import json
 import re
-from pathlib import Path
-from typing import Optional
+from pathlib import Path, PurePosixPath
+from typing import Literal, Optional
 
-from pydantic import BaseModel, field_validator, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from aptl.utils.logging import get_logger
 
 log = get_logger("config")
 
 _NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+_COMPOSE_PROJECT_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
+_PARTICIPANT_MODEL_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$")
+_CREDENTIAL_SOURCE_VARIABLE_PATTERN = re.compile(r"^[A-Z_][A-Z0-9_]{0,127}$")
+_IMMUTABLE_PARTICIPANT_MODEL_PATTERNS = {
+    "claude": re.compile(r"^claude-[a-z0-9-]+-\d{8}$", flags=re.ASCII),
+    "codex": re.compile(
+        r"^(?:codex-[a-z0-9._-]+|gpt-[a-z0-9._-]+|o\d[a-z0-9._-]*)"
+        r"-\d{4}-\d{2}-\d{2}$",
+        flags=re.ASCII,
+    ),
+}
 _CONFIG_FILENAMES = ["aptl.json"]
+
+
+def validate_compose_project_name(value: str) -> str:
+    """Return a bounded Compose project token or raise ``ValueError``."""
+
+    if not _COMPOSE_PROJECT_NAME_PATTERN.fullmatch(value):
+        raise ValueError(
+            "deployment.project_name must be 1-63 lowercase letters, "
+            "digits, hyphens, or underscores and start with a letter or digit"
+        )
+    return value
 
 
 class LabSettings(BaseModel):
@@ -45,11 +68,11 @@ class ContainerSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # Defaults match the full DEFAULT_ACES_SCENARIO (techvault-operational) that
+    # Defaults match the full TechVault env-pack scenario that
     # `aptl lab start` provisions when no scenario is given, so a plain
     # `aptl lab init` + `aptl lab start` brings up the complete lab the
     # walkthrough documents. With soc/enterprise/dns/fileshare off, Compose only
-    # created the wazuh/victim/kali subset while the ACES handoff still tried to
+    # created the wazuh/victim/kali subset while the RAES handoff still tried to
     # wire the scenario's ad/dns/cortex/db nodes, so start failed with
     # "No such container". `reverse` and `mail` stay off — they are not part of
     # that scenario.
@@ -65,10 +88,7 @@ class ContainerSettings(BaseModel):
 
     def enabled_profiles(self) -> list[str]:
         """Return docker compose profile names for enabled containers."""
-        return [
-            name for name in type(self).model_fields
-            if getattr(self, name)
-        ]
+        return [name for name in type(self).model_fields if getattr(self, name)]
 
 
 class RunStorageConfig(BaseModel):
@@ -84,6 +104,61 @@ class RunStorageConfig(BaseModel):
     s3_bucket: str | None = None
     # Future
     s3_prefix: str = "runs/"
+
+
+class ScenarioSourceConfig(BaseModel):
+    """Which scenario APTL realizes, and where its bytes come from.
+
+    A backend is handed a scenario; it does not own one. Selecting it is an
+    operator decision made before ``aptl lab start`` rather than something the
+    backend decides or switches at runtime, so it lives here.
+
+    ``root`` is where the scenario's own inputs — its start-state document and
+    the content it declares — are anchored. ``None`` keeps the historical
+    behaviour of resolving them inside the APTL checkout. A configured root is
+    operator input and is treated as untrusted: it must be a relative path that
+    cannot escape the project.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    identity: str = "techvault"
+    root: str | None = None
+    # ``env-pack`` (the default since #875) resolves the scenario from the
+    # bundled ``raes-env-packs`` pack named by ``identity``, staged and validated
+    # before use, with no host paths in the document. ``project-tree`` is the
+    # legacy path that resolves it from the APTL checkout and requires an explicit
+    # scenario. The operator selects the source; the backend never switches it.
+    source: Literal["project-tree", "env-pack"] = "env-pack"
+
+    @field_validator("identity")
+    @classmethod
+    def validate_identity(cls, value: str) -> str:
+        """Refuse an identity that names nothing."""
+
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("scenario identity must not be empty")
+        return cleaned
+
+    @field_validator("root")
+    @classmethod
+    def validate_root(cls, value: str | None) -> str | None:
+        """Refuse a root that is absolute, escapes upward, or carries a NUL."""
+
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("scenario root must not be empty")
+        if "\x00" in cleaned:
+            raise ValueError("scenario root must not contain a NUL byte")
+        candidate = PurePosixPath(cleaned)
+        if candidate.is_absolute() or ".." in candidate.parts:
+            raise ValueError(
+                "scenario root must be a relative path contained by the project"
+            )
+        return cleaned
 
 
 class DeploymentConfig(BaseModel):
@@ -118,6 +193,13 @@ class DeploymentConfig(BaseModel):
             )
         return v
 
+    @field_validator("project_name")
+    @classmethod
+    def validate_project_name(cls, value: str) -> str:
+        """Validate the identity used by Compose and destructive label queries."""
+
+        return validate_compose_project_name(value)
+
 
 _TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -130,7 +212,7 @@ class LifecycleScheduleEntry(BaseModel):
     (the platform stamps lifecycle timestamps as timezone-aware UTC, so
     the schedule shares that frame). ``days`` is an optional weekday
     filter (empty means every day). ``scenario`` optionally names a
-    curated ACES startup scenario id to boot with.
+    curated RAES startup scenario id to boot with.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -187,6 +269,119 @@ class LabLifecyclePolicyConfig(BaseModel):
         return v
 
 
+def validate_installed_participant_model_id(provider: str, value: str) -> str:
+    """Validate one explicit, non-secret installed-provider model identity."""
+
+    immutable_pattern = _IMMUTABLE_PARTICIPANT_MODEL_PATTERNS.get(provider)
+    if (
+        immutable_pattern is None
+        or not isinstance(value, str)
+        or not _PARTICIPANT_MODEL_PATTERN.fullmatch(value)
+        or not immutable_pattern.fullmatch(value)
+    ):
+        raise ValueError("installed participant model identifier is invalid")
+    return value
+
+
+class InstalledParticipantModels(BaseModel):
+    """Closed model selections for APTL's installed participant providers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    claude: str | None = Field(default=None, strict=True, max_length=128)
+    codex: str | None = Field(default=None, strict=True, max_length=128)
+
+    @field_validator("claude", "codex")
+    @classmethod
+    def validate_model(cls, value: str | None, info: ValidationInfo) -> str | None:
+        """Reject implicit, ambiguous, or unsafe provider model identities."""
+
+        if value is None:
+            return None
+        assert info.field_name is not None
+        return validate_installed_participant_model_id(info.field_name, value)
+
+    def model_for(self, provider: str) -> str:
+        """Return one configured model or fail closed for installed use."""
+
+        if provider not in {"claude", "codex"}:
+            raise ValueError("unknown installed participant provider")
+        model = getattr(self, provider)
+        if model is None:
+            raise ValueError(
+                f"installed participant model is not configured for {provider}"
+            )
+        return model
+
+
+class ProcessEnvironmentCredentialSource(BaseModel):
+    """Select one exact parent-process variable without storing its value."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["process-environment"]
+    variable: str = Field(strict=True, min_length=1, max_length=128)
+
+    @field_validator("variable")
+    @classmethod
+    def validate_variable(cls, value: str) -> str:
+        """Admit one bounded POSIX-style environment variable locator."""
+
+        if not _CREDENTIAL_SOURCE_VARIABLE_PATTERN.fullmatch(value):
+            raise ValueError("participant credential source variable is invalid")
+        return value
+
+    def descriptor_digest(self) -> str:
+        """Identify this non-secret descriptor without publishing its locator."""
+
+        payload = json.dumps(
+            self.model_dump(mode="json"),
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        return "sha256:" + hashlib.sha256(payload).hexdigest()
+
+
+class InstalledParticipantCredentialSources(BaseModel):
+    """Closed configured credential-source selections for installed providers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    claude: ProcessEnvironmentCredentialSource | None = None
+    codex: ProcessEnvironmentCredentialSource | None = None
+
+    def source_for(self, provider: str) -> ProcessEnvironmentCredentialSource:
+        """Return one explicitly configured source or fail closed."""
+
+        if provider not in {"claude", "codex"}:
+            raise ValueError("unknown installed participant provider")
+        source = getattr(self, provider)
+        if source is None:
+            raise ValueError(
+                f"installed participant credential source is not configured for {provider}"
+            )
+        return source
+
+
+class ExperimentSettings(BaseModel):
+    """Strict non-secret apparatus settings approved for experiment binding."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    participant_action_timeout_seconds: int = Field(
+        default=120,
+        strict=True,
+        ge=1,
+        le=3600,
+    )
+    participant_models: InstalledParticipantModels = Field(
+        default_factory=InstalledParticipantModels
+    )
+    participant_credential_sources: InstalledParticipantCredentialSources = Field(
+        default_factory=InstalledParticipantCredentialSources
+    )
+
+
 class AptlConfig(BaseModel):
     """Top-level APTL configuration.
 
@@ -201,8 +396,10 @@ class AptlConfig(BaseModel):
     lab: LabSettings = LabSettings(name="aptl")
     containers: ContainerSettings = ContainerSettings()
     deployment: DeploymentConfig = DeploymentConfig()
+    scenario: ScenarioSourceConfig = ScenarioSourceConfig()
     run_storage: RunStorageConfig = RunStorageConfig()
     lifecycle_policy: LabLifecyclePolicyConfig | None = None
+    experiment: ExperimentSettings = ExperimentSettings()
 
 
 def load_config(path: Path) -> AptlConfig:
@@ -236,8 +433,7 @@ def load_config(path: Path) -> AptlConfig:
     # `except (FileNotFoundError, ValueError)` see a consistent shape.
     if not isinstance(data, dict):
         raise ValueError(
-            f"Config root must be a JSON object, got "
-            f"{type(data).__name__}: {path}"
+            f"Config root must be a JSON object, got {type(data).__name__}: {path}"
         )
 
     log.debug("Loaded config from %s", path)

@@ -13,10 +13,9 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, TextIO
+from typing import TYPE_CHECKING, Optional
 
 from aptl.core.config import (
     AptlConfig,
@@ -33,7 +32,6 @@ from aptl.core.lab_types import (
     StartupOutcome,
 )
 from aptl.core.lifecycle_policy import (
-    LifecycleBusyError,
     LifecycleDecision,
     LifecycleState,
     _parse_iso,
@@ -41,7 +39,10 @@ from aptl.core.lifecycle_policy import (
     decide,
     load_state,
     save_state,
-    state_path,
+)
+from aptl.core.lifecycle_guard import (
+    canonical_lifecycle_project_root,
+    lifecycle_mutation_lock,
 )
 from aptl.core.runstore import resolve_active_run_dir
 from aptl.utils.logging import get_logger
@@ -51,13 +52,6 @@ if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("lifecycle_enforce")
-
-try:
-    import fcntl
-except ModuleNotFoundError:
-    # Windows does not provide POSIX flock; lifecycle locks become in-process.
-    fcntl = None
-
 
 # ---------------------------------------------------------------------------
 # Activity signal + single-owner lock
@@ -102,41 +96,10 @@ def _latest_activity_at(project_dir: Path, state: LifecycleState) -> Optional[da
     return max(candidates) if candidates else None
 
 
-@contextmanager
-def _single_owner_lock(project_dir: Path) -> Iterator[None]:
-    """Hold an exclusive non-blocking flock for the duration of a tick/loop.
+def _single_owner_lock(project_dir: Path) -> Iterator[Path]:
+    """Return the shared project mutation guard for compatibility tests."""
 
-    Raises :class:`LifecycleBusyError` when another owner already holds it.
-    """
-    lock_path = state_path(project_dir).parent / ".lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    handle = lock_path.open("w")
-    try:
-        _try_lock_lifecycle(handle)
-        try:
-            yield
-        finally:
-            _unlock_lifecycle(handle)
-    finally:
-        handle.close()
-
-
-def _try_lock_lifecycle(handle: TextIO) -> None:
-    """Acquire the lifecycle owner lock on POSIX hosts."""
-    if fcntl is None:
-        return
-    try:
-        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError as exc:
-        raise LifecycleBusyError(
-            "another lifecycle owner is active (enforce/monitor lock held)"
-        ) from exc
-
-
-def _unlock_lifecycle(handle: TextIO) -> None:
-    """Release the lifecycle owner lock on POSIX hosts."""
-    if fcntl is not None:
-        fcntl.flock(handle, fcntl.LOCK_UN)
+    return lifecycle_mutation_lock(project_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +185,9 @@ def _apply_teardown(
     )
 
 
-def _resolve_schedule_scenario(project_dir: Path, scenario: Optional[str]) -> Optional[Path]:
+def _resolve_schedule_scenario(
+    project_dir: Path, scenario: Optional[str]
+) -> Optional[Path]:
     """Resolve an optional schedule scenario id to its SDL path."""
     if not scenario:
         return None
@@ -324,15 +289,16 @@ def enforce_once(
     owner holds the project lock.
     """
     now = datetime.now(timezone.utc) if now is None else _to_utc(now)
-    policy, failure = _policy_or_failure(project_dir)
+    project_root = canonical_lifecycle_project_root(project_dir)
+    policy, failure = _policy_or_failure(project_root)
     if failure is not None:
         return failure
     if policy is None:
         return LabResult(
             success=True, message="lifecycle: no policy configured; nothing to enforce"
         )
-    with _single_owner_lock(project_dir):
-        return _enforce_locked(project_dir, policy, now, backend, grace_minutes)
+    with _single_owner_lock(project_root) as locked_project_root:
+        return _enforce_locked(locked_project_root, policy, now, backend, grace_minutes)
 
 
 def run_monitor(
@@ -350,17 +316,18 @@ def run_monitor(
     one-shot ``enforce`` — cannot interleave. Each tick reloads the policy so
     edits to ``aptl.json`` take effect without a restart.
     """
-    policy, failure = _policy_or_failure(project_dir)
+    project_root = canonical_lifecycle_project_root(project_dir)
+    policy, failure = _policy_or_failure(project_root)
     if failure is not None:
         return [failure]
     if policy is None:
         log.info("No lifecycle_policy configured; monitor has nothing to do")
         return []
     results: list[LabResult] = []
-    with _single_owner_lock(project_dir):
+    with _single_owner_lock(project_root) as locked_project_root:
         tick = 0
         while max_ticks is None or tick < max_ticks:
-            policy, failure = _policy_or_failure(project_dir)
+            policy, failure = _policy_or_failure(locked_project_root)
             if failure is not None:
                 results.append(failure)
                 break
@@ -368,7 +335,9 @@ def run_monitor(
                 break
             now = datetime.now(timezone.utc)
             results.append(
-                _enforce_locked(project_dir, policy, now, backend, grace_minutes)
+                _enforce_locked(
+                    locked_project_root, policy, now, backend, grace_minutes
+                )
             )
             tick += 1
             if max_ticks is not None and tick >= max_ticks:

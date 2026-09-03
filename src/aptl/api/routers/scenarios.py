@@ -1,9 +1,9 @@
 """Scenario catalog API endpoints (UI-008c list + UI-008d detail).
 
-Exposes the curated ACES scenario catalog as narrow card summaries for the Lab
+Exposes the curated RAES scenario catalog as narrow card summaries for the Lab
 Home entry points, and a backend-owned workbench *detail* projection for the
 ``/scenarios/[id]`` route. Both project from the curated catalog
-(``scenarios/catalog.json``) and the ACES SDL parser authority; neither exposes
+(``scenarios/catalog.json``) and the RAES SDL parser authority; neither exposes
 the internal catalog ``path`` locator or raw parser output.
 """
 
@@ -38,7 +38,7 @@ def _load_scenario_summaries(project_dir: Path) -> list[ScenarioSummaryResponse]
 
     Returns an empty list when no catalog file is present (a lab need not ship
     a curated catalog). A malformed or schema-invalid catalog is logged and
-    degrades to an empty list. An individual entry whose ACES SDL cannot be
+    degrades to an empty list. An individual entry whose RAES SDL cannot be
     resolved/parsed still lists — with an invalid validation state and no
     required containers — so one broken scenario never fails the whole page.
     """
@@ -84,7 +84,7 @@ def _load_scenario_detail(
 async def list_scenarios(
     project_dir: Annotated[Path, Depends(get_project_dir)],
 ) -> list[ScenarioSummaryResponse]:
-    """List the curated ACES scenario catalog as enriched card summaries."""
+    """List the curated RAES scenario catalog as enriched card summaries."""
     log.info("GET /scenarios")
     return await asyncio.to_thread(_load_scenario_summaries, project_dir)
 

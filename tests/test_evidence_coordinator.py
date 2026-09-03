@@ -3,7 +3,7 @@
 Exercises the lifecycle + terminal-semantics contract with fake collectors and
 a real ``LocalRunStore``: distinct dispositions for success / startup-failure /
 finalization-failure / truncation / accepted-degradation, reverse-order stop,
-content-addressed persistence, ACES evidence records, and the never-empty-on-
+content-addressed persistence, RAES evidence records, and the never-empty-on-
 error rule.
 """
 

@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Brad Edwards" }]
-keywords = ["purple-team", "security", "cyber-range", "wazuh", "kali", "mcp", "aces"]
+keywords = ["purple-team", "security", "cyber-range", "wazuh", "kali", "mcp", "raes"]
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -30,9 +30,14 @@ dependencies = [
     "opentelemetry-sdk>=1.33.0",
     "opentelemetry-exporter-otlp-proto-http>=1.33.0",
     "opentelemetry-semantic-conventions>=0.54b0",
-    "cryptography>=42.0.0",
-    "aces-sdl>=0.23.1,<0.24.0",
+    "cryptography>=50.0.0",
+    "raes==3.3.0",
+    "raes-env-packs==3.9.0",
+    "mcp>=1.27.0,<2.0.0",
     "rfc8785>=0.1.4,<0.2.0",
+    # Imported directly by aptl.core.experiment.resolver; previously satisfied
+    # only transitively through the upstream SDL distribution.
+    "blake3>=1.0.8,<2",
 ]
 
 [project.urls]
@@ -48,6 +53,12 @@ aptl-misp-suricata-sync = "aptl.services.misp_suricata_sync.main:main"
 s3 = [
     "boto3>=1.28.0",
 ]
+# Optional Parquet projection for the EXP-008 evidence bundle (in-process,
+# loss-accounted). Kept out of the runtime install: without it, the bundle
+# records a `projection-unavailable` limitation instead of failing.
+parquet = [
+    "pyarrow>=17.0.0",
+]
 web = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
@@ -62,10 +73,43 @@ dev = [
     "httpx>=0.27.0",
     "hypothesis>=6.0.0",
     "ruff>=0.15.0",
+    # EXP-008 Parquet-projection tests exercise pyarrow in-process; CI installs
+    # requirements/dev.txt, so the projection's mapping/schema-evolution tests
+    # run there rather than silently skipping.
+    "pyarrow>=17.0.0",
 ]
 docs = [
     "mkdocs-material>=9.5.0",
     "mkdocs-git-revision-date-localized-plugin>=1.2.0",
+]
+
+# CI-only tooling. These are not part of any install a user performs, so they are
+# a dependency group rather than an optional-dependency extra. They live here so
+# `uv.lock` stays the single source of truth for every Python artifact CI
+# installs — which is what lets `requirements/ci.txt` be generated with hashes
+# instead of CI running an unpinned `pip install pre-commit` (issue #847).
+[dependency-groups]
+ci = [
+    "pre-commit>=4.0.0",
+    "pip-audit>=2.7.0",
+    "build>=1.2.0",
+    "cyclonedx-bom>=6.0.0",
+]
+
+# The PEP 517 build backend, locked like everything else. `--require-hashes`
+# only covers what pip *resolves*; a source install (`pip install -e .`) or
+# `python -m build` otherwise spins up an isolated build environment and fetches
+# `[build-system].requires` from PyPI with no hash checking at all — an unpinned
+# hole straight through the middle of the hashed-install contract. Exporting
+# this group into every requirements file lets those commands run with
+# `--no-build-isolation` / `--no-isolation` against a hash-verified backend.
+build = [
+    "hatchling>=1.27.0",
+    # hatchling imports `editables` to build an editable wheel. Under build
+    # isolation it would fetch this itself; with isolation off it has to be
+    # present (and hashed) up front, or every `pip install -e .` fails at
+    # metadata generation.
+    "editables>=0.5",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -119,12 +163,19 @@ source = ["aptl"]
 [tool.coverage.report]
 show_missing = true
 # Non-POSIX branches (file modes are advisory off POSIX) cannot be exercised
-# on the Linux CI runner. Excluding the guard clause keeps these
-# platform-specific paths out of coverage without inline trailing
-# ``# pragma: no cover`` comments (SonarCloud S139). ``exclude_also`` extends
-# — not replaces — coverage's defaults, so ``# pragma: no cover`` still works.
+# on the Linux CI runner, and ``if TYPE_CHECKING:`` blocks never run at all.
+# Excluding these guard clauses here keeps such paths out of coverage without
+# inline trailing ``# pragma: no cover`` comments (SonarCloud S139).
+# ``exclude_also`` extends — not replaces — coverage's defaults, so
+# ``# pragma: no cover`` still works.
 exclude_also = [
     "if os.name != \"posix\":",
+    "if os.name == \"nt\":",
+    "except metadata.PackageNotFoundError:",
+    "if TYPE_CHECKING:",
+    # Low-level Windows handle bindings are exercised by Windows CI only;
+    # Linux CI covers the platform-neutral orchestration around them.
+    "def _windows_",
 ]
 
 [tool.coverage.xml]

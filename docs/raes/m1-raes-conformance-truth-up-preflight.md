@@ -1,0 +1,236 @@
+# M1 RAES Conformance Truth-Up Preflight
+
+!!! warning "Superseded in part (2026-07-12, issue #690)"
+    This is a dated preflight record, kept as written. Where it names the
+    captured `scenarios/techvault.sdl.yaml`, the SCN-010 parity inventory
+    (`docs/raes/parity-inventory.yaml`), the parity-manifest gate check, the
+    `aptl raes-inventory` command, or the per-asset mapping ledgers, it no
+    longer describes the repository: all of them were removed in #690. The
+    asset-inventory capture capability now lives in RAES; APTL keeps
+    `scenarios/techvault-operational.sdl.yaml` as its only driving contract.
+    See the Capture Inventory and Parity-Inventory Removal Addendum in
+    [ADR-046](../adrs/adr-046-dynamic-raes-scenario-realization.md).
+
+This note is the architecture preflight for issue #599. It is guidance, not an
+implementation plan. ADR-035 remains the binding RAES adoption decision,
+ADR-046 remains the dynamic realization decision, and ADR-044 remains the run
+record boundary. This note narrows the guardrails for making APTL's
+`full-remote-control-plane` backend claim honest end to end.
+
+## Architecture Decisions
+
+- Treat M1 as a contract-honesty and live-proof milestone, not a new backend
+  framework. APTL already has one RAES runtime target:
+  `create_aptl_runtime_target()` with `AptlProvisioner`, `AptlOrchestrator`,
+  `AptlEvaluator`, and `AptlParticipantRuntime`.
+- `create_aptl_manifest()` is the only APTL source for the published backend
+  manifest. Do not add a checked-in manifest JSON, local capability schema, or
+  profile-specific shim.
+- Contract-first ordering is mandatory. A capability, controlled-vocabulary
+  term, contract id, score field, participant behavior feature, or profile
+  requirement must exist in the RAES repo/package before APTL references it.
+  APTL consumes RAES authorities; it does not front-run them.
+- A manifest capability is valid only when the same target realizes it through
+  live infrastructure or a contract-clean control-plane path. Conformance is a
+  verification boundary, not an assertion boundary.
+- Evaluation progression must be truthful. `AptlEvaluator` may publish
+  `PENDING`, `RUNNING`, and terminal condition/objective outcomes only when
+  those values are driven from real RTE-001 observations or from an upstream
+  RAES evaluation contract that defines the field. APTL does not declare the
+  deprecated SDL scoring chain as a runtime capability.
+- Participant runtime live actions must be compiled-artifact and realization
+  driven. The legacy `DEFAULT_PARTICIPANT_ACTIONS` TechVault probe can remain a
+  compatibility fallback, but new live conformance behavior must use
+  `participant_action_specs_for_scenario()` and the interpreted realization
+  context rather than more hardcoded scenario branches.
+- Documentation truth-up is part of the contract surface. Current docs,
+  adapter docstrings, preflight notes, CI labels, and gate names must either
+  name `full-remote-control-plane` as the current claim or clearly mark older
+  `provisioning-only`, `orchestration-capable`, and
+  `orchestration-evaluation` text as historical.
+
+## Required Cross-Cutting Concerns
+
+- RAES authorities: `raes.parse_sdl_file`, `compile_runtime_model`,
+  `RuntimeManager`, `RuntimeControlPlane`, `RuntimeTarget`, `ExecutionPlan`,
+  `BackendManifest`, `backend_manifest_payload()`, `run_target_conformance()`,
+  `raes conformance backend --profile full-remote-control-plane`, and RAES
+  contract dataclasses for diagnostics, runtime snapshots, workflow,
+  evaluation, and participant runtime.
+- APTL RAES seams: `src/aptl/backends/raes.py`,
+  `raes_manifest.py`, `raes_diagnostics.py`, `raes_realization.py`,
+  `raes_realization_model.py`, `raes_profiles.py`, `raes_orchestrator.py`,
+  `raes_evaluator.py`, `raes_participant_runtime.py`,
+  `raes_participant_actions.py`, and `raes_participant_bindings.py`.
+- Runtime execution owners: `aptl.core.runtime.workflow_engine.WorkflowEngine`
+  for workflow progression and objective outcome propagation; do not publish
+  `aptl.core.runtime` records as RAES DTOs.
+- Deployment owners: `DeploymentBackend`, `DockerComposeBackend`,
+  `SSHComposeBackend`, `ComposeRealizationMixin`, `ComposeQueryMixin`,
+  project-name scoping, compose-project label filters, bounded
+  `container_exec()`, and typed image/network realization methods.
+- Config and secret owners: strict `AptlConfig`, `DeploymentConfig`,
+  `ContainerSettings.enabled_profiles()`, `load_config()`, `load_dotenv()`,
+  `env_vars_from_dict()`, `find_placeholder_env_values()`, ADR-028 generated
+  config, ADR-029 secret handling, and ADR-034 SOC TLS material.
+- Persistence and evidence owners: `LocalRunStore.write_json()` /
+  `write_jsonl()` / `append_jsonl()`, `RangeSnapshot.to_dict()`,
+  `build_reproducibility_record()`, `AptlRealization.details()`, and existing
+  curated/live-gate evidence directories.
+- Validation and workflow gates: `src/aptl/validation/techvault_gate.py`,
+  `src/aptl/validation/_gate_checks.py`,
+  `src/aptl/validation/techvault_live_gate.py`, `_live_gate_checks.py`,
+  `tests/test_raes_backend.py`, `tests/test_raes_evaluator.py`,
+  `tests/test_raes_orchestrator.py`, `tests/test_techvault_static_gate.py`,
+  `.pre-commit-config.yaml`, and `.github/workflows/checks.yml`.
+
+## Security And Validation Layers
+
+- **RAES parser/compiler gate:** authored scenarios enter through RAES parsing,
+  import verification, semantic compilation, planner diagnostics, and runtime
+  manager planning. APTL must not add local SDL, capability, workflow,
+  evaluation, participant, or scoring mirror schemas.
+- **Manifest/profile gate:** `create_aptl_manifest()` must serialize through
+  `backend_manifest_payload()` and pass both `run_target_conformance()` and the
+  published CLI profile. Missing RAES corpus/profile/CLI support is a failure,
+  not a waiver.
+- **Runtime target gate:** the target components must match the manifest:
+  provisioner, orchestrator, evaluator, and participant runtime all present,
+  method-compatible, and returning RAES `ApplyResult` / `RuntimeSnapshot`
+  payloads.
+- **Evaluation envelope gate:** result and history state must use RAES
+  evaluation dataclasses and diagnostics. Do not fabricate score progression,
+  terminal outcomes, or history events to satisfy conformance.
+- **Participant envelope gate:** episode state/history, behavior history,
+  shared state records, action contracts, and observation boundaries must use
+  RAES participant contracts and snapshot validators. A successful command exit
+  is not enough without contract-clean snapshot state.
+- **Deployment and OS exposure gate:** live actions, Docker, Compose, image,
+  network, container, and host operations stay behind `DeploymentBackend`.
+  Commands are argv lists with bounded timeouts. Do not pass tokens,
+  passwords, cookies, private keys, generated config, or rendered secret values
+  in argv, shell strings, URLs, logs, diagnostics, or persisted proof JSON.
+- **Config/env binding gate:** durable non-secret knobs belong in strict
+  `AptlConfig`; runtime secrets belong in `.env` / `EnvVars` with placeholder
+  checks. Diagnostics may name a variable, never its value.
+- **Isolation gate:** shared-daemon operations must remain project-scoped by
+  compose project labels and configured project name. Do not inspect or act on
+  unscoped `aptl-*` containers or networks.
+- **Error-envelope gate:** RAES-facing failures are RAES `Diagnostic` records
+  and operation-status details. APTL-facing failures remain `LabResult`,
+  `StartupDiagnostic`, `GateReport`, `LiveGateReport`, API schemas, or pytest
+  assertions. Every message crossing CLI/API/log/persistence boundaries must be
+  redacted with the existing redactor.
+- **Persistence gate:** structured conformance, live-proof, snapshot, and run
+  evidence uses `LocalRunStore` JSON/JSONL writers or existing redacted
+  snapshot summaries. `write_file()` / `copy_file()` are inappropriate for
+  secret-shaped structured data because they are intentionally pass-through.
+- **API/auth gate:** if any new proof or status surface is exposed through the
+  web API, it must use `verify_token`, `WebAuthSettings`, BFF CSRF/host gates,
+  and narrow Pydantic response projections. Do not expose raw RAES objects or
+  internal paths directly.
+
+## Extensibility Seam
+
+The seam is:
+
+`(scenario_path, backend_profile, target_name, manifest_contract_versions,
+execution_plan, realization_details, participant_action_descriptor,
+evaluation_address, objective_address, run_id, deployment_backend_provider)`.
+
+The next reasonable variation is another scenario, participant action,
+evaluation resource, or deployment provider. That should require adding a
+validated descriptor or typed backend parameter, not editing a TechVault branch,
+forking the manifest generator, adding a new conformance runner, or copying
+RAES schemas into APTL.
+
+## Issue #606 Evaluator Surface Addendum
+
+Issue #606 is an evaluator truth-up on the already-declared
+`full-remote-control-plane` surface, not a manifest promotion and not a new
+score schema. After RAES ADR-073, APTL narrows that surface to conditions and
+objectives: SDL `metrics`, `evaluations`, `tlos`, and `goals` are not declared
+runtime capabilities. `AptlEvaluator` remains the RAES adapter boundary, and the
+public DTOs remain `EvaluationExecutionState` plus `EvaluationHistoryEvent`
+records stored on `RuntimeSnapshot.evaluation_results` and
+`RuntimeSnapshot.evaluation_history`.
+
+Live evaluator progression must be derived from observed run state for the
+current evaluation address and run id. Registration state (`PENDING` plus
+`evaluation_started`) is truthful only before observation; it is not progress.
+When observation advances a supported condition or objective, the adapter may
+emit `RUNNING`, `READY`, or `FAILED` only with history events that match the
+compiled `execution_contract`.
+
+Pass/fail fields are controlled by the compiled `result_contract`, not by APTL
+convention. Condition and objective resources may expose `passed` only when
+`supports_passed` is true. Do not treat objective completion count, elapsed
+time, workflow step count, metric totals, or thresholds as an APTL score.
+
+The conformance re-verification path for #606 is the existing one:
+`evaluation_result_contract_diagnostics()`, `run_target_conformance()` for
+`full-remote-control-plane`, the published `raes conformance backend --profile
+full-remote-control-plane`, and the live-gate run archive as evidence that the
+declared evaluator surface was exercised against live behavior. If persisted
+evidence is added, it must be referenced through `evidence_refs` and written via
+`LocalRunStore.write_json()` / `write_jsonl()` / `append_jsonl()`, never by
+embedding raw SOC payloads or backend stderr into result envelopes.
+
+The extensibility parameter for evaluator progression is the tuple
+`(evaluation_address, result_contract, execution_contract, observed_state,
+run_id)`. The next variation should be another condition/objective scenario or
+evidence source, not a TechVault branch, a hardcoded score curve, a duplicate
+validator, or a separate live-gate-only score model.
+
+## Whole-Repo View
+
+- Canonical configs: `.ground-control.yaml`, `.gc/plan-rules.md`,
+  `pyproject.toml`, `.pre-commit-config.yaml`, `.github/workflows/checks.yml`,
+  `aptl.json` via `AptlConfig`, `.env` via `EnvVars`, and
+  `docker-compose.yml`.
+- Canonical scripts/commands: `pytest`, `pre-commit run --all-files`,
+  manual `pre-commit run raes-scenario-gate --hook-stage manual`, and
+  `raes conformance backend --profile full-remote-control-plane`.
+- Canonical docs/records: ADR-035, ADR-044, ADR-046, this note,
+  `docs/raes/parity-inventory.yaml`, static/live validation gate docs, and
+  adapter docstrings.
+- Runtime layers touched: RAES parser/compiler/planner/control plane, APTL
+  RAES adapters, lab lifecycle, deployment backend, Docker/SSH Compose runner,
+  container exec, snapshot capture, runstore persistence, API/auth if exposed,
+  and CI/pre-commit gates.
+
+## Gotchas And Anti-Patterns
+
+- Declaring a manifest capability because conformance only checks component
+  shape, while live infrastructure cannot realize it.
+- Adding unsupported contract ids or vocabulary tokens locally before RAES
+  publishes them upstream.
+- Keeping adapter docstrings or docs that still describe APTL as merely
+  orchestration-capable without a historical label.
+- Treating evaluator registration as live evaluation progression.
+- Treating participant episode lifecycle calls as lab start/stop operations.
+- Extending `DEFAULT_PARTICIPANT_ACTIONS` as the primary design instead of
+  using runtime-derived action bindings.
+- Calling raw `docker`, `docker compose`, `curl`, or `ssh` from RAES adapters
+  or proof code.
+- Creating duplicate DTOs, schemas, validation helpers, exception hierarchies,
+  redaction helpers, conformance scripts, run manifests, readiness taxonomies,
+  or API projections.
+- Branching on `techvault`, file names, compose profiles, or catalog ids inside
+  canonical adapter logic.
+- Flattening RAES workflow/evaluation/participant histories into summaries
+  before RAES validation and persistence boundaries have handled them.
+
+## Non-Goals
+
+- Do not implement issue #599 in this preflight.
+- Do not define new RAES contracts, profiles, controlled vocabulary, or
+  scenario language in APTL.
+- Do not redesign `RuntimeControlPlane`, `RuntimeTarget`, `DeploymentBackend`,
+  Docker Compose topology, startup ordering, generated config, SOC TLS, web
+  auth, terminal relay, snapshot registry, or run archive layout.
+- Do not make participant runtime a general shell-execution API.
+- Do not make evaluator progression a simulated state machine detached from real
+  condition/objective observations.
+- Do not replace the static/live gates with a new M1-specific gate. Extend the
+  existing gate owners and profile parameters when implementation begins.

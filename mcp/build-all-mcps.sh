@@ -7,12 +7,12 @@ echo "=== Building APTL MCP Servers ==="
 
 # Build shared dependency first
 echo "--- Building aptl-mcp-common (shared dependency) ---"
-cd "$SCRIPT_DIR/aptl-mcp-common" && npm install && npm run build
+cd "$SCRIPT_DIR/aptl-mcp-common" && npm ci && npm run build
 
 # Build all MCP servers
 for server in mcp-red mcp-reverse mcp-soar mcp-indexer mcp-wazuh mcp-casemgmt mcp-network mcp-threatintel; do
   echo "--- Building $server ---"
-  cd "$SCRIPT_DIR/$server" && npm install && npm run build
+  cd "$SCRIPT_DIR/$server" && npm ci && npm run build
 done
 
 echo "=== All MCP servers built successfully ==="

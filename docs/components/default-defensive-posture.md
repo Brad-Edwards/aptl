@@ -665,20 +665,20 @@ Read it as design intent, not as documentation of today's behavior.
 in the GRC workflow platform describes a `mode (red/blue/purple)` field on each
 scenario YAML that would gate which posture defaults apply per run.
 
-**Today's reality is ACES-only for supported startup:**
+**Today's reality is RAES-only for supported startup:**
 
 - Historical APTL-local scenario YAML files now live under
   `scenarios/archive/` and are reference-only. They are not catalog rows,
   startup inputs, or runtime schema examples.
 - Current startup selection uses `scenarios/catalog.json`,
-  `aptl.core.scenario_catalog.resolve_scenario_selection()`, and ACES SDL
-  parsing. The curated TechVault ACES SDL files do not define a local
+  `aptl.core.scenario_catalog.resolve_scenario_selection()`, and RAES SDL
+  parsing. The curated TechVault RAES SDL files do not define a local
   per-run posture mode field.
 
 **No runtime mode-gating exists.** Even when a scenario YAML's `mode:`
 appears in archived reference fixtures, supported startup code does not read it
 and no code branches on the value to apply per-mode posture defaults. Any
-future posture-mode feature must be designed against ACES SDL and the catalog
+future posture-mode feature must be designed against RAES SDL and the catalog
 handoff, not by reviving the archived YAML format.
 
 When mode lands as a real SDL feature, the intended contract is:

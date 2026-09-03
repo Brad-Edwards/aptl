@@ -1,6 +1,6 @@
 """Real-Docker proof: a real TechVault node (dns) boots working image-free.
 
-Authors the dns node from its real bind9 config + zones as declared ACES state
+Authors the dns node from its real bind9 config + zones as declared RAES state
 (admitted straight from `scenarios/techvault-operational.sdl.yaml`, not a
 reauthored fixture), realizes it via the generic materializer, and asserts
 named is active and resolves the real TechVault zone. Zero product code.
@@ -14,15 +14,20 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from aces_sdl import parse_sdl_file
-from aces_runtime.manager import RuntimeManager
+from raes import parse_sdl_file
+from raes_runtime.manager import RuntimeManager
 
-from aptl.backends.aces import create_aptl_runtime_target
-from aptl.backends.aces_materializer import PlaceFileOp, PlaceProjectContentOp
-from aptl.backends.aces_node_materialization import realize_node
-from aptl.backends.aces_realization import interpret_provisioning_plan
+from aptl.backends.raes import create_aptl_runtime_target
+from aptl.backends.raes_materializer import (
+    PlaceFileOp,
+    PlacePackArtifactOp,
+    PlaceProjectContentOp,
+)
+from aptl.backends.raes_node_materialization import realize_node
+from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
 from aptl.core.deployment.docker_compose import DockerComposeBackend
+from tests.helpers import techvault_scenario_bundle
 
 pytestmark = pytest.mark.integration
 
@@ -34,7 +39,7 @@ def _docker_available() -> bool:
 
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
-def test_dns_node_boots_image_free_and_resolves():
+def test_dns_node_boots_image_free_and_resolves(tmp_path):
     repo = Path(__file__).resolve().parent.parent
     subprocess.run(
         ["docker", "build", "-t", "aptl/generic-systemd-base-debian:latest",
@@ -45,10 +50,15 @@ def test_dns_node_boots_image_free_and_resolves():
 
     cfg = AptlConfig(lab={"name": "x"}, containers={})
     be = DockerComposeBackend(project_dir=repo, project_name="aptl")
+    bundle = techvault_scenario_bundle(tmp_path)
     plan = RuntimeManager(
-        create_aptl_runtime_target(project_dir=repo, config=cfg, backend=be)
-    ).plan(parse_sdl_file(repo / "scenarios/techvault-operational.sdl.yaml"))
-    real = interpret_provisioning_plan(plan=plan.provisioning, project_dir=repo, config=cfg)
+        create_aptl_runtime_target(
+            project_dir=repo, config=cfg, backend=be, bundle=bundle
+        )
+    ).plan(parse_sdl_file(bundle.sdl_path))
+    real = interpret_provisioning_plan(
+        plan=plan.provisioning, config=cfg, bundle=bundle, component_root=repo
+    )
     assert [x.message for x in real.diagnostics if x.is_error] == []
     spec = real.deployment_spec([])
 
@@ -67,9 +77,21 @@ def test_dns_node_boots_image_free_and_resolves():
                     is_directory=c.source_kind == "project-directory",
                 )
             )
+        elif c.source_kind in ("pack-file", "pack-directory"):
+            # The env-pack default (#875) ships the dns node's named.conf and
+            # zones as pack artifacts: digest-bound bytes resolved from the
+            # staged pack, not host paths.
+            ops.append(
+                PlacePackArtifactOp(
+                    dest_path=dest,
+                    artifact_id=c.artifact_id,
+                    artifact_digest=c.artifact_digest,
+                    is_directory=c.source_kind == "pack-directory",
+                )
+            )
 
     try:
-        result = realize_node(dns_node, be, tuple(ops))
+        result = realize_node(dns_node, be, tuple(ops), scenario_root=bundle.root)
         assert result is None, getattr(result, "error", None)
         assert be.container_exec(
             "aptl-dns", ["systemctl", "is-active", "named.service"]

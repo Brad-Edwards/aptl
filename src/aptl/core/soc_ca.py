@@ -24,35 +24,23 @@ public surface stay re-exported here.
 
 from __future__ import annotations
 
-import secrets
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
 from cryptography import x509
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.serialization import pkcs12
+from cryptography.hazmat.primitives import hashes
 
-from aptl.core._soc_ca_builders import _build_ca, _build_server_cert
-from aptl.core._soc_ca_chain import (
-    _all_artifacts_present_and_consistent,
-    _keystore_unlocks_to,
-    _try_load_ca,
-    _try_load_service_leaf,
+from aptl.core._soc_ca_chain import _all_artifacts_present_and_consistent
+from aptl.core._soc_ca_generation import (
+    # Re-exported so the generator keeps its historical ``aptl.core.soc_ca``
+    # name after the split.
+    _generate_all as _generate_all,
 )
 from aptl.core._soc_ca_io import (
-    KEYSTORE_FILENAME,
-    KEYSTORE_PASSWORD_FILENAME,
     LAB_CA_RELDIR,
     PathContainmentError,
-    _atomic_write,
     _canonical_output_dir,
-    _enforce_mode,
-    _invalidate_keystore,
-    _pem_cert,
-    _pem_private_key,
-    _safe_service_subdir,
 )
 from aptl.utils.logging import get_logger
 
@@ -65,7 +53,9 @@ __all__ = (
     "PathContainmentError",
     "SOC_SERVICE_REGISTRY",
     "ServiceCert",
+    "derive_soc_service_certs",
     "ensure_soc_certs",
+    "soc_bundle_evidence",
 )
 
 # ---------------------------------------------------------------------------
@@ -102,6 +92,13 @@ class ServiceCert:  # NOSONAR python:S5663 - Python 3 dataclass; no need for exp
     needs_keystore: bool = False
 
 
+# Legacy in-tree fallback ONLY. An env-pack realization derives its SOC service
+# certificate set from the declared certificate-bundle *outputs* (see
+# ``derive_soc_service_certs``) so APTL never decides which services exist or
+# what identities they carry — that is authored in the SDL. This table is kept
+# solely for the in-tree ``aptl lab start`` path that has no realization spec to
+# derive from; it is never the primary decision source (issue #875, SDL-authority
+# class remediation).
 SOC_SERVICE_REGISTRY: tuple[ServiceCert, ...] = (
     ServiceCert(
         name="misp",
@@ -128,6 +125,83 @@ SOC_SERVICE_REGISTRY: tuple[ServiceCert, ...] = (
 )
 
 
+def derive_soc_service_certs(
+    output_paths: tuple[str, ...],
+) -> tuple[ServiceCert, ...]:
+    """Derive the SOC service certificate set from declared bundle outputs.
+
+    The SDL authors *which* SOC services get certificates and *what* each needs
+    as the certificate-bundle artifact's declared outputs — e.g.
+    ``misp/server.pem``, ``thehive/keystore.p12``. APTL derives the request set
+    from those paths instead of a hardcoded service registry, so it never decides
+    the range's service identity (issue #875):
+
+    - each first path segment names a service (root-level outputs like the CA's
+      ``lab-ca.pem`` are not a service);
+    - a ``.p12`` output for a service means it needs a PKCS#12 keystore;
+    - SANs are the service's own DNS name plus host-loopback for local access.
+
+    The subject CN is the conventional ``aptl-<service>`` (TLS verifies SANs, not
+    CN). The per-service PKCS#12 requirement is derived here from the declared
+    outputs; a first-class cert-request/keystore affordance is tracked upstream.
+    """
+
+    from pathlib import PurePosixPath
+
+    files_by_service: dict[str, set[str]] = {}
+    for raw in output_paths:
+        parts = PurePosixPath(raw).parts
+        # A root-level output (the CA) is not a per-service leaf.
+        if len(parts) < 2:
+            continue
+        files_by_service.setdefault(parts[0], set()).add(parts[-1])
+    return tuple(
+        ServiceCert(
+            name=service,
+            subject_cn=f"aptl-{service}",
+            sans=(service, "localhost", "127.0.0.1"),
+            needs_keystore=any(name.endswith(".p12") for name in files),
+        )
+        for service, files in sorted(files_by_service.items())
+    )
+
+
+def soc_bundle_evidence(
+    certs_dir: Path,
+    output_paths: tuple[str, ...],
+) -> dict[str, object] | None:
+    """Return non-secret proof that a realized SOC bundle is consistent, or None.
+
+    The SOC bundle is not the Wazuh ``root-ca.pem`` + ``*-key.pem`` shape -- it
+    carries its own CA name, ``.key`` private keys, and PKCS#12 keystores with
+    passphrase files -- so the Wazuh bundle validator cannot read it. Rather than
+    let a certificate bundle be reported realized on file presence alone, this
+    reuses the same chain check ``ensure_soc_certs`` uses: every leaf verifies
+    against the on-disk CA, every key derives its cert's public key, and every
+    keystore unlocks to a cert with the matching fingerprint (issue #875).
+
+    Only the CA's public fingerprint leaves this boundary; no key material, no
+    passphrase, and no path.
+    """
+
+    if not _all_artifacts_present_and_consistent(
+        certs_dir,
+        _CA_CERT_NAME,
+        _CA_KEY_NAME,
+        derive_soc_service_certs(output_paths),
+    ):
+        return None
+    try:
+        root = x509.load_pem_x509_certificate((certs_dir / _CA_CERT_NAME).read_bytes())
+    except (OSError, ValueError):
+        return None
+    return {
+        "public_root_sha256": root.fingerprint(hashes.SHA256()).hex(),
+        "chain_valid": True,
+        "san_valid": True,
+    }
+
+
 @dataclass
 class CertResult:  # NOSONAR python:S5663 - Python 3 dataclass; no need for explicit `object` base
     """Outcome of :func:`ensure_soc_certs`.
@@ -148,8 +222,17 @@ class CertResult:  # NOSONAR python:S5663 - Python 3 dataclass; no need for expl
 # ---------------------------------------------------------------------------
 
 
-def ensure_soc_certs(project_dir: Path) -> CertResult:
+def ensure_soc_certs(
+    project_dir: Path,
+    services: tuple[ServiceCert, ...] = SOC_SERVICE_REGISTRY,
+) -> CertResult:
     """Generate the lab CA + service certificates if any are missing.
+
+    ``services`` is the set of per-service certificate requests to issue. An
+    env-pack realization passes the set derived from the SDL's declared bundle
+    outputs (:func:`derive_soc_service_certs`); the in-tree ``aptl lab start``
+    path, which has no realization spec, falls back to
+    :data:`SOC_SERVICE_REGISTRY` (issue #875).
 
     Returns a :class:`CertResult` with ``generated=False`` when every
     required artifact is already on disk; otherwise generates the missing
@@ -171,7 +254,7 @@ def ensure_soc_certs(project_dir: Path) -> CertResult:
         return _fail_containment(project_dir / LAB_CA_RELDIR, exc)
 
     if _all_artifacts_present_and_consistent(
-        output_dir, _CA_CERT_NAME, _CA_KEY_NAME, SOC_SERVICE_REGISTRY
+        output_dir, _CA_CERT_NAME, _CA_KEY_NAME, services
     ):
         log.info(
             "SOC stack lab CA already present and consistent at %s",
@@ -180,7 +263,7 @@ def ensure_soc_certs(project_dir: Path) -> CertResult:
         return CertResult(success=True, generated=False, certs_dir=output_dir)
 
     log.info("Generating SOC stack lab CA + service certificates at %s", output_dir)
-    return _generate_with_error_envelope(output_dir)
+    return _generate_with_error_envelope(output_dir, services)
 
 
 def _fail_containment(certs_dir: Path, exc: PathContainmentError) -> CertResult:
@@ -199,7 +282,9 @@ def _fail_containment(certs_dir: Path, exc: PathContainmentError) -> CertResult:
     )
 
 
-def _generate_with_error_envelope(output_dir: Path) -> CertResult:
+def _generate_with_error_envelope(
+    output_dir: Path, services: tuple[ServiceCert, ...]
+) -> CertResult:
     """Wrap :func:`_generate_all` in the ADR-029 error-envelope policy.
 
     The cryptography stack raises a heterogeneous tree of exception
@@ -215,7 +300,7 @@ def _generate_with_error_envelope(output_dir: Path) -> CertResult:
     phase + exception class only.
     """
     try:
-        _generate_all(output_dir)
+        _generate_all(output_dir, services)
     except PathContainmentError as exc:
         # Containment violation per-service subdir; the message itself
         # is safe (it names the rejected path, not key material).
@@ -262,168 +347,3 @@ def _classify_failure_layer(exc: BaseException) -> str:
         if frame.filename.endswith("soc_ca.py") and frame.name:
             return frame.name.lstrip("_")
     return "soc_ca"
-
-
-# ---------------------------------------------------------------------------
-# Generation
-# ---------------------------------------------------------------------------
-
-
-def _generate_all(output_dir: Path) -> None:
-    """Generate any missing CA + service certificates under *output_dir*.
-
-    Permission contract (ADR-029 § Secret at rest):
-
-    - ``output_dir`` and each per-service subdir are ``0o700`` — the
-      host-side access control. No other local user can traverse in.
-    - Public certs (``lab-ca.pem``, ``server.pem``) are ``0o644`` so
-      bind-mounts and operator inspection work without root.
-    - Private keys (``lab-ca.key``, ``server.key``) and the env_file
-      keystore-password blobs are ``0o600``.
-    - PKCS#12 keystores are ``0o644`` because TheHive's non-root process reads
-      the bind-mounted file as a container UID that may not match the host user
-      that ran ``aptl lab start``. The owner-only parent directory remains the
-      host-side access control.
-
-    Symlink containment (ADR-029 § Secret at rest): each per-service
-    subdirectory is verified to be a real directory under ``output_dir``
-    before any write. A pre-planted ``config/soc_certs/<service>``
-    symlink pointing outside the project would otherwise redirect
-    generated private key material away from the gitignored tree.
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-    _enforce_mode(output_dir, 0o700, kind="directory")
-
-    ca_key, ca_cert = _ensure_ca_pair(output_dir)
-
-    for svc in SOC_SERVICE_REGISTRY:
-        _ensure_service_pair(output_dir, svc, ca_key, ca_cert)
-
-
-def _ensure_ca_pair(
-    output_dir: Path,
-) -> tuple[rsa.RSAPrivateKey, x509.Certificate]:
-    """Load or generate the CA cert + key under *output_dir*.
-
-    CA-pair validation: presence alone would let a drifted CA cert /
-    key pair flow into ``_build_server_cert`` (which signs with the
-    key while inheriting issuer from the unrelated cert) and ship
-    certs no client can verify. Same chain shape as the per-service
-    leaf reuse: both files exist + parse, derived public keys match,
-    NotAfter is still in the future (with a renewal-window margin).
-    """
-    ca_cert_path = output_dir / _CA_CERT_NAME
-    ca_key_path = output_dir / _CA_KEY_NAME
-    reusable_ca, ca_cert, ca_key = _try_load_ca(ca_cert_path, ca_key_path)
-    if not reusable_ca:
-        ca_key, ca_cert = _build_ca()
-        _atomic_write(ca_key_path, _pem_private_key(ca_key), mode=0o600)
-        _atomic_write(ca_cert_path, _pem_cert(ca_cert), mode=0o644)
-        return ca_key, ca_cert
-    # Re-apply the permission contract on the reuse path. Codex
-    # cycle-3 security finding: a pre-populated cert tree with
-    # loose modes would otherwise survive a `lab start` cycle
-    # because the consistency check accepted it.
-    _enforce_mode(ca_cert_path, 0o644, kind="file")
-    _enforce_mode(ca_key_path, 0o600, kind="file")
-    # reusable_ca contract: _try_load_ca returns (True, cert, key) only
-    # when both are non-None. The assert is a typing hint for static
-    # checkers, not a runtime guard the caller relies on.
-    assert ca_key is not None and ca_cert is not None
-    return ca_key, ca_cert
-
-
-def _ensure_service_pair(
-    output_dir: Path,
-    svc: ServiceCert,
-    ca_key: rsa.RSAPrivateKey,
-    ca_cert: x509.Certificate,
-) -> None:
-    """Materialize one service's leaf pair (+ optional keystore).
-
-    Extracted from ``_generate_all`` so each iteration of the registry
-    loop is a single named step instead of a 60-line inline body.
-    """
-    svc_dir = _safe_service_subdir(output_dir, svc.name)
-    svc_dir.mkdir(parents=True, exist_ok=True)
-    _enforce_mode(svc_dir, 0o700, kind="directory")
-    svc_cert_path = svc_dir / svc.cert_filename
-    svc_key_path = svc_dir / svc.key_filename
-
-    # A service's leaf pair is considered re-usable only when ALL
-    # of: both files exist; key loads; cert loads; cert + key share
-    # the same public key (no partial-write drift); cert is issued
-    # by the current CA with the required SANs; cert is not within
-    # its renewal window. Any failure → full re-issue. The keystore
-    # (if any) gets invalidated so it can be re-emitted from the
-    # freshly-paired key/cert below.
-    reusable, svc_key, svc_cert = _try_load_service_leaf(
-        svc_key_path, svc_cert_path, svc, ca_cert
-    )
-    if not reusable:
-        svc_key, svc_cert = _build_server_cert(svc, ca_key, ca_cert)
-        _atomic_write(svc_key_path, _pem_private_key(svc_key), mode=0o600)
-        _atomic_write(svc_cert_path, _pem_cert(svc_cert), mode=0o644)
-        _invalidate_keystore(svc_dir)
-    else:
-        # Reuse path — re-apply the permission contract so a
-        # pre-populated tree with relaxed modes doesn't ship as
-        # "consistent" with private keys readable to other local
-        # users (codex cycle-3 security finding).
-        _enforce_mode(svc_cert_path, 0o644, kind="file")
-        _enforce_mode(svc_key_path, 0o600, kind="file")
-
-    if svc.needs_keystore:
-        assert svc_key is not None and svc_cert is not None
-        _ensure_service_keystore(svc_dir, svc, svc_key, svc_cert, ca_cert)
-
-
-def _ensure_service_keystore(
-    svc_dir: Path,
-    svc: ServiceCert,
-    svc_key: rsa.RSAPrivateKey,
-    svc_cert: x509.Certificate,
-    ca_cert: x509.Certificate,
-) -> None:
-    """Materialize the PKCS#12 keystore + password for a Play service.
-
-    Splits out the keystore-only branch so ``_ensure_service_pair`` can
-    stay below the project's cyclomatic-complexity gate. A stale
-    keystore (one whose fingerprint disagrees with the new leaf) is
-    invalidated first so the write branch below re-emits it from the
-    freshly-paired key/cert.
-    """
-    ks_path = svc_dir / KEYSTORE_FILENAME
-    pw_path = svc_dir / KEYSTORE_PASSWORD_FILENAME
-    if (
-        ks_path.is_file()
-        and pw_path.is_file()
-        and not _keystore_unlocks_to(ks_path, pw_path, svc_cert)
-    ):
-        # Stale keystore from an older run whose CA/leaf cycle
-        # rotated. Invalidate so the next branch re-emits it.
-        _invalidate_keystore(svc_dir)
-    elif ks_path.is_file() and pw_path.is_file():
-        # Reuse-path permission reapply (codex cycle-3 sec).
-        _enforce_mode(ks_path, 0o644, kind="file")
-        _enforce_mode(pw_path, 0o600, kind="file")
-    if not (ks_path.is_file() and pw_path.is_file()):
-        password = secrets.token_urlsafe(24)
-        ks_bytes = pkcs12.serialize_key_and_certificates(
-            name=svc.name.encode(),
-            key=svc_key,
-            cert=svc_cert,
-            cas=[ca_cert],
-            encryption_algorithm=serialization.BestAvailableEncryption(
-                password.encode()
-            ),
-        )
-        _atomic_write(ks_path, ks_bytes, mode=0o644)
-        # Write the password in Docker Compose ``env_file`` format
-        # (``KEY=value``) so the TheHive/Cortex services can
-        # consume it via ``env_file:`` rather than baking the
-        # value into the rendered application.conf or passing it
-        # in argv. The KEY name is the same env var Play's
-        # ``${?HTTPS_KEYSTORE_PASSWORD}`` substitution expects.
-        env_blob = f"HTTPS_KEYSTORE_PASSWORD={password}\n".encode()
-        _atomic_write(pw_path, env_blob, mode=0o600)

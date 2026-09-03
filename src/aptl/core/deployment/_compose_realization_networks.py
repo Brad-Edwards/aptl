@@ -56,7 +56,7 @@ def _resolve_realization_networks(
     managed_networks: set[str],
     project_name: str,
 ) -> tuple[set[str], list[str]]:
-    """Resolve ACES network names to concrete project Docker network names."""
+    """Resolve RAES network names to concrete project Docker network names."""
 
     desired: set[str] = set()
     missing: list[str] = []
@@ -96,7 +96,7 @@ def _match_managed_network(
     managed_networks: set[str],
     project_name: str,
 ) -> str | None:
-    """Return the managed Docker network matching an ACES declaration."""
+    """Return the managed Docker network matching a RAES declaration."""
 
     for candidate in _network_name_candidates(declared, project_name):
         if candidate in managed_networks:
@@ -105,7 +105,7 @@ def _match_managed_network(
 
 
 def _network_name_candidates(declared: str, project_name: str) -> tuple[str, ...]:
-    """Return likely Compose network names for an ACES network identifier."""
+    """Return likely Compose network names for a RAES network identifier."""
 
     normalized = _network_token(declared)
     if not normalized:

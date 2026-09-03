@@ -69,3 +69,22 @@ def resolve_run_store(
     if not local_path.is_absolute():
         local_path = project_dir / local_path
     return LocalRunStore(local_path)
+
+
+def resolve_optional_config_for_cli(project_dir: Path) -> AptlConfig:
+    """Load ``aptl.json`` when present, otherwise return strict defaults.
+
+    Experiment admission has a valid config-free mode, but an existing config
+    must still be validated and passed to both persistence and binding
+    admission. Error text is intentionally fixed so Pydantic input values
+    cannot reach the CLI.
+    """
+
+    config_path = find_config(project_dir)
+    if config_path is None:
+        return AptlConfig()
+    try:
+        return load_config(config_path)
+    except (OSError, ValueError) as exc:
+        typer.echo("invalid aptl configuration", err=True)
+        raise typer.Exit(code=1) from exc

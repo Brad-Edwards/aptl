@@ -6,7 +6,7 @@
 
 > Historical note: ADR-035 supersedes this ADR as current scenario-authoring
 > authority. The APTL-local SDL parser and models described here were removed
-> after the ACES SDL cutover; this record remains historical context.
+> after the RAES SDL cutover; this record remains historical context.
 
 ## Context
 
@@ -92,7 +92,7 @@ current SDL surface rather than restoring a second scenario schema.
 The historical authoring schema for this ADR was the local SDL model and parser.
 After ADR-035, those local parser/model APIs are no longer authoritative. Any
 future scenario-level fields such as `mode`, stable IDs, versions, difficulty,
-or estimates must be designed through ACES SDL and the APTL catalog/runtime
+or estimates must be designed through RAES SDL and the APTL catalog/runtime
 handoff; they must not be read from raw YAML side channels, inferred from
 filenames, or reintroduced through a legacy local scenario schema.
 

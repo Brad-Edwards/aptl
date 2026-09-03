@@ -14,115 +14,41 @@ the remote daemon and behave identically to local Docker Compose.
 
 import hashlib
 import sys
-from dataclasses import dataclass, field, asdict
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.snapshot_models import (
+    ContainerSnapshot,
+    NetworkSnapshot,
+    RangeSnapshot,
+    SSHEndpoint,
+    ServiceEndpoint,
+    SoftwareVersions,
+    WazuhRulesSnapshot,
+)
 from aptl.utils.logging import get_logger
-from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
     from aptl.core.deployment import DeploymentBackend
 
 log = get_logger("snapshot")
 
-
-@dataclass
-class SoftwareVersions(object):
-    """Versions of key software components."""
-
-    python_version: str = ""
-    docker_version: str = ""
-    compose_version: str = ""
-    wazuh_manager_version: str = ""
-    wazuh_indexer_version: str = ""
-    aptl_version: str = ""
-    aces_sdl_version: str = ""
-
-
-@dataclass
-class ContainerSnapshot(object):
-    """State of a single Docker container."""
-
-    name: str = ""
-    image: str = ""
-    image_id: str = ""
-    status: str = ""
-    health: str = ""
-    labels: dict[str, str] = field(default_factory=dict)
-    networks: dict[str, str] = field(default_factory=dict)
-    ports: list[str] = field(default_factory=list)
-    image_digest: str = ""
-
-
-@dataclass
-class WazuhRulesSnapshot(object):
-    """Summary of Wazuh rule configuration."""
-
-    total_rules: int = 0
-    custom_rules: int = 0
-    custom_rule_files: list[str] = field(default_factory=list)
-    total_decoders: int = 0
-    custom_decoders: int = 0
-
-
-@dataclass
-class NetworkSnapshot(object):
-    """State of a Docker network."""
-
-    name: str = ""
-    subnet: str = ""
-    gateway: str = ""
-    containers: list[str] = field(default_factory=list)
-
-
-@dataclass
-class ServiceEndpoint(object):
-    """A host-accessible service endpoint."""
-
-    name: str = ""
-    url: str = ""
-    host: str = "localhost"
-    port: int = 0
-    protocol: str = ""
-    credentials: str = ""
-
-
-@dataclass
-class SSHEndpoint(object):
-    """An SSH-accessible container."""
-
-    name: str = ""
-    host: str = "localhost"
-    port: int = 0
-    user: str = ""
-    key_path: str = "~/.ssh/aptl_lab_key"
-    command: str = ""
-
-
-@dataclass
-class RangeSnapshot(object):
-    """Complete point-in-time snapshot of the lab range."""
-
-    timestamp: str = ""
-    software: SoftwareVersions = field(default_factory=SoftwareVersions)
-    containers: list[ContainerSnapshot] = field(default_factory=list)
-    wazuh_rules: WazuhRulesSnapshot = field(default_factory=WazuhRulesSnapshot)
-    networks: list[NetworkSnapshot] = field(default_factory=list)
-    config_hashes: dict[str, str] = field(default_factory=dict)
-    services: list[ServiceEndpoint] = field(default_factory=list)
-    ssh: list[SSHEndpoint] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to a JSON-serializable dictionary.
-
-        Sensitive fields (service credentials, API tokens, etc.) are
-        redacted at this boundary so every caller — `aptl lab status
-        --json`, `--output`, future archive writers — gets the same safe
-        shape. See ADR-012 § Security Guardrail.
-        """
-        return redact(asdict(self))
+__all__ = [
+    "ContainerSnapshot",
+    "NetworkSnapshot",
+    "RangeSnapshot",
+    "SSHEndpoint",
+    "ServiceEndpoint",
+    "SoftwareVersions",
+    "WazuhRulesSnapshot",
+    "capture_snapshot",
+    "container_networks",
+    "container_restart_policy",
+    "detection_content_digest",
+    "list_container_snapshots",
+]
 
 
 def _backend_exec(
@@ -186,13 +112,13 @@ def _get_software_versions(backend: "DeploymentBackend") -> SoftwareVersions:
     except PackageNotFoundError:
         versions.aptl_version = "dev"
 
-    # ACES SDL version from package metadata
+    # RAES SDL version from package metadata
     try:
         from importlib.metadata import PackageNotFoundError, version
 
-        versions.aces_sdl_version = version("aces-sdl")
+        versions.raes_version = version("raes")
     except PackageNotFoundError:
-        versions.aces_sdl_version = ""
+        versions.raes_version = ""
 
     return versions
 
@@ -249,7 +175,28 @@ def _row_to_snapshot(
         labels=row.get("labels", {}),
         networks=container_networks(backend, name),
         ports=row.get("ports", []),
+        restart_policy=container_restart_policy(backend, name),
     )
+
+
+def container_restart_policy(backend: "DeploymentBackend", name: str) -> str:
+    """Return a container's Docker restart-policy name, or empty on failure.
+
+    Read from ``HostConfig.RestartPolicy.Name``. A run-to-completion helper is
+    created with ``restart: "no"`` and legitimately exits; a service is created
+    with ``always``/``unless-stopped`` and must stay up. Readiness needs to tell
+    those apart without an allowance list naming particular containers.
+    """
+    try:
+        info = backend.container_inspect(name)
+    # inspect shells out; absence is not fatal.
+    except Exception:
+        return ""
+    host_config = info.get("HostConfig") if isinstance(info, dict) else None
+    policy = host_config.get("RestartPolicy") if isinstance(host_config, dict) else None
+    if not isinstance(policy, dict):
+        return ""
+    return str(policy.get("Name", ""))
 
 
 def _get_container_snapshots(
@@ -367,13 +314,24 @@ def _get_network_snapshots(
 
 
 def _hash_config_files(config_dir: Path | None = None) -> dict[str, str]:
-    """Compute SHA-256 hashes for config files in the project."""
+    """Compute SHA-256 hashes for non-secret config files in the project.
+
+    ``.env`` is deliberately absent (REP-003 / issue #452). It holds
+    control-plane secrets, and a digest is not safe disclosure for a
+    secret-bearing file — the values it contains have a small guessable
+    domain, so a hash is a confirmation oracle rather than an opaque
+    identity. ADR-029 permits the record to store non-secret identities;
+    apparatus-relevant configuration identity comes from the explicit safe
+    projection in
+    :func:`aptl.core.provenance.providers.config_identity.safe_config_projection`,
+    not from hashing whole files.
+    """
     hashes = {}
 
     if config_dir is None:
         config_dir = Path(".")
 
-    patterns = ["aptl.json", "docker-compose*.yml", "docker-compose*.yaml", ".env"]
+    patterns = ["aptl.json", "docker-compose*.yml", "docker-compose*.yaml"]
     for pattern in patterns:
         for f in sorted(config_dir.glob(pattern)):
             if f.is_file():
@@ -384,27 +342,43 @@ def _hash_config_files(config_dir: Path | None = None) -> dict[str, str]:
 
 
 def detection_content_digest(project_dir: Path) -> str:
-    """Compute a combined sha256 digest of detection content under project_dir.
+    """Return the framed sha256 identity of detection content under project_dir.
 
-    Hashes Suricata custom rules and Wazuh custom rules found under the
-    project directory. Returns an empty string when no detection files are
-    found (empty-safe). Reuses the same file-glob/hash pattern as
-    :func:`_hash_config_files`.
+    Thin adapter over the single detection-content owner,
+    :class:`~aptl.core.provenance.providers.detection.DetectionContentProvider`
+    (REP-003 / issue #452), so there is exactly one implementation of
+    detection-content identity rather than a second hashing path here.
+
+    The previous implementation had four defects this delegation removes: it
+    concatenated file bytes unframed (so ``"ab" + "c"`` and ``"a" + "bc"``
+    collided); it globbed ``config/wazuh/etc/rules`` and
+    ``config/wazuh/etc/decoders``, neither of which exists — the real Wazuh
+    rule/decoder/allowlist surface is ``config/wazuh_cluster``; it was
+    non-recursive, missing ``config/suricata/rules/misp``; and it read through
+    ``glob()``/``read_bytes()``, following symlinks. In practice it covered a
+    single file.
+
+    The empty-string-when-absent and bare-hex return shape is preserved for
+    the existing REP-001 record field; richer per-artifact leaves and explicit
+    limitations live in the run provenance record.
     """
-    patterns = [
-        "config/suricata/rules/*.rules",
-        "config/suricata/rules/*.conf",
-        "config/wazuh/etc/rules/*.xml",
-        "config/wazuh/etc/decoders/*.xml",
-    ]
-    combined = hashlib.sha256()
-    found_any = False
-    for pattern in patterns:
-        for f in sorted(project_dir.glob(pattern)):
-            if f.is_file():
-                combined.update(f.read_bytes())
-                found_any = True
-    return combined.hexdigest() if found_any else ""
+    from aptl.core.provenance.identity import DIGEST_PREFIX, family_identity
+    from aptl.core.provenance.outcomes import ProvenanceStatus
+    from aptl.core.provenance.protocol import ProvenanceContext
+    from aptl.core.provenance.providers.detection import DetectionContentProvider
+    from aptl.core.provenance.registrations import DETECTION_REGISTRATION
+
+    context = ProvenanceContext(
+        registration=DETECTION_REGISTRATION,
+        clock=time.monotonic,
+        started_at=time.monotonic(),
+    )
+    result = DetectionContentProvider(project_dir).collect(context)
+    if result.status is not ProvenanceStatus.COLLECTED or not result.leaves:
+        # Absent, denied, truncated, or timed-out content is not a digest. The
+        # run provenance record states which; this field stays empty-safe.
+        return ""
+    return family_identity("detection", result.leaves)[len(DIGEST_PREFIX) :]
 
 
 def capture_snapshot(

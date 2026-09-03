@@ -30,21 +30,24 @@ import dataclasses
 import hashlib
 import json
 import sys
+import tempfile
+from pathlib import Path
 
 import pytest
 import yaml
-from aces_backend_protocols.backend_manifest import BackendManifest
-from aces_contracts.associated_artifacts import (
+from raes_backend_protocols.backend_manifest import BackendManifest
+from raes_contracts.associated_artifacts import (
     AssociatedArtifactManifestModel,
     associated_artifact_set_digest,
 )
-from aces_contracts.corpus import FIXTURES, corpus_family_root
-from aces_contracts.diagnostics import Severity
-from aces_processor.capabilities import ProcessorManifest
-from aces_processor.manifest import create_reference_processor_manifest
+from raes_contracts.corpus import FIXTURES, corpus_family_root
+from raes_contracts.diagnostics import Severity
+from raes_processor.capabilities import ProcessorManifest
+from raes_processor.manifest import create_reference_processor_manifest
 
-from aptl.backends.aces_manifest import create_aptl_manifest
+from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.core.experiment.admission import (
+    AdmissionEnvironment,
     AdmissionResult,
     MappingArtifactSource,
     admit_experiment,
@@ -59,7 +62,10 @@ from aptl.core.experiment.capture_registry import (
 from aptl.core.experiment.errors import AdmissionRejection
 from aptl.core.experiment.policy import default_admission_policy
 from aptl.core.experiment.resolver import ResolvedArtifact
-from aptl.core.experiment.spec_loading import load_experiment_root
+from aptl.core.experiment.spec_loading import (
+    load_experiment_root,
+    load_participant_manifest,
+)
 from aptl.core.runstore import LocalRunStore
 
 CORPUS_ROOT = corpus_family_root(FIXTURES)
@@ -118,6 +124,7 @@ def _synthetic_manifests() -> tuple[BackendManifest, ProcessorManifest]:
         orchestrator=real_backend.orchestrator,
         evaluator=real_backend.evaluator,
         participant_runtime=real_backend.participant_runtime,
+        realization_envelope=real_backend.realization_envelope,
     )
     test_processor = ProcessorManifest(
         name="test-processor",
@@ -150,18 +157,18 @@ def _pinned_identity_task_payload() -> dict:
     payload["scenario_ref"] = {"ref_kind": "scenario", "ref_id": "canonical-minimal"}
     payload["apparatus_constraints"] = {
         "allowed_processor_refs": [
-            {"ref_kind": "processor", "ref_id": "aces-reference-processor", "ref_version": "0.1.0"}
+            {"ref_kind": "processor", "ref_id": "raes-reference-processor", "ref_version": "2.0.0"}
         ],
         "allowed_backend_refs": [{"ref_kind": "backend", "ref_id": "aptl", "ref_version": "0.1.0"}],
         "required_manifest_refs": [
             {
                 "ref_kind": "manifest",
-                "ref_id": "aces-reference-processor",
+                "ref_id": "raes-reference-processor",
                 "ref_version": "processor-manifest/v2",
                 "subject_ref": {
                     "ref_kind": "processor",
-                    "ref_id": "aces-reference-processor",
-                    "ref_version": "0.1.0",
+                    "ref_id": "raes-reference-processor",
+                    "ref_version": "2.0.0",
                 },
             },
             {
@@ -323,7 +330,7 @@ def _install_mutation_spies(monkeypatch) -> None:
     monkeypatch.setattr(collectors_module, "_run_cmd", _boom)
     monkeypatch.setattr(docker_compose_module.subprocess, "run", _boom)
 
-    for leftover in ("aptl.core.deployment.ssh_compose", "aces_runtime.manager"):
+    for leftover in ("aptl.core.deployment.ssh_compose", "raes_runtime.manager"):
         monkeypatch.delitem(sys.modules, leftover, raising=False)
 
 
@@ -334,7 +341,7 @@ def _install_mutation_spies(monkeypatch) -> None:
 
 class TestAdmissionResult:
     def test_rejected_never_carries_a_plan(self):
-        from aces_contracts.diagnostics import Diagnostic
+        from raes_contracts.diagnostics import Diagnostic
 
         d = Diagnostic(code="c", domain="experiment-admission", address="a", message="m")
         result = AdmissionResult.rejected((d,))
@@ -373,8 +380,10 @@ class TestAdmitExperimentHappyPathCapabilityOnly:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is True
@@ -392,8 +401,10 @@ class TestAdmitExperimentHappyPathCapabilityOnly:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.persisted_path.exists()
@@ -452,6 +463,22 @@ variables:
   danger_level:
     type: string
     default: low
+nodes:
+  on:
+    type: switch
+"""
+
+_EXPLICIT_BINDING_SCENARIO_TEXT = """
+name: scenario-condition-admission
+variables:
+  danger_level:
+    type: string
+    allowed_values: [low, high]
+variation_points:
+  danger-level:
+    kind: parameter
+    target: {kind: variable, variable: danger_level}
+    domain: {kind: enum, values: [low, high]}
 nodes:
   on:
     type: switch
@@ -525,6 +552,116 @@ def _condition_allocation_spec_payload_one_infeasible() -> dict:
     }
 
 
+def _explicit_binding_spec_payload(*, scenario_target: str = "variables.danger_level") -> dict:
+    return {
+        "schema_version": "experiment-authoring-input/v1",
+        "spec_id": "spec-explicit-binding-v1",
+        "spec_version": "1.0.0",
+        "title": "Explicit binding",
+        "description": "Exercises RAES cross-plane binding admission.",
+        "task_ref": {
+            "ref_kind": "task",
+            "ref_id": "task-condition-admission",
+            "ref_version": "1.0.0",
+        },
+        "factors": {
+            "danger": {
+                "name": "Danger",
+                "factor_kind": "treatment",
+                "levels": ["high"],
+            },
+            "timeout": {
+                "name": "Timeout",
+                "factor_kind": "apparatus",
+                "levels": ["90"],
+            },
+        },
+        "run_plan": {
+            "stochastic_controls": [
+                {"control_id": "seed-a", "role": "seed", "value": 1}
+            ],
+            "episode_control": {
+                "turn_order": "sequential",
+                "max_steps": 10,
+                "termination_rule": "fixed horizon",
+            },
+            "allocation": {
+                "allocation_unit": "trial",
+                "allocation_method": "balanced",
+                "compared_conditions": ["cond-high"],
+                "condition_assignments": {
+                    "cond-high": {
+                        "condition_id": "cond-high",
+                        "factor_levels": {"danger": "high", "timeout": "90"},
+                        "required_refs": [
+                            {"ref_kind": "profile", "ref_id": "profile.high"}
+                        ],
+                    }
+                },
+                "target_runs_per_condition": 1,
+                "blocking_factors": [],
+                "replication_policy": "independent-replications",
+            },
+        },
+        "binding_semantics": "explicit-required",
+        "binding_descriptors": {
+            "schema_version": "experiment-binding-descriptors/v1",
+            "descriptors": [
+                {
+                    "binding_id": "binding.scenario.danger",
+                    "source_factor_id": "danger",
+                    "source_factor_level_id": "high",
+                    "source_condition_id": "cond-high",
+                    "target": {
+                        "plane": "scenario",
+                        "scenario_family_id": "scenario-condition-admission",
+                        "variation_point_id": "danger-level",
+                        "target_id": scenario_target,
+                    },
+                    "value_type": "string",
+                    "value": {"kind": "literal", "value": "high"},
+                    "owner": {
+                        "contract_id": "sdl-authoring-input-v1",
+                        "contract_version": "1",
+                        "validator_id": "raes-sdl-instantiation",
+                        "validator_version": "1",
+                    },
+                },
+                {
+                    "binding_id": "binding.apparatus.timeout",
+                    "source_factor_id": "timeout",
+                    "source_factor_level_id": "90",
+                    "source_condition_id": "cond-high",
+                    "target": {
+                        "plane": "apparatus",
+                        "component_kind": "backend",
+                        "component_name": "aptl",
+                        "component_version": "0.1.0",
+                        "manifest_version": "backend-manifest/v2",
+                        "target_id": "participant-runtime.action-timeout-seconds",
+                    },
+                    "value_type": "integer",
+                    "value": {"kind": "literal", "value": 90},
+                    "owner": {
+                        "contract_id": "backend-manifest/v2",
+                        "contract_version": "1",
+                        "validator_id": "aptl-configuration",
+                        "validator_version": "1",
+                    },
+                },
+            ],
+        },
+    }
+
+
+def _explicit_binding_bundle(*, scenario_target: str = "variables.danger_level"):
+    task_payload = _condition_allocation_task_payload()
+    return _Bundle(
+        task_payload=task_payload,
+        spec_payload=_explicit_binding_spec_payload(scenario_target=scenario_target),
+    )
+
+
 class TestAdmitExperimentConditionAllocationAllOrNothing:
     def test_one_infeasible_condition_rejects_the_whole_admission_with_no_partial_plan_or_write(self, tmp_path):
         task_payload = _condition_allocation_task_payload()
@@ -549,8 +686,10 @@ class TestAdmitExperimentConditionAllocationAllOrNothing:
             artifact_source=artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -563,6 +702,74 @@ class TestAdmitExperimentConditionAllocationAllOrNothing:
         # ...and nothing was ever written to the run store (the feasible
         # condition's own snapshot digest, computed before the second
         # condition failed, never reaches persistence).
+        assert store.calls == {}
+
+    def test_explicit_bindings_are_validated_before_planning_and_pinned(self, tmp_path):
+        bundle = _explicit_binding_bundle()
+        bundle.scenario_bytes = _EXPLICIT_BINDING_SCENARIO_TEXT.encode("utf-8")
+        bundle.artifact_source = MappingArtifactSource(
+            artifacts={
+                "task-condition-admission": _resolved(
+                    bundle.task_bytes, "task.json", "application/json"
+                ),
+                "scenario-condition-admission": _resolved(
+                    bundle.scenario_bytes,
+                    "scenario.sdl.yaml",
+                    "application/x-yaml",
+                ),
+            }
+        )
+
+        result = admit_experiment(
+            experiment_root=bundle.experiment_root,
+            artifact_source=bundle.artifact_source,
+            run_store=LocalRunStore(tmp_path / "store"),
+            policy=dataclasses.replace(
+                default_admission_policy(), allow_uncertified_apparatus=True
+            ),
+        )
+
+        assert result.admitted is True
+        trial = result.plan.trials[0]
+        assert trial.parameter_bindings == (("danger_level", "high"),)
+        assert trial.apparatus_configuration == (
+            ("participant-runtime.action-timeout-seconds", 90),
+        )
+        assert {item.descriptor.target.plane for item in trial.realized_bindings} == {
+            "scenario",
+            "apparatus",
+        }
+
+    def test_unknown_explicit_target_rejects_without_a_store_write(self, tmp_path):
+        bundle = _explicit_binding_bundle(
+            scenario_target="variables.unknown_target"
+        )
+        bundle.scenario_bytes = _EXPLICIT_BINDING_SCENARIO_TEXT.encode("utf-8")
+        bundle.artifact_source = MappingArtifactSource(
+            artifacts={
+                "task-condition-admission": _resolved(
+                    bundle.task_bytes, "task.json", "application/json"
+                ),
+                "scenario-condition-admission": _resolved(
+                    bundle.scenario_bytes,
+                    "scenario.sdl.yaml",
+                    "application/x-yaml",
+                ),
+            }
+        )
+        store = _SpyRunStore(tmp_path / "store")
+
+        result = admit_experiment(
+            experiment_root=bundle.experiment_root,
+            artifact_source=bundle.artifact_source,
+            run_store=store,
+            policy=dataclasses.replace(
+                default_admission_policy(), allow_uncertified_apparatus=True
+            ),
+        )
+
+        assert result.admitted is False
+        assert result.plan is None
         assert store.calls == {}
 
 
@@ -581,16 +788,20 @@ class TestAdmitExperimentDeterminism:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
         second = admit_experiment(
             experiment_root=bundle.experiment_root,
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert first.admitted is True
@@ -598,6 +809,40 @@ class TestAdmitExperimentDeterminism:
         assert first.plan_digest == second.plan_digest
         assert first.persisted_path == second.persisted_path
         assert first.trial_ids == second.trial_ids
+
+    def test_authoring_root_digest_is_part_of_plan_identity(self, tmp_path):
+        bundle, backend, processor = _capability_only_bundle()
+        changed_payload = yaml.safe_load(bundle.root_bytes)
+        changed_payload["description"] = "Same graph, distinct authoring artifact."
+        changed_root = yaml.safe_dump(changed_payload).encode("utf-8")
+
+        first = admit_experiment(
+            experiment_root=bundle.experiment_root,
+            artifact_source=bundle.artifact_source,
+            run_store=LocalRunStore(tmp_path / "first"),
+            policy=default_admission_policy(),
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
+        )
+        second = admit_experiment(
+            experiment_root=_resolved(
+                changed_root, "experiment.yaml", "application/x-yaml"
+            ),
+            artifact_source=bundle.artifact_source,
+            run_store=LocalRunStore(tmp_path / "second"),
+            policy=default_admission_policy(),
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
+        )
+
+        assert first.admitted
+        assert second.admitted
+        assert first.plan.source_set_digest != second.plan.source_set_digest
+        assert first.plan.plan_id != second.plan.plan_id
 
 
 @pytest.mark.fuzz
@@ -607,34 +852,42 @@ class TestFuzzAdmitExperimentDeterminism:
 
     @given(target_run_count=st.integers(min_value=1, max_value=30))
     @settings(max_examples=20, deadline=None)
-    def test_repeated_admission_is_deterministic_across_random_flat_counts(self, tmp_path_factory, target_run_count):
+    def test_repeated_admission_is_deterministic_across_random_flat_counts(self, target_run_count):
         bundle, backend, processor = _capability_only_bundle(
             spec_id=f"spec-fuzz-{target_run_count}", target_run_count=target_run_count
         )
-        store = LocalRunStore(tmp_path_factory.mktemp("store"))
+        # hypothesis runs many examples in one function call, so a fresh store
+        # per example comes from a context manager rather than a function-scoped
+        # tmp_path fixture (which hypothesis rejects) or a session-scoped factory.
+        with tempfile.TemporaryDirectory() as store_dir:
+            store = LocalRunStore(Path(store_dir))
 
-        first = admit_experiment(
-            experiment_root=bundle.experiment_root,
-            artifact_source=bundle.artifact_source,
-            run_store=store,
-            policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
-        )
-        second = admit_experiment(
-            experiment_root=bundle.experiment_root,
-            artifact_source=bundle.artifact_source,
-            run_store=store,
-            policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
-        )
+            first = admit_experiment(
+                experiment_root=bundle.experiment_root,
+                artifact_source=bundle.artifact_source,
+                run_store=store,
+                policy=default_admission_policy(),
+                environment=AdmissionEnvironment(
+                    backend_manifest=backend,
+                    processor_manifest=processor,
+                ),
+            )
+            second = admit_experiment(
+                experiment_root=bundle.experiment_root,
+                artifact_source=bundle.artifact_source,
+                run_store=store,
+                policy=default_admission_policy(),
+                environment=AdmissionEnvironment(
+                    backend_manifest=backend,
+                    processor_manifest=processor,
+                ),
+            )
 
-        assert first.admitted is True
-        assert second.admitted is True
-        assert first.plan_digest == second.plan_digest
-        assert len(first.trial_ids) == target_run_count
-        assert len(set(first.trial_ids)) == target_run_count
+            assert first.admitted is True
+            assert second.admitted is True
+            assert first.plan_digest == second.plan_digest
+            assert len(first.trial_ids) == target_run_count
+            assert len(set(first.trial_ids)) == target_run_count
 
 
 # ---------------------------------------------------------------------------
@@ -658,7 +911,7 @@ class TestMutationSpyRejectedAdmissionMakesNoMutatingCalls:
         assert result.admitted is False
         assert store.calls == {}
         assert "aptl.core.deployment.ssh_compose" not in sys.modules
-        assert "aces_runtime.manager" not in sys.modules
+        assert "raes_runtime.manager" not in sys.modules
 
     def test_cross_artifact_identity_mismatch_rejection_makes_no_mutating_or_write_calls(
         self, tmp_path, monkeypatch
@@ -682,8 +935,10 @@ class TestMutationSpyRejectedAdmissionMakesNoMutatingCalls:
             artifact_source=bad_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -701,8 +956,10 @@ class TestMutationSpyRejectedAdmissionMakesNoMutatingCalls:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=tiny_policy,
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -734,8 +991,10 @@ class TestMutationSpyRejectedAdmissionMakesNoMutatingCalls:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -759,8 +1018,10 @@ class TestAdmitExperimentRejectionPaths:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=tiny_policy,
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -786,8 +1047,10 @@ class TestAdmitExperimentRejectionPaths:
             artifact_source=bad_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -816,8 +1079,10 @@ class TestAdmitExperimentRejectionPaths:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -835,8 +1100,10 @@ class TestAdmitExperimentRejectionPaths:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -857,8 +1124,10 @@ class TestAdmitExperimentRejectionPaths:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -877,8 +1146,10 @@ class TestAdmitExperimentRejectionPaths:
             artifact_source=empty_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -909,8 +1180,10 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -936,8 +1209,10 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -954,7 +1229,7 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
         # version branch. ref_kind must be "scenario-snapshot": a
         # ("scenario", id-only) ref rejects a ref_version/ref_digest at the
         # pydantic layer before admission's own cross-artifact join ever
-        # runs (ACES: "generic scenario references are id-only").
+        # runs (RAES: "generic scenario references are id-only").
         bundle, backend, processor = _capability_only_bundle()
         spec_payload = _flat_spec_payload()
         spec_payload["intended_scenario_ref"] = {
@@ -972,8 +1247,10 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1006,8 +1283,10 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1038,8 +1317,10 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1093,8 +1374,10 @@ class TestPersistPlanDiagnostics:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1117,8 +1400,10 @@ class TestPersistPlanDiagnostics:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1221,6 +1506,55 @@ class TestBuildAssociatedArtifactSource:
 
 
 # ---------------------------------------------------------------------------
+# Participant-manifest artifact classification and validation
+# ---------------------------------------------------------------------------
+
+
+class TestLoadParticipantManifest:
+    def test_another_manifest_schema_is_skipped(self) -> None:
+        payload = {
+            "schema_version": "backend-manifest/v2",
+            "identity": {"name": "not-a-participant-manifest", "version": "1.0.0"},
+        }
+
+        assert (
+            load_participant_manifest(
+                json.dumps(payload).encode("utf-8"),
+                policy=default_admission_policy(),
+            )
+            is None
+        )
+
+    def test_a_malformed_participant_manifest_is_rejected_without_leaking_input(
+        self,
+    ) -> None:
+        path = (
+            CORPUS_ROOT
+            / "participant-implementation-manifest"
+            / "participant-implementation-manifest-v1"
+            / "valid"
+            / "reference.json"
+        )
+        payload = json.loads(path.read_text())
+        payload["identity"] = {"name": SECRET}
+        manifest_bytes = json.dumps(payload).encode("utf-8")
+        policy = default_admission_policy()
+
+        with pytest.raises(AdmissionRejection) as excinfo:
+            load_participant_manifest(
+                manifest_bytes,
+                policy=policy,
+            )
+
+        rendered = "\n".join(
+            f"{item.code} {item.address} {item.message}"
+            for item in excinfo.value.diagnostics
+        )
+        assert "participant-manifest-invalid" in rendered
+        assert SECRET not in rendered
+
+
+# ---------------------------------------------------------------------------
 # Admitted-capture path — a covering registry binds and pins into the plan
 # ---------------------------------------------------------------------------
 
@@ -1278,8 +1612,10 @@ class TestAdmitExperimentWithCoveringRegistry:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
             capture_registry=registry,
         )
 
@@ -1301,8 +1637,10 @@ class TestAdmitExperimentWithCoveringRegistry:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
             capture_registry=CollectorRegistry(),
         )
 

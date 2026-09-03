@@ -1,12 +1,12 @@
 """Fast unit proof for the curated-variant live-proof matrix (#535).
 
 These exercise ``aptl.validation.curated_live_proof`` without booting Docker:
-each variant's model-derived ``ExpectedMatrix`` is asserted from the same ACES
+each variant's model-derived ``ExpectedMatrix`` is asserted from the same RAES
 realization the public start path uses, and ``compare_to_snapshot`` is checked
 against synthetic snapshots for the match / missing-container / extra-container /
 missing-network cases. The destructive live boot that records real evidence is
 the manual, documented operator procedure in
-``docs/aces/techvault-curated-live-validation-gate.md`` (not fast CI).
+``docs/raes/techvault-curated-live-validation-gate.md`` (not fast CI).
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ VARIANTS = (
         # `--profile enterprise wazuh` activates the enterprise tier plus the
         # full wazuh profile (dashboard included, though the SDL declares only
         # manager + indexer): Compose activates services by profile, not by
-        # declared ACES node.
+        # declared RAES node.
         extra_services=frozenset(
             {
                 "webapp",
@@ -152,7 +152,7 @@ def test_expected_matrix_is_content_derived_and_reduced(variant: _Variant):
     matrix = expected_reduced_matrix(PROJECT_ROOT, variant.config, variant.path)
 
     assert set(matrix.selected_profiles) == variant.expected_profiles
-    assert matrix.realized_nodes  # realization produced ACES nodes
+    assert matrix.realized_nodes  # realization produced RAES nodes
     services = set(matrix.expected_services)
     assert OTEL_SERVICES.issubset(services)
     assert variant.extra_services.issubset(services)
@@ -264,7 +264,7 @@ def test_participant_action_proof_uses_control_plane_and_records_behavior(
     monkeypatch,
     tmp_path,
 ):
-    from aptl.backends.aces_participant_runtime import PARTICIPANT_ACTION_ADDRESS
+    from aptl.backends.raes_participant_runtime import PARTICIPANT_ACTION_ADDRESS
     from aptl.validation import curated_live_proof
 
     class FakeBackend:
@@ -337,9 +337,12 @@ def test_participant_action_proof_uses_control_plane_and_records_behavior(
     behavior = proof["participant_behavior_history"][PARTICIPANT_ACTION_ADDRESS]
     assert [event["event_type"] for event in behavior] == [
         "action_attempted",
+        "state_transition_recorded",
         "observation_emitted",
     ]
-    assert behavior[-1]["actor_provenance"] == "codex-cli"
+    assert behavior[0]["actor_provenance"].startswith(
+        "participant-implementation:aptl-curated-live-proof@1.0.0"
+    )
     assert any(
         address.startswith(f"{PARTICIPANT_ACTION_ADDRESS}.")
         for address in proof["participant_snapshot_entries"]

@@ -119,6 +119,9 @@ _SAFE_KEY_NAMES: frozenset[str] = frozenset(
         "ssh_key_file",
         "public_key",
         "publickey",
+        # Boolean validation/qualification outcome. The exact-name allowlist
+        # does not exempt compound credential keys containing ``pass``.
+        "passed",
     }
 )
 

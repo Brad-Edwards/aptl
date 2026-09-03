@@ -8,7 +8,7 @@ the runtime: subset directly and start the source: subset via Compose, in
 one `aptl lab start`, without either side conflicting with or silently
 skipping the other.
 
-Constructs the realization spec directly rather than through the ACES
+Constructs the realization spec directly rather than through the RAES
 compiler (already proven separately, e.g. test_imagefree_admission_
 integration.py) so this test isolates `realize()`'s own dispatch.
 
@@ -22,7 +22,7 @@ import subprocess
 import time
 
 import pytest
-from aces_sdl.runtime_configuration import RuntimeConfiguration, RuntimePackage
+from raes.runtime_configuration import RuntimeConfiguration, RuntimePackage
 
 from aptl.core.deployment import (
     DeploymentImageRealization,
@@ -53,7 +53,10 @@ services:
 def _docker_available() -> bool:
     if shutil.which("docker") is None:
         return False
-    return subprocess.run(["docker", "info"], capture_output=True, text=True).returncode == 0
+    return (
+        subprocess.run(["docker", "info"], capture_output=True, text=True).returncode
+        == 0
+    )
 
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
@@ -62,7 +65,9 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
     free_container = "aptl-free-box"
     image_container = "aptl-image-box"
     subprocess.run(
-        ["docker", "rm", "-f", free_container, image_container], capture_output=True, text=True
+        ["docker", "rm", "-f", free_container, image_container],
+        capture_output=True,
+        text=True,
     )
 
     backend = DockerComposeBackend(project_dir=tmp_path, project_name="aptl-mixed-test")
@@ -74,7 +79,9 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
         container_name=free_container,
         networks=("mixed-net",),
         network_attachments=(
-            DeploymentNetworkAttachment(network="mixed-net", ipv4_address="172.31.0.10"),
+            DeploymentNetworkAttachment(
+                network="mixed-net", ipv4_address="172.31.0.10"
+            ),
         ),
         os="linux",
         os_version="",
@@ -89,7 +96,9 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
         container_name=image_container,
         networks=("mixed-net",),
         network_attachments=(
-            DeploymentNetworkAttachment(network="mixed-net", ipv4_address="172.31.0.11"),
+            DeploymentNetworkAttachment(
+                network="mixed-net", ipv4_address="172.31.0.11"
+            ),
         ),
         os="linux",
         os_version="",
@@ -99,7 +108,9 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
         profiles=("default",),
         nodes=(free_node, image_node),
         networks=(
-            DeploymentNetworkRealization(name="mixed-net", cidr="172.31.0.0/24", gateway="172.31.0.1"),
+            DeploymentNetworkRealization(
+                name="mixed-net", cidr="172.31.0.0/24", gateway="172.31.0.1"
+            ),
         ),
         images=(
             DeploymentImageRealization(
@@ -113,28 +124,49 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
             ),
         ),
     )
-    # Not the whole-scenario image_free flag; this proves the per-node
-    # dispatch materializes the runtime: node even when it is False.
-    assert spec.image_free is False
+    # Routing is per-node, not a whole-spec flag (the flag was removed): the
+    # runtime-only node is materialized, the image node stays a Compose service,
+    # and because a Compose node remains the mixed path runs.
+    from aptl.core.deployment._compose_image_free_realization import (
+        _image_free_node_addresses,
+    )
+    from aptl.core.deployment._compose_realization import _needs_compose
+
+    image_free = _image_free_node_addresses(spec)
+    assert free_node.address in image_free
+    assert image_node.address not in image_free
+    assert _needs_compose(spec) is True
 
     try:
-        result = backend.realize(spec, build=False)
+        result = backend.realize(spec, build=False, scenario_root=tmp_path)
         assert result.success, result.error
 
         # Exactly one container for the runtime: node - Compose was told to
         # scale it to zero, so it never started its own "sleep infinity"
         # placeholder alongside the generic materializer's real container.
         ps = subprocess.run(
-            ["docker", "ps", "-a", "--filter", f"name=^{free_container}$", "--format", "{{.Names}}"],
-            capture_output=True, text=True,
+            [
+                "docker",
+                "ps",
+                "-a",
+                "--filter",
+                f"name=^{free_container}$",
+                "--format",
+                "{{.Names}}",
+            ],
+            capture_output=True,
+            text=True,
         )
         assert ps.stdout.split() == [free_container]
 
         # The runtime: node was materialized directly (generic materializer),
         # not via Compose - it is not a Compose-managed container.
-        assert "curl" in backend.container_exec(
-            free_container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
-        ).stdout
+        assert (
+            "curl"
+            in backend.container_exec(
+                free_container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
+            ).stdout
+        )
 
         # The source: node was started via Compose as usual.
         pg_ready = None
@@ -143,7 +175,8 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
             if pg_ready.returncode == 0:
                 break
             time.sleep(1)
-        assert pg_ready is not None and pg_ready.returncode == 0, pg_ready.stdout
+        assert pg_ready is not None, pg_ready.stdout
+        assert pg_ready.returncode == 0, pg_ready.stdout
 
         # The generic materializer's directly-run container is connected to
         # the declared scenario network with its declared static IP, exactly
@@ -152,16 +185,43 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
         # covers both realization styles without any change.
         network = "aptl-mixed-test_aptl-mixed"
         inspect = subprocess.run(
-            ["docker", "inspect", free_container, "--format",
-             f"{{{{(index .NetworkSettings.Networks \"{network}\").IPAddress}}}}"],
-            capture_output=True, text=True,
+            [
+                "docker",
+                "inspect",
+                free_container,
+                "--format",
+                f'{{{{(index .NetworkSettings.Networks "{network}").IPAddress}}}}',
+            ],
+            capture_output=True,
+            text=True,
         )
         assert inspect.stdout.strip() == "172.31.0.10", (inspect.stdout, inspect.stderr)
+        networks = subprocess.run(
+            [
+                "docker",
+                "inspect",
+                free_container,
+                "--format",
+                "{{json .NetworkSettings.Networks}}",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert '"bridge"' not in networks.stdout
     finally:
         subprocess.run(
-            ["docker", "rm", "-f", free_container, image_container], capture_output=True, text=True
+            ["docker", "rm", "-f", free_container, image_container],
+            capture_output=True,
+            text=True,
         )
         subprocess.run(
-            ["docker", "network", "rm", "aptl-mixed-test_aptl-mixed", "aptl-mixed-test_default"],
-            capture_output=True, text=True,
+            [
+                "docker",
+                "network",
+                "rm",
+                "aptl-mixed-test_aptl-mixed",
+                "aptl-mixed-test_default",
+            ],
+            capture_output=True,
+            text=True,
         )

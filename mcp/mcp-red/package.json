@@ -10,6 +10,9 @@
     "files": [
         "build"
     ],
+    "overrides": {
+        "@hono/node-server": "^2.0.11"
+    },
     "scripts": {
         "build": "tsc -p tsconfig.build.json && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
         "prepare": "npm run build",
@@ -29,12 +32,12 @@
     },
     "devDependencies": {
         "@types/node": "^20.11.24",
-        "@typescript-eslint/eslint-plugin": "^8.41.0",
-        "@typescript-eslint/parser": "^8.41.0",
-        "@vitest/coverage-v8": "^4.0.18",
-        "eslint": "^9.34.0",
+        "@typescript-eslint/eslint-plugin": "^8.65.0",
+        "@typescript-eslint/parser": "^8.65.0",
+        "@vitest/coverage-v8": "^4.1.10",
+        "eslint": "^10.8.0",
         "prettier": "^3.6.2",
         "typescript": "^5.3.3",
-        "vitest": "^4.0.18"
+        "vitest": "^4.1.10"
     }
 }

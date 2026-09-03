@@ -25,8 +25,14 @@ repos:
         pass_filenames: false
         files: ^config/suricata/(suricata\.yaml|rules/local\.rules)$
 
+  # Third-party hook repos are pinned to a commit SHA, not a tag. pre-commit
+  # clones and *executes* hook code from this revision on contributor machines
+  # and on clean CI runners, so a mutable tag is a code-execution boundary: an
+  # attacker who can retarget the tag upstream runs arbitrary code here with no
+  # change to this repository. The version stays in a trailing comment for
+  # readability and for `pre-commit autoupdate`.
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b  # v5.0.0
     hooks:
       # config/wazuh-certs-tool.sh is a digest-pinned vendored upstream file
       # (Wazuh 4.8 wazuh-certs-tool.sh), whose sha256 is verified in
@@ -61,6 +67,106 @@ repos:
             mcp/aptl-mcp-common/tests/redaction\.test\.ts|
             src/aptl/utils/redaction\.py
           )$
+
+  # Hash-pinned requirements, regenerated from uv.lock rather than by hand
+  # (issue #847). CI installs Python dependencies with `pip install
+  # --require-hashes -r requirements/<x>.txt`, which only verifies anything if
+  # those files actually match the lock — a hand-maintained export would drift
+  # the first time somebody forgot, and drift silently.
+  #
+  # `uv-lock` keeps uv.lock current with pyproject.toml; each `uv-export`
+  # instance below re-emits one requirements file from that lock. Both are
+  # upstream Astral hooks, so there is no bespoke regeneration script to own.
+  # The `files:` override adds pyproject.toml to the default `^uv\.lock$` trigger
+  # so an edited dependency re-exports even before the lock is staged.
+  #
+  # This is also the enforcement point: the required "Pre-commit hooks" CI job
+  # runs `pre-commit run --all-files`, so a stale requirements file fails a
+  # required check on any PR, including Dependabot's.
+  # SHA-pinned for the same reason as the hook repo above — and with sharper
+  # stakes here, because this is the generator of the hash-pinned requirements
+  # themselves. Hashing the exported packages is worth nothing if a compromised
+  # generator can choose malicious artifacts and emit matching hashes.
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: e3e6ef7d9bda544b2e795782dbd7d2a4fbd7eb6d  # 0.11.32
+    hooks:
+      - id: uv-lock
+      - id: uv-export
+        alias: uv-export-runtime
+        name: Export hashed runtime requirements
+        args:
+          - --frozen
+          - --no-emit-project
+          - --group
+          - build
+          - --no-default-groups
+          - --quiet
+          - -o
+          - requirements/runtime.txt
+        files: ^(uv\.lock|pyproject\.toml)$
+      - id: uv-export
+        alias: uv-export-web
+        name: Export hashed web-service requirements
+        args:
+          - --frozen
+          - --no-emit-project
+          - --group
+          - build
+          - --no-default-groups
+          - --extra
+          - web
+          - --quiet
+          - -o
+          - requirements/web.txt
+        files: ^(uv\.lock|pyproject\.toml)$
+      - id: uv-export
+        alias: uv-export-dev
+        name: Export hashed dev/test requirements
+        args:
+          - --frozen
+          - --no-emit-project
+          - --group
+          - build
+          - --no-default-groups
+          - --extra
+          - dev
+          - --extra
+          - web
+          - --quiet
+          - -o
+          - requirements/dev.txt
+        files: ^(uv\.lock|pyproject\.toml)$
+      - id: uv-export
+        alias: uv-export-docs
+        name: Export hashed docs requirements
+        args:
+          - --frozen
+          - --no-emit-project
+          - --group
+          - build
+          - --no-default-groups
+          - --extra
+          - docs
+          - --quiet
+          - -o
+          - requirements/docs.txt
+        files: ^(uv\.lock|pyproject\.toml)$
+      - id: uv-export
+        alias: uv-export-ci
+        name: Export hashed CI-tooling requirements
+        args:
+          - --frozen
+          - --no-emit-project
+          # --only-group replaces the group set rather than adding to it, so
+          # the build backend is named explicitly here instead of via --group.
+          - --only-group
+          - ci
+          - --only-group
+          - build
+          - --quiet
+          - -o
+          - requirements/ci.txt
+        files: ^(uv\.lock|pyproject\.toml)$
 
   # Local hooks: a Python complexity gate, then the three test suites
   # (which mirror the CI test jobs in .github/workflows/checks.yml). Each
@@ -139,9 +245,9 @@ repos:
         # Prefer the repo's .venv (so contributors don't need to activate it
         # before committing). Fall back to PATH for contributors using a
         # different venv layout that they've already activated. Scenario SDL
-        # is included so an edit to it runs the fast ACES validation-gate
+        # is included so an edit to it runs the fast RAES validation-gate
         # logic tests (the slow full-scenario gate is the manual
-        # `aces-scenario-gate` hook below).
+        # `raes-scenario-gate` hook below).
         # -n auto parallelizes across cores via pytest-xdist (no coverage here,
         # so xdist worker measurement is not a concern — that constraint only
         # applies to the CI `coverage run` job).
@@ -150,19 +256,19 @@ repos:
         pass_filenames: false
         files: ^(src/.*\.py|tests/.*\.py|pyproject\.toml|scenarios/.*\.ya?ml)$
 
-      - id: aces-scenario-gate
-        name: ACES scenario validation gate (manual; techvault-operational)
+      - id: raes-scenario-gate
+        name: RAES scenario validation gate (manual; techvault-operational)
         # SCN-010E / #322. The static gate validates the authoritative
-        # techvault-operational SDL and spawns the `aces conformance backend`
+        # techvault-operational SDL and spawns the `raes conformance backend`
         # CLI, so it is a manual-stage hook rather than part of the per-commit
         # path. Run it before pushing a scenario/manifest change:
-        #   pre-commit run aces-scenario-gate --hook-stage manual
-        # The advisory CI job `aces-scenario-gate` runs the same tests on PRs.
+        #   pre-commit run raes-scenario-gate --hook-stage manual
+        # The advisory CI job `raes-scenario-gate` runs the same tests on PRs.
         entry: bash -c 'if [ -x .venv/bin/pytest ]; then exec .venv/bin/pytest tests/test_techvault_static_gate.py -q -m integration; else exec pytest tests/test_techvault_static_gate.py -q -m integration; fi'
         language: system
         pass_filenames: false
         stages: [manual]
-        files: ^(scenarios/.*\.ya?ml|src/aptl/validation/.*\.py|src/aptl/backends/aces.*\.py)$
+        files: ^(scenarios/.*\.ya?ml|src/aptl/validation/.*\.py|src/aptl/backends/raes.*\.py)$
 
       - id: vitest-mcp-common
         name: MCP TypeScript tests (aptl-mcp-common vitest)

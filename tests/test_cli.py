@@ -469,7 +469,7 @@ class TestLabStartCommand:
         )
 
     def test_start_accepts_explicit_scenario_path(self, runner, mocker, tmp_path):
-        """--scenario-path should resolve and pass an explicit ACES SDL path."""
+        """--scenario-path should resolve and pass an explicit RAES SDL path."""
         from aptl.cli.main import app
         from aptl.core.lab import LabResult
 
@@ -1075,7 +1075,8 @@ class TestLabContinuityAuditCommand:
 
         assert result.exit_code == 0
         parsed = json_mod.loads(result.stdout)
-        assert isinstance(parsed, list) and len(parsed) == 1
+        assert isinstance(parsed, list)
+        assert len(parsed) == 1
         assert parsed[0]["target"] == "aptl-victim"
         assert parsed[0]["action"] == "REVERTED"
 

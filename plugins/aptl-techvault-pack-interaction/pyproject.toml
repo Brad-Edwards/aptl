@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aptl-techvault-pack-interaction"
+version = "0.1.0"
+description = "Deployment-serving operator groups for the TechVault pack on APTL."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Brad Edwards", email = "brad@autarchy.ai" }]
+dependencies = []
+
+[project.entry-points."aptl.pack_backend_interactions"]
+"techvault.aptl" = "aptl_techvault_pack_interaction:provider"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aptl_techvault_pack_interaction"]

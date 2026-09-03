@@ -23,11 +23,11 @@ jobs:
     name: Pre-commit hooks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - run: pip install pre-commit
+      - run: pip install --require-hashes -r requirements/ci.txt
       # Skip the local test hooks here — the dedicated python-tests /
       # mcp-tests / web-tests jobs below already run them with the right
       # toolchain (deps installed, node available, etc). The test hooks
@@ -41,14 +41,16 @@ jobs:
     name: Docs (Vale prose lint + mkdocs strict build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # git-revision-date-localized needs full history for page dates
           fetch-depth: 0
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - run: pip install -e ".[docs]"
+      - run: |
+          pip install --require-hashes -r requirements/docs.txt
+          pip install -e . --no-deps --no-build-isolation
       - name: Vale prose lint (full lintable corpus, ADR-038)
         run: bash tools/vale-lint-all.sh
       - name: mkdocs strict build (nav and links must resolve)
@@ -58,15 +60,16 @@ jobs:
     name: Python tests + coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev,web]"
+          pip install --require-hashes -r requirements/dev.txt
+          pip install -e . --no-deps --no-build-isolation
+          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
       - run: |
           coverage run -m pytest tests/ -q -k "not integration"
           coverage xml -o coverage.xml
@@ -106,13 +109,14 @@ jobs:
               tests/test_version_consistency.py
               -q
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev,web]"
+          pip install --require-hashes -r requirements/dev.txt
+          pip install -e . --no-deps --no-build-isolation
+          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
       - name: Python portable suite without lab integration
         run: python -m pytest ${{ matrix.pytest_args }}
       - name: CLI import and help smoke
@@ -120,28 +124,29 @@ jobs:
       - name: Lab init smoke
         run: aptl lab init ci-lab
 
-  aces-scenario-gate:
-    name: ACES scenario validation gate (advisory, Phase A)
+  raes-scenario-gate:
+    name: RAES scenario validation gate (advisory, Phase A)
     runs-on: ubuntu-latest
     # SCN-010E / #322. The static validation gate parses the authoritative
-    # techvault-operational SDL and spawns the `aces conformance backend` CLI,
+    # techvault-operational SDL and spawns the `raes conformance backend` CLI,
     # so it is integration-marked and runs here rather than in the fast
     # python-tests suite. Advisory in Phase A — `continue-on-error` surfaces
     # failures on the PR without blocking merge; the Phase B cutover PR removes
     # `continue-on-error` to make the gate blocking. The gate needs only the
-    # installed aces-sdl wheel (which bundles the contract corpus) and the
-    # `aces` CLI — no separate corpus checkout.
+    # installed raes wheel (which bundles the contract corpus) and the
+    # `raes` CLI — no separate corpus checkout.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev,web]"
+          pip install --require-hashes -r requirements/dev.txt
+          pip install -e . --no-deps --no-build-isolation
+          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
       - name: Generate lab SSH keys
         # issue #581: the operational scenario's content: now declares the
         # SSH-reachable targets' authorized_keys (SEC #417), sourced from the
@@ -161,7 +166,7 @@ jobs:
           assert ensure_pivot_key(pivot_dir=pivot_dir).success
           assert ensure_target_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir).success
           "
-      - name: ACES static validation gate (techvault-operational)
+      - name: RAES static validation gate (techvault-operational)
         # -n auto runs the parse / compile / conformance-CLI checks in parallel
         # via pytest-xdist. No coverage is collected here, so xdist worker
         # measurement is not a concern.
@@ -171,7 +176,7 @@ jobs:
     name: MCP TypeScript tests + coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
@@ -180,30 +185,36 @@ jobs:
       - name: aptl-mcp-common — install, build, test
         # `npm run build` runs explicitly before mcp-red copies the build
         # output. The `prepare` script also builds, but ordering across
-        # `npm install` and `npx vitest run --coverage` is not load-bearing
+        # `npm ci` and `npx vitest run --coverage` is not load-bearing
         # — the explicit build keeps the contract obvious and the mcp-red
         # step below dependable.
+        # `npm ci` rather than `npm install`: it installs exactly what
+        # package-lock.json pins and fails if the lock and manifest disagree,
+        # which is what makes the dependency set reproducible (issue #847).
         # The `sed` rewrites LCOV `SF:src/...` paths to repo-root-relative
         # `SF:mcp/aptl-mcp-common/src/...` so SonarCloud can match coverage
         # against the actual project tree (Sonar resolves SF: paths against
         # `sonar.sources`, which is anchored at the repo root).
         run: |
           cd mcp/aptl-mcp-common
-          npm install
+          npm ci
           npm run build
           npx vitest run --coverage
           sed -i 's|^SF:|SF:mcp/aptl-mcp-common/|' coverage/lcov.info
       - name: mcp-red — install (rebuilds against fresh common), test, and coverage
-        # mcp-red consumes aptl-mcp-common via `file:`. npm install in
-        # mcp-red copies the *current* build artifact, so the explicit
+        # mcp-red consumes aptl-mcp-common via `file:`. npm copies the
+        # *current* build artifact at install time, so the explicit
         # `npm run build` above must have produced fresh `build/` first.
+        # `npm ci` removes node_modules wholesale before installing from the
+        # lockfile, so it re-copies the freshly built common on its own — the
+        # explicit `rm -rf node_modules/aptl-mcp-common` the old `npm install`
+        # path needed is no longer required.
         # `sed` rewrites LCOV paths so SonarCloud matches coverage against
         # `mcp/mcp-red/src/...` (see aptl-mcp-common step for the same
         # reasoning).
         run: |
           cd mcp/mcp-red
-          rm -rf node_modules/aptl-mcp-common
-          npm install --no-audit --no-fund
+          npm ci --no-audit --no-fund
           npx vitest run --coverage
           sed -i 's|^SF:|SF:mcp/mcp-red/|' coverage/lcov.info
       - name: dependent MCPs — rebuild against fresh common (build-only verification)
@@ -217,8 +228,9 @@ jobs:
           for pkg in mcp-wazuh mcp-soar mcp-network mcp-indexer mcp-reverse mcp-threatintel mcp-casemgmt; do
             echo "=== $pkg ==="
             cd "mcp/$pkg"
-            rm -rf node_modules/aptl-mcp-common
-            npm install --no-audit --no-fund
+            # npm ci clears node_modules first, so the `file:` common dependency
+            # is re-copied fresh without an explicit rm.
+            npm ci --no-audit --no-fund
             if [ -f tsconfig.build.json ]; then
               npx tsc -p tsconfig.build.json
             else
@@ -241,7 +253,7 @@ jobs:
     name: Web frontend tests + coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
@@ -249,7 +261,7 @@ jobs:
           node-version: '22'
       - run: |
           cd web
-          npm install
+          npm ci
           npx svelte-kit sync
           npx vitest run --coverage
           sed -i 's|^SF:|SF:web/|' coverage/lcov.info
@@ -268,8 +280,8 @@ jobs:
     # (non-fatal at the step level) — the lab's large transitive Node tree
     # carries known findings that are triaged out of band, not gated here.
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
@@ -282,8 +294,9 @@ jobs:
         # --strict would otherwise error on it as unauditable). No `|| true`:
         # a known advisory in a real dependency fails the job.
         run: |
-          python -m pip install --upgrade pip
-          pip install -e . pip-audit
+          pip install --require-hashes -r requirements/runtime.txt
+          pip install --require-hashes -r requirements/ci.txt
+          pip install -e . --no-deps --no-build-isolation
           # No --strict: it treats the skipped editable aptl as an error.
           # pip-audit still fails on any real dependency vulnerability.
           pip-audit --skip-editable --progress-spinner=off
@@ -294,7 +307,7 @@ jobs:
             [ -f "$dir/package.json" ] || continue
             echo ""
             echo "=== $dir ==="
-            (cd "$dir" && npm install --no-audit --no-fund --silent >/dev/null 2>&1 && npm audit --audit-level=high)
+            (cd "$dir" && npm ci --no-audit --no-fund --silent >/dev/null 2>&1 && npm audit --audit-level=high)
           done
           true
 
@@ -306,7 +319,7 @@ jobs:
     # is intentionally not requested (artifact-only per ADR-026).
     continue-on-error: true
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
@@ -333,7 +346,7 @@ jobs:
     # and `trivy-image` by design (ADR-026 § Boundaries).
     continue-on-error: true
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
@@ -393,10 +406,10 @@ jobs:
             dockerfile: web/Dockerfile.api
             context: .
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
       - name: Build image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -432,7 +445,7 @@ jobs:
     # replacement for the ecosystem audits.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install osv-scanner (checksum-verified)
         # Pin to a specific release and verify the binary against the
         # publisher's SHA256SUMS manifest before exec'ing it. Without
@@ -486,7 +499,7 @@ jobs:
     if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
@@ -495,7 +508,7 @@ jobs:
       - name: Generate svelte-kit tsconfig (sonar reads web/tsconfig.json which extends it)
         run: |
           cd web
-          npm install --no-audit --no-fund --silent
+          npm ci --no-audit --no-fund --silent
           npx svelte-kit sync
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:

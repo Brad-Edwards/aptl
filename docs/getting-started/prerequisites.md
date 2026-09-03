@@ -8,6 +8,12 @@
 - Docker Compose 2.0+ (`docker compose version`)
 - Docker Buildx (`docker buildx version`)
 - Python 3.11+ (for the CLI)
+- OpenSSH client. `ssh-keygen` must be on `PATH`. `aptl lab start` generates the
+  lab SSH keys (the control-plane key and, for pack-backed scenarios, the
+  scenario's `ssh_key_bundle` keypairs) with it, and hardens them per-platform
+  (POSIX mode on Linux/macOS, NTFS ACLs via `icacls` on Windows). Preinstalled on
+  Linux and macOS; on Windows enable the built-in **OpenSSH Client** optional
+  feature (Settings → Apps → Optional features), or use Git for Windows / WSL2.
 - Node.js 18+ and npm (for the MCP servers, the AI-agent control plane that
   `aptl lab start` builds via `mcp/build-all-mcps.sh`; without them the lab
   still boots but reports `degraded` with MCP servers unavailable)

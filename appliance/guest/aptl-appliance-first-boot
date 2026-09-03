@@ -1,0 +1,25 @@
+#!/bin/sh
+# Idempotent guest start: identity is create-once per overlay; lab start reuses it.
+set -eu
+umask 077
+
+. /etc/aptl/appliance-release.env
+: "${APTL_APPLIANCE_SCENARIO:?missing staged appliance scenario identity}"
+
+aptl appliance bootstrap-overlay --state-dir /var/lib/aptl/overlay
+images_loaded=/var/lib/aptl/overlay/images-loaded
+if test ! -f "$images_loaded"; then
+    docker load --input /opt/aptl/offline/oci-images.tar
+    marker=$(mktemp /var/lib/aptl/overlay/.images-loaded.XXXXXX)
+    sha256sum /opt/aptl/offline/oci-images.tar >"$marker"
+    chmod 0600 "$marker"
+    mv "$marker" "$images_loaded"
+fi
+exec aptl lab start \
+    --project-dir /opt/aptl/project \
+    --scenario "$APTL_APPLIANCE_SCENARIO" \
+    --offline-staged \
+    --appliance-launch-descriptor /run/aptl-launch/appliance-launch.json \
+    --appliance-release-public-key /run/aptl-launch/release-public.pem \
+    --appliance-qualification-public-key \
+    /run/aptl-launch/qualification-public.pem

@@ -18,11 +18,18 @@ from aptl.core.deployment._compose_service_health import (
 )
 
 
-def _info(running=True, health=None, platform="linux"):
+def _info(running=True, health=None, platform="linux", *, status=None, exit_code=0, restart="unless-stopped"):
     state = {"Running": running}
+    if status is not None:
+        state["Status"] = status
+        state["ExitCode"] = exit_code
     if health is not None:
         state["Health"] = {"Status": health}
-    return {"State": state, "Platform": platform}
+    return {
+        "State": state,
+        "Platform": platform,
+        "HostConfig": {"RestartPolicy": {"Name": restart}},
+    }
 
 
 @pytest.mark.parametrize(
@@ -90,9 +97,12 @@ def test_unhealthy_container_reasons_enumerates_each_failure():
     reasons = unhealthy_container_reasons(backend, ["aptl-a", "aptl-b", "aptl-c", "aptl-d"])
     joined = " ".join(reasons)
     assert "aptl-a" not in joined
-    assert "not running" in joined and "aptl-b" in joined
-    assert "unhealthy" in joined and "aptl-c" in joined
-    assert "was never created" in joined and "aptl-d" in joined
+    assert "not running" in joined
+    assert "aptl-b" in joined
+    assert "unhealthy" in joined
+    assert "aptl-c" in joined
+    assert "was never created" in joined
+    assert "aptl-d" in joined
 
 
 def test_wait_returns_empty_when_no_containers():
@@ -136,3 +146,31 @@ def test_wait_times_out_with_reasons_when_never_healthy():
     assert reasons
     assert "aptl-a" in " ".join(reasons)
     assert "not 'healthy'" in " ".join(reasons)
+
+
+def test_an_exited_container_is_never_settled():
+    """A stopped container is a real failure, exit code and restart policy aside.
+
+    ADR-088 (issue #889) retired APTL's only run-to-completion service (the
+    Cortex Elasticsearch index initializer, replaced by the native
+    service-search-index-schema materializer), so a stopped container is always
+    an unrealized failure -- there is no longer a one-shot exemption.
+    """
+    info = _info(running=False, status="exited", exit_code=0, restart="no")
+    assert container_settled(info) is False
+
+
+def test_unhealthy_reasons_reports_a_stopped_container():
+    """A stopped container is always reported as a health failure reason."""
+    class _Backend:
+        def container_inspect(self, name):
+            if name == "aptl-stopped":
+                return _info(running=False, status="exited", exit_code=0, restart="no")
+            return _info(running=True)
+
+    reasons = unhealthy_container_reasons(
+        _Backend(), ["aptl-stopped", "aptl-wazuh-manager"]
+    )
+    joined = " ".join(reasons)
+    assert "aptl-stopped" in joined
+    assert "not running" in joined

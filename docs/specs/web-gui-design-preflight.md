@@ -37,7 +37,7 @@ type, route contract, or workflow concept.
 | Durable first-party config | `src/aptl/core/config.py`, ADR-025 |
 | Runtime environment and placeholder checks | `src/aptl/core/env.py`, `src/aptl/utils/placeholders.py`, `WebAuthSettings.from_env()` |
 | Secret redaction and serialization safety | `src/aptl/utils/redaction.py`, `mcp/aptl-mcp-common/src/redaction.ts`, ADR-029 |
-| Scenario catalog and SDL validation | `src/aptl/core/scenario_catalog.py`, ACES parser authority, ADR-035 |
+| Scenario catalog and SDL validation | `src/aptl/core/scenario_catalog.py`, RAES parser authority, ADR-035 |
 | Logging | `src/aptl/utils/logging.py` and module-local `get_logger(...)` |
 | Run artifact persistence | `src/aptl/core/runstore.py` |
 | Web component inventory | `web/src/lib/components/` and `web/src/lib/components/workbench/` |
@@ -117,7 +117,7 @@ The design specification must name how each in-scope page passes these layers.
 - Treat endpoint metadata as display and reachability projection only.
   `ENDPOINT_REGISTRY` does not authorize terminal access and does not own
   host-published ports or credentials.
-- Treat ACES SDL and `scenario_catalog.py` as scenario authority. The legacy
+- Treat RAES SDL and `scenario_catalog.py` as scenario authority. The legacy
   `/api/scenarios` endpoints are intentionally absent today; a design that
   includes scenario browsing must define a new canonical API projection instead
   of resurrecting the removed in-tree scenario schema by accident.
@@ -224,11 +224,11 @@ authority.
   `containers` scope parameter. The UI confirmation state belongs in a small
   `KillConfirmDialog` built from the kit `Dialog` and `Button`; do not add a
   generic command-confirmation system or a second modal primitive.
-- Scenario entry points must come from a new narrow ACES/catalog API projection
+- Scenario entry points must come from a new narrow RAES/catalog API projection
   when this slice needs them. The current Python tests deliberately assert the
   removed legacy `/api/scenarios` routes are absent, so UI-008c must replace
   that absence with explicit DTOs in `src/aptl/api/schemas.py` backed by
-  `src/aptl/core/scenario_catalog.py` / the ACES parser, not by reviving the old
+  `src/aptl/core/scenario_catalog.py` / the RAES parser, not by reviving the old
   in-tree scenario model from `src/aptl/core/scenarios.py`.
 - Scenario summary DTOs should expose only card/list facts: id, name,
   description, mode, difficulty, estimated time, tags, required containers, and
@@ -256,7 +256,7 @@ authority.
 
 ## UI-008d Scenario Catalog and Workbench Guardrails
 
-UI-008d (`/scenarios/[id]`) is a backend-owned ACES/catalog projection rendered
+UI-008d (`/scenarios/[id]`) is a backend-owned RAES/catalog projection rendered
 as a notebook-style workbench. It must not turn the browser into a scenario
 parser, terminal authority, SIEM authority, scoring store, or replacement SDL.
 
@@ -270,18 +270,18 @@ parser, terminal authority, SIEM authority, scoring store, or replacement SDL.
   `X-APTL-Session` carrier is applied. Do not fetch authenticated `/api/*`
   routes directly from `web/src/routes/scenarios/[id]/+page.ts`.
 - Resolve catalog ids through `src/aptl/core/scenario_catalog.py`. The catalog
-  `path` stays internal and project-contained, with ACES SDL validation handled
-  by the ACES parser authority; API responses must not expose local filesystem
+  `path` stays internal and project-contained, with RAES SDL validation handled
+  by the RAES parser authority; API responses must not expose local filesystem
   paths or archived legacy YAML locators.
 - Required containers, objective/step content, workflows, and authored
-  narrative come from the ACES document or compiled ACES/runtime artifacts. If a
-  card/detail header needs user-facing metadata ACES does not own uniformly
+  narrative come from the RAES document or compiled RAES/runtime artifacts. If a
+  card/detail header needs user-facing metadata RAES does not own uniformly
   today (mode, difficulty, duration, tags), add a narrow validated catalog
   metadata extension instead of inferring it in Svelte or reviving the deleted
   in-tree scenario schema.
 - Keep scenario validation state distinct from lab readiness, objective
   completion, and scoring. A "valid scenario" indicator means the catalog entry
-  and ACES projection loaded/validated; it must not imply the lab is running,
+  and RAES projection loaded/validated; it must not imply the lab is running,
   containers are healthy, detections fired, or objectives are complete.
 - Workbench blocks are display/action descriptors, not authorities. A terminal
   block may name a requested container target, but the terminal WebSocket still
@@ -302,7 +302,7 @@ parser, terminal authority, SIEM authority, scoring store, or replacement SDL.
   execute queries merely because the document rendered; visible user action or
   an explicit refresh control starts the side effect.
 - Errors should use route-appropriate standard envelopes: unknown scenario as a
-  short 404, invalid/unreadable catalog or ACES projection as a redacted
+  short 404, invalid/unreadable catalog or RAES projection as a redacted
   validation/unavailable state, terminal errors through the existing WebSocket
   message shape, and query errors through the SIEM result envelope. Do not add a
   scenario-specific exception hierarchy.
@@ -443,7 +443,7 @@ Use existing extension points for obvious follow-up changes:
   protocol, not host port;
 - new workbench content extends the `WorkbenchBlock` discriminated union and
   block renderer;
-- new scenario browsing data uses a narrow ACES/catalog projection rather than
+- new scenario browsing data uses a narrow RAES/catalog projection rather than
   a local scenario parser;
 - new runtime web settings extend the typed env settings boundary, not
   `aptl.json`;
@@ -473,7 +473,7 @@ Use existing extension points for obvious follow-up changes:
   delivery path instead of making FastAPI the BFF and asset owner.
 - Creating a duplicate route map in Svelte that disagrees with mounted FastAPI
   routers or tests.
-- Reintroducing removed `/api/scenarios` behavior without an explicit ACES
+- Reintroducing removed `/api/scenarios` behavior without an explicit RAES
   projection contract.
 - Parsing `docker-compose.yml` from a UI route or Svelte page to discover
   containers, ports, or terminal targets.
@@ -496,7 +496,7 @@ Use existing extension points for obvious follow-up changes:
   loopback binding and forgeable Fetch-Metadata/Origin headers are not
   authentication, and a host-scoped cookie alone leaks across loopback ports. See
   the shipped-implementation note in `web-gui-design.md`.)
-- Do not redesign the deployment backend, Docker socket model, ACES SDL,
+- Do not redesign the deployment backend, Docker socket model, RAES SDL,
   scenario startup, run archive layout, or endpoint registry.
 - Do not make the web GUI the source of truth for lab topology, scenario
   semantics, credentials, or startup readiness.

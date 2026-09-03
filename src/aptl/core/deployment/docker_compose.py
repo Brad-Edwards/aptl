@@ -4,50 +4,54 @@ Query, realization, and cleanup helpers live in focused sibling modules.
 """
 
 import json
+import os
 import subprocess
 from collections.abc import Sequence
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from aptl.core.deployment._compose_base_substrate import ComposeBaseSubstrateMixin
 from aptl.core.deployment._compose_build_dedupe import (
     write_duplicate_build_override,
 )
+from aptl.core.deployment._compose_image_fetch import ComposeImageFetchMixin
 from aptl.core.deployment._compose_lifecycle import kill_compose_lab
+from aptl.core.deployment._compose_project_cleanup import ComposeProjectCleanupMixin
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
 from aptl.core.deployment._compose_realization import ComposeRealizationMixin
+from aptl.core.deployment._compose_runtime_inventory import (
+    ComposeRuntimeInventoryMixin,
+)
 from aptl.core.deployment._compose_seed_attribution import (
     ComposeSeedAttributionMixin,
 )
-from aptl.core.deployment._compose_seed_safety import (
-    assert_safe_relpath,
-    redacted_stderr_hint,
-)
+from aptl.core.deployment._compose_seed_execution import ComposeSeedExecutionMixin
 from aptl.core.deployment._compose_stop import stop_compose_lab
-from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
+from aptl.core.deployment._compose_boundary import (
+    DEFAULT_BOUNDARY_HELPER_IMAGE,
+)
+from aptl.core.appliance_boundary import (
+    ApplianceBoundaryBinding,
+    ApplianceBoundaryPolicy,
+)
+from aptl.core.config import validate_compose_project_name
+from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.lab_types import LabResult, LabStatus
-from aptl.core.seed_spec import NamedVolumeSeed
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.docker_compose")
-
-# Timeout for Docker Compose subprocess calls during kill operations.
-# Generous enough for a large stack, short enough that a hung daemon
-# won't block the kill switch indefinitely.
 _DOCKER_TIMEOUT = 30
-
-# Timeout for a single volume-seed / legacy-retire container (ADR-043).
-# The copy itself is a handful of small files, but the first seed on a
-# fresh host may pull the seeder image (already in the lab's supply
-# chain), so the margin is deliberately generous.
-_SEED_TIMEOUT = 600
 
 
 class DockerComposeBackend(
+    ComposeRuntimeInventoryMixin,
     ComposeQueryMixin,
     ComposeRealizationMixin,
     ComposeSeedAttributionMixin,
+    ComposeSeedExecutionMixin,
     ComposeBaseSubstrateMixin,
+    ComposeProjectCleanupMixin,
+    ComposeImageFetchMixin,
 ):
     """Docker Compose deployment backend.
 
@@ -61,9 +65,26 @@ class DockerComposeBackend(
         self,
         project_dir: Path,
         project_name: str = "aptl",
+        *,
+        offline_staged: bool = False,
     ) -> None:
         self._project_dir = project_dir
-        self._project_name = project_name
+        self._project_name = validate_compose_project_name(project_name)
+        self._offline_staged = offline_staged
+        self._appliance_boundary: (
+            tuple[
+                ApplianceBoundaryPolicy,
+                ApplianceBoundaryBinding,
+            ]
+            | None
+        ) = None
+        self._boundary_receipts: dict[str, dict[str, object]] = {}
+        self._boundary_helper_image = DEFAULT_BOUNDARY_HELPER_IMAGE
+        # ADR-088 phased startup (issue #889): safe portable readback evidence
+        # from each proven service-search-index-schema materialization, keyed by
+        # content-placement address. Consumed by realization observation to
+        # disclose the concern only after real corroboration (SEM-218).
+        self._service_index_materialization_evidence: dict[str, dict[str, object]] = {}
 
     @property
     def project_dir(self) -> Path:
@@ -72,6 +93,17 @@ class DockerComposeBackend(
     @property
     def project_name(self) -> str:
         return self._project_name
+
+    @property
+    def realization_root(self) -> Path:
+        """The writable root generated realization output is written under.
+
+        The engine checkout, never the pristine staged pack (issue #875).
+        Realization observation reads generated artifacts back from here, so the
+        write side and the read-back side share one authority and cannot drift.
+        """
+
+        return self._project_dir
 
     @property
     def supports_local_artifacts(self) -> bool:
@@ -85,6 +117,7 @@ class DockerComposeBackend(
         profiles: list[str],
         *,
         compose_files: Sequence[Path] | None = None,
+        scenario_root: Path | None = None,
     ) -> list[str]:
         """Build a docker compose command with profile flags.
 
@@ -94,18 +127,29 @@ class DockerComposeBackend(
         Args:
             action: The compose action (up, down, ps, kill, etc.).
             profiles: List of docker compose profiles to activate.
+            scenario_root: When realizing a scenario, the bundle root Compose
+                must use as its effective project directory. Relative build
+                contexts, binds, includes, and ``env_file`` entries resolve
+                against it, never the caller cwd. The operator secret source
+                stays the control-plane ``project_dir/.env``, bound explicitly
+                so a bundle-local ``.env`` cannot override it (issue #874).
+                ``None`` is the legacy direct path over the engine's own compose.
 
         Returns:
             Command as a list of strings suitable for subprocess.run().
         """
-        # Pin the compose project name. Without `-p`, docker compose derives the
-        # project from the working-directory basename, which diverges from
-        # `self._project_name` in any worktree not literally named after the
-        # project (e.g. a `aptl3` git worktree). That divergence makes `start`
-        # / `stop` (this builder) act on a different project than `status` and
-        # the orphan-cleanup filters, so a lab started here cannot be stopped or
-        # inspected and its networks collide with the real project's subnets.
         cmd = ["docker", "compose", "-p", self._project_name]
+        if scenario_root is not None:
+            cmd.extend(["--project-directory", str(scenario_root)])
+            # Always bind an explicit control-plane env source. With
+            # --project-directory pointing at the bundle root, Compose would
+            # otherwise auto-discover <scenario_root>/.env and let the bundle
+            # control interpolation. Bind the operator .env when present, else an
+            # empty source (os.devnull) — never the bundle-local .env (#874).
+            env_file = self._project_dir / ".env"
+            cmd.extend(
+                ["--env-file", str(env_file if env_file.is_file() else os.devnull)]
+            )
         for compose_file in compose_files or ():
             cmd.extend(["-f", str(compose_file)])
 
@@ -136,14 +180,6 @@ class DockerComposeBackend(
         else:
             kwargs["capture_output"] = True
             kwargs["text"] = True
-            # Decode captured docker/compose output as UTF-8 explicitly.
-            # Without this, `text=True` decodes with the host's locale
-            # codec, which on Windows is cp1252 and cannot decode the
-            # non-ASCII bytes BuildKit emits (progress glyphs, box-drawing) —
-            # the reader thread raises UnicodeDecodeError mid-build, the
-            # compose call is seen as failed, and the 60s retry then
-            # collides with the containers the first attempt already started.
-            # `errors="replace"` keeps a stray byte from ever aborting a read.
             kwargs["encoding"] = "utf-8"
             kwargs["errors"] = "replace"
         if timeout is not None:
@@ -192,12 +228,32 @@ class DockerComposeBackend(
                 f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
             ) from exc
 
+    def _run_with_input(
+        self,
+        cmd: list[str],
+        payload: str,
+        *,
+        timeout: int | None = None,
+    ) -> subprocess.CompletedProcess:
+        """Run one fixed command with non-secret structured stdin."""
+
+        kwargs = self._subprocess_kwargs(streaming=False, timeout=timeout)
+        kwargs["input"] = payload
+        try:
+            return subprocess.run(cmd, **kwargs)
+        except subprocess.TimeoutExpired as exc:
+            raise BackendTimeoutError(
+                f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
+            ) from exc
+
     def start(
         self,
         profiles: list[str],
         *,
         build: bool = True,
         exclude_services: tuple[str, ...] = (),
+        only_services: tuple[str, ...] = (),
+        scenario_root: Path | None = None,
     ) -> LabResult:
         """Start lab services via docker compose up.
 
@@ -208,17 +264,37 @@ class DockerComposeBackend(
                 mixed realization): everything else in the active profiles
                 starts normally, but a node the generic materializer already
                 realized directly must not also start as a Compose container.
+            only_services: When non-empty, bring up only these Compose services
+                (and their ``depends_on`` closure), leaving the rest of the
+                active profiles unstarted. Used by the ADR-088 phased startup
+                (issue #889) to bring the materialization target service up and
+                prove its initial state before the general workload — which
+                consumes that state — is admitted. Do not race a materializer
+                against an unrestricted ``compose up``.
+            scenario_root: Bundle root the scenario's Compose model and build
+                contexts resolve against (issue #874). ``None`` is the legacy
+                direct path over the engine's own in-tree compose.
 
         Returns:
             LabResult indicating success or failure.
         """
-        compose_files = self._start_compose_files(build=build)
-        cmd = self._build_command("up", profiles, compose_files=compose_files)
+        build = build and not self._offline_staged
+        compose_files = self._start_compose_files(
+            build=build, scenario_root=scenario_root
+        )
+        cmd = self._build_command(
+            "up", profiles, compose_files=compose_files, scenario_root=scenario_root
+        )
         if build:
             cmd.append("--build")
+        if self._offline_staged:
+            cmd.extend(["--pull", "never"])
         cmd.append("-d")
         for service in exclude_services:
             cmd += ["--scale", f"{service}=0"]
+        # Positional service names must follow the options: `compose up -d <svc>`
+        # starts only the named services plus their depends_on closure.
+        cmd.extend(only_services)
 
         log.info("Starting lab with profiles: %s", profiles)
         log.debug("Command: %s", " ".join(cmd))
@@ -232,15 +308,19 @@ class DockerComposeBackend(
         log.info("Lab started successfully")
         return LabResult(success=True, message="Lab started")
 
-    def _start_compose_files(self, *, build: bool) -> tuple[Path, ...] | None:
-        """Return Compose files for startup, adding build dedupe when needed."""
+    def _start_compose_files(
+        self, *, build: bool, scenario_root: Path | None = None
+    ) -> tuple[Path, ...] | None:
+        """Return Compose files for startup, adding build dedupe when needed.
 
-        override = write_duplicate_build_override(self._project_dir) if build else None
-        return (
-            (self._project_dir / "docker-compose.yml", override)
-            if override is not None
-            else None
-        )
+        The base ``docker-compose.yml`` and the build-dedupe override are
+        scenario-declared inputs; they resolve against ``scenario_root`` (the
+        bundle root) when realizing a scenario, else the engine's own tree.
+        """
+
+        root = scenario_root if scenario_root is not None else self._project_dir
+        override = write_duplicate_build_override(root) if build else None
+        return (root / "docker-compose.yml", override) if override is not None else None
 
     def stop(self, profiles: list[str], *, remove_volumes: bool = False) -> LabResult:
         """Stop lab services via docker compose down.
@@ -307,160 +387,3 @@ class DockerComposeBackend(
             Tuple of (success, error_message).
         """
         return kill_compose_lab(self, profiles, timeout=_DOCKER_TIMEOUT)
-
-    def pull_images(self, images: list[str]) -> list[str]:
-        """Pre-pull container images via docker pull.
-
-        Args:
-            images: List of image references to pull.
-
-        Returns:
-            List of warning messages for images that failed to pull
-            (non-fatal).
-        """
-        warnings: list[str] = []
-        for image in images:
-            try:
-                result = self._run(["docker", "pull", image])
-                if result.returncode != 0:
-                    msg = f"Failed to pull {image}: {result.stderr.strip()}"
-                    log.warning(msg)
-                    warnings.append(msg)
-                else:
-                    log.info("Pulled %s", image)
-            except OSError as exc:
-                msg = f"Failed to pull {image}: {exc}"
-                log.warning(msg)
-                warnings.append(msg)
-        return warnings
-
-    def seed_named_volumes(
-        self,
-        seeds: Sequence[NamedVolumeSeed],
-        *,
-        seeder_image: str,
-    ) -> None:
-        """Materialize checked-in source into Compose named volumes (ADR-043).
-
-        See :meth:`DeploymentBackend.seed_named_volumes`. Each seed is
-        retired-then-copied by short-lived root containers run through the
-        backend's own ``_run`` so this stays a narrow, typed operation
-        rather than a generic Docker passthrough.
-        """
-        # Validate every declared relpath before the first Docker command so
-        # an unsafe seed can never cause any container or volume side effect.
-        for seed in seeds:
-            for seed_file in seed.files:
-                assert_safe_relpath(seed_file.src)
-                assert_safe_relpath(seed_file.dest)
-        for seed in seeds:
-            self._ensure_labeled_seed_volume(seed)
-            self._retire_legacy_seed_path(seed, seeder_image)
-            self._seed_one_named_volume(seed, seeder_image)
-
-    def _seed_one_named_volume(self, seed: NamedVolumeSeed, seeder_image: str) -> None:
-        """Copy a seed's files into its project-scoped named volume."""
-        # Project scoping (ADR-037): the real volume name is derived from
-        # the configured compose project, never set as an explicit global.
-        volume = f"{self._project_name}_{seed.volume_suffix}"
-        cmd = [
-            "docker",
-            "run",
-            "--rm",
-            "--user",
-            "0:0",
-            "--entrypoint",
-            "/bin/sh",
-            "-v",
-            f"{seed.source_dir}:/src:ro",
-            "-v",
-            f"{volume}:/dest",
-            seeder_image,
-            "-c",
-            self._build_seed_script(seed),
-        ]
-        result = self._run(cmd, timeout=_SEED_TIMEOUT)
-        if result.returncode != 0:
-            # Name only the artifact in the raised message — raw Docker
-            # stderr never reaches the exception (test_nonzero_exit_raises_
-            # without_leaking_stderr). The operator-facing log line carries
-            # a redacted stderr tail so a seed failure is diagnosable
-            # without rerunning the docker command by hand (issue #716).
-            log.error(
-                "Seed of volume %s failed (exit %s)%s",
-                seed.volume_suffix,
-                result.returncode,
-                redacted_stderr_hint(result.stderr),
-            )
-            raise BackendSeedError(
-                f"Seeding named volume '{seed.volume_suffix}' failed"
-            )
-
-    def _build_seed_script(self, seed: NamedVolumeSeed) -> str:
-        """Build the fixed-path copy script for one seed.
-
-        Only the fixed container paths ``/src`` and ``/dest`` plus
-        validated, code-defined relpaths appear in the returned string;
-        the host source dir and the volume name travel through argv ``-v``
-        flags, never the shell text (ADR-043 §Security Layers). Root
-        ``cp`` overwrites prior content, so the seed is idempotent
-        regardless of the existing owner.
-        """
-        parts = ["set -e"]
-        for seed_file in seed.files:
-            assert_safe_relpath(seed_file.src)
-            assert_safe_relpath(seed_file.dest)
-            dest_dir = PurePosixPath(seed_file.dest).parent
-            if dest_dir.name:
-                parts.append(f"mkdir -p /dest/{dest_dir}")
-            parts.append(f"cp -a /src/{seed_file.src} /dest/{seed_file.dest}")
-        return "; ".join(parts)
-
-    @staticmethod
-    def _assert_safe_relpath(relpath: str) -> None:
-        """Preserve the validation seam shared with content realization."""
-
-        assert_safe_relpath(relpath)
-
-    def _retire_legacy_seed_path(
-        self, seed: NamedVolumeSeed, seeder_image: str
-    ) -> None:
-        """Remove a seed's pre-ADR-043 legacy host bind dir, if present.
-
-        The directory may be owned by the in-container ``suricata`` UID
-        (991), so the host operator cannot delete it. A root container
-        mounts the host-owned *parent* and removes the single canonical
-        child by name — a narrow, path-contained cleanup (ADR-043), in
-        argv form against fixed container paths.
-        """
-        legacy = seed.legacy_retire_path
-        if legacy is None:
-            return
-        name = legacy.name
-        assert_safe_relpath(name)
-        cmd = [
-            "docker",
-            "run",
-            "--rm",
-            "--user",
-            "0:0",
-            "--entrypoint",
-            "rm",
-            "-v",
-            f"{legacy.parent}:/legacy",
-            seeder_image,
-            "-rf",
-            f"/legacy/{name}",
-        ]
-        result = self._run(cmd, timeout=_SEED_TIMEOUT)
-        if result.returncode != 0:
-            # Same redacted-hint contract as the seed path (issue #716): the
-            # raised message names only the artifact; the log line carries a
-            # redacted stderr tail for diagnosis.
-            log.error(
-                "Retire of legacy seed path %s failed (exit %s)%s",
-                legacy,
-                result.returncode,
-                redacted_stderr_hint(result.stderr),
-            )
-            raise BackendSeedError(f"Retiring legacy seed path '{name}' failed")

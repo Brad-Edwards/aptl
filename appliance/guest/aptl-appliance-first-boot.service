@@ -1,0 +1,18 @@
+[Unit]
+Description=APTL disposable appliance first-boot readiness
+After=docker.service network.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/aptl-appliance-first-boot
+RemainAfterExit=yes
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/aptl /opt/aptl/project
+
+[Install]
+WantedBy=multi-user.target

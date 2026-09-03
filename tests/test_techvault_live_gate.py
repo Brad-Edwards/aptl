@@ -10,6 +10,7 @@ boot is the integration-marked, ``APTL_LIVE_GATE``-gated test at the bottom.
 import functools
 import json
 import os
+import tempfile
 import types
 from pathlib import Path
 
@@ -19,10 +20,11 @@ from aptl.core.config import AptlConfig
 from aptl.core.lab_types import LabResult, StartupOutcome
 from aptl.core.runstore import LocalRunStore
 from aptl.validation import _live_gate_checks as lgc
+from aptl.validation import techvault_live_gate as tlg
 from aptl.validation import _live_gate_probes as lgp
 from aptl.validation import _live_gate_telemetry as lgt
 from aptl.validation.techvault_live_gate import (
-    CATEGORY_ACES_SPECIFICATION,
+    CATEGORY_RAES_SPECIFICATION,
     CATEGORY_BACKEND_INSTANTIATION,
     CATEGORY_BACKEND_INTERPRETATION,
     CATEGORY_DEFENSIVE_STACK_READINESS,
@@ -36,9 +38,14 @@ from aptl.validation.techvault_live_gate import (
     LiveGateState,
     validate_live_deployment,
 )
+from tests.helpers import techvault_scenario_bundle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
+# The default TechVault scenario now ships as the bundled env-pack (#875); stage
+# it once for the module and drive the live gate from its validated SDL.
+SCENARIO = techvault_scenario_bundle(
+    Path(tempfile.mkdtemp(prefix="aptl-live-gate-"))
+).sdl_path
 
 
 # --------------------------------------------------------------------------- #
@@ -73,7 +80,7 @@ class _Manager:
     def __init__(self, target):
         self.target = target
 
-    def plan(self, scenario):
+    def plan(self, scenario, artifact_availability=None):
         return types.SimpleNamespace(provisioning=object())
 
 
@@ -110,13 +117,19 @@ def _node(name, profiles, aliases=None, declared_health=None):
 
 
 def _container(
-    name, *, status="Up 2 minutes (healthy)", health="healthy", networks=None
+    name,
+    *,
+    status="Up 2 minutes (healthy)",
+    health="healthy",
+    networks=None,
+    restart_policy="",
 ):
     return {
         "name": name,
         "status": status,
         "health": health,
         "networks": networks or {},
+        "restart_policy": restart_policy,
     }
 
 
@@ -134,7 +147,7 @@ def _wire_boot(
     }
     # The realization + boot probes moved to `_live_gate_probes` (lgp); their
     # leaf deps are looked up there. `select_backend_profiles` is still called
-    # directly in `check_aces_driven_boot` (lgc), so it stays patched on lgc.
+    # directly in `check_raes_driven_boot` (lgc), so it stays patched on lgc.
     monkeypatch.setattr(lgp, "get_backend", lambda config, project_dir: _Backend())
     monkeypatch.setattr(lgp, "create_aptl_runtime_target", lambda **k: object())
     monkeypatch.setattr(lgp, "RuntimeManager", _Manager)
@@ -164,7 +177,7 @@ def test_check_category_map_covers_every_check_with_valid_categories():
         {
             "static_prerequisite",
             "boot_inputs_match_public_path",
-            "aces_driven_boot",
+            "raes_driven_boot",
             "defensive_stack_readiness",
             "kali_reachability",
             "telemetry_evidence_path",
@@ -176,7 +189,7 @@ def test_check_category_map_covers_every_check_with_valid_categories():
 
 
 def test_live_gate_report_passed_failures_categories_and_render():
-    ok = LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
+    ok = LiveGateCheck("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
     bad = LiveGateCheck(
         "kali_reachability", CATEGORY_KALI_REACHABILITY, False, ("unreachable",)
     )
@@ -185,7 +198,9 @@ def test_live_gate_report_passed_failures_categories_and_render():
     assert report.failures() == (bad,)
     assert report.failure_categories() == (CATEGORY_KALI_REACHABILITY,)
     text = report.render()
-    assert "FAIL" in text and "unreachable" in text and "failing layers" in text
+    assert "FAIL" in text
+    assert "unreachable" in text
+    assert "failing layers" in text
     assert LiveGateReport("s", "p", "r", (ok,)).passed is True
 
 
@@ -201,7 +216,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
     # run caught exactly that for `check_scenario_variation(state=...)`).
     def static(scenario_path, *, project_dir, config, options):
         return object(), LiveGateCheck(
-            "static_prerequisite", CATEGORY_ACES_SPECIFICATION, True
+            "static_prerequisite", CATEGORY_RAES_SPECIFICATION, True
         )
 
     def inputs(scenario_path, *, project_dir, options):
@@ -211,18 +226,23 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
 
     def boot(scenario, *, project_dir, config, options, state, scenario_path):
         assert scenario_path == SCENARIO
-        return LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
+        return LiveGateCheck("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
 
     def readiness(*, state):
         return LiveGateCheck(
             "defensive_stack_readiness", CATEGORY_DEFENSIVE_STACK_READINESS, True
         )
 
-    def reachability(*, project_dir, config, state):
-        return LiveGateCheck("kali_reachability", CATEGORY_KALI_REACHABILITY, True)
-
-    def telemetry(*, project_dir, config, options, state):
-        return LiveGateCheck("telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, True)
+    def semantic(ctx, state):
+        # Semantic verification runs through the plugin seam now; the orchestrator
+        # reaches it at one call site. Stub that site so this test stays about
+        # composition, not discovery (the seam has its own tests).
+        return [
+            LiveGateCheck("kali_reachability", CATEGORY_KALI_REACHABILITY, True),
+            LiveGateCheck(
+                "telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, True
+            ),
+        ]
 
     def archive(
         scenario_path, *, project_dir, config, run_store, run_id, state, prior_checks
@@ -236,10 +256,9 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
 
     monkeypatch.setattr(lgc, "check_static_prerequisite", static)
     monkeypatch.setattr(lgc, "check_boot_inputs_match_public_path", inputs)
-    monkeypatch.setattr(lgc, "check_aces_driven_boot", boot)
+    monkeypatch.setattr(lgc, "check_raes_driven_boot", boot)
     monkeypatch.setattr(lgc, "check_defensive_stack_readiness", readiness)
-    monkeypatch.setattr(lgc, "check_kali_reachability", reachability)
-    monkeypatch.setattr(lgc, "check_telemetry_evidence_path", telemetry)
+    monkeypatch.setattr(tlg, "_semantic_checks", semantic)
     monkeypatch.setattr(lgc, "check_run_archive_manifest", archive)
     monkeypatch.setattr(lgc, "check_scenario_variation", variation)
     report = validate_live_deployment(
@@ -250,7 +269,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
         "run_id_input",
         "static_prerequisite",
         "boot_inputs_match_public_path",
-        "aces_driven_boot",
+        "raes_driven_boot",
         "defensive_stack_readiness",
         "kali_reachability",
         "telemetry_evidence_path",
@@ -271,7 +290,7 @@ def test_validate_live_deployment_short_circuits_on_static_failure(monkeypatch):
         lambda *a, **k: (
             None,
             LiveGateCheck(
-                "static_prerequisite", CATEGORY_ACES_SPECIFICATION, False, ("bad",)
+                "static_prerequisite", CATEGORY_RAES_SPECIFICATION, False, ("bad",)
             ),
         ),
     )
@@ -288,14 +307,14 @@ def test_validate_live_deployment_records_archive_on_boot_failure(monkeypatch):
         "check_static_prerequisite",
         lambda *a, **k: (
             object(),
-            LiveGateCheck("static_prerequisite", CATEGORY_ACES_SPECIFICATION, True),
+            LiveGateCheck("static_prerequisite", CATEGORY_RAES_SPECIFICATION, True),
         ),
     )
     monkeypatch.setattr(
         lgc,
-        "check_aces_driven_boot",
+        "check_raes_driven_boot",
         lambda *a, **k: LiveGateCheck(
-            "aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, False, ("boom",)
+            "raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, False, ("boom",)
         ),
     )
     archive_calls = []
@@ -315,7 +334,7 @@ def test_validate_live_deployment_records_archive_on_boot_failure(monkeypatch):
         "run_id_input",
         "static_prerequisite",
         "boot_inputs_match_public_path",
-        "aces_driven_boot",
+        "raes_driven_boot",
         "run_archive_manifest",
     ]
     assert archive_calls == [1]
@@ -334,7 +353,8 @@ def test_check_static_prerequisite_passes_and_parses(monkeypatch):
         SCENARIO, project_dir=PROJECT_ROOT, config=_config(), options=LiveGateOptions()
     )
     assert scenario == "SCENARIO-OBJ"
-    assert check.passed and check.category == CATEGORY_ACES_SPECIFICATION
+    assert check.passed
+    assert check.category == CATEGORY_RAES_SPECIFICATION
 
 
 def test_check_static_prerequisite_blocks_on_static_failure(monkeypatch):
@@ -344,51 +364,40 @@ def test_check_static_prerequisite_blocks_on_static_failure(monkeypatch):
     scenario, check = lgc.check_static_prerequisite(
         SCENARIO, project_dir=PROJECT_ROOT, config=_config(), options=LiveGateOptions()
     )
-    assert scenario is None and not check.passed
+    assert scenario is None
+    assert not check.passed
     assert any("static gate failed" in d for d in check.diagnostics)
 
 
 # --------------------------------------------------------------------------- #
-# 2. ACES-driven boot.
+# 2. RAES-driven boot.
 # --------------------------------------------------------------------------- #
 
 
-def test_check_aces_driven_boot_happy_populates_state(monkeypatch):
+def test_check_raes_driven_boot_happy_populates_state(monkeypatch):
     _wire_boot(monkeypatch)
     state = LiveGateState()
-    check = lgc.check_aces_driven_boot(
+    check = lgc.check_raes_driven_boot(
         object(),
         project_dir=PROJECT_ROOT,
         config=_config(),
         options=LiveGateOptions(),
         state=state,
     )
-    assert check.passed and check.category == CATEGORY_BACKEND_INSTANTIATION
+    assert check.passed
+    assert check.category == CATEGORY_BACKEND_INSTANTIATION
     assert state.realization_details["nodes"]
     assert state.selected_profiles == ["dmz", "soc"]
     assert state.snapshot["containers"]
 
 
-def test_check_aces_driven_boot_fails_on_interpretation_error(monkeypatch):
+def test_check_raes_driven_boot_fails_on_interpretation_error(monkeypatch):
     bad = _Realization(
         [_node("webapp", ["dmz"])], ["dmz"], diagnostics=(_Diag("error"),)
     )
     _wire_boot(monkeypatch, realization=bad)
     state = LiveGateState()
-    check = lgc.check_aces_driven_boot(
-        object(),
-        project_dir=PROJECT_ROOT,
-        config=_config(),
-        options=LiveGateOptions(),
-        state=state,
-    )
-    assert not check.passed and check.category == CATEGORY_BACKEND_INTERPRETATION
-
-
-def test_check_aces_driven_boot_fails_on_empty_realization(monkeypatch):
-    _wire_boot(monkeypatch, realization=_Realization([], []))
-    state = LiveGateState()
-    check = lgc.check_aces_driven_boot(
+    check = lgc.check_raes_driven_boot(
         object(),
         project_dir=PROJECT_ROOT,
         config=_config(),
@@ -396,24 +405,39 @@ def test_check_aces_driven_boot_fails_on_empty_realization(monkeypatch):
         state=state,
     )
     assert not check.passed
-    assert any("no ACES nodes" in d for d in check.diagnostics)
+    assert check.category == CATEGORY_BACKEND_INTERPRETATION
 
 
-def test_check_aces_driven_boot_fails_on_boot_failed(monkeypatch):
-    _wire_boot(monkeypatch, outcome=StartupOutcome.FAILED)
+def test_check_raes_driven_boot_fails_on_empty_realization(monkeypatch):
+    _wire_boot(monkeypatch, realization=_Realization([], []))
     state = LiveGateState()
-    check = lgc.check_aces_driven_boot(
+    check = lgc.check_raes_driven_boot(
         object(),
         project_dir=PROJECT_ROOT,
         config=_config(),
         options=LiveGateOptions(),
         state=state,
     )
-    assert not check.passed and check.category == CATEGORY_BACKEND_INSTANTIATION
+    assert not check.passed
+    assert any("no RAES nodes" in d for d in check.diagnostics)
+
+
+def test_check_raes_driven_boot_fails_on_boot_failed(monkeypatch):
+    _wire_boot(monkeypatch, outcome=StartupOutcome.FAILED)
+    state = LiveGateState()
+    check = lgc.check_raes_driven_boot(
+        object(),
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(),
+        state=state,
+    )
+    assert not check.passed
+    assert check.category == CATEGORY_BACKEND_INSTANTIATION
     assert any("public lab start failed" in d for d in check.diagnostics)
 
 
-def test_check_aces_driven_boot_skips_cleanup_and_reboot_when_requested(monkeypatch):
+def test_check_raes_driven_boot_skips_cleanup_and_reboot_when_requested(monkeypatch):
     boots = []
     _wire_boot(monkeypatch)
     monkeypatch.setattr(
@@ -424,7 +448,7 @@ def test_check_aces_driven_boot_skips_cleanup_and_reboot_when_requested(monkeypa
         ),
     )
     state = LiveGateState()
-    check = lgc.check_aces_driven_boot(
+    check = lgc.check_raes_driven_boot(
         object(),
         project_dir=PROJECT_ROOT,
         config=_config(),
@@ -434,10 +458,11 @@ def test_check_aces_driven_boot_skips_cleanup_and_reboot_when_requested(monkeypa
     # Non-destructive: no clean boot (cleanup+reboot), but the running lab is
     # still snapshotted and the realization matrix is still computed.
     assert boots == []
-    assert check.passed and state.snapshot["containers"]
+    assert check.passed
+    assert state.snapshot["containers"]
 
 
-def test_check_aces_driven_boot_fails_when_clean_boot_fails(monkeypatch):
+def test_check_raes_driven_boot_fails_when_clean_boot_fails(monkeypatch):
     """A failed clean boot (e.g. fatal cleanup) fails the gate, no snapshot."""
     _wire_boot(monkeypatch)
     monkeypatch.setattr(
@@ -450,18 +475,19 @@ def test_check_aces_driven_boot_fails_when_clean_boot_fails(monkeypatch):
         ),
     )
     state = LiveGateState()
-    check = lgc.check_aces_driven_boot(
+    check = lgc.check_raes_driven_boot(
         object(),
         project_dir=PROJECT_ROOT,
         config=_config(),
         options=LiveGateOptions(),
         state=state,
     )
-    assert not check.passed and check.category == CATEGORY_BACKEND_INSTANTIATION
+    assert not check.passed
+    assert check.category == CATEGORY_BACKEND_INSTANTIATION
     assert any("public lab start failed" in d for d in check.diagnostics)
 
 
-def test_check_aces_driven_boot_passes_selected_scenario_to_public_start(monkeypatch):
+def test_check_raes_driven_boot_passes_selected_scenario_to_public_start(monkeypatch):
     _wire_boot(monkeypatch)
     boots = []
     monkeypatch.setattr(
@@ -475,7 +501,7 @@ def test_check_aces_driven_boot_passes_selected_scenario_to_public_start(monkeyp
     state = LiveGateState()
     selected = PROJECT_ROOT / "scenarios" / "custom.sdl.yaml"
 
-    check = lgc.check_aces_driven_boot(
+    check = lgc.check_raes_driven_boot(
         object(),
         project_dir=PROJECT_ROOT,
         config=_config(),
@@ -497,7 +523,8 @@ def test_boot_inputs_pass_for_default_scenario_and_profile():
     check = lgc.check_boot_inputs_match_public_path(
         SCENARIO, project_dir=PROJECT_ROOT, options=LiveGateOptions()
     )
-    assert check.passed and check.category == CATEGORY_BACKEND_INSTANTIATION
+    assert check.passed
+    assert check.category == CATEGORY_BACKEND_INSTANTIATION
 
 
 def test_boot_inputs_pass_for_custom_scenario_when_profile_matches():
@@ -526,16 +553,16 @@ def test_validate_live_deployment_short_circuits_on_profile_mismatch(monkeypatch
         "check_static_prerequisite",
         lambda *a, **k: (
             object(),
-            LiveGateCheck("static_prerequisite", CATEGORY_ACES_SPECIFICATION, True),
+            LiveGateCheck("static_prerequisite", CATEGORY_RAES_SPECIFICATION, True),
         ),
     )
     booted = []
     monkeypatch.setattr(
         lgc,
-        "check_aces_driven_boot",
+        "check_raes_driven_boot",
         lambda *a, **k: (
             booted.append(1)
-            or LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
+            or LiveGateCheck("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
         ),
     )
     report = validate_live_deployment(
@@ -602,18 +629,88 @@ def test_readiness_fails_on_stopped_node_container():
     assert any("not running" in d for d in check.diagnostics)
 
 
-def test_readiness_tolerates_unhealthy_non_node_infra():
+def test_readiness_fails_on_a_container_no_declared_node_accounts_for():
+    """ADR-048 parity runs both ways: nothing may run that nothing declares.
+
+    This previously asserted the opposite -- an undeclared container was
+    tolerated and merely logged, so range content could drift away from the
+    scenario without ever failing a run. The rule is now absolute and carries no
+    allowance list, because an exception for "infrastructure" is precisely the
+    silent approximation SEM-218 I2 forbids.
+
+    The observability collector here is a real example: it is a genuine part of
+    the range, and the correct response is for the scenario to declare it, which
+    the default TechVault scenario now does.
+    """
+
     state = _readiness_state(
         [_node("webapp", ["dmz"])],
         [
             _container("aptl-webapp"),
+            _container("aptl-otel-collector"),
+        ],
+    )
+    check = lgc.check_defensive_stack_readiness(state=state)
+
+    assert not check.passed
+    assert any("aptl-otel-collector" in d for d in check.diagnostics)
+    assert any("no declared node accounts for it" in d for d in check.diagnostics)
+
+
+def test_readiness_fails_an_exited_run_to_completion_container():
+    """A restart:"no" container that exited is a readiness failure, no exemption.
+
+    ADR-088 (issue #889) retired APTL's only run-to-completion service (the
+    Cortex Elasticsearch index initializer, replaced by the native
+    service-search-index-schema materializer): every declared node must now be
+    running, restart policy notwithstanding.
+    """
+
+    state = _readiness_state(
+        [_node("webapp", ["dmz"])],
+        [
             _container(
-                "aptl-otel-collector", status="Up 1m (unhealthy)", health="unhealthy"
+                "aptl-webapp",
+                status="Exited (0) 5 minutes ago",
+                health="",
+                restart_policy="no",
             ),
         ],
     )
     check = lgc.check_defensive_stack_readiness(state=state)
-    assert check.passed
+
+    assert not check.passed
+
+
+def test_readiness_still_fails_a_service_that_exited():
+    """A container configured to stay up (unless-stopped) that has exited fails."""
+
+    state = _readiness_state(
+        [_node("webapp", ["dmz"])],
+        [
+            _container(
+                "aptl-webapp",
+                status="Exited (0) 1 minute ago",
+                health="",
+                restart_policy="unless-stopped",
+            ),
+        ],
+    )
+    check = lgc.check_defensive_stack_readiness(state=state)
+
+    assert not check.passed
+
+
+def test_readiness_passes_when_every_container_maps_to_a_declared_node():
+    """The other side of the same rule: full parity is what passing means."""
+
+    state = _readiness_state(
+        [_node("webapp", ["dmz"]), _node("otel-collector", ["dmz"])],
+        [_container("aptl-webapp"), _container("aptl-otel-collector")],
+    )
+    check = lgc.check_defensive_stack_readiness(state=state)
+
+    assert check.passed, check.diagnostics
 
 
 def test_readiness_skips_nodes_in_unselected_profiles():
@@ -655,8 +752,8 @@ def test_readiness_passes_when_declared_health_met():
 
 
 def test_readiness_fails_when_one_node_reports_unhealthy_alongside_a_healthy_node():
-    # Health is observed, never declared (aces-sdl 0.21.0 removed authored
-    # `runtime.health`, ACES #761), so there is no declared expectation left to
+    # Health is observed, never declared (raes 0.21.0 removed authored
+    # `runtime.health`, RAES #761), so there is no declared expectation left to
     # mismatch against. The container's own healthcheck is the expectation
     # instead: once it reports a health state at all, that state must be
     # "healthy". A sibling node with no healthcheck (tolerated on its own, see
@@ -707,262 +804,6 @@ def test_readiness_tolerates_unreported_health_when_node_declares_none():
 
 
 # --------------------------------------------------------------------------- #
-# 4. Kali reachability.
-# --------------------------------------------------------------------------- #
-
-
-def _reach_state(containers):
-    state = LiveGateState()
-    state.snapshot = {"containers": containers}
-    return state
-
-
-def test_reachability_passes_when_shared_targets_reachable(monkeypatch):
-    monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend(returncode=0))
-    state = _reach_state(
-        [
-            _container("aptl-kali", networks={"aptl-dmz-net": "172.20.1.30"}),
-            _container("aptl-webapp", networks={"aptl-dmz-net": "172.20.1.10"}),
-        ]
-    )
-    check = lgc.check_kali_reachability(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
-    assert check.passed
-    assert state.evidence["kali_reachability_targets"] == ["aptl-webapp"]
-
-
-def test_reachability_fails_when_target_unreachable(monkeypatch):
-    monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend(returncode=1))
-    state = _reach_state(
-        [
-            _container("aptl-kali", networks={"aptl-dmz-net": "172.20.1.30"}),
-            _container("aptl-webapp", networks={"aptl-dmz-net": "172.20.1.10"}),
-        ]
-    )
-    check = lgc.check_kali_reachability(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
-    assert not check.passed
-    assert any("cannot reach" in d for d in check.diagnostics)
-
-
-def test_reachability_fails_without_kali():
-    state = _reach_state([_container("aptl-webapp", networks={"n": "1.2.3.4"})])
-    check = lgc.check_kali_reachability(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
-    assert not check.passed
-    assert any("Kali container not present" in d for d in check.diagnostics)
-
-
-def test_reachability_fails_without_shared_network():
-    state = _reach_state(
-        [
-            _container("aptl-kali", networks={"aptl-redteam-net": "172.30.0.30"}),
-            _container("aptl-webapp", networks={"aptl-dmz-net": "172.20.1.10"}),
-        ]
-    )
-    check = lgc.check_kali_reachability(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
-    assert not check.passed
-    assert any("share a network" in d for d in check.diagnostics)
-
-
-# --------------------------------------------------------------------------- #
-# 5. Telemetry / evidence path.
-# --------------------------------------------------------------------------- #
-
-
-def _telemetry_state():
-    state = LiveGateState()
-    state.snapshot = {
-        "containers": [
-            _container("aptl-kali", networks={"aptl-dmz-net": "172.20.1.30"}),
-            _container("aptl-webapp", networks={"aptl-dmz-net": "172.20.1.10"}),
-        ]
-    }
-    return state
-
-
-def _telemetry_env(_path):
-    return {
-        "INDEXER_USERNAME": "live-indexer-user",
-        "INDEXER_PASSWORD": "live-indexer-password",
-        "API_USERNAME": "live-api-user",
-        "API_PASSWORD": "live-api-password",
-        "APTL_HP_WAZUH_INDEXER_9200": "19200",
-    }
-
-
-def _patch_collect_no_sleep(monkeypatch):
-    """Drive the evidence poll loop with an injected no-op sleep.
-
-    Binds the real ``_collect_until_evidence`` with ``sleep_fn`` set to a no-op
-    via its explicit dependency boundary, rather than patching ``time.sleep`` on
-    the module. The poll loop still runs its iterations and collector calls.
-    """
-    monkeypatch.setattr(
-        lgt,
-        "_collect_until_evidence",
-        functools.partial(lgp._collect_until_evidence, sleep_fn=lambda _: None),
-    )
-
-
-def test_telemetry_fails_when_only_suricata_traffic_is_collected(monkeypatch):
-    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
-    _patch_collect_no_sleep(monkeypatch)
-    monkeypatch.setattr(
-        lgp,
-        "collect_suricata_eve",
-        lambda s, e, b: [{"event_type": "alert"}, {"event_type": "flow"}],
-    )
-    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
-    state = _telemetry_state()
-    check = lgc.check_telemetry_evidence_path(
-        project_dir=PROJECT_ROOT,
-        config=_config(),
-        options=LiveGateOptions(event_window_seconds=10),
-        state=state,
-        env_loader=_telemetry_env,
-    )
-    assert not check.passed
-    telemetry = state.evidence["telemetry"]
-    assert telemetry["suricata_traffic_event_count"] == 2
-    assert telemetry["suricata_event_types"] == {"alert": 1, "flow": 1}
-    assert telemetry["wazuh_alert_count"] == 0
-    assert any("Wazuh alert" in d for d in check.diagnostics)
-
-
-def test_telemetry_passes_when_post_trigger_wazuh_alert_is_collected(monkeypatch):
-    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
-    _patch_collect_no_sleep(monkeypatch)
-    monkeypatch.setattr(
-        lgp,
-        "collect_suricata_eve",
-        lambda s, e, b: [{"event_type": "flow"}],
-    )
-    collector_kwargs = {}
-
-    def collect_wazuh(start, end, **kwargs):
-        collector_kwargs.update(kwargs)
-        return [
-            {
-                "rule": {"id": "5710"},
-                "agent": {"name": "manager"},
-                "@timestamp": "2026-07-17T10:00:00+00:00",
-                "full_log": "Invalid user aptl-live-gate-invalid from 172.20.4.30",
-            }
-        ]
-
-    monkeypatch.setattr(lgp, "collect_wazuh_alerts", collect_wazuh)
-    state = _telemetry_state()
-    check = lgc.check_telemetry_evidence_path(
-        project_dir=PROJECT_ROOT,
-        config=_config(),
-        options=LiveGateOptions(event_window_seconds=10),
-        state=state,
-        env_loader=_telemetry_env,
-    )
-    assert check.passed
-    telemetry = state.evidence["telemetry"]
-    assert telemetry["wazuh_alert_count"] == 1
-    assert telemetry["wazuh_correlated_alert_count"] == 1
-    assert telemetry["wazuh_correlation"]["rule_id"] == "5710"
-    assert len(telemetry["wazuh_correlation"]["sha256"]) == 64
-    assert "full_log" not in telemetry["wazuh_correlation"]
-    assert collector_kwargs == {
-        "indexer_url": "https://localhost:19200",
-        "auth": ("live-indexer-user", "live-indexer-password"),
-    }
-
-
-def test_telemetry_rejects_unrelated_post_trigger_wazuh_alert(monkeypatch):
-    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
-    _patch_collect_no_sleep(monkeypatch)
-    monkeypatch.setattr(lgp, "collect_suricata_eve", lambda s, e, b: [])
-    monkeypatch.setattr(
-        lgp,
-        "collect_wazuh_alerts",
-        lambda s, e, **kwargs: [
-            {
-                "rule": {"id": "1002"},
-                "full_log": "Unrelated periodic service event",
-            }
-        ],
-    )
-    state = _telemetry_state()
-
-    check = lgc.check_telemetry_evidence_path(
-        project_dir=PROJECT_ROOT,
-        config=_config(),
-        options=LiveGateOptions(event_window_seconds=10),
-        state=state,
-        env_loader=_telemetry_env,
-    )
-
-    assert not check.passed
-    assert state.evidence["telemetry"]["wazuh_alert_count"] == 1
-    assert state.evidence["telemetry"]["wazuh_correlated_alert_count"] == 0
-
-
-def test_telemetry_fails_on_stats_only_events(monkeypatch):
-    # Suricata emits `stats` regardless of traffic; the check must not pass on
-    # them alone (otherwise it would pass on any quiet lab).
-    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
-    _patch_collect_no_sleep(monkeypatch)
-    monkeypatch.setattr(
-        lgp,
-        "collect_suricata_eve",
-        lambda s, e, b: [{"event_type": "stats"}, {"event_type": "stats"}],
-    )
-    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
-    state = _telemetry_state()
-    check = lgc.check_telemetry_evidence_path(
-        project_dir=PROJECT_ROOT,
-        config=_config(),
-        options=LiveGateOptions(event_window_seconds=10),
-        state=state,
-        env_loader=_telemetry_env,
-    )
-    assert not check.passed
-    assert state.evidence["telemetry"]["suricata_traffic_event_count"] == 0
-    assert any("stats-only" in d for d in check.diagnostics)
-
-
-def test_telemetry_fails_when_no_evidence(monkeypatch):
-    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
-    _patch_collect_no_sleep(monkeypatch)
-    monkeypatch.setattr(lgp, "collect_suricata_eve", lambda s, e, b: [])
-    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
-    state = _telemetry_state()
-    check = lgc.check_telemetry_evidence_path(
-        project_dir=PROJECT_ROOT,
-        config=_config(),
-        options=LiveGateOptions(event_window_seconds=10),
-        state=state,
-        env_loader=_telemetry_env,
-    )
-    assert not check.passed
-    assert any("no correlated post-trigger Wazuh alert" in d for d in check.diagnostics)
-
-
-def test_telemetry_fails_without_target(monkeypatch):
-    state = LiveGateState()
-    state.snapshot = {
-        "containers": [_container("aptl-kali", networks={"n": "1.1.1.1"})]
-    }
-    check = lgc.check_telemetry_evidence_path(
-        project_dir=PROJECT_ROOT,
-        config=_config(),
-        options=LiveGateOptions(),
-        state=state,
-    )
-    assert not check.passed
-
-
-# --------------------------------------------------------------------------- #
 # 6. Run-archive manifest.
 # --------------------------------------------------------------------------- #
 
@@ -993,7 +834,7 @@ def _archive_state():
 
 def test_run_archive_writes_manifest_through_redacting_boundary():
     store = _RecordingStore()
-    prior = (LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True),)
+    prior = (LiveGateCheck("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True),)
     check = lgc.check_run_archive_manifest(
         SCENARIO,
         project_dir=PROJECT_ROOT,
@@ -1009,19 +850,19 @@ def test_run_archive_writes_manifest_through_redacting_boundary():
     assert len(store.json_writes) == 1
     _, path, manifest = store.json_writes[0]
     assert path == "live-gate/manifest.json"
-    assert manifest["aces_provenance"]["realization"]["nodes"]
-    assert manifest["aces_provenance"]["selected_profiles"] == ["dmz", "soc"]
+    assert manifest["raes_provenance"]["realization"]["nodes"]
+    assert manifest["raes_provenance"]["selected_profiles"] == ["dmz", "soc"]
     assert manifest["evaluator_surfaces"]["profile"] == "full-remote-control-plane"
     assert (
         manifest["evaluator_surfaces"]["execution_state_integration"]
-        == "aptl.backends.aces_evaluator.AptlEvaluator"
+        == "aptl.backends.raes_evaluator.AptlEvaluator"
     )
     assert manifest["participant_runtime_surfaces"]["contracts"] == [
         "participant-episode-state-envelope-v1",
         "participant-episode-history-event-stream-v1",
         "participant-behavior-history-event-stream-v1",
     ]
-    assert manifest["scenario"]["name"] == "techvault-operational"
+    assert manifest["scenario"]["name"] == "techvault"
 
 
 def test_run_archive_roundtrips_to_local_store(tmp_path):
@@ -1038,7 +879,8 @@ def test_run_archive_roundtrips_to_local_store(tmp_path):
     assert check.passed
     manifest_path = tmp_path / "rid" / "live-gate" / "manifest.json"
     written = manifest_path.read_text()
-    assert "aces_provenance" in written and "realization" in written
+    assert "raes_provenance" in written
+    assert "realization" in written
     # Regression guard: the validation outcome key must survive the run-archive
     # redaction boundary (a `passed` key would be masked as [REDACTED]).
     reloaded = json.loads(written)
@@ -1053,7 +895,7 @@ def test_run_archive_records_failing_final_check_as_not_ok():
     # cannot disagree with the returned report.
     store = _RecordingStore()
     prior = (
-        LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True),
+        LiveGateCheck("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True),
         LiveGateCheck(
             "scenario_variation",
             CATEGORY_BACKEND_INTERPRETATION,
@@ -1125,7 +967,7 @@ def _variation_state(nodes):
 def _write_compose(project_dir: Path, services: dict[str, list[str]]) -> None:
     """Write a minimal compose file mapping service names to profiles.
 
-    Mirrors the helper in ``test_aces_backend.py``; lets variation tests drive
+    Mirrors the helper in ``test_raes_backend.py``; lets variation tests drive
     the real ``interpret_provisioning_plan`` compose-profile resolution against a
     hermetic ``tmp_path`` instead of the repo's live ``docker-compose.yml``.
     """
@@ -1242,7 +1084,7 @@ def _patch_cli(mocker, *, passed=True):
         "scn",
         "full-remote-control-plane",
         "rid",
-        (LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, passed),),
+        (LiveGateCheck("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, passed),),
     )
     mocker.patch(
         "aptl.cli._common.resolve_config_for_cli",
@@ -1324,3 +1166,157 @@ def test_cli_validate_live_yes_runs_destructive(mocker):
     assert result.exit_code == 0
     run.assert_called_once()
     assert run.call_args.kwargs["options"].skip_clean_boot is False
+
+
+def test_trigger_is_redriven_on_every_poll(monkeypatch):
+    """Host monitoring becomes ready after boot, so a one-shot trigger is lost.
+
+    A trigger fired once before the SIEM path is live produces events that never
+    arrive, and polling afterwards cannot recover them — the observed failure was
+    a window with Suricata evidence, Wazuh alerts flowing, and zero correlated
+    alerts. Re-driving asks whether the path works within the window.
+    """
+    from aptl.validation import _live_gate_probes as probes
+
+    attempts = {"n": 0}
+    monkeypatch.setattr(probes, "collect_suricata_eve", lambda *a, **k: [])
+
+    def _alerts(*_a, **_k):
+        # Correlates only once the trigger has been re-driven, mimicking a path
+        # that becomes ready partway through the window.
+        if attempts["n"] >= 2:
+            return [{"rule": {"id": "5710"}, "data": {"dstuser": probes._WAZUH_TRIGGER_IDENTITY}}]
+        return [{"rule": {"id": "1002"}, "data": {"srcip": "10.0.0.1"}}]
+
+    monkeypatch.setattr(probes, "collect_wazuh_alerts", _alerts)
+
+    _eve, alerts = probes._collect_until_evidence(
+        object(),
+        "2026-01-01T00:00:00+00:00",
+        60,
+        indexer_url="https://localhost:9200",
+        indexer_auth=("u", "p"),
+        sleep_fn=lambda _s: None,
+        regenerate=lambda: attempts.__setitem__("n", attempts["n"] + 1),
+    )
+
+    assert attempts["n"] >= 2, "trigger was not re-driven while waiting"
+    assert any(probes._is_correlated_wazuh_alert(a) for a in alerts)
+
+
+def test_without_redrive_a_lost_trigger_is_never_recovered(monkeypatch):
+    """The pre-fix behaviour: one-shot triggering cannot recover readiness lag."""
+    from aptl.validation import _live_gate_probes as probes
+
+    monkeypatch.setattr(probes, "collect_suricata_eve", lambda *a, **k: [])
+    monkeypatch.setattr(
+        probes,
+        "collect_wazuh_alerts",
+        lambda *a, **k: [{"rule": {"id": "1002"}, "data": {"srcip": "10.0.0.1"}}],
+    )
+
+    _eve, alerts = probes._collect_until_evidence(
+        object(),
+        "2026-01-01T00:00:00+00:00",
+        30,
+        indexer_url="https://localhost:9200",
+        indexer_auth=("u", "p"),
+        sleep_fn=lambda _s: None,
+    )
+
+    assert not any(probes._is_correlated_wazuh_alert(a) for a in alerts)
+
+
+def test_ssh_listening_targets_are_probed_first(monkeypatch):
+    """Failed-auth proof needs a host that answers on 22.
+
+    Taking an arbitrary slice of reachable containers can probe only hosts with
+    no SSH listener, which produces no auth event and no alert however many times
+    it is retried — indistinguishable from a broken detection path.
+    """
+    from aptl.validation import _live_gate_probes as probes
+
+    targets = [("no-ssh-a", "10.0.0.1"), ("no-ssh-b", "10.0.0.2"), ("has-ssh", "10.0.0.9")]
+    monkeypatch.setattr(
+        probes, "_ssh_reachable_from_kali", lambda _b, ip: ip == "10.0.0.9"
+    )
+
+    ordered = probes._prioritise_ssh_targets(object(), targets)
+
+    assert ordered[0] == ("has-ssh", "10.0.0.9")
+    # Nothing is dropped: a host that did not answer the probe is still a target.
+    assert sorted(ordered) == sorted(targets)
+
+
+def test_target_order_is_stable_when_nothing_listens(monkeypatch):
+    """With no listener anywhere the original order is preserved, not shuffled."""
+    from aptl.validation import _live_gate_probes as probes
+
+    targets = [("a", "10.0.0.1"), ("b", "10.0.0.2")]
+    monkeypatch.setattr(probes, "_ssh_reachable_from_kali", lambda _b, _ip: False)
+
+    assert probes._prioritise_ssh_targets(object(), targets) == targets
+
+
+def test_structural_half_of_the_gate_holds_no_scenario_answer_key():
+    """#877: core's structural checks must carry no scenario-derived constant.
+
+    The point of the split is that the modules deciding *whether the range
+    matches the admitted graph* work for any scenario. If a TechVault name leaks
+    back into them the boundary has been reopened, and the plugin seam built on
+    top of it (#878/#879) would be resting on nothing.
+
+    ``techvault_live_gate`` itself is excluded: it is the orchestrator and is
+    named for the scenario that proved it, which #878 renames along with the
+    report. The check is on the modules that make structural decisions.
+    """
+
+    import re
+    from pathlib import Path
+
+    structural = (
+        "_live_gate_checks.py",
+        "_live_gate_readiness.py",
+    )
+    # Scenario answer keys, not merely the string "techvault": a docstring may
+    # legitimately mention the proving scenario, but a *constant* naming the
+    # attacker node or the defensive stack is an answer key.
+    answer_keys = re.compile(r"aptl-kali|wazuh|suricata|_KALI_CONTAINER", re.I)
+    root = Path(__file__).resolve().parent.parent / "src" / "aptl" / "validation"
+
+    offenders = {
+        name: sorted(set(answer_keys.findall((root / name).read_text())))
+        for name in structural
+        if answer_keys.search((root / name).read_text())
+    }
+
+    assert not offenders, f"scenario answer keys leaked back into core: {offenders}"
+
+
+def test_semantic_verification_runs_only_through_the_plugin_seam():
+    """The orchestrator must reach scenario knowledge only via discovery (#879).
+
+    Semantic verification is now an installed plugin found through
+    ``scenario_verification_discovery``. The orchestrator must not also import a
+    scenario-specific check module or name an attacker/defensive-stack constant:
+    if it did, the seam it stands on would be decorative and a second scenario
+    would need core edits.
+    """
+
+    import re
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parent.parent
+        / "src"
+        / "aptl"
+        / "validation"
+        / "techvault_live_gate.py"
+    ).read_text()
+
+    # The discovery seam is reached, and the retired in-core scenario module is
+    # gone entirely.
+    assert "scenario_verification_discovery" in source
+    assert "_live_gate_semantic" not in source
+    # No scenario answer key is named in the orchestrator itself.
+    assert not re.search(r"aptl-kali|_KALI_CONTAINER", source)

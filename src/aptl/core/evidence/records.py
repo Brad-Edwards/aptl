@@ -1,13 +1,13 @@
-"""ACES evidence-record construction for evidence acquisition (EXP-010 / issue
+"""RAES evidence-record construction for evidence acquisition (EXP-010 / issue
 #752 preflight "Evidence ownership and persistence").
 
-Portable evidence is emitted ONLY through public ACES models
+Portable evidence is emitted ONLY through public RAES models
 (:class:`ExperimentEvidenceRecordModel`,
 :class:`ExperimentRawEvidenceContentModel`, :class:`ExperimentChecksumModel`,
 :class:`ExperimentReferenceModel`) — never an APTL-local mirror. This module is
 a pure builder: the coordinator has already streamed, quota'd, hashed, and
 (where required) redacted the raw bytes into a content-addressed
-:class:`~aptl.core.runstore.ContentInsertion`; here we only assemble the ACES
+:class:`~aptl.core.runstore.ContentInsertion`; here we only assemble the RAES
 record around it.
 
 Evidence-record identity derives from stable run / planned-trial / capture-spec
@@ -24,12 +24,20 @@ import hashlib
 from dataclasses import dataclass
 
 import rfc8785
-from aces_contracts.contracts import (
+from raes_contracts.contracts import (
     ExperimentCaptureSpecReferenceModel,
     ExperimentChecksumModel,
     ExperimentEvidenceRecordModel,
-    ExperimentRawEvidenceContentModel,
     ExperimentReferenceModel,
+)
+from raes_contracts.contracts.experiment_capture import (
+    ExperimentRawEvidenceContentModel,
+)
+
+# RAES 1.1.0 stopped re-exporting this model from ``raes_contracts.contracts``;
+# it is now owned by the ``experiment_capture`` submodule.
+from raes_contracts.contracts.experiment_capture import (
+    ExperimentRawEvidenceContentModel,
 )
 
 from aptl.core.evidence.content_store import ContentInsertion
@@ -58,7 +66,7 @@ class RecordDisclosure:
 
 
 def _bare_hex(prefixed_digest: str) -> str:
-    """Return the bare hex of a ``sha256:<hex>`` prefixed digest for ACES checksum value."""
+    """Return the bare hex of a ``sha256:<hex>`` prefixed digest for RAES checksum value."""
     return prefixed_digest.split(":", 1)[1]
 
 
@@ -106,7 +114,7 @@ def build_evidence_record(
     captured_at: str,
     disclosure: RecordDisclosure,
 ) -> ExperimentEvidenceRecordModel:
-    """Assemble one ACES :class:`ExperimentEvidenceRecordModel` for a captured binding.
+    """Assemble one RAES :class:`ExperimentEvidenceRecordModel` for a captured binding.
 
     ``disclosure`` carries the coordinator's decided sensitivity + redaction/
     loss disposition (what it actually did to the bytes), never inferred here.

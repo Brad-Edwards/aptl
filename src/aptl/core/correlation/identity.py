@@ -6,12 +6,12 @@ fixed, versioned domain-separation prefix plus canonical parts — never
 from an ambient wall clock, a process-random or universally-unique
 identifier, or the order evidence happened to arrive in (preflight
 "Extensibility Seam" / "Gotchas And Anti-Patterns": planned identity must
-be derived from ACES inputs, never minted from time or ingestion order).
+be derived from RAES inputs, never minted from time or ingestion order).
 
 Two distinct identity shapes:
 
 - **Planned** identity (:func:`derive_planned_ref`) is deterministic —
-  the same ACES/plan inputs always derive the same ref, on any host, in
+  the same RAES/plan inputs always derive the same ref, on any host, in
   any process, regardless of the interpreter's hash-randomization seed.
 - **Attempt** identity (:func:`bind_attempt_ref`) accepts an externally
   supplied run/episode/action id (e.g. an experiment run's own run id)
@@ -32,7 +32,7 @@ from aptl.core.correlation.models import assert_non_secret, validate_correlation
 
 #: ASCII unit separator (0x1F) joining hash-input fields. Mirrors
 #: ``aptl.core.experiment.trial_plan``'s ``_FIELD_SEP``: not a legal
-#: character in any authored ACES identifier, so it cannot be abused to
+#: character in any authored RAES identifier, so it cannot be abused to
 #: fabricate a cross-field collision (e.g. by embedding the separator
 #: inside one part to make two distinct part tuples hash to the same
 #: input bytes).
@@ -68,7 +68,7 @@ def stable_ref(*parts: str, domain: bytes) -> str:
 
 def derive_planned_ref(*parts: str, domain: bytes) -> str:
     """Deterministic *planned* identity: derive a ref purely from
-    caller-supplied ACES/plan inputs (never an attempt/run result).
+    caller-supplied RAES/plan inputs (never an attempt/run result).
 
     A thin, deliberately distinct name for :func:`stable_ref` so a
     planned-identity call site can never be confused with an

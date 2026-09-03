@@ -25,7 +25,7 @@ template placeholder values with lab credentials that match the running
 containers. The startup output points to `.env` for passwords and tokens. Run
 `aptl lab info` later to reprint the same access summary.
 
-`aptl lab start` defaults to the curated TechVault operational ACES SDL. List
+`aptl lab start` defaults to the curated TechVault operational RAES SDL. List
 the curated startup inputs with:
 
 ```bash

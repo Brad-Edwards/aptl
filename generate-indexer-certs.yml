@@ -14,6 +14,19 @@ services:
     # digest is verified before execution: the certificate producer must
     # never execute mutable network content (the shipped entrypoint's
     # runtime download is the supply-chain flaw this replaces).
+    #
+    # SAN augmentation (issue #875 cutover): the vendored tool only issues one
+    # SAN per node and its DNS regex rejects single-label names, so it emits
+    # certs valid only for the dotted `wazuh.indexer` form. The env-pack now
+    # addresses the SOC services by their hyphenated compose names
+    # (`wazuh-indexer`) and container names (`aptl-wazuh-indexer`), so filebeat
+    # -> indexer and dashboard -> indexer TLS verification failed against a
+    # dotted-only certificate, and no `wazuh-alerts-*` index was ever created.
+    # After the tool runs, re-sign each leaf certificate with the same key, CN,
+    # and root CA but a full subjectAltName covering every name the services are
+    # actually reached by. Hostname verification stays enabled; the certificate
+    # is made correct rather than the check weakened. The vendored tool and its
+    # pinned digest are untouched.
     working_dir: /tmp
     environment:
       - HOME=/tmp
@@ -27,6 +40,13 @@ services:
         cp /config/certs.yml ./config.yml
         chmod 700 wazuh-certs-tool.sh
         bash ./wazuh-certs-tool.sh -A
+        for role in indexer manager dashboard; do
+          cn="wazuh.$${role}"
+          printf 'authorityKeyIdentifier=keyid,issuer\nbasicConstraints=CA:FALSE\nkeyUsage=digitalSignature,nonRepudiation,keyEncipherment,dataEncipherment\nsubjectAltName=DNS:wazuh.%s,DNS:wazuh-%s,DNS:aptl-wazuh-%s\n' "$${role}" "$${role}" "$${role}" > "/tmp/$${cn}-san.cnf"
+          openssl req -new -key "./wazuh-certificates/$${cn}-key.pem" -subj "/C=US/L=California/O=Wazuh/OU=Wazuh/CN=$${cn}" -out "/tmp/$${cn}.csr"
+          openssl x509 -req -in "/tmp/$${cn}.csr" -CA ./wazuh-certificates/root-ca.pem -CAkey ./wazuh-certificates/root-ca.key -CAcreateserial -sha256 -days 3650 -out "./wazuh-certificates/$${cn}.pem" -extfile "/tmp/$${cn}-san.cnf"
+        done
+        rm -f ./wazuh-certificates/*.srl
         cp ./wazuh-certificates/* /certificates/
         cp /certificates/root-ca.pem /certificates/root-ca-manager.pem
         cp /certificates/root-ca.key /certificates/root-ca-manager.key

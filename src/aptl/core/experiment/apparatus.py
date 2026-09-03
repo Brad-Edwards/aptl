@@ -38,17 +38,17 @@ Two independent surfaces live here:
     contains the backend's name). This check runs UNCONDITIONALLY for
     every admission call (it is a structural fact about the two manifests
     actually being used, independent of what any one task's allow-lists
-    say) — at the locked ACES 0.23.1 surface, the published
+    say) — at the locked RAES 2.0.0 surface, the published
     reference-processor manifest names only ``stub`` as a compatible
     backend while ``create_aptl_manifest()`` names
-    ``aces-reference-processor`` as compatible, so this gate currently
+    ``raes-reference-processor`` as compatible, so this gate currently
     rejects EVERY admission that uses the real default manifests. That is
     the correct, ADR-mandated fail-closed behavior, not a bug: "Strict
     mutual apparatus-manifest compatibility cannot be fabricated by
-    patching either payload locally; fail closed until the canonical ACES
+    patching either payload locally; fail closed until the canonical RAES
     declaration and the requested task constraints are mutually
     satisfiable" (ADR-047 Gotchas). It is exercised here with real,
-    unpatched ACES manifest objects — never by constructing a fake
+    unpatched RAES manifest objects — never by constructing a fake
     manifest whose ``compatible_backends``/``compatible_processors`` was
     hand-edited to make the pair line up.
 
@@ -69,10 +69,10 @@ Two independent surfaces live here:
   mutual-compat would otherwise be the sole reason for rejection).
 
 * :func:`plan_condition_feasibility` / :func:`require_feasible_plan` —
-  planning-only scenario feasibility via ACES's reference processor
+  planning-only scenario feasibility via RAES's reference processor
   directly. ADR-047 "Apparatus capability admission": scenario-specific
   feasibility remains with ``RuntimeManager.plan()`` for EXECUTION, but
-  admission must use the equivalent planning-only ACES API instead,
+  admission must use the equivalent planning-only RAES API instead,
   because constructing APTL's runtime target pulls in ``AptlConfig`` and a
   ``DeploymentBackend`` — a dependency-boundary violation even with a
   no-op backend. Neither function here imports or constructs either. A
@@ -86,8 +86,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 
-from aces_backend_protocols.manifest import BackendManifest
-from aces_contracts.contracts import (
+from raes_backend_protocols.manifest import BackendManifest
+from raes_contracts.contracts import (
     BACKEND_MANIFEST_V2_SCHEMA_VERSION,
     PROCESSOR_MANIFEST_V2_SCHEMA_VERSION,
     ExperimentApparatusConstraintModel,
@@ -96,14 +96,14 @@ from aces_contracts.contracts import (
     ExperimentProcessorReferenceModel,
     ExperimentTaskModel,
 )
-from aces_contracts.diagnostics import Diagnostic, Severity
-from aces_processor.capabilities import ProcessorManifest
-from aces_processor.manifest import create_reference_processor_manifest
-from aces_processor.reference import ReferenceProcessorResult, ScenarioInput, run_reference_processor
-from aces_sdl import SDLInstantiationError
+from raes_contracts.diagnostics import Diagnostic, Severity
+from raes_processor.capabilities import ProcessorManifest
+from raes_processor.manifest import create_reference_processor_manifest
+from raes_processor.reference import ReferenceProcessorResult, ScenarioInput, run_reference_processor
+from raes import SDLInstantiationError
 
-from aptl.backends.aces_manifest import create_aptl_manifest
-from aptl.core.experiment.errors import AdmissionRejection, diagnostic, normalize_aces_failure
+from aptl.backends.raes_manifest import create_aptl_manifest
+from aptl.core.experiment.errors import AdmissionRejection, diagnostic, normalize_raes_failure
 from aptl.core.experiment.policy import AdmissionPolicy
 
 _ADDRESS_APPARATUS = "task.apparatus_constraints"
@@ -420,7 +420,7 @@ def plan_condition_feasibility(
 ) -> ReferenceProcessorResult:
     """Planning-only feasibility for one condition's parameter binding.
 
-    Calls ACES's reference processor directly — no ``AptlConfig``,
+    Calls RAES's reference processor directly — no ``AptlConfig``,
     ``DeploymentBackend``, or Docker probe. ``SDLInstantiationError``
     (which ``run_reference_processor`` raises, not returns as a diagnostic,
     for a structurally broken parameter binding — a missing, unused, or
@@ -433,7 +433,7 @@ def plan_condition_feasibility(
         return run_reference_processor(scenario, manifest, parameters=parameters, profile=profile)
     except SDLInstantiationError as exc:
         raise AdmissionRejection(
-            normalize_aces_failure(
+            normalize_raes_failure(
                 exc, address=_ADDRESS_CONDITION_PARAMETERS, code=_CODE_CONDITION_PARAMETERS_INVALID
             )
         ) from exc
@@ -448,5 +448,5 @@ def require_feasible_plan(result: ReferenceProcessorResult, *, address: str) -> 
     """
     if not result.is_valid:
         raise AdmissionRejection(
-            normalize_aces_failure(result.diagnostics, address=address, code=_CODE_PLAN_INFEASIBLE)
+            normalize_raes_failure(result.diagnostics, address=address, code=_CODE_PLAN_INFEASIBLE)
         )

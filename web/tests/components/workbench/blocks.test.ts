@@ -8,7 +8,8 @@ import TerminalBlock from '../../../src/lib/components/workbench/TerminalBlock.s
 // embedded terminal (on the lazy open action) exercises the {#if open} path
 // without a real xterm instance.
 vi.mock('@xterm/xterm', () => ({
-	Terminal: vi.fn(() => ({
+	Terminal: vi.fn(function () {
+		return {
 		loadAddon: vi.fn(),
 		open: vi.fn(),
 		onData: vi.fn(),
@@ -17,13 +18,18 @@ vi.mock('@xterm/xterm', () => ({
 		dispose: vi.fn(),
 		cols: 80,
 		rows: 24
-	}))
+	};
+	})
 }));
 vi.mock('@xterm/addon-fit', () => ({
-	FitAddon: vi.fn(() => ({ fit: vi.fn(), dispose: vi.fn() }))
+	FitAddon: vi.fn(function () {
+		return { fit: vi.fn(), dispose: vi.fn() };
+	})
 }));
 vi.mock('@xterm/addon-web-links', () => ({
-	WebLinksAddon: vi.fn(() => ({ dispose: vi.fn() }))
+	WebLinksAddon: vi.fn(function () {
+		return { dispose: vi.fn() };
+	})
 }));
 vi.mock('@xterm/xterm/css/xterm.css', () => ({}));
 
@@ -34,15 +40,19 @@ beforeEach(() => {
 	// jsdom lacks these browser DOM APIs the embedded terminal wires up on mount.
 	vi.stubGlobal(
 		'ResizeObserver',
-		vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() }))
+		vi.fn(function () {
+		return { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() };
+	})
 	);
 	vi.stubGlobal(
 		'matchMedia',
-		vi.fn(() => ({
+		vi.fn(function () {
+		return {
 			matches: false,
 			addEventListener: vi.fn(),
 			removeEventListener: vi.fn()
-		}))
+		};
+	})
 	);
 });
 

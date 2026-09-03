@@ -1,4 +1,4 @@
-"""Check implementations for the ACES live validation gate (SCN-010F / #323).
+"""Check implementations for the RAES live validation gate (SCN-010F / #323).
 
 These compose behind ``techvault_live_gate.validate_live_deployment``; see that
 module for the public entry point, the ``LiveGateCheck`` / ``LiveGateReport``
@@ -8,7 +8,7 @@ Each check returns a :class:`LiveGateCheck` with redacted diagnostics (ADR-029).
 Live Docker / log / network inspection goes through ``DeploymentBackend`` and the
 existing collectors; SOC HTTP probes go through the collectors' ``curl_safe``
 boundary — never raw ``docker`` / ``curl`` in this module. Realization evidence
-is tied to ACES resource addresses and realization details, never the scenario
+is tied to RAES resource addresses and realization details, never the scenario
 name or a TechVault preset.
 
 The private probe / helper functions live in
@@ -22,46 +22,41 @@ check branch without a live lab. The boot / telemetry probes that live in
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from aces_sdl import SDLError, parse_sdl_file
-from aces_sdl.scenario import Scenario
+from raes import SDLError, parse_sdl_file
+from raes.scenario import Scenario
 
-from aptl.backends.aces_profiles import select_backend_profiles
-from aptl.backends.aces_realization import interpret_provisioning_plan
-from aptl.core.deployment import get_backend
+from aptl.backends.raes_profiles import select_backend_profiles
+from aptl.backends.raes import resolve_scenario_bundle
+from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.utils.redaction import redact
 from aptl.validation._live_gate_probes import (
-    _KALI_CONTAINER,
     _boot_lab,
     _check,
     _check_to_dict,
     _compute_realization,
     _default_run_store,
-    _distinct_profile_nodes,
-    _find_container,
     _missing_manifest_keys,
-    _ping_from_kali,
     _scenario_name,
-    _shared_network_targets,
+)
+from aptl.validation._live_gate_variation import (
+    _distinct_profile_nodes,
     _single_node_plan,
     _variation_diagnostics,
 )
-from aptl.validation._live_gate_telemetry import telemetry_diagnostics
 from aptl.validation._live_gate_readiness import (
     _node_readiness_diagnostics,
-    _warn_unhealthy_infra,
+    _undeclared_container_diagnostics,
 )
 from aptl.validation.techvault_gate import GateOptions, validate_scenario
 from aptl.validation.techvault_live_gate import (
-    CATEGORY_ACES_SPECIFICATION,
+    CATEGORY_RAES_SPECIFICATION,
     CATEGORY_BACKEND_INSTANTIATION,
     CATEGORY_BACKEND_INTERPRETATION,
     CATEGORY_DEFENSIVE_STACK_READINESS,
     CATEGORY_EVIDENCE_CAPTURE,
-    CATEGORY_KALI_REACHABILITY,
     DEFAULT_PROFILE,
     LiveGateCheck,
 )
@@ -108,21 +103,21 @@ def check_static_prerequisite(
             for check in report.failures()
         ]
         return None, _check(
-            "static_prerequisite", CATEGORY_ACES_SPECIFICATION, diagnostics
+            "static_prerequisite", CATEGORY_RAES_SPECIFICATION, diagnostics
         )
     try:
         scenario = parse_sdl_file(scenario_path)
     except (SDLError, FileNotFoundError, ValueError, TypeError) as exc:
         return None, _check(
             "static_prerequisite",
-            CATEGORY_ACES_SPECIFICATION,
+            CATEGORY_RAES_SPECIFICATION,
             [redact(f"scenario parse failed after static gate passed: {exc}")],
         )
-    return scenario, _check("static_prerequisite", CATEGORY_ACES_SPECIFICATION, [])
+    return scenario, _check("static_prerequisite", CATEGORY_RAES_SPECIFICATION, [])
 
 
 # --------------------------------------------------------------------------- #
-# 2. ACES-driven boot.
+# 2. RAES-driven boot.
 # --------------------------------------------------------------------------- #
 
 
@@ -166,7 +161,7 @@ def check_boot_inputs_match_public_path(
     )
 
 
-def check_aces_driven_boot(
+def check_raes_driven_boot(
     scenario: Scenario,
     *,
     project_dir: Path,
@@ -175,19 +170,19 @@ def check_aces_driven_boot(
     state: "LiveGateState",
     scenario_path: Path | None = None,
 ) -> LiveGateCheck:
-    """Clean up and boot through the public ACES start path; tie evidence to ACES.
+    """Clean up and boot through the public RAES start path; tie evidence to RAES.
 
     Computes the realization matrix (``RuntimeManager.plan`` +
     ``interpret_provisioning_plan`` — the same pure interpretation
     ``AptlProvisioner.apply`` performs) so the expected node/service/network/
-    profile surface is keyed by ACES resource addresses, never the scenario
+    profile surface is keyed by RAES resource addresses, never the scenario
     name. Then runs ``stop_lab(-v)`` cleanup and ``orchestrate_lab_start`` (whose
-    only container-start path is the ACES handoff) and records the snapshot.
+    only container-start path is the RAES handoff) and records the snapshot.
     """
     realization, interp_errors = _compute_realization(scenario, project_dir, config)
     if realization is None or interp_errors:
         return _check(
-            "aces_driven_boot", CATEGORY_BACKEND_INTERPRETATION, interp_errors
+            "raes_driven_boot", CATEGORY_BACKEND_INTERPRETATION, interp_errors
         )
     state.realization_details = realization.details()
     state.diagnostics_seen = len(realization.diagnostics)
@@ -200,7 +195,7 @@ def check_aces_driven_boot(
         state,
         scenario_path=scenario_path,
     )
-    return _check("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, boot_diagnostics)
+    return _check("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, boot_diagnostics)
 
 
 # --------------------------------------------------------------------------- #
@@ -212,7 +207,7 @@ def check_defensive_stack_readiness(
     *,
     state: "LiveGateState",
 ) -> LiveGateCheck:
-    """Assert every ACES-realized node is live + healthy in the booted range.
+    """Assert every RAES-realized node is live + healthy in the booted range.
 
     Pass/fail is keyed to the realized node surface (anti-preset): each declared
     node must map to a running, non-unhealthy container. Non-node infrastructure
@@ -233,116 +228,13 @@ def check_defensive_stack_readiness(
     diagnostics, matched_names = _node_readiness_diagnostics(
         nodes, containers, selected
     )
-    _warn_unhealthy_infra(containers, matched_names)
+    # Parity runs both ways (ADR-048): a declared node that never started, and a
+    # container running that nothing declared. The second direction is what
+    # catches range content the scenario has drifted away from describing.
+    diagnostics.extend(_undeclared_container_diagnostics(containers, matched_names))
     return _check(
         "defensive_stack_readiness", CATEGORY_DEFENSIVE_STACK_READINESS, diagnostics
     )
-
-
-# --------------------------------------------------------------------------- #
-# 4. Kali reachability.
-# --------------------------------------------------------------------------- #
-
-
-def check_kali_reachability(
-    *,
-    project_dir: Path,
-    config: "AptlConfig",
-    state: "LiveGateState",
-) -> LiveGateCheck:
-    """From Kali, reach every lab host it shares a declared network with.
-
-    Reachability targets are derived from network co-membership in the live
-    snapshot (the realized network attachments), not a hardcoded host list.
-    """
-    snapshot = state.snapshot or {}
-    containers = snapshot.get("containers", [])
-    kali = _find_container(containers, _KALI_CONTAINER)
-    if kali is None:
-        return _check(
-            "kali_reachability",
-            CATEGORY_KALI_REACHABILITY,
-            ["Kali container not present in the booted range"],
-        )
-
-    kali_networks = set((kali.get("networks") or {}).keys())
-    targets = _shared_network_targets(kali, containers, kali_networks)
-    diagnostics = _reachability_diagnostics(
-        kali_networks, targets, config, project_dir, state
-    )
-    return _check("kali_reachability", CATEGORY_KALI_REACHABILITY, diagnostics)
-
-
-def _reachability_diagnostics(
-    kali_networks: set[str],
-    targets: list[tuple[str, str]],
-    config: "AptlConfig",
-    project_dir: Path,
-    state: "LiveGateState",
-) -> list[str]:
-    """Probe each shared-network target from Kali and record the tested set."""
-    if not kali_networks:
-        return ["Kali container has no network attachments in the snapshot"]
-    if not targets:
-        return ["no lab hosts share a network with Kali to test reachability"]
-
-    backend = get_backend(config, project_dir)
-    diagnostics: list[str] = []
-    for name, ip in targets:
-        if not _ping_from_kali(backend, ip):
-            diagnostics.append(f"Kali cannot reach {name} ({ip}) on shared network")
-    state.evidence = {"kali_reachability_targets": [t[0] for t in targets]}
-    return diagnostics
-
-
-# --------------------------------------------------------------------------- #
-# 5. Telemetry / evidence path.
-# --------------------------------------------------------------------------- #
-
-
-def check_telemetry_evidence_path(
-    *,
-    project_dir: Path,
-    config: "AptlConfig",
-    options: "LiveGateOptions",
-    state: "LiveGateState",
-    env_loader: Callable[[Path], dict[str, str]] | None = None,
-) -> LiveGateCheck:
-    """Generate one representative event and confirm it traverses the defensive stack.
-
-    Drives traffic from Kali at a reachable DMZ host, then collects Suricata EVE
-    and Wazuh alerts in the bounded post-trigger window. A Wazuh alert is
-    mandatory; Suricata evidence is recorded as supporting evidence but cannot
-    satisfy the realized-Wazuh proof by itself.
-    """
-    snapshot = state.snapshot or {}
-    containers = snapshot.get("containers", [])
-    kali = _find_container(containers, _KALI_CONTAINER)
-    if kali is None:
-        return _check(
-            "telemetry_evidence_path",
-            CATEGORY_EVIDENCE_CAPTURE,
-            ["Kali container not present; cannot generate a representative event"],
-        )
-
-    kali_networks = set((kali.get("networks") or {}).keys())
-    targets = _shared_network_targets(kali, containers, kali_networks)
-    if not targets:
-        return _check(
-            "telemetry_evidence_path",
-            CATEGORY_EVIDENCE_CAPTURE,
-            ["no reachable target to generate defensive-stack telemetry"],
-        )
-
-    diagnostics = telemetry_diagnostics(
-        targets,
-        config,
-        project_dir,
-        options,
-        state,
-        env_loader=env_loader,
-    )
-    return _check("telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, diagnostics)
 
 
 # --------------------------------------------------------------------------- #
@@ -360,11 +252,11 @@ def check_run_archive_manifest(
     state: "LiveGateState",
     prior_checks: tuple[LiveGateCheck, ...],
 ) -> LiveGateCheck:
-    """Persist scenario identity + ACES provenance + validation evidence.
+    """Persist scenario identity + RAES provenance + validation evidence.
 
     Writes through ``LocalRunStore``'s redacting boundary (ADR-029).
     Objective and condition run surfaces are published through the portable
-    ACES evaluation contracts at the backend boundary. Live evaluator
+    RAES evaluation contracts at the backend boundary. Live evaluator
     progression is emitted by ``AptlEvaluator`` from observed runtime state.
     """
     realization = state.realization_details or {}
@@ -375,7 +267,7 @@ def check_run_archive_manifest(
             "name": _scenario_name(scenario_path),
         },
         "run_id": run_id,
-        "aces_provenance": {
+        "raes_provenance": {
             "realization": realization,
             "selected_profiles": state.selected_profiles,
             "interpretation_diagnostics": state.diagnostics_seen,
@@ -395,7 +287,7 @@ def check_run_archive_manifest(
                 "evaluation-result-envelope-v1",
                 "evaluation-history-event-stream-v1",
             ],
-            "execution_state_integration": "aptl.backends.aces_evaluator.AptlEvaluator",
+            "execution_state_integration": "aptl.backends.raes_evaluator.AptlEvaluator",
         },
         "orchestrator_surfaces": {
             "profile": "orchestration-evaluation",
@@ -412,7 +304,7 @@ def check_run_archive_manifest(
                 "participant-episode-history-event-stream-v1",
                 "participant-behavior-history-event-stream-v1",
             ],
-            "execution_state_integration": "aptl.backends.aces_participant_runtime",
+            "execution_state_integration": "aptl.backends.raes_participant_runtime",
         },
     }
 
@@ -447,7 +339,7 @@ def check_scenario_variation(
 ) -> LiveGateCheck:
     """Prove the same interpreter path realizes distinct declared content distinctly.
 
-    Compares two declared ACES nodes from the booted scenario through the same
+    Compares two declared RAES nodes from the booted scenario through the same
     ``interpret_provisioning_plan`` path and asserts distinct realization details
     — the anti-collapse property #324 (SCN-010G) generalized.
     """
@@ -461,11 +353,13 @@ def check_scenario_variation(
         )
 
     first_node, second_node = pair
+    # In-tree booted scenario: the bundle root is the project directory.
+    bundle = resolve_scenario_bundle(project_dir, None, config)
     first = interpret_provisioning_plan(
-        plan=_single_node_plan(first_node), project_dir=project_dir, config=config
+        plan=_single_node_plan(first_node), config=config, bundle=bundle
     )
     second = interpret_provisioning_plan(
-        plan=_single_node_plan(second_node), project_dir=project_dir, config=config
+        plan=_single_node_plan(second_node), config=config, bundle=bundle
     )
     diagnostics = _variation_diagnostics(first, second)
     return _check("scenario_variation", CATEGORY_BACKEND_INTERPRETATION, diagnostics)

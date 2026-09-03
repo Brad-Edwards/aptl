@@ -36,6 +36,14 @@ def aptl_config():
         return json.load(f)
 
 
+@pytest.fixture(scope="module")
+def techvault_sdl(tmp_path_factory) -> Path:
+    """Staged SDL path of the default TechVault env-pack scenario (#875)."""
+    from tests.helpers import techvault_scenario_path
+
+    return techvault_scenario_path(tmp_path_factory.mktemp("techvault-consistency"))
+
+
 class TestComposeConsistency:
     """Validate docker-compose.yml internal consistency."""
 
@@ -95,7 +103,7 @@ class TestComposeConsistency:
             )
         )
 
-    def test_misp_suricata_rules_mount_named_volume(self, compose_config):
+    def test_misp_suricata_rules_mount_named_volume(self, compose_config, techvault_sdl):
         """ADR-043: MISP rules ride a shared named volume, never a host bind.
 
         Nothing checked-in or under ``.aptl/`` may be bind-mounted onto a
@@ -108,8 +116,8 @@ class TestComposeConsistency:
         is a separate, not-yet-built secrets-injection concern for
         image-free nodes (tracked alongside #809) and is not asserted here.
         """
-        from aces_sdl import parse_sdl_file
-        from aces_sdl.runtime_mounts import RuntimeMountSourceKind
+        from raes import parse_sdl_file
+        from raes.runtime_mounts import RuntimeMountSourceKind
 
         services = compose_config["services"]
         suricata_volumes = services["suricata"]["volumes"]
@@ -128,9 +136,7 @@ class TestComposeConsistency:
         assert "suricata_misp_rules" in top_level
         assert "suricata_config_seed" in top_level
 
-        scenario = parse_sdl_file(
-            PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
-        )
+        scenario = parse_sdl_file(techvault_sdl)
         sync_node = scenario.nodes["misp-suricata-sync"]
         volume_mounts = {
             mount.source: mount.target
@@ -240,38 +246,37 @@ class TestKaliContainerLifecycle:
     """
 
     @staticmethod
-    def _kali_node():
-        from aces_sdl import parse_sdl_file
+    def _kali_node(techvault_sdl):
+        from raes import parse_sdl_file
 
-        scenario = parse_sdl_file(
-            PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
-        )
+        scenario = parse_sdl_file(techvault_sdl)
         return scenario.nodes["kali"]
 
-    def test_kali_runs_under_systemd_reaper(self):
+    def test_kali_runs_under_systemd_reaper(self, techvault_sdl):
         """kali must declare service_manager_units so the generic
         materializer boots it on the init-capable systemd base image
-        (`base_image_for_os`, src/aptl/backends/aces_materializer.py) —
+        (`base_image_for_os`, src/aptl/backends/raes_materializer.py) —
         systemd is PID 1 there and reaps orphaned children natively.
         Without any service unit declared, kali would get the bare
         non-service base image instead, with no reaper (the zombie defect
         in issue #293, now a property of image selection, not a Compose
         `init: true` flag)."""
-        kali = self._kali_node()
-        assert kali.runtime is not None and kali.runtime.service_manager_units, (
+        kali = self._kali_node(techvault_sdl)
+        assert kali.runtime is not None
+        assert kali.runtime.service_manager_units, (
             "kali must declare at least one service_manager_units entry "
             "(ADR-033 §2 / issue #293): with none, the materializer selects "
             "the non-service base image, which has no PID-1 reaper."
         )
 
-    def test_kali_capture_wiring_is_verified_not_a_bare_port_probe(self):
+    def test_kali_capture_wiring_is_verified_not_a_bare_port_probe(self, techvault_sdl):
         """kali's readiness must reflect the usable surface — sshd AND the
         OBS-003 ForceCommand capture wrapper — not merely an open port
         (ADR-033 §2). The generic materializer's read-after-write
         verification of these two service units (fail-closed: a lab start
         does not report ready if either is not observed active) replaces
         the old aptl-healthcheck.sh script."""
-        kali = self._kali_node()
+        kali = self._kali_node(techvault_sdl)
         unit_names = {
             unit.unit_name for unit in kali.runtime.service_manager_units
         }

@@ -43,7 +43,7 @@ _ACCOUNT_CMD_TIMEOUT = 60
 
 
 class ComposeRealizationAccountMixin(object):
-    """Realize typed ACES account placements through Docker Compose."""
+    """Realize typed RAES account placements through Docker Compose."""
 
     def realize_accounts(
         self,

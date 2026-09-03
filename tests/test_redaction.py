@@ -81,6 +81,7 @@ class TestSafeKeyAllowlist:
             "ssh_keyfile",
             "public_key",
             "publickey",
+            "passed",
         ],
     )
     def test_path_like_key_names_are_not_redacted(self, key):
@@ -926,6 +927,7 @@ class TestIsSensitiveKeyPredicate:
             "ssh_keyfile",
             "public_key",
             "publickey",
+            "passed",
         ],
     )
     def test_false_for_safe_key_allowlist(self, key):

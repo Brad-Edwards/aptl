@@ -1,17 +1,17 @@
-# TechVault Curated ACES Startup Variants
+# TechVault Curated RAES Startup Variants
 
-Issue #534 adds small ACES SDL startup variants for TechVault. Their purpose is
-to prove that APTL realizes Compose profiles from declared ACES node content,
+Issue #534 adds small RAES SDL startup variants for TechVault. Their purpose is
+to prove that APTL realizes Compose profiles from declared RAES node content,
 not from the full TechVault scenario name or a preset.
 
 ## Authorities
 
-- ACES SDL parsing and semantic validation belong to the installed ACES parser
-  and processor/runtime compiler. APTL must not re-model ACES SDL with local
+- RAES SDL parsing and semantic validation belong to the installed RAES parser
+  and processor/runtime compiler. APTL must not re-model RAES SDL with local
   Pydantic classes.
-- APTL realization belongs to `aptl.backends.aces_realization` and the Compose
-  profile index in `aptl.backends.aces_profiles`.
-- Dependency expansion belongs to `aptl.backends.aces_dependency_closure`.
+- APTL realization belongs to `aptl.backends.raes_realization` and the Compose
+  profile index in `aptl.backends.raes_profiles`.
+- Dependency expansion belongs to `aptl.backends.raes_dependency_closure`.
 - Startup aliases belong to the strict `scenarios/catalog.json` schema and
   `aptl.core.scenario_catalog`; catalog rows are aliases, not behavior.
 - Public startup still defaults to `scenarios/techvault-operational.sdl.yaml`.
@@ -34,7 +34,7 @@ not from the full TechVault scenario name or a preset.
 ## Curated variants
 
 The catalog registers four curated variants alongside the default operational
-scenario. Each one is a small single-file ACES SDL document under `scenarios/`.
+scenario. Each one is a small single-file RAES SDL document under `scenarios/`.
 The selected profile set is derived from declared node content and dependency
 closure, then gated by the enabled container profiles in configuration. The
 `otel` profile is always part of the public start set, so every variant includes
@@ -63,14 +63,14 @@ content-driven through anti-collapse and rename checks.
 
 Live proof for these variants is a separate concern from the static authoring
 proof. Before implementing or recording that evidence, use
-[`docs/aces/techvault-curated-live-validation-preflight.md`](../aces/techvault-curated-live-validation-preflight.md)
-as the boundary guide: compare each booted range to its ACES-realized reduced
+[`docs/raes/techvault-curated-live-validation-preflight.md`](../raes/techvault-curated-live-validation-preflight.md)
+as the boundary guide: compare each booted range to its RAES-realized reduced
 profile set, not to the full TechVault live gate. The recorded live-boot evidence
 and reproduction commands live in the
-[curated live validation gate](../aces/techvault-curated-live-validation-gate.md).
+[curated live validation gate](../raes/techvault-curated-live-validation-gate.md).
 
 Because `aptl lab start` boots with `docker compose --profile <selected>`, which
-activates every service in a selected profile rather than only the declared ACES
+activates every service in a selected profile rather than only the declared RAES
 nodes, the provisioner validates that the selected profile set is a valid Compose
 project before starting the backend. When an activated service has a `depends_on`
 target that the selection excludes, the provisioner refuses with an
@@ -84,7 +84,7 @@ the enterprise tier cannot boot without the Wazuh core.
 - Catalog and explicit paths must remain project-contained and parser-validated.
 - Static proof must use `_NoStartBackend` or equivalent no-start wiring; it must
   not start Docker while asserting parse/compile/realization behavior.
-- Diagnostics and failures must use the existing ACES diagnostic path and APTL
+- Diagnostics and failures must use the existing RAES diagnostic path and APTL
   redaction helpers. Do not print raw SDL dumps, backend stderr, secrets, or
   rendered config.
 - Variants must not introduce new config or environment keys. Durable
@@ -97,5 +97,5 @@ the enterprise tier cannot boot without the Wazuh core.
 
 - No dependency closure beyond the curated slices needed here; broad subset
   closure belongs to #532.
-- No arbitrary app or package installation from ACES feature descriptors.
+- No arbitrary app or package installation from RAES feature descriptors.
 - No change to the default operational startup scenario.

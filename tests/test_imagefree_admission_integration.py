@@ -1,6 +1,6 @@
 """Full-stack real-Docker test: admit an image-free SDL and realize it (ADR-048).
 
-Exercises the entire path through the real ACES compiler:
+Exercises the entire path through the real RAES compiler:
 parse -> plan -> interpret -> deployment_spec (image_free derived) ->
 backend.realize -> generic materializer -> real container, verified by
 read-after-write. Zero product code; proves an arbitrary image-free scenario
@@ -15,15 +15,20 @@ import shutil
 import subprocess
 
 import pytest
-from aces_sdl import parse_sdl_file
-from aces_runtime.manager import RuntimeManager
+from raes import parse_sdl_file
+from raes_runtime.manager import RuntimeManager
 
-from aptl.backends.aces import create_aptl_runtime_target
-from aptl.backends.aces_realization import interpret_provisioning_plan
+from aptl.backends.raes import create_aptl_runtime_target
+from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
 from aptl.core.deployment.docker_compose import DockerComposeBackend
+from aptl.core.scenario_bundle import project_tree_bundle
 
 pytestmark = pytest.mark.integration
+
+
+def _bundle(root):
+    return project_tree_bundle(root, root / "scenarios" / "demo.sdl.yaml")
 
 _SDL = """\
 name: imagefree-admission-smoke
@@ -62,20 +67,27 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
     cfg = AptlConfig(lab={"name": "smoke"}, containers={})
     backend = DockerComposeBackend(project_dir=tmp_path, project_name="aptl-imagefree-admit")
 
-    # Admit through the real ACES compiler/planner/interpreter.
+    # Admit through the real RAES compiler/planner/interpreter.
     scenario = parse_sdl_file(sdl)
-    target = create_aptl_runtime_target(project_dir=tmp_path, config=cfg, backend=backend)
+    bundle = _bundle(tmp_path)
+    target = create_aptl_runtime_target(
+        project_dir=tmp_path, config=cfg, backend=backend, bundle=bundle
+    )
     plan = RuntimeManager(target).plan(scenario)
     realization = interpret_provisioning_plan(
-        plan=plan.provisioning, project_dir=tmp_path, config=cfg
+        plan=plan.provisioning, config=cfg, bundle=bundle
     )
     assert [d.message for d in realization.diagnostics if d.is_error] == []
 
     spec = realization.deployment_spec([])
-    assert spec.image_free is True
+    # Fully image-free: every node is materialized, so nothing is left for the
+    # Compose path (this replaces the removed whole-spec image_free flag).
+    from aptl.core.deployment._compose_realization import _needs_compose
+
+    assert _needs_compose(spec) is False
 
     try:
-        result = backend.realize(spec)
+        result = backend.realize(spec, scenario_root=tmp_path)
         assert result.success, result.error
         assert "curl" in backend.container_exec(
             container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
@@ -123,15 +135,24 @@ def test_admit_and_realize_service_node_boots_a_real_service(tmp_path):
     cfg = AptlConfig(lab={"name": "svc"}, containers={})
     backend = DockerComposeBackend(project_dir=tmp_path, project_name="aptl-imagefree-svc")
     scenario = parse_sdl_file(sdl)
-    target = create_aptl_runtime_target(project_dir=tmp_path, config=cfg, backend=backend)
+    bundle = _bundle(tmp_path)
+    target = create_aptl_runtime_target(
+        project_dir=tmp_path, config=cfg, backend=backend, bundle=bundle
+    )
     plan = RuntimeManager(target).plan(scenario)
-    realization = interpret_provisioning_plan(plan=plan.provisioning, project_dir=tmp_path, config=cfg)
+    realization = interpret_provisioning_plan(
+        plan=plan.provisioning, config=cfg, bundle=bundle
+    )
     assert [d.message for d in realization.diagnostics if d.is_error] == []
     spec = realization.deployment_spec([])
-    assert spec.image_free is True
+    # Fully image-free: every node is materialized, so nothing is left for the
+    # Compose path (this replaces the removed whole-spec image_free flag).
+    from aptl.core.deployment._compose_realization import _needs_compose
+
+    assert _needs_compose(spec) is False
 
     try:
-        result = backend.realize(spec)
+        result = backend.realize(spec, scenario_root=tmp_path)
         assert result.success, result.error
         # The service the SDL declared is really running.
         active = backend.container_exec(container, ["systemctl", "is-active", "sshd.service"])

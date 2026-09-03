@@ -1,9 +1,9 @@
 name: paper-enterprise-participant-evidence-loop
 version: '1.0'
-description: 'APTL realization variant of the ACES paper reference scenario: authored SDL
+description: 'APTL realization variant of the RAES paper reference scenario: authored SDL
   participant action contract, observation boundary, outcome interpretation, processor compilation,
   and runtime-parsed backend binding for a focused security evaluation slice with Wazuh evaluator
-  evidence. The optional participant policy-provenance surface from ACES #598 is intentionally
+  evidence. The optional participant policy-provenance surface from RAES #598 is intentionally
   omitted until APTL has a real policy-gate backend service.'
 nodes:
   redteam-net:
@@ -28,6 +28,9 @@ nodes:
     - name: ssh
       port: 22
       protocol: tcp
+    runtime:
+      packages:
+      - {manager: apt, name: curl, version: "*"}
     roles:
       paper-evaluator: paper-evaluator
     conditions:
@@ -63,8 +66,8 @@ nodes:
     type: vm
     os: linux
     source:
-      name: wazuh-manager
-      version: 4.x
+      name: wazuh/wazuh-manager
+      version: 4.12.0
     resources:
       ram: 1 GiB
       cpu: 1
@@ -89,8 +92,8 @@ nodes:
     type: vm
     os: linux
     source:
-      name: wazuh-indexer
-      version: 4.x
+      name: wazuh/wazuh-indexer
+      version: 4.12.0
     resources:
       ram: 1 GiB
       cpu: 1
@@ -649,7 +652,7 @@ outcome_interpretation_rules:
     - target_id: paper-meaning-supported
       target_layer: scenario_meaning
       ref: paper-demonstration
-      relation: 'Shows that ACES can represent participant, target, internal dependency, OSS
+      relation: 'Shows that RAES can represent participant, target, internal dependency, OSS
         defender evidence, policy provenance, evaluator evidence, and observation boundaries
         in one focused enterprise slice.
 
@@ -718,8 +721,6 @@ behavior_specifications:
     - action_contracts
     - observation_boundaries
     - behavior_history
-    - x-paper:wazuh-evidence
-    - x-paper:boundary-negative-evidence
     evidence_contract_refs:
     - participant-behavior-history-event-stream-v1
     extension_policy: governed-extension

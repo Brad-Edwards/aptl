@@ -13,8 +13,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from aces_sdl.accounts import Account
-from aces_sdl.scenario import Scenario
+from raes.accounts import Account
+from raes.scenario import Scenario
 
 from aptl.utils.redaction import redact
 from aptl.validation.techvault_gate import GateCheck

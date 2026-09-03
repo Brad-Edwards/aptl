@@ -1,0 +1,399 @@
+"""Provider-observed disclosure of the six runtime realization concerns (#876).
+
+raes 3.1.0 lowers six per-node runtime dimensions into the RAES realization
+concern registry -- ``runtime-environment``, ``runtime-mounts`` (bind/tmpfs
+only), ``linux-capabilities``, ``published-ports``, ``forwarding-agents``, and
+``service-listeners``. RAES owns admission and the fail-closed non-approximation
+gate (``realization_disclosure``); this module supplies the BACKEND half: it
+OBSERVES each declared runtime concern off the realized container through the
+typed ``DeploymentBackend`` ops and DISCLOSES the observed value at the concern's
+payload path, projected through RAES's own projector so RAES can compare
+declared-vs-observed.
+
+Projection alignment (resolved empirically against raes 3.1.0). The RAES planner
+writes the node's *raw authored* runtime value into the plan op payload
+(``node.model_dump(mode="json")``), not a pre-projected one, and the gate
+projects that declared value with ``observed=False`` while projecting the value
+this module discloses with ``observed=True``. So the disclosed value must be one
+that, re-projected with ``observed=True``, equals ``project(raw_declared,
+observed=False)``. :func:`_disclose` achieves that by projecting the observed
+value with ``observed=False`` first (which commits a realized ``secret_fixture``
+value to its hash rather than rejecting it, and strips every raw value from the
+wire) and then re-validating with ``observed=True`` (which runs the concern's
+observed-validator and enforces the secret boundary). A correctly realized node
+matches; a node whose realized value differs -- or that APTL cannot realize --
+projects to something else and the EXACT gate rejects it.
+
+Two disclosure shapes are used, each honest about what the container reveals:
+
+* ``runtime-environment`` takes the *actual realized value* out of the
+  container's ``Config.Env`` for each declared variable, so the committed value
+  differs the moment the realized value diverges from the declaration. A
+  ``redacted`` / ``operator_secret`` variable carries only presence (its raw
+  value never leaves the container); a ``secret_fixture`` value is committed to a
+  hash, never disclosed raw.
+* ``published-ports``, ``linux-capabilities``, ``runtime-mounts``, and
+  ``service-listeners`` *corroborate* each declared element against the realized
+  container (the same read-back-and-attest pattern the domain-topology observer
+  already uses) and disclose the declared value only for corroborated elements.
+  An element the container does not corroborate is dropped, so the disclosed
+  value diverges from the declaration and the gate rejects it.
+
+  These four also enforce completeness in the other direction: the concern fails
+  closed when the container carries security-relevant state the contract does not
+  declare -- an undeclared host-published port, a capability beyond the declared
+  set, an undeclared bind mount, or a tcp/udp listener the contract omits. Only
+  the fixed state APTL's own generic-substrate init adds (the init capabilities
+  and the cgroup bind of a systemd node) is subtracted as a known baseline; a
+  plain node adds nothing. Without this, the concrete lingering-state case the
+  cycle-7 review raised would pass: an idempotently reused container keeps a port
+  a later contract dropped, the declared-only projection never sees it, and the
+  gate reports the node ready while the port stays reachable (issue #876).
+
+Corroboration evidence never comes from executing a binary inside the attested
+container. The first four concerns read host-side ``docker inspect`` (daemon
+state the container cannot forge); ``service-listeners`` reads the kernel's
+per-netns socket tables through ``backend.observe_container_listeners`` -- a
+sidecar in the target's network namespace using its own trusted binary -- so a
+workload that shadows ``ss``/``test`` cannot narrow its attested bind scope
+(issue #876 security review).
+
+``forwarding-agents`` *corroborates* each declared agent against the realized
+container's mount footprint: a source's filesystem ``location`` and a
+``unix_socket`` reload channel's serving volume are mounts the container must
+carry, read back from ``docker inspect`` (daemon-observed) and cross-referenced
+with the node's declared mounts. Only agents whose footprint is present are
+disclosed; an agent whose footprint is absent (or that declares no
+host-observable footprint) drops the whole concern, so the realized set diverges
+from the declared one and the EXACT requirement is rejected rather than handed a
+fabricated match.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, Any
+
+from raes.runtime_configuration import RuntimeConfiguration
+from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
+
+from aptl.backends._runtime_concern_disclosure import _PROTECTED, _disclose, _record
+from aptl.backends._runtime_concern_excess import (
+    _INIT_CAPABILITY_BASELINE,
+    _capabilities_corroborate,
+    _has_undeclared_network_listeners,
+    _has_undeclared_ports,
+    _normalized_capabilities,
+    _port_entry_matches,
+    _realized_scope_matches_declared,
+    _runs_init,
+    _sensitivity,
+)
+from aptl.backends._runtime_mount_observation import (
+    _observe_forwarding_agents,
+    _observe_mounts,
+)
+from aptl.core.deployment.realization import LOOPBACK_HOST_IP
+from aptl.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from aptl.core.deployment._proc_net_listeners import ContainerListeners
+    from aptl.core.deployment.backend import DeploymentBackend
+
+log = get_logger("realization-observe")
+
+_ENVIRONMENT_PATH = CONCERN_PAYLOAD_PATH["runtime-environment"]
+_MOUNTS_PATH = CONCERN_PAYLOAD_PATH["runtime-mounts"]
+_CAPABILITIES_PATH = CONCERN_PAYLOAD_PATH["linux-capabilities"]
+_PUBLISHED_PORTS_PATH = CONCERN_PAYLOAD_PATH["published-ports"]
+_SERVICE_LISTENERS_PATH = CONCERN_PAYLOAD_PATH["service-listeners"]
+_FORWARDING_AGENTS_PATH = CONCERN_PAYLOAD_PATH["forwarding-agents"]
+
+# The excess-detection, scope, and init-baseline helpers this module's observers
+# rely on live in :mod:`aptl.backends._runtime_concern_excess`; they are imported
+# above so the disclosure and completeness logic stays in one place.
+
+
+def observe_runtime_concerns(
+    backend: "DeploymentBackend",
+    container_name: str | None,
+    info: Mapping[str, Any],
+    declared_runtime: RuntimeConfiguration | None,
+) -> dict[tuple[str, ...], object]:
+    """Return the disclosed runtime concerns a realized node declares.
+
+    Keyed by ``CONCERN_PAYLOAD_PATH`` tuple. A concern APTL cannot be seen to
+    have realized is absent, so the gate reads an omission (a rejected EXACT
+    declaration) rather than an echo of the plan.
+    """
+
+    concerns: dict[tuple[str, ...], object] = {}
+    if declared_runtime is None or not container_name:
+        return concerns
+    _record(concerns, _ENVIRONMENT_PATH, lambda: _observe_environment(info, declared_runtime))
+    _record(concerns, _PUBLISHED_PORTS_PATH, lambda: _observe_published_ports(info, declared_runtime))
+    _record(concerns, _CAPABILITIES_PATH, lambda: _observe_capabilities(info, declared_runtime))
+    _record(concerns, _MOUNTS_PATH, lambda: _observe_mounts(info, declared_runtime))
+    _record(
+        concerns,
+        _SERVICE_LISTENERS_PATH,
+        lambda: _observe_service_listeners(backend, container_name, declared_runtime),
+    )
+    _record(
+        concerns,
+        _FORWARDING_AGENTS_PATH,
+        lambda: _observe_forwarding_agents(info, declared_runtime),
+    )
+    return concerns
+
+
+# --------------------------------------------------------------------------- #
+# runtime-environment
+# --------------------------------------------------------------------------- #
+
+
+def _observe_environment(
+    info: Mapping[str, Any],
+    runtime: RuntimeConfiguration,
+) -> object | None:
+    """Disclose declared env variables carrying their realized container values."""
+
+    declared = runtime.environment
+    if not declared:
+        return None
+    realized = _container_environment(info)
+    records: list[dict[str, object]] = []
+    for variable in declared:
+        name = getattr(variable, "name", "")
+        if not name:
+            continue
+        record = variable.model_dump(mode="json", by_alias=True)
+        classification = record.get("value_classification")
+        declared_value = record.get("value")
+        if classification not in _PROTECTED and not declared_value:
+            # A valueless non-secret variable is faithfully realized as "no value"
+            # when the container omits it or carries it empty (a plain variable
+            # the author left without a value is optional/operator-set) -- disclose
+            # it as declared so a faithful realization matches. But a NON-empty
+            # realized value is an undeclared operator value (an out-of-band `.env`
+            # entry the scenario never authored): disclose it so the
+            # non-approximation gate rejects the divergence rather than treating a
+            # valueless declaration as a wildcard.
+            realized_value = realized.get(name)
+            if realized_value:
+                record["value"] = realized_value
+            records.append(record)
+            continue
+        if name not in realized:
+            # A variable that must carry a realized value — an authored non-secret
+            # value, or an operator-supplied secret — but is absent from the
+            # container is not realized: omit it so the non-approximation gate
+            # rejects the exact declaration rather than reading an echo.
+            continue
+        # A protected value is presence-only; its raw material is never read.
+        record["value"] = "" if classification in _PROTECTED else realized[name]
+        records.append(record)
+    if not records:
+        return None
+    return _disclose("runtime-environment", records)
+
+
+def _container_environment(info: Mapping[str, Any]) -> dict[str, str]:
+    """Parse the realized container's ``Config.Env`` into a name -> value map."""
+
+    config = info.get("Config") if isinstance(info, Mapping) else None
+    entries = config.get("Env") if isinstance(config, Mapping) else None
+    realized: dict[str, str] = {}
+    if isinstance(entries, list):
+        for entry in entries:
+            if isinstance(entry, str) and "=" in entry:
+                name, _, value = entry.partition("=")
+                realized[name] = value
+    return realized
+
+
+# --------------------------------------------------------------------------- #
+# published-ports
+# --------------------------------------------------------------------------- #
+
+
+def _observe_published_ports(
+    info: Mapping[str, Any],
+    runtime: RuntimeConfiguration,
+) -> object | None:
+    """Disclose declared host-published ports the container actually binds.
+
+    Fails closed (returns None) when the container publishes ANY port the
+    contract does not declare: the base substrate publishes nothing, so an
+    undeclared host binding is excess exposure -- the concrete lingering-port case
+    the cycle-7 review raised, where a reused container keeps a host port a later
+    contract dropped. Every realized binding must map to a declared port.
+    """
+
+    network = runtime.network
+    declared_ports = tuple(network.published_ports) if network is not None else ()
+    bindings = _port_bindings(info)
+    if _has_undeclared_ports(bindings, declared_ports) or not declared_ports:
+        return None
+    disclosed = [
+        port.model_dump(mode="json", by_alias=True)
+        for port in declared_ports
+        if _port_binding_present(port, bindings)
+    ]
+    if not disclosed:
+        return None
+    return _disclose("published-ports", disclosed)
+
+
+def _port_bindings(info: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Return ``HostConfig.PortBindings`` as a mapping, or empty."""
+
+    host_config = info.get("HostConfig") if isinstance(info, Mapping) else None
+    bindings = host_config.get("PortBindings") if isinstance(host_config, Mapping) else None
+    return bindings if isinstance(bindings, Mapping) else {}
+
+
+def _port_binding_present(port: object, bindings: Mapping[str, Any]) -> bool:
+    """Return whether the container realized this declared port binding.
+
+    An author who omitted ``host_ip`` is realized on loopback (ADR-034 / the
+    base substrate), so the corroboration expects loopback there, not the raw
+    container value.
+    """
+
+    key = f"{getattr(port, 'container_port', '')}/{getattr(port, 'protocol', 'tcp')}"
+    entries = bindings.get(key)
+    if not isinstance(entries, Sequence):
+        return False
+    expected_ip = getattr(port, "host_ip", "") or LOOPBACK_HOST_IP
+    host_port = getattr(port, "host_port", None)
+    expected_port = str(host_port) if host_port is not None else None
+    return any(
+        _port_entry_matches(entry, expected_ip, expected_port)
+        for entry in entries
+        if isinstance(entry, Mapping)
+    )
+
+
+# --------------------------------------------------------------------------- #
+# linux-capabilities
+# --------------------------------------------------------------------------- #
+
+
+def _observe_capabilities(
+    info: Mapping[str, Any],
+    runtime: RuntimeConfiguration,
+) -> object | None:
+    """Disclose a declared capability policy the container's grants corroborate.
+
+    Only the container-config knobs ``add`` / ``drop`` are observable off a
+    realized container; ``required`` is an author assertion and ``effective`` /
+    ``process_overrides`` are process-runtime facts APTL does not realize through
+    the docker capability flags. A policy that asserts any of those is not
+    corroborable and is dropped so the gate does not receive a value APTL cannot
+    stand behind.
+    """
+
+    policy = runtime.linux_capabilities
+    if policy is None:
+        return None
+    declared = policy.model_dump(mode="json", by_alias=True)
+    # ``required``/``effective``/``process_overrides`` are non-realizable
+    # assertions, so a policy asserting any of them is dropped.
+    unrealizable = bool(declared.get("required") or declared.get("effective") or declared.get("process_overrides"))
+    host_config = info.get("HostConfig") if isinstance(info, Mapping) else None
+    granted = _normalized_capabilities(host_config.get("CapAdd") if isinstance(host_config, Mapping) else None)
+    dropped = _normalized_capabilities(host_config.get("CapDrop") if isinstance(host_config, Mapping) else None)
+    # Corroboration folds three fail-closed checks (issue #876 cycle-7 review): a
+    # declared drop actually granted is not dropped; a grant beyond the declared
+    # set plus the init baseline is undeclared privilege; every declared add/drop
+    # must be realized. A systemd node subtracts exactly its init capabilities.
+    baseline = _INIT_CAPABILITY_BASELINE if _runs_init(runtime) else frozenset()
+    corroborated = not unrealizable and _capabilities_corroborate(
+        declared, granted, dropped, baseline
+    )
+    return _disclose("linux-capabilities", declared) if corroborated else None
+
+
+# --------------------------------------------------------------------------- #
+# service-listeners
+# --------------------------------------------------------------------------- #
+
+
+def _observe_service_listeners(
+    backend: "DeploymentBackend",
+    container_name: str,
+    runtime: RuntimeConfiguration,
+) -> object | None:
+    """Disclose declared listeners the container is observed to be serving.
+
+    Listener state comes from ``backend.observe_container_listeners`` -- the
+    kernel's per-netns socket tables, read by a mechanism that executes no
+    container-provided binary (issue #876 security review). A read that cannot be
+    completed discloses nothing, so the gate rejects rather than assumes a match.
+    """
+
+    declared = runtime.service_listeners
+    if not declared:
+        return None
+    observed = backend.observe_container_listeners(container_name)
+    result: object | None = None
+    # Excess check (issue #876 cycle-7 review): the base substrate opens no
+    # network listener of its own, so a realized tcp/udp socket the contract does
+    # not declare is a hostile or leftover exposure and must not pass behind an
+    # echoed declaration. Unix sockets are deliberately not excess-checked -- a
+    # systemd node's own init opens many internal ones -- so only network
+    # exposure is bounded here.
+    if observed is not None and not _has_undeclared_network_listeners(
+        observed.sockets, declared
+    ):
+        disclosed = [
+            listener.model_dump(mode="json", by_alias=True)
+            for listener in declared
+            if _listener_present(listener, observed)
+        ]
+        if disclosed:
+            result = _disclose("service-listeners", disclosed)
+    return result
+
+
+def _listener_present(listener: object, observed: "ContainerListeners") -> bool:
+    """Return whether the trusted observation corroborates one declared listener."""
+
+    protocol = _sensitivity(getattr(listener, "protocol", ""))
+    if protocol == "unix":
+        socket_path = getattr(listener, "socket_path", "")
+        return bool(socket_path) and socket_path in observed.unix_socket_paths
+    return _network_listener_present(listener, protocol, observed)
+
+
+def _network_listener_present(
+    listener: object, protocol: str, observed: "ContainerListeners"
+) -> bool:
+    """Return whether a trusted observation corroborates a declared tcp/udp listener."""
+
+    port = getattr(listener, "port", None)
+    if port is None:
+        return False
+    declared_port = int(port)
+    declared_address = getattr(listener, "address", "")
+    # An unresolved symbolic address ($VAR) cannot be scope-checked, so it is
+    # failed closed until the compiled binding resolves it to a concrete or
+    # wildcard address -- otherwise a workload could bind all interfaces behind a
+    # symbolic declaration (issue #876 cycle-7 review).
+    if declared_address.startswith("$"):
+        return False
+    present = False
+    for socket_protocol, socket_address, socket_port in observed.sockets:
+        if socket_protocol != protocol or socket_port != declared_port:
+            continue
+        # Exact scope match in both directions: a concrete declaration realized on
+        # a wildcard is over-exposed and a wildcard declaration realized on one
+        # interface is under-exposed -- neither corroborates (issue #876 review).
+        if _realized_scope_matches_declared(socket_address, declared_address):
+            present = True
+            break
+    return present
+
+
+__all__ = ["observe_runtime_concerns"]

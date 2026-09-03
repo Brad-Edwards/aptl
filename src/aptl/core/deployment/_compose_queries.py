@@ -10,6 +10,11 @@ import subprocess
 import json
 from typing import Any
 
+from aptl.core.deployment._proc_net_listeners import (
+    PROC_NET_READER,
+    ContainerListeners,
+    parse_proc_net_listeners,
+)
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.docker_compose")
@@ -17,7 +22,31 @@ log = get_logger("deployment.docker_compose")
 # Bound for snapshot / host-inventory probes. A stalled docker daemon
 # (especially the SSH transport) must not hang `aptl lab status --json`
 # or the lab-start snapshot step indefinitely.
-_HOST_INVENTORY_TIMEOUT = 15
+# A single `docker inspect` / host-inventory read is normally sub-second, but the
+# realization-observation pass runs it against every container right after a
+# clean `aptl lab start` — when the docker daemon is at its busiest pulling
+# base images, building components, and starting ~30 containers with their JVMs.
+# Under that first-boot load `docker inspect` can take tens of seconds, and a
+# 15s cap made observation raise BackendTimeoutError and fail the SEM-218 gate
+# for a container that was actually healthy (issue #889 fresh-machine boot). The
+# cap only exists to stop a genuinely stalled daemon hanging observation forever,
+# so it is set generously; a healthy daemon always answers well within it.
+_HOST_INVENTORY_TIMEOUT = 90
+# A single netns-joining sidecar read is a cheap kernel-table dump; bound it so a
+# stalled daemon cannot hang realization observation.
+_LISTENER_SIDECAR_TIMEOUT = 30
+# The listener observer runs from an APTL-pinned image, NEVER one derived from the
+# target container (issue #876 cycle-5 security review): a digest pin fixes the
+# exact bytes, so a workload -- which in a cyber range is expected to be hostile --
+# cannot substitute its own `sh`/`cat` to forge the readback. This is the same
+# pinned alpine base the network-boundary helper builds on, so any offline stage
+# that carries the boundary helper already carries this observer. The observer
+# only reads the kernel's per-netns socket tables; it needs no capabilities and
+# gets none.
+_LISTENER_OBSERVER_IMAGE = (
+    "alpine:3.22@sha256:"
+    "14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce"
+)
 
 
 def _parse_labels(labels_str: str) -> dict[str, str]:
@@ -83,6 +112,38 @@ def _decode_first_object(stdout: str) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _string_mapping(raw: object) -> dict[str, str]:
+    """Normalize an observed mapping without accepting other JSON shapes."""
+
+    if not isinstance(raw, dict):
+        return {}
+    return {str(key): str(value) for key, value in raw.items()}
+
+
+def _network_ipam_configs(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return valid Docker IPAM configuration records or one empty record."""
+
+    ipam = payload.get("IPAM")
+    raw = ipam.get("Config") if isinstance(ipam, dict) else None
+    if not isinstance(raw, list):
+        return [{}]
+    configs = [item for item in raw if isinstance(item, dict)]
+    return configs or [{}]
+
+
+def _network_bridge(
+    payload: dict[str, Any],
+    options: dict[str, str],
+    network_id: str,
+) -> str:
+    """Return the explicit or deterministic default bridge interface name."""
+
+    bridge = options.get("com.docker.network.bridge.name", "")
+    if not bridge and payload.get("Driver") == "bridge" and network_id:
+        return f"br-{network_id[:12]}"
+    return bridge
+
+
 def _decode_compose_ps(stdout: str) -> list[dict[str, Any]]:
     """Parse ``docker compose ps --format json`` output (NDJSON or array)."""
     stripped = stdout.strip()
@@ -136,10 +197,15 @@ class ComposeQueryMixin(object):
         fmt = "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.Labels}}\t{{.Ports}}"
         result = self._run(
             [
-                "docker", "ps", "-a",
-                "--filter", f"label=com.docker.compose.project={self._project_name}",
-                "--filter", "name=aptl-",
-                "--format", fmt,
+                "docker",
+                "ps",
+                "-a",
+                "--filter",
+                f"label=com.docker.compose.project={self._project_name}",
+                "--filter",
+                "name=aptl-",
+                "--format",
+                fmt,
             ],
             timeout=_HOST_INVENTORY_TIMEOUT,
         )
@@ -157,20 +223,21 @@ class ComposeQueryMixin(object):
         # tenants' aptl-* networks on a shared SSH daemon.
         result = self._run(
             [
-                "docker", "network", "ls",
-                "--filter", f"label=com.docker.compose.project={self._project_name}",
-                "--filter", f"name={name_prefix}",
-                "--format", "{{.Name}}",
+                "docker",
+                "network",
+                "ls",
+                "--filter",
+                f"label=com.docker.compose.project={self._project_name}",
+                "--filter",
+                f"name={name_prefix}",
+                "--format",
+                "{{.Name}}",
             ],
             timeout=_HOST_INVENTORY_TIMEOUT,
         )
         if result.returncode != 0:
             return []
-        return [
-            line.strip()
-            for line in result.stdout.splitlines()
-            if line.strip()
-        ]
+        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
     def host_list_networks(self) -> list[str]:
         """List every Docker network visible to the backend daemon."""
@@ -181,13 +248,11 @@ class ComposeQueryMixin(object):
         )
         if result.returncode != 0:
             return []
-        return [
-            line.strip()
-            for line in result.stdout.splitlines()
-            if line.strip()
-        ]
+        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
     def host_inspect_network(self, name: str) -> dict[str, Any]:
+        """Return bounded network identity, labels, addresses, and membership."""
+
         result = self._run(
             ["docker", "network", "inspect", name],
             timeout=_HOST_INVENTORY_TIMEOUT,
@@ -199,25 +264,35 @@ class ComposeQueryMixin(object):
         )
         if not payload:
             return {}
-        ipam = (payload.get("IPAM", {}).get("Config") or [{}])[0]
+        ipam_configs = _network_ipam_configs(payload)
+        ipam = ipam_configs[0]
         containers_map = payload.get("Containers", {})
-        labels = payload.get("Labels")
-        if not isinstance(labels, dict):
-            labels = {}
+        labels = _string_mapping(payload.get("Labels"))
+        options = _string_mapping(payload.get("Options"))
+        network_id = str(payload.get("Id", ""))
+        bridge = _network_bridge(payload, options, network_id)
+        subnets = [
+            str(config.get("Subnet", ""))
+            for config in ipam_configs
+            if isinstance(config, dict) and config.get("Subnet")
+        ]
         return {
             "name": name,
+            "id": network_id,
+            "driver": str(payload.get("Driver", "")),
+            "bridge": bridge,
             "internal": bool(payload.get("Internal", False)),
             "subnet": ipam.get("Subnet", ""),
+            "subnets": subnets,
             "gateway": ipam.get("Gateway", ""),
-            "labels": {str(key): str(value) for key, value in labels.items()},
+            "labels": labels,
+            "options": options,
             "containers": sorted(c.get("Name", "") for c in containers_map.values()),
         }
 
     # Container interaction (CLI-004, ADR-023) ----------------------------
 
-    def container_list(
-        self, *, all_containers: bool = True
-    ) -> list[dict[str, Any]]:
+    def container_list(self, *, all_containers: bool = True) -> list[dict[str, Any]]:
         cmd = ["docker", "compose", "-p", self._project_name, "ps"]
         if all_containers:
             cmd.append("-a")
@@ -259,9 +334,7 @@ class ComposeQueryMixin(object):
         cmd.append(name)
         return self._run(cmd, timeout=timeout)
 
-    def container_shell(
-        self, name: str, *, shell: str | None = None
-    ) -> int:
+    def container_shell(self, name: str, *, shell: str | None = None) -> int:
         if shell is not None:
             return self._run_streaming(["docker", "exec", "-it", name, shell])
         # Probe non-interactively for bash before launching the TTY,
@@ -271,7 +344,9 @@ class ComposeQueryMixin(object):
         if not should_run:
             log.warning(
                 "container_shell probe of %s failed (exit %d): %s",
-                name, probe.returncode, probe.stderr.strip(),
+                name,
+                probe.returncode,
+                probe.stderr.strip(),
             )
             return probe.returncode
         if chosen == "/bin/sh":
@@ -287,6 +362,27 @@ class ComposeQueryMixin(object):
     ) -> subprocess.CompletedProcess:
         argv = ["docker", "exec", name, *cmd]
         return self._run(argv, timeout=timeout)
+
+    def container_exec_with_input(
+        self,
+        name: str,
+        cmd: list[str],
+        payload: str,
+        *,
+        timeout: int | None = None,
+    ) -> subprocess.CompletedProcess:
+        """Exec ``cmd`` in a container with non-secret structured stdin.
+
+        The interactive ``-i`` flag keeps stdin open so a fixed helper (e.g.
+        ``sh -s``) reads its script/body from ``payload`` rather than the host
+        argv. Used by the ADR-088 service-materialization provider so native
+        index names, endpoints, and request bodies never enter host process
+        argv (issue #889). Shares the selected-daemon behaviour of every other
+        exec: the SSH backend inherits it unchanged over ``DOCKER_HOST``.
+        """
+
+        argv = ["docker", "exec", "-i", name, *cmd]
+        return self._run_with_input(argv, payload, timeout=timeout)
 
     def container_restart(self, name: str, *, timeout: int | None = None) -> None:
         """Restart a container by name via ``docker restart``.
@@ -323,6 +419,49 @@ class ComposeQueryMixin(object):
             timeout=_HOST_INVENTORY_TIMEOUT,
         )
         if result.returncode != 0:
-            log.debug("container_inspect failed for %s: %s", name, result.stderr.strip())
+            log.debug(
+                "container_inspect failed for %s: %s", name, result.stderr.strip()
+            )
             return {}
         return _decode_first_object(result.stdout)
+
+    def observe_container_listeners(self, name: str) -> ContainerListeners | None:
+        """Read a container's listeners from OUTSIDE its own trust boundary (#876).
+
+        Launches a throwaway sidecar from an APTL-pinned observer image
+        (:data:`_LISTENER_OBSERVER_IMAGE`) that joins the target's network
+        namespace and reads the kernel's per-netns socket tables with ITS OWN
+        ``sh``/``cat`` -- never the target's, and never an image derived from the
+        target. The kernel tables are ground truth outside the container's
+        filesystem, and the observer's tooling is fixed by digest, so a workload
+        (expected to be hostile in a cyber range) cannot forge the readback. The
+        sidecar drops all capabilities, gains no new privileges, and runs
+        read-only: it only reads. Returns ``None`` when the read cannot be
+        completed, which the observer treats as a refused disclosure (a rejected
+        EXACT declaration) rather than an assumed match.
+        """
+
+        pull_never = bool(getattr(self, "_offline_staged", False))
+        result = self._run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                *(["--pull=never"] if pull_never else []),
+                "--network",
+                f"container:{name}",
+                "--cap-drop=ALL",
+                "--security-opt=no-new-privileges",
+                "--read-only",
+                "--entrypoint",
+                "sh",
+                _LISTENER_OBSERVER_IMAGE,
+                "-c",
+                PROC_NET_READER,
+            ],
+            timeout=_LISTENER_SIDECAR_TIMEOUT,
+        )
+        if result.returncode != 0:
+            log.debug("listener sidecar failed for %s: %s", name, result.stderr.strip())
+            return None
+        return parse_proc_net_listeners(result.stdout)

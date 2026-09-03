@@ -3,11 +3,11 @@
 
 The preflight requires **stable diagnostic/reason codes** that distinguish
 missing source, startup failure, mid-run loss, truncation, clock skew,
-timeout, and finalization failure "even where ACES terminal statuses
+timeout, and finalization failure "even where RAES terminal statuses
 coincide". This module owns that vocabulary as an enum plus a small set of
 capture-domain diagnostic codes, and the coordinator's overall
 :class:`AcquisitionDisposition` mapping. Collector failures are typed outcome
-DATA projected into ACES diagnostics — there is no second public exception
+DATA projected into RAES diagnostics — there is no second public exception
 hierarchy (preflight / ADR-047 "Error envelope").
 """
 
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from aces_contracts.diagnostics import Diagnostic, Severity
+from raes_contracts.diagnostics import Diagnostic, Severity
 
 from aptl.utils.redaction import redact
 
@@ -73,7 +73,7 @@ STATUS_DIAGNOSTIC_CODES: dict[CollectorStatus, str] = {
 class AcquisitionDisposition(str, Enum):
     """The overall acquisition outcome for one trial's capture set.
 
-    Maps onto ACES ``ExperimentRunModel`` run/outcome status without creating
+    Maps onto RAES ``ExperimentRunModel`` run/outcome status without creating
     a second controller state machine:
 
     * :attr:`SEALED_READY` — every required capture succeeded and finalized;

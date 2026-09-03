@@ -1,9 +1,9 @@
-"""Tests for the ACES scenario-detail workbench projection (UI-008d).
+"""Tests for the RAES scenario-detail workbench projection (UI-008d).
 
-The projection turns a curated catalog entry plus its parsed ACES SDL
+The projection turns a curated catalog entry plus its parsed RAES SDL
 ``Scenario`` into a backend-owned ``ScenarioDetailResponse``: header facts
 plus an ordered ``WorkbenchBlock`` discriminated union. The block families
-are projected from whatever ACES actually owns and are omitted when the
+are projected from whatever RAES actually owns and are omitted when the
 source section is empty — no fabricated steps/objectives for infra-only SDLs.
 """
 
@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("aces_sdl", reason="ACES SDL not installed")
+pytest.importorskip("raes", reason="RAES SDL not installed")
 
-from aces_sdl import parse_sdl, parse_sdl_file  # noqa: E402
+from raes import parse_sdl, parse_sdl_file  # noqa: E402
 
 from aptl.api.scenario_projection import (  # noqa: E402
     build_scenario_detail,
@@ -112,10 +112,10 @@ class TestBlockProjection:
         terminals = [b for b in detail.blocks if b.type == "terminal"]
         assert [t.container for t in terminals] == ["ssh-target"]
 
-    def test_infra_only_scenario_emits_no_objective_step_or_siem_blocks(self):
-        scenario = parse_sdl_file(
-            PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
-        )
+    def test_infra_only_scenario_emits_no_objective_step_or_siem_blocks(self, tmp_path):
+        from tests.helpers import techvault_scenario_path
+
+        scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
         detail = build_scenario_detail(
             _entry("techvault-operational"), scenario
         )
@@ -143,14 +143,14 @@ class TestRichScenarioProjection:
         )
         return build_scenario_detail(_entry("paper-agent-loop"), scenario)
 
-    def test_objective_blocks_projected_from_aces_objectives(self, paper_detail):
+    def test_objective_blocks_projected_from_raes_objectives(self, paper_detail):
         objectives = [b for b in paper_detail.blocks if b.type == "objective"]
         assert objectives, "paper-agent-loop declares objectives"
         assert any("handoff" in o.name for o in objectives)
-        # Every objective carries a human success summary derived from ACES.
+        # Every objective carries a human success summary derived from RAES.
         assert all(o.success for o in objectives)
 
-    def test_step_blocks_projected_from_aces_workflows(self, paper_detail):
+    def test_step_blocks_projected_from_raes_workflows(self, paper_detail):
         steps = [b for b in paper_detail.blocks if b.type == "step"]
         assert steps, "paper-agent-loop declares a workflow with steps"
         assert [s.index for s in steps] == sorted(s.index for s in steps)

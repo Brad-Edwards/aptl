@@ -274,7 +274,7 @@ def _add_evaluator_result_candidates(
 
     The evaluator and participant clocks are distinct sources. Their windows
     are only comparable when they share a timestamp domain: then an overlap is
-    a ``TIME_WINDOW_CANDIDATE`` (never EXPLICIT/DECLARED — no ACES contract
+    a ``TIME_WINDOW_CANDIDATE`` (never EXPLICIT/DECLARED — no RAES contract
     propagates a shared id across the evaluation/participant namespaces). When
     the domains differ and no offset reconciles them, overlap cannot be
     established, so the edge is an explicit ``GAP_OR_UNKNOWN`` disclosing the

@@ -12,7 +12,7 @@ lives in :mod:`aptl.core.evidence.adapters.wiring`. Turning these on is what
 flips ``create_aptl_manifest().observation`` from ``None`` to a real aggregate
 projection — done together with the acquisition machinery (the honesty rule).
 
-``channel_kind`` / ``capture_kind`` / sealing use governed ACES
+``channel_kind`` / ``capture_kind`` / sealing use governed RAES
 controlled-vocabulary terms (``observation-channel-kinds`` /
 ``observation-capture-kinds`` / ``observation-sealing-modes``); the observation
 projection validates them at manifest build.

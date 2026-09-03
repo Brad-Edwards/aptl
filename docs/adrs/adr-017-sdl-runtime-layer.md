@@ -6,8 +6,8 @@
 
 > Historical note: ADR-035 supersedes this proposed runtime direction. The
 > local parser, compiler, planner, and target registry described here were
-> removed after the ACES SDL cutover. The current runtime handoff uses ACES SDL
-> and ACES runtime planning.
+> removed after the RAES SDL cutover. The current runtime handoff uses RAES SDL
+> and RAES runtime planning.
 
 ## Context
 

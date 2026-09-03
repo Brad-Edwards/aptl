@@ -1,5 +1,5 @@
 <script lang="ts">
-	// One ordered step projected from an ACES workflow. A display descriptor:
+	// One ordered step projected from a RAES workflow. A display descriptor:
 	// the workbench never auto-runs step content.
 	interface Props {
 		index: number;

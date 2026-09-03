@@ -18,17 +18,17 @@ def _env_key(*parts: str) -> str:
     return "_".join(parts)
 
 
-def _aces_outcome(
+def _raes_outcome(
     *,
     success: bool,
     error: str = "",
     selected_profiles: tuple[str, ...] = (),
     retryable: bool = False,
 ):
-    """Build the concrete outcome returned by the ACES backend handoff."""
-    from aces_contracts.runtime_state import RuntimeSnapshot
+    """Build the concrete outcome returned by the RAES backend handoff."""
+    from raes_contracts.runtime_state import RuntimeSnapshot
 
-    from aptl.backends.aces import AcesStartOutcome
+    from aptl.backends.raes import AcesStartOutcome
     from aptl.core.lab_types import LabResult
 
     return AcesStartOutcome(
@@ -45,7 +45,7 @@ def _aces_outcome(
     )
 
 
-def _aces_start_after_backend_retry(
+def _raes_start_after_backend_retry(
     *_args,
     before_backend_retry=None,
     **_kwargs,
@@ -53,7 +53,7 @@ def _aces_start_after_backend_retry(
     """Model the backend invoking the lifecycle callback between apply attempts."""
     assert before_backend_retry is not None
     before_backend_retry()
-    return _aces_outcome(
+    return _raes_outcome(
         success=True,
         selected_profiles=("soc", "wazuh", "victim", "kali"),
     )
@@ -62,7 +62,7 @@ def _aces_start_after_backend_retry(
 class TestLabImportContracts:
     """Import contracts for core lab orchestration."""
 
-    def test_aces_handoff_import_failure_returns_failed_lab_result(
+    def test_raes_handoff_import_failure_returns_failed_lab_result(
         self, monkeypatch, tmp_path
     ):
         import builtins
@@ -70,29 +70,29 @@ class TestLabImportContracts:
 
         import aptl.backends as backends
         from aptl.core.config import AptlConfig
-        from aptl.core.lab import start_aces_scenario
+        from aptl.core.lab import start_raes_scenario
 
         real_import = builtins.__import__
 
         def guarded_import(
             name, global_vars=None, local_vars=None, fromlist=(), level=0
         ):
-            if name == "aptl.backends.aces":
-                raise ModuleNotFoundError("No module named 'aces_sdl'")
+            if name == "aptl.backends.raes":
+                raise ModuleNotFoundError("No module named 'raes'")
             return real_import(name, global_vars, local_vars, fromlist, level)
 
-        monkeypatch.delitem(sys.modules, "aptl.backends.aces", raising=False)
-        monkeypatch.delattr(backends, "aces", raising=False)
+        monkeypatch.delitem(sys.modules, "aptl.backends.raes", raising=False)
+        monkeypatch.delattr(backends, "raes", raising=False)
         monkeypatch.setattr(builtins, "__import__", guarded_import)
 
         backend = MagicMock()
-        result = start_aces_scenario(tmp_path, AptlConfig(), backend)
+        result = start_raes_scenario(tmp_path, AptlConfig(), backend)
 
         assert result.success is False
-        assert "ACES runtime handoff unavailable" in result.error
+        assert "RAES runtime handoff unavailable" in result.error
         backend.start.assert_not_called()
 
-    def test_import_does_not_eagerly_load_aces_backend(self):
+    def test_import_does_not_eagerly_load_raes_backend(self):
         import subprocess
         import sys
 
@@ -101,14 +101,14 @@ import importlib.abc
 import sys
 
 
-class BlockAcesBackend(importlib.abc.MetaPathFinder):
+class BlockRaesBackend(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname == "aptl.backends.aces":
-            raise RuntimeError("aptl.backends.aces imported eagerly")
+        if fullname == "aptl.backends.raes":
+            raise RuntimeError("aptl.backends.raes imported eagerly")
         return None
 
 
-sys.meta_path.insert(0, BlockAcesBackend())
+sys.meta_path.insert(0, BlockRaesBackend())
 import aptl.core.lab
 """
         result = subprocess.run(
@@ -245,30 +245,30 @@ class TestLabStop:
                 return cmd_args
         raise AssertionError("docker compose down was not called")
 
-    def test_stop_calls_compose_down(self, mock_subprocess):
+    def test_stop_calls_compose_down(self, mock_subprocess, tmp_path):
         """stop_lab should invoke docker compose down."""
         from aptl.core.lab import stop_lab
 
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        result = stop_lab()
+        result = stop_lab(project_dir=tmp_path)
 
         assert result.success is True
         cmd_args = self._compose_down_args(mock_subprocess)
         assert "down" in cmd_args
 
-    def test_stop_with_volumes_flag(self, mock_subprocess):
+    def test_stop_with_volumes_flag(self, mock_subprocess, tmp_path):
         """stop_lab with remove_volumes=True should pass -v flag."""
         from aptl.core.lab import stop_lab
 
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        stop_lab(remove_volumes=True)
+        stop_lab(remove_volumes=True, project_dir=tmp_path)
 
         cmd_args = self._compose_down_args(mock_subprocess)
         assert "-v" in cmd_args
 
-    def test_stop_returns_failure_on_error(self, mock_subprocess):
+    def test_stop_returns_failure_on_error(self, mock_subprocess, tmp_path):
         """If docker compose down fails, stop_lab returns failure."""
         from aptl.core.lab import stop_lab
 
@@ -276,7 +276,7 @@ class TestLabStop:
             returncode=1, stdout="", stderr="Cannot stop"
         )
 
-        result = stop_lab()
+        result = stop_lab(project_dir=tmp_path)
 
         assert result.success is False
 
@@ -318,6 +318,22 @@ class TestLabStop:
         assert "victim" in cmd_args
         assert "wazuh" in cmd_args
 
+    def test_stop_refuses_invalid_present_config_identity(
+        self, mock_subprocess, tmp_path
+    ):
+        """Teardown must not guess the default project when aptl.json is invalid."""
+        from aptl.core.lab import stop_lab
+
+        (tmp_path / "aptl.json").write_text(
+            '{"lab":{"name":"test"},"deployment":{"project_name":"../other"}}'
+        )
+
+        result = stop_lab(project_dir=tmp_path)
+
+        assert result.success is False
+        assert "invalid configuration" in result.error.lower()
+        mock_subprocess.assert_not_called()
+
     def test_stop_always_includes_otel_profile(self, mock_subprocess, tmp_path):
         """stop_lab must tear down every profile start_lab always brings up.
 
@@ -348,6 +364,69 @@ class TestLabStop:
         assert result.success is True
         cmd_args = self._compose_down_args(mock_subprocess)
         assert "otel" in cmd_args
+
+
+class TestPreexistingRangeAdmission:
+    def test_running_created_or_exited_container_blocks_start(self, tmp_path):
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+        from aptl.core.lab import _LabStartContext, _step_reject_preexisting_range
+
+        backend = MagicMock()
+        backend.observe_project_runtime.return_value = ProjectRuntimePresence(
+            container_count=1,
+            network_count=0,
+        )
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False, backend=backend)
+
+        result = _step_reject_preexisting_range(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert "lifecycle-range-present" in result.error
+        assert "aptl lab stop" in result.error
+
+    def test_network_only_residue_blocks_start(self, tmp_path):
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+        from aptl.core.lab import _LabStartContext, _step_reject_preexisting_range
+
+        backend = MagicMock()
+        backend.observe_project_runtime.return_value = ProjectRuntimePresence(
+            container_count=0,
+            network_count=1,
+        )
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False, backend=backend)
+
+        result = _step_reject_preexisting_range(ctx)
+
+        assert result is not None
+        assert "lifecycle-range-present" in result.error
+
+    def test_presence_observation_failure_blocks_start(self, tmp_path):
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+        from aptl.core.lab import _LabStartContext, _step_reject_preexisting_range
+
+        backend = MagicMock()
+        backend.observe_project_runtime.return_value = ProjectRuntimePresence(
+            error="container observation failed"
+        )
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False, backend=backend)
+
+        result = _step_reject_preexisting_range(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert "lifecycle-observation-failed" in result.error
+        assert "docker stderr" not in result.error.lower()
+
+    def test_absent_project_allows_start_to_continue(self, tmp_path):
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+        from aptl.core.lab import _LabStartContext, _step_reject_preexisting_range
+
+        backend = MagicMock()
+        backend.observe_project_runtime.return_value = ProjectRuntimePresence()
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False, backend=backend)
+
+        assert _step_reject_preexisting_range(ctx) is None
 
 
 class TestCleanBootLab:
@@ -1309,6 +1388,13 @@ class TestOrchestrateLabStart:
             "aptl.core.deployment.docker_compose."
             "DockerComposeBackend.seed_named_volumes",
         )
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+
+        mocks["project_presence"] = mocker.patch(
+            "aptl.core.deployment.docker_compose."
+            "DockerComposeBackend.observe_project_runtime",
+            return_value=ProjectRuntimePresence(),
+        )
         # The seed step also runs the legacy source-ownership repair, which
         # now probes hostenv (docker info). Stub it so the orchestration
         # tests stay hermetic (#678).
@@ -1327,11 +1413,11 @@ class TestOrchestrateLabStart:
             return_value=CertResult(success=True, generated=False, certs_dir=certs_dir),
         )
 
-        # Mock ACES runtime handoff start. The planned profile set is part of
+        # Mock RAES runtime handoff start. The planned profile set is part of
         # the outcome so the lifecycle does not re-plan the authored scenario.
         mocks["start"] = mocker.patch(
-            "aptl.core.lab.start_aces_scenario",
-            return_value=_aces_outcome(
+            "aptl.core.lab.start_raes_scenario",
+            return_value=_raes_outcome(
                 success=True,
                 selected_profiles=("wazuh", "victim", "kali", "otel"),
             ),
@@ -1402,7 +1488,7 @@ class TestOrchestrateLabStart:
         progress.assert_any_call("Waiting for Wazuh services to become ready.")
 
     def test_orchestrates_selected_scenario_path(self, mocker, tmp_path):
-        """Selected ACES SDL paths should reach the startup handoff."""
+        """Selected RAES SDL paths should reach the startup handoff."""
         from aptl.core.lab import orchestrate_lab_start
 
         mocks = self._patch_all_steps(mocker, tmp_path)
@@ -1727,7 +1813,7 @@ class TestOrchestrateLabStart:
             )
         )
 
-        # Re-mock ACES handoff and wait_for_service since config changes
+        # Re-mock RAES handoff and wait_for_service since config changes
         from aptl.core.lab import LabResult
 
         mocks["start"].return_value = LabResult(success=True, message="Lab started")
@@ -1778,7 +1864,7 @@ class TestOrchestrateLabStart:
 
 
 class TestStatefulArtifactOwnership:
-    def test_real_scenario_populates_exact_admitted_ownership(self):
+    def test_real_scenario_populates_exact_admitted_ownership(self, tmp_path):
         from aptl.core.config import load_config
         from aptl.core.lab import (
             _LabStartContext,
@@ -1788,12 +1874,23 @@ class TestStatefulArtifactOwnership:
         )
 
         project_root = Path(__file__).resolve().parents[1]
+        backend = MagicMock()
+        # The real contract returns a sha256 identity for a materialized
+        # component image; a bare MagicMock would be treated as no digest and
+        # the scenario would fail admission before artifact preparation.
+        backend.materialize_component_image.return_value = "sha256:" + "e" * 64
+        # The default TechVault scenario now ships as the bundled env-pack
+        # (#875). Stage it and admit ownership from the staged SDL; anchoring to
+        # the project tree keeps the compose service-name mapping the exact
+        # admitted ownership below is expressed against.
+        from tests.helpers import techvault_scenario_path
+
         ctx = _LabStartContext(
             project_dir=project_root,
             skip_seed=False,
-            scenario_path=project_root / "scenarios/techvault-operational.sdl.yaml",
+            scenario_path=techvault_scenario_path(tmp_path),
             config=load_config(project_root / "aptl.json"),
-            backend=MagicMock(),
+            backend=backend,
         )
 
         result = _load_stateful_artifact_ownership(ctx)
@@ -1819,9 +1916,7 @@ class TestStatefulArtifactOwnership:
         assert result is None
         assert ctx.stateful_artifact_ownership == frozenset()
 
-    def test_admission_error_fails_before_legacy_mutation(
-        self, tmp_path, monkeypatch
-    ):
+    def test_admission_error_fails_before_legacy_mutation(self, tmp_path, monkeypatch):
         from aptl.core.config import AptlConfig
         from aptl.core.lab import _LabStartContext, _load_stateful_artifact_ownership
 
@@ -2021,9 +2116,7 @@ class TestSyncCredentialsStep:
         )
 
         ctx = self._ctx(mocker, tmp_path)
-        ctx.stateful_artifact_ownership = frozenset(
-            {_WAZUH_MANAGER_CONFIG_OWNERSHIP}
-        )
+        ctx.stateful_artifact_ownership = frozenset({_WAZUH_MANAGER_CONFIG_OWNERSHIP})
         dashboard = mocker.patch("aptl.core.lab.sync_dashboard_config")
         manager = mocker.patch("aptl.core.lab.sync_manager_config")
 
@@ -2230,9 +2323,7 @@ class TestResolveHostPortsStep:
             host_ip="127.0.0.1",
             remapped=True,
         )
-        mocker.patch(
-            "aptl.core.host_ports.resolve_host_ports", return_value=[remapped]
-        )
+        mocker.patch("aptl.core.host_ports.resolve_host_ports", return_value=[remapped])
         mocker.patch("aptl.core.host_ports.project_port_bindings", return_value={})
         progress = MagicMock()
 
@@ -2240,7 +2331,8 @@ class TestResolveHostPortsStep:
 
         notes = " ".join(c.args[0] for c in progress.call_args_list)
         assert "wazuh.dashboard" in notes
-        assert "443" in notes and "20009" in notes
+        assert "443" in notes
+        assert "20009" in notes
 
 
 class TestSeedSuricataVolumesStep:
@@ -2655,9 +2747,7 @@ class TestStartupClassificationWiring:
             "https://localhost:20015"
         )
 
-    def test_wait_for_services_falls_back_to_9200_when_no_remap(
-        self, tmp_path, mocker
-    ):
+    def test_wait_for_services_falls_back_to_9200_when_no_remap(self, tmp_path, mocker):
         """No entry for wazuh.indexer in `ctx.resolved_ports` (the common
         case where 9200 was free) keeps the historical URL."""
         from aptl.core.lab import _step_wait_for_services
@@ -2917,6 +3007,31 @@ class TestStartupClassificationWiring:
         wait_mock.assert_not_called()
         assert ctx.diagnostics == []
 
+    def test_test_ssh_skips_profile_alias_without_declared_ssh(self, tmp_path, mocker):
+        """An image-free Kali node need not inherit the appliance's sshd."""
+        from aptl.core.lab import _step_test_ssh
+
+        ctx = self._ctx(tmp_path, selected_profiles={"kali"})
+        ctx.raes_outcome = mocker.Mock(
+            realization_details={
+                "nodes": [
+                    {
+                        "name": "kali",
+                        "services": [],
+                    }
+                ]
+            }
+        )
+        networks = mocker.patch("aptl.core.lab.container_networks")
+        wait_mock = mocker.patch("aptl.core.lab.wait_for_service")
+
+        result = _step_test_ssh(ctx)
+
+        assert result is None
+        networks.assert_not_called()
+        wait_mock.assert_not_called()
+        assert ctx.diagnostics == []
+
     # -- build_mcps (capability) ---------------------------------------
 
     def test_build_mcps_missing_script_emits_capability_warning(self, tmp_path):
@@ -3031,15 +3146,15 @@ class TestStartupClassificationWiring:
     # -- write_run_record (REP-001) ------------------------------------
 
     def _run_record_ctx(self, tmp_path):
-        """A ctx carrying a real run target + aces_outcome + snapshot so
+        """A ctx carrying a real run target + raes_outcome + snapshot so
         _step_write_run_record writes a real manifest under the run dir."""
-        from aptl.backends.aces import AcesStartOutcome
+        from aptl.backends.raes import AcesStartOutcome
         from aptl.core.lab import _LabStartContext
         from aptl.core.lab_types import LabResult
         from aptl.core.runstore import LocalRunStore
         from aptl.core.snapshot import RangeSnapshot
 
-        from aces_contracts.runtime_state import RuntimeSnapshot
+        from raes_contracts.runtime_state import RuntimeSnapshot
 
         run_store = LocalRunStore(tmp_path / ".aptl" / "runs")
         run_id = "run_20260101T000000Z"
@@ -3049,6 +3164,9 @@ class TestStartupClassificationWiring:
             realization_details={"nodes": [{"name": "techvault.victim"}]},
             selected_profiles=["victim", "otel"],
             scenario_path=tmp_path / "scenarios" / "demo.sdl.yaml",
+            pack_interaction_evidence={
+                "provider": {"mapping_digest": "sha256:" + "a" * 64}
+            },
         )
         ctx = _LabStartContext(
             project_dir=tmp_path,
@@ -3056,7 +3174,7 @@ class TestStartupClassificationWiring:
             config=self._make_config(),
             backend=MagicMock(),
         )
-        ctx.aces_outcome = outcome
+        ctx.raes_outcome = outcome
         ctx.snapshot = RangeSnapshot()
         ctx.run_store = run_store
         ctx.run_id = run_id
@@ -3113,11 +3231,14 @@ class TestStartupClassificationWiring:
         manifest = run_store.get_run_manifest(run_id)
         assert manifest["run_id"] == run_id
         # The realization populated by GAP 1 is carried into the record.
-        assert manifest["aces"]["realization"]["nodes"]
+        assert manifest["raes"]["realization"]["nodes"]
         assert manifest["backend_evidence"]["selected_profiles"] == [
             "victim",
             "otel",
         ]
+        assert manifest["backend_evidence"]["pack_interaction"]["provider"][
+            "mapping_digest"
+        ].startswith("sha256:")
         assert run_id in run_store.list_runs()
 
     def test_resolve_run_target_mints_validatable_run_id(self, tmp_path):
@@ -3480,16 +3601,16 @@ class TestLabOrchestrationContracts:
         return AptlConfig(lab={"name": "test-lab"}, containers=defaults)
 
     def _outcome(self, *, success, selected_profiles, error="", message="ok"):
-        """Build a real `AcesStartOutcome` — the shape `start_aces_scenario`
-        actually returns on a successful ACES import. ACES computes
+        """Build a real `AcesStartOutcome` — the shape `start_raes_scenario`
+        actually returns on a successful RAES import. RAES computes
         `selected_profiles` before the backend apply and returns it on
-        BOTH the failure and success branches (aces.py:181-216), so the
+        BOTH the failure and success branches (raes.py:181-216), so the
         SOC retry-gate tests below must prove the ordering contract
         against this shape, not a bare `LabResult` (which carries no
         `selected_profiles` attribute at all) — issue #550."""
-        from aces_contracts.runtime_state import RuntimeSnapshot
+        from raes_contracts.runtime_state import RuntimeSnapshot
 
-        from aptl.backends.aces import AcesStartOutcome
+        from aptl.backends.raes import AcesStartOutcome
         from aptl.core.lab import LabResult
 
         return AcesStartOutcome(
@@ -3590,25 +3711,25 @@ class TestLabOrchestrationContracts:
         with pytest.raises(icontract.ViolationError):
             _step_start_containers(ctx)
 
-    def test_start_containers_routes_through_aces_handoff(self, mocker, tmp_path):
+    def test_start_containers_routes_through_raes_handoff(self, mocker, tmp_path):
         from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config()
         ctx.backend = MagicMock()
-        start_aces = mocker.patch(
-            "aptl.core.lab.start_aces_scenario",
-            return_value=_aces_outcome(success=True),
+        start_raes = mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            return_value=_raes_outcome(success=True),
         )
 
         result = _step_start_containers(ctx)
 
         assert result is None
-        from aptl.backends.aces_start_model import AcesRunTarget
+        from aptl.backends.raes_start_model import AcesRunTarget
 
         # GAP 4: the handoff is invoked with the single run target resolved
         # once on ctx, so orchestration and the run record share a run_id.
-        start_aces.assert_called_once_with(
+        start_raes.assert_called_once_with(
             tmp_path,
             ctx.config,
             ctx.backend,
@@ -3635,25 +3756,23 @@ class TestLabOrchestrationContracts:
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=False)
         ctx.backend = MagicMock()
-        start_aces = mocker.patch(
-            "aptl.core.lab.start_aces_scenario",
-            side_effect=_aces_start_after_backend_retry,
+        start_raes = mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            side_effect=_raes_start_after_backend_retry,
         )
         sleep = mocker.patch("time.sleep")
 
         result = _step_start_containers(ctx)
 
         assert result is None
-        start_aces.assert_called_once()
-        assert start_aces.call_args.kwargs["before_backend_retry"] is not None
+        start_raes.assert_called_once()
+        assert start_raes.call_args.kwargs["before_backend_retry"] is not None
         sleep.assert_called_once_with(60)
 
-    def test_start_containers_reuses_profiles_from_aces_outcome(
-        self, mocker, tmp_path
-    ):
-        from aces_contracts.runtime_state import RuntimeSnapshot
+    def test_start_containers_reuses_profiles_from_raes_outcome(self, mocker, tmp_path):
+        from raes_contracts.runtime_state import RuntimeSnapshot
 
-        from aptl.backends.aces import AcesStartOutcome
+        from aptl.backends.raes import AcesStartOutcome
         from aptl.core.lab import LabResult, _step_start_containers
 
         ctx = self._ctx(tmp_path)
@@ -3666,7 +3785,7 @@ class TestLabOrchestrationContracts:
             selected_profiles=["wazuh", "otel"],
             scenario_path=None,
         )
-        mocker.patch("aptl.core.lab.start_aces_scenario", return_value=outcome)
+        mocker.patch("aptl.core.lab.start_raes_scenario", return_value=outcome)
         replan = mocker.patch(
             "aptl.core.lab.selected_profiles_for_scenario",
             side_effect=AssertionError("successful startup must not plan twice"),
@@ -3678,12 +3797,12 @@ class TestLabOrchestrationContracts:
         assert ctx.selected_profiles == {"wazuh", "otel"}
         replan.assert_not_called()
 
-    def test_start_containers_does_not_retry_nonretryable_aces_failure(
+    def test_start_containers_does_not_retry_nonretryable_raes_failure(
         self, mocker, tmp_path
     ):
-        from aces_contracts.runtime_state import RuntimeSnapshot
+        from raes_contracts.runtime_state import RuntimeSnapshot
 
-        from aptl.backends.aces import AcesStartOutcome
+        from aptl.backends.raes import AcesStartOutcome
         from aptl.core.lab import LabResult, _step_start_containers
 
         ctx = self._ctx(tmp_path)
@@ -3692,7 +3811,7 @@ class TestLabOrchestrationContracts:
         outcome = AcesStartOutcome(
             lab_result=LabResult(
                 success=False,
-                error="ACES runtime variable binding failed.",
+                error="RAES runtime variable binding failed.",
             ),
             final_snapshot=RuntimeSnapshot(),
             realization_details={},
@@ -3700,8 +3819,8 @@ class TestLabOrchestrationContracts:
             scenario_path=None,
             retryable=False,
         )
-        start_aces = mocker.patch(
-            "aptl.core.lab.start_aces_scenario", return_value=outcome
+        start_raes = mocker.patch(
+            "aptl.core.lab.start_raes_scenario", return_value=outcome
         )
         sleep = mocker.patch("time.sleep")
 
@@ -3709,7 +3828,7 @@ class TestLabOrchestrationContracts:
 
         assert result is not None
         assert result.success is False
-        start_aces.assert_called_once()
+        start_raes.assert_called_once()
         sleep.assert_not_called()
 
     def test_start_containers_retries_retryable_backend_start_failure(
@@ -3720,16 +3839,16 @@ class TestLabOrchestrationContracts:
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
         ctx.backend = MagicMock()
-        start_aces = mocker.patch(
-            "aptl.core.lab.start_aces_scenario",
-            side_effect=_aces_start_after_backend_retry,
+        start_raes = mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            side_effect=_raes_start_after_backend_retry,
         )
         sleep = mocker.patch("time.sleep")
 
         result = _step_start_containers(ctx)
 
         assert result is None
-        start_aces.assert_called_once()
+        start_raes.assert_called_once()
         sleep.assert_called_once_with(60)
 
     def test_start_containers_preserves_scenario_path_on_soc_retry(
@@ -3742,16 +3861,16 @@ class TestLabOrchestrationContracts:
         ctx.backend = MagicMock()
         selected = tmp_path / "scenarios" / "custom.sdl.yaml"
         ctx.scenario_path = selected
-        start_aces = mocker.patch(
-            "aptl.core.lab.start_aces_scenario",
-            side_effect=_aces_start_after_backend_retry,
+        start_raes = mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            side_effect=_raes_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
         result = _step_start_containers(ctx)
 
         assert result is None
-        assert [call.kwargs["scenario_path"] for call in start_aces.call_args_list] == [
+        assert [call.kwargs["scenario_path"] for call in start_raes.call_args_list] == [
             selected,
         ]
 
@@ -3775,16 +3894,16 @@ class TestLabOrchestrationContracts:
         backend.container_exec.return_value = MagicMock(returncode=0, stdout="0\n")
         ctx.backend = backend
 
-        start_aces = mocker.patch(
-            "aptl.core.lab.start_aces_scenario",
-            side_effect=_aces_start_after_backend_retry,
+        start_raes = mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            side_effect=_raes_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
         result = _step_start_containers(ctx)
 
         assert result is None
-        start_aces.assert_called_once()
+        start_raes.assert_called_once()
         backend.container_restart.assert_called_once_with("aptl-wazuh-manager")
 
     def test_start_containers_skips_restart_when_wazuh_daemons_alive(
@@ -3804,15 +3923,15 @@ class TestLabOrchestrationContracts:
         backend.container_exec.return_value = MagicMock(returncode=0, stdout="9\n")
         ctx.backend = backend
 
-        start_aces = mocker.patch(
-            "aptl.core.lab.start_aces_scenario",
-            side_effect=_aces_start_after_backend_retry,
+        start_raes = mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            side_effect=_raes_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
         _step_start_containers(ctx)
 
-        start_aces.assert_called_once()
+        start_raes.assert_called_once()
         backend.container_restart.assert_not_called()
 
     def test_start_containers_skips_restart_when_wazuh_manager_not_running(
@@ -3831,15 +3950,15 @@ class TestLabOrchestrationContracts:
         }
         ctx.backend = backend
 
-        start_aces = mocker.patch(
-            "aptl.core.lab.start_aces_scenario",
-            side_effect=_aces_start_after_backend_retry,
+        start_raes = mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            side_effect=_raes_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
         _step_start_containers(ctx)
 
-        start_aces.assert_called_once()
+        start_raes.assert_called_once()
         backend.container_restart.assert_not_called()
         backend.container_exec.assert_not_called()
 
@@ -3857,21 +3976,19 @@ class TestLabOrchestrationContracts:
         backend.container_inspect.side_effect = RuntimeError("boom")
         ctx.backend = backend
 
-        start_aces = mocker.patch(
-            "aptl.core.lab.start_aces_scenario",
-            side_effect=_aces_start_after_backend_retry,
+        start_raes = mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            side_effect=_raes_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
         # Should complete without raising; retry still runs.
         result = _step_start_containers(ctx)
         assert result is None
-        start_aces.assert_called_once()
+        start_raes.assert_called_once()
         backend.container_restart.assert_not_called()
 
-    def test_start_containers_watchdog_swallows_exec_failures(
-        self, mocker, tmp_path
-    ):
+    def test_start_containers_watchdog_swallows_exec_failures(self, mocker, tmp_path):
         """A nonzero exec probe (or non-int stdout) blocks the restart —
         we do not know the process state, so refuse to restart rather
         than guess wrong."""
@@ -3886,19 +4003,17 @@ class TestLabOrchestrationContracts:
         )
         ctx.backend = backend
 
-        start_aces = mocker.patch(
-            "aptl.core.lab.start_aces_scenario",
-            side_effect=_aces_start_after_backend_retry,
+        start_raes = mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            side_effect=_raes_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
         _step_start_containers(ctx)
-        start_aces.assert_called_once()
+        start_raes.assert_called_once()
         backend.container_restart.assert_not_called()
 
-    def test_start_containers_watchdog_swallows_restart_failure(
-        self, mocker, tmp_path
-    ):
+    def test_start_containers_watchdog_swallows_restart_failure(self, mocker, tmp_path):
         """`container_restart` raising is logged and swallowed — the
         retry proceeds regardless."""
         from aptl.core.lab import _step_start_containers
@@ -3911,15 +4026,15 @@ class TestLabOrchestrationContracts:
         backend.container_restart.side_effect = RuntimeError("daemon down")
         ctx.backend = backend
 
-        start_aces = mocker.patch(
-            "aptl.core.lab.start_aces_scenario",
-            side_effect=_aces_start_after_backend_retry,
+        start_raes = mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            side_effect=_raes_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
         result = _step_start_containers(ctx)
         assert result is None
-        start_aces.assert_called_once()
+        start_raes.assert_called_once()
         # We tried, we failed, we did not raise.
         backend.container_restart.assert_called_once_with("aptl-wazuh-manager")
 
@@ -3939,9 +4054,9 @@ class TestLabOrchestrationContracts:
         )
         ctx.backend = backend
 
-        start_aces = mocker.patch(
-            "aptl.core.lab.start_aces_scenario",
-            side_effect=_aces_start_after_backend_retry,
+        start_raes = mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            side_effect=_raes_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
@@ -3949,7 +4064,7 @@ class TestLabOrchestrationContracts:
         # Without this the test cannot tell "retry ran and the ValueError
         # branch handled it" from "retry never fired", which is exactly what
         # a bare LabResult side_effect would silently cause (issue #550).
-        start_aces.assert_called_once()
+        start_raes.assert_called_once()
         backend.container_restart.assert_not_called()
 
     def test_start_containers_hints_for_stale_realization_networks(
@@ -3958,7 +4073,7 @@ class TestLabOrchestrationContracts:
         from aptl.core.lab import LabResult, _step_start_containers
 
         stale_error = (
-            "ACES runtime handoff failed: aptl.provisioner.backend-start-failed "
+            "RAES runtime handoff failed: aptl.provisioner.backend-start-failed "
             "at runtime.apply.provisioning: Existing network aptl_aptl-dmz "
             "does not match realized network dmz-net: label "
             "org.aptl.realization.network expected 'true', found ''."
@@ -3967,7 +4082,7 @@ class TestLabOrchestrationContracts:
         ctx.config = self._full_config()
         ctx.backend = MagicMock()
         mocker.patch(
-            "aptl.core.lab.start_aces_scenario",
+            "aptl.core.lab.start_raes_scenario",
             return_value=LabResult(success=False, error=stale_error),
         )
 
@@ -4086,16 +4201,15 @@ class TestLabOrchestrationContracts:
         from aptl.core.lab import _step_sync_credentials
 
         ctx = self._ctx(tmp_path)  # env stays None
-        try:
+        with pytest.raises(icontract.ViolationError) as exc_info:
             _step_sync_credentials(ctx)
-            assert False, "expected ViolationError"
-        except icontract.ViolationError as exc:
-            text = str(exc)
-            # The label must be a narrow, attributable string the CLI can
-            # grep for; raw `EnvVars(...)` repr must not appear.
-            assert "EnvVars(" not in text
-            assert "api_password" not in text
-            assert "INDEXER_PASSWORD" not in text
+
+        text = str(exc_info.value)
+        # The label must be a narrow, attributable string the CLI can
+        # grep for; raw `EnvVars(...)` repr must not appear.
+        assert "EnvVars(" not in text
+        assert "api_password" not in text
+        assert "INDEXER_PASSWORD" not in text
 
     def test_violation_with_secret_bearing_ctx_stays_narrow(self, tmp_path):
         """Tougher property (codex cycle 2 finding #1): when a contract
@@ -4128,21 +4242,20 @@ class TestLabOrchestrationContracts:
             # ssh_key_path stays None — triggers the contract.
         )
 
-        try:
+        with pytest.raises(icontract.ViolationError) as exc_info:
             _step_test_ssh(ctx)
-            assert False, "expected ViolationError"
-        except icontract.ViolationError as exc:
-            text = str(exc)
-            # Narrow description survives.
-            assert "ssh_key_is_ready" in text
-            # None of the secret-shaped env values leak.
-            assert "indexer-secret-do-not-leak" not in text
-            assert "api-secret-do-not-leak" not in text
-            assert "cluster-key-do-not-leak" not in text
-            # Nor does any context repr framing.
-            assert "_LabStartContext(" not in text
-            assert "EnvVars(" not in text
-            assert "ctx was" not in text
+
+        text = str(exc_info.value)
+        # Narrow description survives.
+        assert "ssh_key_is_ready" in text
+        # None of the secret-shaped env values leak.
+        assert "indexer-secret-do-not-leak" not in text
+        assert "api-secret-do-not-leak" not in text
+        assert "cluster-key-do-not-leak" not in text
+        # Nor does any context repr framing.
+        assert "_LabStartContext(" not in text
+        assert "EnvVars(" not in text
+        assert "ctx was" not in text
 
 
 class TestOrchestrateLabStartContractMapping:
@@ -4346,7 +4459,7 @@ class TestGenerateSocCertsStep:
     """
 
     def _ctx(self, tmp_path: Path, *, soc: bool, backend=None):
-        from aptl.core.config import AptlConfig
+        from aptl.core.config import AptlConfig, ScenarioSourceConfig
         from aptl.core.env import EnvVars
         from aptl.core.lab import _LabStartContext
 
@@ -4360,7 +4473,14 @@ class TestGenerateSocCertsStep:
                 api_username="u",
                 api_password="p",
             ),
-            config=AptlConfig(lab={"name": "t"}, containers=containers),
+            # Host-side SOC-cert generation is the project-tree path; an env-pack
+            # scenario declares the SOC CA as a realization artifact and skips it
+            # (#875), so this suite selects the in-tree source explicitly.
+            config=AptlConfig(
+                lab={"name": "t"},
+                containers=containers,
+                scenario=ScenarioSourceConfig(source="project-tree"),
+            ),
             backend=backend or MagicMock(),
         )
 

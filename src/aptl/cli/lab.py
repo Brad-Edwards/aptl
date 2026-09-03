@@ -7,6 +7,8 @@ from typing import Optional
 import typer
 
 from aptl.cli import lab_init, lifecycle
+from aptl.cli.participant_profile import qualify_profile
+from aptl.cli.participant_readiness import participant_readiness
 from aptl.cli.continuity import continuity_audit
 from aptl.cli.lab_render import (
     emit_lab_access_summary,
@@ -43,6 +45,8 @@ lab_init.register(app)
 # this module stays focused; register them under `lab` (no UX change:
 # `aptl lab enforce` / `monitor` / `policy show`).
 lifecycle.register(app)
+app.command("qualify-profile")(qualify_profile)
+app.command("participant-readiness")(participant_readiness)
 
 
 # Shared destructive-data warning. Both `stop --volumes` and
@@ -80,8 +84,8 @@ def _confirm_destructive(skip_prompt: bool) -> bool:
 
 
 @app.command()
-def start(
-    project_dir: Path = typer.Option(
+def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
+    project_dir: Path = typer.Option(  # NOSONAR - required Typer option surface.
         Path("."),
         "--project-dir",
         "-d",
@@ -95,12 +99,12 @@ def start(
     scenario: Optional[str] = typer.Option(
         None,
         "--scenario",
-        help="Curated ACES startup scenario id from the catalog.",
+        help="Curated RAES startup scenario id from the catalog.",
     ),
     scenario_path: Optional[Path] = typer.Option(
         None,
         "--scenario-path",
-        help="Explicit ACES SDL scenario path under the project directory.",
+        help="Explicit RAES SDL scenario path under the project directory.",
     ),
     clean: bool = typer.Option(
         False,
@@ -118,6 +122,29 @@ def start(
         "-y",
         help="Skip the confirmation prompt for --clean.",
     ),
+    offline_staged: bool = typer.Option(
+        False,
+        "--offline-staged",
+        help=(
+            "Use only pre-staged appliance images and MCP artifacts; "
+            "forbid pulls and builds."
+        ),
+    ),
+    appliance_launch_descriptor: Optional[Path] = typer.Option(
+        None,
+        "--appliance-launch-descriptor",
+        help="Create-once descriptor for a verified appliance release.",
+    ),
+    appliance_release_public_key: Optional[Path] = typer.Option(
+        None,
+        "--appliance-release-public-key",
+        help="Release trust anchor used to reverify the launch descriptor.",
+    ),
+    appliance_qualification_public_key: Optional[Path] = typer.Option(
+        None,
+        "--appliance-qualification-public-key",
+        help="Independent APP-2 qualification trust anchor.",
+    ),
 ) -> None:
     """Start the APTL lab environment."""
     log.info("Starting lab from %s (clean=%s)", project_dir, clean)
@@ -132,6 +159,27 @@ def start(
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=2)
 
+    launch_values = (
+        appliance_launch_descriptor,
+        appliance_release_public_key,
+        appliance_qualification_public_key,
+    )
+    if any(launch_values) and (not all(launch_values) or not offline_staged):
+        typer.echo(
+            "error: appliance launch requires both trust anchors and --offline-staged",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    from aptl.core.lab import ApplianceStartOptions
+
+    appliance_kwargs = {}
+    if offline_staged or appliance_launch_descriptor is not None:
+        appliance_kwargs["appliance"] = ApplianceStartOptions(
+            offline_staged=offline_staged,
+            launch_descriptor=appliance_launch_descriptor,
+            release_public_key=appliance_release_public_key,
+            qualification_public_key=appliance_qualification_public_key,
+        )
     if clean:
         if not _confirm_destructive(yes):
             raise typer.Exit(code=0)
@@ -141,6 +189,7 @@ def start(
             skip_seed=skip_seed,
             scenario_path=selected_scenario,
             progress=_emit_lab_start_progress,
+            **appliance_kwargs,
         )
     else:
         result = orchestrate_lab_start(
@@ -148,6 +197,7 @@ def start(
             skip_seed=skip_seed,
             scenario_path=selected_scenario,
             progress=_emit_lab_start_progress,
+            **appliance_kwargs,
         )
 
     render_start_result(result)
@@ -188,7 +238,7 @@ def scenarios(
         help="Path to the APTL project directory.",
     ),
 ) -> None:
-    """List curated ACES startup scenarios."""
+    """List curated RAES startup scenarios."""
     try:
         catalog = load_scenario_catalog(project_dir)
     except ValueError as exc:
@@ -316,7 +366,7 @@ def status(
 
 _LIVE_GATE_WARNING = (
     "\n  WARNING: the live validation gate runs `aptl lab stop -v` and then\n"
-    "  re-boots the lab through the ACES start path. This DESTROYS all lab\n"
+    "  re-boots the lab through the RAES start path. This DESTROYS all lab\n"
     "  data (Wazuh/MISP/TheHive/Shuffle volumes). Pass --skip-clean-boot to\n"
     "  validate the already-running lab without destroying it.\n"
 )
@@ -333,12 +383,12 @@ def validate_live(
     scenario: Optional[Path] = typer.Option(
         None,
         "--scenario",
-        help="ACES SDL scenario (default: scenarios/techvault-operational.sdl.yaml).",
+        help="RAES SDL scenario (default: the configured scenario, the bundled TechVault env-pack).",
     ),
     profile: str = typer.Option(
         "full-remote-control-plane",
         "--profile",
-        help="ACES backend capability profile to validate against.",
+        help="RAES backend capability profile to validate against.",
     ),
     run_id: Optional[str] = typer.Option(
         None,
@@ -357,9 +407,9 @@ def validate_live(
         help="Skip the data-destruction confirmation prompt.",
     ),
 ) -> None:
-    """Run the live ACES validation gate (boots the lab end-to-end; DESTRUCTIVE).
+    """Run the live RAES validation gate (boots the lab end-to-end; DESTRUCTIVE).
 
-    Proves a fresh TechVault lab is realized from the interpreted ACES model
+    Proves a fresh TechVault lab is realized from the interpreted RAES model
     through the public start path and captures operational + provenance evidence
     in the run archive. Intended for maintainers / a documented CI runner — not
     fast CI: it needs Docker, the SOC stack's resources, and minutes of startup.

@@ -10,12 +10,15 @@
     "files": [
         "build"
     ],
+    "overrides": {
+        "@hono/node-server": "^2.0.11"
+    },
     "scripts": {
         "build": "tsc -p tsconfig.build.json && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
         "prepare": "npm run build",
         "watch": "tsc --watch",
         "inspector": "npx @modelcontextprotocol/inspector build/index.js",
-        "test": "vitest run",
+        "test": "vitest run --passWithNoTests",
         "test:watch": "vitest"
     },
     "dependencies": {
@@ -25,6 +28,6 @@
     "devDependencies": {
         "@types/node": "^20.11.24",
         "typescript": "^5.3.3",
-        "vitest": "^1.0.0"
+        "vitest": "^4.1.10"
     }
 }

@@ -2,18 +2,6 @@
   "version": 1,
   "scenarios": [
     {
-      "id": "techvault-operational",
-      "name": "TechVault Operational",
-      "description": "Default public APTL startup scenario backed by ACES SDL.",
-      "path": "scenarios/techvault-operational.sdl.yaml",
-      "metadata": {
-        "mode": "purple",
-        "difficulty": "advanced",
-        "estimated_minutes": 60,
-        "tags": ["soc", "full-stack", "purple"]
-      }
-    },
-    {
       "id": "techvault-attacker-target",
       "name": "TechVault Attacker/Target",
       "description": "Kali red-team host plus a single monitored victim and core observability.",
@@ -22,7 +10,10 @@
         "mode": "red",
         "difficulty": "beginner",
         "estimated_minutes": 30,
-        "tags": ["red", "recon"]
+        "tags": [
+          "red",
+          "recon"
+        ]
       }
     },
     {
@@ -34,7 +25,10 @@
         "mode": "red",
         "difficulty": "intermediate",
         "estimated_minutes": 45,
-        "tags": ["web", "exploitation"]
+        "tags": [
+          "web",
+          "exploitation"
+        ]
       }
     },
     {
@@ -46,7 +40,10 @@
         "mode": "blue",
         "difficulty": "beginner",
         "estimated_minutes": 30,
-        "tags": ["blue", "detection"]
+        "tags": [
+          "blue",
+          "detection"
+        ]
       }
     },
     {
@@ -58,19 +55,27 @@
         "mode": "blue",
         "difficulty": "beginner",
         "estimated_minutes": 20,
-        "tags": ["observability"]
+        "tags": [
+          "observability"
+        ]
       }
     },
     {
-      "id": "paper-agent-loop",
-      "name": "Paper Agent Loop",
-      "description": "APTL realization of the ACES paper participant/portal/DB/Wazuh evidence loop.",
-      "path": "scenarios/paper-agent-loop.sdl.yaml",
+      "id": "bounded-participant-agency-techvault",
+      "name": "Bounded Participant Agency \u2014 TechVault",
+      "description": "Purpose-built green, red, and blue participant evaluation with closed action bounds.",
+      "path": "scenarios/bounded-participant-agency-techvault.sdl.yaml",
       "metadata": {
         "mode": "purple",
         "difficulty": "advanced",
         "estimated_minutes": 45,
-        "tags": ["paper", "evidence", "purple"]
+        "tags": [
+          "participants",
+          "evaluation",
+          "green",
+          "red",
+          "blue"
+        ]
       }
     }
   ]

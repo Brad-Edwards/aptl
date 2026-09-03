@@ -2,7 +2,7 @@
 
 These exercise the scenario-generic gate composed in
 ``aptl.validation.techvault_gate``: the authoritative operational scenario
-gate, fail-loud on a missing ACES corpus, and the anti-collapse / anti-preset
+gate, fail-loud on a missing RAES corpus, and the anti-collapse / anti-preset
 proofs that the realization is driven by declared content, not by the
 scenario id.
 
@@ -11,13 +11,14 @@ gate validates.
 """
 
 import subprocess
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from aces_sdl import parse_sdl_file
-from aces_runtime.manager import RuntimeManager
-from aces_contracts.planning import (
+from raes.module_registry import LOCKFILE_NAME
+from raes_runtime.manager import RuntimeManager
+from raes_contracts.planning import (
     ChangeAction,
     PlannedResource,
     ProvisioningPlan,
@@ -25,50 +26,69 @@ from aces_contracts.planning import (
     RuntimeDomain,
 )
 
-from aptl.backends.aces_profiles import (
+from aptl.backends.raes_profiles import (
     load_compose_profile_index,
     public_start_profiles,
     select_backend_profiles,
     steady_state_service_aliases_for_profiles,
 )
-from aptl.backends.aces import create_aptl_runtime_target
-from aptl.backends.aces_realization import interpret_provisioning_plan
+from aptl.backends.raes import create_aptl_runtime_target
+from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig, load_config
-from aptl.core.deployment.docker_compose import DockerComposeBackend
+from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.validation import _account_parity
 from aptl.validation import _gate_checks as gc
+from aptl.validation import _gate_raes_cli as gcli
 from aptl.validation._account_parity import check_account_provisioner_parity
+from aptl.validation._gate_raes_cli import (
+    _cli_detail,
+    conformance_cli_diagnostics,
+    verify_imports_diagnostics,
+)
 from aptl.validation._gate_checks import (
     _NoStartBackend,
-    _cli_detail,
-    _conformance_cli_diagnostics,
     _outcome,
     _severity,
     _target_conformance_diagnostics,
-    _verify_imports_diagnostics,
     check_backend_conformance,
     check_compile,
     check_import_lock,
     check_parse,
     check_provisioning_realization,
 )
-from aptl.validation.imagefree_gate import assert_image_free
 from aptl.validation.techvault_gate import (
     GateCheck,
     GateOptions,
     GateReport,
     validate_scenario,
 )
+from tests.helpers import techvault_scenario_bundle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-OPERATIONAL_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
+# The default TechVault scenario now ships as the bundled env-pack (#875); the
+# in-tree techvault-operational.sdl.yaml was retired. Stage the pack once for the
+# module and drive the gate from its validated SDL, exactly as config-driven
+# resolution does at lab start.
+_OPERATIONAL_BUNDLE = techvault_scenario_bundle(
+    Path(tempfile.mkdtemp(prefix="aptl-static-gate-"))
+)
+OPERATIONAL_SCENARIO = _OPERATIONAL_BUNDLE.sdl_path
 PAPER_SCENARIO = PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
 PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy", "webapp-proxy"})
 
 
+def _bundle(root, sdl_path=None):
+    """Bundle for an in-tree scenario rooted at ``root`` (issue #874).
+
+    Every call below previously passed ``root`` as ``project_dir``; anchoring
+    the bundle to the same directory keeps these gates behaviourally identical.
+    """
+    return project_tree_bundle(root, sdl_path or root / "scenarios" / "demo.sdl.yaml")
+
+
 # --------------------------------------------------------------------------- #
 # Authoritative operational scenario gate (integration: backend_conformance
-# spawns the `aces conformance backend` CLI). This is the driving-SDL completion
+# spawns the `raes conformance backend` CLI). This is the driving-SDL completion
 # gate — it validates that techvault-operational passes the composed gate.
 #
 # It calls `validate_scenario()` with default options, exactly as the CI job and
@@ -100,38 +120,6 @@ def test_operational_gate_passes():
         "provisioning_realization",
         "account_provisioner_parity",
     ]
-
-
-@pytest.mark.xfail(
-    reason=(
-        "ad, kali-capture, wazuh-sidecar-db, wazuh-sidecar-suricata are blocked on "
-        "genuine ACES SDL expressivity gaps, not local workarounds: "
-        "Brad-Edwards/aces#845 (no compiled placement for domain-controller "
-        "bootstrap), #847 (RuntimePackage has no documented way to declare a "
-        "third-party package repository - needed for the Wazuh agent), #849 "
-        "(no SDL concept for a node sharing another node's network namespace). "
-        "Remove this marker once all four are authored; strict=True fails the "
-        "build the moment that happens without the marker being removed."
-    ),
-    strict=True,
-)
-def test_operational_scenario_passes_the_realization_declaration_gate():
-    """Every OS-bearing node in the shipped SDL resolves through a declared
-    realization (ADR-048 P7): generic-materializer runtime: or a trust-
-    policy-resolved source:, never docker-compose.yml alone with nothing
-    declared in the SDL. This is the blocking check the operational
-    TechVault cutover must pass, growing stricter as more nodes convert.
-    """
-    config = load_config(PROJECT_ROOT / "aptl.json")
-    backend = DockerComposeBackend(project_dir=PROJECT_ROOT, project_name="aptl")
-    plan = RuntimeManager(
-        create_aptl_runtime_target(project_dir=PROJECT_ROOT, config=config, backend=backend)
-    ).plan(parse_sdl_file(OPERATIONAL_SCENARIO))
-    realization = interpret_provisioning_plan(
-        plan=plan.provisioning, project_dir=PROJECT_ROOT, config=config
-    )
-    assert [d.message for d in realization.diagnostics if d.is_error] == []
-    assert_image_free(realization.deployment_spec([]))  # raises with every violation
 
 
 def test_operational_scenario_matches_public_start_profiles_and_services():
@@ -171,17 +159,19 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
     assert scenario is not None
     assert parse_check.passed, parse_check.diagnostics
 
+    bundle = _bundle(PROJECT_ROOT, OPERATIONAL_SCENARIO)
     execution_plan = RuntimeManager(
         create_aptl_runtime_target(
             project_dir=PROJECT_ROOT,
             config=config,
             backend=_NoStartBackend(),
+            bundle=bundle,
         )
     ).plan(scenario)
     realization = interpret_provisioning_plan(
         plan=execution_plan.provisioning,
-        project_dir=PROJECT_ROOT,
         config=config,
+        bundle=bundle,
     )
     details = realization.details()
 
@@ -193,7 +183,7 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
     assert details["resource_counts"]["generated-artifact"] >= 2
     assert details["resource_counts"]["persistent-volume"] >= 2
     generators = {item["generator"] for item in details["generated_artifacts"]}
-    assert generators == {"certificate_bundle", "rendered_config"}
+    assert generators == {"certificate_bundle", "rendered_config", "ssh_key_bundle"}
     artifacts = {item["name"]: item for item in details["generated_artifacts"]}
     assert {output["path"] for output in artifacts["wazuh-indexer-certs"]["outputs"]} == {
         "root-ca.pem",
@@ -219,11 +209,14 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
         )
     )
     nodes = {node["name"]: node for node in details["nodes"]}
+    # Digest-pinned, resolved from the node's authored exact artifact
+    # requirement rather than an APTL-side allowlist entry (ADR-050): a mutable
+    # tag is not an admissible pin.
     assert nodes["wazuh-manager"]["image"]["image_ref"] == (
-        "wazuh/wazuh-manager:4.12.0"
+        "wazuh/wazuh-manager@sha256:dea2fa1e6d5062147b6a85b241f5f501c5f1ba4b817d12bda06f7870a89ad561"
     )
     assert nodes["wazuh-indexer"]["image"]["image_ref"] == (
-        "wazuh/wazuh-indexer:4.12.0"
+        "wazuh/wazuh-indexer@sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299"
     )
     assert (
         "provision.node.wazuh-indexer"
@@ -237,17 +230,19 @@ def test_paper_scenario_lowers_same_wazuh_stateful_contract():
     assert scenario is not None
     assert parse_check.passed, parse_check.diagnostics
 
+    bundle = _bundle(PROJECT_ROOT, PAPER_SCENARIO)
     execution_plan = RuntimeManager(
         create_aptl_runtime_target(
             project_dir=PROJECT_ROOT,
             config=config,
             backend=_NoStartBackend(),
+            bundle=bundle,
         )
     ).plan(scenario)
     realization = interpret_provisioning_plan(
         plan=execution_plan.provisioning,
-        project_dir=PROJECT_ROOT,
         config=config,
+        bundle=bundle,
     )
     details = realization.details()
 
@@ -263,20 +258,23 @@ def test_paper_scenario_lowers_same_wazuh_stateful_contract():
 # --------------------------------------------------------------------------- #
 # Fail-loud: a missing corpus/profile is a gate failure, never a warning.
 # The in-process path (run_target_conformance) stays in the fast suite; the full
-# check additionally spawns the `aces conformance backend` CLI, so its test is
+# check additionally spawns the `raes conformance backend` CLI, so its test is
 # integration-marked (the repo classifies subprocess-spawning tests that way).
 # --------------------------------------------------------------------------- #
 
 
 def test_target_conformance_fails_loudly_on_missing_corpus(tmp_path):
-    from aces_conformance.conformance import run_target_conformance
+    from raes_conformance.conformance import run_target_conformance
 
-    from aptl.backends.aces import create_aptl_runtime_target
+    from aptl.backends.raes import create_aptl_runtime_target
     from aptl.validation._gate_checks import _NoStartBackend
 
     config = AptlConfig(lab={"name": "techvault"})
     target = create_aptl_runtime_target(
-        project_dir=PROJECT_ROOT, config=config, backend=_NoStartBackend()
+        project_dir=PROJECT_ROOT,
+        config=config,
+        backend=_NoStartBackend(),
+        bundle=_bundle(PROJECT_ROOT, OPERATIONAL_SCENARIO),
     )
     report = run_target_conformance(
         target,
@@ -340,7 +338,7 @@ def test_no_start_backend_reads_back_image_free_content_kind_via_container_exec(
     with an AttributeError the moment a scenario used image-free content
     (caught only by a real live-gate boot, not by any prior unit test).
     """
-    from aptl.backends._aces_observation_helpers import observed_content_type
+    from aptl.backends._raes_observation_helpers import observed_content_type
     from aptl.core.deployment.realization import (
         DeploymentContentRealization,
         DeploymentRealizationSpec,
@@ -387,7 +385,7 @@ def test_no_start_backend_reads_back_image_free_content_kind_via_container_exec(
 
 @pytest.mark.integration
 def test_backend_conformance_fails_loudly_on_missing_corpus(tmp_path):
-    # Spawns the `aces conformance backend` CLI subprocess via
+    # Spawns the `raes conformance backend` CLI subprocess via
     # check_backend_conformance, so it is integration-marked.
     config = AptlConfig(lab={"name": "techvault"})
     check = check_backend_conformance(
@@ -450,10 +448,10 @@ def test_distinct_scenarios_yield_distinct_realization(tmp_path):
     config = AptlConfig(lab={"name": "t"})
 
     first = interpret_provisioning_plan(
-        plan=_node_plan("kali"), project_dir=tmp_path, config=config
+        plan=_node_plan("kali"), config=config, bundle=_bundle(tmp_path)
     )
     second = interpret_provisioning_plan(
-        plan=_node_plan("victim"), project_dir=tmp_path, config=config
+        plan=_node_plan("victim"), config=config, bundle=_bundle(tmp_path)
     )
 
     assert not [d for d in first.diagnostics if _is_error(d)]
@@ -470,7 +468,7 @@ def test_realization_rejects_unrealizable_node_even_named_techvault(tmp_path):
     # A node with no compose-profile mapping cannot be realized, regardless of
     # the lab being named "techvault".
     realization = interpret_provisioning_plan(
-        plan=_node_plan("totally-unknown-node"), project_dir=tmp_path, config=config
+        plan=_node_plan("totally-unknown-node"), config=config, bundle=_bundle(tmp_path)
     )
     assert [d for d in realization.diagnostics if _is_error(d)]
 
@@ -518,10 +516,10 @@ def test_cross_profile_dependency_gaps_detects_excluded_dependency(tmp_path):
 
 
 def test_local_manifest_shim_is_removed():
-    from aptl.backends import aces_manifest
+    from aptl.backends import raes_manifest
 
-    assert not hasattr(aces_manifest, "AptlBackendManifest")
-    assert not hasattr(aces_manifest, "AptlProvisionerCapabilities")
+    assert not hasattr(raes_manifest, "AptlBackendManifest")
+    assert not hasattr(raes_manifest, "AptlProvisionerCapabilities")
 
 
 # --------------------------------------------------------------------------- #
@@ -532,7 +530,7 @@ def test_local_manifest_shim_is_removed():
 
 
 def _proc(returncode, stdout="", stderr=""):
-    return subprocess.CompletedProcess(["aces"], returncode, stdout, stderr)
+    return subprocess.CompletedProcess(["raes"], returncode, stdout, stderr)
 
 
 def test_gate_report_passed_failures_and_render():
@@ -568,9 +566,9 @@ def test_outcome_packs_diagnostics():
 
 
 def test_verify_imports_diagnostics():
-    assert _verify_imports_diagnostics(None)
-    assert _verify_imports_diagnostics(_proc(1, stderr="stale"))
-    assert _verify_imports_diagnostics(_proc(0)) == []
+    assert verify_imports_diagnostics(None)
+    assert verify_imports_diagnostics(_proc(1, stderr="stale"))
+    assert verify_imports_diagnostics(_proc(0)) == []
 
 
 def test_target_conformance_diagnostics():
@@ -591,12 +589,12 @@ def test_target_conformance_diagnostics():
 
 
 def test_conformance_cli_diagnostics(monkeypatch):
-    monkeypatch.setattr(gc, "_run_aces", lambda *a, **k: None)
-    assert _conformance_cli_diagnostics("provisioning-only", None, None)
-    monkeypatch.setattr(gc, "_run_aces", lambda *a, **k: _proc(1, stderr="x"))
-    assert _conformance_cli_diagnostics("provisioning-only", Path("f"), Path("p"))
-    monkeypatch.setattr(gc, "_run_aces", lambda *a, **k: _proc(0))
-    assert _conformance_cli_diagnostics("provisioning-only", None, None) == []
+    monkeypatch.setattr(gcli, "run_raes", lambda *a, **k: None)
+    assert conformance_cli_diagnostics("provisioning-only", None, None)
+    monkeypatch.setattr(gcli, "run_raes", lambda *a, **k: _proc(1, stderr="x"))
+    assert conformance_cli_diagnostics("provisioning-only", Path("f"), Path("p"))
+    monkeypatch.setattr(gcli, "run_raes", lambda *a, **k: _proc(0))
+    assert conformance_cli_diagnostics("provisioning-only", None, None) == []
 
 
 def test_cli_detail_json_and_plain():
@@ -612,7 +610,7 @@ def test_check_parse_rejects_missing_file(tmp_path):
 
 
 def _scenario_with_imports(*imports: object) -> SimpleNamespace:
-    """Stand in for a parsed ACES ``Scenario`` carrying (or not) an import set."""
+    """Stand in for a parsed RAES ``Scenario`` carrying (or not) an import set."""
     return SimpleNamespace(imports=list(imports))
 
 
@@ -622,14 +620,16 @@ def test_check_import_lock_missing_and_unavailable(tmp_path, monkeypatch):
     scenario = _scenario_with_imports("local:mod.sdl.yaml")
 
     check = check_import_lock(path, scenario)
-    assert not check.passed and any(
+    assert not check.passed
+    assert any(
         "missing import lockfile" in d for d in check.diagnostics
     )
 
-    (tmp_path / "aces.lock.json").write_text("{}")
-    monkeypatch.setattr(gc, "_run_aces", lambda *a, **k: None)
+    (tmp_path / LOCKFILE_NAME).write_text("{}")
+    monkeypatch.setattr(gc, "run_raes", lambda *a, **k: None)
     check = check_import_lock(path, scenario)
-    assert not check.passed and any("not found on PATH" in d for d in check.diagnostics)
+    assert not check.passed
+    assert any("not found on PATH" in d for d in check.diagnostics)
 
 
 def test_check_import_lock_passes_when_scenario_declares_no_imports(tmp_path):
@@ -640,7 +640,7 @@ def test_check_import_lock_passes_when_scenario_declares_no_imports(tmp_path):
     check = check_import_lock(path, _scenario_with_imports())
 
     assert check.passed
-    assert not (tmp_path / "aces.lock.json").exists()
+    assert not (tmp_path / LOCKFILE_NAME).exists()
 
 
 def test_operational_scenario_declares_no_imports():
@@ -666,13 +666,14 @@ def test_check_provisioning_realization_handles_raise(monkeypatch):
         project_dir=PROJECT_ROOT,
         config=AptlConfig(lab={"name": "t"}),
     )
-    assert details is None and not check.passed
+    assert details is None
+    assert not check.passed
 
 
 def test_check_provisioning_realization_fails_on_profile_mismatch(tmp_path):
     from textwrap import dedent
 
-    from aces_sdl.parser import parse_sdl
+    from raes.parser import parse_sdl
 
     _write_compose(tmp_path, {"kali": ["kali"], "victim": ["victim"]})
     scenario = parse_sdl(
@@ -748,14 +749,24 @@ def test_operational_scenario_content_and_accounts_are_honest():
     account_placements = [
         p for p in placements if p["resource_type"] == "account-placement"
     ]
-    assert content_placements and all("content" in p for p in content_placements)
-    assert account_placements and all("account" in p for p in account_placements)
+    assert content_placements
+    # A content-placement lowers to exactly one typed realization: an ordinary
+    # file/directory ("content"), a logical evidence dataset ("dataset"), or (ADR-088,
+    # issue #889) a service-search-index-schema materialization
+    # ("service_index_schema") -- the Cortex job index is realized honestly.
+    assert all(
+        "content" in p or "dataset" in p or "service_index_schema" in p
+        for p in content_placements
+    )
+    assert any("service_index_schema" in p for p in content_placements)
+    assert account_placements
+    assert all("account" in p for p in account_placements)
 
 
 def test_provisioning_realization_fails_on_unrealizable_content(tmp_path):
     from textwrap import dedent
 
-    from aces_sdl.parser import parse_sdl
+    from raes.parser import parse_sdl
 
     _write_compose(tmp_path, {"fileshare": ["fileshare"]})
     scenario = parse_sdl(
@@ -815,7 +826,7 @@ def test_account_provisioner_parity_passes_for_operational_scenario():
 
 
 def test_account_provisioner_parity_fails_on_phantom_account():
-    from aces_sdl.accounts import Account, PasswordStrength
+    from raes.accounts import Account, PasswordStrength
 
     scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
     assert parse_check.passed

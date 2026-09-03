@@ -60,10 +60,12 @@ run from source instead, use a virtualenv editable install
 - [ADR Index](adrs/README.md) -- Why we built it this way
 
 ### Scenario Authoring
-- [Authoring Boundary](sdl/index.md): Current ACES-owned scenario handoff
-- [Curated ACES Variants](sdl/techvault-curated-variants.md): Supported startup catalog variants
-- [TechVault Static Validation Gate](aces/techvault-static-validation-gate.md): Current static scenario gate
-- [TechVault Live Validation Gate](aces/techvault-live-validation-gate.md): Current runtime realization gate
+- [Authoring Boundary](sdl/index.md): Current RAES-owned scenario handoff
+- [RAES SDL & runtime (OpenRAE/rae)](https://github.com/OpenRAE/rae): Companion repo owning SDL shape and semantics
+- [Pack definitions & authoring (OpenRAE/env-packs)](https://github.com/OpenRAE/env-packs): Companion repo for the environment-pack format, templates, schemas, and authoring support
+- [Curated RAES Variants](sdl/techvault-curated-variants.md): Supported startup catalog variants
+- [TechVault Static Validation Gate](raes/techvault-static-validation-gate.md): Current static scenario gate
+- [TechVault Live Validation Gate](raes/techvault-live-validation-gate.md): Current runtime realization gate
 
 ### Scenarios & Runs
 - [SOC Architecture Spec](specs/soc-feature-spec.md): Historical pre-SDL runtime spec retained for context
@@ -78,6 +80,8 @@ run from source instead, use a virtualenv editable install
 - [Smoke Test Plan](testing/smoke-test-plan.md): Historical full-stack plan for the pre-SDL scenario engine
 
 ### Reference
+- [Guided Purple Participant Profile](reference/participant-profile.md): Versioned bounded workshop surface, readiness contract, and qualification ceilings
+- [Disposable Appliance Release](reference/appliance-release.md): Signed golden image, offline payload, local KVM overlays, qualification, and rollback
 - [TechVault Scenario Overview](reference/techvault-scenario-overview.md): What the default range contains—topology, targets, SOC stack, planted vulnerabilities, and curated variants
 - [TechVault Company Profile](reference/techvault-company-profile.md)
 - [TechVault OSINT Readiness](reference/techvault-osint-readiness.md)

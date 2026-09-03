@@ -1,4 +1,4 @@
-"""Tests for curated ACES startup scenario catalog resolution."""
+"""Tests for curated RAES startup scenario catalog resolution."""
 
 import builtins
 import importlib
@@ -28,20 +28,20 @@ class ParserFailure(Exception):
 def _patch_parser(mocker, *, side_effect: Exception | None = None):
     parser = mocker.Mock(side_effect=side_effect)
     mocker.patch(
-        "aptl.core.scenario_catalog._load_aces_sdl_parser",
+        "aptl.core.scenario_catalog._load_raes_sdl_parser",
         return_value=(ParserFailure, parser),
     )
     return parser
 
 
-def test_import_does_not_require_aces_sdl(monkeypatch):
+def test_import_does_not_require_raes_sdl(monkeypatch):
     sys.modules.pop("aptl.core.scenario_catalog", None)
 
     real_import = builtins.__import__
 
     def blocked_import(name, *args, **kwargs):
-        if name == "aces_sdl":
-            raise ImportError("missing aces_sdl")
+        if name == "raes":
+            raise ImportError("missing raes")
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", blocked_import)
@@ -60,7 +60,7 @@ def test_loads_curated_catalog_entries(mocker, tmp_path):
 version: 1
 scenarios:
   - id: custom
-    name: Custom ACES
+    name: Custom RAES
     description: Curated cutover input.
     path: scenarios/custom.sdl.yaml
 """,
@@ -72,15 +72,16 @@ scenarios:
     assert catalog.scenarios[0].path == "scenarios/custom.sdl.yaml"
 
 
-def test_repository_catalog_includes_paper_agent_loop():
+def test_repository_catalog_includes_bounded_participant_agency():
     from aptl.core.scenario_catalog import load_scenario_catalog
 
     project_root = Path(__file__).resolve().parents[1]
     catalog = load_scenario_catalog(project_root)
     entries = {entry.id: entry for entry in catalog.scenarios}
 
-    assert entries["paper-agent-loop"].path == "scenarios/paper-agent-loop.sdl.yaml"
-    assert (project_root / entries["paper-agent-loop"].path).exists()
+    scenario = entries["bounded-participant-agency-techvault"]
+    assert scenario.path == "scenarios/bounded-participant-agency-techvault.sdl.yaml"
+    assert (project_root / scenario.path).exists()
 
 
 def test_resolves_catalog_id_to_project_contained_sdl(mocker, tmp_path):
@@ -93,7 +94,7 @@ def test_resolves_catalog_id_to_project_contained_sdl(mocker, tmp_path):
 version: 1
 scenarios:
   - id: custom
-    name: Custom ACES
+    name: Custom RAES
     path: scenarios/custom.sdl.yaml
 """,
     )
@@ -160,7 +161,7 @@ def test_rejects_symlinked_scenario_path(tmp_path):
 version: 1
 scenarios:
   - id: custom
-    name: Custom ACES
+    name: Custom RAES
     path: scenarios/custom.sdl.yaml
 """,
     )
@@ -184,7 +185,7 @@ def test_rejects_symlinked_scenario_directory_component(tmp_path):
 version: 1
 scenarios:
   - id: custom
-    name: Custom ACES
+    name: Custom RAES
     path: scenarios/custom.sdl.yaml
 """,
         )
@@ -215,7 +216,7 @@ scenarios:
         resolve_scenario_selection(tmp_path, scenario_id="missing")
 
 
-def test_rejects_aces_parser_failure(mocker, tmp_path):
+def test_rejects_raes_parser_failure(mocker, tmp_path):
     from aptl.core.scenario_catalog import resolve_scenario_selection
 
     _write_scenario(tmp_path)
@@ -225,17 +226,17 @@ def test_rejects_aces_parser_failure(mocker, tmp_path):
 version: 1
 scenarios:
   - id: custom
-    name: Custom ACES
+    name: Custom RAES
     path: scenarios/custom.sdl.yaml
 """,
     )
     _patch_parser(mocker, side_effect=ParserFailure("bad sdl"))
 
-    with pytest.raises(ValueError, match="ACES SDL"):
+    with pytest.raises(ValueError, match="RAES SDL"):
         resolve_scenario_selection(tmp_path, scenario_id="custom")
 
 
-def test_rejects_missing_aces_parser_dependency(monkeypatch, tmp_path):
+def test_rejects_missing_raes_parser_dependency(monkeypatch, tmp_path):
     from aptl.core.scenario_catalog import resolve_scenario_selection
 
     _write_scenario(tmp_path)
@@ -243,16 +244,17 @@ def test_rejects_missing_aces_parser_dependency(monkeypatch, tmp_path):
     real_import = builtins.__import__
 
     def blocked_import(name, *args, **kwargs):
-        if name == "aces_sdl":
-            raise ImportError("missing aces_sdl")
+        if name == "raes":
+            raise ImportError("missing raes")
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", blocked_import)
 
-    with pytest.raises(ValueError, match="ACES runtime handoff unavailable"):
+    scenario_path = Path("scenarios/custom.sdl.yaml")
+    with pytest.raises(ValueError, match="RAES runtime handoff unavailable"):
         resolve_scenario_selection(
             tmp_path,
-            scenario_path=Path("scenarios/custom.sdl.yaml"),
+            scenario_path=scenario_path,
         )
 
 
@@ -297,7 +299,7 @@ def test_catalog_metadata_extension_parses(tmp_path):
 version: 1
 scenarios:
   - id: custom
-    name: Custom ACES
+    name: Custom RAES
     path: scenarios/custom.sdl.yaml
     metadata:
       mode: purple
@@ -325,7 +327,7 @@ def test_catalog_metadata_is_optional(tmp_path):
 version: 1
 scenarios:
   - id: custom
-    name: Custom ACES
+    name: Custom RAES
     path: scenarios/custom.sdl.yaml
 """,
     )
@@ -342,7 +344,7 @@ def test_catalog_metadata_rejects_nonpositive_minutes(tmp_path):
 version: 1
 scenarios:
   - id: custom
-    name: Custom ACES
+    name: Custom RAES
     path: scenarios/custom.sdl.yaml
     metadata:
       estimated_minutes: 0
@@ -362,7 +364,7 @@ def test_catalog_metadata_forbids_unknown_fields(tmp_path):
 version: 1
 scenarios:
   - id: custom
-    name: Custom ACES
+    name: Custom RAES
     path: scenarios/custom.sdl.yaml
     metadata:
       bogus: value
@@ -383,7 +385,7 @@ def test_resolve_and_parse_unknown_id_raises_not_found(tmp_path):
 version: 1
 scenarios:
   - id: custom
-    name: Custom ACES
+    name: Custom RAES
     path: scenarios/custom.sdl.yaml
 """,
     )
@@ -413,7 +415,7 @@ def test_resolve_and_parse_returns_entry_and_scenario(tmp_path):
 version: 1
 scenarios:
   - id: custom
-    name: Custom ACES
+    name: Custom RAES
     path: scenarios/custom.sdl.yaml
 """,
     )

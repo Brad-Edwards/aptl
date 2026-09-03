@@ -6,16 +6,22 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from aces_sdl.runtime_configuration import RuntimeConfiguration
+    from raes.runtime_configuration import RuntimeConfiguration
 
 
 ImageRealizationMode = Literal["pull", "build"]
 StatefulConsumerAccessMode = Literal["read_only", "read_write"]
-GeneratedArtifactKind = Literal["certificate_bundle", "rendered_config"]
+GeneratedArtifactKind = Literal[
+    "certificate_bundle", "rendered_config", "ssh_key_bundle"
+]
 GeneratedArtifactLifecycle = Literal["regenerate_on_change", "reuse_valid"]
+GeneratedArtifactOutputDisposition = Literal["consumer_selected", "producer_private"]
 ResourceSensitivity = Literal["public", "restricted", "secret"]
 VolumeLifecycle = Literal["retain", "ephemeral"]
 VolumeAccessMode = Literal["read_write_once", "read_write_many", "read_only_many"]
+AclDirection = Literal["in", "out", "inout"]
+AclAction = Literal["allow", "deny"]
+AclProtocol = Literal["any", "tcp", "udp", "icmp"]
 
 # An SDL-declared host publish with no author-supplied host address binds
 # loopback. Defaulting to all interfaces would silently put a scenario-declared
@@ -77,10 +83,42 @@ class DeploymentNetworkAttachment(object):
 
 
 @dataclass(frozen=True)
-class DeploymentServicePort(object):
-    """One node-local transport binding declared on an ACES node.
+class DeploymentAclRealization(object):
+    """One admitted RAES infrastructure ACL lowered for backend enforcement."""
 
-    Mirrors ACES ``ServicePort``: a container-facing service identity. It does
+    owner_address: str
+    owner_resource_type: Literal["node", "network"]
+    owner_name: str
+    name: str
+    order: int
+    direction: AclDirection
+    from_network: str | None
+    to_network: str | None
+    protocol: AclProtocol
+    ports: tuple[int, ...]
+    action: AclAction
+
+    def details(self) -> dict[str, object]:
+        return {
+            "owner_address": self.owner_address,
+            "owner_resource_type": self.owner_resource_type,
+            "owner_name": self.owner_name,
+            "name": self.name,
+            "order": self.order,
+            "direction": self.direction,
+            "from_network": self.from_network,
+            "to_network": self.to_network,
+            "protocol": self.protocol,
+            "ports": list(self.ports),
+            "action": self.action,
+        }
+
+
+@dataclass(frozen=True)
+class DeploymentServicePort(object):
+    """One node-local transport binding declared on a RAES node.
+
+    Mirrors RAES ``ServicePort``: a container-facing service identity. It does
     not publish a host port and does not authorize traffic — host exposure is
     :class:`DeploymentPublishedPort`, a deliberately separate surface (ADR-025).
     """
@@ -97,7 +135,7 @@ class DeploymentServicePort(object):
 class DeploymentPublishedPort(object):
     """One host-published port binding declared on a node's runtime network.
 
-    Mirrors ACES ``RuntimePublishedPort``. ``host_ip`` is the host-facing
+    Mirrors RAES ``RuntimePublishedPort``. ``host_ip`` is the host-facing
     exposure boundary: an author who omits it gets loopback, never all
     interfaces (ADR-034 Host Exposure Amendment). ``host_port`` is ``None`` when
     the author declared a container port with no fixed host binding.
@@ -135,24 +173,42 @@ class DeploymentNodeRealization(object):
     os: str = ""
     os_version: str = ""
     runtime: RuntimeConfiguration | None = None
+    # ADR-051 route 3 (issue #876): started immutably from the verified config id
+    # (never a pull, never a moved tag) when the node authored an open
+    # dynamic-composition source.
+    dynamic_composition: bool = False
+    # Deployment-serving membership is resolved once by the pack/backend
+    # interaction seam and copied through the DTO. Renderers never rediscover it
+    # from component names.
+    profiles: tuple[str, ...] = ()
 
 
 ContentSourceKind = Literal[
-    "inline-text", "project-file", "project-directory", "empty-directory"
+    "inline-text",
+    "project-file",
+    "project-directory",
+    "empty-directory",
+    "pack-file",
+    "pack-directory",
 ]
 
 
 @dataclass(frozen=True)
 class DeploymentContentRealization(object):
-    """One content-placement operation lowered from an ACES content resource.
+    """One content-placement operation lowered from a RAES content resource.
 
     ``source_kind`` records how the content is materialized: ``inline-text``
     (bounded text carried on the placement itself), ``project-file`` /
-    ``project-directory`` (a checked-in, project-contained source path), or
+    ``project-directory`` (a checked-in, project-contained source path),
     ``empty-directory`` (an explicit empty-directory declaration with no
-    source). ``source_relpath`` is project-relative and only set for the two
-    project-sourced kinds; ``inline_text`` is only set for ``inline-text``.
-    Both are mutually exclusive by construction in the interpreter.
+    source), or ``pack-file`` / ``pack-directory`` (bytes resolved from a
+    validated env-pack by opaque ``artifact_id`` + ``sha256`` ``artifact_digest``
+    through ``resolve_pack_artifact``; a ``pack-directory`` artifact is an
+    ``application/x-tar`` archive extracted at the destination). ``source_relpath``
+    is project-relative and only set for the two project-sourced kinds;
+    ``inline_text`` is only set for ``inline-text``; ``artifact_id`` /
+    ``artifact_digest`` / ``media_type`` are only set for the two pack kinds.
+    These are mutually exclusive by construction in the interpreter.
     """
 
     address: str
@@ -163,6 +219,9 @@ class DeploymentContentRealization(object):
     source_kind: ContentSourceKind
     source_relpath: str | None = None
     inline_text: str | None = None
+    artifact_id: str | None = None
+    artifact_digest: str | None = None
+    media_type: str | None = None
     sensitive: bool = False
 
     def details(self) -> dict[str, object]:
@@ -174,13 +233,60 @@ class DeploymentContentRealization(object):
             "dest_relpath": self.dest_relpath,
             "source_kind": self.source_kind,
             "source_relpath": self.source_relpath,
+            "artifact_id": self.artifact_id,
+            "artifact_digest": self.artifact_digest,
             "sensitive": self.sensitive,
         }
 
 
 @dataclass(frozen=True)
+class DeploymentServiceSearchIndexSchemaRealization(object):
+    """One ADR-088 ``service-search-index-schema`` materialization lowered from a
+    RAES content-placement that carries a ``service_materialization`` binding.
+
+    The portable logical store is the canonical content ``address`` bound to the
+    exact ``target_service_address``; the concrete native index name is resolved
+    from the backend adapter configuration, never authored in SDL (ADR-088 keeps
+    native ids out of the portable contract). ``field_semantics`` maps portable
+    top-level field names to the closed portable semantic set
+    (``exact-token`` / ``full-text`` / ``integer`` / ``temporal`` / ``boolean``);
+    the backend projects each to a native field type, materializes the schema
+    through the service's native interface, and proves it by fresh native
+    readback whose portable projection reproduces ``field_schema_digest`` (the
+    RAES-compiled ``canonical_field_schema_digest``).
+
+    ``field_semantics`` is a name-sorted tuple of ``(field, semantic)`` pairs so
+    the record stays hashable/immutable; :meth:`field_semantics_map` returns the
+    mapping the provider consumes.
+    """
+
+    address: str
+    target_address: str
+    target_service_address: str
+    content_name: str
+    field_semantics: tuple[tuple[str, str], ...]
+    field_schema_digest: str
+
+    def field_semantics_map(self) -> dict[str, str]:
+        return dict(self.field_semantics)
+
+    def details(self) -> dict[str, object]:
+        # Portable identifiers, the declared semantics, and the digest only — no
+        # native index name, endpoint, query, or response body crosses this
+        # record (ADR-088 / issue #889 redaction boundary).
+        return {
+            "address": self.address,
+            "target_address": self.target_address,
+            "target_service_address": self.target_service_address,
+            "content_name": self.content_name,
+            "field_semantics": dict(self.field_semantics),
+            "field_schema_digest": self.field_schema_digest,
+        }
+
+
+@dataclass(frozen=True)
 class DeploymentAccountRealization(object):
-    """One account-placement identity lowered from an ACES account resource.
+    """One account-placement identity lowered from a RAES account resource.
 
     Carries non-secret identity only (ADR-046 addendum): no password material
     crosses this record. The concrete credential is generated inside the target
@@ -218,13 +324,20 @@ class DeploymentAccountRealization(object):
 
 @dataclass(frozen=True)
 class DeploymentStatefulConsumer(object):
-    """One resolved node mount for a generated artifact or persistent volume."""
+    """One resolved node mount for a generated artifact or persistent volume.
+
+    ``selected_outputs`` names the generated-artifact outputs this consumer
+    receives; empty for persistent volumes and for generated artifacts that
+    expose every consumer-selectable output. A ``producer_private`` output is
+    never selectable and never mounted, regardless of this list.
+    """
 
     target_address: str
     node_name: str
     service_name: str
     mount_destination: str
     access_mode: StatefulConsumerAccessMode
+    selected_outputs: tuple[str, ...] = ()
 
     def details(self) -> dict[str, object]:
         return {
@@ -233,28 +346,37 @@ class DeploymentStatefulConsumer(object):
             "service_name": self.service_name,
             "mount_destination": self.mount_destination,
             "access_mode": self.access_mode,
+            "selected_outputs": list(self.selected_outputs),
         }
 
 
 @dataclass(frozen=True)
 class DeploymentGeneratedArtifactOutput(object):
-    """One declared output from a backend-owned generated artifact."""
+    """One declared output from a backend-owned generated artifact.
+
+    ``disposition`` is ``producer_private`` for material that must stay on the
+    producer and never be mounted into any consumer (a CA private key, the
+    control-plane SSH key), or ``consumer_selected`` for material a consumer may
+    receive by naming it in its ``selected_outputs``.
+    """
 
     name: str
     path: str
     sensitivity: ResourceSensitivity
+    disposition: GeneratedArtifactOutputDisposition = "consumer_selected"
 
     def details(self) -> dict[str, object]:
         return {
             "name": self.name,
             "path": self.path,
             "sensitivity": self.sensitivity,
+            "disposition": self.disposition,
         }
 
 
 @dataclass(frozen=True)
 class DeploymentGeneratedArtifactRealization(object):
-    """One ACES generated-artifact operation admitted for deployment."""
+    """One RAES generated-artifact operation admitted for deployment."""
 
     address: str
     name: str
@@ -282,7 +404,7 @@ class DeploymentGeneratedArtifactRealization(object):
 
 @dataclass(frozen=True)
 class DeploymentPersistentVolumeRealization(object):
-    """One ACES persistent-volume operation admitted for deployment."""
+    """One RAES persistent-volume operation admitted for deployment."""
 
     address: str
     name: str
@@ -311,14 +433,15 @@ class DeploymentRealizationSpec(object):
     profiles: tuple[str, ...]
     nodes: tuple[DeploymentNodeRealization, ...]
     networks: tuple[DeploymentNetworkRealization, ...]
+    acls: tuple[DeploymentAclRealization, ...] = ()
     images: tuple[DeploymentImageRealization, ...] = ()
     content: tuple[DeploymentContentRealization, ...] = ()
     accounts: tuple[DeploymentAccountRealization, ...] = ()
+    service_index_schemas: tuple[DeploymentServiceSearchIndexSchemaRealization, ...] = ()
     generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
     persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()
-    # ADR-048: when True, the backend realizes every node by materializing its
-    # declared desired state onto a generic base substrate (no appliance image,
-    # no compose-up of the hand-authored model). Set by the interpreter only
-    # when the scenario is fully image-free authored; False keeps the legacy
-    # compose path unchanged so a partially-authored scenario never boots empty.
-    image_free: bool = False
+    # ADR-048 image-free materialization is no longer a whole-spec flag: routing
+    # is derived per node at realize() time (``_needs_compose`` /
+    # ``_image_free_node_addresses``) so a graph that mixes pinned artifacts,
+    # per-component builds and materialized nodes routes each node correctly
+    # rather than falling into a single whole-graph decision.

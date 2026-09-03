@@ -1,0 +1,173 @@
+{
+  "schema_version": "aptl.participant-asset-lock/v1",
+  "profile_id": "guided-purple",
+  "profile_version": 1,
+  "assets": [
+    {
+      "asset_id": "narrative",
+      "kind": "project-file",
+      "source": "participant-profiles/guided-purple-v1/narrative.json",
+      "sha256": "a1d971348cbf22f97c3f7957ccb1387bef6de7a5f5bd9c031863a7f6959ef8af"
+    },
+    {
+      "asset_id": "readiness",
+      "kind": "project-file",
+      "source": "participant-profiles/guided-purple-v1/readiness.json",
+      "sha256": "a8e991a7c180225488778c8ce7491ec125be078002120eb15a73ba40dd98d57d"
+    },
+    {
+      "asset_id": "aptl-config",
+      "kind": "project-file",
+      "source": "participant-profiles/guided-purple-v1/aptl.json",
+      "sha256": "eca39978d2f457b65e5779e373af706bd22b1614d63d158424a6da143349f0bc"
+    },
+    {
+      "asset_id": "raes-scenario",
+      "kind": "project-file",
+      "source": "scenarios/techvault-attacker-target.sdl.yaml",
+      "sha256": "a85b11d98aab9b5b4cd209bade57b5869556882dab5b5f3f41e5f44292372a78"
+    },
+    {
+      "asset_id": "scenario-catalog",
+      "kind": "project-file",
+      "source": "scenarios/catalog.json",
+      "sha256": "9e65c40e12e250f2a29725cc7899913f74004eac9485908c42fd10a13feb67c2"
+    },
+    {
+      "asset_id": "workbench-registry",
+      "kind": "project-file",
+      "source": "src/aptl/workbench/profiles.py",
+      "sha256": "c52c5ab26d211b42e584a7c890400afdda8a0338622ec40449b4d8e0c60d0734"
+    },
+    {
+      "asset_id": "compose-model",
+      "kind": "project-file",
+      "source": "docker-compose.yml",
+      "sha256": "78eb6f561b388432b15f4883a34109df12f0f256308dadaec7063d20f69957c0"
+    },
+    {
+      "asset_id": "mcp-red-build",
+      "kind": "mcp-artifact",
+      "source": "mcp/mcp-red/build/index.js",
+      "sha256": "8e2b2072d2787b6c28d73ec31a54d5da29ce6c0601ee9cbf9ba51de3c93de6e9"
+    },
+    {
+      "asset_id": "mcp-red-dependencies",
+      "kind": "project-file",
+      "source": "mcp/mcp-red/package-lock.json",
+      "sha256": "f0bbd9c2a70292b111c0c51c3b4f900465bc81bb33e29622172938b88bc28291"
+    },
+    {
+      "asset_id": "mcp-red-config",
+      "kind": "project-file",
+      "source": "mcp/mcp-red/docker-lab-config.json",
+      "sha256": "811c25b67e09832ddebdeb9dee13ee64ee46c54534fe5a96af606806eeef8efa"
+    },
+    {
+      "asset_id": "mcp-indexer-build",
+      "kind": "mcp-artifact",
+      "source": "mcp/mcp-indexer/build/index.js",
+      "sha256": "11014137cc5f31553cf9a7e104c0e230dbe849b16fcbb52c6c15c15f03820ccb"
+    },
+    {
+      "asset_id": "mcp-indexer-dependencies",
+      "kind": "project-file",
+      "source": "mcp/mcp-indexer/package-lock.json",
+      "sha256": "a78efa70004faf8d163d12d564b5c2ced90c507070b7034777297377d7807edc"
+    },
+    {
+      "asset_id": "mcp-indexer-config",
+      "kind": "project-file",
+      "source": "mcp/mcp-indexer/docker-lab-config.json",
+      "sha256": "5eecf4e5931b77b674eb0ff89d7980d31b99307260c546b20a57abb66de62e91"
+    },
+    {
+      "asset_id": "mcp-wazuh-build",
+      "kind": "mcp-artifact",
+      "source": "mcp/mcp-wazuh/build/index.js",
+      "sha256": "a6413637f5733754ad315d7013ef4d9beeb7d2568e1460002865a75a0be823c8"
+    },
+    {
+      "asset_id": "mcp-wazuh-dependencies",
+      "kind": "project-file",
+      "source": "mcp/mcp-wazuh/package-lock.json",
+      "sha256": "682594f8da3517cb41922188df34d1f67ff9516baa1badbf304f07e73f5e68ae"
+    },
+    {
+      "asset_id": "mcp-wazuh-config",
+      "kind": "project-file",
+      "source": "mcp/mcp-wazuh/docker-lab-config.json",
+      "sha256": "7d6929f3758b7debe1a3d6a9ae546597bd7628f73fc45ac0f244cb8ef89b5616"
+    },
+    {
+      "asset_id": "image-kali",
+      "kind": "oci-image",
+      "source": "local://aptl-kali@sha256:871d2dbe51b579620c86de9f8fdd78002a073eae8b0471e0f5d11c83843d89f0",
+      "sha256": "871d2dbe51b579620c86de9f8fdd78002a073eae8b0471e0f5d11c83843d89f0",
+      "services": ["kali"]
+    },
+    {
+      "asset_id": "image-kali-capture",
+      "kind": "oci-image",
+      "source": "local://aptl-kali-capture@sha256:821ec7c26c62d4d501e04ae6031d1acaafb532df900ac4ab8ae890f06d965751",
+      "sha256": "821ec7c26c62d4d501e04ae6031d1acaafb532df900ac4ab8ae890f06d965751",
+      "services": ["kali-capture"]
+    },
+    {
+      "asset_id": "image-kali-ssh-proxy",
+      "kind": "oci-image",
+      "source": "local://aptl-kali-ssh-proxy@sha256:a2592cd742c4399c954e651784b455325f96f32cd4e0025453f64b8f9fa07016",
+      "sha256": "a2592cd742c4399c954e651784b455325f96f32cd4e0025453f64b8f9fa07016",
+      "services": ["kali-ssh-proxy"]
+    },
+    {
+      "asset_id": "image-victim",
+      "kind": "oci-image",
+      "source": "local://aptl-victim@sha256:7ad2cbc7e0f708513032e923ecad32f53a04db99c899394078d900fe9c353549",
+      "sha256": "7ad2cbc7e0f708513032e923ecad32f53a04db99c899394078d900fe9c353549",
+      "services": ["victim"]
+    },
+    {
+      "asset_id": "image-wazuh-manager",
+      "kind": "oci-image",
+      "source": "wazuh/wazuh-manager@sha256:dea2fa1e6d5062147b6a85b241f5f501c5f1ba4b817d12bda06f7870a89ad561",
+      "sha256": "dea2fa1e6d5062147b6a85b241f5f501c5f1ba4b817d12bda06f7870a89ad561",
+      "services": ["wazuh.manager"]
+    },
+    {
+      "asset_id": "image-wazuh-indexer",
+      "kind": "oci-image",
+      "source": "wazuh/wazuh-indexer@sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299",
+      "sha256": "3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299",
+      "services": ["wazuh.indexer"]
+    },
+    {
+      "asset_id": "image-wazuh-dashboard",
+      "kind": "oci-image",
+      "source": "wazuh/wazuh-dashboard@sha256:8f5b50fde67a0b1c4d2321aa26b12bbc5cef21269cf4f6225746f0b946458bd7",
+      "sha256": "8f5b50fde67a0b1c4d2321aa26b12bbc5cef21269cf4f6225746f0b946458bd7",
+      "services": ["wazuh.dashboard"]
+    },
+    {
+      "asset_id": "image-otel-collector",
+      "kind": "oci-image",
+      "source": "otel/opentelemetry-collector-contrib@sha256:e39311df1f3d941923c00da79ac7ba6269124a870ee87e3c3ad24d60f8aee4d2",
+      "sha256": "e39311df1f3d941923c00da79ac7ba6269124a870ee87e3c3ad24d60f8aee4d2",
+      "services": ["aptl-otel-collector"]
+    },
+    {
+      "asset_id": "image-tempo",
+      "kind": "oci-image",
+      "source": "grafana/tempo@sha256:4b0277a9b572a4b1fa43b01468e58911ec214dd69d033f2cd476596d14de9fe3",
+      "sha256": "4b0277a9b572a4b1fa43b01468e58911ec214dd69d033f2cd476596d14de9fe3",
+      "services": ["aptl-tempo"]
+    },
+    {
+      "asset_id": "image-grafana",
+      "kind": "oci-image",
+      "source": "grafana/grafana@sha256:62d2b9d20a19714ebfe48d1bb405086081bc602aa053e28cf6d73c7537640dfb",
+      "sha256": "62d2b9d20a19714ebfe48d1bb405086081bc602aa053e28cf6d73c7537640dfb",
+      "services": ["aptl-grafana-otel"]
+    }
+  ]
+}

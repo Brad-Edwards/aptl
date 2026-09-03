@@ -511,3 +511,127 @@ def _padding_for(cert: x509.Certificate):
     if isinstance(pub, rsa.RSAPublicKey):
         return padding.PKCS1v15()
     pytest.fail(f"Unexpected key type {type(pub)} — extend the test helper")
+
+
+class TestDeriveSocServiceCerts:
+    """Issue #875: derive the SOC cert set from declared bundle outputs."""
+
+    def test_services_and_keystore_flags_come_from_output_paths(self):
+        from aptl.core.soc_ca import derive_soc_service_certs
+
+        outputs = (
+            "lab-ca.pem",  # the CA, root-level -> not a per-service leaf
+            "misp/server.pem",
+            "thehive/server.pem",
+            "thehive/keystore.p12",
+            "thehive/keystore.p12.password",
+            "shuffle-frontend/server.pem",
+        )
+
+        services = {s.name: s for s in derive_soc_service_certs(outputs)}
+
+        assert set(services) == {"misp", "thehive", "shuffle-frontend"}
+        # keystore requirement derived from the declared .p12 output
+        assert services["thehive"].needs_keystore is True
+        assert services["misp"].needs_keystore is False
+        # SANs derive from the service's own name plus host loopback
+        assert services["misp"].sans == ("misp", "localhost", "127.0.0.1")
+        assert services["misp"].subject_cn == "aptl-misp"
+
+    def test_empty_outputs_yield_no_services(self):
+        from aptl.core.soc_ca import derive_soc_service_certs
+
+        assert derive_soc_service_certs(("lab-ca.pem",)) == ()
+
+    def test_derived_set_generates_only_those_services(self, tmp_path):
+        from aptl.core.soc_ca import (
+            LAB_CA_RELDIR,
+            derive_soc_service_certs,
+            ensure_soc_certs,
+        )
+
+        services = derive_soc_service_certs(("misp/server.pem",))
+        result = ensure_soc_certs(tmp_path, services=services)
+
+        assert result.success
+        certs = tmp_path / LAB_CA_RELDIR
+        assert (certs / "misp" / "server.pem").is_file()
+        # a service not in the derived set is not generated
+        assert not (certs / "thehive").exists()
+
+
+# ---------------------------------------------------------------------------
+# soc_bundle_evidence — realization observation
+# ---------------------------------------------------------------------------
+
+
+_SOC_BUNDLE_OUTPUTS = (
+    "lab-ca.key",
+    "lab-ca.pem",
+    "misp/server.pem",
+    "misp/server.key",
+    "thehive/keystore.p12",
+    "thehive/keystore.p12.password",
+)
+
+
+class TestSocBundleEvidence:
+    """The SOC bundle's own shape has to be validated by its own chain check.
+
+    Running the Wazuh ``root-ca.pem`` + ``*-key.pem`` validator over a bundle
+    that carries ``lab-ca.pem``, ``.key`` private keys, and PKCS#12 keystores
+    reports a correctly issued bundle as invalid PEM. That stripped its snapshot
+    entry and made the SEM-218 gate reject certificates APTL had just generated
+    and verified (issue #875).
+    """
+
+    def test_consistent_bundle_yields_non_secret_root_proof(self, tmp_path):
+        from aptl.core.soc_ca import (
+            LAB_CA_RELDIR,
+            derive_soc_service_certs,
+            ensure_soc_certs,
+            soc_bundle_evidence,
+        )
+
+        ensure_soc_certs(tmp_path, services=derive_soc_service_certs(_SOC_BUNDLE_OUTPUTS))
+
+        evidence = soc_bundle_evidence(tmp_path / LAB_CA_RELDIR, _SOC_BUNDLE_OUTPUTS)
+
+        assert evidence is not None
+        assert len(evidence["public_root_sha256"]) == 64
+        assert evidence["chain_valid"] is True
+        # Nothing secret crosses the boundary: no key, passphrase, or path.
+        assert set(evidence) == {"public_root_sha256", "chain_valid", "san_valid"}
+
+    def test_leaf_issued_by_a_foreign_ca_yields_no_evidence(self, tmp_path):
+        from aptl.core.soc_ca import (
+            LAB_CA_RELDIR,
+            derive_soc_service_certs,
+            ensure_soc_certs,
+            soc_bundle_evidence,
+        )
+
+        services = derive_soc_service_certs(_SOC_BUNDLE_OUTPUTS)
+        ensure_soc_certs(tmp_path, services=services)
+        foreign = tmp_path / "foreign"
+        ensure_soc_certs(foreign, services=services)
+        certs = tmp_path / LAB_CA_RELDIR
+        (certs / "misp" / "server.pem").write_bytes(
+            (foreign / LAB_CA_RELDIR / "misp" / "server.pem").read_bytes()
+        )
+
+        assert soc_bundle_evidence(certs, _SOC_BUNDLE_OUTPUTS) is None
+
+    def test_missing_declared_output_yields_no_evidence(self, tmp_path):
+        from aptl.core.soc_ca import (
+            LAB_CA_RELDIR,
+            derive_soc_service_certs,
+            ensure_soc_certs,
+            soc_bundle_evidence,
+        )
+
+        ensure_soc_certs(tmp_path, services=derive_soc_service_certs(_SOC_BUNDLE_OUTPUTS))
+        certs = tmp_path / LAB_CA_RELDIR
+        (certs / "misp" / "server.pem").unlink()
+
+        assert soc_bundle_evidence(certs, _SOC_BUNDLE_OUTPUTS) is None

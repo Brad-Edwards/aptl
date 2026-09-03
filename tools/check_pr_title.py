@@ -13,6 +13,8 @@ Policy:
   * Reject agent/tool advertising bracketed prefixes such as ``[codex] ...``,
     ``[claude] ...``, ``[openai] ...``, ``[chatgpt] ...`` (case-insensitive),
     on every target branch including ``dev``.
+  * Accept GitHub's default ``Dev`` title only for an exact same-repository
+    ``dev`` -> ``main`` promotion identified from trusted event fields.
   * Enforce the conventional title shape ``<type>(<optional-scope>): <subject>``
     with a single allowed type.
   * Require the subject to start lowercase (``^[a-z].*$``).
@@ -62,6 +64,11 @@ RULE_AGENT_BRAND = "pr-title-agent-brand"
 RULE_CONVENTIONAL = "pr-title-conventional"
 RULE_SUBJECT_LOWERCASE = "pr-title-subject-lowercase"
 RULE_EMPTY = "pr-title-empty"
+
+PROMOTION_REPOSITORY = "Brad-Edwards/aptl"
+PROMOTION_BASE_REF = "main"
+PROMOTION_HEAD_REF = "dev"
+PROMOTION_PLATFORM_TITLE = "Dev"
 
 
 @dataclass(frozen=True)
@@ -156,14 +163,44 @@ def validate_pr_title(
     return violations
 
 
-def _resolve_title(args: argparse.Namespace) -> str | None:
-    """Resolve the PR title without ever shell-interpolating untrusted data.
+def is_platform_titled_promotion(event: object) -> bool:
+    """Return whether trusted event fields identify the narrow title exception."""
+    if not isinstance(event, dict):
+        return False
+
+    pull_request = event.get("pull_request")
+    if not isinstance(pull_request, dict):
+        return False
+
+    base = pull_request.get("base")
+    head = pull_request.get("head")
+    if not isinstance(base, dict) or not isinstance(head, dict):
+        return False
+
+    base_repo = base.get("repo")
+    head_repo = head.get("repo")
+    if not isinstance(base_repo, dict) or not isinstance(head_repo, dict):
+        return False
+
+    return (
+        pull_request.get("title") == PROMOTION_PLATFORM_TITLE
+        and base_repo.get("full_name") == PROMOTION_REPOSITORY
+        and head_repo.get("full_name") == PROMOTION_REPOSITORY
+        and base.get("ref") == PROMOTION_BASE_REF
+        and head.get("ref") == PROMOTION_HEAD_REF
+    )
+
+
+def _resolve_title(
+    args: argparse.Namespace,
+) -> tuple[str | None, dict[str, object] | None]:
+    """Resolve title and event without shell-interpolating untrusted data.
 
     Priority: explicit ``--title`` (local/testing) -> ``$GITHUB_EVENT_PATH``
     JSON (the CI path) -> ``PR_TITLE`` env var.
     """
     if args.title is not None:
-        return args.title
+        return args.title, None
 
     event_path = args.event_path or os.environ.get("GITHUB_EVENT_PATH")
     if event_path:
@@ -175,16 +212,24 @@ def _resolve_title(args: argparse.Namespace) -> str | None:
                 f"pr-title-guard: could not read event JSON from {event_path}: {exc}",
                 file=sys.stderr,
             )
-            return None
-        title = (event.get("pull_request") or {}).get("title")
-        if title is None:
+            return None, None
+        if not isinstance(event, dict):
+            print(
+                "pr-title-guard: event JSON root must be an object.",
+                file=sys.stderr,
+            )
+            return None, None
+        pull_request = event.get("pull_request")
+        title = pull_request.get("title") if isinstance(pull_request, dict) else None
+        if not isinstance(title, str):
             print(
                 "pr-title-guard: no pull_request.title in event payload.",
                 file=sys.stderr,
             )
-        return title
+            return None, event
+        return title, event
 
-    return os.environ.get("PR_TITLE")
+    return os.environ.get("PR_TITLE"), None
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -203,7 +248,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    title = _resolve_title(args)
+    title, event = _resolve_title(args)
     if title is None:
         # Fail closed: a pull_request event should always carry a title.
         print(
@@ -212,7 +257,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 2
 
-    violations = validate_pr_title(title)
+    violations = [] if is_platform_titled_promotion(event) else validate_pr_title(title)
     if violations:
         print(f"pr-title-guard: rejected PR title: {title!r}", file=sys.stderr)
         for violation in violations:

@@ -9,6 +9,49 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [5.2.0](https://github.com/Brad-Edwards/aptl/compare/v5.1.1...v5.2.0) (2026-09-03)
+
+
+### Features
+
+* add host-side appliance seat launcher for kiosk lifecycle ([#860](https://github.com/Brad-Edwards/aptl/issues/860)) ([c0854bf](https://github.com/Brad-Edwards/aptl/commit/c0854bf902401a9d3ea486d3e7fe97ee52daa8ed))
+* add in-appliance participant workbench ([#835](https://github.com/Brad-Edwards/aptl/issues/835)) ([4a188b9](https://github.com/Brad-Edwards/aptl/commit/4a188b9b777133d8a5f4e44a1ecd9ba9f0f8bc01))
+* add pack backend interaction seam ([#927](https://github.com/Brad-Edwards/aptl/issues/927)) ([ebb4db2](https://github.com/Brad-Edwards/aptl/commit/ebb4db29b2a5bc6b5ebfc93eca75b909c9af8d03))
+* add safe experimental parameter binding ([#857](https://github.com/Brad-Edwards/aptl/issues/857)) ([2726603](https://github.com/Brad-Edwards/aptl/commit/272660373ef63d39e7bbf8fc3d3ae82a7e04c1e1))
+* add versioned disposable lab appliance ([#840](https://github.com/Brad-Edwards/aptl/issues/840)) ([f71a72e](https://github.com/Brad-Edwards/aptl/commit/f71a72ea59194493334a93db49831855472b1250))
+* define bounded participant lab profile ([#836](https://github.com/Brad-Edwards/aptl/issues/836)) ([621b4cb](https://github.com/Brad-Edwards/aptl/commit/621b4cb5346c3b2ee494bc07dd455eac3cc86fca))
+* enforce appliance network boundary ([#838](https://github.com/Brad-Edwards/aptl/issues/838)) ([f7d343f](https://github.com/Brad-Edwards/aptl/commit/f7d343fa2bf22e5ab76b34479eb4d4e3bd7568c9))
+* **evidence:** add portable research evidence bundle export (EXP-008) ([#873](https://github.com/Brad-Edwards/aptl/issues/873)) ([a6322b3](https://github.com/Brad-Edwards/aptl/commit/a6322b3c3138a42a4880be1a1be0b65a5206da68))
+* honest per-dimension runtime readback for dynamic composition ([#876](https://github.com/Brad-Edwards/aptl/issues/876)) ([#893](https://github.com/Brad-Edwards/aptl/issues/893)) ([3db5171](https://github.com/Brad-Edwards/aptl/commit/3db5171f3e4add842efd1d81fa0d4fe078511b7e))
+* qualify bounded RAES participant agency ([#855](https://github.com/Brad-Edwards/aptl/issues/855)) ([19014ac](https://github.com/Brad-Edwards/aptl/commit/19014ac209c41599ffa3832de26995f23f62eca2))
+* **raes:** declare Cortex index as ADR-088 initial service state, native materializer + readback ([#889](https://github.com/Brad-Edwards/aptl/issues/889)) ([#911](https://github.com/Brad-Edwards/aptl/issues/911)) ([aaf9235](https://github.com/Brad-Edwards/aptl/commit/aaf9235b43fcafbff352ae1afcef33f31e5041c7))
+* record run-scoped apparatus and detection-content provenance ([#871](https://github.com/Brad-Edwards/aptl/issues/871)) ([ca648f1](https://github.com/Brad-Edwards/aptl/commit/ca648f10fbd08bc2a9468315ae7545958b3d5f54))
+* rename ACES to RAES and migrate to the raes 1.1.0 distribution ([#846](https://github.com/Brad-Edwards/aptl/issues/846)) ([ced66dc](https://github.com/Brad-Edwards/aptl/commit/ced66dcc408b0462dc7ea774b5332fb7fd0627a1))
+* **scenario:** declare TechVault content in the SDL via the env-pack ([#875](https://github.com/Brad-Edwards/aptl/issues/875)) ([#908](https://github.com/Brad-Edwards/aptl/issues/908)) ([4dcf07b](https://github.com/Brad-Edwards/aptl/commit/4dcf07bd9c61184cbe9e137eacc6df67753e8819))
+* **scenario:** realization contract for TechVault, scenario-verification plugin seam, and standup fixes ([#866](https://github.com/Brad-Edwards/aptl/issues/866)) ([#890](https://github.com/Brad-Edwards/aptl/issues/890)) ([7b21cdb](https://github.com/Brad-Edwards/aptl/commit/7b21cdbda7b497b7249e3e779e41754ef6a20d4f))
+* seal ACES run and evidence records for terminal execution attempts ([#872](https://github.com/Brad-Edwards/aptl/issues/872)) ([1f6d17e](https://github.com/Brad-Edwards/aptl/commit/1f6d17e58d12ff23714be354aa75794b0de3ab85))
+
+
+### Bug Fixes
+
+* adopt OpenSSF Scorecard and remediate the supply-chain findings it reported ([#850](https://github.com/Brad-Edwards/aptl/issues/850)) ([20ed98f](https://github.com/Brad-Edwards/aptl/commit/20ed98f761a96355202a33f8cb5fa4437a3292ea))
+* bind explicit models to installed participants ([#865](https://github.com/Brad-Edwards/aptl/issues/865)) ([e2b8241](https://github.com/Brad-Edwards/aptl/commit/e2b8241de84a2f9b780f3d3153b640639e4fae82))
+* **ci:** allow exact dev promotion titles ([#941](https://github.com/Brad-Edwards/aptl/issues/941)) ([95b16d5](https://github.com/Brad-Edwards/aptl/commit/95b16d525106d1cf91e4a15c9a1912e96f8038f2))
+* clear appliance boundary quality gate ([#839](https://github.com/Brad-Edwards/aptl/issues/839)) ([5a6c113](https://github.com/Brad-Edwards/aptl/commit/5a6c1137ff90c5fc716bd7a21af61fb83a5aeac6))
+* complete participant workbench integration ([#837](https://github.com/Brad-Edwards/aptl/issues/837)) ([583e100](https://github.com/Brad-Edwards/aptl/commit/583e100853ac42240de4827678a20d94edb93d7d))
+* harden lab lifecycle recovery ([#933](https://github.com/Brad-Edwards/aptl/issues/933)) ([fece8b2](https://github.com/Brad-Edwards/aptl/commit/fece8b2ff6098b2d12a1b08fabfa3f3534950d55))
+* make participant credential sourcing explicit ([#928](https://github.com/Brad-Edwards/aptl/issues/928)) ([96302e4](https://github.com/Brad-Edwards/aptl/commit/96302e4686f46012b47b5ba4c0db88f63c3ff61d))
+* preserve bounded participant execution semantics ([#861](https://github.com/Brad-Edwards/aptl/issues/861)) ([0f0d8ee](https://github.com/Brad-Edwards/aptl/commit/0f0d8ee775562ee8558fd309e209a46dae024df8))
+* **quality:** resolve SonarCloud new-code findings blocking the dev gate ([#938](https://github.com/Brad-Edwards/aptl/issues/938)) ([8689d02](https://github.com/Brad-Edwards/aptl/commit/8689d02a6514493b9927b190bf0643a580438f05))
+
+
+### Documentation
+
+* add Ground Control requirement specs as repo-local files ([#904](https://github.com/Brad-Edwards/aptl/issues/904)) ([9320c7a](https://github.com/Brad-Edwards/aptl/commit/9320c7af3d03debdd3d1b558af466f8d7262884c))
+* cross-reference the OpenRAE env-pack companion repo ([#926](https://github.com/Brad-Edwards/aptl/issues/926)) ([15dead9](https://github.com/Brad-Edwards/aptl/commit/15dead977ac73eef2d57128c432970a39c659c9f))
+* name the scenario language in full in the readme ([#844](https://github.com/Brad-Edwards/aptl/issues/844)) ([0b3c61c](https://github.com/Brad-Edwards/aptl/commit/0b3c61c1a2279692cf33cafe7a8b98ba7e209dbb))
+* sync branch-protection baseline with live required checks ([#854](https://github.com/Brad-Edwards/aptl/issues/854)) ([8280f20](https://github.com/Brad-Edwards/aptl/commit/8280f203dd122e5e9c78d1b1199ebd67c5516a04))
+
 ## [5.1.1](https://github.com/Brad-Edwards/aptl/compare/v5.1.0...v5.1.1) (2026-07-25)
 
 

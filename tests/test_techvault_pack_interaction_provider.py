@@ -14,7 +14,7 @@ from aptl_techvault_pack_interaction import TechVaultPackInteraction
 PACK = PackIdentity(
     pack_id="techvault",
     pack_version="0.1.0",
-    set_digest="sha256:f1c807f70540ca68c640cde72e8b5606b928f4ec40cc00a44d7fd37d6bbfd55f",
+    set_digest="sha256:c532775575d99438f4b4890d49a4fdb7354921f0405afdaa9f370ea4fe3f5a20",
 )
 BACKEND = BackendIdentity("aptl", "0.1.0", "full-remote-control-plane")
 
@@ -46,6 +46,12 @@ def test_provider_returns_a_total_mapping_for_an_admitted_subset() -> None:
         "provision.node.victim": ("victim",),
         "provision.node.webapp": ("enterprise",),
     }
+
+
+def test_provider_is_bound_to_the_released_shuffle_contract() -> None:
+    provider = TechVaultPackInteraction()
+
+    assert provider.supported_pack_set_digests == (PACK.set_digest,)
 
 
 def test_provider_preserves_intentionally_unprofiled_components() -> None:

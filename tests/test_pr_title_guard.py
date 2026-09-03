@@ -125,6 +125,14 @@ def test_accepts_platform_title_for_exact_same_repo_promotion(tmp_path: Path) ->
     assert _run_with_event(tmp_path, _pull_request_event()) == 0
 
 
+def test_promotion_identity_is_independent_of_the_allowed_title() -> None:
+    event = _pull_request_event(title="an arbitrary title")
+
+    assert check_pr_title.is_trusted_promotion(event)
+    assert check_pr_title.is_allowed_platform_promotion_title("Dev")
+    assert not check_pr_title.is_allowed_platform_promotion_title("an arbitrary title")
+
+
 @pytest.mark.parametrize(
     ("override", "value"),
     [
@@ -143,3 +151,22 @@ def test_rejects_platform_title_for_promotion_near_misses(
 def test_exact_promotion_does_not_exempt_an_arbitrary_title(tmp_path: Path) -> None:
     event = _pull_request_event(title="ship whatever")
     assert _run_with_event(tmp_path, event) == 1
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        None,
+        {},
+        {"pull_request": []},
+        {"pull_request": {"base": {}, "head": {}}},
+        {
+            "pull_request": {
+                "base": {"ref": "main", "repo": None},
+                "head": {"ref": "dev", "repo": {"full_name": "Brad-Edwards/aptl"}},
+            }
+        },
+    ],
+)
+def test_promotion_identity_rejects_malformed_event_shapes(event: object) -> None:
+    assert not check_pr_title.is_trusted_promotion(event)

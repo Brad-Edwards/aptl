@@ -21,8 +21,8 @@ name: PR Title Lint
 #
 # Running is not blocking. This workflow reports a check; whether the check is
 # required to merge is live branch-protection configuration.
-# `.github/branch-protection-baseline.json` does not currently list
-# `PR title lint` as a required context on either branch.
+# `.github/branch-protection-baseline.json` records `PR title lint` as required
+# on both branches, but that checked-in intent does not enforce the live rules.
 #
 # The PR title is untrusted event data, read from $GITHUB_EVENT_PATH by the
 # checker (never shell-interpolated), the token is read-only, and this uses

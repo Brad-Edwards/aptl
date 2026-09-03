@@ -163,8 +163,8 @@ def validate_pr_title(
     return violations
 
 
-def is_platform_titled_promotion(event: object) -> bool:
-    """Return whether trusted event fields identify the narrow title exception."""
+def is_trusted_promotion(event: object) -> bool:
+    """Return whether trusted event fields identify the promotion branch pair."""
     if not isinstance(event, dict):
         return False
 
@@ -183,12 +183,16 @@ def is_platform_titled_promotion(event: object) -> bool:
         return False
 
     return (
-        pull_request.get("title") == PROMOTION_PLATFORM_TITLE
-        and base_repo.get("full_name") == PROMOTION_REPOSITORY
+        base_repo.get("full_name") == PROMOTION_REPOSITORY
         and head_repo.get("full_name") == PROMOTION_REPOSITORY
         and base.get("ref") == PROMOTION_BASE_REF
         and head.get("ref") == PROMOTION_HEAD_REF
     )
+
+
+def is_allowed_platform_promotion_title(title: str) -> bool:
+    """Return whether ``title`` is the one platform-generated exception."""
+    return title == PROMOTION_PLATFORM_TITLE
 
 
 def _resolve_title(
@@ -257,7 +261,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 2
 
-    violations = [] if is_platform_titled_promotion(event) else validate_pr_title(title)
+    promotion_title_allowed = is_trusted_promotion(
+        event
+    ) and is_allowed_platform_promotion_title(title)
+    violations = [] if promotion_title_allowed else validate_pr_title(title)
     if violations:
         print(f"pr-title-guard: rejected PR title: {title!r}", file=sys.stderr)
         for violation in violations:

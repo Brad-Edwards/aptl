@@ -32,7 +32,7 @@ dependencies = [
     "opentelemetry-semantic-conventions>=0.54b0",
     "cryptography>=50.0.0",
     "raes==3.3.0",
-    "raes-env-packs==3.9.0",
+    "raes-env-packs==4.0.1",
     "mcp>=1.27.0,<2.0.0",
     "rfc8785>=0.1.4,<0.2.0",
     # Imported directly by aptl.core.experiment.resolver; previously satisfied

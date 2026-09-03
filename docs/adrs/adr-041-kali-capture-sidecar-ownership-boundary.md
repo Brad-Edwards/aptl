@@ -8,6 +8,25 @@ accepted
 
 2026-06-20
 
+## Issue #939 Amendment (2026-09-03)
+
+For a session governed by an admitted required-capture binding, issue #939
+supersedes this ADR's best-effort fallback and peer-credential-only authority
+clauses. Such a session must receive a bounded control-plane-issued proof, must
+authenticate the capture endpoint, and must receive a synchronous
+`session_accepted` acknowledgement before participant execution. Missing or
+failed capture rejects the session; it never opens an uncaptured shell.
+
+The proof is bound to the existing EXP-010 `CaptureBinding` and run/session
+identity, consumed atomically, and kept out of participant descendants and
+portable evidence. Connection ownership remains a stream-integrity mechanism,
+not admission authority. See
+[Issue 939 Fail-Closed Kali Capture Session Admission Preflight](../architecture/issue-939-fail-closed-kali-capture-session-admission-preflight.md).
+
+Historical best-effort behavior below applies only to a legacy path with no
+admitted required-capture binding and cannot satisfy the TechVault participant
+access contract.
+
 ## Context
 
 ADR-033 moved red-side behavioural capture out of the SIEM and into

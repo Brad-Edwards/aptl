@@ -8,6 +8,18 @@ accepted
 
 2026-06-20
 
+## Issue #939 Amendment (2026-09-03)
+
+For admitted required-capture sessions, issue #939 makes authenticated,
+synchronous capture admission a hard precondition for participant execution.
+This supersedes the error-envelope clause below that preserved degraded SSH
+login behavior. `PersistentSession` remains the command lifecycle owner and
+the sidecar remains the PTY/capture owner, but connection ownership and an open
+endpoint are not authorization. Command outcome, capture finalization, and
+evidence completeness remain separate and capture failure must never cause
+command replay. See
+[Issue 939 Fail-Closed Kali Capture Session Admission Preflight](../architecture/issue-939-fail-closed-kali-capture-session-admission-preflight.md).
+
 ## Context
 
 ADR-033 made the MCP-side PTY tee the authoritative record of red-side

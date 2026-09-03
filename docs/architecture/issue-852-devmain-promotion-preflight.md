@@ -1,7 +1,8 @@
-# Issue 852 Dev-To-Main Promotion Preflight
+# Issues 852 And 940 Dev-To-Main Promotion Preflight
 
 This note fixes the design boundaries for standardizing the `dev` to `main`
-promotion. It is architecture guidance, not an implementation plan.
+promotion and for recognizing that exact branch pair in repository-side PR
+policy. It is architecture guidance, not an implementation plan.
 `docs/releasing.md` remains the operator-facing release contract.
 
 ## Architecture Decisions
@@ -30,6 +31,17 @@ promotion. It is architecture guidance, not an implementation plan.
   Contract tests should cover the exact promotion, Release Please, and
   back-merge title shapes. Do not copy its Conventional Commit regex or allowed
   types into Make, workflow YAML, or release code.
+- Keep promotion identity separate from the exceptional title it permits. The
+  trusted promotion class is the conjunction of base repository, head
+  repository, base ref, and head ref. Only after that identity matches may the
+  title policy accept GitHub's exact platform-generated `Dev` title. Do not use
+  title text to establish promotion identity, and do not let promotion identity
+  exempt arbitrary titles.
+- The audit of repository PR workflows finds no other feature-PR-only metadata
+  rule. `.github/workflows/checks.yml` has no title, body, label, author, draft,
+  or changed-file condition and therefore needs no promotion branch. Keep its
+  build, test, documentation, dependency, security, and supply chain jobs on
+  both `main`- and `dev`-targeted pull requests.
 - Make the operator documentation distinguish feature integration from
   promotion: feature PRs into `dev` are squash-merged, while the batch
   promotion from `dev` into `main` requires a merge commit. The merge preserves
@@ -59,10 +71,10 @@ boundaries and does not introduce a durable product architecture decision.
 | Developer authentication | Use the operator's existing `gh` authentication. Never embed a PAT, read a secret file, add a repository credential, or pass a token as a command argument. GitHub CLI and the API enforce repository permissions. |
 | Local shell and process surface | Pass only fixed, non-secret branch, title, and body values. Explicit `--head` avoids implicit current-branch push/fork behavior. The PR text may appear in process arguments; no credential or environment dump may. Preserve the CLI's nonzero exit and stderr. |
 | Repository and compare shape | GitHub CLI resolves the repository from its canonical local/`GH_REPO` mechanisms; GitHub validates base/head refs, differences, and duplicate PR state. A future friendly preflight, if justified, must query GitHub's compare API for that same resolved repository rather than inspect stale local tracking refs. |
-| PR title shape | `tools/check_pr_title.py` validates untrusted event JSON, Conventional Commit type/scope/subject shape, lowercase subject, and branded-prefix policy. The three workflow-produced title families must pass this function directly. |
+| PR title shape | `tools/check_pr_title.py` validates untrusted event JSON, Conventional Commit type/scope/subject shape, lowercase subject, and branded-prefix policy. Promotion classification must use the exact four trusted identity fields before applying the one-title exception. The three workflow-produced title families must pass this function directly. |
 | Workflow trust | Keep `pull_request`, base-SHA checkout, read-only permissions, pinned actions, and event-file parsing. A PR must not execute a policy checker from its own head or place its title in a `run:` expression. |
 | Release configuration | The existing Release Please JSON schema and action remain unchanged. Promotion preserves commit topology; it does not synthesize changelog data or version state. |
-| Branch rules | Adding `main` to the workflow filter makes a check run; it does not by itself make that check required. If “gate” means merge-blocking, reconcile the live `main` rule and the checked-in baseline with the exact `PR title lint` context. Do not claim enforcement from YAML alone. |
+| Branch rules | Adding `main` to the workflow filter makes a check run; it does not by itself make that check required. The checked-in baseline records `PR title lint` for both branches, but only the live rules can enforce it. Do not claim live enforcement from YAML or the baseline alone. |
 | Bot-created PRs | Release Please and back-merge PRs use `GITHUB_TOKEN`. GitHub's current event rules can place resulting `pull_request` runs in an approval-required state. Keep the titles valid, but do not replace the token with a PAT merely to avoid approval or admin-bypass workflow. |
 | Persistence and observability | GitHub owns the PR and git history. GitHub CLI stdout/stderr and the Actions check are the operational evidence. Do not add local state, a database record, APTL structured logging, OpenTelemetry, or a second error envelope. |
 | Product validators | `AptlConfig`, environment hydration, API authentication/CSRF, SDL/Pydantic validation, container policy, redaction, and run-store persistence are not traversed because this change adds no product input, runtime, listener, or stored lab state. |
@@ -70,12 +82,14 @@ boundaries and does not introduce a durable product architecture decision.
 
 ## Extensibility And Whole-Repository Scope
 
-The supported extensibility seam is GitHub CLI's native repository selection
-(`GH_REPO` or its `--repo` equivalent), not configurable promotion branches or
-titles. `dev`, `main`, and the Conventional Commit title are repository policy.
-If another promotion pair is ever accepted, add it against the same GitHub CLI
-and title-validator contracts; introduce a shared helper only after real
-duplication exists.
+The supported local-command extensibility seam is GitHub CLI's native repository
+selection (`GH_REPO` or its `--repo` equivalent), not configurable promotion
+branches or titles. In the title checker, keep repository/ref/title constants as
+policy data and keep the event-object classifier callable independently of CLI
+loading. `dev`, `main`, and the allowed titles remain repository policy. If a
+second promotion pair is ever accepted, represent exact policy records and
+match every field; do not generalize to target-branch, branch-name, owner-only,
+or wildcard exemptions before real duplication exists.
 
 The repository surfaces in scope are:
 
@@ -100,6 +114,9 @@ The repository surfaces in scope are:
   branch governance separately and keep the baseline honest.
 - Do not implement another Conventional Commit parser in Make, YAML, a shell
   script, or release configuration.
+- Do not conflate "this event is the trusted promotion" with "this title is an
+  allowed promotion title." Branch/repository identity establishes the former;
+  the exact title comparison establishes the latter.
 - Do not compute ahead/behind state from an unfetched local `main`, `dev`,
   `origin/main`, or `origin/dev`. Do not add an implicit fetch or mutate local
   branches merely to open a remote PR.

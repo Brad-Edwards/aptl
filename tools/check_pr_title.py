@@ -261,9 +261,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 2
 
-    promotion_title_allowed = is_trusted_promotion(
-        event
-    ) and is_allowed_platform_promotion_title(title)
+    promotion_title_allowed = is_trusted_promotion(event) and (
+        is_allowed_platform_promotion_title(title)
+    )
     violations = [] if promotion_title_allowed else validate_pr_title(title)
     if violations:
         print(f"pr-title-guard: rejected PR title: {title!r}", file=sys.stderr)

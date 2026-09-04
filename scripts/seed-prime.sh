@@ -80,16 +80,18 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "[0/6] Waiting for SOC tools to be healthy..."
 
-# Apply the temporary env-pack SOAR fixups before waiting on health. The frozen
-# TechVault env-pack realizes MISP, misp-redis, and shuffle-backend without the
-# runtime env they need, so recreate them with the recovered working config
-# first (see scripts/envpack-soar-fixups.sh + OpenRAE/env-packs#280/#281). This
-# blocks until the recreated services are serving so the steps below find them
-# up; a failure here surfaces as the individual seed-step errors, not a hard
-# stop.
+# Apply the remaining temporary env-pack SOAR fixups before waiting on health.
+# The released pack now owns Shuffle's complete backend runtime contract; this
+# helper only repairs the independently tracked MISP/Redis contract and publishes
+# the MCP endpoints. It still waits for MISP and Shuffle readiness so the seed
+# steps below do not race their APIs. Failed Shuffle readiness stops before any
+# seed content is written; it never triggers a post-realization replacement.
 export MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
 if [ -x "$SCRIPT_DIR/envpack-soar-fixups.sh" ]; then
-    "$SCRIPT_DIR/envpack-soar-fixups.sh" || echo "  WARNING: env-pack SOAR fixups reported issues"
+    if ! "$SCRIPT_DIR/envpack-soar-fixups.sh"; then
+        echo "  ERROR: Shuffle readiness failed; refusing to seed scenario content"
+        exit 1
+    fi
 fi
 
 # Apply the temporary env-pack Suricata content fixups. The frozen env-pack

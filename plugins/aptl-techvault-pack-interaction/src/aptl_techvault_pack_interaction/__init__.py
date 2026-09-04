@@ -17,7 +17,7 @@ from aptl.backends.pack_interaction import (
 __version__ = "0.1.0"
 
 _PACK_SET_DIGEST = (
-    "sha256:f1c807f70540ca68c640cde72e8b5606b928f4ec40cc00a44d7fd37d6bbfd55f"
+    "sha256:c532775575d99438f4b4890d49a4fdb7354921f0405afdaa9f370ea4fe3f5a20"
 )
 
 _GROUP_BY_COMPONENT = {

@@ -45,6 +45,32 @@ def _raes_outcome(
     )
 
 
+def _admitted_surface(
+    bundle_root: Path,
+    *,
+    env_pack: bool = True,
+    selected_profiles: tuple[str, ...] = (),
+    ownership: frozenset[tuple[str, str, str, str, str]] = frozenset(),
+):
+    """Build the pre-start facts `_step_load_config` admits (issue #951).
+
+    Admission is a RAES boundary, so orchestration tests stub it exactly as they
+    stub the start handoff: planning a real scenario here would make every lab
+    orchestration test stage and admit the bundled env-pack.
+    """
+    from aptl.backends._raes_scenario_queries import AdmittedStartSurface
+    from aptl.core.scenario_bundle import ScenarioSourceKind
+
+    return AdmittedStartSurface(
+        bundle_root=bundle_root,
+        source_kind=(
+            ScenarioSourceKind.ENV_PACK if env_pack else ScenarioSourceKind.PROJECT_TREE
+        ),
+        selected_profiles=selected_profiles,
+        stateful_artifact_ownership=ownership,
+    )
+
+
 def _raes_start_after_backend_retry(
     *_args,
     before_backend_retry=None,
@@ -896,6 +922,90 @@ class TestCheckBindMounts:
 
         assert _step_check_bind_mounts(ctx) is None
 
+    def test_step_reads_the_compose_model_from_the_admitted_bundle_root(
+        self, tmp_path
+    ):
+        """The Compose model is scenario input, read from the admitted bundle.
+
+        An env-pack bundle ships no ``docker-compose.yml``; the backend
+        generates the base model from the realization. Scanning the project
+        directory's unrelated static file instead is what failed every fresh
+        install for every scenario (issue #951).
+        """
+        from aptl.core.lab import _LabStartContext, _step_check_bind_mounts
+
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n"
+            "  misp:\n"
+            "    profiles: [soc]\n"
+            "    volumes:\n"
+            "      - ./config/soc_certs/misp/server.pem"
+            ":/etc/nginx/certs/cert.pem:ro\n"
+        )
+        pack_root = tmp_path / ".aptl" / "staged-packs" / "fixture"
+        pack_root.mkdir(parents=True)
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.admitted_surface = _admitted_surface(
+            pack_root, selected_profiles=("soc",)
+        )
+
+        assert _step_check_bind_mounts(ctx) is None
+
+    def test_step_filters_by_admitted_profiles_not_the_config_ceiling(
+        self, tmp_path
+    ):
+        """A reduced scenario is not judged against services it never starts.
+
+        ``containers.enabled_profiles()`` is the operator's capability ceiling;
+        the admitted realization names the surface ``docker compose --profile``
+        actually receives (issue #550's rule, issue #951's failure).
+        """
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import _LabStartContext, _step_check_bind_mounts
+
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n"
+            "  misp:\n"
+            "    profiles: [soc]\n"
+            "    volumes:\n"
+            "      - ./config/soc_certs/misp/server.pem"
+            ":/etc/nginx/certs/cert.pem:ro\n"
+        )
+        ctx = _LabStartContext(
+            project_dir=tmp_path, skip_seed=False, config=AptlConfig()
+        )
+        ctx.admitted_surface = _admitted_surface(
+            tmp_path, env_pack=False, selected_profiles=("otel",)
+        )
+
+        assert "soc" in ctx.config.containers.enabled_profiles()
+        assert _step_check_bind_mounts(ctx) is None
+
+    def test_step_still_fails_an_admitted_service_with_a_missing_source(
+        self, tmp_path
+    ):
+        """The compatibility guard still protects the project-tree model."""
+        from aptl.core.lab import _LabStartContext, _step_check_bind_mounts
+
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n"
+            "  misp:\n"
+            "    profiles: [soc]\n"
+            "    volumes:\n"
+            "      - ./config/soc_certs/misp/server.pem"
+            ":/etc/nginx/certs/cert.pem:ro\n"
+        )
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.admitted_surface = _admitted_surface(
+            tmp_path, env_pack=False, selected_profiles=("soc",)
+        )
+
+        result = _step_check_bind_mounts(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert "soc_certs" in result.error
+
 
 class TestStartupClassificationTypes:
     """Tests for the StartupOutcome / DiagnosticImpact / StartupDiagnostic types.
@@ -1413,6 +1523,21 @@ class TestOrchestrateLabStart:
             return_value=CertResult(success=True, generated=False, certs_dir=certs_dir),
         )
 
+        # Mock the single scenario admission (#951). The default config selects
+        # the bundled env-pack, so without this every orchestration test would
+        # stage and plan the real pack. The staged pack root carries no
+        # docker-compose.yml, which is what makes the bind-mount pre-flight a
+        # no-op on that path.
+        pack_root = tmp_path / ".aptl" / "staged-packs" / "fixture"
+        pack_root.mkdir(parents=True)
+        mocks["admitted_surface"] = _admitted_surface(
+            pack_root, selected_profiles=("wazuh", "victim", "kali", "otel")
+        )
+        mocks["admit"] = mocker.patch(
+            "aptl.core.lab.admit_start_surface",
+            return_value=(object(), mocks["admitted_surface"]),
+        )
+
         # Mock RAES runtime handoff start. The planned profile set is part of
         # the outcome so the lifecycle does not re-plan the authored scenario.
         mocks["start"] = mocker.patch(
@@ -1863,85 +1988,220 @@ class TestOrchestrateLabStart:
         assert len(pull_calls) >= 1
 
 
-class TestStatefulArtifactOwnership:
-    def test_real_scenario_populates_exact_admitted_ownership(self, tmp_path):
-        from aptl.core.config import load_config
-        from aptl.core.lab import (
-            _LabStartContext,
-            _WAZUH_CERTIFICATE_OWNERSHIP,
-            _WAZUH_MANAGER_CONFIG_OWNERSHIP,
-            _load_stateful_artifact_ownership,
-        )
+class TestAdmittedStartSurface:
+    """`_step_load_config` admits the selected scenario exactly once (#951)."""
 
-        project_root = Path(__file__).resolve().parents[1]
-        backend = MagicMock()
-        # The real contract returns a sha256 identity for a materialized
-        # component image; a bare MagicMock would be treated as no digest and
-        # the scenario would fail admission before artifact preparation.
-        backend.materialize_component_image.return_value = "sha256:" + "e" * 64
-        # The default TechVault scenario now ships as the bundled env-pack
-        # (#875). Stage it and admit ownership from the staged SDL; anchoring to
-        # the project tree keeps the compose service-name mapping the exact
-        # admitted ownership below is expressed against.
-        from tests.helpers import techvault_scenario_path
-
-        ctx = _LabStartContext(
-            project_dir=project_root,
-            skip_seed=False,
-            scenario_path=techvault_scenario_path(tmp_path),
-            config=load_config(project_root / "aptl.json"),
-            backend=backend,
-        )
-
-        result = _load_stateful_artifact_ownership(ctx)
-
-        assert result is None
-        assert _WAZUH_CERTIFICATE_OWNERSHIP <= ctx.stateful_artifact_ownership
-        assert _WAZUH_MANAGER_CONFIG_OWNERSHIP in ctx.stateful_artifact_ownership
-
-    def test_missing_scenario_leaves_legacy_ownership(self, tmp_path):
+    def _ctx(self, tmp_path, scenario_path=None):
         from aptl.core.config import AptlConfig
-        from aptl.core.lab import _LabStartContext, _load_stateful_artifact_ownership
+        from aptl.core.lab import _LabStartContext
 
-        ctx = _LabStartContext(
+        return _LabStartContext(
             project_dir=tmp_path,
             skip_seed=False,
-            scenario_path=tmp_path / "missing.sdl.yaml",
+            scenario_path=scenario_path,
             config=AptlConfig(),
             backend=MagicMock(),
         )
 
-        result = _load_stateful_artifact_ownership(ctx)
+    def test_default_selection_resolves_without_substituting_a_default_path(
+        self, mocker, tmp_path
+    ):
+        """`scenario_path=None` reaches the resolver unchanged.
 
-        assert result is None
-        assert ctx.stateful_artifact_ownership == frozenset()
+        Substituting `DEFAULT_RAES_SCENARIO` named a document deleted in #908
+        that was never the env-pack's location, so the admission silently
+        resolved nothing and every fresh install failed the bind-mount
+        pre-flight (issue #951).
+        """
+        from aptl.core.lab import _load_admitted_start_surface
 
-    def test_admission_error_fails_before_legacy_mutation(self, tmp_path, monkeypatch):
-        from aptl.core.config import AptlConfig
-        from aptl.core.lab import _LabStartContext, _load_stateful_artifact_ownership
-
-        scenario = tmp_path / "scenario.sdl.yaml"
-        scenario.write_text("schema_version: 1.0.0\nname: fixture\n")
-        ctx = _LabStartContext(
-            project_dir=tmp_path,
-            skip_seed=False,
-            scenario_path=scenario,
-            config=AptlConfig(),
-            backend=MagicMock(),
-        )
-        monkeypatch.setattr(
-            "aptl.core.lab.admitted_stateful_artifact_ownership",
-            lambda *args, **kwargs: (_ for _ in ()).throw(
-                ValueError("fixture admission failure")
-            ),
+        ctx = self._ctx(tmp_path)
+        admit = mocker.patch(
+            "aptl.core.lab.admit_start_surface",
+            return_value=(object(), _admitted_surface(tmp_path / "pack")),
         )
 
-        result = _load_stateful_artifact_ownership(ctx)
+        assert _load_admitted_start_surface(ctx) is None
+
+        assert admit.call_args.kwargs["scenario_path"] is None
+
+    def test_explicit_selection_reaches_the_resolver_unchanged(
+        self, mocker, tmp_path
+    ):
+        """An operator-selected scenario path is not rewritten before resolution."""
+        from aptl.core.lab import _load_admitted_start_surface
+
+        selected = tmp_path / "scenarios" / "custom.sdl.yaml"
+        ctx = self._ctx(tmp_path, scenario_path=selected)
+        admit = mocker.patch(
+            "aptl.core.lab.admit_start_surface",
+            return_value=(object(), _admitted_surface(tmp_path, env_pack=False)),
+        )
+
+        assert _load_admitted_start_surface(ctx) is None
+
+        assert admit.call_args.kwargs["scenario_path"] == selected
+
+    def test_admitted_facts_are_cached_for_the_later_steps(self, mocker, tmp_path):
+        """Ownership, the admission itself, and the surface all land on ctx."""
+        from aptl.core.lab import _load_admitted_start_surface
+
+        ctx = self._ctx(tmp_path)
+        admitted = object()
+        surface = _admitted_surface(
+            tmp_path / "pack",
+            selected_profiles=("otel",),
+            ownership=frozenset({("a", "certificate_bundle", "svc", "/d", "src")}),
+        )
+        mocker.patch(
+            "aptl.core.lab.admit_start_surface", return_value=(admitted, surface)
+        )
+
+        assert _load_admitted_start_surface(ctx) is None
+
+        assert ctx.admitted_start is admitted
+        assert ctx.admitted_surface is surface
+        assert ctx.stateful_artifact_ownership == surface.stateful_artifact_ownership
+
+    def test_admission_failure_fails_closed_before_legacy_mutation(
+        self, mocker, tmp_path
+    ):
+        """A scenario that cannot be admitted stops the start; it never degrades.
+
+        Continuing with no admitted facts is exactly what #951 did: every later
+        step then guessed, and the run failed further downstream with an error
+        that named the wrong cause.
+        """
+        from aptl.core.lab import _load_admitted_start_surface
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.admit_start_surface",
+            side_effect=ValueError("fixture admission failure"),
+        )
+
+        result = _load_admitted_start_surface(ctx)
 
         assert result is not None
         assert result.success is False
         assert "admission failed" in result.error
         assert ctx.stateful_artifact_ownership == frozenset()
+        assert ctx.admitted_start is None
+
+    def test_rejected_variable_binding_never_discloses_the_value(
+        self, mocker, tmp_path
+    ):
+        """Admission moved earlier; the binding-disclosure boundary did not.
+
+        A rejected RAES variable binding can carry an operator secret. The
+        in-handoff failure path always projected a fixed message instead of the
+        exception; moving admission into `_step_load_config` (#951) must keep
+        that, not fall through to the generic redacted-exception branch.
+        """
+        from raes import SDLInstantiationError
+
+        from aptl.backends.raes import INSTANTIATION_FAILURE_MESSAGE
+        from aptl.core.lab import _load_admitted_start_surface
+
+        secret = "operator-supplied-tier-value"
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.admit_start_surface",
+            side_effect=SDLInstantiationError(
+                f"variable 'deployment_tier' rejected value {secret}"
+            ),
+        )
+
+        result = _load_admitted_start_surface(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert secret not in result.error
+        assert result.error == INSTANTIATION_FAILURE_MESSAGE
+
+    def test_sdl_parse_failure_fails_closed(self, mocker, tmp_path):
+        """Admission parses the scenario, so RAES parse errors must be caught.
+
+        `SDLError` is not an `OSError`/`ValueError`, so without an explicit
+        branch it would escape `_step_load_config` as an unhandled exception
+        instead of a `LabResult`.
+        """
+        from raes import SDLError
+
+        from aptl.core.lab import _load_admitted_start_surface
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.admit_start_surface",
+            side_effect=SDLError("fixture parse failure"),
+        )
+
+        result = _load_admitted_start_surface(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert "admission failed" in result.error
+
+    def test_missing_env_pack_fails_closed(self, mocker, tmp_path):
+        """A missing or rejected pack fails closed rather than resolving nothing."""
+        from aptl.core.lab import _load_admitted_start_surface
+        from aptl.core.scenario_bundle import EnvPackError
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.admit_start_surface",
+            side_effect=EnvPackError("env-pack source not found"),
+        )
+
+        result = _load_admitted_start_surface(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert ctx.admitted_surface is None
+
+
+class TestScenarioSourceKindIsResolved:
+    """`_scenario_is_env_pack` reads the resolved bundle, not the config flag."""
+
+    def _ctx(self, tmp_path, surface):
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import _LabStartContext
+
+        ctx = _LabStartContext(
+            project_dir=tmp_path,
+            skip_seed=False,
+            # The configured default names the env-pack in both cases; only the
+            # resolved bundle distinguishes them.
+            config=AptlConfig(),
+        )
+        ctx.admitted_surface = surface
+        return ctx
+
+    def test_explicit_project_tree_selection_is_not_an_env_pack_run(self, tmp_path):
+        """A catalog id resolves to a project-tree bundle even under the default.
+
+        Reading `config.scenario.source` made a curated scenario skip the
+        host-side SOC CA it still depends on (issue #951).
+        """
+        from aptl.core.lab import _scenario_is_env_pack
+
+        ctx = self._ctx(tmp_path, _admitted_surface(tmp_path, env_pack=False))
+
+        assert ctx.config.scenario.source == "env-pack"
+        assert _scenario_is_env_pack(ctx) is False
+
+    def test_configured_env_pack_selection_is_an_env_pack_run(self, tmp_path):
+        from aptl.core.lab import _scenario_is_env_pack
+
+        ctx = self._ctx(tmp_path, _admitted_surface(tmp_path / "pack"))
+
+        assert _scenario_is_env_pack(ctx) is True
+
+    def test_unadmitted_context_is_not_an_env_pack_run(self, tmp_path):
+        """Without an admission the legacy host-side producers stay enabled."""
+        from aptl.core.lab import _scenario_is_env_pack
+
+        assert _scenario_is_env_pack(self._ctx(tmp_path, None)) is False
 
 
 class TestSyncCredentialsStep:
@@ -3717,6 +3977,7 @@ class TestLabOrchestrationContracts:
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config()
         ctx.backend = MagicMock()
+        ctx.admitted_start = object()
         start_raes = mocker.patch(
             "aptl.core.lab.start_raes_scenario",
             return_value=_raes_outcome(success=True),
@@ -3729,11 +3990,14 @@ class TestLabOrchestrationContracts:
 
         # GAP 4: the handoff is invoked with the single run target resolved
         # once on ctx, so orchestration and the run record share a run_id.
+        # #951: it is also handed the admission `_step_load_config` already
+        # made, so the apply path never plans (or re-stages the pack) again.
         start_raes.assert_called_once_with(
             tmp_path,
             ctx.config,
             ctx.backend,
             scenario_path=None,
+            admitted=ctx.admitted_start,
             run_target=AcesRunTarget(run_store=ctx.run_store, run_id=ctx.run_id),
             before_backend_retry=ANY,
         )

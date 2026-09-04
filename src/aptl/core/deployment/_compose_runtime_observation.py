@@ -45,6 +45,98 @@ def _spawn_failure(
     )
 
 
+def _inspect_mounts(info: object) -> Sequence[object]:
+    """Return normalized Docker inspect mount entries."""
+
+    mounts = info.get("Mounts") if isinstance(info, Mapping) else None
+    if isinstance(mounts, Sequence) and not isinstance(mounts, (str, bytes)):
+        return mounts
+    return ()
+
+
+def _inspect_environment(info: object) -> Sequence[object]:
+    """Return normalized Docker inspect environment entries."""
+
+    config = info.get("Config") if isinstance(info, Mapping) else None
+    raw_env = config.get("Env") if isinstance(config, Mapping) else None
+    if isinstance(raw_env, Sequence) and not isinstance(raw_env, (str, bytes)):
+        return raw_env
+    return ()
+
+
+def _inspect_has_endpoint_override(info: object) -> bool:
+    """Whether inspect environment redirects Docker commands elsewhere."""
+
+    return any(
+        str(item).split("=", 1)[0] in {"DOCKER_HOST", "DOCKER_CONTEXT"}
+        for item in _inspect_environment(info)
+    )
+
+
+def _inspect_is_privileged(info: object) -> bool:
+    """Whether Docker inspect reports a privileged container."""
+
+    host_config = info.get("HostConfig") if isinstance(info, Mapping) else None
+    return bool(
+        isinstance(host_config, Mapping) and host_config.get("Privileged") is True
+    )
+
+
+def _inspect_has_socket_route(info: object) -> bool:
+    """Whether any observed bind contains or targets the Docker socket."""
+
+    return any(
+        mount_exposes_or_mentions_docker_socket(
+            mount,
+            source_key="Source",
+            target_key="Destination",
+            type_key="Type",
+            bind_type="bind",
+        )
+        for mount in _inspect_mounts(info)
+    )
+
+
+def _mount_is_canonical_authority_socket(mount: object) -> bool:
+    """Whether one observed mount is the admitted canonical socket bind."""
+
+    return bool(
+        isinstance(mount, Mapping)
+        and mount.get("Type") == "bind"
+        and mount.get("Source") == "/var/run/docker.sock"
+        and mount.get("Destination") == "/var/run/docker.sock"
+        and mount.get("RW") is True
+    )
+
+
+def _authority_mount_is_valid(
+    entries: Sequence[object],
+    admission: DeploymentDockerAuthorityAdmission,
+) -> bool:
+    """Whether a holder exposes only its admitted runtime mount footprint."""
+
+    socket_mounts = [
+        mount
+        for mount in entries
+        if mount_exposes_or_mentions_docker_socket(
+            mount,
+            source_key="Source",
+            target_key="Destination",
+            type_key="Type",
+            bind_type="bind",
+        )
+    ]
+    return bool(
+        len(socket_mounts) == 1
+        and _mount_is_canonical_authority_socket(socket_mounts[0])
+        and not has_undeclared_runtime_mounts(
+            entries,
+            allowed_targets=set(admission.allowed_mount_targets),
+            docker_authority_admitted=True,
+        )
+    )
+
+
 class ComposeRuntimeOrchestrationObservationMixin(
     ComposeSpawnedChildLifecycleMixin,
 ):
@@ -320,48 +412,14 @@ class ComposeRuntimeOrchestrationObservationMixin(
         """Whether one holder exposes only the admitted endpoint to the same daemon."""
 
         info = self.container_inspect(container_name)
-        mounts = info.get("Mounts") if isinstance(info, Mapping) else None
-        entries = mounts if isinstance(mounts, Sequence) else ()
-        socket_mounts = [
-            mount
-            for mount in entries
-            if mount_exposes_or_mentions_docker_socket(
-                mount,
-                source_key="Source",
-                target_key="Destination",
-                type_key="Type",
-                bind_type="bind",
-            )
-        ]
-        mount_ok = bool(
-            len(socket_mounts) == 1
-            and socket_mounts[0].get("Type") == "bind"
-            and socket_mounts[0].get("Source") == "/var/run/docker.sock"
-            and socket_mounts[0].get("Destination") == "/var/run/docker.sock"
-            and socket_mounts[0].get("RW") is True
-        )
-        mount_ok = mount_ok and not has_undeclared_runtime_mounts(
-            entries,
-            allowed_targets=set(admission.allowed_mount_targets),
-            docker_authority_admitted=True,
-        )
-        config = info.get("Config") if isinstance(info, Mapping) else None
-        raw_env = config.get("Env") if isinstance(config, Mapping) else None
-        env = (
-            raw_env
-            if isinstance(raw_env, Sequence) and not isinstance(raw_env, (str, bytes))
-            else ()
-        )
-        environment_ok = not any(
-            str(item).split("=", 1)[0] in {"DOCKER_HOST", "DOCKER_CONTEXT"}
-            for item in env
-        )
-        host_config = info.get("HostConfig") if isinstance(info, Mapping) else None
-        privilege_ok = not (
-            isinstance(host_config, Mapping) and host_config.get("Privileged") is True
-        )
         daemon_id = getattr(self, "_docker_daemon_id", None)
-        if not (mount_ok and environment_ok and privilege_ok and daemon_id):
+        configuration_ok = bool(
+            _authority_mount_is_valid(_inspect_mounts(info), admission)
+            and not _inspect_has_endpoint_override(info)
+            and not _inspect_is_privileged(info)
+            and daemon_id
+        )
+        if not configuration_ok:
             return False
         try:
             observed = self.container_exec(
@@ -383,35 +441,8 @@ class ComposeRuntimeOrchestrationObservationMixin(
     def _inspected_container_has_docker_authority(info: object) -> bool:
         """Whether inspect output exposes the socket, an override, or privilege."""
 
-        mounts = info.get("Mounts") if isinstance(info, Mapping) else None
-        entries = (
-            mounts
-            if isinstance(mounts, Sequence) and not isinstance(mounts, (str, bytes))
-            else ()
+        return bool(
+            _inspect_has_socket_route(info)
+            or _inspect_has_endpoint_override(info)
+            or _inspect_is_privileged(info)
         )
-        socket = any(
-            mount_exposes_or_mentions_docker_socket(
-                mount,
-                source_key="Source",
-                target_key="Destination",
-                type_key="Type",
-                bind_type="bind",
-            )
-            for mount in entries
-        )
-        config = info.get("Config") if isinstance(info, Mapping) else None
-        raw_env = config.get("Env") if isinstance(config, Mapping) else None
-        env = (
-            raw_env
-            if isinstance(raw_env, Sequence) and not isinstance(raw_env, (str, bytes))
-            else ()
-        )
-        endpoint_override = any(
-            str(item).split("=", 1)[0] in {"DOCKER_HOST", "DOCKER_CONTEXT"}
-            for item in env
-        )
-        host_config = info.get("HostConfig") if isinstance(info, Mapping) else None
-        privileged = bool(
-            isinstance(host_config, Mapping) and host_config.get("Privileged") is True
-        )
-        return socket or endpoint_override or privileged

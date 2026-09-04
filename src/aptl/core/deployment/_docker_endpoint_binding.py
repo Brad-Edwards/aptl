@@ -39,37 +39,14 @@ class DockerEndpointBindingMixin:
         self._docker_socket_identity = None
         self._docker_daemon_id = None
         self._docker_host_override = None
-        failure: LabResult | None = None
-        if not self.supports_local_artifacts:
-            failure = LabResult(
-                success=False,
-                error="Docker control authority requires the local Docker daemon.",
-            )
+        failure = self._local_authority_failure()
         identity = None
         if failure is None:
-            identity = _local_docker_socket_identity()
-            if identity is None:
-                failure = LabResult(
-                    success=False,
-                    error=_DOCKER_ENDPOINT_UNAVAILABLE,
-                )
+            identity, failure = self._binding_socket_identity()
         daemon_id = None
         if failure is None and identity is not None:
-            self._docker_host_override = _DOCKER_SOCKET_HOST
-            daemon_id = self._current_docker_daemon_id()
-            if daemon_id is None:
-                failure = LabResult(
-                    success=False,
-                    error=_DOCKER_ENDPOINT_UNAVAILABLE,
-                )
-        if (
-            failure is None
-            and identity is not None
-            and _local_docker_socket_identity() != identity
-        ):
-            failure = LabResult(
-                success=False,
-                error=_DOCKER_ENDPOINT_CHANGED,
+            daemon_id, failure = self._binding_daemon_identity(
+                expected_socket=identity,
             )
         if failure is not None:
             self._docker_host_override = None
@@ -77,6 +54,44 @@ class DockerEndpointBindingMixin:
             self._docker_socket_identity = identity
             self._docker_daemon_id = daemon_id
         return failure or LabResult(success=True)
+
+    def _local_authority_failure(self) -> LabResult | None:
+        """Reject local socket authority on a backend without local artifacts."""
+
+        if self.supports_local_artifacts:
+            return None
+        return LabResult(
+            success=False,
+            error="Docker control authority requires the local Docker daemon.",
+        )
+
+    @staticmethod
+    def _binding_socket_identity() -> tuple[tuple[int, int] | None, LabResult | None]:
+        """Return the accessible socket identity or an unavailable diagnostic."""
+
+        identity = _local_docker_socket_identity()
+        failure = (
+            None
+            if identity is not None
+            else LabResult(success=False, error=_DOCKER_ENDPOINT_UNAVAILABLE)
+        )
+        return identity, failure
+
+    def _binding_daemon_identity(
+        self,
+        *,
+        expected_socket: tuple[int, int],
+    ) -> tuple[str | None, LabResult | None]:
+        """Bind the override and attest the daemon without a socket swap."""
+
+        self._docker_host_override = _DOCKER_SOCKET_HOST
+        daemon_id = self._current_docker_daemon_id()
+        failure = None
+        if daemon_id is None:
+            failure = LabResult(success=False, error=_DOCKER_ENDPOINT_UNAVAILABLE)
+        elif _local_docker_socket_identity() != expected_socket:
+            failure = LabResult(success=False, error=_DOCKER_ENDPOINT_CHANGED)
+        return daemon_id, failure
 
     def revalidate_local_docker_socket(self) -> LabResult:
         """Prove the socket and daemon identities have not changed."""

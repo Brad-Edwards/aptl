@@ -89,29 +89,11 @@ class ComposeMixedRealizationMixin:
 
         profiles = list(realization.profiles)
         realization_root = self.realization_root
-        compose_files: tuple[Path, ...] | None = None
-        failure = self._validate_stateful_realization(realization)
-        if failure is None:
-            failure = self._validate_stateful_compose_capability(realization)
-        if failure is None:
-            failure = self._realize_stateful_prerequisites(
-                realization,
-                realization_root,
-            )
-        if failure is None:
-            failure = self._prepare_spawn_images(realization)
-        if failure is None:
-            failure, compose_files = self._prepare_realization_images(
-                realization,
-                scenario_root,
-                realization_root,
-            )
-        if failure is None:
-            failure = self._realize_published_ports(realization)
-        if failure is None:
-            failure = self._realize_networks_and_boundaries(realization)
-        if failure is None:
-            failure = self._realize_content(realization, scenario_root)
+        failure, compose_files = self._prepare_compose_pipeline(
+            realization,
+            scenario_root=scenario_root,
+            realization_root=realization_root,
+        )
         if failure is None:
             compose_files = self._realization_compose_files(
                 compose_files,
@@ -136,6 +118,40 @@ class ComposeMixedRealizationMixin:
                 scenario_root=scenario_root,
             )
         return failure or LabResult(success=True)
+
+    def _prepare_compose_pipeline(
+        self,
+        realization: DeploymentRealizationSpec,
+        *,
+        scenario_root: Path,
+        realization_root: Path,
+    ) -> tuple[LabResult | None, tuple[Path, ...] | None]:
+        """Run ordered prerequisites through authored content realization."""
+
+        compose_files: tuple[Path, ...] | None = None
+        failure = self._validate_stateful_realization(realization)
+        if failure is None:
+            failure = self._validate_stateful_compose_capability(realization)
+        if failure is None:
+            failure = self._realize_stateful_prerequisites(
+                realization,
+                realization_root,
+            )
+        if failure is None:
+            failure = self._prepare_spawn_images(realization)
+        if failure is None:
+            failure, compose_files = self._prepare_realization_images(
+                realization,
+                scenario_root,
+                realization_root,
+            )
+        if failure is None:
+            failure = self._realize_published_ports(realization)
+        if failure is None:
+            failure = self._realize_networks_and_boundaries(realization)
+        if failure is None:
+            failure = self._realize_content(realization, scenario_root)
+        return failure, compose_files
 
     def _start_compose_realization(
         self,

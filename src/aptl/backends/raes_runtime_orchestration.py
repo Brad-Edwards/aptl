@@ -48,6 +48,57 @@ def _value(value: object) -> str:
     return str(getattr(value, "value", value) or "")
 
 
+def _control_interfaces_by_id(
+    runtime: RuntimeConfiguration,
+) -> tuple[dict[str, RuntimeControlInterface], set[str]]:
+    """Index local interfaces while retaining ambiguous identifiers."""
+
+    interfaces: dict[str, RuntimeControlInterface] = {}
+    duplicate_ids: set[str] = set()
+    for interface in runtime.local_control_interfaces:
+        identifier = str(interface.control_interface_id or "")
+        if identifier in interfaces:
+            duplicate_ids.add(identifier)
+        interfaces[identifier] = interface
+    return interfaces, duplicate_ids
+
+
+def _authority_class_is_supported(authority: RuntimeOrchestrationAuthority) -> bool:
+    """Whether an authority requests the supported Docker privilege class."""
+
+    return bool(
+        _value(authority.engine) == "docker"
+        and _value(authority.privilege_class) == "host_root_equivalent"
+    )
+
+
+def _control_interface_is_supported(interface: RuntimeControlInterface) -> bool:
+    """Whether an interface is the exact canonical read-write Docker socket."""
+
+    return bool(
+        _value(getattr(interface, "kind", "")) == "unix_socket"
+        and _value(getattr(interface, "access", "")) == "read_write"
+        and getattr(interface, "path", "") == DOCKER_SOCKET_PATH
+        and getattr(interface, "bind_source", "") == DOCKER_SOCKET_PATH
+        and not getattr(interface, "protocol", "")
+    )
+
+
+def _authority_binding_is_supported(
+    authority: RuntimeOrchestrationAuthority,
+    interface: RuntimeControlInterface | None,
+    duplicate_ids: set[str],
+) -> bool:
+    """Whether one authority joins unambiguously to the canonical endpoint."""
+
+    return bool(
+        authority.control_interface_ref not in duplicate_ids
+        and interface is not None
+        and _authority_class_is_supported(authority)
+        and _control_interface_is_supported(interface)
+    )
+
+
 def docker_control_authorities(
     runtime: RuntimeConfiguration | None,
     *,
@@ -57,33 +108,17 @@ def docker_control_authorities(
 
     if runtime is None:
         return ()
-    interfaces: dict[str, RuntimeControlInterface] = {}
-    duplicate_ids: set[str] = set()
-    for interface in runtime.local_control_interfaces:
-        identifier = str(interface.control_interface_id or "")
-        if identifier in interfaces:
-            duplicate_ids.add(identifier)
-        interfaces[identifier] = interface
+    interfaces, duplicate_ids = _control_interfaces_by_id(runtime)
 
     bindings: list[tuple[RuntimeOrchestrationAuthority, RuntimeControlInterface]] = []
     for authority in runtime.orchestration_authorities:
         interface = interfaces.get(str(authority.control_interface_ref or ""))
-        valid = (
-            _value(authority.engine) == "docker"
-            and _value(authority.privilege_class) == "host_root_equivalent"
-            and authority.control_interface_ref not in duplicate_ids
-            and interface is not None
-            and _value(getattr(interface, "kind", "")) == "unix_socket"
-            and _value(getattr(interface, "access", "")) == "read_write"
-            and getattr(interface, "path", "") == DOCKER_SOCKET_PATH
-            and getattr(interface, "bind_source", "") == DOCKER_SOCKET_PATH
-            and not getattr(interface, "protocol", "")
-        )
-        if not valid:
+        if not _authority_binding_is_supported(authority, interface, duplicate_ids):
             raise ValueError(
                 "aptl.provisioner.runtime-control-interface-invalid: "
                 f"unsupported orchestration authority on {node_address}."
             )
+        assert interface is not None
         bindings.append((authority, interface))
     if len(bindings) > 1:
         raise ValueError(
@@ -217,6 +252,44 @@ def spawn_image_requirements(
     return tuple(requirements)
 
 
+def _node_networks(node: DeploymentNodeRealization) -> set[str]:
+    """Return every network selected through either node representation."""
+
+    return set(node.networks) | {
+        attachment.network for attachment in node.network_attachments
+    }
+
+
+def _authority_holder_is_management_only(node: DeploymentNodeRealization) -> bool:
+    """Whether an authority holder is isolated from participant workloads."""
+
+    container = getattr(node.runtime, "container", None)
+    namespaces = getattr(container, "namespaces", None)
+    network_namespace = getattr(namespaces, "network", None)
+    return bool(
+        node.service_name
+        and _node_networks(node)
+        and node.profiles
+        and set(node.profiles) <= _MANAGEMENT_PROFILES
+        and not node.services
+        and not node.published_ports
+        and not getattr(network_namespace, "target_node_ref", None)
+    )
+
+
+def _allowed_mount_targets(node: DeploymentNodeRealization) -> set[str]:
+    """Return the admitted runtime mount footprint for one holder."""
+
+    targets = {
+        str(getattr(mount, "target", "") or "")
+        for mount in getattr(node.runtime, "mounts", ())
+        if getattr(mount, "target", "")
+    }
+    if getattr(node.runtime, "service_manager_units", ()):
+        targets.add("/sys/fs/cgroup")
+    return targets
+
+
 def admit_docker_authorities(
     nodes: tuple[DeploymentNodeRealization, ...],
 ) -> tuple[DeploymentDockerAuthorityAdmission, ...]:
@@ -227,35 +300,14 @@ def admit_docker_authorities(
         bindings = docker_control_authorities(node.runtime, node_address=node.address)
         if not bindings:
             continue
-        networks = set(node.networks) | {
-            attachment.network for attachment in node.network_attachments
-        }
-        container = getattr(node.runtime, "container", None)
-        namespaces = getattr(container, "namespaces", None)
-        network_namespace = getattr(namespaces, "network", None)
-        management_only = (
-            bool(node.service_name)
-            and bool(networks)
-            and bool(node.profiles)
-            and set(node.profiles) <= _MANAGEMENT_PROFILES
-            and not node.services
-            and not node.published_ports
-            and not getattr(network_namespace, "target_node_ref", None)
-        )
-        if not management_only:
+        if not _authority_holder_is_management_only(node):
             raise ValueError(
                 "aptl.provisioner.runtime-authority-not-management-only: "
                 f"Docker authority is not management-only on {node.address}."
             )
         authority, interface = bindings[0]
         requirements = spawn_image_requirements(node.runtime, node_address=node.address)
-        allowed_mount_targets = {
-            str(getattr(mount, "target", "") or "")
-            for mount in getattr(node.runtime, "mounts", ())
-            if getattr(mount, "target", "")
-        }
-        if getattr(node.runtime, "service_manager_units", ()):
-            allowed_mount_targets.add("/sys/fs/cgroup")
+        allowed_mount_targets = _allowed_mount_targets(node)
         admissions.append(
             DeploymentDockerAuthorityAdmission(
                 node_address=node.address,

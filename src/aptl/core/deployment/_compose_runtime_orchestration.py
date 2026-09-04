@@ -39,19 +39,37 @@ def _spawn_requirement_is_complete(
     """Whether a carried child contract contains every field core code consumes."""
 
     return bool(
+        _spawn_requirement_identity_is_complete(
+            requirement,
+            node_address=node_address,
+        )
+        and _positive_int(requirement.execution_timeout_seconds)
+        and _positive_int(requirement.expected_count)
+    )
+
+
+def _spawn_requirement_identity_is_complete(
+    requirement: DeploymentSpawnImageRequirement,
+    *,
+    node_address: str,
+) -> bool:
+    """Whether a child contract carries its complete immutable identity."""
+
+    label_name, _separator, label_value = requirement.child_label.partition("=")
+    return bool(
         requirement.node_address == node_address
         and requirement.authority_id
         and requirement.template_id
         and requirement.image_ref
-        and requirement.child_label.partition("=")[0]
-        and requirement.child_label.partition("=")[2]
-        and isinstance(requirement.execution_timeout_seconds, int)
-        and not isinstance(requirement.execution_timeout_seconds, bool)
-        and requirement.execution_timeout_seconds > 0
-        and isinstance(requirement.expected_count, int)
-        and not isinstance(requirement.expected_count, bool)
-        and requirement.expected_count > 0
+        and label_name
+        and label_value
     )
+
+
+def _positive_int(value: object) -> bool:
+    """Whether a value is a positive integer rather than a Boolean."""
+
+    return bool(isinstance(value, int) and not isinstance(value, bool) and value > 0)
 
 
 def docker_socket_volume(
@@ -219,18 +237,24 @@ def _effective_service_errors(
 ) -> list[str]:
     """Return authority-containment errors for one effective service."""
 
-    if not isinstance(raw_service, Mapping):
-        return []
-    socket_mounts = [
-        mount
-        for mount in _service_volumes(raw_service)
-        if _mount_mentions_socket(mount)
-    ]
-    if service_name in holders:
-        return _authority_service_errors(service_name, raw_service, socket_mounts)
-    if socket_mounts:
-        return [f"Docker socket bind appears on unauthorized service {service_name}."]
-    return []
+    errors: list[str] = []
+    if isinstance(raw_service, Mapping):
+        socket_mounts = [
+            mount
+            for mount in _service_volumes(raw_service)
+            if _mount_mentions_socket(mount)
+        ]
+        if service_name in holders:
+            errors = _authority_service_errors(
+                service_name,
+                raw_service,
+                socket_mounts,
+            )
+        elif socket_mounts:
+            errors = [
+                f"Docker socket bind appears on unauthorized service {service_name}."
+            ]
+    return errors
 
 
 def effective_orchestration_model_errors(

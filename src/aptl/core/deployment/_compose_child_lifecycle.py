@@ -41,15 +41,12 @@ class ComposeSpawnedChildLifecycleMixin:
     ) -> LabResult | None:
         """Stop an over-deadline running child and prove it became terminal."""
 
-        failure: LabResult | None = None
-        state = _container_state(info)
-        if state is None:
-            failure = self._lifecycle_observation_failure(node_address, template_id)
-        running = bool(state is not None and state.get("Running") is True)
-        started = _docker_timestamp(state.get("StartedAt")) if running else None
-        if running and started is None:
-            failure = self._lifecycle_observation_failure(node_address, template_id)
-        if failure is None and running and started is not None:
+        state, started, failure = self._initial_child_lifecycle(
+            info,
+            node_address=node_address,
+            template_id=template_id,
+        )
+        if failure is None and started is not None and state is not None:
             state, failure = self._wait_for_spawned_child(
                 container_id,
                 state,
@@ -57,18 +54,66 @@ class ComposeSpawnedChildLifecycleMixin:
                 node_address=node_address,
                 template_id=template_id,
             )
-        if failure is None and state is not None and state.get("Running") is True:
-            terminal = self._terminate_spawned_child(container_id)
-            diagnostic = (
-                "Spawned child exceeded lifecycle deadline for "
-                if terminal
-                else "Spawned child lifecycle termination failed for "
-            )
-            failure = LabResult(
-                success=False,
-                error=f"{diagnostic}{node_address}/{template_id}.",
+        if failure is None and self._child_is_running(state):
+            failure = self._termination_result(
+                container_id,
+                node_address=node_address,
+                template_id=template_id,
             )
         return failure
+
+    def _initial_child_lifecycle(
+        self,
+        info: object,
+        *,
+        node_address: str,
+        template_id: str,
+    ) -> tuple[
+        Mapping[object, object] | None,
+        datetime | None,
+        LabResult | None,
+    ]:
+        """Validate the initial state and parse a running child's start time."""
+
+        state = _container_state(info)
+        started = None
+        failure = None
+        if state is None:
+            failure = self._lifecycle_observation_failure(node_address, template_id)
+        elif self._child_is_running(state):
+            started = _docker_timestamp(state.get("StartedAt"))
+            if started is None:
+                failure = self._lifecycle_observation_failure(
+                    node_address,
+                    template_id,
+                )
+        return state, started, failure
+
+    @staticmethod
+    def _child_is_running(state: Mapping[object, object] | None) -> bool:
+        """Whether an observed child state is currently running."""
+
+        return bool(state is not None and state.get("Running") is True)
+
+    def _termination_result(
+        self,
+        container_id: str,
+        *,
+        node_address: str,
+        template_id: str,
+    ) -> LabResult:
+        """Terminate an overdue child and return the stable result diagnostic."""
+
+        terminal = self._terminate_spawned_child(container_id)
+        diagnostic = (
+            "Spawned child exceeded lifecycle deadline for "
+            if terminal
+            else "Spawned child lifecycle termination failed for "
+        )
+        return LabResult(
+            success=False,
+            error=f"{diagnostic}{node_address}/{template_id}.",
+        )
 
     def _wait_for_spawned_child(
         self,

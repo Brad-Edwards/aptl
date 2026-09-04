@@ -390,9 +390,10 @@ def test_public_plan_binds_authority_before_artifact_availability(
 
     monkeypatch.setattr(raes, "artifact_availability_for_scenario", _availability)
     backend = MagicMock()
+    config = AptlConfig()
 
     with pytest.raises(RuntimeError, match="ordering proof"):
-        raes._plan_scenario(tmp_path, AptlConfig(), backend, None, None)
+        raes._plan_scenario(tmp_path, config, backend, None, None)
 
     assert calls == ["bind", "availability"]
 

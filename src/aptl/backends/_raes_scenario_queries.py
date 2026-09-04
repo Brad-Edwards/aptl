@@ -3,92 +3,128 @@
 Split out of :mod:`aptl.backends.raes` so that module keeps the start/apply flow
 while this one carries the read-only queries the CLI and lab lifecycle ask
 before (and instead of) a start: which Compose profiles a scenario selects, and
-which stateful artifact mounts the admitted graph owns. Both plan through the
-same RAES runtime manager the start path uses, so an answer here and a start
-cannot disagree; neither applies the plan.
+which stateful artifact mounts the admitted graph owns. Both project the same
+admission the start path applies, so an answer here and a start cannot disagree;
+neither applies the plan.
 
-The planning seams (``create_aptl_runtime_target``, ``parse_sdl_file``,
-``RuntimeManager``, ``artifact_availability_for_scenario``) are resolved from
-``aptl.backends.raes`` at call time rather than bound at import: that module
-stays the single composition surface for them, so substituting one there governs
-every path that plans a scenario, this one included.
+``aptl.backends.raes.admit_raes_scenario`` is resolved at call time rather than
+bound at import: that module stays the single composition surface for the
+planning seams, so substituting one there governs every path that plans a
+scenario, this one included.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from aptl.backends.raes_diagnostics import render_raes_diagnostics
 from aptl.backends.raes_profiles import select_backend_profiles
-from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
 from aptl.core.deployment._compose_stateful_model import artifact_source_path
+from aptl.core.scenario_bundle import ScenarioSourceKind
 
 if TYPE_CHECKING:
-    from raes_processor.models import ExecutionPlan
-
+    from aptl.backends.raes_realization_model import AptlRealization
+    from aptl.backends.raes_start_model import AdmittedScenarioStart
     from aptl.core.deployment.backend import DeploymentBackend
-    from aptl.core.scenario_bundle import ScenarioBundle
 
 
-def _plan_without_applying(
+@dataclass(frozen=True)
+class AdmittedStartSurface:
+    """The pre-mutation facts one admitted scenario execution settles.
+
+    Lab start reads every scenario-dependent decision off this instead of
+    guessing from the operator's configuration ceiling or a hardcoded default
+    path (issue #951):
+
+    - ``bundle_root`` is where the Compose model the run actually uses lives. A
+      project-tree bundle ships a static ``docker-compose.yml`` there; an
+      env-pack ships none and the backend generates the base model from the
+      realization, so there is no static model to inspect.
+    - ``source_kind`` is the *resolved* source. An explicit scenario selection
+      is project-tree even when the configured default names an env-pack, so
+      legacy host-side producers must key off this, never ``config.scenario``.
+    - ``selected_profiles`` is the realized runtime surface — the profiles
+      ``docker compose --profile`` receives — not ``containers.enabled_profiles()``.
+    - ``stateful_artifact_ownership`` is the exact admitted consumer set.
+    """
+
+    bundle_root: Path
+    source_kind: ScenarioSourceKind
+    selected_profiles: tuple[str, ...]
+    stateful_artifact_ownership: frozenset[tuple[str, str, str, str, str]]
+
+
+def admit_start_surface(
     project_dir: Path,
     config: AptlConfig,
     backend: "DeploymentBackend",
-    scenario_path: Path | None,
-) -> tuple[ScenarioBundle, ExecutionPlan]:
-    """Resolve, parse and plan a scenario, returning its bundle and plan."""
+    scenario_path: Path | None = None,
+) -> tuple["AdmittedScenarioStart", AdmittedStartSurface]:
+    """Admit the scenario once and project the pre-start facts off it.
 
-    from aptl.backends.raes import (
-        RuntimeManager,
-        artifact_availability_for_scenario,
-        create_aptl_runtime_target,
-        parse_sdl_file,
-        resolve_scenario_bundle,
-    )
+    Returns the admission itself alongside the surface so the caller can hand
+    the same admission to the apply path rather than planning a second time.
+    """
 
-    bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
-    scenario = parse_sdl_file(bundle.sdl_path)
-    target = create_aptl_runtime_target(
-        project_dir=project_dir, config=config, backend=backend, bundle=bundle
+    from aptl.backends.raes import admit_raes_scenario
+
+    admitted = admit_raes_scenario(
+        project_dir, config, backend, scenario_path=scenario_path
     )
-    execution_plan = RuntimeManager(target).plan(
-        scenario,
-        artifact_availability=artifact_availability_for_scenario(
-            scenario,
-            backend,
-            scenario_root=bundle.root,
-            component_root=project_dir,
+    return admitted, start_surface_of(admitted, config)
+
+
+def start_surface_of(
+    admitted: "AdmittedScenarioStart",
+    config: AptlConfig,
+) -> AdmittedStartSurface:
+    """Project one admitted execution onto the facts pre-start steps need."""
+
+    realization = _admitted_realization(admitted)
+    return AdmittedStartSurface(
+        bundle_root=admitted.bundle.root,
+        source_kind=admitted.bundle.source_kind,
+        selected_profiles=tuple(
+            select_backend_profiles(config, realization.profiles)
+        ),
+        stateful_artifact_ownership=_artifact_ownership(
+            admitted.bundle.root, realization
         ),
     )
-    return bundle, execution_plan
 
 
-def selected_profiles_for_scenario(
-    project_dir: Path,
-    config: AptlConfig,
-    backend: "DeploymentBackend",
-    scenario_path: Path | None = None,
-) -> list[str]:
-    """Return the Compose profiles selected by a scenario without side effects."""
-    bundle, execution_plan = _plan_without_applying(
-        project_dir, config, backend, scenario_path
-    )
-    realization = interpret_provisioning_plan(
-        plan=execution_plan.provisioning,
-        config=config,
-        bundle=bundle,
-        component_root=project_dir,
-    )
-    return select_backend_profiles(config, realization.profiles)
+def _admitted_realization(admitted: "AdmittedScenarioStart") -> "AptlRealization":
+    """Return the admitted realization, refusing a blocking-diagnostic plan.
+
+    A plan or realization that carries an error diagnostic never becomes a
+    pre-start answer: the caller must fail closed before any legacy mutation
+    rather than proceed on a partial interpretation.
+    """
+
+    blocking = [
+        diagnostic
+        for diagnostic in admitted.execution_plan.diagnostics
+        if diagnostic.is_error
+    ]
+    if blocking:
+        raise ValueError(render_raes_diagnostics(blocking))
+    realization = admitted.realization
+    if realization is None:
+        raise ValueError("Admitted scenario produced no APTL realization.")
+    blocking = [
+        diagnostic for diagnostic in realization.diagnostics if diagnostic.is_error
+    ]
+    if blocking:
+        raise ValueError(render_raes_diagnostics(blocking))
+    return realization
 
 
-def admitted_stateful_artifact_ownership(
-    project_dir: Path,
-    config: AptlConfig,
-    backend: "DeploymentBackend",
-    scenario_path: Path | None = None,
+def _artifact_ownership(
+    root: Path,
+    realization: "AptlRealization",
 ) -> frozenset[tuple[str, str, str, str, str]]:
     """Return exact addressed artifact consumers from the admitted graph.
 
@@ -99,35 +135,38 @@ def admitted_stateful_artifact_ownership(
     beneath an owned directory is not owned by the artifact (issue #677).
     """
 
-    bundle, execution_plan = _plan_without_applying(
-        project_dir, config, backend, scenario_path
-    )
-    blocking = [
-        diagnostic for diagnostic in execution_plan.diagnostics if diagnostic.is_error
-    ]
-    if blocking:
-        raise ValueError(render_raes_diagnostics(blocking))
-    realization = interpret_provisioning_plan(
-        plan=execution_plan.provisioning,
-        config=config,
-        bundle=bundle,
-        component_root=project_dir,
-    )
-    blocking = [
-        diagnostic for diagnostic in realization.diagnostics if diagnostic.is_error
-    ]
-    if blocking:
-        raise ValueError(render_raes_diagnostics(blocking))
     return frozenset(
         (
             artifact.address,
             artifact.generator,
             consumer.service_name,
             consumer.mount_destination,
-            artifact_source_path(bundle.root, artifact)
-            .relative_to(bundle.root)
-            .as_posix(),
+            artifact_source_path(root, artifact).relative_to(root).as_posix(),
         )
         for artifact in realization.generated_artifacts
         for consumer in artifact.consumers
     )
+
+
+def selected_profiles_for_scenario(
+    project_dir: Path,
+    config: AptlConfig,
+    backend: "DeploymentBackend",
+    scenario_path: Path | None = None,
+) -> list[str]:
+    """Return the Compose profiles selected by a scenario without side effects."""
+
+    _, surface = admit_start_surface(project_dir, config, backend, scenario_path)
+    return list(surface.selected_profiles)
+
+
+def admitted_stateful_artifact_ownership(
+    project_dir: Path,
+    config: AptlConfig,
+    backend: "DeploymentBackend",
+    scenario_path: Path | None = None,
+) -> frozenset[tuple[str, str, str, str, str]]:
+    """Return exact addressed artifact consumers from the admitted graph."""
+
+    _, surface = admit_start_surface(project_dir, config, backend, scenario_path)
+    return surface.stateful_artifact_ownership

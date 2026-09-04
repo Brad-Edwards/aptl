@@ -6,6 +6,7 @@ from unittest.mock import ANY, MagicMock
 
 import pytest
 
+from raes import SDLInstantiationError
 from raes_contracts.planning import (
     ChangeAction,
     EvaluationPlan,
@@ -1748,7 +1749,9 @@ def test_start_raes_scenario_passes_runtime_parameters_to_raes_planner(
         tmp_path,
         config,
         backend,
-        parameters=parameters,
+        admitted=raes.admit_raes_scenario(
+            tmp_path, config, backend, parameters=parameters
+        ),
     )
 
     assert result.lab_result.success is True
@@ -1865,12 +1868,22 @@ def test_start_raes_scenario_projects_instantiation_failure_without_values(
     backend = MagicMock()
     before_retry = MagicMock()
 
+    config = AptlConfig(lab={"name": "test"})
+    with pytest.raises(SDLInstantiationError):
+        raes.admit_raes_scenario(
+            tmp_path,
+            config,
+            backend,
+            scenario_path=scenario_path,
+            parameters={"deployment_tier": supplied_value},
+        )
+    # The handoff projects that same failure through its fixed message when it
+    # admits internally, so the rejected binding is never disclosed.
     result = raes.start_raes_scenario(
         tmp_path,
-        AptlConfig(lab={"name": "test"}),
+        config,
         backend,
         scenario_path=scenario_path,
-        parameters={"deployment_tier": supplied_value},
         before_backend_retry=before_retry,
     )
 
@@ -1919,7 +1932,18 @@ def test_start_raes_scenario_retries_soc_apply_without_replanning(mocker, tmp_pa
             ),
         ),
         backend,
-        parameters={"victim_os": "linux"},
+        admitted=raes.admit_raes_scenario(
+            tmp_path,
+            AptlConfig(
+                lab={"name": "test"},
+                containers={"soc": True},
+                scenario=ScenarioSourceConfig(
+                    source="project-tree", identity="techvault-operational"
+                ),
+            ),
+            backend,
+            parameters={"victim_os": "linux"},
+        ),
         before_backend_retry=before_retry,
     )
 
@@ -1927,6 +1951,80 @@ def test_start_raes_scenario_retries_soc_apply_without_replanning(mocker, tmp_pa
     assert calls == {"plan": 1, "apply": 2}
     assert backend.realize.call_count == 2
     before_retry.assert_called_once_with()
+
+
+def _raes_started_outcome():
+    """Build the successful apply outcome the handoff returns."""
+    from aptl.backends.raes_start_model import AcesStartOutcome
+
+    return AcesStartOutcome(
+        lab_result=LabResult(success=True, message="ok"),
+        final_snapshot=RuntimeSnapshot(),
+        realization_details={},
+        selected_profiles=[],
+        scenario_path=None,
+    )
+
+
+def test_start_raes_scenario_applies_a_supplied_admission_without_replanning(
+    mocker, tmp_path
+):
+    """A caller-supplied admission is applied as-is, not planned again.
+
+    Lab start admits the scenario before it mutates anything and hands that
+    admission here. Re-planning would stage the env-pack a second time and let
+    the pre-start decisions already taken describe a different admission
+    (issue #951).
+    """
+    from types import SimpleNamespace
+
+    from aptl.backends import raes
+
+    _write_compose(tmp_path, {"aptl-soc": ["soc"]})
+    admit = mocker.patch("aptl.backends.raes.admit_raes_scenario")
+    apply_plan = mocker.patch(
+        "aptl.backends.raes._apply_with_backend_retry",
+        return_value=_raes_started_outcome(),
+    )
+    bundle = project_tree_bundle(tmp_path, tmp_path / "scenarios" / "x.sdl.yaml")
+    admitted = SimpleNamespace(
+        bundle=bundle, target=object(), execution_plan=object(), realization=None
+    )
+
+    result = raes.start_raes_scenario(
+        tmp_path,
+        AptlConfig(lab={"name": "test"}),
+        MagicMock(),
+        admitted=admitted,
+    )
+
+    assert result.lab_result.success is True
+    admit.assert_not_called()
+    assert apply_plan.call_args.args[0] is admitted.target
+    assert apply_plan.call_args.args[1] is admitted.execution_plan
+    assert apply_plan.call_args.args[2] == bundle.sdl_path
+
+
+def test_lab_start_handoff_forwards_the_admission_to_the_backend(mocker, tmp_path):
+    """`core.lab`'s lazy wrapper must forward the admission it is given.
+
+    The orchestration tests stub this wrapper, so a parameter dropped between it
+    and the backend handoff is invisible to them and only surfaces on a real
+    `aptl lab start`.
+    """
+    from aptl.core import lab
+
+    handoff = mocker.patch(
+        "aptl.backends.raes.start_raes_scenario",
+        return_value=_raes_started_outcome(),
+    )
+    admitted = object()
+
+    lab.start_raes_scenario(
+        tmp_path, AptlConfig(lab={"name": "test"}), MagicMock(), admitted=admitted
+    )
+
+    assert handoff.call_args.kwargs["admitted"] is admitted
 
 
 def test_start_raes_scenario_does_not_retry_non_soc_apply(mocker, tmp_path):

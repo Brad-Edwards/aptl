@@ -48,6 +48,11 @@ from aptl.core.deployment._compose_realization_networks import (
     _network_name_candidates,
     _resolve_realization_networks,
 )
+from aptl.core.deployment._compose_runtime_orchestration import (
+    deployment_spawn_image_requirements,
+    docker_authority_admissions,
+    realization_has_docker_authority,
+)
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
 
@@ -75,6 +80,26 @@ class ComposeRealizationMixin(
     ComposeStatefulRealizationMixin,
 ):
     """Realize typed scenario specs through Docker Compose."""
+
+    def verify_runtime_orchestration(
+        self, realization: DeploymentRealizationSpec
+    ) -> LabResult:
+        """Re-attest authority holders and current children on the bound daemon.
+
+        This public backend seam is also used after scenario verification, when
+        on-demand workers have actually existed. Rebinding first makes that
+        delayed observation independent of the process that started the lab.
+        """
+
+        route = self._validate_runtime_orchestration_route(realization)
+        if route is not None:
+            return route
+        endpoint = self._bind_runtime_orchestration(realization)
+        if endpoint is not None:
+            return endpoint
+        return self._verify_runtime_orchestration(
+            realization, require_children=True
+        ) or LabResult(success=True)
 
     def realize(
         self,
@@ -104,6 +129,12 @@ class ComposeRealizationMixin(
         # Request-scoped, like the network bindings below: the base start reads it
         # by node address and never re-resolves the tag it was verified from.
         self._realization_substrate_digests = dict(substrate_digests or {})
+        route = self._validate_runtime_orchestration_route(realization)
+        if route is not None:
+            return route
+        endpoint = self._bind_runtime_orchestration(realization)
+        if endpoint is not None:
+            return endpoint
         # Route from per-node facts, never a whole-graph flag. A mixed graph is
         # normal (ADR-051): some nodes come from a pinned artifact, some are
         # built from a specification, some are composed from declared state. The
@@ -180,6 +211,9 @@ class ComposeRealizationMixin(
             """Pull/build declared images and capture the resulting compose override."""
 
             nonlocal compose_files
+            result = self._prepare_spawn_images(realization)
+            if result is not None:
+                return result
             result, compose_files = self._prepare_realization_images(
                 realization, scenario_root, realization_root
             )
@@ -205,6 +239,10 @@ class ComposeRealizationMixin(
             consumes that initial state, is admitted.
             """
 
+            if realization_has_docker_authority(realization):
+                endpoint = self.revalidate_local_docker_socket()
+                if not endpoint.success:
+                    return endpoint
             phase = self._materialize_service_index_schemas(
                 realization,
                 build=build and not self._offline_staged,
@@ -243,6 +281,47 @@ class ComposeRealizationMixin(
             if result is not None:
                 return result
         return LabResult(success=True)
+
+    @staticmethod
+    def _validate_runtime_orchestration_route(
+        realization: DeploymentRealizationSpec,
+    ) -> LabResult | None:
+        """Require every Docker authority holder to be Compose image-backed."""
+
+        image_addresses = {image.address for image in realization.images}
+        try:
+            admissions = docker_authority_admissions(realization)
+        except ValueError as exc:
+            return LabResult(success=False, error=str(exc))
+        for admission in admissions:
+            if admission.node_address not in image_addresses:
+                return LabResult(
+                    success=False,
+                    error=(
+                        "Docker control authority requires a Compose image for "
+                        f"{admission.node_address}."
+                    ),
+                )
+        return None
+
+    def _bind_runtime_orchestration(
+        self, realization: DeploymentRealizationSpec
+    ) -> LabResult | None:
+        """Validate child closure and bind the exact local control endpoint."""
+
+        try:
+            required = realization_has_docker_authority(realization)
+            deployment_spawn_image_requirements(realization)
+        except ValueError as exc:
+            return LabResult(success=False, error=str(exc))
+        if not required:
+            return None
+        endpoint = (
+            self.revalidate_local_docker_socket()
+            if getattr(self, "_docker_socket_identity", None) is not None
+            else self.bind_local_docker_socket()
+        )
+        return None if endpoint.success else endpoint
 
     def _realize_networks_and_boundaries(
         self,

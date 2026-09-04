@@ -25,6 +25,9 @@ from raes.scenario import Scenario
 from aptl.backends.raes import create_aptl_runtime_target, resolve_scenario_bundle
 from aptl.backends.raes_artifact_availability import artifact_availability_for_scenario
 from aptl.backends.raes_realization import interpret_provisioning_plan
+from aptl.backends.raes_runtime_orchestration import (
+    prepare_runtime_orchestration_for_scenario,
+)
 from aptl.core.collectors import collect_suricata_eve, collect_wazuh_alerts
 from aptl.core.deployment import get_backend
 from aptl.core.lab import clean_boot_lab
@@ -98,6 +101,7 @@ def _compute_realization(
         target = create_aptl_runtime_target(
             project_dir=project_dir, config=config, backend=backend, bundle=bundle
         )
+        prepare_runtime_orchestration_for_scenario(scenario, backend)
         # Gather artifact availability at the backend trust boundary before
         # planning, exactly as `aptl lab start` does (`_plan_scenario`): the image
         # policy trusts a node's source image only against verified availability,

@@ -31,6 +31,7 @@ from raes.scenario import Scenario
 from aptl.backends.raes_profiles import select_backend_profiles
 from aptl.backends.raes import resolve_scenario_bundle
 from aptl.backends.raes_realization import interpret_provisioning_plan
+from aptl.core.deployment import get_backend
 from aptl.utils.redaction import redact
 from aptl.validation._live_gate_probes import (
     _boot_lab,
@@ -187,6 +188,7 @@ def check_raes_driven_boot(
     state.realization_details = realization.details()
     state.diagnostics_seen = len(realization.diagnostics)
     state.selected_profiles = select_backend_profiles(config, realization.profiles)
+    state.deployment_spec = realization.deployment_spec(state.selected_profiles)
 
     boot_diagnostics = _boot_lab(
         project_dir,
@@ -196,6 +198,34 @@ def check_raes_driven_boot(
         scenario_path=scenario_path,
     )
     return _check("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, boot_diagnostics)
+
+
+def check_runtime_orchestration_containment(
+    *,
+    project_dir: Path,
+    config: "AptlConfig",
+    state: "LiveGateState",
+) -> LiveGateCheck:
+    """Re-attest authority holders and spawned children after semantic work."""
+
+    spec = state.deployment_spec
+    if spec is None:
+        return _check(
+            "runtime_orchestration_containment",
+            CATEGORY_BACKEND_INSTANTIATION,
+            ["runtime orchestration realization is unavailable"],
+        )
+    try:
+        result = get_backend(config, project_dir).verify_runtime_orchestration(spec)
+    except Exception as exc:
+        diagnostics = [redact(f"runtime orchestration observation raised: {exc}")]
+    else:
+        diagnostics = [] if result.success else [redact(result.error or "failed")]
+    return _check(
+        "runtime_orchestration_containment",
+        CATEGORY_BACKEND_INSTANTIATION,
+        diagnostics,
+    )
 
 
 # --------------------------------------------------------------------------- #

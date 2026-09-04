@@ -27,6 +27,9 @@ from aptl.backends.raes_execution_helpers import (
     interpret_realization,
 )
 from aptl.backends.raes_artifact_availability import artifact_availability_for_scenario
+from aptl.backends.raes_runtime_orchestration import (
+    prepare_runtime_orchestration_for_scenario,
+)
 from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, create_aptl_manifest
 from aptl.backends.raes_evaluator import AptlEvaluator
 from aptl.backends.raes_orchestrator import AptlOrchestrator
@@ -210,6 +213,9 @@ def _plan_scenario(
     # resolver (issue #874 / #875).
     bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
     scenario = parse_sdl_file(bundle.sdl_path)
+    # A runtime authority is joined and bound before any artifact probe, so
+    # every image fact and later mutation targets the same exact local daemon.
+    prepare_runtime_orchestration_for_scenario(scenario, backend)
     # Artifact availability is a trusted input to planning, gathered at the
     # backend trust boundary before the single admitted plan() call (ADR-051); a
     # no-op for a scenario that authors no artifact_requirement. The scenario's

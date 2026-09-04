@@ -45,11 +45,13 @@ def _plan_without_applying(
         artifact_availability_for_scenario,
         create_aptl_runtime_target,
         parse_sdl_file,
+        prepare_runtime_orchestration_for_scenario,
         resolve_scenario_bundle,
     )
 
     bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
     scenario = parse_sdl_file(bundle.sdl_path)
+    prepare_runtime_orchestration_for_scenario(scenario, backend)
     target = create_aptl_runtime_target(
         project_dir=project_dir, config=config, backend=backend, bundle=bundle
     )

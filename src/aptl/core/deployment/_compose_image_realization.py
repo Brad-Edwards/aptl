@@ -7,16 +7,9 @@ from pathlib import Path
 import yaml
 
 from aptl.core.deployment._compose_node_generation import base_compose_file
-from aptl.core.deployment._docker_image_identity import (
-    EXACT_IMAGE_INSPECT_FORMAT,
-    exact_inspected_image_identity,
-    normalized_platform,
-    platform_is_compatible,
+from aptl.core.deployment._compose_spawn_image_realization import (
+    prepare_spawn_images,
 )
-from aptl.core.deployment._compose_runtime_orchestration import (
-    deployment_spawn_image_requirements,
-)
-from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
     DeploymentRealizationSpec,
@@ -131,94 +124,7 @@ class ComposeRealizationImageMixin:
     ) -> LabResult | None:
         """Prepare exact child images on the authority's bound Docker daemon."""
 
-        try:
-            requirements = deployment_spawn_image_requirements(realization)
-        except ValueError as exc:
-            return LabResult(success=False, error=str(exc))
-        if not requirements:
-            return None
-        endpoint = self.revalidate_local_docker_socket()
-        if not endpoint.success:
-            return endpoint
-        try:
-            platform = self._run(
-                ["docker", "version", "--format", "{{.Server.Os}}/{{.Server.Arch}}"],
-                timeout=_IMAGE_REALIZATION_TIMEOUT,
-            )
-        except BackendTimeoutError:
-            return LabResult(success=False, error="Docker platform query timed out.")
-        expected = (
-            normalized_platform(platform.stdout) if platform.returncode == 0 else None
-        )
-        if not expected:
-            return LabResult(success=False, error="Docker platform query failed.")
-
-        by_image = {
-            image_ref: min(
-                (item for item in requirements if item.image_ref == image_ref),
-                key=lambda item: item.execution_timeout_seconds,
-            )
-            for image_ref in dict.fromkeys(item.image_ref for item in requirements)
-        }
-        for requirement in by_image.values():
-            node_address = requirement.node_address
-            template_id = requirement.template_id
-            image_ref = requirement.image_ref
-            operation_timeout = min(
-                _IMAGE_REALIZATION_TIMEOUT,
-                requirement.execution_timeout_seconds,
-            )
-            if not self._offline_staged:
-                try:
-                    pull = self._run(
-                        ["docker", "pull", image_ref], timeout=operation_timeout
-                    )
-                except BackendTimeoutError:
-                    pull = None
-                if pull is None or pull.returncode != 0:
-                    return LabResult(
-                        success=False,
-                        error=f"Spawn image pull failed for {node_address}/{template_id}.",
-                    )
-            try:
-                inspect = self._run(
-                    [
-                        "docker",
-                        "image",
-                        "inspect",
-                        "--format",
-                        EXACT_IMAGE_INSPECT_FORMAT,
-                        image_ref,
-                    ],
-                    timeout=operation_timeout,
-                )
-            except BackendTimeoutError:
-                inspect = None
-            if inspect is None or inspect.returncode != 0:
-                return LabResult(
-                    success=False,
-                    error=f"Spawn image missing for {node_address}/{template_id}.",
-                )
-            observed_identity = exact_inspected_image_identity(
-                inspect.stdout, image_ref
-            )
-            if observed_identity is None:
-                return LabResult(
-                    success=False,
-                    error=(
-                        "Spawn image identity unavailable for "
-                        f"{node_address}/{template_id}."
-                    ),
-                )
-            if not platform_is_compatible(expected, observed_identity.platform):
-                return LabResult(
-                    success=False,
-                    error=(
-                        "Spawn image platform incompatible for "
-                        f"{node_address}/{template_id}."
-                    ),
-                )
-        return None
+        return prepare_spawn_images(self, realization)
 
     def materialize_component_image(
         self, image_ref: str, dockerfile_path: str, context_path: str

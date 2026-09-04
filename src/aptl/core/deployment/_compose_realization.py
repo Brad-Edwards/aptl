@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
 from pathlib import Path
-from typing import cast
 
 from aptl.core.deployment._compose_account_realization import (
     ComposeRealizationAccountMixin,
@@ -19,7 +17,9 @@ from aptl.core.deployment._compose_boundary_realization import (
 from aptl.core.deployment._compose_model_realization import (
     ComposeRealizationModelMixin,
 )
-from aptl.core.deployment._compose_node_generation import STATIC_COMPOSE_FILENAME
+from aptl.core.deployment._compose_mixed_realization import (
+    ComposeMixedRealizationMixin,
+)
 from aptl.core.deployment._compose_post_start import (
     ComposeRealizationPostStartMixin,
 )
@@ -49,9 +49,7 @@ from aptl.core.deployment._compose_realization_networks import (
     _resolve_realization_networks,
 )
 from aptl.core.deployment._compose_runtime_orchestration import (
-    deployment_spawn_image_requirements,
-    docker_authority_admissions,
-    realization_has_docker_authority,
+    ComposeRuntimeOrchestrationRouteMixin,
 )
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
@@ -69,6 +67,8 @@ __all__ = [
 
 
 class ComposeRealizationMixin(
+    ComposeRuntimeOrchestrationRouteMixin,
+    ComposeMixedRealizationMixin,
     ComposeBoundaryRealizationMixin,
     ComposeRealizationImageMixin,
     ComposeRealizationNetworkMixin,
@@ -91,12 +91,9 @@ class ComposeRealizationMixin(
         delayed observation independent of the process that started the lab.
         """
 
-        route = self._validate_runtime_orchestration_route(realization)
-        if route is not None:
-            return route
-        endpoint = self._bind_runtime_orchestration(realization)
-        if endpoint is not None:
-            return endpoint
+        failure = self._runtime_orchestration_preflight(realization)
+        if failure is not None:
+            return failure
         return self._verify_runtime_orchestration(
             realization, require_children=True
         ) or LabResult(success=True)
@@ -129,12 +126,9 @@ class ComposeRealizationMixin(
         # Request-scoped, like the network bindings below: the base start reads it
         # by node address and never re-resolves the tag it was verified from.
         self._realization_substrate_digests = dict(substrate_digests or {})
-        route = self._validate_runtime_orchestration_route(realization)
-        if route is not None:
-            return route
-        endpoint = self._bind_runtime_orchestration(realization)
-        if endpoint is not None:
-            return endpoint
+        failure = self._runtime_orchestration_preflight(realization)
+        if failure is not None:
+            return failure
         # Route from per-node facts, never a whole-graph flag. A mixed graph is
         # normal (ADR-051): some nodes come from a pinned artifact, some are
         # built from a specification, some are composed from declared state. The
@@ -145,183 +139,6 @@ class ComposeRealizationMixin(
         return self._realize_mixed_or_legacy(
             realization, build=build, scenario_root=scenario_root
         )
-
-    def _realize_mixed_or_legacy(
-        self,
-        realization: DeploymentRealizationSpec,
-        *,
-        build: bool,
-        scenario_root: Path,
-    ) -> LabResult:
-        """Realize a spec with at least one still-Compose-managed node.
-
-        Covers both shapes: fully legacy (nothing image-free) and mixed
-        (ADR-048's image-free subset materialized first, then the legacy
-        Compose pipeline for the rest).
-        """
-
-        image_free_addresses = _image_free_node_addresses(realization)
-        if image_free_addresses:
-            # Mixed realization (ADR-048): materialize the runtime:-declared
-            # subset directly first - it never becomes a Compose container -
-            # then run the legacy pipeline for the rest, with those service
-            # names excluded from `compose up` so neither side starts, skips,
-            # or double-realizes the other's nodes.
-            node_result = self._materialize_image_free_nodes(
-                realization, image_free_addresses, scenario_root, self._project_dir
-            )
-            if node_result is not None:
-                return node_result
-            # ``--scale <svc>=0`` keeps Compose from starting an image-free node's
-            # stub, but only when that stub exists. A static in-tree
-            # docker-compose.yml declares every node, so its image-free stubs must
-            # be scaled to zero; a generated env-pack base contains only image
-            # nodes, so scaling an absent service errors ("no such service")
-            # (issue #875).
-            excluded_services = (
-                _image_free_service_names(realization, image_free_addresses)
-                if (scenario_root / STATIC_COMPOSE_FILENAME).exists()
-                else ()
-            )
-            legacy_content = tuple(
-                item
-                for item in realization.content
-                if item.target_address not in image_free_addresses
-            )
-            realization = cast(
-                DeploymentRealizationSpec, replace(realization, content=legacy_content)
-            )
-            realization = _strip_image_free_published_ports(
-                realization, image_free_addresses
-            )
-        else:
-            excluded_services = ()
-
-        profiles = list(realization.profiles)
-        compose_files: tuple[Path, ...] | None = None
-        # Generated realization output (base compose, overrides, generated
-        # artifacts) is written under the writable engine checkout, never under
-        # the pristine staged pack whose digest-validated inventory must not gain
-        # generated files (issue #875). In-tree the two roots coincide. This is
-        # the backend's published root so realization observation reads the
-        # artifacts back from the same place they were written.
-        realization_root = self.realization_root
-
-        def _images() -> LabResult | None:
-            """Pull/build declared images and capture the resulting compose override."""
-
-            nonlocal compose_files
-            result = self._prepare_spawn_images(realization)
-            if result is not None:
-                return result
-            result, compose_files = self._prepare_realization_images(
-                realization, scenario_root, realization_root
-            )
-            return result
-
-        def _compose_model() -> LabResult | None:
-            """Render and validate the generated Compose model."""
-
-            nonlocal compose_files
-            compose_files = self._realization_compose_files(
-                compose_files, realization, scenario_root, realization_root
-            )
-            return self._validate_realization_compose_model(
-                profiles, compose_files, realization, scenario_root, realization_root
-            )
-
-        def _start() -> LabResult:
-            """Start the realized services and return the final realization result.
-
-            ADR-088 phased startup (issue #889): any service-search-index-schema
-            materialization runs first — its target service is brought up and
-            proven by fresh native readback before the general workload, which
-            consumes that initial state, is admitted.
-            """
-
-            if realization_has_docker_authority(realization):
-                endpoint = self.revalidate_local_docker_socket()
-                if not endpoint.success:
-                    return endpoint
-            phase = self._materialize_service_index_schemas(
-                realization,
-                build=build and not self._offline_staged,
-                compose_files=compose_files,
-                exclude_services=excluded_services,
-                scenario_root=scenario_root,
-            )
-            if phase is not None and not phase.success:
-                return phase
-
-            start_result = self._start_realized_services(
-                profiles,
-                build=build and not self._offline_staged,
-                compose_files=compose_files,
-                exclude_services=excluded_services,
-                scenario_root=scenario_root,
-            )
-            return self._realization_result(start_result, realization)
-
-        # Each step realizes one stage and returns a fail-closed LabResult, or
-        # None to fall through to the next stage. The last stage always
-        # returns, so the pipeline always ends in a concrete result.
-        steps = (
-            lambda: self._validate_stateful_realization(realization),
-            lambda: self._validate_stateful_compose_capability(realization),
-            lambda: self._realize_stateful_prerequisites(realization, realization_root),
-            _images,
-            lambda: self._realize_published_ports(realization),
-            lambda: self._realize_networks_and_boundaries(realization),
-            lambda: self._realize_content(realization, scenario_root),
-            _compose_model,
-            _start,
-        )
-        for step in steps:
-            result = step()
-            if result is not None:
-                return result
-        return LabResult(success=True)
-
-    @staticmethod
-    def _validate_runtime_orchestration_route(
-        realization: DeploymentRealizationSpec,
-    ) -> LabResult | None:
-        """Require every Docker authority holder to be Compose image-backed."""
-
-        image_addresses = {image.address for image in realization.images}
-        try:
-            admissions = docker_authority_admissions(realization)
-        except ValueError as exc:
-            return LabResult(success=False, error=str(exc))
-        for admission in admissions:
-            if admission.node_address not in image_addresses:
-                return LabResult(
-                    success=False,
-                    error=(
-                        "Docker control authority requires a Compose image for "
-                        f"{admission.node_address}."
-                    ),
-                )
-        return None
-
-    def _bind_runtime_orchestration(
-        self, realization: DeploymentRealizationSpec
-    ) -> LabResult | None:
-        """Validate child closure and bind the exact local control endpoint."""
-
-        try:
-            required = realization_has_docker_authority(realization)
-            deployment_spawn_image_requirements(realization)
-        except ValueError as exc:
-            return LabResult(success=False, error=str(exc))
-        if not required:
-            return None
-        endpoint = (
-            self.revalidate_local_docker_socket()
-            if getattr(self, "_docker_socket_identity", None) is not None
-            else self.bind_local_docker_socket()
-        )
-        return None if endpoint.success else endpoint
 
     def _realize_networks_and_boundaries(
         self,

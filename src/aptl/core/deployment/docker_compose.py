@@ -5,7 +5,6 @@ Query, realization, and cleanup helpers live in focused sibling modules.
 
 import json
 import os
-import stat
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
@@ -28,6 +27,7 @@ from aptl.core.deployment._compose_seed_attribution import (
 )
 from aptl.core.deployment._compose_seed_execution import ComposeSeedExecutionMixin
 from aptl.core.deployment._compose_stop import stop_compose_lab
+from aptl.core.deployment._docker_endpoint_binding import DockerEndpointBindingMixin
 from aptl.core.deployment._compose_boundary import (
     DEFAULT_BOUNDARY_HELPER_IMAGE,
 )
@@ -42,25 +42,10 @@ from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.docker_compose")
 _DOCKER_TIMEOUT = 30
-_DOCKER_SOCKET_PATH = "/var/run/docker.sock"
-_DOCKER_SOCKET_HOST = "unix:///var/run/docker.sock"
-
-
-def _local_docker_socket_identity() -> tuple[int, int] | None:
-    """Return an accessible non-symlink socket identity, or ``None``."""
-
-    try:
-        info = os.lstat(_DOCKER_SOCKET_PATH)
-    except OSError:
-        return None
-    if not stat.S_ISSOCK(info.st_mode) or not os.access(
-        _DOCKER_SOCKET_PATH, os.R_OK | os.W_OK
-    ):
-        return None
-    return int(info.st_dev), int(info.st_ino)
 
 
 class DockerComposeBackend(
+    DockerEndpointBindingMixin,
     ComposeRuntimeInventoryMixin,
     ComposeQueryMixin,
     ComposeRealizationMixin,
@@ -210,69 +195,6 @@ class DockerComposeBackend(
             env.pop("DOCKER_CONTEXT", None)
             kwargs["env"] = env
         return kwargs
-
-    def bind_local_docker_socket(self) -> LabResult:
-        """Bind all subsequent Docker commands to the exact local socket."""
-
-        self._docker_socket_identity = None
-        self._docker_daemon_id = None
-        self._docker_host_override = None
-        if not self.supports_local_artifacts:
-            return LabResult(
-                success=False,
-                error="Docker control authority requires the local Docker daemon.",
-            )
-        identity = _local_docker_socket_identity()
-        if identity is None:
-            return LabResult(success=False, error="Docker control endpoint unavailable.")
-
-        self._docker_host_override = _DOCKER_SOCKET_HOST
-        try:
-            daemon = self._run(
-                ["docker", "info", "--format", "{{.ID}}"], timeout=_DOCKER_TIMEOUT
-            )
-        except BackendTimeoutError:
-            daemon = None
-        if daemon is None or daemon.returncode != 0 or not daemon.stdout.strip():
-            self._docker_host_override = None
-            return LabResult(success=False, error="Docker control endpoint unavailable.")
-        if _local_docker_socket_identity() != identity:
-            self._docker_host_override = None
-            return LabResult(
-                success=False, error="Docker control endpoint identity changed."
-            )
-        self._docker_socket_identity = identity
-        self._docker_daemon_id = daemon.stdout.strip()
-        return LabResult(success=True)
-
-    def revalidate_local_docker_socket(self) -> LabResult:
-        """Prove the socket and daemon identities have not changed."""
-
-        if self._docker_socket_identity is None or self._docker_daemon_id is None:
-            return LabResult(success=False, error="Docker control endpoint is not bound.")
-        identity = _local_docker_socket_identity()
-        if identity is None:
-            return LabResult(success=False, error="Docker control endpoint unavailable.")
-        if identity != self._docker_socket_identity:
-            return LabResult(
-                success=False, error="Docker control endpoint identity changed."
-            )
-        try:
-            daemon = self._run(
-                ["docker", "info", "--format", "{{.ID}}"], timeout=_DOCKER_TIMEOUT
-            )
-        except BackendTimeoutError:
-            daemon = None
-        if (
-            daemon is None
-            or daemon.returncode != 0
-            or daemon.stdout.strip() != self._docker_daemon_id
-            or _local_docker_socket_identity() != self._docker_socket_identity
-        ):
-            return LabResult(
-                success=False, error="Docker control endpoint identity changed."
-            )
-        return LabResult(success=True)
 
     def _run(
         self,

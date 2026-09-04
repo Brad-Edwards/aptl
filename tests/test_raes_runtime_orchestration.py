@@ -171,22 +171,25 @@ def test_control_authority_rejects_unsupported_engine_or_privilege(
 ) -> None:
     payload = _runtime().model_dump(mode="json")
     payload["orchestration_authorities"][0][authority_field] = value
+    runtime = RuntimeConfiguration.model_validate(payload)
 
     with pytest.raises(
         ValueError, match="aptl.provisioner.runtime-control-interface-invalid"
     ):
         docker_control_authorities(
-            RuntimeConfiguration.model_validate(payload),
+            runtime,
             node_address="provision.node.orborus",
         )
 
 
 def test_mutable_spawn_template_is_not_an_immutable_image_requirement() -> None:
+    runtime = _runtime(image_ref="ghcr.io/example/worker:latest")
+
     with pytest.raises(
         ValueError, match="aptl.provisioner.spawn-image-identity-invalid"
     ):
         spawn_image_requirements(
-            _runtime(image_ref="ghcr.io/example/worker:latest"),
+            runtime,
             node_address="provision.node.orborus",
         )
 
@@ -194,12 +197,13 @@ def test_mutable_spawn_template_is_not_an_immutable_image_requirement() -> None:
 def test_unbounded_child_lifecycle_is_rejected() -> None:
     payload = _runtime().model_dump(mode="json")
     payload["orchestration_authorities"][0]["lifecycle_policy"] = {}
+    runtime = RuntimeConfiguration.model_validate(payload)
 
     with pytest.raises(
         ValueError, match="aptl.provisioner.orchestration-lifecycle-unbounded"
     ):
         spawn_image_requirements(
-            RuntimeConfiguration.model_validate(payload),
+            runtime,
             node_address="provision.node.orborus",
         )
 
@@ -207,12 +211,13 @@ def test_unbounded_child_lifecycle_is_rejected() -> None:
 def test_empty_spawn_closure_is_rejected() -> None:
     payload = _runtime().model_dump(mode="json")
     payload["orchestration_authorities"][0]["spawn_templates"] = []
+    runtime = RuntimeConfiguration.model_validate(payload)
 
     with pytest.raises(
         ValueError, match="aptl.provisioner.spawn-image-identity-invalid"
     ):
         spawn_image_requirements(
-            RuntimeConfiguration.model_validate(payload),
+            runtime,
             node_address="provision.node.orborus",
         )
 
@@ -239,12 +244,13 @@ def test_spawn_child_correlation_must_be_complete_and_exact(
 ) -> None:
     payload = _runtime().model_dump(mode="json")
     mutation(payload)
+    runtime = RuntimeConfiguration.model_validate(payload)
 
     with pytest.raises(
         ValueError, match="aptl.provisioner.spawn-child-correlation-invalid"
     ):
         spawn_image_requirements(
-            RuntimeConfiguration.model_validate(payload),
+            runtime,
             node_address="provision.node.orborus",
         )
 
@@ -309,13 +315,12 @@ def test_effective_model_rejects_missing_graph_admission() -> None:
 
 def test_core_rejects_stale_carried_admission_without_reading_raes() -> None:
     admission = replace(_spec().docker_authority_admissions[0], service_name="stale")
+    stale_spec = replace(_spec(), docker_authority_admissions=(admission,))
 
     with pytest.raises(
         ValueError, match="aptl.provisioner.runtime-authority-admission-invalid"
     ):
-        deployment_spawn_image_requirements(
-            replace(_spec(), docker_authority_admissions=(admission,))
-        )
+        deployment_spawn_image_requirements(stale_spec)
 
 
 def test_multiple_docker_authorities_on_one_node_are_rejected() -> None:
@@ -323,12 +328,13 @@ def test_multiple_docker_authorities_on_one_node_are_rejected() -> None:
     second = dict(payload["orchestration_authorities"][0])
     second["orchestration_authority_id"] = "second-runtime"
     payload["orchestration_authorities"].append(second)
+    runtime = RuntimeConfiguration.model_validate(payload)
 
     with pytest.raises(
         ValueError, match="aptl.provisioner.runtime-control-interface-invalid"
     ):
         docker_control_authorities(
-            RuntimeConfiguration.model_validate(payload),
+            runtime,
             node_address="provision.node.orborus",
         )
 
@@ -383,9 +389,10 @@ def test_public_plan_binds_authority_before_artifact_availability(
         raise RuntimeError("stop after ordering proof")
 
     monkeypatch.setattr(raes, "artifact_availability_for_scenario", _availability)
+    backend = MagicMock()
 
     with pytest.raises(RuntimeError, match="ordering proof"):
-        raes._plan_scenario(tmp_path, AptlConfig(), MagicMock(), None, None)
+        raes._plan_scenario(tmp_path, AptlConfig(), backend, None, None)
 
     assert calls == ["bind", "availability"]
 
@@ -438,7 +445,8 @@ def test_authority_holder_without_compose_image_is_rejected_before_realization(
 
     result = backend._validate_runtime_orchestration_route(replace(_spec(), images=()))
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert result.error == (
         "Docker control authority requires a Compose image for provision.node.orborus."
     )
@@ -491,10 +499,17 @@ def test_effective_compose_rejects_privileged_authority_holder() -> None:
     )
 
 
-@pytest.mark.parametrize("source", ["/", "/var/run", "/run/docker.sock"])
+@pytest.mark.parametrize("source", ["/", "/var/run", "/socket-alias"])
 def test_effective_compose_rejects_socket_ancestor_and_alias_binds(
-    source: str,
+    source: str, monkeypatch
 ) -> None:
+    if source == "/socket-alias":
+        realpath = os.path.realpath
+        monkeypatch.setattr(
+            os.path,
+            "realpath",
+            lambda path: "/var/run/docker.sock" if path == source else realpath(path),
+        )
     payload = {
         "services": {
             "worker": {
@@ -575,10 +590,17 @@ def test_raw_raes_authority_does_not_admit_the_control_socket_mount() -> None:
     )
 
 
-@pytest.mark.parametrize("source", ["/", "/var/run", "/run/docker.sock"])
+@pytest.mark.parametrize("source", ["/", "/var/run", "/socket-alias"])
 def test_control_socket_ancestor_and_alias_binds_are_never_admitted(
-    source: str,
+    source: str, monkeypatch
 ) -> None:
+    if source == "/socket-alias":
+        realpath = os.path.realpath
+        monkeypatch.setattr(
+            os.path,
+            "realpath",
+            lambda path: "/var/run/docker.sock" if path == source else realpath(path),
+        )
     runtime = _runtime()
     mount = {
         "Type": "bind",
@@ -794,9 +816,8 @@ def test_offline_child_image_verification_never_calls_registry(tmp_path) -> None
     commands = [call.args[0] for call in backend._run.call_args_list]
     assert commands[0][:2] == ["docker", "version"]
     assert commands[1][:3] == ["docker", "image", "inspect"]
-    assert all(
-        "pull" not in command and "manifest" not in command for command in commands
-    )
+    assert all("pull" not in command for command in commands)
+    assert all("manifest" not in command for command in commands)
 
 
 def test_offline_child_image_platform_mismatch_is_stable_and_bounded(tmp_path) -> None:
@@ -818,7 +839,8 @@ def test_offline_child_image_platform_mismatch_is_stable_and_bounded(tmp_path) -
 
     result = backend._prepare_spawn_images(_spec())
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert result.error == (
         "Spawn image platform incompatible for provision.node.orborus/worker."
     )
@@ -886,7 +908,8 @@ def test_child_image_cache_alias_is_not_exact_identity_evidence(tmp_path) -> Non
 
     result = backend._prepare_spawn_images(_spec())
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert result.error == (
         "Spawn image identity unavailable for provision.node.orborus/worker."
     )
@@ -948,7 +971,8 @@ def test_post_start_authority_rejects_image_default_endpoint_override(tmp_path) 
 
     result = backend._verify_runtime_orchestration(_spec())
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert result.error == "Docker authority runtime observation failed for orborus."
 
 
@@ -987,7 +1011,8 @@ def test_post_start_authority_rejects_undeclared_extra_bind(tmp_path) -> None:
 
     result = backend._verify_runtime_orchestration(_spec())
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
 
 
 def test_post_start_rejects_socket_propagation_to_another_service(tmp_path) -> None:
@@ -1026,7 +1051,8 @@ def test_post_start_rejects_socket_propagation_to_another_service(tmp_path) -> N
 
     result = backend._verify_runtime_orchestration(spec)
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert result.error == "Docker authority propagated to unauthorized service worker."
 
 
@@ -1108,7 +1134,8 @@ def test_post_start_rejects_every_spawned_child_docker_authority(
 
     result = backend._verify_runtime_orchestration(_spec(), require_children=True)
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert result.error == (
         "Docker authority propagated to spawned child provision.node.orborus/worker."
     )
@@ -1169,7 +1196,8 @@ def test_post_start_rejects_descendant_image_selected_by_ancestor_filter(
 
     result = backend._verify_runtime_orchestration(_spec(), require_children=True)
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert result.error == (
         "Spawned-child image identity mismatch for provision.node.orborus/worker."
     )
@@ -1220,7 +1248,8 @@ def test_post_work_attestation_terminates_overdue_spawned_child(tmp_path) -> Non
 
     result = backend._verify_runtime_orchestration(_spec(), require_children=True)
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert result.error == (
         "Spawned child exceeded lifecycle deadline for provision.node.orborus/worker."
     )
@@ -1301,7 +1330,8 @@ def test_post_work_attestation_requires_exact_correlated_child_count(tmp_path) -
 
     result = backend._verify_runtime_orchestration(_spec(), require_children=True)
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert result.error == (
         "Spawned-child correlation count mismatch for provision.node.orborus/worker."
     )
@@ -1310,12 +1340,12 @@ def test_post_work_attestation_requires_exact_correlated_child_count(tmp_path) -
 def test_running_child_is_supervised_until_terminal_before_success(
     tmp_path, monkeypatch
 ) -> None:
-    from aptl.core.deployment import _compose_post_start as post_start
+    from aptl.core.deployment import _compose_child_lifecycle as child_lifecycle
 
     backend = DockerComposeBackend(tmp_path)
     inspected = MagicMock(return_value={"State": {"Running": False}})
     backend.container_inspect = inspected
-    monkeypatch.setattr(post_start.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(child_lifecycle.time, "sleep", lambda _seconds: None)
     started = datetime.now(timezone.utc).isoformat()
 
     result = backend._enforce_spawned_child_deadline(

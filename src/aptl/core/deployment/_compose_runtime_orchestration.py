@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 from aptl.core.deployment.realization import DeploymentRealizationSpec
+from aptl.core.lab_types import LabResult
 from aptl.runtime_authority import (
     DOCKER_SOCKET_PATH,
     DeploymentDockerAuthorityAdmission,
@@ -144,6 +145,8 @@ def realization_has_docker_authority(realization: DeploymentRealizationSpec) -> 
 
 
 def _environment_names(raw: object) -> set[str]:
+    """Normalize Compose mapping/list environment forms to variable names."""
+
     if isinstance(raw, Mapping):
         return {str(name) for name in raw}
     if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
@@ -152,6 +155,8 @@ def _environment_names(raw: object) -> set[str]:
 
 
 def _mount_is_exact_socket(mount: object) -> bool:
+    """Whether one effective mount is the canonical admitted socket bind."""
+
     return bool(
         isinstance(mount, Mapping)
         and mount.get("type") == "bind"
@@ -162,6 +167,8 @@ def _mount_is_exact_socket(mount: object) -> bool:
 
 
 def _mount_mentions_socket(mount: object) -> bool:
+    """Whether one effective mount exposes or targets the Docker socket."""
+
     return mount_exposes_or_mentions_docker_socket(
         mount,
         source_key="source",
@@ -169,6 +176,61 @@ def _mount_mentions_socket(mount: object) -> bool:
         type_key="type",
         bind_type="bind",
     )
+
+
+def _service_volumes(raw_service: Mapping[object, object]) -> Sequence[object]:
+    """Return a service's normalized effective volume sequence."""
+
+    mounts = raw_service.get("volumes")
+    if isinstance(mounts, Sequence) and not isinstance(mounts, (str, bytes)):
+        return mounts
+    return ()
+
+
+def _authority_service_errors(
+    service_name: object,
+    raw_service: Mapping[object, object],
+    socket_mounts: list[object],
+) -> list[str]:
+    """Validate one service selected by a carried authority admission."""
+
+    errors: list[str] = []
+    if len(socket_mounts) != 1 or not _mount_is_exact_socket(socket_mounts[0]):
+        errors.append(
+            f"Docker authority service {service_name} must have exactly one "
+            "canonical read-write socket bind."
+        )
+    names = _environment_names(raw_service.get("environment"))
+    if names & {"DOCKER_HOST", "DOCKER_CONTEXT"}:
+        errors.append(
+            f"Docker authority service {service_name} has a Docker endpoint override."
+        )
+    if raw_service.get("privileged") is True:
+        errors.append(
+            f"Docker authority service {service_name} must not be privileged."
+        )
+    return errors
+
+
+def _effective_service_errors(
+    service_name: object,
+    raw_service: object,
+    holders: Mapping[str, str],
+) -> list[str]:
+    """Return authority-containment errors for one effective service."""
+
+    if not isinstance(raw_service, Mapping):
+        return []
+    socket_mounts = [
+        mount
+        for mount in _service_volumes(raw_service)
+        if _mount_mentions_socket(mount)
+    ]
+    if service_name in holders:
+        return _authority_service_errors(service_name, raw_service, socket_mounts)
+    if socket_mounts:
+        return [f"Docker socket bind appears on unauthorized service {service_name}."]
+    return []
 
 
 def effective_orchestration_model_errors(
@@ -189,39 +251,74 @@ def effective_orchestration_model_errors(
         admission.service_name: admission.node_address for admission in admissions
     }
 
-    errors: list[str] = []
-    for service_name, raw_service in services.items():
-        if not isinstance(raw_service, Mapping):
-            continue
-        mounts = raw_service.get("volumes")
-        volumes = (
-            mounts
-            if isinstance(mounts, Sequence) and not isinstance(mounts, (str, bytes))
-            else ()
-        )
-        socket_mounts = [mount for mount in volumes if _mount_mentions_socket(mount)]
-        if service_name in holders:
-            if len(socket_mounts) != 1 or not _mount_is_exact_socket(socket_mounts[0]):
-                errors.append(
-                    f"Docker authority service {service_name} must have exactly one "
-                    "canonical read-write socket bind."
-                )
-            names = _environment_names(raw_service.get("environment"))
-            if names & {"DOCKER_HOST", "DOCKER_CONTEXT"}:
-                errors.append(
-                    f"Docker authority service {service_name} has a Docker endpoint override."
-                )
-            if raw_service.get("privileged") is True:
-                errors.append(
-                    f"Docker authority service {service_name} must not be privileged."
-                )
-        elif socket_mounts:
-            errors.append(
-                f"Docker socket bind appears on unauthorized service {service_name}."
-            )
-    for holder in holders:
-        if holder not in services:
-            errors.append(
-                f"Docker authority service {holder} is absent from Compose model."
-            )
+    errors = [
+        error
+        for service_name, raw_service in services.items()
+        for error in _effective_service_errors(service_name, raw_service, holders)
+    ]
+    errors.extend(
+        f"Docker authority service {holder} is absent from Compose model."
+        for holder in holders
+        if holder not in services
+    )
     return errors
+
+
+class ComposeRuntimeOrchestrationRouteMixin:
+    """Validate and bind carried runtime-authority admissions before mutation."""
+
+    @staticmethod
+    def _validate_runtime_orchestration_route(
+        realization: DeploymentRealizationSpec,
+    ) -> LabResult | None:
+        """Require every Docker authority holder to be Compose image-backed."""
+
+        image_addresses = {image.address for image in realization.images}
+        try:
+            admissions = docker_authority_admissions(realization)
+        except ValueError as exc:
+            return LabResult(success=False, error=str(exc))
+        missing = next(
+            (
+                admission.node_address
+                for admission in admissions
+                if admission.node_address not in image_addresses
+            ),
+            None,
+        )
+        if missing is None:
+            return None
+        return LabResult(
+            success=False,
+            error=f"Docker control authority requires a Compose image for {missing}.",
+        )
+
+    def _bind_runtime_orchestration(
+        self, realization: DeploymentRealizationSpec
+    ) -> LabResult | None:
+        """Validate child closure and bind the exact local control endpoint."""
+
+        try:
+            required = realization_has_docker_authority(realization)
+            deployment_spawn_image_requirements(realization)
+        except ValueError as exc:
+            return LabResult(success=False, error=str(exc))
+        if not required:
+            return None
+        endpoint = (
+            self.revalidate_local_docker_socket()
+            if getattr(self, "_docker_socket_identity", None) is not None
+            else self.bind_local_docker_socket()
+        )
+        return None if endpoint.success else endpoint
+
+    def _runtime_orchestration_preflight(
+        self,
+        realization: DeploymentRealizationSpec,
+    ) -> LabResult | None:
+        """Validate the route and bind its endpoint as one ordered preflight."""
+
+        failure = self._validate_runtime_orchestration_route(realization)
+        if failure is None:
+            failure = self._bind_runtime_orchestration(realization)
+        return failure

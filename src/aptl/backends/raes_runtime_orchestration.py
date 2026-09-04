@@ -93,6 +93,103 @@ def docker_control_authorities(
     return tuple(bindings)
 
 
+def _bounded_execution_timeout(
+    authority: RuntimeOrchestrationAuthority,
+    *,
+    node_address: str,
+) -> int:
+    """Return the admitted finite execution deadline for one authority."""
+
+    lifecycle = getattr(authority, "lifecycle_policy", None)
+    raw_timeout = str(getattr(lifecycle, "execution_timeout", "") or "")
+    try:
+        timeout = int(raw_timeout)
+    except ValueError:
+        timeout = 0
+    if not 0 < timeout <= 86400:
+        raise ValueError(
+            "aptl.provisioner.orchestration-lifecycle-unbounded: "
+            f"missing finite execution timeout on {node_address}."
+        )
+    return timeout
+
+
+def _children_by_template_image(
+    authority: RuntimeOrchestrationAuthority,
+    *,
+    node_address: str,
+) -> dict[str, object]:
+    """Join a non-empty, one-to-one child closure by exact authored image."""
+
+    if not authority.spawn_templates:
+        raise ValueError(
+            "aptl.provisioner.spawn-image-identity-invalid: "
+            f"empty child-image closure on {node_address}."
+        )
+    template_images = [
+        str(template.image_ref or "") for template in authority.spawn_templates
+    ]
+    child_images = [str(child.image_ref or "") for child in authority.realized_children]
+    children = {
+        str(child.image_ref or ""): child for child in authority.realized_children
+    }
+    complete = bool(
+        len(template_images) == len(set(template_images))
+        and len(child_images) == len(set(child_images))
+        and set(child_images) == set(template_images)
+    )
+    if not complete:
+        raise ValueError(
+            "aptl.provisioner.spawn-child-correlation-invalid: "
+            f"child correlation is incomplete on {node_address}."
+        )
+    return children
+
+
+def _spawn_image_requirement(
+    authority: RuntimeOrchestrationAuthority,
+    template: object,
+    child: object,
+    *,
+    node_address: str,
+    timeout: int,
+) -> DeploymentSpawnImageRequirement:
+    """Validate and lower one exact template/realized-child pair."""
+
+    image_ref = str(getattr(template, "image_ref", "") or "")
+    if not _DIGEST_IMAGE.fullmatch(image_ref):
+        raise ValueError(
+            "aptl.provisioner.spawn-image-identity-invalid: "
+            f"mutable child image on {node_address}."
+        )
+    label_match = _CHILD_LABEL.fullmatch(str(getattr(child, "evidence_ref", "") or ""))
+    count = getattr(child, "count", None)
+    child_image_ref = str(getattr(child, "image_ref", "") or "")
+    correlation_valid = bool(
+        label_match is not None
+        and isinstance(count, int)
+        and not isinstance(count, bool)
+        and 0 < count <= 1000
+        and child_image_ref == image_ref
+    )
+    if not correlation_valid:
+        raise ValueError(
+            "aptl.provisioner.spawn-child-correlation-invalid: "
+            f"unsupported child correlation on {node_address}."
+        )
+    assert label_match is not None
+    assert isinstance(count, int)
+    return DeploymentSpawnImageRequirement(
+        node_address=node_address,
+        authority_id=str(authority.orchestration_authority_id),
+        template_id=str(getattr(template, "template_id", "")),
+        image_ref=image_ref,
+        execution_timeout_seconds=timeout,
+        child_label=f"{label_match.group(1)}={label_match.group(2)}",
+        expected_count=count,
+    )
+
+
 def spawn_image_requirements(
     runtime: RuntimeConfiguration | None,
     *,
@@ -104,73 +201,17 @@ def spawn_image_requirements(
     for authority, _interface in docker_control_authorities(
         runtime, node_address=node_address
     ):
-        lifecycle = getattr(authority, "lifecycle_policy", None)
-        timeout = str(getattr(lifecycle, "execution_timeout", "") or "")
-        try:
-            timeout_seconds = int(timeout)
-            bounded = 0 < timeout_seconds <= 86400
-        except ValueError:
-            bounded = False
-            timeout_seconds = 0
-        if not bounded:
-            raise ValueError(
-                "aptl.provisioner.orchestration-lifecycle-unbounded: "
-                f"missing finite execution timeout on {node_address}."
-            )
-        if not authority.spawn_templates:
-            raise ValueError(
-                "aptl.provisioner.spawn-image-identity-invalid: "
-                f"empty child-image closure on {node_address}."
-            )
-        template_images = [
-            str(template.image_ref or "") for template in authority.spawn_templates
-        ]
-        child_images = [
-            str(child.image_ref or "") for child in authority.realized_children
-        ]
-        children = {
-            str(child.image_ref or ""): child for child in authority.realized_children
-        }
-        if (
-            len(template_images) != len(set(template_images))
-            or len(child_images) != len(set(child_images))
-            or set(child_images) != set(template_images)
-        ):
-            raise ValueError(
-                "aptl.provisioner.spawn-child-correlation-invalid: "
-                f"child correlation is incomplete on {node_address}."
-            )
+        timeout = _bounded_execution_timeout(authority, node_address=node_address)
+        children = _children_by_template_image(authority, node_address=node_address)
         for template in authority.spawn_templates:
             image_ref = str(template.image_ref or "")
-            if not _DIGEST_IMAGE.fullmatch(image_ref):
-                raise ValueError(
-                    "aptl.provisioner.spawn-image-identity-invalid: "
-                    f"mutable child image on {node_address}."
-                )
-            child = children[image_ref]
-            label_match = _CHILD_LABEL.fullmatch(str(child.evidence_ref or ""))
-            count = child.count
-            child_image_ref = str(child.image_ref or "")
-            if (
-                label_match is None
-                or isinstance(count, bool)
-                or not isinstance(count, int)
-                or not 0 < count <= 1000
-                or child_image_ref != image_ref
-            ):
-                raise ValueError(
-                    "aptl.provisioner.spawn-child-correlation-invalid: "
-                    f"unsupported child correlation on {node_address}."
-                )
             requirements.append(
-                DeploymentSpawnImageRequirement(
+                _spawn_image_requirement(
+                    authority,
+                    template,
+                    children[image_ref],
                     node_address=node_address,
-                    authority_id=str(authority.orchestration_authority_id),
-                    template_id=str(template.template_id),
-                    image_ref=image_ref,
-                    execution_timeout_seconds=timeout_seconds,
-                    child_label=f"{label_match.group(1)}={label_match.group(2)}",
-                    expected_count=count,
+                    timeout=timeout,
                 )
             )
     return tuple(requirements)

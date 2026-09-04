@@ -59,6 +59,21 @@ def _realize_pack(tmp_path):
     )
 
 
+def _without_downstream_orborus_authority(realization):
+    """Isolate non-authority tests until env-packs #285 completes the closure."""
+
+    nodes = tuple(
+        replace(
+            node,
+            runtime=node.runtime.model_copy(update={"orchestration_authorities": []}),
+        )
+        if node.name == "shuffle-orborus" and node.runtime is not None
+        else node
+        for node in realization.nodes
+    )
+    return replace(realization, nodes=nodes)
+
+
 def test_techvault_pack_realizes_without_provisioner_diagnostics(tmp_path):
     """Interpreting the pack yields nodes, networks, profiles and no errors."""
 
@@ -86,16 +101,7 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(tmp_path):
     # which must replace Shuffle's mutable child image and author the realized
     # child correlation before APTL can admit its Docker authority. Strip only
     # that downstream declaration so the generic Compose surface remains covered.
-    nodes = tuple(
-        replace(
-            node,
-            runtime=node.runtime.model_copy(update={"orchestration_authorities": []}),
-        )
-        if node.name == "shuffle-orborus" and node.runtime is not None
-        else node
-        for node in realization.nodes
-    )
-    spec = replace(realization, nodes=nodes).deployment_spec(
+    spec = _without_downstream_orborus_authority(realization).deployment_spec(
         sorted(realization.profiles)
     )
     document = render_realization_compose(spec)

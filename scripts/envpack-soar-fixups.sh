@@ -2,17 +2,14 @@
 # =============================================================================
 # TEMPORARY env-pack SOAR fixups
 # =============================================================================
-# The frozen TechVault env-pack realizes MISP, misp-redis, and shuffle-backend
-# WITHOUT the runtime environment they need, so they boot broken:
+# The frozen TechVault env-pack realizes MISP and misp-redis WITHOUT the runtime
+# environment they need, so they boot broken:
 #
 #   - misp-redis runs with no password, but MISP connects with
 #     auth=redispassword -> Redis unreachable -> API-key auth fails.
 #   - MISP has no MYSQL_*/ADMIN_*/BASE_URL env and its lab cert is mounted at
 #     the wrong path -> no DB, no admin key, self-signed cert.
-#   - shuffle-backend has no SHUFFLE_OPENSEARCH_* env -> it verifies TLS against
-#     the opensearch demo cert and never connects to its datastore.
-#
-# This recreates those three containers with the configuration recovered from
+# This recreates those two containers with the configuration recovered from
 # the pre-ACES docker-compose.yml (which ran these services for months). It is
 # idempotent: a container already carrying the fix is left untouched, so this is
 # safe to run on every boot. It buys us out of the env-pack release cycle; it
@@ -20,7 +17,6 @@
 #
 # Root fixes tracked upstream (remove this script when they ship):
 #   MISP  -> OpenRAE/env-packs#280 ; retire per Brad-Edwards/aptl#912
-#   Shuffle -> OpenRAE/env-packs#281 ; retire per Brad-Edwards/aptl#913
 # =============================================================================
 set -uo pipefail
 
@@ -95,29 +91,6 @@ fix_misp() {
         "$img" >/dev/null
 }
 
-# --- shuffle-backend: restore opensearch env (incl. intra-cluster skip-ssl) --
-fix_shuffle_backend() {
-    _present aptl-shuffle-backend || return 0
-    _has_env aptl-shuffle-backend SHUFFLE_OPENSEARCH_URL && return 0
-    log "shuffle-backend missing opensearch env; recreating with working configuration"
-    local img net
-    img="$(_image aptl-shuffle-backend)"; net="$(_net aptl-shuffle-backend)"
-    _capture_labels aptl-shuffle-backend
-    docker rm -f aptl-shuffle-backend >/dev/null 2>&1 || true
-    docker run -d --name aptl-shuffle-backend --restart unless-stopped "${LBL_ARGS[@]}" \
-        --network "$net" --network-alias aptl-shuffle-backend --network-alias shuffle-backend \
-        -e SHUFFLE_APP_SDK_TIMEOUT=120 \
-        -e SHUFFLE_DEFAULT_USERNAME=admin -e SHUFFLE_DEFAULT_PASSWORD=ShuffleAdmin2024! \
-        -e SHUFFLE_DEFAULT_APIKEY=31a211c4-ea5c-4a49-b022-5e2434e758a7 \
-        -e SHUFFLE_OPENSEARCH_URL=https://shuffle-opensearch:9200 \
-        -e SHUFFLE_OPENSEARCH_USERNAME=admin -e SHUFFLE_OPENSEARCH_PASSWORD=StrongPassword123! \
-        -e SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true \
-        -v aptl_shuffle_data:/shuffle-database -v /var/run/docker.sock:/var/run/docker.sock \
-        "$img" >/dev/null
-    # The frontend proxies to the backend; bounce it so it re-resolves the new one.
-    docker restart aptl-shuffle-frontend >/dev/null 2>&1 || true
-}
-
 # --- readiness waits so the seed steps find the services up -----------------
 wait_misp() {
     _present aptl-misp || return 0
@@ -148,7 +121,8 @@ wait_shuffle() {
         fi
         sleep 10
     done
-    log "WARNING: shuffle-backend not serving after 300s"
+    log "ERROR: shuffle-backend not serving after 300s"
+    return 1
 }
 
 # --- MCP participant endpoints ----------------------------------------------
@@ -188,8 +162,9 @@ fix_mcp_endpoints() {
 log "applying temporary env-pack SOAR fixups (see header for tracking issues)"
 fix_misp_redis
 fix_misp
-fix_shuffle_backend
 wait_misp
-wait_shuffle
+if ! wait_shuffle; then
+    exit 1
+fi
 fix_mcp_endpoints
 log "done"

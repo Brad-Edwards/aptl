@@ -156,6 +156,7 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [Issue #913 Shuffle Post-Realization Mutation](issue-913-shuffle-post-realization-mutation-preflight.md)
 - [Issue #905 Lab Lifecycle Robustness](issue-905-lab-lifecycle-robustness-preflight.md)
 - [Issue #874 Scenario-Bundle Realization Roots](issue-874-scenario-bundle-realization-roots-preflight.md)
 - [Issue #878 Scenario Verification Plugin Seam](issue-878-scenario-verification-plugin-seam-preflight.md)

@@ -393,7 +393,7 @@ def test_public_plan_binds_authority_before_artifact_availability(
     config = AptlConfig()
 
     with pytest.raises(RuntimeError, match="ordering proof"):
-        raes._plan_scenario(tmp_path, config, backend, None, None)
+        raes.admit_raes_scenario(tmp_path, config, backend)
 
     assert calls == ["bind", "availability"]
 

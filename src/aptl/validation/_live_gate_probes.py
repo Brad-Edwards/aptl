@@ -103,7 +103,7 @@ def _compute_realization(
         )
         prepare_runtime_orchestration_for_scenario(scenario, backend)
         # Gather artifact availability at the backend trust boundary before
-        # planning, exactly as `aptl lab start` does (`_plan_scenario`): the image
+        # planning, exactly as `aptl lab start` does (`admit_raes_scenario`): the image
         # policy trusts a node's source image only against verified availability,
         # so a real-backend plan without it rejects every imaged node as
         # ``untrusted-image``.

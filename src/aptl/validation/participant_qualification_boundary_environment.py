@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from raes_contracts.runtime_state import OperationState
 
-from aptl.backends.raes import _plan_scenario
+from aptl.backends.raes import admit_raes_scenario
 from aptl.backends.raes_participant_apparatus import build_participant_apparatus
 from aptl.backends.raes_participant_driver import AptlParticipantControlPlane
 from aptl.backends.raes_participant_fixture import participant_episode_state_dir
@@ -50,13 +50,13 @@ def prepare_challenge_context(
 
     run_store.create_run(run_id)
     scenario_path = project_dir / SCENARIO_RELATIVE_PATH
-    target, plan = _plan_scenario(
+    admitted = admit_raes_scenario(
         project_dir,
         config,
         backend,
-        scenario_path,
-        None,
+        scenario_path=scenario_path,
     )
+    target, plan = admitted.target, admitted.execution_plan
     if any(diagnostic.is_error for diagnostic in plan.diagnostics):
         raise ValueError("boundary challenge scenario planning failed")
     bundle = project_tree_bundle(project_dir, scenario_path)

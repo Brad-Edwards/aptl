@@ -45,6 +45,20 @@ _INIT_CAPABILITY_BASELINE = frozenset(
 )
 _INIT_BIND_MOUNT_TARGETS = frozenset({"/sys/fs/cgroup"})
 
+# The listener half of that same baseline. Docker attaches its embedded DNS
+# resolver to every container on a user-defined network, listening on this
+# reserved address inside the container's own network namespace, on a tcp and a
+# udp port the daemon picks at attach time.
+#
+# Those two sockets are not workload exposure and cannot be declared: no SDL
+# author can name a port Docker chooses per attachment. Counting them as
+# undeclared exposure made the excess check reject *every* node that declares a
+# service listener, so the SEM-218 realization gate failed the whole lab start
+# (issue #951) — the check's own reason for existing (a leftover or hostile
+# listener) was never in play. Same carve-out the unix-socket exemption below
+# already makes for an init's internal sockets.
+_EMBEDDED_DNS_RESOLVER_ADDRESS = "127.0.0.11"
+
 
 def _sensitivity(value: object) -> str:
     """Return a protocol/sensitivity enum's canonical string value."""
@@ -175,7 +189,12 @@ def _has_undeclared_network_listeners(
     sockets: tuple[tuple[str, str, int], ...],
     declared: Sequence[object],
 ) -> bool:
-    """Return whether the container serves a tcp/udp listener no declaration covers."""
+    """Return whether the container serves a tcp/udp listener no declaration covers.
+
+    Docker's own embedded DNS resolver sockets are subtracted first, as runtime
+    baseline rather than realized workload state — see
+    :func:`_embedded_dns_resolver_sockets`.
+    """
 
     declared_keys = {
         (
@@ -186,6 +205,35 @@ def _has_undeclared_network_listeners(
         if _sensitivity(getattr(listener, "protocol", "")) != "unix"
         and getattr(listener, "port", None) is not None
     }
+    baseline = _embedded_dns_resolver_sockets(sockets)
+    realized = (socket for socket in sockets if socket not in baseline)
     return any(
-        (protocol, port) not in declared_keys for protocol, _address, port in sockets
+        (protocol, port) not in declared_keys for protocol, _address, port in realized
+    )
+
+
+def _embedded_dns_resolver_sockets(
+    sockets: tuple[tuple[str, str, int], ...],
+) -> frozenset[tuple[str, str, int]]:
+    """Return the sockets attributable to Docker's embedded DNS resolver.
+
+    The resolver opens exactly one tcp and one udp socket on
+    :data:`_EMBEDDED_DNS_RESOLVER_ADDRESS`. Nothing in the kernel's socket table
+    distinguishes those from a workload's own bind, and Linux lets a workload
+    bind an unused port on that address too — so exempting the address wholesale
+    would let a container hide a backdoor listener behind the baseline.
+
+    Attribution is therefore only safe while the address carries a single socket
+    of a protocol. A second one means neither can be attributed, so both stay
+    subject to excess detection and the gate rejects: fail closed rather than
+    subtract a socket that might be the workload's.
+    """
+
+    by_protocol: dict[str, list[tuple[str, str, int]]] = {}
+    for socket in sockets:
+        protocol, address, _port = socket
+        if address == _EMBEDDED_DNS_RESOLVER_ADDRESS:
+            by_protocol.setdefault(protocol, []).append(socket)
+    return frozenset(
+        candidates[0] for candidates in by_protocol.values() if len(candidates) == 1
     )

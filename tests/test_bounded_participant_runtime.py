@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from raes_contracts.runtime_state import OperationState
 
-from aptl.backends.raes import _plan_scenario
+from aptl.backends.raes import admit_raes_scenario
 from aptl.backends.raes_participant_apparatus import (
     build_participant_apparatus,
     project_participant_turn,
@@ -248,13 +248,13 @@ def _runtime(
     LocalRunStore,
 ]:
     backend = _StatefulBackend()
-    target, plan = _plan_scenario(
+    admitted = admit_raes_scenario(
         PROJECT_ROOT,
         AptlConfig(lab={"name": "test"}),
         backend,
-        SCENARIO,
-        None,
+        scenario_path=SCENARIO,
     )
+    target, plan = admitted.target, admitted.execution_plan
     store = LocalRunStore(tmp_path / "runs")
     store.create_run("readiness-run")
     target.participant_runtime.plan_authority.bind_runtime_context(

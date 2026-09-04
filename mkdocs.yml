@@ -95,6 +95,7 @@ nav:
     - "Issue #878 Scenario Verification Plugin Seam Preflight": architecture/issue-878-scenario-verification-plugin-seam-preflight.md
     - "Issue #905 Lab Lifecycle Robustness Preflight": architecture/issue-905-lab-lifecycle-robustness-preflight.md
     - "Issue #949 Orborus Control Authority Preflight": architecture/issue-949-orborus-control-authority-preflight.md
+    - "Issue #951 Fresh Env-Pack Start Preflight": architecture/issue-951-fresh-env-pack-start-preflight.md
   - Deployment: deployment.md
   - Components:
     - Wazuh SIEM: components/wazuh-siem.md

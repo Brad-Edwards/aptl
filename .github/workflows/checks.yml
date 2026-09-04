@@ -172,6 +172,82 @@ jobs:
         # measurement is not a concern.
         run: python -m pytest tests/test_techvault_static_gate.py -q -m integration -n auto
 
+  fresh-start-preflight:
+    name: Fresh-install lab-start pre-flight (issue #951)
+    runs-on: ubuntu-latest
+    # Blocking, and deliberately separate from `python-tests`: admitting the
+    # bundled env-pack needs Docker and takes minutes, which does not belong in
+    # the fast coverage run. It is the unit-level counterpart to
+    # `clean-install-lab-boot` — same regression, checked from a materialized
+    # project directory without booting containers.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: |
+          pip install --require-hashes -r requirements/dev.txt
+          pip install -e . --no-deps --no-build-isolation
+          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
+      - run: python -m pytest tests/test_lab_fresh_start.py -q -m integration
+
+  clean-install-lab-boot:
+    name: Clean-install lab boot and teardown (DEP-008)
+    runs-on: ubuntu-latest
+    # DEP-008 promises `pipx install aptl-labs && aptl lab init && aptl lab start`
+    # produces a working lab with no git clone. Nothing proved it: every other
+    # job installs the project editable from the checkout, and a developer
+    # checkout carries gitignored generated state (config/soc_certs/, .aptl/)
+    # that hides a fresh-install failure entirely. Issue #951 shipped exactly
+    # that failure to PyPI in 5.2.0 — the quick start failed in nine seconds for
+    # every scenario. This boots the smallest curated scenario from the built
+    # wheel in a clean environment so the released artifact is what gets tested.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Build the wheel with the locked, no-isolation toolchain
+        run: |
+          pip install --require-hashes -r requirements/ci.txt
+          python -m build --wheel --no-isolation --outdir dist/
+      - name: Install the wheel into a clean virtual environment
+        # Deliberately NOT `pip install -e .`, not the checkout's CLI, and not
+        # the local pack-interaction plugin: any of those would test something
+        # other than the artifact users install. `--no-deps` after the locked
+        # runtime set keeps the dependency closure pinned and hash-verified.
+        run: |
+          python -m venv "$RUNNER_TEMP/clean-venv"
+          "$RUNNER_TEMP/clean-venv/bin/pip" install --require-hashes -r requirements/runtime.txt
+          "$RUNNER_TEMP/clean-venv/bin/pip" install --no-deps dist/*.whl
+      - name: Materialize a lab project from the installed package
+        # Run from an empty directory so nothing in the checkout can satisfy an
+        # asset the wheel forgot to ship.
+        run: |
+          mkdir -p "$RUNNER_TEMP/clean-install"
+          cd "$RUNNER_TEMP/clean-install"
+          "$RUNNER_TEMP/clean-venv/bin/aptl" lab init ci-lab
+          test ! -e ci-lab/config/soc_certs
+          test ! -e ci-lab/.aptl
+      - name: Start the smallest curated scenario
+        # `aptl lab start` enforces the documented vm.max_map_count prerequisite
+        # on a native Linux Docker Engine, so the runner satisfies it the same
+        # way docs/getting-started/prerequisites.md tells an operator to.
+        run: |
+          sudo sysctl -w vm.max_map_count=262144
+          cd "$RUNNER_TEMP/clean-install/ci-lab"
+          "$RUNNER_TEMP/clean-venv/bin/aptl" lab start --scenario techvault-observability-core
+      - name: Stop the lab and remove its volumes
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP/clean-install/ci-lab"
+          "$RUNNER_TEMP/clean-venv/bin/aptl" lab stop --volumes --yes
+      - name: Assert no project containers, networks, or volumes remain
+        if: always()
+        run: |
+          "$RUNNER_TEMP/clean-venv/bin/python" scripts/ci/assert_project_teardown.py \
+            "$RUNNER_TEMP/clean-install/ci-lab"
+
   mcp-tests:
     name: MCP TypeScript tests + coverage
     runs-on: ubuntu-latest

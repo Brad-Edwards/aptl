@@ -47,6 +47,7 @@ from aptl.backends.raes_start_model import (
     DEFAULT_RAES_SCENARIO as DEFAULT_RAES_SCENARIO,
     AcesRunTarget,
     AcesStartOutcome,
+    AdmittedScenarioStart,
 )
 from aptl.core.config import AptlConfig
 from aptl.core.scenario_bundle import (
@@ -66,7 +67,10 @@ if TYPE_CHECKING:
 
 log = get_logger("raes-backend")
 
-_INSTANTIATION_FAILURE_MESSAGE = (
+# Fixed disclosure for a rejected variable binding: the rejected value can be an
+# operator secret, so no admission failure — here or in lab start's pre-mutation
+# admission — may echo it back (issue #951 moved that second call site).
+INSTANTIATION_FAILURE_MESSAGE = (
     "RAES runtime variable binding failed before deployment. Provide every "
     "required variable using its declared type and allowed values."
 )
@@ -128,33 +132,38 @@ def start_raes_scenario(
     scenario_path: Path | None = None,
     *,
     run_target: AcesRunTarget | None = None,
-    parameters: Mapping[str, object] | None = None,
     before_backend_retry: Callable[[], None] | None = None,
+    admitted: AdmittedScenarioStart | None = None,
 ) -> AcesStartOutcome:
     """Start an APTL lab by compiling and applying a RAES SDL scenario.
 
     ``run_target`` (resolved once for the whole lab-start run, REP-001 / GAP 4)
     is threaded into orchestration so workflow result and history artifacts
     persist under the same run directory the reproducibility record is written
-    to. ``parameters`` is the explicit per-run RAES binding mapping; only the
-    planner sees it, and APTL neither logs nor persists it.
+    to. Per-run RAES variable bindings are an *admission* input: supply them to
+    :func:`admit_raes_scenario` and pass the resulting admission here.
+
+    ``admitted`` is the scenario execution the caller already admitted through
+    :func:`admit_raes_scenario`. Lab start admits once, before it mutates
+    anything, and hands that same admission back here; re-planning would stage
+    the env-pack a second time and let a pre-start decision diverge from the
+    deployment it precedes (issue #951). ``None`` admits here, which keeps
+    every other caller unchanged.
     """
 
     resolved_scenario = _resolve_scenario_path(project_dir, scenario_path, config)
     try:
-        resolved_scenario = resolve_scenario_bundle(
-            project_dir, scenario_path, config
-        ).sdl_path
-        target, execution_plan = _plan_scenario(
-            project_dir,
-            config,
-            backend,
-            scenario_path,
-            parameters,
-        )
+        if admitted is None:
+            admitted = admit_raes_scenario(
+                project_dir,
+                config,
+                backend,
+                scenario_path=scenario_path,
+            )
+        resolved_scenario = admitted.bundle.sdl_path
         return _apply_with_backend_retry(
-            target,
-            execution_plan,
+            admitted.target,
+            admitted.execution_plan,
             resolved_scenario,
             run_target,
             before_backend_retry,
@@ -184,7 +193,7 @@ def _start_failure_outcome(
     if isinstance(exc, EnvPackError):
         error = redact(f"RAES scenario pack acquisition failed: {exc}")
     elif isinstance(exc, SDLInstantiationError):
-        error = _INSTANTIATION_FAILURE_MESSAGE
+        error = INSTANTIATION_FAILURE_MESSAGE
     else:
         error = redact(f"RAES runtime handoff failed: {exc}")
     return AcesStartOutcome(
@@ -197,14 +206,22 @@ def _start_failure_outcome(
     )
 
 
-def _plan_scenario(
+def admit_raes_scenario(
     project_dir: Path,
     config: AptlConfig,
     backend: "DeploymentBackend",
-    scenario_path: Path | None,
-    parameters: Mapping[str, object] | None,
-) -> tuple[RuntimeTarget, "ExecutionPlan"]:
-    """Build one RAES plan and the target that consumes its concrete model."""
+    *,
+    scenario_path: Path | None = None,
+    parameters: Mapping[str, object] | None = None,
+) -> AdmittedScenarioStart:
+    """Admit one scenario execution: resolve, parse, plan, and interpret it once.
+
+    This is the single admission every caller shares. Pre-mutation questions
+    (which profiles the run selects, which generated artifacts own which mounts,
+    which bundle root holds the Compose model) are answered from the returned
+    admission rather than by planning again, and the same admission is applied
+    by :func:`start_raes_scenario`. Nothing here mutates the deployment.
+    """
 
     # Resolve the scenario bundle once, here, where the scenario is resolved: an
     # explicit path (or in-tree config) yields the project tree; the configured
@@ -261,7 +278,12 @@ def _plan_scenario(
             execution_plan,
             bundle.sdl_path,
         )
-    return target, execution_plan
+    return AdmittedScenarioStart(
+        bundle=bundle,
+        target=target,
+        execution_plan=execution_plan,
+        realization=realization,
+    )
 
 
 def _apply_with_backend_retry(

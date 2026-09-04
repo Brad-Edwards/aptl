@@ -16,7 +16,7 @@ from raes_processor.compiler import compile_runtime_model
 from raes_contracts.runtime_state import OperationState
 from raes_runtime.control_plane import RuntimeControlPlane
 
-from aptl.backends.raes import _plan_scenario, create_aptl_runtime_target
+from aptl.backends.raes import admit_raes_scenario, create_aptl_runtime_target
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.backends.raes_participant_actions import PARTICIPANT_ACTION_ADDRESS
 from aptl.backends.raes_runtime_model_artifact import compiled_runtime_model_bytes
@@ -82,13 +82,12 @@ def test_compiled_model_artifact_rejects_lossy_string_coercion() -> None:
 
 def test_selected_scenario_has_no_blocking_backend_diagnostics() -> None:
     config = AptlConfig(lab={"name": "test"})
-    _, plan = _plan_scenario(
+    plan = admit_raes_scenario(
         PROJECT_ROOT,
         config,
         MagicMock(),
-        SCENARIO,
-        None,
-    )
+        scenario_path=SCENARIO,
+    ).execution_plan
 
     assert [diagnostic for diagnostic in plan.diagnostics if diagnostic.is_error] == []
     realization = interpret_provisioning_plan(
@@ -189,13 +188,13 @@ def test_participant_realization_readiness_fails_closed_on_missing_handler() -> 
 
 
 def test_final_runtime_target_retains_the_exact_admitted_plan_and_model() -> None:
-    target, plan = _plan_scenario(
+    admitted = admit_raes_scenario(
         PROJECT_ROOT,
         AptlConfig(lab={"name": "test"}),
         MagicMock(),
-        SCENARIO,
-        None,
+        scenario_path=SCENARIO,
     )
+    target, plan = admitted.target, admitted.execution_plan
 
     authority = target.participant_runtime.plan_authority
     assert authority is not None
@@ -210,13 +209,12 @@ def test_privileged_realization_rejects_same_name_with_unapproved_source(
 ) -> None:
     modified = tmp_path / SCENARIO.name
     modified.write_bytes(SCENARIO.read_bytes() + b"\n")
-    target, _ = _plan_scenario(
+    target = admit_raes_scenario(
         PROJECT_ROOT,
         AptlConfig(lab={"name": "test"}),
         MagicMock(),
-        modified,
-        None,
-    )
+        scenario_path=modified,
+    ).target
     authority = target.participant_runtime.plan_authority
     assert authority is not None
     assert authority.is_bounded_participant_agency is True

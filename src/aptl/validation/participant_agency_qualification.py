@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from aptl.backends.raes import _plan_scenario
+from aptl.backends.raes import admit_raes_scenario
 from aptl.backends.raes_participant_provider import (
     ParticipantDecisionSolicitation,
 )
@@ -109,13 +109,13 @@ def validate_participant_agency_qualification(
     selected_run_id = run_id or f"participant-qualification-{uuid4().hex}"
     run_store.create_run(selected_run_id)
     deployment = backend or get_backend(config, project_dir)
-    target, plan = _plan_scenario(
+    admitted = admit_raes_scenario(
         project_dir,
         config,
         deployment,
-        project_dir / SCENARIO_RELATIVE_PATH,
-        None,
+        scenario_path=project_dir / SCENARIO_RELATIVE_PATH,
     )
+    target, plan = admitted.target, admitted.execution_plan
     authority = target.participant_runtime.plan_authority
     if authority is None:
         raise ValueError("participant plan authority is unavailable")

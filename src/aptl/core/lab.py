@@ -14,7 +14,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 import icontract
 import yaml
@@ -94,8 +94,9 @@ from aptl.utils.redaction import redact
 if TYPE_CHECKING:
     from docker.client import DockerClient
 
+    from aptl.backends._raes_scenario_queries import AdmittedStartSurface
     from aptl.backends.raes import AcesStartOutcome
-    from aptl.backends.raes_start_model import AcesRunTarget
+    from aptl.backends.raes_start_model import AcesRunTarget, AdmittedScenarioStart
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("lab")
@@ -147,6 +148,7 @@ def start_raes_scenario(
     run_target: AcesRunTarget | None = None,
     parameters: Mapping[str, object] | None = None,
     before_backend_retry: Callable[[], None] | None = None,
+    admitted: "AdmittedScenarioStart | None" = None,
 ) -> AcesStartOutcome | LabResult:
     """Lazy RAES handoff import for the public lab-start path.
 
@@ -155,6 +157,8 @@ def start_raes_scenario(
     under the same run directory the run record is written to.
     ``before_backend_retry`` lets the lifecycle prepare SOC dependencies while
     the backend retains and reapplies the already admitted execution plan.
+    ``admitted`` is the execution `_step_load_config` already admitted, so the
+    handoff applies it instead of planning the scenario a second time (#951).
     """
     try:
         from aptl.backends.raes import start_raes_scenario as _start_raes_scenario
@@ -171,6 +175,7 @@ def start_raes_scenario(
         run_target=run_target,
         parameters=parameters,
         before_backend_retry=before_backend_retry,
+        admitted=admitted,
     )
 
 
@@ -254,7 +259,7 @@ def admitted_stateful_artifact_ownership(
     config: AptlConfig,
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
-) -> frozenset[tuple[str, str, str, str]]:
+) -> frozenset[tuple[str, str, str, str, str]]:
     """Lazy RAES import for exact pre-mutation artifact ownership."""
 
     from aptl.backends._raes_scenario_queries import (
@@ -262,6 +267,21 @@ def admitted_stateful_artifact_ownership(
     )
 
     return _load(project_dir, config, backend, scenario_path=scenario_path)
+
+
+def admit_start_surface(
+    project_dir: Path,
+    config: AptlConfig,
+    backend: "DeploymentBackend",
+    scenario_path: Path | None = None,
+) -> tuple["AdmittedScenarioStart", "AdmittedStartSurface"]:
+    """Lazy RAES import for the one admitted execution lab start reuses."""
+
+    from aptl.backends._raes_scenario_queries import (
+        admit_start_surface as _admit,
+    )
+
+    return _admit(project_dir, config, backend, scenario_path=scenario_path)
 
 
 WAZUH_IMAGE_VERSION = "4.12.0"
@@ -821,6 +841,13 @@ class _LabStartContext(object):
     run_store: object = None
     run_id: str | None = None
     stateful_artifact_ownership: frozenset[tuple[str, str, str, str, str]] = frozenset()
+    # The one admitted scenario execution (issue #951). `_step_load_config`
+    # admits it before any legacy mutation; `_step_start_containers` applies
+    # this exact object rather than planning (and re-staging the env-pack) a
+    # second time. `object` mirrors `raes_outcome`/`snapshot` above: typed at
+    # use sites to keep the RAES import lazy.
+    admitted_start: object = None
+    admitted_surface: "AdmittedStartSurface | None" = None
 
 
 # Ownership tuples are (address, generator, service_name, mount_destination,
@@ -1045,7 +1072,7 @@ def _step_load_config(ctx: _LabStartContext) -> LabResult | None:
             )
             result = _configure_verified_appliance_launch(ctx)
         if result is None:
-            result = _load_stateful_artifact_ownership(ctx)
+            result = _load_admitted_start_surface(ctx)
     return result
 
 
@@ -1160,27 +1187,35 @@ def _read_appliance_boot_id() -> str:
     return Path("/proc/sys/kernel/random/boot_id").read_text().strip()
 
 
-def _load_stateful_artifact_ownership(
+def _load_admitted_start_surface(
     ctx: _LabStartContext,
 ) -> LabResult | None:
-    """Cache exact admitted artifact consumers before legacy mutation."""
+    """Admit the selected scenario once and cache what pre-start steps need.
 
-    from aptl.backends.raes_start_model import DEFAULT_RAES_SCENARIO
+    ``ctx.scenario_path`` is handed to the resolver unchanged. Substituting a
+    default filename here is wrong twice over: ``DEFAULT_RAES_SCENARIO`` names
+    an in-tree document that no longer exists, and it is not where the default
+    env-pack lives, so the substitution made every fresh install admit nothing
+    and then fail the bind-mount pre-flight (issue #951). ``scenario_path=None``
+    means "resolve the configured selection", which is exactly what
+    ``resolve_scenario_bundle`` does — including staging and validating the
+    bundled env-pack.
 
-    scenario_path = ctx.scenario_path or DEFAULT_RAES_SCENARIO
-    if not scenario_path.is_absolute():
-        scenario_path = ctx.project_dir / scenario_path
-    if not scenario_path.is_file():
-        return None
+    Admission failure is fatal: continuing with no admitted facts is what
+    produced the regression, and every later step would be guessing.
+    """
+
+    from aptl.core.scenario_bundle import EnvPackError
+
+    assert ctx.config is not None and ctx.backend is not None
     try:
-        assert ctx.config is not None and ctx.backend is not None
-        ctx.stateful_artifact_ownership = admitted_stateful_artifact_ownership(
+        admitted, surface = admit_start_surface(
             ctx.project_dir,
             ctx.config,
             ctx.backend,
-            scenario_path=scenario_path,
+            scenario_path=ctx.scenario_path,
         )
-    except (OSError, TypeError, ValueError) as exc:
+    except (EnvPackError, OSError, TypeError, ValueError) as exc:
         return LabResult(
             success=False,
             error=(
@@ -1188,6 +1223,9 @@ def _load_stateful_artifact_ownership(
                 f"{redact(str(exc))}"
             ),
         )
+    ctx.admitted_start = admitted
+    ctx.admitted_surface = surface
+    ctx.stateful_artifact_ownership = surface.stateful_artifact_ownership
     return None
 
 
@@ -1206,9 +1244,18 @@ def _scenario_is_env_pack(ctx: _LabStartContext) -> bool:
     When it does, standup material the pack declares as generated artifacts
     (SSH pivot keys, authorized-key projections, the SOC CA) is produced during
     realization from the pack, not by the host-side lab-start steps.
+
+    The answer comes from the *resolved* bundle, not ``config.scenario.source``.
+    An explicit catalog id or scenario path wins selection and resolves to a
+    project-tree bundle even while the configured default names an env-pack, so
+    reading the config flag skipped the host-side producers a curated scenario
+    still depends on (issue #951).
     """
 
-    return ctx.config is not None and ctx.config.scenario.source == "env-pack"
+    from aptl.core.scenario_bundle import ScenarioSourceKind
+
+    surface = ctx.admitted_surface
+    return surface is not None and surface.source_kind is ScenarioSourceKind.ENV_PACK
 
 
 def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
@@ -1579,11 +1626,26 @@ def _step_generate_soc_certs(ctx: _LabStartContext) -> LabResult | None:
 
 
 def _step_check_bind_mounts(ctx: _LabStartContext) -> LabResult | None:
-    """Validate active Compose bind-mount sources before Docker runs."""
+    """Validate the bind-mount sources of the model this run actually applies.
+
+    The Compose model is a scenario-declared input, so it is read from the
+    admitted bundle root, never the engine checkout. A project-tree bundle ships
+    a static ``docker-compose.yml`` there and this stays its compatibility
+    guard; an env-pack ships none, the backend generates the base model from the
+    realization, and ``_check_bind_mounts`` finds no file to inspect. Scanning
+    the project's unrelated static file instead is what failed every fresh
+    install (issue #951).
+
+    Services are filtered by the profiles the *admitted realization* selected —
+    the surface ``docker compose --profile`` receives — not by
+    ``containers.enabled_profiles()``, which is the operator's capability
+    ceiling. A reduced catalog scenario must not be judged against SOC services
+    it never starts (issue #550's rule, applied here).
+    """
     log.info("Step 6b: Checking bind-mount sources...")
-    enabled = (
-        ctx.config.containers.enabled_profiles() if ctx.config is not None else None
-    )
+    surface = ctx.admitted_surface
+    project_root = surface.bundle_root if surface is not None else ctx.project_dir
+    enabled = list(surface.selected_profiles) if surface is not None else None
     stateful_owned = frozenset(
         (service_name, mount_destination, source_relpath)
         for _address, _generator, service_name, mount_destination, source_relpath in (
@@ -1591,7 +1653,7 @@ def _step_check_bind_mounts(ctx: _LabStartContext) -> LabResult | None:
         )
     )
     mount_errors = _check_bind_mounts(
-        ctx.project_dir,
+        project_root,
         enabled_profiles=enabled,
         stateful_owned_mounts=stateful_owned,
     )
@@ -1749,6 +1811,10 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
         ctx.config,
         ctx.backend,
         scenario_path=ctx.scenario_path,
+        # Apply the execution admitted at `_step_load_config`. Re-planning here
+        # would stage the env-pack a second time and let the pre-start
+        # decisions taken since then describe a different admission (#951).
+        admitted=cast("AdmittedScenarioStart | None", ctx.admitted_start),
         run_target=AcesRunTarget(run_store=ctx.run_store, run_id=ctx.run_id),
         # The RAES handoff invokes this only for a retryable backend-start
         # failure whose admitted plan actually selected SOC. Keeping that gate

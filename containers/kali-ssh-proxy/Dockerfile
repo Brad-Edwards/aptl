@@ -1,4 +1,4 @@
-FROM python:3.12-alpine@sha256:6d43704baacd1bfbe7c295d7f13079d5d8104ed33568873133f8fc69980419df
+FROM python:3.14-alpine@sha256:c6ead215bfd31f1e433d968853b7a769989117115b728874824e6c0a27cb96fc
 
 COPY containers/kali-ssh-proxy/proxy.py /usr/local/bin/aptl-ssh-proxy
 RUN chmod 0555 /usr/local/bin/aptl-ssh-proxy

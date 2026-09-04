@@ -5,7 +5,7 @@
 # `containers/ad/` and the shared Wazuh agent assets from
 # `containers/_wazuh-agent/` (issue #248). Compose declares this via
 # `build: { context: ., dockerfile: containers/ad/Dockerfile }`.
-FROM ubuntu:22.04@sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982
+FROM ubuntu:26.04@sha256:2260313b31c8c011cd2eebe728008efac1b3982be73eb71348ea2648d2c0e09b
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV SAMBA_DOMAIN=TECHVAULT

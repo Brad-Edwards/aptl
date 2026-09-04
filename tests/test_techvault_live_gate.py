@@ -71,9 +71,14 @@ class _Realization:
         self.nodes = tuple(nodes)
         self.profiles = frozenset(profiles)
         self.diagnostics = tuple(diagnostics)
+        self.spec = object()
 
     def details(self):
         return self._details
+
+    def deployment_spec(self, profiles):
+        assert profiles == sorted(self.profiles)
+        return self.spec
 
 
 class _Manager:
@@ -254,10 +259,18 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
             "scenario_variation", CATEGORY_BACKEND_INTERPRETATION, True
         )
 
+    def orchestration(*, project_dir, config, state):
+        return LiveGateCheck(
+            "runtime_orchestration_containment",
+            CATEGORY_BACKEND_INSTANTIATION,
+            True,
+        )
+
     monkeypatch.setattr(lgc, "check_static_prerequisite", static)
     monkeypatch.setattr(lgc, "check_boot_inputs_match_public_path", inputs)
     monkeypatch.setattr(lgc, "check_raes_driven_boot", boot)
     monkeypatch.setattr(lgc, "check_defensive_stack_readiness", readiness)
+    monkeypatch.setattr(lgc, "check_runtime_orchestration_containment", orchestration)
     monkeypatch.setattr(tlg, "_semantic_checks", semantic)
     monkeypatch.setattr(lgc, "check_run_archive_manifest", archive)
     monkeypatch.setattr(lgc, "check_scenario_variation", variation)
@@ -273,6 +286,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
         "defensive_stack_readiness",
         "kali_reachability",
         "telemetry_evidence_path",
+        "runtime_orchestration_containment",
         "run_archive_manifest",
         "scenario_variation",
     }
@@ -388,7 +402,49 @@ def test_check_raes_driven_boot_happy_populates_state(monkeypatch):
     assert check.category == CATEGORY_BACKEND_INSTANTIATION
     assert state.realization_details["nodes"]
     assert state.selected_profiles == ["dmz", "soc"]
+    assert state.deployment_spec is not None
     assert state.snapshot["containers"]
+
+
+def test_runtime_orchestration_containment_uses_post_work_backend_attestation(
+    monkeypatch,
+):
+    spec = object()
+    backend = types.SimpleNamespace(
+        verify_runtime_orchestration=lambda observed: (
+            LabResult(success=True) if observed is spec else LabResult(success=False)
+        )
+    )
+    monkeypatch.setattr(lgc, "get_backend", lambda *_args: backend)
+    state = LiveGateState(deployment_spec=spec)
+
+    check = lgc.check_runtime_orchestration_containment(
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        state=state,
+    )
+
+    assert check.passed
+
+
+def test_runtime_orchestration_containment_fails_closed(monkeypatch):
+    backend = types.SimpleNamespace(
+        verify_runtime_orchestration=lambda _spec: LabResult(
+            success=False,
+            error="Docker authority propagated to spawned child node/template.",
+        )
+    )
+    monkeypatch.setattr(lgc, "get_backend", lambda *_args: backend)
+    state = LiveGateState(deployment_spec=object())
+
+    check = lgc.check_runtime_orchestration_containment(
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        state=state,
+    )
+
+    assert not check.passed
+    assert "spawned child" in check.diagnostics[0]
 
 
 def test_check_raes_driven_boot_fails_on_interpretation_error(monkeypatch):

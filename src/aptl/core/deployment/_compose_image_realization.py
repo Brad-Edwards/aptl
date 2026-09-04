@@ -7,6 +7,9 @@ from pathlib import Path
 import yaml
 
 from aptl.core.deployment._compose_node_generation import base_compose_file
+from aptl.core.deployment._compose_spawn_image_realization import (
+    prepare_spawn_images,
+)
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
     DeploymentRealizationSpec,
@@ -115,6 +118,13 @@ class ComposeRealizationImageMixin:
             timeout=_IMAGE_REALIZATION_TIMEOUT,
         )
         return resolvable.returncode == 0
+
+    def _prepare_spawn_images(
+        self, realization: DeploymentRealizationSpec
+    ) -> LabResult | None:
+        """Prepare exact child images on the authority's bound Docker daemon."""
+
+        return prepare_spawn_images(self, realization)
 
     def materialize_component_image(
         self, image_ref: str, dockerfile_path: str, context_path: str

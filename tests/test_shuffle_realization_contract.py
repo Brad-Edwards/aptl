@@ -10,7 +10,10 @@ from pathlib import Path
 from raes.parser import parse_sdl_file
 
 from tests.helpers import techvault_scenario_path
-from tests.test_env_pack_realization import _realize_pack
+from tests.test_env_pack_realization import (
+    _realize_pack,
+    _without_downstream_orborus_authority,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -72,9 +75,10 @@ def test_released_pack_supplies_the_complete_shuffle_contract(tmp_path: Path) ->
     assert scenario.persistent_volumes["shuffle_data"].consumers[0].node == (
         "shuffle-backend"
     )
-    assert scenario.persistent_volumes[
-        "shuffle_opensearch_data"
-    ].consumers[0].node == "shuffle-opensearch"
+    assert (
+        scenario.persistent_volumes["shuffle_opensearch_data"].consumers[0].node
+        == "shuffle-opensearch"
+    )
 
 
 def test_generated_compose_uses_only_the_admitted_shuffle_runtime(
@@ -83,7 +87,12 @@ def test_generated_compose_uses_only_the_admitted_shuffle_runtime(
     from aptl.core.deployment._compose_node_generation import render_realization_compose
 
     realization = _realize_pack(tmp_path)
-    spec = realization.deployment_spec(sorted(realization.profiles))
+    # Issue #913 covers the released Shuffle backend contract. The independent
+    # Orborus authority remains fail-closed until env-packs #285 supplies its
+    # immutable, correlated child closure required by APTL #949.
+    spec = _without_downstream_orborus_authority(realization).deployment_spec(
+        sorted(realization.profiles)
+    )
     document = render_realization_compose(spec)
     backend = document["services"]["shuffle-backend"]
 

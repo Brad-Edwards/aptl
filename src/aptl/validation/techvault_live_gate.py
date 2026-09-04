@@ -76,6 +76,7 @@ CHECK_CATEGORY: dict[str, str] = {
     "defensive_stack_readiness": CATEGORY_DEFENSIVE_STACK_READINESS,
     "kali_reachability": CATEGORY_KALI_REACHABILITY,
     "telemetry_evidence_path": CATEGORY_EVIDENCE_CAPTURE,
+    "runtime_orchestration_containment": CATEGORY_BACKEND_INSTANTIATION,
     "run_archive_manifest": CATEGORY_EVIDENCE_CAPTURE,
     "scenario_variation": CATEGORY_BACKEND_INTERPRETATION,
 }
@@ -170,6 +171,7 @@ class LiveGateState(object):
     """
 
     realization_details: dict | None = None
+    deployment_spec: object | None = None
     selected_profiles: list[str] = field(default_factory=list)
     snapshot: dict | None = None
     evidence: dict | None = None
@@ -321,6 +323,17 @@ def _run_live_checks(
     #      installed the seam returns ``blocked`` and these checks fail, so core
     #      holds no scenario answer key of its own.
     results.extend(_semantic_checks(ctx, state))
+
+    # Re-attest after semantic work, when on-demand orchestration children have
+    # existed. Startup-only observation cannot cover workers spawned later by a
+    # workflow, so acceptance waits for this second backend-boundary check.
+    results.append(
+        checks.check_runtime_orchestration_containment(
+            project_dir=ctx.project_dir,
+            config=ctx.config,
+            state=state,
+        )
+    )
 
     # 6. Scenario variation — the same interpreter path realizes distinct
     #    declared content distinctly (#324 / SCN-010G live diagnostic). Run

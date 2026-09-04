@@ -27,6 +27,7 @@ from aptl.core.deployment._compose_seed_attribution import (
 )
 from aptl.core.deployment._compose_seed_execution import ComposeSeedExecutionMixin
 from aptl.core.deployment._compose_stop import stop_compose_lab
+from aptl.core.deployment._docker_endpoint_binding import DockerEndpointBindingMixin
 from aptl.core.deployment._compose_boundary import (
     DEFAULT_BOUNDARY_HELPER_IMAGE,
 )
@@ -44,6 +45,7 @@ _DOCKER_TIMEOUT = 30
 
 
 class DockerComposeBackend(
+    DockerEndpointBindingMixin,
     ComposeRuntimeInventoryMixin,
     ComposeQueryMixin,
     ComposeRealizationMixin,
@@ -85,6 +87,9 @@ class DockerComposeBackend(
         # content-placement address. Consumed by realization observation to
         # disclose the concern only after real corroboration (SEM-218).
         self._service_index_materialization_evidence: dict[str, dict[str, object]] = {}
+        self._docker_socket_identity: tuple[int, int] | None = None
+        self._docker_daemon_id: str | None = None
+        self._docker_host_override: str | None = None
 
     @property
     def project_dir(self) -> Path:
@@ -184,6 +189,11 @@ class DockerComposeBackend(
             kwargs["errors"] = "replace"
         if timeout is not None:
             kwargs["timeout"] = timeout
+        if self._docker_host_override is not None:
+            env = os.environ.copy()
+            env["DOCKER_HOST"] = self._docker_host_override
+            env.pop("DOCKER_CONTEXT", None)
+            kwargs["env"] = env
         return kwargs
 
     def _run(

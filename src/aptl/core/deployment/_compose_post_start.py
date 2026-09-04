@@ -11,12 +11,15 @@ only then are accounts realized.
 from __future__ import annotations
 
 from aptl.core.deployment._compose_service_health import wait_for_realized_health
+from aptl.core.deployment._compose_runtime_observation import (
+    ComposeRuntimeOrchestrationObservationMixin,
+)
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
 
 
-class ComposeRealizationPostStartMixin:
+class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMixin):
     """Reconcile, observe and finish a realization after Compose startup."""
 
     def _realization_result(
@@ -64,6 +67,8 @@ class ComposeRealizationPostStartMixin:
                 )
         if result is None:
             result = self._verify_stateful_authenticated_readiness(realization)
+        if result is None:
+            result = self._verify_runtime_orchestration(realization)
         if result is None:
             result = self._realize_accounts_step(realization) or LabResult(
                 success=True,

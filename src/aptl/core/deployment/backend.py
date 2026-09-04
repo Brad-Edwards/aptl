@@ -176,6 +176,26 @@ class DeploymentBackend(HostInventoryBackend, ContainerOpsBackend, Protocol):
         """
         ...
 
+    def bind_local_docker_socket(self) -> LabResult:
+        """Bind Docker operations to the exact local Unix control endpoint.
+
+        Backends that cannot expose the controller-local socket must fail
+        closed. The binding precedes artifact availability and remains valid
+        through image preparation and startup.
+        """
+        ...
+
+    def verify_runtime_orchestration(
+        self, realization: DeploymentRealizationSpec
+    ) -> LabResult:
+        """Re-attest admitted holders and spawned children after live work."""
+
+        ...
+
+    def revalidate_local_docker_socket(self) -> LabResult:
+        """Prove the bound socket and daemon identities are unchanged."""
+        ...
+
     def materialize_component_image(
         self, image_ref: str, dockerfile_path: str, context_path: str
     ) -> str | None:

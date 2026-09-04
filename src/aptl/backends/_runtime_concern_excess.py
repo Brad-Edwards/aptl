@@ -21,6 +21,8 @@ from typing import Any
 
 from raes.runtime_configuration import RuntimeConfiguration
 
+from aptl.runtime_authority import has_undeclared_runtime_mounts
+
 _STATEFUL_MOUNT_KINDS = frozenset({"bind", "tmpfs"})
 # Docker reports an all-interfaces bind as an empty HostIp; ``ss`` reports it as
 # ``0.0.0.0`` / ``::``. Both are wildcards — broader than any concrete address.
@@ -76,7 +78,9 @@ def _address_is_wildcard(address: str) -> bool:
     return address in _WILDCARD_ADDRESSES
 
 
-def _realized_scope_matches_declared(realized_address: str, declared_address: str) -> bool:
+def _realized_scope_matches_declared(
+    realized_address: str, declared_address: str
+) -> bool:
     """Return whether a realized bind address EXACTLY matches the declared scope.
 
     Both directions are a mismatch, not just one: a concrete declaration realized
@@ -166,20 +170,19 @@ def _has_undeclared_mounts(
     realized_mounts: Sequence[object],
     declared: list[object],
     runtime: RuntimeConfiguration,
+    *,
+    docker_authority_admitted: bool = False,
 ) -> bool:
     """Return whether the container carries an undeclared bind/tmpfs mount."""
 
     allowed_targets = {getattr(mount, "target", "") for mount in declared}
     if _runs_init(runtime):
         allowed_targets |= _INIT_BIND_MOUNT_TARGETS
-    for realized in realized_mounts:
-        if not isinstance(realized, Mapping):
-            continue
-        if realized.get("Type") not in _STATEFUL_MOUNT_KINDS:
-            continue
-        if realized.get("Destination") not in allowed_targets:
-            return True
-    return False
+    return has_undeclared_runtime_mounts(
+        realized_mounts,
+        allowed_targets=allowed_targets,
+        docker_authority_admitted=docker_authority_admitted,
+    )
 
 
 def _has_undeclared_network_listeners(
@@ -194,7 +197,10 @@ def _has_undeclared_network_listeners(
     """
 
     declared_keys = {
-        (_sensitivity(getattr(listener, "protocol", "")), int(getattr(listener, "port")))
+        (
+            _sensitivity(getattr(listener, "protocol", "")),
+            int(getattr(listener, "port")),
+        )
         for listener in declared
         if _sensitivity(getattr(listener, "protocol", "")) != "unix"
         and getattr(listener, "port", None) is not None

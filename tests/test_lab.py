@@ -2088,6 +2088,60 @@ class TestAdmittedStartSurface:
         assert ctx.stateful_artifact_ownership == frozenset()
         assert ctx.admitted_start is None
 
+    def test_rejected_variable_binding_never_discloses_the_value(
+        self, mocker, tmp_path
+    ):
+        """Admission moved earlier; the binding-disclosure boundary did not.
+
+        A rejected RAES variable binding can carry an operator secret. The
+        in-handoff failure path always projected a fixed message instead of the
+        exception; moving admission into `_step_load_config` (#951) must keep
+        that, not fall through to the generic redacted-exception branch.
+        """
+        from raes import SDLInstantiationError
+
+        from aptl.backends.raes import INSTANTIATION_FAILURE_MESSAGE
+        from aptl.core.lab import _load_admitted_start_surface
+
+        secret = "operator-supplied-tier-value"
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.admit_start_surface",
+            side_effect=SDLInstantiationError(
+                f"variable 'deployment_tier' rejected value {secret}"
+            ),
+        )
+
+        result = _load_admitted_start_surface(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert secret not in result.error
+        assert result.error == INSTANTIATION_FAILURE_MESSAGE
+
+    def test_sdl_parse_failure_fails_closed(self, mocker, tmp_path):
+        """Admission parses the scenario, so RAES parse errors must be caught.
+
+        `SDLError` is not an `OSError`/`ValueError`, so without an explicit
+        branch it would escape `_step_load_config` as an unhandled exception
+        instead of a `LabResult`.
+        """
+        from raes import SDLError
+
+        from aptl.core.lab import _load_admitted_start_surface
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.admit_start_surface",
+            side_effect=SDLError("fixture parse failure"),
+        )
+
+        result = _load_admitted_start_surface(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert "admission failed" in result.error
+
     def test_missing_env_pack_fails_closed(self, mocker, tmp_path):
         """A missing or rejected pack fails closed rather than resolving nothing."""
         from aptl.core.lab import _load_admitted_start_surface

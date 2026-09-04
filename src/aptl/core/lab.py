@@ -146,7 +146,6 @@ def start_raes_scenario(
     scenario_path: Path | None = None,
     *,
     run_target: AcesRunTarget | None = None,
-    parameters: Mapping[str, object] | None = None,
     before_backend_retry: Callable[[], None] | None = None,
     admitted: "AdmittedScenarioStart | None" = None,
 ) -> AcesStartOutcome | LabResult:
@@ -173,7 +172,6 @@ def start_raes_scenario(
         backend,
         scenario_path=scenario_path,
         run_target=run_target,
-        parameters=parameters,
         before_backend_retry=before_backend_retry,
         admitted=admitted,
     )
@@ -1202,9 +1200,16 @@ def _load_admitted_start_surface(
     bundled env-pack.
 
     Admission failure is fatal: continuing with no admitted facts is what
-    produced the regression, and every later step would be guessing.
+    produced the regression, and every later step would be guessing. Admission
+    parses and instantiates the scenario, so this catches the RAES parse and
+    binding errors too — and a rejected variable binding discloses only the
+    fixed message, never the value, exactly as the in-handoff failure path
+    always did. Moving admission here must not move that boundary.
     """
 
+    from raes import SDLError, SDLInstantiationError
+
+    from aptl.backends.raes import INSTANTIATION_FAILURE_MESSAGE
     from aptl.core.scenario_bundle import EnvPackError
 
     assert ctx.config is not None and ctx.backend is not None
@@ -1215,7 +1220,9 @@ def _load_admitted_start_surface(
             ctx.backend,
             scenario_path=ctx.scenario_path,
         )
-    except (EnvPackError, OSError, TypeError, ValueError) as exc:
+    except SDLInstantiationError:
+        return LabResult(success=False, error=INSTANTIATION_FAILURE_MESSAGE)
+    except (EnvPackError, SDLError, OSError, TypeError, ValueError) as exc:
         return LabResult(
             success=False,
             error=(

@@ -6,6 +6,7 @@ from unittest.mock import ANY, MagicMock
 
 import pytest
 
+from raes import SDLInstantiationError
 from raes_contracts.planning import (
     ChangeAction,
     EvaluationPlan,
@@ -1748,7 +1749,9 @@ def test_start_raes_scenario_passes_runtime_parameters_to_raes_planner(
         tmp_path,
         config,
         backend,
-        parameters=parameters,
+        admitted=raes.admit_raes_scenario(
+            tmp_path, config, backend, parameters=parameters
+        ),
     )
 
     assert result.lab_result.success is True
@@ -1865,12 +1868,22 @@ def test_start_raes_scenario_projects_instantiation_failure_without_values(
     backend = MagicMock()
     before_retry = MagicMock()
 
+    config = AptlConfig(lab={"name": "test"})
+    with pytest.raises(SDLInstantiationError):
+        raes.admit_raes_scenario(
+            tmp_path,
+            config,
+            backend,
+            scenario_path=scenario_path,
+            parameters={"deployment_tier": supplied_value},
+        )
+    # The handoff projects that same failure through its fixed message when it
+    # admits internally, so the rejected binding is never disclosed.
     result = raes.start_raes_scenario(
         tmp_path,
-        AptlConfig(lab={"name": "test"}),
+        config,
         backend,
         scenario_path=scenario_path,
-        parameters={"deployment_tier": supplied_value},
         before_backend_retry=before_retry,
     )
 
@@ -1919,7 +1932,18 @@ def test_start_raes_scenario_retries_soc_apply_without_replanning(mocker, tmp_pa
             ),
         ),
         backend,
-        parameters={"victim_os": "linux"},
+        admitted=raes.admit_raes_scenario(
+            tmp_path,
+            AptlConfig(
+                lab={"name": "test"},
+                containers={"soc": True},
+                scenario=ScenarioSourceConfig(
+                    source="project-tree", identity="techvault-operational"
+                ),
+            ),
+            backend,
+            parameters={"victim_os": "linux"},
+        ),
         before_backend_retry=before_retry,
     )
 

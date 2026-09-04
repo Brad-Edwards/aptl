@@ -26,6 +26,7 @@ from aptl.core.deployment._compose_stateful_model import artifact_source_path
 from aptl.core.scenario_bundle import ScenarioSourceKind
 
 if TYPE_CHECKING:
+    from aptl.backends.raes_realization_model import AptlRealization
     from aptl.backends.raes_start_model import AdmittedScenarioStart
     from aptl.core.deployment.backend import DeploymentBackend
 
@@ -95,7 +96,7 @@ def start_surface_of(
     )
 
 
-def _admitted_realization(admitted: "AdmittedScenarioStart"):
+def _admitted_realization(admitted: "AdmittedScenarioStart") -> "AptlRealization":
     """Return the admitted realization, refusing a blocking-diagnostic plan.
 
     A plan or realization that carries an error diagnostic never becomes a
@@ -123,7 +124,7 @@ def _admitted_realization(admitted: "AdmittedScenarioStart"):
 
 def _artifact_ownership(
     root: Path,
-    realization,
+    realization: "AptlRealization",
 ) -> frozenset[tuple[str, str, str, str, str]]:
     """Return exact addressed artifact consumers from the admitted graph.
 

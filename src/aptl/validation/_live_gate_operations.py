@@ -54,24 +54,32 @@ class DetectionResult(object):
 
 
 def _validate_origin(origin: object, error: str) -> str:
+    """Return one bounded container origin or raise the caller's stable error."""
+
     if not isinstance(origin, str) or not origin or len(origin) > 128:
         raise ValueError(error)
     return origin
 
 
 def _validate_address(address: object) -> str:
+    """Return one bounded network address accepted by the probe boundary."""
+
     if not isinstance(address, str) or not address or len(address) > 255:
         raise ValueError("invalid-network-operation")
     return address
 
 
 def _validate_port(port: object) -> int:
+    """Return one valid TCP port without treating booleans as integers."""
+
     if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
         raise ValueError("invalid-port")
     return port
 
 
 def _validate_argv(argv: object) -> tuple[str, ...]:
+    """Return bounded container argv with no empty or oversized members."""
+
     if not isinstance(argv, tuple) or not argv or len(argv) > 64:
         raise ValueError("invalid-container-operation")
     if any(not isinstance(item, str) or not item or len(item) > 4096 for item in argv):
@@ -80,6 +88,8 @@ def _validate_argv(argv: object) -> tuple[str, ...]:
 
 
 def _validate_timeout(timeout_seconds: object) -> int:
+    """Return one bounded backend execution timeout."""
+
     if (
         isinstance(timeout_seconds, bool)
         or not isinstance(timeout_seconds, int)

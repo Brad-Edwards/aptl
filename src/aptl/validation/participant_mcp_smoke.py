@@ -82,6 +82,8 @@ def _installed_plan_entry_points() -> list[metadata.EntryPoint]:
 
 
 def _load_installed_plan(selector: str) -> object:
+    """Load the one installed smoke plan whose selector matches exactly."""
+
     exact = [
         entry_point
         for entry_point in _installed_plan_entry_points()
@@ -100,6 +102,8 @@ def _load_installed_plan(selector: str) -> object:
 
 
 def _valid_operation(operation: McpSmokeOperation) -> bool:
+    """Return whether one operation is bounded and executable by the host."""
+
     identifiers = (operation.check_id, operation.server_id, operation.tool_name)
     return (
         all(_SAFE_ID.fullmatch(value) is not None for value in identifiers)
@@ -109,14 +113,13 @@ def _valid_operation(operation: McpSmokeOperation) -> bool:
 
 
 def _validated_operations(loaded: object) -> tuple[McpSmokeOperation, ...]:
-    valid_container = (
-        isinstance(loaded, tuple)
-        and bool(loaded)
-        and len(loaded) <= _MAX_OPERATIONS
-    )
-    if not valid_container or not all(
-        isinstance(item, McpSmokeOperation) for item in loaded
-    ):
+    """Return one bounded, typed, immutable installed operation plan."""
+
+    if not isinstance(loaded, tuple):
+        raise ParticipantMcpSmokeError("participant smoke plan is malformed")
+    valid_container = bool(loaded) and len(loaded) <= _MAX_OPERATIONS
+    valid_items = all(isinstance(item, McpSmokeOperation) for item in loaded)
+    if not valid_container or not valid_items:
         raise ParticipantMcpSmokeError("participant smoke plan is malformed")
     operations = tuple(loaded)
     if not all(_valid_operation(operation) for operation in operations):

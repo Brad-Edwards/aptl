@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aptl.core.deployment import get_backend
 from aptl.core.env import env_vars_from_dict, find_placeholder_env_values, load_dotenv
@@ -36,6 +36,8 @@ class EvidenceCollectionRequest(object):
 
 @dataclass(frozen=True)
 class _IndexerSettings(object):
+    """Validated endpoint and credentials for the core-owned Wazuh collector."""
+
     url: str
     auth: tuple[str, str]
 
@@ -44,6 +46,8 @@ def _indexer_settings(
     project_dir: Path,
     env_loader: Callable[[Path], dict[str, str]] | None,
 ) -> _IndexerSettings:
+    """Load and validate the project-local Wazuh indexer settings."""
+
     raw_env = (env_loader or load_dotenv)(project_dir / ".env")
     if find_placeholder_env_values(raw_env):
         raise ValueError("placeholder credentials")
@@ -60,10 +64,12 @@ def _indexer_settings(
 def _record_summary(
     state: "LiveGateState",
     start_iso: str,
-    eve: list[dict],
-    alerts: list[dict],
+    eve: list[dict[str, Any]],
+    alerts: list[dict[str, Any]],
     alert_matches: Callable[[object], bool],
-) -> list[dict]:
+) -> list[dict[str, Any]]:
+    """Persist a bounded evidence summary and return correlated alerts."""
+
     end_iso = _now_iso()
     traffic_eve = [event for event in eve if _is_traffic_event(event)]
     correlated_alerts = [alert for alert in alerts if alert_matches(alert)]
@@ -101,7 +107,9 @@ def collect_evidence_diagnostics(
         else:
             request.trigger()
             if request.monotonic_fn() >= request.deadline_monotonic:
-                diagnostics.append("verification deadline elapsed during evidence trigger")
+                diagnostics.append(
+                    "verification deadline elapsed during evidence trigger"
+                )
             else:
                 eve, alerts = _collect_until_evidence(
                     EvidencePollRequest(

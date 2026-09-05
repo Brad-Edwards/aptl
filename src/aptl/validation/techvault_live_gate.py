@@ -76,6 +76,7 @@ if TYPE_CHECKING:
     from aptl.core.runstore import RunStorageBackend
     from aptl.core.scenario_bundle import ScenarioBundle
 
+
 @dataclass(frozen=True)
 class _RunContext(object):
     """Immutable run-scoped inputs threaded through the post-boot checks.
@@ -311,11 +312,6 @@ def _map_verification_report(report: object) -> list[LiveGateCheck]:
     semantic checks with the blocking reason, so verification that could not
     happen never reads as verification that passed.
     """
-    from aptl.validation.scenario_verification import (
-        VerificationReport,
-        VerificationStatus,
-    )
-
     if not isinstance(report, VerificationReport):
         return [
             LiveGateCheck(
@@ -436,3 +432,22 @@ def _verification_identities(
             transport=provider,
         ),
     )
+
+
+__all__ = [
+    "CATEGORY_BACKEND_INSTANTIATION",
+    "CATEGORY_BACKEND_INTERPRETATION",
+    "CATEGORY_DEFENSIVE_STACK_READINESS",
+    "CATEGORY_EVIDENCE_CAPTURE",
+    "CATEGORY_KALI_REACHABILITY",
+    "CATEGORY_RAES_SPECIFICATION",
+    "CHECK_CATEGORY",
+    "DEFAULT_PROFILE",
+    "FAILURE_CATEGORIES",
+    "LiveGateCheck",
+    "LiveGateOptions",
+    "LiveGateReport",
+    "LiveGateState",
+    "make_live_gate_report",
+    "validate_live_deployment",
+]

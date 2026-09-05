@@ -51,7 +51,9 @@ def sequence(verifier: object, name: str) -> tuple[str, ...]:
     """Read one explicit, bounded tuple-of-strings compatibility claim."""
 
     value = getattr(verifier, name, None)
-    valid_items = isinstance(value, tuple) and all(
+    if not isinstance(value, tuple):
+        raise VerifierContractError("verifier-metadata-invalid")
+    valid_items = all(
         isinstance(item, str) and bool(item) and len(item) <= 256 for item in value
     )
     if (
@@ -65,6 +67,8 @@ def sequence(verifier: object, name: str) -> tuple[str, ...]:
 
 
 def _validate_scenario(context: VerificationContext) -> None:
+    """Validate the admitted scenario identity and its exact content digest."""
+
     identifier(context.scenario.identity, "verification-context-invalid")
     identifier(context.scenario.source_kind, "verification-context-invalid")
     text(context.scenario.version, "verification-context-invalid")
@@ -74,6 +78,8 @@ def _validate_scenario(context: VerificationContext) -> None:
 
 
 def _validate_backend(context: VerificationContext) -> None:
+    """Validate every backend compatibility dimension exposed to plugins."""
+
     identifier(context.backend.target_name, "verification-context-invalid")
     text(context.backend.target_version, "verification-context-invalid")
     identifier(context.backend.profile, "verification-context-invalid")
@@ -82,11 +88,15 @@ def _validate_backend(context: VerificationContext) -> None:
 
 
 def _valid_schedule_number(value: object, *, finite: bool) -> bool:
+    """Return whether a deadline or interval is a usable real number."""
+
     valid = not isinstance(value, bool) and isinstance(value, (int, float))
     return valid and (not finite or isfinite(value))
 
 
 def _validate_schedule(context: VerificationContext) -> None:
+    """Validate the host-owned deadline and polling interval."""
+
     deadline = context.deadline_monotonic
     interval = context.poll_interval_seconds
     valid_deadline = _valid_schedule_number(deadline, finite=False) and deadline > 0
@@ -98,13 +108,17 @@ def _validate_schedule(context: VerificationContext) -> None:
 
 
 def _validate_observation_items(value: tuple | list, depth: int) -> None:
+    """Validate a bounded sequence of framework observations recursively."""
+
     if len(value) > MAX_METADATA_ITEMS:
         raise VerifierContractError("verification-context-invalid")
     for item in value:
         _validate_observation(item, depth=depth + 1)
 
 
-def _validate_observation_mapping(value: Mapping, depth: int) -> None:
+def _validate_observation_mapping(value: Mapping[object, object], depth: int) -> None:
+    """Validate a bounded mapping of framework observations recursively."""
+
     if len(value) > MAX_METADATA_ITEMS:
         raise VerifierContractError("verification-context-invalid")
     for key, item in value.items():
@@ -120,17 +134,17 @@ def _validate_observation(value: object, *, depth: int = 0) -> None:
     if isinstance(value, str):
         if len(value) > MAX_DIAGNOSTIC_LENGTH:
             raise VerifierContractError("verification-context-invalid")
-    elif isinstance(value, (int, float, bool, type(None))):
-        pass
     elif isinstance(value, (tuple, list)):
         _validate_observation_items(value, depth)
     elif isinstance(value, Mapping):
         _validate_observation_mapping(value, depth)
-    else:
+    elif not isinstance(value, (int, float, bool, type(None))):
         raise VerifierContractError("verification-context-invalid")
 
 
 def _validate_observations(context: VerificationContext) -> None:
+    """Validate the complete bounded observation surface."""
+
     observations = context.observations
     if not isinstance(observations, Mapping) or len(observations) > MAX_METADATA_ITEMS:
         raise VerifierContractError("verification-context-invalid")
@@ -157,9 +171,10 @@ def validate_context(context: VerificationContext) -> None:
 def diagnostics(value: object) -> tuple[str, ...]:
     """Validate, bound, redact, and immutably copy diagnostic text."""
 
-    valid_items = isinstance(value, tuple) and all(
-        isinstance(item, str) and len(item) <= MAX_DIAGNOSTIC_LENGTH
-        for item in value
+    if not isinstance(value, tuple):
+        raise VerifierContractError("verifier-report-invalid")
+    valid_items = all(
+        isinstance(item, str) and len(item) <= MAX_DIAGNOSTIC_LENGTH for item in value
     )
     if not valid_items or len(value) > MAX_DIAGNOSTICS:
         raise VerifierContractError("verifier-report-invalid")
@@ -167,6 +182,8 @@ def diagnostics(value: object) -> tuple[str, ...]:
 
 
 def _copy_prerequisite(item: PrerequisiteResult) -> PrerequisiteResult:
+    """Return one validated host-owned prerequisite copy."""
+
     if not isinstance(item.status, PrerequisiteStatus):
         raise VerifierContractError("verifier-report-invalid")
     prerequisite_id = identifier(item.prerequisite_id, "verifier-report-invalid")
@@ -180,9 +197,9 @@ def _copy_prerequisite(item: PrerequisiteResult) -> PrerequisiteResult:
 def validated_prerequisites(value: object) -> tuple[PrerequisiteResult, ...]:
     """Validate and copy typed prerequisite outcomes."""
 
-    valid_items = isinstance(value, tuple) and all(
-        isinstance(item, PrerequisiteResult) for item in value
-    )
+    if not isinstance(value, tuple):
+        raise VerifierContractError("verifier-report-invalid")
+    valid_items = all(isinstance(item, PrerequisiteResult) for item in value)
     if not valid_items or len(value) > MAX_PREREQUISITES:
         raise VerifierContractError("verifier-report-invalid")
     copied = tuple(_copy_prerequisite(item) for item in value)
@@ -193,6 +210,8 @@ def validated_prerequisites(value: object) -> tuple[PrerequisiteResult, ...]:
 
 
 def _copy_check(item: VerificationCheck) -> VerificationCheck:
+    """Return one validated host-owned semantic-check copy."""
+
     if item.status not in (VerificationStatus.PASSED, VerificationStatus.FAILED):
         raise VerifierContractError("verifier-report-invalid")
     return VerificationCheck(
@@ -206,9 +225,9 @@ def _copy_check(item: VerificationCheck) -> VerificationCheck:
 def validated_checks(value: object) -> tuple[VerificationCheck, ...]:
     """Validate and copy typed semantic-check outcomes."""
 
-    valid_items = isinstance(value, tuple) and all(
-        isinstance(item, VerificationCheck) for item in value
-    )
+    if not isinstance(value, tuple):
+        raise VerifierContractError("verifier-report-invalid")
+    valid_items = all(isinstance(item, VerificationCheck) for item in value)
     if not valid_items or len(value) > MAX_CHECKS:
         raise VerifierContractError("verifier-report-invalid")
     copied = tuple(_copy_check(item) for item in value)

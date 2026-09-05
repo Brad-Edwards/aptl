@@ -241,97 +241,104 @@ docs/adrs/adr-050-terminal-attempt-archival-and-atomic-seal.md	architecture-hist
 docs/adrs/adr-051-component-level-raes-realization.md	architecture-history	Preserve immutable record with proposed disposition ledger
 docs/adrs/adr-052-configured-participant-credential-sourcing.md	architecture-history	Preserve immutable record with proposed disposition ledger
 docs/adrs/adr-053-pack-backend-deployment-serving-interaction-seam.md	architecture-history	Preserve immutable record with proposed disposition ledger
-docs/architecture/dep-003-ephemeral-lifecycle-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/dep-008-self-contained-lab-assets-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/enterprise-infrastructure.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/exp-005-safe-parameter-binding-provenance-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/exp-008-portable-evidence-bundle-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/exp-009-aces-archival-sealing-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/exp-010-capture-admission-evidence-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/grc-boundary-surface-vocabulary-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/index.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-550-soc-selected-profile-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-557-participant-implementation-binding-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-589-scenario-pack-capture-ownership-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-677-cert-producer-ownership-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-790-ssh-module-split-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-820-resource-bounded-participant-profile-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-821-participant-workbench-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-823-versioned-disposable-appliance-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-824-kiosk-launcher-reset-recovery-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-845-raes-hard-rename-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-847-openssf-scorecard-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-852-devmain-promotion-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-858-bounded-participant-choice-transport-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-859-idempotent-stuttering-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-862-explicit-participant-model-selection-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-866-techvault-realization-contract-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-874-scenario-bundle-realization-roots-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-875-scenario-content-declaration-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-876-dynamic-composition-readback-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-878-scenario-verification-plugin-seam-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-892-dynamic-composition-artifact-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-905-lab-lifecycle-robustness-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-913-shuffle-post-realization-mutation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/issue-951-fresh-env-pack-start-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/networking.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/obs-002-correlation-identity-clock-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/rep-003-run-scoped-provenance-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/architecture/rng-001-ephemeral-environments-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/components/appliance-boundary.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/components/default-defensive-posture.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/components/kali-redteam.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/components/mcp-integration.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/components/mcp-smoke-test-protocol.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/components/participant-workbench.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/components/reverse-engineering-container.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/components/victim-containers.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/components/wazuh-active-response.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/components/wazuh-siem.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/containers/victim-template-guide.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/deployment.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/getting-started/index.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/getting-started/installation.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/getting-started/prerequisites.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/getting-started/quick-start.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/index.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/app-1-appliance-boundary-materialization-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/bounded-participant-agency-readiness.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/dsl-003-runtime-substitution-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/dsl-005-assertion-evaluation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/dsl-008-realization-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/dsl-010-participant-runtime-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/issue-759-libvirt-service-reachability-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/m1-raes-conformance-truth-up-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/orchestration-capable-profile-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/paper-scenario-realization.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-curated-live-validation-gate.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-curated-live-validation-gate/.gitignore	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-curated-live-validation-gate/run-curated-live-proof.sh	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-curated-live-validation-gate/techvault-attacker-target/participant-action.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-curated-live-validation-gate/techvault-attacker-target/result.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-curated-live-validation-gate/techvault-attacker-target/snapshot.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-curated-live-validation-gate/techvault-defensive-min/result.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-curated-live-validation-gate/techvault-defensive-min/snapshot.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-curated-live-validation-gate/techvault-enterprise-web/result.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-curated-live-validation-gate/techvault-enterprise-web/snapshot.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-curated-live-validation-gate/techvault-observability-core/result.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-curated-live-validation-gate/techvault-observability-core/snapshot.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-curated-live-validation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-live-validation-gate.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-live-validation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-static-validation-gate.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/raes/techvault-static-validation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/red-team-taxonomy.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/reference/appliance-release.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/reference/appliance-seat-launcher.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/reference/evidence-bundle-export.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/reference/experiment-runs.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/reference/participant-profile.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/reference/techvault-company-profile.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/reference/techvault-osint-readiness.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/reference/techvault-scenario-overview.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/releasing.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/adrs/adr-054-lilrae-core-and-experience-ownership.md	architecture-history	Proposed identity-continuity and capability-ownership decision; filename retained only as a legacy locator
+docs/adrs/adr-055-local-runtime-authority-and-ownership.md	architecture-history	Proposed local authority decision; does not create a product split
+docs/adrs/adr-056-scenario-led-capability-qualification.md	architecture-history	Proposed scenario-led qualification decision for one product
+docs/adrs/adr-057-agent-execution-compartments.md	architecture-history	Proposed participant-compartment decision for one product
+docs/adrs/adr-058-adoption-and-security-release-gates.md	architecture-history	Proposed release-gate decision; TechVault remains a scenario pack
+docs/architecture/dep-003-ephemeral-lifecycle-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/dep-008-self-contained-lab-assets-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/enterprise-infrastructure.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/exp-005-safe-parameter-binding-provenance-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/exp-008-portable-evidence-bundle-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/exp-009-aces-archival-sealing-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/exp-010-capture-admission-evidence-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/grc-boundary-surface-vocabulary-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/index.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-550-soc-selected-profile-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-557-participant-implementation-binding-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-589-scenario-pack-capture-ownership-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-677-cert-producer-ownership-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-790-ssh-module-split-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-820-resource-bounded-participant-profile-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-821-participant-workbench-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-823-versioned-disposable-appliance-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-824-kiosk-launcher-reset-recovery-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-845-raes-hard-rename-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-847-openssf-scorecard-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-852-devmain-promotion-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-858-bounded-participant-choice-transport-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-859-idempotent-stuttering-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-862-explicit-participant-model-selection-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-866-techvault-realization-contract-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-874-scenario-bundle-realization-roots-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-875-scenario-content-declaration-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-876-dynamic-composition-readback-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-878-scenario-verification-plugin-seam-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-892-dynamic-composition-artifact-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-905-lab-lifecycle-robustness-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-913-shuffle-post-realization-mutation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-934-rename-boundary-preflight.md	architecture-history	Binding #934 rename-boundary inventory and retirement guardrails
+docs/architecture/issue-949-orborus-control-authority-preflight.md	architecture-history	Post-baseline architecture guidance; retain with its owning issue
+docs/architecture/issue-951-fresh-env-pack-start-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/networking.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/obs-002-correlation-identity-clock-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/rep-003-run-scoped-provenance-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/rng-001-ephemeral-environments-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/components/appliance-boundary.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/components/default-defensive-posture.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/components/kali-redteam.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/components/mcp-integration.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/components/mcp-smoke-test-protocol.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/components/participant-workbench.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/components/reverse-engineering-container.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/components/victim-containers.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/components/wazuh-active-response.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/components/wazuh-siem.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/containers/victim-template-guide.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/deployment.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/getting-started/index.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/getting-started/installation.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/getting-started/prerequisites.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/getting-started/quick-start.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/index.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/app-1-appliance-boundary-materialization-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/bounded-participant-agency-readiness.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/dsl-003-runtime-substitution-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/dsl-005-assertion-evaluation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/dsl-008-realization-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/dsl-010-participant-runtime-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/issue-759-libvirt-service-reachability-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/m1-raes-conformance-truth-up-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/orchestration-capable-profile-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/paper-scenario-realization.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-curated-live-validation-gate.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-curated-live-validation-gate/.gitignore	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-curated-live-validation-gate/run-curated-live-proof.sh	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-curated-live-validation-gate/techvault-attacker-target/participant-action.json	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-curated-live-validation-gate/techvault-attacker-target/result.json	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-curated-live-validation-gate/techvault-attacker-target/snapshot.json	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-curated-live-validation-gate/techvault-defensive-min/result.json	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-curated-live-validation-gate/techvault-defensive-min/snapshot.json	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-curated-live-validation-gate/techvault-enterprise-web/result.json	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-curated-live-validation-gate/techvault-enterprise-web/snapshot.json	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-curated-live-validation-gate/techvault-observability-core/result.json	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-curated-live-validation-gate/techvault-observability-core/snapshot.json	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-curated-live-validation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-live-validation-gate.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-live-validation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-static-validation-gate.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/raes/techvault-static-validation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/red-team-taxonomy.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/reference/appliance-release.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/reference/appliance-seat-launcher.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/reference/evidence-bundle-export.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/reference/experiment-runs.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/reference/participant-profile.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/reference/techvault-company-profile.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/reference/techvault-osint-readiness.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/reference/techvault-scenario-overview.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/releasing.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/requirements/AGT-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
 docs/requirements/AGT-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
 docs/requirements/AGT-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
@@ -487,27 +494,50 @@ docs/requirements/UI-005/requirement.md	requirements-follow-owner	Preserve exact
 docs/requirements/UI-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
 docs/requirements/UI-007/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
 docs/requirements/UI-008/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
-docs/sdl/complex-scenario-authoring-notes.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/sdl/complex-scenarios.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/sdl/index.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/sdl/limitations.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/sdl/parser.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/sdl/precedents.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/sdl/runtime-architecture.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/sdl/sections.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/sdl/techvault-curated-variants.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/sdl/testing.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/sdl/validation.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/specs/soc-feature-spec.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/specs/web-component-kit.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/specs/web-gui-design-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/specs/web-gui-design.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/testing/property-based-parser-tests.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/testing/smoke-test-plan.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/troubleshooting/index.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/workshop/emergency-rollout.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/workshop/playbook.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
-docs/workshop/walkthrough.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/reviews/962-lilrae-readiness/README.md	architecture-history	Corrected #962 assessment and #934 tracked-path reconciliation record
+docs/reviews/962-lilrae-readiness/adr-disposition.md	architecture-history	Disposition ledger for baseline ADRs; current owner vocabulary is scenario/capability based
+docs/reviews/962-lilrae-readiness/agent-sandboxing.md	architecture-history	Review evidence for participant confinement; retain with #962
+docs/reviews/962-lilrae-readiness/backlog-disposition.md	architecture-history	Issue-disposition ledger corrected to one-product rename semantics
+docs/reviews/962-lilrae-readiness/delivery-plan.md	architecture-history	Coordination and dependency plan corrected to technical cutover semantics
+docs/reviews/962-lilrae-readiness/dependency-changes.json	architecture-history	Immutable #962 dependency-change evidence
+docs/reviews/962-lilrae-readiness/evidence/README.md	architecture-history	Index for immutable #962 review evidence
+docs/reviews/962-lilrae-readiness/evidence/boundary-final.json	architecture-history	Immutable #962 final boundary-probe evidence
+docs/reviews/962-lilrae-readiness/evidence/boundary-probes.py	architecture-history	Reproducible #962 boundary-probe source
+docs/reviews/962-lilrae-readiness/evidence/boundary-results.json	architecture-history	Immutable #962 baseline boundary-probe evidence
+docs/reviews/962-lilrae-readiness/evidence/dev-protection.json	architecture-history	Immutable #962 repository-protection observation
+docs/reviews/962-lilrae-readiness/evidence/precommit-baseline.txt	architecture-history	Immutable #962 baseline pre-commit evidence
+docs/reviews/962-lilrae-readiness/evidence/precommit-final.txt	architecture-history	Immutable #962 final pre-commit evidence
+docs/reviews/962-lilrae-readiness/evidence/process-final.json	architecture-history	Immutable #962 final process-probe evidence
+docs/reviews/962-lilrae-readiness/evidence/process-probes.py	architecture-history	Reproducible #962 process-probe source
+docs/reviews/962-lilrae-readiness/evidence/process-results.json	architecture-history	Immutable #962 baseline process-probe evidence
+docs/reviews/962-lilrae-readiness/evidence/static-gate-final.txt	architecture-history	Immutable #962 final static-gate evidence
+docs/reviews/962-lilrae-readiness/evidence/static-gate.txt	architecture-history	Immutable #962 baseline static-gate evidence
+docs/reviews/962-lilrae-readiness/evidence/upstream-959-files.tsv	architecture-history	Immutable #962 upstream-delta evidence
+docs/reviews/962-lilrae-readiness/identity-disposition.tsv	architecture-history	Canonical #934 technical identity, compatibility, retirement, and coordination ledger
+docs/reviews/962-lilrae-readiness/migration-inventory.md	architecture-history	Corrected ownership inventory for one product across a rename
+docs/reviews/962-lilrae-readiness/tracked-file-inventory.tsv	architecture-history	Reconciled tracked-file ledger including its own audit artifact
+docs/reviews/962-lilrae-readiness/upstream-update.md	architecture-history	Immutable #962 update for merged orchestration-authority work
+docs/sdl/complex-scenario-authoring-notes.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/sdl/complex-scenarios.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/sdl/index.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/sdl/limitations.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/sdl/parser.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/sdl/precedents.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/sdl/runtime-architecture.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/sdl/sections.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/sdl/techvault-curated-variants.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/sdl/testing.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/sdl/validation.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/specs/soc-feature-spec.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/specs/web-component-kit.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/specs/web-gui-design-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/specs/web-gui-design.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/testing/property-based-parser-tests.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/testing/smoke-test-plan.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/troubleshooting/index.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/workshop/emergency-rollout.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/workshop/playbook.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/workshop/walkthrough.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 eslint.config.js	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 examples/aptl-lab-topology.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 examples/hospital-ransomware-surgery-day.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
@@ -516,27 +546,27 @@ examples/satcom-release-poisoning.sdl.yaml	split-pack-delivery	Inventory exact c
 generate-indexer-certs.yml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 hatch_build.py	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 lab_connections.txt	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
-mcp/aptl-mcp-common/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/captures.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/config.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/endpoint-url.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/http.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/redaction.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/runs.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/server.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/shells.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/ssh-contracts.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/ssh-manager.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/ssh-session.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/ssh.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/telemetry.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/tools/api-definitions.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/tools/api-handlers.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/tools/definitions.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/tools/handlers.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/src/utils.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/package-lock.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/package.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/captures.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/config.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/endpoint-url.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/http.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/index.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/redaction.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/runs.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/server.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/shells.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/ssh-contracts.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/ssh-manager.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/ssh-session.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/ssh.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/telemetry.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/tools/api-definitions.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/tools/api-handlers.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/tools/definitions.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/tools/handlers.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/src/utils.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
 mcp/aptl-mcp-common/tests/api-tools.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 mcp/aptl-mcp-common/tests/captures.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 mcp/aptl-mcp-common/tests/config-env-substitution.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -557,97 +587,97 @@ mcp/aptl-mcp-common/tests/ssh.test.ts	tests-follow-owner	Retain meaningful bound
 mcp/aptl-mcp-common/tests/telemetry.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 mcp/aptl-mcp-common/tests/tools-definitions.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 mcp/aptl-mcp-common/tests/tools-handlers.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
-mcp/aptl-mcp-common/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/aptl-mcp-common/vitest.config.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/build-all-mcps.sh	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-casemgmt/.gitignore	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-casemgmt/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-casemgmt/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-casemgmt/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-casemgmt/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-casemgmt/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-casemgmt/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-indexer/.gitignore	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-indexer/build/index.js	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-indexer/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-indexer/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-indexer/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-indexer/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-indexer/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-indexer/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-indexer/vitest.config.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-network/.gitignore	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-network/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-network/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-network/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-network/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-network/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-network/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-red/.gitignore	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-red/.prettierrc	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-red/build/index.js	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-red/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-red/eslint.config.js	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-red/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-red/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-red/src/capture.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-red/src/classifier.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-red/src/effective-mode.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-red/src/extractor.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-red/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-red/src/logger.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/tsconfig.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/aptl-mcp-common/vitest.config.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/build-all-mcps.sh	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-casemgmt/.gitignore	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-casemgmt/docker-lab-config.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-casemgmt/package-lock.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-casemgmt/package.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-casemgmt/src/index.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-casemgmt/tsconfig.build.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-casemgmt/tsconfig.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-indexer/.gitignore	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-indexer/build/index.js	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-indexer/docker-lab-config.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-indexer/package-lock.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-indexer/package.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-indexer/src/index.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-indexer/tsconfig.build.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-indexer/tsconfig.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-indexer/vitest.config.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-network/.gitignore	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-network/docker-lab-config.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-network/package-lock.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-network/package.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-network/src/index.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-network/tsconfig.build.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-network/tsconfig.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-red/.gitignore	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-red/.prettierrc	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-red/build/index.js	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-red/docker-lab-config.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-red/eslint.config.js	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-red/package-lock.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-red/package.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-red/src/capture.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-red/src/classifier.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-red/src/effective-mode.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-red/src/extractor.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-red/src/index.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-red/src/logger.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
 mcp/mcp-red/tests/capture.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 mcp/mcp-red/tests/classifier.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 mcp/mcp-red/tests/effective-mode.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 mcp/mcp-red/tests/extractor.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 mcp/mcp-red/tests/logger.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
-mcp/mcp-red/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-red/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-red/vitest.config.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-reverse/.gitignore	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-reverse/.prettierrc	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-reverse/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-reverse/eslint.config.js	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-reverse/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-reverse/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-reverse/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-reverse/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-reverse/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-reverse/vitest.config.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-soar/.gitignore	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-soar/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-soar/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-soar/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-soar/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-soar/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-soar/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-threatintel/.gitignore	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-threatintel/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-threatintel/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-threatintel/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-threatintel/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-threatintel/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-threatintel/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-wazuh/build/index.js	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-wazuh/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-wazuh/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-wazuh/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-wazuh/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-wazuh/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/mcp-wazuh/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
-mcp/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/tsconfig.build.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-red/tsconfig.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-red/vitest.config.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-reverse/.gitignore	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-reverse/.prettierrc	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-reverse/docker-lab-config.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-reverse/eslint.config.js	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-reverse/package-lock.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-reverse/package.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-reverse/src/index.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-reverse/tsconfig.build.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-reverse/tsconfig.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-reverse/vitest.config.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-soar/.gitignore	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-soar/docker-lab-config.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-soar/package-lock.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-soar/package.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-soar/src/index.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-soar/tsconfig.build.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-soar/tsconfig.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-threatintel/.gitignore	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-threatintel/docker-lab-config.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-threatintel/package-lock.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-threatintel/package.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-threatintel/src/index.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-threatintel/tsconfig.build.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-threatintel/tsconfig.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-wazuh/build/index.js	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-wazuh/docker-lab-config.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-wazuh/package-lock.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-wazuh/package.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-wazuh/src/index.ts	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-wazuh/tsconfig.build.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/mcp-wazuh/tsconfig.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
+mcp/package-lock.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
 mkdocs.yml	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 participant-profiles/guided-purple-v1/aptl.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
 participant-profiles/guided-purple-v1/asset-lock.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
 participant-profiles/guided-purple-v1/narrative.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
 participant-profiles/guided-purple-v1/profile.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
 participant-profiles/guided-purple-v1/readiness.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
-plugins/aptl-techvault-pack-interaction/README.md	experience-plugin	Independent trusted executable package with compatibility qualification
-plugins/aptl-techvault-pack-interaction/pyproject.toml	experience-plugin	Independent trusted executable package with compatibility qualification
-plugins/aptl-techvault-pack-interaction/src/aptl_techvault_pack_interaction/__init__.py	experience-plugin	Independent trusted executable package with compatibility qualification
-plugins/aptl-techvault-verifier/README.md	experience-plugin	Independent trusted executable package with compatibility qualification
-plugins/aptl-techvault-verifier/pyproject.toml	experience-plugin	Independent trusted executable package with compatibility qualification
-plugins/aptl-techvault-verifier/src/aptl_techvault_verifier/__init__.py	experience-plugin	Independent trusted executable package with compatibility qualification
+plugins/aptl-techvault-pack-interaction/README.md	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
+plugins/aptl-techvault-pack-interaction/pyproject.toml	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
+plugins/aptl-techvault-pack-interaction/src/aptl_techvault_pack_interaction/__init__.py	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
+plugins/aptl-techvault-verifier/README.md	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
+plugins/aptl-techvault-verifier/pyproject.toml	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
+plugins/aptl-techvault-verifier/src/aptl_techvault_verifier/__init__.py	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
 pyproject.toml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 release-please-config.json	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 requirements/ci.txt	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
@@ -771,7 +801,7 @@ src/aptl/backends/raes_evaluator.py	core-candidate	Migrate only after public-imp
 src/aptl/backends/raes_execution_helpers.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_image_free_content_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_image_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
-src/aptl/backends/raes_manifest.py	split-core-experience	Cut scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
+src/aptl/backends/raes_manifest.py	mixed-lifecycle-policy	Separate scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
 src/aptl/backends/raes_materializer.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_materializer_engine.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_node_materialization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -811,6 +841,7 @@ src/aptl/backends/raes_realization_values.py	core-candidate	Migrate only after p
 src/aptl/backends/raes_repro.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_runtime_model_artifact.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_runtime_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_runtime_orchestration.py	core-candidate	Scenario-independent RAES orchestration adapter added after the #962 baseline; retain and assess under #970
 src/aptl/backends/raes_service_index_schema.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_start_model.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_stateful_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -854,10 +885,10 @@ src/aptl/core/archival/verify.py	core-candidate	Migrate only after public-import
 src/aptl/core/assets.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/attacks.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/certs.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
-src/aptl/core/collectors.py	split-core-experience	Cut scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
-src/aptl/core/config.py	split-core-experience	Cut scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
+src/aptl/core/collectors.py	mixed-lifecycle-policy	Separate scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
+src/aptl/core/config.py	mixed-lifecycle-policy	Separate scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
 src/aptl/core/content_seed.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
-src/aptl/core/continuity.py	split-core-experience	Cut scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
+src/aptl/core/continuity.py	mixed-lifecycle-policy	Separate scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
 src/aptl/core/contracts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/correlation/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/correlation/_assemble.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -876,12 +907,14 @@ src/aptl/core/deployment/_compose_base_substrate.py	core-candidate	Migrate only 
 src/aptl/core/deployment/_compose_boundary.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_boundary_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_build_dedupe.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_child_lifecycle.py	backend-substrate	Post-baseline Compose child-lifecycle mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_content_mounts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_content_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_image_fetch.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_image_free_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_image_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_lifecycle.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_mixed_realization.py	backend-substrate	Post-baseline mixed-realization compatibility mechanism; retire only after declared parity
 src/aptl/core/deployment/_compose_model_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_network_conflicts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_network_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -893,11 +926,14 @@ src/aptl/core/deployment/_compose_queries.py	core-candidate	Migrate only after p
 src/aptl/core/deployment/_compose_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_realization_networks.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_runtime_inventory.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_runtime_observation.py	backend-substrate	Post-baseline native runtime observation mechanism; retain with deployment authority
+src/aptl/core/deployment/_compose_runtime_orchestration.py	backend-substrate	Post-baseline Compose runtime-orchestration mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_seed_attribution.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_seed_execution.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_seed_safety.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_service_health.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_service_index_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_spawn_image_realization.py	backend-substrate	Post-baseline child-image realization mechanism; retain with exact authority checks
 src/aptl/core/deployment/_compose_stateful_constants.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_stateful_graph.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_stateful_model.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -906,6 +942,8 @@ src/aptl/core/deployment/_compose_stateful_realization.py	core-candidate	Migrate
 src/aptl/core/deployment/_compose_stateful_services.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_stop.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_volume_cleanup.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_docker_endpoint_binding.py	backend-substrate	Post-baseline Docker endpoint binding; retain with ownership and exposure checks
+src/aptl/core/deployment/_docker_image_identity.py	backend-substrate	Post-baseline Docker image identity helper; retain with digest evidence
 src/aptl/core/deployment/_flag_signing_keys.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_proc_net_listeners.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_service_index_materialization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -922,7 +960,7 @@ src/aptl/core/deployment/errors.py	core-candidate	Migrate only after public-impo
 src/aptl/core/deployment/realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/ssh_compose.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/detection.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
-src/aptl/core/endpoints.py	split-core-experience	Cut scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
+src/aptl/core/endpoints.py	mixed-lifecycle-policy	Separate scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
 src/aptl/core/env.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/evidence/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/evidence/_persist.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -983,7 +1021,7 @@ src/aptl/core/host_keys.py	core-candidate	Migrate only after public-import, hist
 src/aptl/core/host_ports.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/hostenv.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/kill.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
-src/aptl/core/lab.py	split-core-experience	Cut scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
+src/aptl/core/lab.py	mixed-lifecycle-policy	Separate scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
 src/aptl/core/lab_types.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/lifecycle_enforce.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/lifecycle_guard.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1016,22 +1054,23 @@ src/aptl/core/scenarios.py	core-candidate	Migrate only after public-import, hist
 src/aptl/core/seed_spec.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/services.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/session.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
-src/aptl/core/snapshot.py	split-core-experience	Cut scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
+src/aptl/core/snapshot.py	mixed-lifecycle-policy	Separate scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
 src/aptl/core/snapshot_models.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/soc_ca.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/ssh.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/suricata_seed.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/sysreqs.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/telemetry.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
-src/aptl/services/__init__.py	experience-plugin	SOC-specific service integration
-src/aptl/services/misp_suricata_sync/__init__.py	experience-plugin	SOC-specific service integration
-src/aptl/services/misp_suricata_sync/config.py	experience-plugin	SOC-specific service integration
-src/aptl/services/misp_suricata_sync/main.py	experience-plugin	SOC-specific service integration
-src/aptl/services/misp_suricata_sync/misp_client.py	experience-plugin	SOC-specific service integration
-src/aptl/services/misp_suricata_sync/models.py	experience-plugin	SOC-specific service integration
-src/aptl/services/misp_suricata_sync/rule_writer.py	experience-plugin	SOC-specific service integration
-src/aptl/services/misp_suricata_sync/suricata_reloader.py	experience-plugin	SOC-specific service integration
-src/aptl/services/misp_suricata_sync/translator.py	experience-plugin	SOC-specific service integration
+src/aptl/runtime_authority.py	core-candidate	Post-baseline scenario-independent runtime authority contract; retain and assess under #970
+src/aptl/services/__init__.py	scenario-integration-plugin	Selected TechVault SOC service integration; not a product layer
+src/aptl/services/misp_suricata_sync/__init__.py	scenario-integration-plugin	Selected TechVault SOC service integration; not a product layer
+src/aptl/services/misp_suricata_sync/config.py	scenario-integration-plugin	Selected TechVault SOC service integration; not a product layer
+src/aptl/services/misp_suricata_sync/main.py	scenario-integration-plugin	Selected TechVault SOC service integration; not a product layer
+src/aptl/services/misp_suricata_sync/misp_client.py	scenario-integration-plugin	Selected TechVault SOC service integration; not a product layer
+src/aptl/services/misp_suricata_sync/models.py	scenario-integration-plugin	Selected TechVault SOC service integration; not a product layer
+src/aptl/services/misp_suricata_sync/rule_writer.py	scenario-integration-plugin	Selected TechVault SOC service integration; not a product layer
+src/aptl/services/misp_suricata_sync/suricata_reloader.py	scenario-integration-plugin	Selected TechVault SOC service integration; not a product layer
+src/aptl/services/misp_suricata_sync/translator.py	scenario-integration-plugin	Selected TechVault SOC service integration; not a product layer
 src/aptl/utils/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/utils/_pathsafe_core.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/utils/_pathsafe_read.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1230,6 +1269,7 @@ tests/test_lab_fresh_start.py	tests-follow-owner	Retain meaningful boundary and 
 tests/test_lab_init_cli.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_lifecycle_guard.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_lifecycle_policy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_lilrae_rename_boundary.py	tests-follow-owner	Structural gate for #934 identity, inventory, wording, and retirement invariants
 tests/test_line_endings.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_listener_observation_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_live_gate_operations.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1296,6 +1336,7 @@ tests/test_raes_realization_service_ports.py	tests-follow-owner	Retain meaningfu
 tests/test_raes_repro.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_raes_runtime_environment.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_raes_runtime_observation.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_runtime_orchestration.py	tests-follow-owner	Post-baseline regression coverage for the RAES orchestration boundary
 tests/test_raes_service_index_schema.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_raes_service_index_schema_lowering.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_raes_stateful_realization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

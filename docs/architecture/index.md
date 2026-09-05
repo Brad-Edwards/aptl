@@ -156,6 +156,7 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [Issue #934 APTL-To-LilRAE Rename Boundary](issue-934-rename-boundary-preflight.md)
 - [Issue #951 Fresh Env-Pack Start](issue-951-fresh-env-pack-start-preflight.md)
 - [Issue #913 Shuffle Post-Realization Mutation](issue-913-shuffle-post-realization-mutation-preflight.md)
 - [Issue #905 Lab Lifecycle Robustness](issue-905-lab-lifecycle-robustness-preflight.md)

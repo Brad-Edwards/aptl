@@ -10,7 +10,8 @@ TechVault already lives in
 for now. #880's remaining role in this graph is consumer integration and
 residual APTL cleanup/parity, not an outstanding physical pack relocation.
 Pack authoring belongs with the existing env-packs content; backend fixes and
-qualification remain with APTL as it becomes LilRAE.
+qualification remain with the same product while its technical APTL identities
+are dispositioned for the LilRAE rename.
 
 ## Milestones
 
@@ -18,7 +19,7 @@ qualification remain with APTL as it becomes LilRAE.
 | --- | --- | --- |
 | [Local Docker isolation hardening](https://github.com/Brad-Edwards/aptl/milestone/33) | Exact supported local profile has enforceable authority, owned state and tested failure behavior | #955–#958, #963–#968, #856, #939, #491, #455/#456 |
 | [Quickstart from released artifacts](https://github.com/Brad-Edwards/aptl/milestone/32) | Existing packaged APTL path has truthful docs/catalog, bounded artifact availability and actionable failed-start recovery | #949, #952–#954; the tiny Hub journey remains LilRAE #10 |
-| [LilRAE migration: core boundary](https://github.com/Brad-Edwards/aptl/milestone/34) | One scenario-independent backend with lineage, optional experience packages and an explicit migration path | #934, #970, #878–#880, #591/#592, with LilRAE #3/#6 |
+| [LilRAE rename: capability boundary](https://github.com/Brad-Edwards/aptl/milestone/34) | One product with scenario-independent lifecycle behavior, optional scenario-pack integrations, and explicit technical-identity migration | #934, #970, #878–#880, #591/#592, with LilRAE #3/#6 |
 | [LilRAE adoption: release qualification](https://github.com/Brad-Edwards/aptl/milestone/35) | Required evidence gates and exact released tiny/advanced journeys on claimed platforms | #969, #870/#685, #961, scoped user-doc work in #851; LilRAE #4/#9/#10 and Hub #3 |
 
 The existing realization follow-up milestone owns #909/#910/#912/#915–#918 and
@@ -31,7 +32,7 @@ actual GitHub dependency relationships; prerequisite points to dependent.
 
 ```mermaid
 flowchart TD
-    envelope["LilRAE #6: envelope design"] --> migration["LilRAE #3: core migration"]
+    envelope["LilRAE #6: envelope design"] --> migration["LilRAE #3: history-preserving technical cutover"]
     inventory["APTL #934: ownership inventory"] --> core["APTL #970: lifecycle separation"]
     ownership["APTL #964: owned resources"] --> core
     core --> migration
@@ -62,7 +63,7 @@ until its profile-specific evidence exists.
 - [#967: fix: validate MCP tool arguments at the server boundary](https://github.com/Brad-Edwards/aptl/issues/967).
 - [#968: feat: enforce and disclose egress for the ordinary local range](https://github.com/Brad-Edwards/aptl/issues/968).
 - [#969: ci: gate adoption on platform security and declared conformance evidence](https://github.com/Brad-Edwards/aptl/issues/969).
-- [#970: refactor: separate generic lab lifecycle from experience startup hooks](https://github.com/Brad-Edwards/aptl/issues/970).
+- [#970: refactor: separate generic lab lifecycle from scenario-pack startup hooks](https://github.com/Brad-Edwards/aptl/issues/970).
 
 ## Dependency changes
 
@@ -102,7 +103,7 @@ own gate. [GitHub issue dependency API](https://docs.github.com/en/rest/issues/i
 ## Work that can start now
 
 - Fix the independently reproduced #963–#967 defects and #956 admission bypass.
-- Decide the profile/ownership boundaries in LilRAE #6 and APTL #934 using the
+- Decide the capability/ownership boundaries in LilRAE #6 and APTL #934 using the
   proposed ADRs and this baseline; prepare contract and negative tests.
 - Build #969 gate infrastructure while fixes proceed; qualification cannot pass
   a profile whose required fixes and evidence remain incomplete.

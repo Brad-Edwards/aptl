@@ -19,6 +19,10 @@ import pytest
 from aptl.core.config import AptlConfig
 from aptl.core.lab_types import LabResult, StartupOutcome
 from aptl.core.runstore import LocalRunStore
+from aptl.validation.scenario_verification import (
+    VerificationReport,
+    VerificationStatus,
+)
 from aptl.validation import _live_gate_checks as lgc
 from aptl.validation import techvault_live_gate as tlg
 from aptl.validation import _live_gate_probes as lgp
@@ -43,9 +47,8 @@ from tests.helpers import techvault_scenario_bundle
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 # The default TechVault scenario now ships as the bundled env-pack (#875); stage
 # it once for the module and drive the live gate from its validated SDL.
-SCENARIO = techvault_scenario_bundle(
-    Path(tempfile.mkdtemp(prefix="aptl-live-gate-"))
-).sdl_path
+BUNDLE = techvault_scenario_bundle(Path(tempfile.mkdtemp(prefix="aptl-live-gate-")))
+SCENARIO = BUNDLE.sdl_path
 
 
 # --------------------------------------------------------------------------- #
@@ -199,14 +202,33 @@ def test_live_gate_report_passed_failures_categories_and_render():
         "kali_reachability", CATEGORY_KALI_REACHABILITY, False, ("unreachable",)
     )
     report = LiveGateReport("scn", "provisioning-only", "rid", (ok, bad))
+    assert isinstance(report, VerificationReport)
+    assert all(type(check).__name__ == "VerificationCheck" for check in report.checks)
     assert report.passed is False
-    assert report.failures() == (bad,)
+    assert tuple(check.check_id for check in report.failures()) == (
+        "kali_reachability",
+    )
     assert report.failure_categories() == (CATEGORY_KALI_REACHABILITY,)
     text = report.render()
     assert "FAIL" in text
     assert "unreachable" in text
     assert "failing layers" in text
     assert LiveGateReport("s", "p", "r", (ok,)).passed is True
+
+
+def test_live_gate_preserves_blocked_as_a_distinct_terminal_status():
+    blocked = LiveGateCheck(
+        "scenario_verification",
+        CATEGORY_EVIDENCE_CAPTURE,
+        VerificationStatus.BLOCKED,
+        ("no compatible verifier",),
+    )
+    report = LiveGateReport("scn", "profile", "rid", (blocked,))
+
+    assert blocked.status is VerificationStatus.BLOCKED
+    assert report.status is VerificationStatus.BLOCKED
+    assert report.passed is False
+    assert "BLOCKED" in report.render()
 
 
 # --------------------------------------------------------------------------- #
@@ -244,9 +266,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
         # composition, not discovery (the seam has its own tests).
         return [
             LiveGateCheck("kali_reachability", CATEGORY_KALI_REACHABILITY, True),
-            LiveGateCheck(
-                "telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, True
-            ),
+            LiveGateCheck("telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, True),
         ]
 
     def archive(
@@ -940,8 +960,8 @@ def test_run_archive_roundtrips_to_local_store(tmp_path):
     # Regression guard: the validation outcome key must survive the run-archive
     # redaction boundary (a `passed` key would be masked as [REDACTED]).
     reloaded = json.loads(written)
-    assert reloaded["validation"]["ok"] is True
-    assert reloaded["validation"]["checks"][0]["ok"] is True
+    assert reloaded["validation"]["status"] == "passed"
+    assert reloaded["validation"]["checks"][0]["status"] == "passed"
 
 
 def test_run_archive_records_failing_final_check_as_not_ok():
@@ -970,9 +990,9 @@ def test_run_archive_records_failing_final_check_as_not_ok():
     )
     assert check.passed  # the manifest write itself succeeded
     _, _, manifest = store.json_writes[0]
-    assert manifest["validation"]["ok"] is False
-    recorded = {c["name"]: c["ok"] for c in manifest["validation"]["checks"]}
-    assert recorded["scenario_variation"] is False
+    assert manifest["validation"]["status"] == "failed"
+    recorded = {c["name"]: c["status"] for c in manifest["validation"]["checks"]}
+    assert recorded["scenario_variation"] == "failed"
 
 
 def test_run_archive_fails_without_realization():
@@ -1241,23 +1261,28 @@ def test_trigger_is_redriven_on_every_poll(monkeypatch):
         # Correlates only once the trigger has been re-driven, mimicking a path
         # that becomes ready partway through the window.
         if attempts["n"] >= 2:
-            return [{"rule": {"id": "5710"}, "data": {"dstuser": probes._WAZUH_TRIGGER_IDENTITY}}]
+            return [{"rule": {"id": "5710"}, "data": {"dstuser": "test-marker"}}]
         return [{"rule": {"id": "1002"}, "data": {"srcip": "10.0.0.1"}}]
 
     monkeypatch.setattr(probes, "collect_wazuh_alerts", _alerts)
 
     _eve, alerts = probes._collect_until_evidence(
-        object(),
-        "2026-01-01T00:00:00+00:00",
-        60,
-        indexer_url="https://localhost:9200",
-        indexer_auth=("u", "p"),
-        sleep_fn=lambda _s: None,
-        regenerate=lambda: attempts.__setitem__("n", attempts["n"] + 1),
+        probes.EvidencePollRequest(
+            backend=object(),
+            start_iso="2026-01-01T00:00:00+00:00",
+            deadline_monotonic=60.0,
+            poll_interval_seconds=10.0,
+            indexer_url="https://localhost:9200",
+            indexer_auth=("u", "p"),
+            alert_matches=lambda alert: "test-marker" in str(alert),
+            sleep_fn=lambda _s: None,
+            monotonic_fn=lambda: 0.0,
+            regenerate=lambda: attempts.__setitem__("n", attempts["n"] + 1),
+        )
     )
 
     assert attempts["n"] >= 2, "trigger was not re-driven while waiting"
-    assert any(probes._is_correlated_wazuh_alert(a) for a in alerts)
+    assert any("test-marker" in str(alert) for alert in alerts)
 
 
 def test_without_redrive_a_lost_trigger_is_never_recovered(monkeypatch):
@@ -1272,46 +1297,45 @@ def test_without_redrive_a_lost_trigger_is_never_recovered(monkeypatch):
     )
 
     _eve, alerts = probes._collect_until_evidence(
-        object(),
-        "2026-01-01T00:00:00+00:00",
-        30,
-        indexer_url="https://localhost:9200",
-        indexer_auth=("u", "p"),
-        sleep_fn=lambda _s: None,
+        probes.EvidencePollRequest(
+            backend=object(),
+            start_iso="2026-01-01T00:00:00+00:00",
+            deadline_monotonic=30.0,
+            poll_interval_seconds=10.0,
+            indexer_url="https://localhost:9200",
+            indexer_auth=("u", "p"),
+            alert_matches=lambda alert: "test-marker" in str(alert),
+            sleep_fn=lambda _s: None,
+            monotonic_fn=lambda: 0.0,
+        )
     )
 
-    assert not any(probes._is_correlated_wazuh_alert(a) for a in alerts)
+    assert not any("test-marker" in str(alert) for alert in alerts)
 
 
-def test_ssh_listening_targets_are_probed_first(monkeypatch):
-    """Failed-auth proof needs a host that answers on 22.
-
-    Taking an arbitrary slice of reachable containers can probe only hosts with
-    no SSH listener, which produces no auth event and no alert however many times
-    it is retried — indistinguishable from a broken detection path.
-    """
+def test_poll_does_not_redrive_after_sleep_reaches_the_deadline(monkeypatch):
     from aptl.validation import _live_gate_probes as probes
 
-    targets = [("no-ssh-a", "10.0.0.1"), ("no-ssh-b", "10.0.0.2"), ("has-ssh", "10.0.0.9")]
-    monkeypatch.setattr(
-        probes, "_ssh_reachable_from_kali", lambda _b, ip: ip == "10.0.0.9"
+    now = iter((0.0, 0.0, 10.0))
+    attempts = []
+
+    _eve, alerts = probes._collect_until_evidence(
+        probes.EvidencePollRequest(
+            backend=object(),
+            start_iso="2026-01-01T00:00:00+00:00",
+            deadline_monotonic=10.0,
+            poll_interval_seconds=10.0,
+            indexer_url="https://localhost:9200",
+            indexer_auth=("u", "p"),
+            alert_matches=lambda _alert: False,
+            sleep_fn=lambda _seconds: None,
+            monotonic_fn=lambda: next(now),
+            regenerate=lambda: attempts.append("triggered"),
+        )
     )
 
-    ordered = probes._prioritise_ssh_targets(object(), targets)
-
-    assert ordered[0] == ("has-ssh", "10.0.0.9")
-    # Nothing is dropped: a host that did not answer the probe is still a target.
-    assert sorted(ordered) == sorted(targets)
-
-
-def test_target_order_is_stable_when_nothing_listens(monkeypatch):
-    """With no listener anywhere the original order is preserved, not shuffled."""
-    from aptl.validation import _live_gate_probes as probes
-
-    targets = [("a", "10.0.0.1"), ("b", "10.0.0.2")]
-    monkeypatch.setattr(probes, "_ssh_reachable_from_kali", lambda _b, _ip: False)
-
-    assert probes._prioritise_ssh_targets(object(), targets) == targets
+    assert attempts == []
+    assert alerts == []
 
 
 def test_structural_half_of_the_gate_holds_no_scenario_answer_key():
@@ -1376,3 +1400,22 @@ def test_semantic_verification_runs_only_through_the_plugin_seam():
     assert "_live_gate_semantic" not in source
     # No scenario answer key is named in the orchestrator itself.
     assert not re.search(r"aptl-kali|_KALI_CONTAINER", source)
+
+
+def test_report_and_plugin_admission_share_canonical_bundle_identities():
+    scenario, backend = tlg._verification_identities(
+        SCENARIO,
+        BUNDLE,
+        "full-remote-control-plane",
+        "docker-compose",
+    )
+
+    assert scenario.identity == BUNDLE.identity
+    assert scenario.source_kind == BUNDLE.source_kind.value
+    assert scenario.version == BUNDLE.pack_identity.pack_version
+    assert scenario.content_digest == BUNDLE.pack_identity.set_digest
+    assert backend.target_name == "aptl"
+    assert backend.target_version == "0.1.0"
+    assert backend.profile == "full-remote-control-plane"
+    assert backend.provider == "docker-compose"
+    assert backend.transport == "docker-compose"

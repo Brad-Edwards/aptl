@@ -12,7 +12,10 @@ discovery silently finds nothing and the caller treats that as fine.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from importlib import metadata
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -31,16 +34,27 @@ from aptl.validation.scenario_verification import (
 from aptl.validation import scenario_verification_discovery as discovery
 
 SCENARIO = ScenarioIdentity(
-    identity="techvault-operational", content_digest="sha256:" + "a" * 64
+    identity="techvault",
+    content_digest="sha256:" + "a" * 64,
+    source_kind="env-pack",
+    version="0.1.0",
 )
 BACKEND = BackendIdentity(
-    target_name="aptl", target_version="1", profile="full-remote-control-plane"
+    target_name="aptl",
+    target_version="0.1.0",
+    profile="full-remote-control-plane",
+    provider="docker-compose",
+    transport="docker-compose",
 )
 
 
-def _context() -> VerificationContext:
+def _context(*, deadline_monotonic: float = float("inf")) -> VerificationContext:
     return VerificationContext(
-        run_id="run", attempt_id="attempt", scenario=SCENARIO, backend=BACKEND
+        run_id="run",
+        attempt_id="attempt",
+        scenario=SCENARIO,
+        backend=BACKEND,
+        deadline_monotonic=deadline_monotonic,
     )
 
 
@@ -53,14 +67,37 @@ class _Verifier(object):
             "extension_api_version", EXTENSION_API_VERSION
         )
         self.scenario_identity = overrides.get("scenario_identity", SCENARIO.identity)
-        self.scenario_content_digests = overrides.get("scenario_content_digests", ())
+        self.scenario_source_kinds = overrides.get(
+            "scenario_source_kinds", (SCENARIO.source_kind,)
+        )
+        self.scenario_versions = overrides.get("scenario_versions", (SCENARIO.version,))
+        self.scenario_content_digests = overrides.get(
+            "scenario_content_digests", (SCENARIO.content_digest,)
+        )
         self.backend_target_name = overrides.get("backend_target_name", "aptl")
-        self.backend_profiles = overrides.get("backend_profiles", ())
+        self.backend_target_versions = overrides.get(
+            "backend_target_versions", (BACKEND.target_version,)
+        )
+        self.backend_profiles = overrides.get("backend_profiles", (BACKEND.profile,))
+        self.backend_providers = overrides.get("backend_providers", (BACKEND.provider,))
+        self.backend_transports = overrides.get(
+            "backend_transports", (BACKEND.transport,)
+        )
         self._status = status
         self._raises = overrides.get("raises", False)
         self._malformed = overrides.get("malformed", False)
+        self._prerequisites = overrides.get(
+            "prerequisites",
+            (PrerequisiteResult("stack-ready", PrerequisiteStatus.SATISFIED),),
+        )
+        self._checks = overrides.get(
+            "checks", (VerificationCheck("detection", status),)
+        )
+        self._diagnostics = overrides.get("diagnostics", ())
+        self.calls = 0
 
     def run(self, context):
+        self.calls += 1
         if self._raises:
             raise RuntimeError("credential=hunter2 leaked from a broken plugin")
         if self._malformed:
@@ -69,12 +106,13 @@ class _Verifier(object):
             status=self._status,
             scenario=context.scenario,
             backend=context.backend,
+            run_id=context.run_id,
+            attempt_id=context.attempt_id,
             plugin_id="self-reported-and-untrusted",
             distribution="self-reported-and-untrusted",
-            prerequisites=(
-                PrerequisiteResult("stack-ready", PrerequisiteStatus.SATISFIED),
-            ),
-            checks=(VerificationCheck("detection", self._status),),
+            prerequisites=self._prerequisites,
+            checks=self._checks,
+            diagnostics=self._diagnostics,
         )
 
 
@@ -88,11 +126,13 @@ def _install(monkeypatch, *verifiers):
 
     class _EP:
         def __init__(self, verifier, index):
-            self.name = f"verifier-{index}"
+            self.name = "techvault.aptl"
             self.dist = _Dist(f"aptl-verifier-{index}")
             self._verifier = verifier
+            self.loaded = False
 
         def load(self):
+            self.loaded = True
             if isinstance(self._verifier, Exception):
                 raise self._verifier
             return self._verifier
@@ -102,6 +142,26 @@ def _install(monkeypatch, *verifiers):
         "_entry_points",
         lambda: [_EP(v, i) for i, v in enumerate(verifiers)],
     )
+
+
+class _EntryPoint:
+    """Entry-point double that records whether discovery executed its target."""
+
+    def __init__(self, name: str, target: object) -> None:
+        self.name = name
+        self.dist = SimpleNamespace(name="test-distribution", version="1.2.3")
+        self.target = target
+        self.loaded = False
+
+    def load(self) -> object:
+        self.loaded = True
+        if isinstance(self.target, BaseException):
+            raise self.target
+        return self.target
+
+
+def _install_entry_points(monkeypatch, *entry_points: _EntryPoint) -> None:
+    monkeypatch.setattr(discovery, "_entry_points", lambda: list(entry_points))
 
 
 def test_core_registers_no_scenario_verifier():
@@ -130,7 +190,7 @@ def test_no_installed_verifier_blocks(monkeypatch):
 
     assert report.status is VerificationStatus.BLOCKED
     assert report.status is not VerificationStatus.PASSED
-    assert "no scenario verifier is installed" in report.diagnostics[0]
+    assert "no compatible scenario verifier" in report.diagnostics[0]
 
 
 def test_two_matching_verifiers_block_rather_than_picking_one(monkeypatch):
@@ -150,6 +210,67 @@ def test_extension_api_mismatch_blocks(monkeypatch):
     report = discovery.verify_scenario(_context())
 
     assert report.status is VerificationStatus.BLOCKED
+
+
+def test_unrelated_entry_points_are_filtered_before_loading(monkeypatch):
+    """Installed code outside the exact scenario/backend family is not executed."""
+
+    unrelated = _EntryPoint("other-scenario.aptl", RuntimeError("must not load"))
+    exact = _EntryPoint("techvault.aptl", _Verifier())
+    _install_entry_points(monkeypatch, unrelated, exact)
+
+    report = discovery.verify_scenario(_context())
+
+    assert report.status is VerificationStatus.PASSED
+    assert unrelated.loaded is False
+    assert exact.loaded is True
+
+
+@pytest.mark.parametrize(
+    ("metadata_name", "metadata_value"),
+    [
+        ("scenario_source_kinds", ()),
+        ("scenario_versions", ()),
+        ("scenario_content_digests", ()),
+        ("backend_target_versions", ()),
+        ("backend_profiles", ()),
+        ("backend_providers", ()),
+        ("backend_transports", ()),
+        ("plugin_id", "not a bounded plugin id"),
+    ],
+)
+def test_malformed_or_wildcard_metadata_blocks(
+    monkeypatch, metadata_name, metadata_value
+):
+    """An omitted compatibility dimension cannot silently claim future inputs."""
+
+    _install(monkeypatch, _Verifier(**{metadata_name: metadata_value}))
+
+    report = discovery.verify_scenario(_context())
+
+    assert report.status is VerificationStatus.BLOCKED
+    assert "metadata" in report.diagnostics[0]
+
+
+@pytest.mark.parametrize(
+    ("metadata_name", "metadata_value"),
+    [
+        ("scenario_source_kinds", ("project-tree",)),
+        ("scenario_versions", ("0.0.9",)),
+        ("backend_target_versions", ("0.0.9",)),
+        ("backend_providers", ("other-provider",)),
+        ("backend_transports", ("ssh-compose",)),
+    ],
+)
+def test_every_compatibility_dimension_is_matched_exactly(
+    monkeypatch, metadata_name, metadata_value
+):
+    _install(monkeypatch, _Verifier(**{metadata_name: metadata_value}))
+
+    report = discovery.verify_scenario(_context())
+
+    assert report.status is VerificationStatus.BLOCKED
+    assert "no compatible scenario verifier" in report.diagnostics[0]
 
 
 def test_pinned_content_digest_must_match_the_admitted_scenario(monkeypatch):
@@ -205,6 +326,113 @@ def test_a_malformed_report_blocks(monkeypatch):
     assert "malformed report" in report.diagnostics[0]
 
 
+def test_an_internally_inconsistent_report_blocks(monkeypatch):
+    """A plugin cannot claim passed while returning a failed semantic check."""
+
+    _install(
+        monkeypatch,
+        _Verifier(
+            status=VerificationStatus.PASSED,
+            checks=(VerificationCheck("detection", VerificationStatus.FAILED),),
+        ),
+    )
+
+    report = discovery.verify_scenario(_context())
+
+    assert report.status is VerificationStatus.BLOCKED
+    assert "malformed report" in report.diagnostics[0]
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {
+            "prerequisites": (
+                PrerequisiteResult("stack-ready", PrerequisiteStatus.SATISFIED),
+                PrerequisiteResult("stack-ready", PrerequisiteStatus.SATISFIED),
+            )
+        },
+        {
+            "checks": (
+                VerificationCheck("detection", VerificationStatus.PASSED),
+                VerificationCheck("detection", VerificationStatus.PASSED),
+            )
+        },
+    ],
+)
+def test_duplicate_report_member_ids_are_malformed(monkeypatch, overrides):
+    _install(monkeypatch, _Verifier(**overrides))
+
+    report = discovery.verify_scenario(_context())
+
+    assert report.status is VerificationStatus.BLOCKED
+    assert "malformed report" in report.diagnostics[0]
+
+
+def test_an_unmet_prerequisite_cannot_be_reported_as_passed(monkeypatch):
+    _install(
+        monkeypatch,
+        _Verifier(
+            prerequisites=(
+                PrerequisiteResult("stack-ready", PrerequisiteStatus.UNSATISFIED),
+            ),
+        ),
+    )
+
+    report = discovery.verify_scenario(_context())
+
+    assert report.status is VerificationStatus.BLOCKED
+    assert "malformed report" in report.diagnostics[0]
+
+
+def test_an_elapsed_deadline_blocks_without_running_the_plugin(monkeypatch):
+    verifier = _Verifier()
+    _install(monkeypatch, verifier)
+    monkeypatch.setattr(discovery, "monotonic", lambda: 10_001.0)
+
+    report = discovery.verify_scenario(_context(deadline_monotonic=10_000.0))
+
+    assert report.status is VerificationStatus.BLOCKED
+    assert "deadline" in report.diagnostics[0]
+    assert verifier.calls == 0
+
+
+@pytest.mark.parametrize(
+    "context",
+    [
+        replace(_context(), run_id="../run"),
+        replace(_context(), scenario=replace(SCENARIO, identity="not a safe id")),
+        replace(_context(), scenario=replace(SCENARIO, content_digest="")),
+        replace(_context(), backend=replace(BACKEND, transport="")),
+    ],
+)
+def test_invalid_context_blocks_before_loading_installed_code(monkeypatch, context):
+    entry_point = _EntryPoint("techvault.aptl", RuntimeError("must not load"))
+    _install_entry_points(monkeypatch, entry_point)
+
+    report = discovery.verify_scenario(context)
+
+    assert report.status is VerificationStatus.BLOCKED
+    assert "context" in report.diagnostics[0]
+    assert entry_point.loaded is False
+
+
+def test_plugin_diagnostics_are_redacted_before_projection(monkeypatch):
+    _install(
+        monkeypatch,
+        _Verifier(
+            status=VerificationStatus.BLOCKED,
+            checks=(),
+            diagnostics=("credential=hunter2 unavailable",),
+        ),
+    )
+
+    report = discovery.verify_scenario(_context())
+
+    assert report.status is VerificationStatus.BLOCKED
+    assert "hunter2" not in report.diagnostics[0]
+
+
 def test_a_single_compatible_verifier_runs_and_its_provenance_is_host_observed(
     monkeypatch,
 ):
@@ -220,6 +448,7 @@ def test_a_single_compatible_verifier_runs_and_its_provenance_is_host_observed(
     assert report.distribution_version == "9.9.9"
     assert report.distribution != "self-reported-and-untrusted"
     assert report.plugin_id == "test-verifier"
+    assert report.entry_point == "techvault.aptl"
 
 
 def test_a_failing_verifier_reports_failed_not_blocked(monkeypatch):
@@ -255,7 +484,7 @@ def test_blocked_is_distinct_from_both_other_outcomes(status):
 
 
 def test_the_techvault_verifier_is_a_separate_distribution():
-    """"Core ships zero adapters" has to be checkable, not just asserted.
+    """ "Core ships zero adapters" has to be checkable, not just asserted.
 
     The TechVault verifier lives in this repository for now, but it builds and
     installs as its own distribution. If it were ever folded into ``aptl-labs``,
@@ -264,19 +493,27 @@ def test_the_techvault_verifier_is_a_separate_distribution():
     the thing worth testing, not the file layout.
     """
 
-    from importlib import metadata
+    import tomllib
 
-    entry_points = {
-        entry_point.name: entry_point
-        for entry_point in metadata.entry_points(group=ENTRY_POINT_GROUP)
+    root = Path(__file__).resolve().parents[1]
+    core = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    plugin = tomllib.loads(
+        (root / "plugins/aptl-techvault-verifier/pyproject.toml").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert core["project"]["name"] == "aptl-labs"
+    assert "aptl.scenario_verifiers" not in core["project"].get("entry-points", {})
+    assert plugin["project"]["name"] == "aptl-techvault-verifier"
+    assert plugin["project"]["entry-points"][ENTRY_POINT_GROUP] == {
+        "techvault.aptl": "aptl_techvault_verifier:verifier"
     }
-    techvault = entry_points.get("techvault")
-    if techvault is None:
-        pytest.skip("aptl-techvault-verifier is not installed in this environment")
-
-    assert techvault.dist is not None
-    assert techvault.dist.name == "aptl-techvault-verifier"
-    assert techvault.dist.name not in {"aptl", "aptl-labs"}
+    assert plugin["project"]["entry-points"]["aptl.participant_mcp_smoke_plans"] == {
+        "guided-purple.techvault-attacker-target": (
+            "aptl_techvault_verifier.participant_smoke:PARTICIPANT_SMOKE_OPERATIONS"
+        )
+    }
 
 
 def test_core_holds_no_techvault_answer_key_behind_the_seam():
@@ -312,3 +549,25 @@ def test_core_holds_no_techvault_answer_key_behind_the_seam():
 
     # And the retired in-core scenario module is gone, not merely bypassed.
     assert not (root / "_live_gate_semantic.py").exists()
+
+
+def test_core_source_contains_no_known_verification_answer_keys():
+    """The wheel bundles all of ``src``, so ownership must cover the whole tree."""
+
+    root = Path(__file__).resolve().parent.parent / "src" / "aptl"
+    markers = (
+        "aptl-live-gate-invalid",
+        "_RECENT_SSH_ALERT_QUERY",
+        "mcp.red.ssh-authentication-attack",
+        "_PLUGIN_CHECK_CATEGORY",
+        "_is_correlated_wazuh_alert",
+        "kali nmap + failed-ssh-auth",
+    )
+    offenders = {
+        str(path.relative_to(root)): [marker for marker in markers if marker in text]
+        for path in root.rglob("*.py")
+        if (text := path.read_text(encoding="utf-8"))
+        and any(marker in text for marker in markers)
+    }
+
+    assert not offenders, f"verification answer keys remain in core: {offenders}"

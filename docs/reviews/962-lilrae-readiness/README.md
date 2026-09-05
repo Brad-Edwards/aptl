@@ -8,22 +8,23 @@ into the review branch before final verification.
 
 ## Assessment
 
-APTL is a substantial migration source with useful contract, observation and
-evidence machinery. It is not yet a reliably bounded, independently qualified
-personal range that should be recommended to other users without its current
-development limitations. Preserve the working mechanisms and history. Fix the
-authority and lifecycle gaps, then separate the core from its experience code.
+APTL is the working name of the product being renamed to LilRAE. It has useful
+contract, observation, and evidence machinery, but it is not yet a reliably
+bounded, independently qualified personal range that should be recommended to
+other users without its current development limitations. Preserve the working
+mechanisms and history. Fix the authority and lifecycle gaps, then separate
+shared lifecycle behavior from scenario-pack integrations and research policy.
 A rename, a wholesale rewrite, or additional generic abstraction would not
 resolve the principal problems.
 
-The intended product is clear in [Hub #3](https://github.com/OpenRAE/hub/issues/3)
-and [Hub ADR 0005](https://github.com/OpenRAE/hub/blob/dev/docs/decisions/adrs/0005-adopt-personal-and-organizational-backend-products.md):
-LilRAE is the complete personal backend generalized from the current APTL
-backend. TechVault and its selected integrations form an advanced experience
-on it. The tiny quickstart is a bounded
-profile on that same product. RAES owns semantics and conformance. Neither
-APTL/LilRAE comparison nor a second reference runtime is the migration target.
-LilRAE's current `dev` CLI is still metadata-only; migration remains real work.
+The intended identity is clear: APTL and LilRAE are one product across a
+rename, not separate products, layers, or user experiences.
+TechVault is a scenario pack. It is selected by that product, and its
+integrations remain pack-specific capabilities, not a retained APTL layer. The
+small quickstart is a bounded profile on the same product, and RAES owns
+portable semantics and conformance.
+Technical extraction and release work remains, but it must not recreate a
+product-to-product migration model.
 
 **TechVault content has already moved to
 [OpenRAE/env-packs/packs/techvault](https://github.com/OpenRAE/env-packs/tree/main/packs/techvault)
@@ -31,18 +32,27 @@ for now.** The pack includes its SDL, assets, seeded content and artifact
 manifest. Its README records `built` maturity, with golden-range proof still
 outstanding. This plan consumes that existing pack. #880 covers residual APTL
 copies, packaging/startup coupling and consumer parity; it does not schedule
-the physical pack move again or choose a new permanent home. APTL-to-LilRAE is
-the backend migration, not another runtime layer around TechVault.
+the physical pack move again or choose a new permanent home. The APTL-to-LilRAE
+change is identity continuity plus technical decoupling, not a migration
+between products or another runtime layer around TechVault.
 
 ## Evidence and coverage
 
-The review inventoried all **1,467 tracked paths**, traced the main lifecycle,
-RAES adapters, native realization/readback, participant launch, MCP dispatch,
-API/UI, evidence, plugin, packaging, container and CI boundaries, and reviewed
-the **88 initially open issues** and **54 existing ADRs**. The Python application
-has **398 files and 88,587 physical lines**, including comments/docstrings;
-tests contain 93,278 physical lines across 256 Python files. Size is context,
-not a defect count.
+The review inventoried all **1,467 tracked paths** at baseline, traced the main
+lifecycle, RAES adapters, native realization/readback, participant launch, MCP
+dispatch, API/UI, evidence, plugin, packaging, container and CI boundaries,
+and reviewed the **88 initially open issues** and **54 existing ADRs**. The
+Python application has **398 files and 88,587 physical lines**, including
+comments/docstrings; tests contain 93,278 physical lines across 256 Python
+files. Size is context, not a defect count.
+
+At `dev` commit `d48d2b7e`, the repository contains **1,505 tracked paths**.
+The tracked-file ledger now reconciles the **38** additions since the original
+baseline; no baseline path had disappeared at that commit. The three new #934
+artifacts bring the final delivery inventory to **1,508 paths**. The
+complementary [identity-disposition ledger](identity-disposition.tsv) records
+independently versioned identity surfaces without treating every occurrence as
+a product boundary.
 
 This is a repository-wide architecture and risk review with targeted code
 inspection and probes. It is not a claim that every line was manually audited,
@@ -113,11 +123,12 @@ as if it were operator-facing application code.
 
 The control flow remains difficult to reason about across mutable lifecycle
 context and mixins. Per-function C901/ESLint gates do not measure that coupling.
-Do not respond by creating dozens of tiny forwarding files. Separate lifecycle,
-admission, realization, observation and experience hooks with explicit inputs,
-outputs, failure states and ownership. There are 83 broad Python exception
-handlers in the static inventory; inspect safety-critical cases individually
-rather than treating all defensive exception mapping as a defect.
+Do not respond by creating dozens of tiny forwarding files. Separate
+lifecycle, admission, realization, observation, and scenario-selected hooks
+with explicit inputs, outputs, failure states and ownership. There are 83 broad
+Python exception handlers in the static inventory; inspect safety-critical
+cases individually rather than treating all defensive exception mapping as a
+defect.
 
 The manifest includes scenario/research features such as `x-paper:wazuh-evidence`.
 The verifier and serving-interaction plugins already exist, so #878/#879 are
@@ -141,9 +152,10 @@ data, with an explicit retirement policy for legacy writers and paths.
    LilRAE #6/#4. A fully adopted scenario requires exact acquisition, meaningful
    behavior, readback, negative cases and cleanup. Add capability only when the
    next adopted scenario requires it.
-3. **Extract the backend with history.** Use #934/#970 and LilRAE #3. A tiny
-   install must not import or install TechVault/SOC/research/provider machinery.
-   Advanced functionality remains available through selected packs/plugins.
+3. **Decouple the product with history.** Use #934/#970 and LilRAE #3 while
+   preserving that APTL and LilRAE are the same product. A small install must
+   not import or install TechVault/SOC/research/provider machinery. Advanced
+   functionality remains available through selected packs/plugins.
 4. **Prove released journeys.** LilRAE #10 and Hub #3 own the tiny useful result,
    one changed input and teardown. #870/#685 own the separate full TechVault
    parity proof. Record cold-download and warm-run timing honestly.
@@ -163,8 +175,10 @@ materialization envelope, not a promise that the current APTL default meets it.
 
 ## Deliverables and roadmap
 
-- [Migration inventory](migration-inventory.md), with an owner category for
+- [Ownership and rename inventory](migration-inventory.md), with an owner category for
   [every tracked path](tracked-file-inventory.tsv).
+- [Identity disposition](identity-disposition.tsv), covering technical names,
+  compatibility boundaries, retirement evidence, and coordination owners.
 - [Disposition of all 88 existing issues](backlog-disposition.md).
 - [Disposition of all 54 existing ADRs](adr-disposition.md), plus proposed
   ADR-054 through ADR-058. None is marked accepted by this review.
@@ -172,7 +186,7 @@ materialization envelope, not a promise that the current APTL default meets it.
 - [Milestones and dependency graph](delivery-plan.md).
 - [Changes that landed during review](upstream-update.md).
 
-The two new milestones cover core migration and release qualification. Existing
+The two new milestones cover technical decoupling and release qualification. Existing
 local-isolation and released-quickstart milestones remain useful. Obsolete
 APTL-versus-LilRAE research framing should be superseded; cloud federation,
 general simulation, broad kit support, CAPEv2 and speculative agent features

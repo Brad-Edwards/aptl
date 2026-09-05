@@ -35,16 +35,29 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
+from time import monotonic
 from types import ModuleType
 from typing import TYPE_CHECKING
 
+from aptl.backends.identity import (
+    APTL_RAES_TARGET_NAME,
+    APTL_RAES_TARGET_VERSION,
+    BackendIdentity,
+)
 from aptl.backends.raes import DEFAULT_RAES_SCENARIO
+from aptl.validation.scenario_verification import (
+    ScenarioIdentity,
+    VerificationCheck,
+    VerificationReport,
+    VerificationStatus,
+)
 
 if TYPE_CHECKING:
     from raes.scenario import Scenario
 
     from aptl.core.config import AptlConfig
     from aptl.core.runstore import RunStorageBackend
+    from aptl.core.scenario_bundle import ScenarioBundle
 
 DEFAULT_PROFILE = "full-remote-control-plane"
 
@@ -93,48 +106,87 @@ class LiveGateCheck(object):
 
     name: str
     category: str
-    passed: bool
+    status: VerificationStatus | bool
     diagnostics: tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        """Normalize compatibility booleans into the shared status vocabulary."""
 
-@dataclass(frozen=True)
-class LiveGateReport(object):
-    """The composed outcome of every live-gate check for a scenario."""
-
-    scenario: str
-    profile: str
-    run_id: str
-    checks: tuple[LiveGateCheck, ...]
+        if isinstance(self.status, bool):
+            object.__setattr__(
+                self,
+                "status",
+                VerificationStatus.PASSED if self.status else VerificationStatus.FAILED,
+            )
 
     @property
     def passed(self) -> bool:
-        """Return whether every live-gate check passed."""
-        return all(check.passed for check in self.checks)
+        """Return whether this check reached the sole successful outcome."""
 
-    def failures(self) -> tuple[LiveGateCheck, ...]:
-        """Return the checks that failed."""
-        return tuple(check for check in self.checks if not check.passed)
+        return self.status is VerificationStatus.PASSED
 
-    def failure_categories(self) -> tuple[str, ...]:
-        """Return the distinct failure categories, worst-layer order preserved."""
-        failed = {check.category for check in self.failures()}
-        return tuple(cat for cat in FAILURE_CATEGORIES if cat in failed)
 
-    def render(self) -> str:
-        """Render a redacted, human/CI-readable summary."""
-        lines = [
-            f"RAES live validation gate — scenario={self.scenario} "
-            f"profile={self.profile} run_id={self.run_id}: "
-            f"{'PASS' if self.passed else 'FAIL'}"
-        ]
-        for check in self.checks:
-            marker = "ok" if check.passed else "FAIL"
-            lines.append(f"  [{marker}] {check.name} ({check.category})")
-            for diagnostic in check.diagnostics:
-                lines.append(f"        - {diagnostic}")
-        if not self.passed:
-            lines.append("  failing layers: " + ", ".join(self.failure_categories()))
-        return "\n".join(lines)
+def _aggregate_status(checks: tuple[LiveGateCheck, ...]) -> VerificationStatus:
+    """Return the authoritative aggregate outcome for operational checks."""
+
+    if any(check.status is VerificationStatus.BLOCKED for check in checks):
+        return VerificationStatus.BLOCKED
+    if any(check.status is VerificationStatus.FAILED for check in checks):
+        return VerificationStatus.FAILED
+    return VerificationStatus.PASSED
+
+
+def _canonical_checks(
+    checks: tuple[LiveGateCheck, ...],
+) -> tuple[VerificationCheck, ...]:
+    """Convert legacy operational checks at the shared report boundary."""
+
+    return tuple(
+        VerificationCheck(
+            check_id=check.name,
+            category=check.category,
+            status=check.status,
+            diagnostic="; ".join(check.diagnostics),
+        )
+        for check in checks
+    )
+
+
+def make_live_gate_report(
+    scenario: str,
+    profile: str,
+    run_id: str,
+    checks: tuple[LiveGateCheck, ...],
+) -> VerificationReport:
+    """Compatibility constructor for the one shared verification report shape."""
+
+    import hashlib
+
+    return VerificationReport(
+        status=_aggregate_status(checks),
+        scenario=ScenarioIdentity(
+            identity=scenario,
+            content_digest="sha256:"
+            + hashlib.sha256(scenario.encode("utf-8")).hexdigest(),
+            source_kind="project-tree",
+            version="project-tree",
+        ),
+        backend=BackendIdentity(
+            target_name=APTL_RAES_TARGET_NAME,
+            target_version=APTL_RAES_TARGET_VERSION,
+            profile=profile,
+            provider="unknown",
+            transport="unknown",
+        ),
+        run_id=run_id,
+        attempt_id=run_id,
+        checks=_canonical_checks(checks),
+    )
+
+
+# Existing callers import this constructor by its historical name. It returns
+# ``VerificationReport`` and therefore does not preserve a second report schema.
+LiveGateReport = make_live_gate_report
 
 
 @dataclass(frozen=True)
@@ -188,6 +240,7 @@ class _RunContext(object):
     """
 
     scenario_path: Path
+    bundle: ScenarioBundle
     # The selector the boot resolves (``None`` -> configured env-pack). Distinct
     # from ``scenario_path`` (the resolved staged SDL used for parse/digest): the
     # env-pack's content artifacts resolve through the pack resolver, not a
@@ -207,13 +260,13 @@ def validate_live_deployment(
     config: "AptlConfig",
     options: LiveGateOptions | None = None,
     run_store: RunStorageBackend | None = None,
-) -> LiveGateReport:
+) -> VerificationReport:
     """Run the full live validation gate for ``scenario_path``.
 
     Boots the lab through the public RAES start path, validates operational
     readiness / reachability / telemetry, and records RAES provenance plus
     validation evidence into the run archive. Returns a structured
-    :class:`LiveGateReport`; never raises for an expected failure mode (a
+    :class:`VerificationReport`; never raises for an expected failure mode (a
     failed check is reported, not raised).
     """
     from aptl.validation import _live_gate_checks as checks
@@ -230,7 +283,8 @@ def validate_live_deployment(
     # stages; the boot instead resolves the env-pack itself (config-driven), so it
     # keeps the original selector.
     boot_scenario_path = scenario_path
-    scenario_path = resolve_scenario_bundle(project_dir, scenario_path, config).sdl_path
+    bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
+    scenario_path = bundle.sdl_path
     run_id = opts.run_id or uuid.uuid4().hex
     state = LiveGateState()
     results: list[LiveGateCheck] = []
@@ -238,7 +292,7 @@ def validate_live_deployment(
     run_id_check = checks.check_run_id_input(opts)
     results.append(run_id_check)
     if not run_id_check.passed:
-        return _report(scenario_path, run_id, opts, results)
+        return _report(scenario_path, run_id, opts, results, bundle, config)
 
     # 1. Static prerequisite — parse/compile/conformance must pass; a
     #    static failure blocks the live boot rather than degrading to a warning.
@@ -265,6 +319,7 @@ def validate_live_deployment(
     if inputs_passed:
         ctx = _RunContext(
             scenario_path=scenario_path,
+            bundle=bundle,
             boot_scenario_path=boot_scenario_path,
             project_dir=project_dir,
             config=config,
@@ -274,7 +329,7 @@ def validate_live_deployment(
         )
         _run_live_checks(checks, scenario, ctx, state, results)
 
-    return _report(scenario_path, run_id, opts, results)
+    return _report(scenario_path, run_id, opts, results, bundle, config)
 
 
 def _run_live_checks(
@@ -352,16 +407,6 @@ def _run_live_checks(
     results.append(_archive_manifest(checks, ctx, state, results))
 
 
-# A discovered verifier's check id maps to the live gate's own check name and
-# failure category, so the report taxonomy and run archive stay stable no matter
-# which plugin ran. A check id the map does not cover is surfaced under evidence
-# capture rather than dropped.
-_PLUGIN_CHECK_CATEGORY: dict[str, tuple[str, str]] = {
-    "attacker-reachability": ("kali_reachability", CATEGORY_KALI_REACHABILITY),
-    "detection-traversal": ("telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE),
-}
-
-
 def _semantic_checks(
     ctx: "_RunContext",
     state: LiveGateState,
@@ -375,44 +420,37 @@ def _semantic_checks(
     honest, because a range whose semantic verification could not run has not
     been verified.
     """
-    import hashlib
-
-    from aptl.backends.raes_manifest import create_aptl_manifest
     from aptl.validation._live_gate_operations import LiveGateOperations
     from aptl.validation.scenario_verification import (
-        BackendIdentity,
-        ScenarioIdentity,
         VerificationContext,
     )
     from aptl.validation.scenario_verification_discovery import verify_scenario
 
-    identity = ctx.scenario_path.name.removesuffix(".yaml").removesuffix(".sdl")
-    digest = "sha256:" + hashlib.sha256(ctx.scenario_path.read_bytes()).hexdigest()
-    manifest = create_aptl_manifest()
-    scenario = ScenarioIdentity(
-        identity=identity, content_digest=digest, source_kind="project-tree"
-    )
-    backend = BackendIdentity(
-        target_name=manifest.name,
-        target_version=str(getattr(manifest, "version", "")),
-        profile=ctx.options.profile,
+    scenario, backend = _verification_identities(
+        ctx.scenario_path,
+        ctx.bundle,
+        ctx.options.profile,
+        ctx.config.deployment.provider,
     )
     containers = [
         str(c.get("name", ""))
         for c in (state.snapshot or {}).get("containers", [])
         if c.get("name")
     ]
+    deadline_monotonic = monotonic() + ctx.options.event_window_seconds
     context = VerificationContext(
         run_id=ctx.run_id,
         attempt_id=ctx.run_id,
         scenario=scenario,
         backend=backend,
-        deadline_seconds=ctx.options.event_window_seconds,
+        deadline_monotonic=deadline_monotonic,
+        poll_interval_seconds=min(10.0, float(ctx.options.event_window_seconds)),
         operations=LiveGateOperations(
             project_dir=ctx.project_dir,
             config=ctx.config,
             options=ctx.options,
             state=state,
+            deadline_monotonic=deadline_monotonic,
         ),
         observations={"containers": containers},
     )
@@ -435,29 +473,39 @@ def _map_verification_report(report: object) -> list[LiveGateCheck]:
     if not isinstance(report, VerificationReport):
         return [
             LiveGateCheck(
-                name,
-                category,
-                False,
+                "scenario_verification",
+                CATEGORY_EVIDENCE_CAPTURE,
+                VerificationStatus.BLOCKED,
                 ("scenario verification returned no usable report",),
             )
-            for name, category in _PLUGIN_CHECK_CATEGORY.values()
         ]
 
     if report.status is VerificationStatus.BLOCKED:
         reason = "; ".join(report.diagnostics) or "scenario verification was blocked"
         return [
-            LiveGateCheck(name, category, False, (f"blocked: {reason}",))
-            for name, category in _PLUGIN_CHECK_CATEGORY.values()
+            LiveGateCheck(
+                "scenario_verification",
+                CATEGORY_EVIDENCE_CAPTURE,
+                VerificationStatus.BLOCKED,
+                (f"blocked: {reason}",),
+            )
         ]
 
     results: list[LiveGateCheck] = []
     for check in report.checks:
-        name, category = _PLUGIN_CHECK_CATEGORY.get(
-            check.check_id, (check.check_id, CATEGORY_EVIDENCE_CAPTURE)
+        category = (
+            check.category
+            if check.category in FAILURE_CATEGORIES
+            else CATEGORY_EVIDENCE_CAPTURE
         )
-        passed = check.status is VerificationStatus.PASSED
-        diagnostics = () if passed else (check.diagnostic or "semantic check failed",)
-        results.append(LiveGateCheck(name, category, passed, diagnostics))
+        diagnostics = (
+            ()
+            if check.status is VerificationStatus.PASSED
+            else (check.diagnostic or "semantic check failed",)
+        )
+        results.append(
+            LiveGateCheck(check.check_id, category, check.status, diagnostics)
+        )
     return results
 
 
@@ -484,6 +532,61 @@ def _report(
     run_id: str,
     opts: LiveGateOptions,
     results: list[LiveGateCheck],
-) -> LiveGateReport:
-    """Pack accumulated checks into a :class:`LiveGateReport`."""
-    return LiveGateReport(str(scenario_path), opts.profile, run_id, tuple(results))
+    bundle: ScenarioBundle,
+    config: AptlConfig,
+) -> VerificationReport:
+    """Pack accumulated checks into the shared versioned report shape."""
+
+    checks = tuple(results)
+    scenario, backend = _verification_identities(
+        scenario_path,
+        bundle,
+        opts.profile,
+        config.deployment.provider,
+    )
+    return VerificationReport(
+        status=_aggregate_status(checks),
+        scenario=scenario,
+        backend=backend,
+        run_id=run_id,
+        attempt_id=run_id,
+        checks=_canonical_checks(checks),
+    )
+
+
+def _verification_identities(
+    scenario_path: Path,
+    bundle: ScenarioBundle,
+    profile: str,
+    provider: str,
+) -> tuple[ScenarioIdentity, BackendIdentity]:
+    """Bind reports and plugin admission to the same canonical identities."""
+
+    import hashlib
+
+    pack = bundle.pack_identity
+    content = (
+        scenario_path.read_bytes()
+        if scenario_path.is_file()
+        else f"unavailable:{bundle.identity}".encode()
+    )
+    digest = (
+        pack.set_digest
+        if pack is not None
+        else "sha256:" + hashlib.sha256(content).hexdigest()
+    )
+    return (
+        ScenarioIdentity(
+            identity=bundle.identity,
+            content_digest=digest,
+            source_kind=bundle.source_kind.value,
+            version=pack.pack_version if pack is not None else "project-tree",
+        ),
+        BackendIdentity(
+            target_name=APTL_RAES_TARGET_NAME,
+            target_version=APTL_RAES_TARGET_VERSION,
+            profile=profile,
+            provider=provider,
+            transport=provider,
+        ),
+    )

@@ -304,10 +304,13 @@ def check_run_archive_manifest(
         },
         "validation": {
             "checks": [_check_to_dict(check) for check in prior_checks],
-            # Key is "ok", not "passed": the run-archive redaction boundary masks
-            # any key containing "pass" (the password heuristic), which would
-            # render every check outcome as [REDACTED].
-            "ok": all(check.passed for check in prior_checks),
+            "status": (
+                "blocked"
+                if any(check.status.value == "blocked" for check in prior_checks)
+                else "passed"
+                if all(check.passed for check in prior_checks)
+                else "failed"
+            ),
         },
         "snapshot": state.snapshot,
         "evidence": state.evidence,

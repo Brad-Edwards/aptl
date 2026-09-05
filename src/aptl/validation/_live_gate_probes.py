@@ -15,6 +15,7 @@ import hashlib
 import json
 import time
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -261,18 +262,24 @@ def _tcp_reachable_from_container(
     return result.returncode == 0
 
 
+@dataclass(frozen=True)
+class EvidencePollRequest(object):
+    """Bounded inputs for one scenario-neutral evidence polling window."""
+
+    backend: "DeploymentBackend"
+    start_iso: str
+    deadline_monotonic: float
+    poll_interval_seconds: float
+    indexer_url: str
+    indexer_auth: tuple[str, str]
+    alert_matches: Callable[[object], bool]
+    sleep_fn: Callable[[float], None] = time.sleep
+    monotonic_fn: Callable[[], float] = time.monotonic
+    regenerate: Callable[[], None] | None = None
+
+
 def _collect_until_evidence(
-    backend: "DeploymentBackend",
-    start_iso: str,
-    *,
-    deadline_monotonic: float,
-    poll_interval_seconds: float,
-    indexer_url: str,
-    indexer_auth: tuple[str, str],
-    alert_matches: Callable[[object], bool],
-    sleep_fn: Callable[[float], None] = time.sleep,
-    monotonic_fn: Callable[[], float] = time.monotonic,
-    regenerate: Callable[[], None] | None = None,
+    request: EvidencePollRequest,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Poll core collectors until a plugin-owned correlation predicate matches.
 
@@ -286,34 +293,38 @@ def _collect_until_evidence(
     framework owns bounded retries and the absolute monotonic deadline; it does
     not know what action is driven or what evidence proves correlation.
     """
-    remaining = deadline_monotonic - monotonic_fn()
-    if remaining <= 0 or poll_interval_seconds <= 0:
+    remaining = request.deadline_monotonic - request.monotonic_fn()
+    if remaining <= 0 or request.poll_interval_seconds <= 0:
         return [], []
     steps = max(
-        1, int((remaining + poll_interval_seconds - 1) // poll_interval_seconds)
+        1,
+        int(
+            (remaining + request.poll_interval_seconds - 1)
+            // request.poll_interval_seconds
+        ),
     )
     eve: list[dict[str, Any]] = []
     alerts: list[dict[str, Any]] = []
     for _ in range(steps):
-        remaining = deadline_monotonic - monotonic_fn()
+        remaining = request.deadline_monotonic - request.monotonic_fn()
         if remaining <= 0:
             break
-        sleep_fn(min(poll_interval_seconds, remaining))
-        if deadline_monotonic - monotonic_fn() <= 0:
+        request.sleep_fn(min(request.poll_interval_seconds, remaining))
+        if request.deadline_monotonic - request.monotonic_fn() <= 0:
             break
-        if regenerate is not None:
-            regenerate()
-        if deadline_monotonic - monotonic_fn() <= 0:
+        if request.regenerate is not None:
+            request.regenerate()
+        if request.deadline_monotonic - request.monotonic_fn() <= 0:
             break
         now = _now_iso()
-        eve = collect_suricata_eve(start_iso, now, backend)
+        eve = collect_suricata_eve(request.start_iso, now, request.backend)
         alerts = collect_wazuh_alerts(
-            start_iso,
+            request.start_iso,
             now,
-            indexer_url=indexer_url,
-            auth=indexer_auth,
+            indexer_url=request.indexer_url,
+            auth=request.indexer_auth,
         )
-        if any(alert_matches(alert) for alert in alerts):
+        if any(request.alert_matches(alert) for alert in alerts):
             break
     return eve, alerts
 

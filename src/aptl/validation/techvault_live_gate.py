@@ -33,7 +33,7 @@ The check implementations live in ``aptl.validation._live_gate_checks``.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic
 from types import ModuleType
@@ -45,9 +45,26 @@ from aptl.backends.identity import (
     BackendIdentity,
 )
 from aptl.backends.raes import DEFAULT_RAES_SCENARIO
+from aptl.validation._live_gate_models import (
+    CATEGORY_BACKEND_INSTANTIATION,
+    CATEGORY_BACKEND_INTERPRETATION,
+    CATEGORY_DEFENSIVE_STACK_READINESS,
+    CATEGORY_EVIDENCE_CAPTURE,
+    CATEGORY_KALI_REACHABILITY,
+    CATEGORY_RAES_SPECIFICATION,
+    CHECK_CATEGORY,
+    DEFAULT_PROFILE,
+    FAILURE_CATEGORIES,
+    LiveGateCheck,
+    LiveGateOptions,
+    LiveGateReport,
+    LiveGateState,
+    aggregate_status as _aggregate_status,
+    canonical_checks as _canonical_checks,
+    make_live_gate_report,
+)
 from aptl.validation.scenario_verification import (
     ScenarioIdentity,
-    VerificationCheck,
     VerificationReport,
     VerificationStatus,
 )
@@ -58,177 +75,6 @@ if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
     from aptl.core.runstore import RunStorageBackend
     from aptl.core.scenario_bundle import ScenarioBundle
-
-DEFAULT_PROFILE = "full-remote-control-plane"
-
-# Stable failure categories (issue #323 acceptance: a failure must identify the
-# layer that broke). These map onto existing RAES diagnostics and APTL startup
-# diagnostics — they are labels for triage, NOT a parallel exception hierarchy.
-CATEGORY_RAES_SPECIFICATION = "raes_specification"
-CATEGORY_BACKEND_INTERPRETATION = "backend_interpretation"
-CATEGORY_BACKEND_INSTANTIATION = "backend_instantiation"
-CATEGORY_DEFENSIVE_STACK_READINESS = "defensive_stack_readiness"
-CATEGORY_KALI_REACHABILITY = "kali_reachability"
-CATEGORY_EVIDENCE_CAPTURE = "evidence_capture"
-
-FAILURE_CATEGORIES: tuple[str, ...] = (
-    CATEGORY_RAES_SPECIFICATION,
-    CATEGORY_BACKEND_INTERPRETATION,
-    CATEGORY_BACKEND_INSTANTIATION,
-    CATEGORY_DEFENSIVE_STACK_READINESS,
-    CATEGORY_KALI_REACHABILITY,
-    CATEGORY_EVIDENCE_CAPTURE,
-)
-
-# Each live check's stable failure category. A check name absent from this map
-# is a programming error surfaced by ``LiveGateReport.failure_categories``.
-CHECK_CATEGORY: dict[str, str] = {
-    "static_prerequisite": CATEGORY_RAES_SPECIFICATION,
-    "boot_inputs_match_public_path": CATEGORY_BACKEND_INSTANTIATION,
-    "raes_driven_boot": CATEGORY_BACKEND_INSTANTIATION,
-    "defensive_stack_readiness": CATEGORY_DEFENSIVE_STACK_READINESS,
-    "kali_reachability": CATEGORY_KALI_REACHABILITY,
-    "telemetry_evidence_path": CATEGORY_EVIDENCE_CAPTURE,
-    "runtime_orchestration_containment": CATEGORY_BACKEND_INSTANTIATION,
-    "run_archive_manifest": CATEGORY_EVIDENCE_CAPTURE,
-    "scenario_variation": CATEGORY_BACKEND_INTERPRETATION,
-}
-
-
-@dataclass(frozen=True)
-class LiveGateCheck(object):
-    """One named live-gate check, its failure category, and outcome.
-
-    Distinct from the static gate's ``GateCheck`` only by the ``category``
-    field, which carries the issue-#323 failure taxonomy. ``diagnostics`` are
-    already redacted by the check that produced them (ADR-029).
-    """
-
-    name: str
-    category: str
-    status: VerificationStatus | bool
-    diagnostics: tuple[str, ...] = ()
-
-    def __post_init__(self) -> None:
-        """Normalize compatibility booleans into the shared status vocabulary."""
-
-        if isinstance(self.status, bool):
-            object.__setattr__(
-                self,
-                "status",
-                VerificationStatus.PASSED if self.status else VerificationStatus.FAILED,
-            )
-
-    @property
-    def passed(self) -> bool:
-        """Return whether this check reached the sole successful outcome."""
-
-        return self.status is VerificationStatus.PASSED
-
-
-def _aggregate_status(checks: tuple[LiveGateCheck, ...]) -> VerificationStatus:
-    """Return the authoritative aggregate outcome for operational checks."""
-
-    if any(check.status is VerificationStatus.BLOCKED for check in checks):
-        return VerificationStatus.BLOCKED
-    if any(check.status is VerificationStatus.FAILED for check in checks):
-        return VerificationStatus.FAILED
-    return VerificationStatus.PASSED
-
-
-def _canonical_checks(
-    checks: tuple[LiveGateCheck, ...],
-) -> tuple[VerificationCheck, ...]:
-    """Convert legacy operational checks at the shared report boundary."""
-
-    return tuple(
-        VerificationCheck(
-            check_id=check.name,
-            category=check.category,
-            status=check.status,
-            diagnostic="; ".join(check.diagnostics),
-        )
-        for check in checks
-    )
-
-
-def make_live_gate_report(
-    scenario: str,
-    profile: str,
-    run_id: str,
-    checks: tuple[LiveGateCheck, ...],
-) -> VerificationReport:
-    """Compatibility constructor for the one shared verification report shape."""
-
-    import hashlib
-
-    return VerificationReport(
-        status=_aggregate_status(checks),
-        scenario=ScenarioIdentity(
-            identity=scenario,
-            content_digest="sha256:"
-            + hashlib.sha256(scenario.encode("utf-8")).hexdigest(),
-            source_kind="project-tree",
-            version="project-tree",
-        ),
-        backend=BackendIdentity(
-            target_name=APTL_RAES_TARGET_NAME,
-            target_version=APTL_RAES_TARGET_VERSION,
-            profile=profile,
-            provider="unknown",
-            transport="unknown",
-        ),
-        run_id=run_id,
-        attempt_id=run_id,
-        checks=_canonical_checks(checks),
-    )
-
-
-# Existing callers import this constructor by its historical name. It returns
-# ``VerificationReport`` and therefore does not preserve a second report schema.
-LiveGateReport = make_live_gate_report
-
-
-@dataclass(frozen=True)
-class LiveGateOptions(object):
-    """Tunable inputs for the live validation gate.
-
-    ``profile`` selects the backend capability profile (``full-remote-control-plane``).
-    ``clean_volumes`` runs the data-destroying ``stop -v`` cleanup before the
-    boot; ``skip_clean_boot`` validates against an already-running lab without
-    the destructive cleanup (operator opt-in for a non-destructive check). The
-    static prerequisite runs the fast static stages by default
-    (``static_check_imports=False``); the slow ``raes sdl verify-imports`` step
-    has its own dedicated gate. ``event_window_seconds`` bounds the
-    telemetry-evidence collection window.
-    """
-
-    profile: str = DEFAULT_PROFILE
-    run_id: str | None = None
-    clean_volumes: bool = True
-    skip_clean_boot: bool = False
-    static_check_imports: bool = False
-    event_window_seconds: int = 180
-    fixtures_root: Path | None = None
-    profiles_root: Path | None = None
-
-
-@dataclass
-class LiveGateState(object):
-    """Mutable scratchpad threaded through the live-gate checks.
-
-    Analogous to ``aptl.core.lab._LabStartContext``: each check reads what it
-    needs and writes outputs later checks depend on, so the orchestrator stays
-    a flat sequence and the per-check return contract stays uniform.
-    """
-
-    realization_details: dict | None = None
-    deployment_spec: object | None = None
-    selected_profiles: list[str] = field(default_factory=list)
-    snapshot: dict | None = None
-    evidence: dict | None = None
-    diagnostics_seen: int = 0
-
 
 @dataclass(frozen=True)
 class _RunContext(object):

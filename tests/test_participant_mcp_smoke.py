@@ -186,9 +186,10 @@ def test_profile_smoke_requires_exactly_one_installed_plan(monkeypatch, count) -
         "_installed_plan_entry_points",
         lambda: [_EntryPoint(SMOKE_OPERATIONS) for _ in range(count)],
     )
+    profile = _profile()
 
     with pytest.raises(ParticipantMcpSmokeError, match="exactly one compatible"):
-        smoke.resolve_participant_mcp_smoke_operations(_profile())
+        smoke.resolve_participant_mcp_smoke_operations(profile)
 
 
 def test_profile_smoke_rejects_a_plan_that_fails_to_load(monkeypatch) -> None:
@@ -197,9 +198,10 @@ def test_profile_smoke_rejects_a_plan_that_fails_to_load(monkeypatch) -> None:
         "_installed_plan_entry_points",
         lambda: [_EntryPoint(RuntimeError("must not escape"))],
     )
+    profile = _profile()
 
     with pytest.raises(ParticipantMcpSmokeError, match="could not be loaded"):
-        smoke.resolve_participant_mcp_smoke_operations(_profile())
+        smoke.resolve_participant_mcp_smoke_operations(profile)
 
 
 @pytest.mark.parametrize(
@@ -222,9 +224,10 @@ def test_profile_smoke_rejects_malformed_installed_plans(monkeypatch, loaded) ->
         "_installed_plan_entry_points",
         lambda: [_EntryPoint(loaded)],
     )
+    profile = _profile()
 
     with pytest.raises(ParticipantMcpSmokeError, match="plan is malformed"):
-        smoke.resolve_participant_mcp_smoke_operations(_profile())
+        smoke.resolve_participant_mcp_smoke_operations(profile)
 
 
 def test_profile_smoke_rejects_missing_or_extra_registration(

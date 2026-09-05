@@ -1267,16 +1267,18 @@ def test_trigger_is_redriven_on_every_poll(monkeypatch):
     monkeypatch.setattr(probes, "collect_wazuh_alerts", _alerts)
 
     _eve, alerts = probes._collect_until_evidence(
-        object(),
-        "2026-01-01T00:00:00+00:00",
-        deadline_monotonic=60.0,
-        poll_interval_seconds=10.0,
-        indexer_url="https://localhost:9200",
-        indexer_auth=("u", "p"),
-        alert_matches=lambda alert: "test-marker" in str(alert),
-        sleep_fn=lambda _s: None,
-        monotonic_fn=lambda: 0.0,
-        regenerate=lambda: attempts.__setitem__("n", attempts["n"] + 1),
+        probes.EvidencePollRequest(
+            backend=object(),
+            start_iso="2026-01-01T00:00:00+00:00",
+            deadline_monotonic=60.0,
+            poll_interval_seconds=10.0,
+            indexer_url="https://localhost:9200",
+            indexer_auth=("u", "p"),
+            alert_matches=lambda alert: "test-marker" in str(alert),
+            sleep_fn=lambda _s: None,
+            monotonic_fn=lambda: 0.0,
+            regenerate=lambda: attempts.__setitem__("n", attempts["n"] + 1),
+        )
     )
 
     assert attempts["n"] >= 2, "trigger was not re-driven while waiting"
@@ -1295,15 +1297,17 @@ def test_without_redrive_a_lost_trigger_is_never_recovered(monkeypatch):
     )
 
     _eve, alerts = probes._collect_until_evidence(
-        object(),
-        "2026-01-01T00:00:00+00:00",
-        deadline_monotonic=30.0,
-        poll_interval_seconds=10.0,
-        indexer_url="https://localhost:9200",
-        indexer_auth=("u", "p"),
-        alert_matches=lambda alert: "test-marker" in str(alert),
-        sleep_fn=lambda _s: None,
-        monotonic_fn=lambda: 0.0,
+        probes.EvidencePollRequest(
+            backend=object(),
+            start_iso="2026-01-01T00:00:00+00:00",
+            deadline_monotonic=30.0,
+            poll_interval_seconds=10.0,
+            indexer_url="https://localhost:9200",
+            indexer_auth=("u", "p"),
+            alert_matches=lambda alert: "test-marker" in str(alert),
+            sleep_fn=lambda _s: None,
+            monotonic_fn=lambda: 0.0,
+        )
     )
 
     assert not any("test-marker" in str(alert) for alert in alerts)
@@ -1316,16 +1320,18 @@ def test_poll_does_not_redrive_after_sleep_reaches_the_deadline(monkeypatch):
     attempts = []
 
     _eve, alerts = probes._collect_until_evidence(
-        object(),
-        "2026-01-01T00:00:00+00:00",
-        deadline_monotonic=10.0,
-        poll_interval_seconds=10.0,
-        indexer_url="https://localhost:9200",
-        indexer_auth=("u", "p"),
-        alert_matches=lambda _alert: False,
-        sleep_fn=lambda _seconds: None,
-        monotonic_fn=lambda: next(now),
-        regenerate=lambda: attempts.append("triggered"),
+        probes.EvidencePollRequest(
+            backend=object(),
+            start_iso="2026-01-01T00:00:00+00:00",
+            deadline_monotonic=10.0,
+            poll_interval_seconds=10.0,
+            indexer_url="https://localhost:9200",
+            indexer_auth=("u", "p"),
+            alert_matches=lambda _alert: False,
+            sleep_fn=lambda _seconds: None,
+            monotonic_fn=lambda: next(now),
+            regenerate=lambda: attempts.append("triggered"),
+        )
     )
 
     assert attempts == []

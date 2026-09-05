@@ -15,11 +15,12 @@ names an origin node and asks a question; the framework answers it.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from math import floor, isfinite
 from pathlib import Path
 import time
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from aptl.core.deployment import get_backend
 from aptl.validation import _live_gate_telemetry as telemetry
@@ -50,6 +51,42 @@ class DetectionResult(object):
 
     observed: bool
     diagnostics: tuple[str, ...]
+
+
+def _validate_origin(origin: object, error: str) -> str:
+    if not isinstance(origin, str) or not origin or len(origin) > 128:
+        raise ValueError(error)
+    return origin
+
+
+def _validate_address(address: object) -> str:
+    if not isinstance(address, str) or not address or len(address) > 255:
+        raise ValueError("invalid-network-operation")
+    return address
+
+
+def _validate_port(port: object) -> int:
+    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        raise ValueError("invalid-port")
+    return port
+
+
+def _validate_argv(argv: object) -> tuple[str, ...]:
+    if not isinstance(argv, tuple) or not argv or len(argv) > 64:
+        raise ValueError("invalid-container-operation")
+    if any(not isinstance(item, str) or not item or len(item) > 4096 for item in argv):
+        raise ValueError("invalid-container-operation")
+    return argv
+
+
+def _validate_timeout(timeout_seconds: object) -> int:
+    if (
+        isinstance(timeout_seconds, bool)
+        or not isinstance(timeout_seconds, int)
+        or not 1 <= timeout_seconds <= 300
+    ):
+        raise ValueError("invalid-container-operation")
+    return timeout_seconds
 
 
 class LiveGateOperations(object):
@@ -140,21 +177,9 @@ class LiveGateOperations(object):
     def tcp_reachable_from(self, origin: str, address: str, port: int) -> bool:
         """Return whether ``origin`` can open one bounded TCP endpoint."""
 
-        if (
-            not isinstance(origin, str)
-            or not origin
-            or len(origin) > 128
-            or not isinstance(address, str)
-            or not address
-            or len(address) > 255
-        ):
-            raise ValueError("invalid-network-operation")
-        if (
-            isinstance(port, bool)
-            or not isinstance(port, int)
-            or not 1 <= port <= 65535
-        ):
-            raise ValueError("invalid-port")
+        _validate_origin(origin, "invalid-network-operation")
+        _validate_address(address)
+        _validate_port(port)
         timeout = self._bounded_timeout(15)
         if timeout is None:
             return False
@@ -176,22 +201,9 @@ class LiveGateOperations(object):
         not choose a host executable, working directory, environment, or backend.
         """
 
-        if (
-            not isinstance(origin, str)
-            or not origin
-            or len(origin) > 128
-            or not isinstance(argv, tuple)
-            or not argv
-            or len(argv) > 64
-            or any(
-                not isinstance(item, str) or not item or len(item) > 4096
-                for item in argv
-            )
-            or isinstance(timeout_seconds, bool)
-            or not isinstance(timeout_seconds, int)
-            or not 1 <= timeout_seconds <= 300
-        ):
-            raise ValueError("invalid-container-operation")
+        _validate_origin(origin, "invalid-container-operation")
+        _validate_argv(argv)
+        _validate_timeout(timeout_seconds)
         bounded_timeout = self._bounded_timeout(timeout_seconds)
         if bounded_timeout is None:
             return False
@@ -217,11 +229,13 @@ class LiveGateOperations(object):
             self._config,
             self._project_dir,
             self._state,
-            trigger=trigger,
-            alert_matches=alert_matches,
-            deadline_monotonic=effective_deadline,
-            poll_interval_seconds=poll_interval_seconds,
-            monotonic_fn=self._monotonic,
+            telemetry.EvidenceCollectionRequest(
+                trigger=trigger,
+                alert_matches=alert_matches,
+                deadline_monotonic=effective_deadline,
+                poll_interval_seconds=poll_interval_seconds,
+                monotonic_fn=self._monotonic,
+            ),
         )
         return DetectionResult(not diagnostics, tuple(diagnostics))
 

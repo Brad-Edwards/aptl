@@ -81,12 +81,7 @@ def _installed_plan_entry_points() -> list[metadata.EntryPoint]:
     return list(metadata.entry_points(group=PARTICIPANT_SMOKE_ENTRY_POINT_GROUP))
 
 
-def resolve_participant_mcp_smoke_operations(
-    profile: ResolvedParticipantProfile,
-) -> tuple[McpSmokeOperation, ...]:
-    """Load the one installed operation plan matching an admitted profile."""
-
-    selector = _profile_selector(profile)
+def _load_installed_plan(selector: str) -> object:
     exact = [
         entry_point
         for entry_point in _installed_plan_entry_points()
@@ -97,28 +92,45 @@ def resolve_participant_mcp_smoke_operations(
             "exactly one compatible participant smoke plan must be installed"
         )
     try:
-        loaded = exact[0].load()
+        return exact[0].load()
     except Exception:
         raise ParticipantMcpSmokeError(
             "participant smoke plan could not be loaded"
         ) from None
-    if (
-        not isinstance(loaded, tuple)
-        or not loaded
-        or len(loaded) > _MAX_OPERATIONS
-        or any(not isinstance(item, McpSmokeOperation) for item in loaded)
+
+
+def _valid_operation(operation: McpSmokeOperation) -> bool:
+    identifiers = (operation.check_id, operation.server_id, operation.tool_name)
+    return (
+        all(_SAFE_ID.fullmatch(value) is not None for value in identifiers)
+        and isinstance(operation.arguments, Mapping)
+        and callable(operation.validates)
+    )
+
+
+def _validated_operations(loaded: object) -> tuple[McpSmokeOperation, ...]:
+    valid_container = (
+        isinstance(loaded, tuple)
+        and bool(loaded)
+        and len(loaded) <= _MAX_OPERATIONS
+    )
+    if not valid_container or not all(
+        isinstance(item, McpSmokeOperation) for item in loaded
     ):
         raise ParticipantMcpSmokeError("participant smoke plan is malformed")
     operations = tuple(loaded)
-    for operation in operations:
-        if (
-            _SAFE_ID.fullmatch(operation.check_id) is None
-            or _SAFE_ID.fullmatch(operation.server_id) is None
-            or _SAFE_ID.fullmatch(operation.tool_name) is None
-            or not isinstance(operation.arguments, Mapping)
-            or not callable(operation.validates)
-        ):
-            raise ParticipantMcpSmokeError("participant smoke plan is malformed")
+    if not all(_valid_operation(operation) for operation in operations):
+        raise ParticipantMcpSmokeError("participant smoke plan is malformed")
+    return operations
+
+
+def resolve_participant_mcp_smoke_operations(
+    profile: ResolvedParticipantProfile,
+) -> tuple[McpSmokeOperation, ...]:
+    """Load the one installed operation plan matching an admitted profile."""
+
+    selector = _profile_selector(profile)
+    operations = _validated_operations(_load_installed_plan(selector))
     _validate_profile_binding(profile, operations)
     return operations
 

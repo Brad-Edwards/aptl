@@ -88,7 +88,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install the hash-verified test and build toolchain
-        run: pip install --require-hashes -r requirements/ci.txt
+        run: pip install --require-hashes -r requirements/dev.txt
       - name: Prove core-only and separately installed verifier wheels
         run: >-
           python -m pytest tests/test_scenario_verification_artifacts.py -q

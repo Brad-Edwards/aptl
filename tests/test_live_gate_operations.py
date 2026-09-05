@@ -188,8 +188,9 @@ def test_expired_framework_deadline_prevents_container_activity(monkeypatch):
 def test_generic_execution_rejects_unbounded_plugin_input(
     origin, argv, timeout_seconds
 ):
+    operations = _operations(_state([]))
     with pytest.raises(ValueError, match="invalid-container-operation"):
-        _operations(_state([])).execute_in_node(
+        operations.execute_in_node(
             origin,
             argv,
             timeout_seconds=timeout_seconds,
@@ -227,10 +228,9 @@ def test_tcp_probe_clamps_to_the_framework_deadline(monkeypatch):
 
 @pytest.mark.parametrize("port", [0, 65_536, True])
 def test_tcp_probe_rejects_an_invalid_port(port):
+    operations = _operations(_state([]))
     with pytest.raises(ValueError, match="invalid-port"):
-        _operations(_state([])).tcp_reachable_from(
-            "scenario-origin", "192.0.2.10", port
-        )
+        operations.tcp_reachable_from("scenario-origin", "192.0.2.10", port)
 
 
 @pytest.mark.parametrize(
@@ -243,18 +243,19 @@ def test_tcp_probe_rejects_an_invalid_port(port):
     ],
 )
 def test_tcp_probe_rejects_invalid_network_input(origin, address):
+    operations = _operations(_state([]))
     with pytest.raises(ValueError, match="invalid-network-operation"):
-        _operations(_state([])).tcp_reachable_from(origin, address, 22)
+        operations.tcp_reachable_from(origin, address, 22)
 
 
 def test_generic_evidence_collection_uses_plugin_callbacks(monkeypatch):
     state = _state([_container("scenario-origin")])
     calls = []
 
-    def collect(*args, **kwargs):
-        calls.append(kwargs)
-        kwargs["trigger"]()
-        assert kwargs["alert_matches"]({"marker": "scenario-correlation"})
+    def collect(_config, _project_dir, _state, request):
+        calls.append(request)
+        request.trigger()
+        assert request.alert_matches({"marker": "scenario-correlation"})
         return []
 
     monkeypatch.setattr(lgt, "collect_evidence_diagnostics", collect)
@@ -269,8 +270,8 @@ def test_generic_evidence_collection_uses_plugin_callbacks(monkeypatch):
 
     assert result.observed
     assert trigger_calls == ["triggered"]
-    assert calls[0]["deadline_monotonic"] == 100.0
-    assert calls[0]["poll_interval_seconds"] == 2.0
+    assert calls[0].deadline_monotonic == 100.0
+    assert calls[0].poll_interval_seconds == 2.0
 
 
 def test_expired_evidence_window_never_invokes_the_plugin_trigger(monkeypatch):
@@ -282,12 +283,14 @@ def test_expired_evidence_window_never_invokes_the_plugin_trigger(monkeypatch):
         _config(),
         PROJECT_ROOT,
         state,
-        trigger=lambda: trigger_calls.append("triggered"),
-        alert_matches=lambda _alert: False,
-        deadline_monotonic=10.0,
-        poll_interval_seconds=2.0,
-        env_loader=_telemetry_env,
-        monotonic_fn=lambda: 10.0,
+        lgt.EvidenceCollectionRequest(
+            trigger=lambda: trigger_calls.append("triggered"),
+            alert_matches=lambda _alert: False,
+            deadline_monotonic=10.0,
+            poll_interval_seconds=2.0,
+            env_loader=_telemetry_env,
+            monotonic_fn=lambda: 10.0,
+        ),
     )
 
     assert trigger_calls == []
@@ -323,25 +326,18 @@ def _wire_telemetry(monkeypatch):
     monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
     monkeypatch.setattr(lgt, "load_dotenv", _telemetry_env)
 
-    def collect_once(
-        backend,
-        start_iso,
-        *,
-        indexer_url,
-        indexer_auth,
-        alert_matches,
-        regenerate,
-        **_kwargs,
-    ):
-        regenerate()
+    def collect_once(request):
+        request.regenerate()
         end_iso = "2026-07-17T10:00:00+00:00"
         return (
-            lgp.collect_suricata_eve(start_iso, end_iso, backend),
+            lgp.collect_suricata_eve(
+                request.start_iso, end_iso, request.backend
+            ),
             lgp.collect_wazuh_alerts(
-                start_iso,
+                request.start_iso,
                 end_iso,
-                indexer_url=indexer_url,
-                auth=indexer_auth,
+                indexer_url=request.indexer_url,
+                auth=request.indexer_auth,
             ),
         )
 

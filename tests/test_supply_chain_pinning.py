@@ -304,7 +304,9 @@ def test_scenario_verification_artifact_boundary_runs_in_ci() -> None:
         str(step.get("run", "")) for step in job["steps"] if "run" in step
     )
 
-    assert "pip install --require-hashes -r requirements/ci.txt" in commands
+    # This job executes pytest as well as building wheels, so it needs the
+    # hash-locked development/test export rather than the CI-tool-only export.
+    assert "pip install --require-hashes -r requirements/dev.txt" in commands
     assert "tests/test_scenario_verification_artifacts.py" in commands
     assert "-m integration" in commands
 

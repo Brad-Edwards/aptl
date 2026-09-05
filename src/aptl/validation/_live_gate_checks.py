@@ -290,6 +290,11 @@ def check_run_archive_manifest(
     progression is emitted by ``AptlEvaluator`` from observed runtime state.
     """
     realization = state.realization_details or {}
+    validation_status = "failed"
+    if any(check.status.value == "blocked" for check in prior_checks):
+        validation_status = "blocked"
+    elif all(check.passed for check in prior_checks):
+        validation_status = "passed"
     manifest = {
         "schema": "aptl.live-gate.manifest/v1",
         "scenario": {
@@ -304,13 +309,7 @@ def check_run_archive_manifest(
         },
         "validation": {
             "checks": [_check_to_dict(check) for check in prior_checks],
-            "status": (
-                "blocked"
-                if any(check.status.value == "blocked" for check in prior_checks)
-                else "passed"
-                if all(check.passed for check in prior_checks)
-                else "failed"
-            ),
+            "status": validation_status,
         },
         "snapshot": state.snapshot,
         "evidence": state.evidence,

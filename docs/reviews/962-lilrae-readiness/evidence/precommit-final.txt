@@ -1,0 +1,243 @@
+Restore Suricata checked-in config ownership (legacy pre-ADR-043).......................Passed
+- hook id: suricata-config-source-ownership
+- duration: 0.24s
+trim trailing whitespace................................................................Passed
+- hook id: trailing-whitespace
+- duration: 0.29s
+fix end of files........................................................................Passed
+- hook id: end-of-file-fixer
+- duration: 0.27s
+check yaml..............................................................................Passed
+- hook id: check-yaml
+- duration: 0.74s
+check json..............................................................................Passed
+- hook id: check-json
+- duration: 0.2s
+check for added large files.............................................................Passed
+- hook id: check-added-large-files
+- duration: 0.27s
+check for merge conflicts...............................................................Passed
+- hook id: check-merge-conflict
+- duration: 0.24s
+detect private key......................................................................Passed
+- hook id: detect-private-key
+- duration: 0.23s
+uv-lock.................................................................................Passed
+- hook id: uv-lock
+- duration: 0.11s
+
+Resolved 145 packages in 1ms
+
+Export hashed runtime requirements......................................................Passed
+- hook id: uv-export
+- duration: 0.06s
+Export hashed web-service requirements..................................................Passed
+- hook id: uv-export
+- duration: 0.06s
+Export hashed dev/test requirements.....................................................Passed
+- hook id: uv-export
+- duration: 0.06s
+Export hashed docs requirements.........................................................Passed
+- hook id: uv-export
+- duration: 0.05s
+Export hashed CI-tooling requirements...................................................Passed
+- hook id: uv-export
+- duration: 0.05s
+Python complexity gate (ruff C901)......................................................Passed
+- hook id: ruff-complexity
+- duration: 0.03s
+
+All checks passed!
+
+TypeScript complexity gate (ESLint complexity)..........................................Passed
+- hook id: ts-complexity
+- duration: 3.18s
+Vale prose lint (ADR-038)...............................................................Passed
+- hook id: vale-prose-lint
+- duration: 12.95s
+
+✔ 0 errors, 0 warnings and 0 suggestions in 337 files.
+
+Python tests (pytest)...................................................................Passed
+- hook id: pytest
+- duration: 244.14s
+
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [  1%]
+........................................................................ [  3%]
+........................................................................ [  4%]
+........................................................................ [  6%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+........................................................................ [ 10%]
+........................................................................ [ 12%]
+........................................................................ [ 13%]
+........................................................................ [ 15%]
+........................................................................ [ 16%]
+........................................................................ [ 18%]
+........................................................................ [ 20%]
+........................................................................ [ 21%]
+........................................................................ [ 23%]
+........................................................................ [ 24%]
+........................................................................ [ 26%]
+........................................................................ [ 27%]
+................................ss.ssss................................. [ 29%]
+........................................................................ [ 30%]
+........................................................................ [ 32%]
+........................................................................ [ 33%]
+........................................................................ [ 35%]
+........................................................................ [ 36%]
+........................................................................ [ 38%]
+........................................................................ [ 40%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
+...........................ssssssssssssssssssssssssss................... [ 44%]
+........................................................................ [ 46%]
+........................................................................ [ 47%]
+........................................................................ [ 49%]
+........................................................................ [ 50%]
+........................................................................ [ 52%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+........................................................................ [ 57%]
+........................................................................ [ 58%]
+........................................................................ [ 60%]
+........................................................................ [ 61%]
+........................................................................ [ 63%]
+........................................................................ [ 64%]
+.............................................s.......................... [ 66%]
+........................................................................ [ 67%]
+........................................................................ [ 69%]
+........................................................................ [ 70%]
+........................................................................ [ 72%]
+........................................................................ [ 73%]
+........................................................................ [ 75%]
+........................................................................ [ 77%]
+........................................................................ [ 78%]
+............................................s.sssssss..ssss.ssssss.sssss [ 80%]
+sssssssssssssssss.ssssss................................................ [ 81%]
+........................................................................ [ 83%]
+........................................................................ [ 84%]
+.............................................................s.......... [ 86%]
+........................................................................ [ 87%]
+........................................................................ [ 89%]
+........................................................................ [ 90%]
+.................................................ssss................... [ 92%]
+.............................................ssssss.s.ss.s.............. [ 94%]
+........................................................................ [ 95%]
+........................................................................ [ 97%]
+........................................................................ [ 98%]
+................................................................         [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: 16 warnings
+  /home/atomik/src/aptl3/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_in_process_agents.py:123: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_in_process_agents.py:150: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_in_process_agents.py:163: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_in_process_agents.py:188: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_in_process_agents.py:231: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_in_process_agents.py:270: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:53: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:62: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:68: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:76: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:82: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [4] tests/test_obs003_kali_capture.py:93: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:98: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:102: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:128: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:141: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:149: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:162: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:268: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:307: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:350: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:363: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:375: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:415: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:434: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:472: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:482: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:502: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_obs003_kali_capture.py:520: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_lifecycle_guard.py:167: requires Windows junction semantics
+SKIPPED [1] tests/test_shell.py:57: Windows-only branch
+SKIPPED [1] tests/test_smoke.py:52: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [5] tests/test_smoke.py:55: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [4] tests/test_smoke.py:65: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:95: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:100: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:105: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:120: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:124: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:135: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:172: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:185: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:199: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [8] tests/test_smoke.py:218: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [9] tests/test_smoke.py:238: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:259: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:263: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:270: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:277: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:291: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:298: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:305: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:312: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:319: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_supply_chain_pinning.py:315: fixture removed or relocated
+SKIPPED [3] tests/test_smoke.py:41: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_smoke.py:49: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_wazuh_active_response.py:157: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_wazuh_active_response.py:198: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_wazuh_active_response.py:251: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_wazuh_active_response.py:282: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_wazuh_active_response.py:299: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_wazuh_active_response.py:329: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_wazuh_active_response.py:348: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_wazuh_active_response.py:447: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_wazuh_active_response.py:377: Set APTL_SMOKE=1 to run live smoke tests
+SKIPPED [1] tests/test_wazuh_active_response.py:490: Set APTL_SMOKE=1 to run live smoke tests
+4578 passed, 94 skipped, 16 warnings in 243.46s (0:04:03)
+
+MCP TypeScript tests (aptl-mcp-common vitest)...........................................Passed
+- hook id: vitest-mcp-common
+- duration: 1.35s
+
+RUN  v4.1.10 /home/atomik/src/aptl3/mcp/aptl-mcp-common
+
+
+ Test Files  20 passed (20)
+      Tests  462 passed (462)
+   Start at  02:39:41
+   Duration  825ms (transform 3.42s, setup 0ms, import 4.41s, tests 1.56s, environment 3ms)
+
+MCP TypeScript tests (mcp-red vitest)...................................................Passed
+- hook id: vitest-mcp-red
+- duration: 9.34s
+
+RUN  v4.1.10 /home/atomik/src/aptl3/mcp/mcp-red
+
+
+ Test Files  5 passed (5)
+      Tests  216 passed (216)
+   Start at  02:39:51
+   Duration  782ms (transform 1.23s, setup 0ms, import 1.86s, tests 259ms, environment 1ms)
+
+Web frontend tests (vitest).............................................................Passed
+- hook id: vitest-web
+- duration: 13.52s
+
+RUN  v4.1.10 /home/atomik/src/aptl3/web
+
+
+ Test Files  37 passed (37)
+      Tests  238 passed (238)
+   Start at  02:39:55
+   Duration  9.67s (transform 16.81s, setup 41.53s, import 10.85s, tests 15.60s, environment 50.53s)

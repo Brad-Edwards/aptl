@@ -1,0 +1,21 @@
+Restore Suricata checked-in config ownership (legacy pre-ADR-043).......................Passed
+trim trailing whitespace................................................................Passed
+fix end of files........................................................................Passed
+check yaml..............................................................................Passed
+check json..............................................................................Passed
+check for added large files.............................................................Passed
+check for merge conflicts...............................................................Passed
+detect private key......................................................................Passed
+uv-lock.................................................................................Passed
+Export hashed runtime requirements......................................................Passed
+Export hashed web-service requirements..................................................Passed
+Export hashed dev/test requirements.....................................................Passed
+Export hashed docs requirements.........................................................Passed
+Export hashed CI-tooling requirements...................................................Passed
+Python complexity gate (ruff C901)......................................................Passed
+TypeScript complexity gate (ESLint complexity)..........................................Passed
+Vale prose lint (ADR-038)...............................................................Passed
+Python tests (pytest)...................................................................Passed
+MCP TypeScript tests (aptl-mcp-common vitest)...........................................Passed
+MCP TypeScript tests (mcp-red vitest)...................................................Passed
+Web frontend tests (vitest).............................................................Passed

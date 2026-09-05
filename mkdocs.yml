@@ -96,6 +96,15 @@ nav:
     - "Issue #905 Lab Lifecycle Robustness Preflight": architecture/issue-905-lab-lifecycle-robustness-preflight.md
     - "Issue #949 Orborus Control Authority Preflight": architecture/issue-949-orborus-control-authority-preflight.md
     - "Issue #951 Fresh Env-Pack Start Preflight": architecture/issue-951-fresh-env-pack-start-preflight.md
+    - LilRAE Readiness Review:
+      - Assessment: reviews/962-lilrae-readiness/README.md
+      - Migration Inventory: reviews/962-lilrae-readiness/migration-inventory.md
+      - Existing Issues: reviews/962-lilrae-readiness/backlog-disposition.md
+      - Existing ADRs: reviews/962-lilrae-readiness/adr-disposition.md
+      - Agent Sandboxing: reviews/962-lilrae-readiness/agent-sandboxing.md
+      - Delivery Plan: reviews/962-lilrae-readiness/delivery-plan.md
+      - Upstream update: reviews/962-lilrae-readiness/upstream-update.md
+      - Evidence: reviews/962-lilrae-readiness/evidence/README.md
   - Deployment: deployment.md
   - Components:
     - Wazuh SIEM: components/wazuh-siem.md
@@ -194,6 +203,11 @@ nav:
     - ADR-051 Component-Level RAES Realization: adrs/adr-051-component-level-raes-realization.md
     - ADR-052 Configured Participant Credential Sourcing: adrs/adr-052-configured-participant-credential-sourcing.md
     - ADR-053 Pack-Backend Deployment-Serving Interaction Seam: adrs/adr-053-pack-backend-deployment-serving-interaction-seam.md
+    - ADR-054 LilRAE Core and Experience Ownership: adrs/adr-054-lilrae-core-and-experience-ownership.md
+    - ADR-055 Local Runtime Authority and Ownership: adrs/adr-055-local-runtime-authority-and-ownership.md
+    - ADR-056 Scenario-Led Capability Qualification: adrs/adr-056-scenario-led-capability-qualification.md
+    - ADR-057 Agent Execution Compartments: adrs/adr-057-agent-execution-compartments.md
+    - ADR-058 Adoption and Security Release Gates: adrs/adr-058-adoption-and-security-release-gates.md
 
 extra:
   social:

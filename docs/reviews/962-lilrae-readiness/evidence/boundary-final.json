@@ -1,0 +1,8 @@
+{
+  "foreign_matching_container_adopted": true,
+  "foreign_container_removal_requested": true,
+  "ambient_canary_bound_without_grant": true,
+  "generated_env_followed_symlink": true,
+  "daemon_called": false,
+  "real_credentials_used": false
+}

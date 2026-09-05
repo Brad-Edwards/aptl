@@ -22,9 +22,16 @@ from aptl.core.config import AptlConfig, ScenarioSourceConfig
 from aptl.core.deployment._compose_realization_networks import _concrete_network_name
 from aptl.core.lab_types import LabResult
 from aptl.core.scenario_bundle import ScenarioBundle, project_tree_bundle
+from tests.helpers import techvault_scenario_bundle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CONFORMANCE_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-defensive-min.sdl.yaml"
+
+
+@pytest.fixture(scope="module")
+def conformance_bundle(tmp_path_factory):
+    """Stage the acquired full-pack conformance input once for this module."""
+
+    return techvault_scenario_bundle(tmp_path_factory.mktemp("aptl-conformance"))
 
 
 def _bundle(root: Path) -> ScenarioBundle:
@@ -737,7 +744,7 @@ _CONFORMANCE_SCENARIO_CONTAINERS = (
 _CONFORMANCE_SCENARIO_NETWORKS = ("security-net",)
 
 
-def test_aptl_target_passes_provisioning_only_conformance():
+def test_aptl_target_passes_provisioning_only_conformance(conformance_bundle):
     from raes_conformance.conformance import run_target_conformance
 
     from aptl.backends.raes import create_aptl_runtime_target
@@ -749,7 +756,7 @@ def test_aptl_target_passes_provisioning_only_conformance():
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=PROJECT_ROOT,
-        bundle=_bundle(PROJECT_ROOT),
+        bundle=conformance_bundle,
         config=config,
         backend=backend,
     )
@@ -757,7 +764,7 @@ def test_aptl_target_passes_provisioning_only_conformance():
     report = run_target_conformance(
         target,
         profile="provisioning-only",
-        reference_scenario=CONFORMANCE_SCENARIO,
+        reference_scenario=conformance_bundle.sdl_path,
     )
 
     # The realization-envelope constructive case is live-harness-only and is
@@ -774,7 +781,9 @@ def test_aptl_target_passes_provisioning_only_conformance():
     assert report.unsupported_capability_gaps == ()
 
 
-def test_aptl_target_passes_orchestration_evaluation_conformance():
+def test_aptl_target_passes_orchestration_evaluation_conformance(
+    conformance_bundle,
+):
     from raes_conformance.conformance import run_target_conformance
 
     from aptl.backends.raes import create_aptl_runtime_target
@@ -786,7 +795,7 @@ def test_aptl_target_passes_orchestration_evaluation_conformance():
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=PROJECT_ROOT,
-        bundle=_bundle(PROJECT_ROOT),
+        bundle=conformance_bundle,
         config=config,
         backend=backend,
     )
@@ -794,7 +803,7 @@ def test_aptl_target_passes_orchestration_evaluation_conformance():
     report = run_target_conformance(
         target,
         profile="orchestration-evaluation",
-        reference_scenario=CONFORMANCE_SCENARIO,
+        reference_scenario=conformance_bundle.sdl_path,
     )
 
     # The realization-envelope constructive case is live-harness-only and is
@@ -828,7 +837,9 @@ def test_aptl_target_passes_orchestration_evaluation_conformance():
     assert "realization-envelope-constructive" in case_names
 
 
-def test_aptl_target_passes_full_remote_control_plane_conformance():
+def test_aptl_target_passes_full_remote_control_plane_conformance(
+    conformance_bundle,
+):
     from raes_conformance.conformance import run_target_conformance
 
     from aptl.backends.raes import create_aptl_runtime_target
@@ -840,7 +851,7 @@ def test_aptl_target_passes_full_remote_control_plane_conformance():
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=PROJECT_ROOT,
-        bundle=_bundle(PROJECT_ROOT),
+        bundle=conformance_bundle,
         config=config,
         backend=backend,
     )
@@ -848,7 +859,7 @@ def test_aptl_target_passes_full_remote_control_plane_conformance():
     report = run_target_conformance(
         target,
         profile="full-remote-control-plane",
-        reference_scenario=CONFORMANCE_SCENARIO,
+        reference_scenario=conformance_bundle.sdl_path,
     )
 
     # The realization-envelope constructive case is live-harness-only and is
@@ -999,16 +1010,13 @@ def test_legacy_participant_smoke_action_requires_explicit_admission(tmp_path):
     )
 
 
-def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
-    tmp_path,
+def test_runtime_binding_action_uses_compiled_addresses_and_evidence(
+    tmp_path, mocker
 ):
     import subprocess
 
-    from raes_processor.compiler import compile_runtime_model
     from raes_contracts.runtime_state import OperationState
     from raes_runtime.control_plane import RuntimeControlPlane
-    from raes_runtime.manager import RuntimeManager
-    from raes import parse_sdl_file
 
     from aptl.backends.raes import create_aptl_runtime_target
     from aptl.backends.raes_participant_actions import (
@@ -1016,42 +1024,23 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
         participant_action_specs_from_runtime_model,
     )
 
-    participant_address = "participant.behavior.paper-agent"
-    action_contract_address = "participant.action-contract.probe-customer-portal-login"
-    observation_boundary_address = "participant.observation-boundary.paper-agent-view"
+    participant_address = _BINDING_PARTICIPANT_ADDRESS
+    action_contract_address = _BINDING_ACTION_ADDRESS
+    observation_boundary_address = _BINDING_BOUNDARY_ADDRESS
 
     assert participant_address not in DEFAULT_PARTICIPANT_ACTIONS
-    assert not (
-        Path(__file__).resolve().parents[1]
-        / "src/aptl/backends/raes_paper_participant_actions.py"
-    ).exists()
     backend = MagicMock()
     backend.container_exec.return_value = subprocess.CompletedProcess(
         args=["bash"],
         returncode=0,
-        stdout=(
-            "portal_http_status=200\nboundary_db=blocked\nboundary_wazuh_api=blocked\n"
-        ),
+        stdout="ready\n",
         stderr="",
     )
-    project_root = Path(__file__).resolve().parents[1]
-    scenario = parse_sdl_file(project_root / "scenarios" / "paper-agent-loop.sdl.yaml")
-    model = compile_runtime_model(scenario)
-    config = AptlConfig(
-        lab={"name": "test"},
-        containers={"enterprise": True, "kali": True, "wazuh": True},
-    )
-    plan_target = create_aptl_runtime_target(
-        project_dir=project_root,
-        bundle=_bundle(project_root),
-        config=config,
-        backend=MagicMock(),
-    )
-    plan = RuntimeManager(plan_target).plan(scenario)
+    model, plan, config = _binding_model_plan_config(mocker)
     participant_action_specs = participant_action_specs_from_runtime_model(
         model,
         provisioning_plan=plan.provisioning,
-        bundle=_bundle(project_root),
+        bundle=_bundle(PROJECT_ROOT),
         config=config,
     )
     target = create_aptl_runtime_target(
@@ -1079,16 +1068,13 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
     assert action.success is True
     backend.container_exec.assert_called_once()
     container_name, command = backend.container_exec.call_args.args
-    assert container_name == "aptl-kali"
-    assert command[:2] == ["bash", "-lc"]
-    assert "172.20.1.20:8080/login" in command[2]
-    assert "172.20.2.11/5432" in command[2]
-    assert "172.20.2.30/55000" in command[2]
+    assert container_name == "fixture-source"
+    assert command == ["printf", "ready"]
     behavior = action.snapshot.participant_behavior_history[participant_address]
     assert behavior[0]["action_contract_address"] == action_contract_address
     assert behavior[-1]["observation_boundary_address"] == observation_boundary_address
     assert any(
-        "boundary_db=blocked" in observation
+        "ready" in observation
         for observation in behavior[-1]["action_result"]["observations"]
     )
     entries = action.snapshot.entries
@@ -1096,28 +1082,22 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
         entries[participant_address].payload["participant_address"]
         == participant_address
     )
-    assert entries[action_contract_address].payload["action_name"] == (
-        "probe-customer-portal-login"
-    )
+    assert entries[action_contract_address].payload["action_name"] == "fixture-action"
     assert entries[observation_boundary_address].payload["boundary_name"] == (
-        "paper-agent-view"
+        "fixture-view"
     )
-    assert "Kali victim SSH" not in str(entries[action_contract_address].payload)
-    assert "kali-victim-ssh" not in str(entries[observation_boundary_address].payload)
     shared_state_records = getattr(action.snapshot, "shared_state_records", {})
     assert {record["state_scope"] for record in shared_state_records.values()} == {
         participant_address
     }
     assert participant_action_specs[participant_address].target_refs == (
-        "container:aptl-kali",
-        "container:aptl-webapp",
-        "http://172.20.1.20:8080/login",
-        "boundary-negative:tcp:172.20.2.11:5432",
-        "boundary-negative:tcp:172.20.2.30:55000",
+        "container:fixture-source",
     )
 
 
-def test_runtime_model_without_paper_artifacts_registers_no_paper_action():
+def test_runtime_model_without_binding_artifacts_registers_no_dynamic_action(
+    conformance_bundle,
+):
     from raes_runtime.manager import RuntimeManager
     from raes import parse_sdl_file
 
@@ -1137,10 +1117,10 @@ def test_runtime_model_without_paper_artifacts_registers_no_paper_action():
         lab={"name": "test"},
         containers={"enterprise": True, "kali": True, "wazuh": True},
     )
-    scenario = parse_sdl_file(project_root / "scenarios" / "paper-agent-loop.sdl.yaml")
+    scenario = parse_sdl_file(conformance_bundle.sdl_path)
     target = create_aptl_runtime_target(
         project_dir=project_root,
-        bundle=_bundle(project_root),
+        bundle=conformance_bundle,
         config=config,
         backend=MagicMock(),
     )
@@ -1150,7 +1130,7 @@ def test_runtime_model_without_paper_artifacts_registers_no_paper_action():
         participant_action_specs_from_runtime_model(
             EmptyModel(),
             provisioning_plan=plan.provisioning,
-            bundle=_bundle(project_root),
+            bundle=conformance_bundle,
             config=config,
         )
         == {}
@@ -1221,64 +1201,109 @@ def test_runtime_bindings_skip_non_binding_extensions_and_content():
     assert _runtime_bindings(model) == []
 
 
-def _compile_paper_model_plan_config():
-    """Compile the real paper scenario for binding fail-closed tests."""
-    from raes_processor.compiler import compile_runtime_model
-    from raes_runtime.manager import RuntimeManager
-    from raes import parse_sdl_file
+def _binding_model_plan_config(mocker):
+    """Build a scenario-independent runtime-binding fixture."""
+    from types import SimpleNamespace
 
-    from aptl.backends.raes import create_aptl_runtime_target
+    from raes_contracts.planning import ProvisioningPlan
 
-    scenario = parse_sdl_file(PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml")
-    model = compile_runtime_model(scenario)
-    config = AptlConfig(
-        lab={"name": "test"},
-        containers={"enterprise": True, "kali": True, "wazuh": True},
+    from aptl.backends.raes_participant_bindings import (
+        _BINDING_EXTENSION_KEY,
+        _BINDING_SCHEMA,
     )
-    target = create_aptl_runtime_target(
-        project_dir=PROJECT_ROOT,
-        bundle=_bundle(PROJECT_ROOT),
-        config=config,
-        backend=MagicMock(),
+    from aptl.backends.raes_realization_model import AptlRealization, NodeRealization
+
+    binding = {
+        "schema_version": _BINDING_SCHEMA,
+        "runtime_target": "aptl",
+        "participant_ref": "fixture",
+        "action_contract_ref": "fixture-action",
+        "observation_boundary_ref": "fixture-view",
+        "source_container_ref": "nodes.fixture-source",
+        "command": {"argv": ["printf", "ready"]},
+        "success_markers": ["ready"],
+        "target_refs": ["container:fixture-source"],
+    }
+    behavior = SimpleNamespace(
+        action_contract_addresses=(_BINDING_ACTION_ADDRESS,),
+        observation_boundary_addresses=(_BINDING_BOUNDARY_ADDRESS,),
     )
-    plan = RuntimeManager(target).plan(scenario)
-    return model, plan, config
+    model = SimpleNamespace(
+        behavior_specifications={
+            _BINDING_SPEC_ADDRESS: SimpleNamespace(
+                spec={"extensions": {_BINDING_EXTENSION_KEY: binding}}
+            )
+        },
+        participant_behaviors={_BINDING_PARTICIPANT_ADDRESS: behavior},
+        action_contracts={_BINDING_ACTION_ADDRESS: object()},
+        observation_boundaries={_BINDING_BOUNDARY_ADDRESS: object()},
+    )
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(
+            NodeRealization(
+                address="nodes.fixture-source",
+                name="fixture-source",
+                aliases=(),
+                profiles=(),
+                backend_services=(),
+                container_name="fixture-source",
+                services=(),
+                networks=(),
+                static_addresses=(),
+            ),
+        ),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+    )
+    mocker.patch(
+        "aptl.backends.raes_participant_bindings.interpret_provisioning_plan",
+        return_value=realization,
+    )
+    return (
+        model,
+        SimpleNamespace(provisioning=ProvisioningPlan()),
+        AptlConfig(lab={"name": "test"}),
+    )
 
 
-_PAPER_BEHAVIOR_SPEC_ADDRESS = "participant.behavior-specification.paper-agent-behavior"
-_PAPER_PARTICIPANT_ADDRESS = "participant.behavior.paper-agent"
+_BINDING_SPEC_ADDRESS = "participant.behavior-specification.fixture"
+_BINDING_PARTICIPANT_ADDRESS = "participant.behavior.fixture"
+_BINDING_ACTION_ADDRESS = "participant.action-contract.fixture-action"
+_BINDING_BOUNDARY_ADDRESS = "participant.observation-boundary.fixture-view"
 
 
-def _paper_binding(model):
+def _fixture_binding(model):
     from aptl.backends.raes_participant_bindings import _BINDING_EXTENSION_KEY
 
-    spec = model.behavior_specifications[_PAPER_BEHAVIOR_SPEC_ADDRESS].spec
+    spec = model.behavior_specifications[_BINDING_SPEC_ADDRESS].spec
     return spec["extensions"][_BINDING_EXTENSION_KEY]
 
 
-def test_valid_binding_yields_participant_spec_baseline():
+def test_valid_binding_yields_participant_spec_baseline(mocker):
     """Baseline for the fail-closed cases: the untouched binding produces a spec."""
     from aptl.backends.raes_participant_actions import (
         participant_action_specs_from_runtime_model,
     )
 
-    model, plan, config = _compile_paper_model_plan_config()
+    model, plan, config = _binding_model_plan_config(mocker)
     specs = participant_action_specs_from_runtime_model(
         model,
         provisioning_plan=plan.provisioning,
         bundle=_bundle(PROJECT_ROOT),
         config=config,
     )
-    assert _PAPER_PARTICIPANT_ADDRESS in specs
+    assert _BINDING_PARTICIPANT_ADDRESS in specs
 
 
-def test_participant_binding_uses_the_approved_apparatus_timeout_default():
+def test_participant_binding_uses_the_approved_apparatus_timeout_default(mocker):
     from aptl.backends.raes_participant_actions import (
         participant_action_specs_from_runtime_model,
     )
 
-    model, plan, config = _compile_paper_model_plan_config()
-    _paper_binding(model).pop("timeout_seconds", None)
+    model, plan, config = _binding_model_plan_config(mocker)
+    _fixture_binding(model).pop("timeout_seconds", None)
     payload = config.model_dump(mode="python")
     payload["experiment"] = {"participant_action_timeout_seconds": 37}
     configured = AptlConfig.model_validate(payload)
@@ -1290,7 +1315,7 @@ def test_participant_binding_uses_the_approved_apparatus_timeout_default():
         config=configured,
     )
 
-    assert specs[_PAPER_PARTICIPANT_ADDRESS].timeout_seconds == 37
+    assert specs[_BINDING_PARTICIPANT_ADDRESS].timeout_seconds == 37
 
 
 def _set_runtime_target(binding):
@@ -1336,7 +1361,7 @@ def _empty_success_markers(binding):
         "empty-success-markers",
     ],
 )
-def test_malformed_binding_is_dropped_fail_closed(mutate):
+def test_malformed_binding_is_dropped_fail_closed(mutate, mocker):
     """A semantically invalid binding fails closed — the spec is dropped (#691).
 
     ``participant_action_specs_from_runtime_model`` swallows the per-binding
@@ -1350,8 +1375,8 @@ def test_malformed_binding_is_dropped_fail_closed(mutate):
         participant_action_specs_from_runtime_model,
     )
 
-    model, plan, config = _compile_paper_model_plan_config()
-    mutate(_paper_binding(model))
+    model, plan, config = _binding_model_plan_config(mocker)
+    mutate(_fixture_binding(model))
 
     specs = participant_action_specs_from_runtime_model(
         model,
@@ -1359,7 +1384,7 @@ def test_malformed_binding_is_dropped_fail_closed(mutate):
         bundle=_bundle(PROJECT_ROOT),
         config=config,
     )
-    assert _PAPER_PARTICIPANT_ADDRESS not in specs
+    assert _BINDING_PARTICIPANT_ADDRESS not in specs
 
 
 def test_assert_compiled_addresses_rejects_compiled_but_unassigned_refs():

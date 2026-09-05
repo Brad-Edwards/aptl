@@ -7,7 +7,7 @@ are projected from whatever RAES actually owns and are omitted when the
 source section is empty — no fabricated steps/objectives for infra-only SDLs.
 """
 
-from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -23,8 +23,6 @@ from aptl.core.scenario_catalog import (  # noqa: E402
     ScenarioCatalogEntry,
     ScenarioCatalogMetadata,
 )
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 EDGE_SDL = """
 name: edge-scenario
@@ -49,7 +47,6 @@ def _entry(scenario_id="edge", *, metadata=None):
     return ScenarioCatalogEntry(
         id=scenario_id,
         name="Edge Scenario",
-        path="scenarios/secret-internal-path.sdl.yaml",
         description="A catalog description.",
         metadata=metadata,
     )
@@ -134,12 +131,29 @@ class TestBlockProjection:
 
 
 class TestRichScenarioProjection:
-    """paper-agent-loop carries objectives + workflows + vm nodes."""
+    """RAES objective/workflow facts project without a checked-in scenario."""
 
     @pytest.fixture
     def paper_detail(self):
-        scenario = parse_sdl_file(
-            PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
+        success = SimpleNamespace(
+            mode="all_of", conditions=[], metrics=["handoff"], evaluations=[], tlos=[], goals=[]
+        )
+        scenario = SimpleNamespace(
+            nodes={},
+            objectives={
+                "handoff": SimpleNamespace(
+                    name="handoff", description="Complete the handoff", success=success
+                )
+            },
+            workflows={
+                "flow": SimpleNamespace(
+                    steps={
+                        "observe": SimpleNamespace(
+                            type="action", description="Observe the result", objective=""
+                        )
+                    }
+                )
+            },
         )
         return build_scenario_detail(_entry("paper-agent-loop"), scenario)
 

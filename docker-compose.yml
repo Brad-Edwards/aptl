@@ -43,7 +43,6 @@ services:
       - wazuh_queue:/var/ossec/queue
       - wazuh_var_multigroups:/var/ossec/var/multigroups
       - wazuh_integrations:/var/ossec/integrations
-      - ./config/wazuh_cluster/custom-shuffle:/var/ossec/integrations/custom-shuffle
       - wazuh_active_response:/var/ossec/active-response/bin
       - wazuh_agentless:/var/ossec/agentless
       - wazuh_wodles:/var/ossec/wodles
@@ -57,15 +56,8 @@ services:
       # template config/wazuh_cluster/wazuh_manager.conf (ADR-028); never edit
       # the .aptl/ copy by hand.
       - ./.aptl/config/wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf
-      - ./config/wazuh_cluster/falco_rules.xml:/var/ossec/etc/rules/falco_rules.xml
-      # kali_redteam_rules.xml and kali_decoders.xml mounts removed under
-      # ADR-033 — no red activity flows into the SIEM (non-contamination).
-      - ./config/wazuh_cluster/samba_decoders.xml:/var/ossec/etc/decoders/samba_decoders.xml
-      - ./config/wazuh_cluster/postgresql_decoders.xml:/var/ossec/etc/decoders/postgresql_decoders.xml
-      - ./config/wazuh_cluster/ad_rules.xml:/var/ossec/etc/rules/ad_rules.xml
-      - ./config/wazuh_cluster/webapp_rules.xml:/var/ossec/etc/rules/webapp_rules.xml
-      - ./config/wazuh_cluster/suricata_rules.xml:/var/ossec/etc/rules/suricata_rules.xml
-      - ./config/wazuh_cluster/database_rules.xml:/var/ossec/etc/rules/database_rules.xml
+      # Scenario-specific rules, decoders, and integrations are mounted by the
+      # admitted environment-pack realization, never from the APTL checkout.
       - ./config/wazuh_cluster/patch-rule-path.py:/docker-entrypoint-initdb.d/patch-rule-path.py:ro
     entrypoint: ["/bin/bash", "-c", "cp /run/filebeat-override.yml /etc/filebeat/filebeat.yml && chown root:root /etc/filebeat/filebeat.yml && python3 /docker-entrypoint-initdb.d/patch-rule-path.py 2>/dev/null; exec /init"]
     healthcheck:
@@ -224,8 +216,8 @@ services:
         limits:
           # 1g was too small: the container OOM-killed (exit 137) shortly
           # after loading the full ~52k signature set (default + local +
-          # MISP + suricata_rules + falco + ad + webapp + database +
-          # samba + postgresql). Colima on macOS reproduced this
+          # MISP plus the acquired pack's rule and decoder corpus). Colima on
+          # macOS reproduced this
           # consistently with 18 restarts before compose gave up. 3g
           # leaves headroom for signature reloads and packet buffers
           # without dominating the 24 GB Colima footprint.
@@ -337,7 +329,7 @@ services:
       aptl-security:
 
   # MISP -> Suricata IOC sync (intel-driven detection per ADR-019)
-  # Realized generically from scenarios/techvault-operational.sdl.yaml
+  # Realized generically from the acquired TechVault SDL
   # (ADR-048 / issue #581) — a `runtime:` node, never Compose-started. This
   # stub exists only so `--scale misp-suricata-sync=0` (the mixed-
   # realization exclusion) has a declared service to scale to zero; no
@@ -683,7 +675,7 @@ services:
   # ==========================================================================
 
   # TechVault Web Application
-  # Realized generically from scenarios/techvault-operational.sdl.yaml
+  # Realized generically from the acquired TechVault SDL
   # (ADR-048 / issue #581) — a `runtime:` node, never Compose-started. This
   # stub exists only so `--scale webapp=0` (the mixed-realization
   # exclusion) has a declared service to scale to zero; no config here is
@@ -781,7 +773,7 @@ services:
       aptl-internal:
         ipv4_address: 172.20.2.26
 
-  # Realized generically from scenarios/techvault-operational.sdl.yaml
+  # Realized generically from the acquired TechVault SDL
   # (ADR-048 / issue #581) — a `runtime:` node, never Compose-started. This
   # stub exists only so `--scale dns=0` (the mixed-realization exclusion)
   # has a declared service to scale to zero; no config here is live.
@@ -854,7 +846,7 @@ services:
       aptl-internal:
         ipv4_address: 172.20.2.10
 
-  # Realized generically from scenarios/techvault-operational.sdl.yaml
+  # Realized generically from the acquired TechVault SDL
   # (ADR-048 / issue #581) — a `runtime:` node, never Compose-started. This
   # stub exists only so `--scale db=0` (the mixed-realization exclusion)
   # has a declared service to scale to zero; no config here is live.
@@ -869,7 +861,7 @@ services:
       aptl-internal:
         ipv4_address: 172.20.2.11
 
-  # Realized generically from scenarios/techvault-operational.sdl.yaml
+  # Realized generically from the acquired TechVault SDL
   # (ADR-048 / issue #581) — a `runtime:` node, never Compose-started. This
   # stub exists only so `--scale fileshare=0` (the mixed-realization
   # exclusion) has a declared service to scale to zero; no config here is
@@ -952,7 +944,7 @@ services:
       aptl-security:
         ipv4_address: 172.20.0.36
 
-  # Realized generically from scenarios/techvault-operational.sdl.yaml
+  # Realized generically from the acquired TechVault SDL
   # (ADR-048 / issue #581) — a `runtime:` node, never Compose-started. This
   # stub exists only so `--scale victim=0` (the mixed-realization
   # exclusion) has a declared service to scale to zero; no config here is
@@ -965,7 +957,7 @@ services:
       aptl-internal:
         ipv4_address: 172.20.2.20
 
-  # Realized generically from scenarios/techvault-operational.sdl.yaml
+  # Realized generically from the acquired TechVault SDL
   # (ADR-048 / issue #581) — a `runtime:` node, never Compose-started. This
   # stub exists only so `--scale workstation=0` (the mixed-realization
   # exclusion) has a declared service to scale to zero; no config here is
@@ -982,7 +974,7 @@ services:
   # RED TEAM (aptl-redteam network: 172.20.4.0/24)
   # ==========================================================================
 
-  # Realized generically from scenarios/techvault-operational.sdl.yaml
+  # Realized generically from the acquired TechVault SDL
   # (ADR-048 / issue #581) — a `runtime:` node, never Compose-started. This
   # stub exists only so `--scale kali=0` (the mixed-realization exclusion)
   # has a declared service to scale to zero, and so kali-ssh-proxy /

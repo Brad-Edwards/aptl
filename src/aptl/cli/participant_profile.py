@@ -16,9 +16,6 @@ from aptl.validation.participant_qualification import (
     persist_participant_qualification,
 )
 
-DEFAULT_PARTICIPANT_PROFILE = Path("participant-profiles/guided-purple-v1/profile.json")
-
-
 def qualify_profile(
     project_dir: Path = typer.Option(
         Path("."),
@@ -27,9 +24,9 @@ def qualify_profile(
         help="Path to the materialized APTL project directory.",
     ),
     profile: Path = typer.Option(
-        DEFAULT_PARTICIPANT_PROFILE,
+        ...,
         "--profile",
-        help="Project-contained participant profile manifest.",
+        help="Project-contained participant profile manifest supplied by its owner.",
     ),
     report: Path = typer.Option(
         ...,

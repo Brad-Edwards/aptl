@@ -92,20 +92,15 @@ grc:
       surfaces: [dockerfile]
     - key: dmz-zone
       name: DMZ Zone (aptl-dmz)
-      description: Semi-exposed victim network — webapp, mailserver, DNS.
+      description: Semi-exposed victim network — generic component build contexts.
       paths:
-        - containers/webapp/**
         - containers/mailserver/**
-        - containers/dns/**
-      # webapp app/ (python) -> application; webapp + dns Dockerfiles -> dockerfile.
-      surfaces: [application, dockerfile]
+      surfaces: [dockerfile]
     - key: internal-zone
       name: Internal Zone (aptl-internal)
       description: Internal enterprise network — Active Directory, PostgreSQL, SMB fileshare, victim/workstation hosts.
       paths:
         - containers/ad/**
-        - containers/db/**
-        - containers/fileshare/**
         - containers/victim/**
         - containers/workstation/**
         - containers/windows-victim/**

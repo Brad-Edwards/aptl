@@ -92,7 +92,7 @@ def checkout_root(package_dir: Path | None = None) -> Path | None:
     if package_dir is None:
         package_dir = Path(__file__).resolve().parent.parent
     root = package_dir.parent.parent
-    if (root / "docker-compose.yml").is_file() and (root / "scenarios").is_dir():
+    if (root / "docker-compose.yml").is_file() and (root / "pyproject.toml").is_file():
         return root
     return None
 

@@ -32,6 +32,7 @@ from raes import parse_sdl_file
 from aptl.backends.raes import create_aptl_runtime_target
 from aptl.backends.raes_participant_runtime import PARTICIPANT_ACTION_ADDRESS
 from aptl.core.scenario_bundle import project_tree_bundle
+from aptl.core.scenario_bundle import ScenarioBundle
 from aptl.backends.raes_profiles import (
     load_compose_profile_index,
     normalized_identifier_aliases,
@@ -84,6 +85,8 @@ def expected_reduced_matrix(
     project_dir: Path,
     config: AptlConfig,
     scenario_path: Path,
+    *,
+    bundle: ScenarioBundle | None = None,
 ) -> ExpectedMatrix:
     """Compute a variant's reduced live surface from RAES realization.
 
@@ -93,7 +96,7 @@ def expected_reduced_matrix(
     set through the shared ``ComposeProfileIndex``. No Docker is started.
     """
     scenario = parse_sdl_file(scenario_path)
-    bundle = project_tree_bundle(project_dir, scenario_path)
+    bundle = bundle or project_tree_bundle(project_dir, scenario_path)
     target = create_aptl_runtime_target(
         project_dir=project_dir,
         config=config,
@@ -102,7 +105,10 @@ def expected_reduced_matrix(
     )
     execution_plan = RuntimeManager(target).plan(scenario)
     realization = interpret_provisioning_plan(
-        plan=execution_plan.provisioning, config=config, bundle=bundle
+        plan=execution_plan.provisioning,
+        config=config,
+        bundle=bundle,
+        component_root=project_dir,
     )
     selected_profiles = select_backend_profiles(config, realization.profiles)
 
@@ -116,9 +122,9 @@ def expected_reduced_matrix(
     )
 
     service_aliases = steady_state_service_aliases_for_profiles(
-        bundle.root, selected_profiles
+        project_dir, selected_profiles
     )
-    index = load_compose_profile_index(bundle.root)
+    index = load_compose_profile_index(project_dir)
     network_aliases: dict[str, frozenset[str]] = {}
     for service_name in service_aliases:
         service = index.services.get(service_name)

@@ -116,3 +116,10 @@ def test_a_configured_root_anchors_the_scenario(tmp_path):
     resolved = _resolve_scenario_path(tmp_path, None, config)
 
     assert (tmp_path / "environments" / "demo") in resolved.parents
+
+
+def test_no_implicit_project_tree_default_without_config(tmp_path):
+    from aptl.backends.raes import _resolve_scenario_path
+
+    with pytest.raises(ValueError, match="explicit scenario path or configuration"):
+        _resolve_scenario_path(tmp_path, None, None)

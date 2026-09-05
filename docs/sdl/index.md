@@ -20,13 +20,19 @@ APTL consumes published RAES SDL and packs. How a scenario *runs* as a lab (the
 Compose topology, container realization, lab lifecycle, credentials, and
 captured evidence) stays APTL-owned and is documented in APTL's own pages.
 
-Current operator-facing startup selection uses:
+Current operator-facing startup selection uses one acquired-pack path:
 
-- `scenarios/catalog.json` for curated scenario IDs
-- `aptl.core.scenario_catalog.resolve_scenario_selection()` for catalog or
-  explicit path resolution
+- `ScenarioSourceConfig` for the configured pack selector
+- `resolve_scenario_bundle()` for staging and associated-artifact identity
+  validation
+- the `raes-env-packs` catalog model for operator-facing metadata
 - `raes.parse_sdl_file` for SDL validation
 - `aptl.backends.raes.start_raes_scenario()` for runtime handoff through RAES
+
+`aptl lab scenarios` therefore reports pack identity (id, version, set digest,
+and maturity), not an APTL-relative path. An explicit `--scenario-path` is a
+project-contained development override; it is not a fallback for a missing or
+invalid acquired pack.
 
 The historical APTL-local SDL reference pages in this section are retained only
 for old ADR links and design archaeology. They are not current authoring
@@ -37,4 +43,4 @@ For current TechVault authoring and validation, use the RAES pages:
 
 - [TechVault Static Validation Gate](../raes/techvault-static-validation-gate.md)
 - [TechVault Live Validation Gate](../raes/techvault-live-validation-gate.md)
-- [Curated RAES Startup Variants](techvault-curated-variants.md)
+- [Retired APTL-local startup variants](techvault-curated-variants.md)

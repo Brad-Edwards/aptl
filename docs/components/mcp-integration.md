@@ -25,7 +25,7 @@ flowchart TD
 ```
 
 The optional `mcp-reverse` server is built with the other artifacts but is not
-written to the default client configuration because `techvault-operational`
+written to the default client configuration because the acquired `techvault` pack
 does not realize a reverse-engineering node.
 
 ## Common Library

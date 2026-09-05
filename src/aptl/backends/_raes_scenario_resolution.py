@@ -2,8 +2,8 @@
 
 Split out of :mod:`aptl.backends.raes` so that module keeps the runtime-target
 composition and start/apply flow while this one carries the selection seam:
-explicit path, configured selection, or the historical in-tree default, and the
-staged-env-pack vs project-tree bundle choice. Both names are re-exported from
+explicit development path or configured acquired pack, and the staged-env-pack
+vs project-tree bundle choice. Both names are re-exported from
 ``aptl.backends.raes`` unchanged.
 """
 
@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from aptl.backends.raes_start_model import DEFAULT_RAES_SCENARIO
 from aptl.core.config import AptlConfig
 from aptl.core.scenario_bundle import (
     ScenarioBundle,
@@ -29,11 +28,10 @@ def _resolve_scenario_path(
 ) -> Path:
     """Resolve which scenario to realize, and where its bytes come from.
 
-    Precedence is explicit selection, then configuration, then the historical
-    in-tree default. A backend is handed a scenario rather than owning one, so
-    the operator chooses it before ``aptl lab start``. A configured root anchors
-    the scenario's own inputs; it is validated as a contained relative path when
-    the configuration is parsed, so joining it here cannot escape the project.
+    An explicit project-contained path is a development override. Otherwise a
+    project-tree source must be configured explicitly; there is no implicit
+    in-tree scenario fallback. A backend is handed a scenario rather than
+    owning one, so the operator chooses it before ``aptl lab start``.
     """
 
     if scenario_path is not None:
@@ -47,7 +45,9 @@ def _resolve_scenario_path(
         relative = Path(f"{selection.identity}.sdl.yaml")
         base = Path(selection.root) if selection.root else Path("scenarios")
         return project_dir / base / relative
-    return project_dir / DEFAULT_RAES_SCENARIO
+    raise ValueError(
+        "scenario selection requires an explicit scenario path or configuration"
+    )
 
 
 def resolve_scenario_bundle(

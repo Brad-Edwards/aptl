@@ -512,17 +512,16 @@ def wait_for_alert(
 
 
 # --------------------------------------------------------------------------- #
-# Default TechVault scenario (issue #875): the in-tree techvault-operational.sdl
-# was retired in favour of the bundled env-pack. Tests that parse/plan/realize
-# "the default TechVault scenario" resolve its staged SDL through this helper.
+# Default TechVault scenario (issue #875): tests that parse, plan, or realize
+# the full acquired pack resolve its staged SDL through this helper.
 # --------------------------------------------------------------------------- #
 def techvault_scenario_bundle(staging_root: Path):
-    """Stage + return the default TechVault env-pack bundle under ``staging_root``."""
+    """Stage the acquired TechVault env-pack beneath ``staging_root``."""
     from aptl.core.scenario_bundle import env_pack_bundle
 
     return env_pack_bundle(Path(staging_root) / ".aptl" / "staged-packs", "techvault")
 
 
 def techvault_scenario_path(staging_root: Path) -> Path:
-    """Staged SDL path of the default TechVault env-pack scenario (#875)."""
+    """Return the staged SDL path of the acquired TechVault pack (#875)."""
     return techvault_scenario_bundle(staging_root).sdl_path

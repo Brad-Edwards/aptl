@@ -13,9 +13,9 @@ from aptl.backends.raes_participant_provider import (
     ParticipantDecisionSolicitation,
 )
 from aptl.core.deployment import get_backend
+from aptl.core.scenario_catalog import resolve_scenario_selection
 from aptl.validation.participant_agency_readiness import (
     BEHAVIOR_ADDRESSES,
-    SCENARIO_RELATIVE_PATH,
     ParticipantReadinessReport,
     ParticipantReadinessRequest,
     validate_participant_agency_readiness,
@@ -80,6 +80,7 @@ class _QualificationContext:
     """Shared exact-plan coordinates for every qualification check."""
 
     project_dir: Path
+    scenario_path: Path
     config: AptlConfig
     run_store: RunStorageBackend
     run_id: str
@@ -91,6 +92,7 @@ class _QualificationContext:
 def validate_participant_agency_qualification(
     *,
     project_dir: Path,
+    scenario_path: Path,
     config: AptlConfig,
     run_store: RunStorageBackend,
     run_id: str | None = None,
@@ -109,11 +111,16 @@ def validate_participant_agency_qualification(
     selected_run_id = run_id or f"participant-qualification-{uuid4().hex}"
     run_store.create_run(selected_run_id)
     deployment = backend or get_backend(config, project_dir)
+    scenario_path = resolve_scenario_selection(
+        project_dir,
+        scenario_path=scenario_path,
+    )
+    assert scenario_path is not None
     admitted = admit_raes_scenario(
         project_dir,
         config,
         deployment,
-        scenario_path=project_dir / SCENARIO_RELATIVE_PATH,
+        scenario_path=scenario_path,
     )
     target, plan = admitted.target, admitted.execution_plan
     authority = target.participant_runtime.plan_authority
@@ -121,6 +128,7 @@ def validate_participant_agency_qualification(
         raise ValueError("participant plan authority is unavailable")
     context = _QualificationContext(
         project_dir=project_dir,
+        scenario_path=scenario_path,
         config=config,
         run_store=run_store,
         run_id=selected_run_id,
@@ -147,6 +155,7 @@ def validate_participant_agency_qualification(
         run_boundary_challenge(
             challenge_id,
             project_dir=project_dir,
+            scenario_path=scenario_path,
             config=config,
             run_store=run_store,
             parent_run_id=selected_run_id,
@@ -210,6 +219,7 @@ def _positive_trajectory_checks(
         trajectory = validate_participant_agency_readiness(
             ParticipantReadinessRequest(
                 project_dir=context.project_dir,
+                scenario_path=context.scenario_path,
                 config=context.config,
                 run_store=context.run_store,
                 provider_name="deterministic-sequence",
@@ -289,6 +299,7 @@ def _installed_provider_checks(
         trajectory = validate_participant_agency_readiness(
             ParticipantReadinessRequest(
                 project_dir=context.project_dir,
+                scenario_path=context.scenario_path,
                 config=context.config,
                 run_store=context.run_store,
                 provider_name=installed_provider,

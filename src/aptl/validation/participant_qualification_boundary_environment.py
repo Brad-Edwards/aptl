@@ -16,9 +16,9 @@ from aptl.backends.raes_participant_driver import AptlParticipantControlPlane
 from aptl.backends.raes_participant_fixture import participant_episode_state_dir
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.scenario_bundle import project_tree_bundle
+from aptl.core.scenario_catalog import resolve_scenario_selection
 from aptl.validation.participant_agency_readiness import (
     BEHAVIOR_ADDRESSES,
-    SCENARIO_RELATIVE_PATH,
     _verify_live_materialization,
 )
 from aptl.validation.participant_qualification_challenge_support import (
@@ -40,6 +40,7 @@ BOUNDARY_CHALLENGE_PATH = "evaluator/boundary-challenge.json"
 def prepare_challenge_context(
     *,
     project_dir: Path,
+    scenario_path: Path,
     config: AptlConfig,
     run_store: RunStorageBackend,
     run_id: str,
@@ -49,7 +50,11 @@ def prepare_challenge_context(
     """Prepare an isolated, exact-state participant episode."""
 
     run_store.create_run(run_id)
-    scenario_path = project_dir / SCENARIO_RELATIVE_PATH
+    scenario_path = resolve_scenario_selection(
+        project_dir,
+        scenario_path=scenario_path,
+    )
+    assert scenario_path is not None
     admitted = admit_raes_scenario(
         project_dir,
         config,

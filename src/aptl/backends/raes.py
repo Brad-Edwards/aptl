@@ -42,9 +42,6 @@ from aptl.backends.raes_participant_driver import ParticipantPlanAuthority
 from aptl.backends.raes_participant_runtime import AptlParticipantRuntime
 from aptl.backends.raes_provisioner import AptlProvisioner
 from aptl.backends.raes_start_model import (
-    # ``DEFAULT_RAES_SCENARIO`` is re-exported: callers read the default
-    # scenario selection off this module.
-    DEFAULT_RAES_SCENARIO as DEFAULT_RAES_SCENARIO,
     AcesRunTarget,
     AcesStartOutcome,
     AdmittedScenarioStart,

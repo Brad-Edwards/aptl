@@ -884,6 +884,27 @@ _WAZUH_CERTIFICATE_OWNERSHIP = frozenset(
         ),
     }
 )
+_SSH_KEY_BUNDLE_SOURCE = ".aptl/realization/ssh-key-bundles/techvault-ssh-keys"
+_SSH_KEY_BUNDLE_OWNERSHIP = frozenset(
+    (
+        "provision.generated-artifact.techvault-ssh-keys",
+        "ssh_key_bundle",
+        service,
+        "/home",
+        _SSH_KEY_BUNDLE_SOURCE,
+    )
+    for service in ("workstation", "victim", "kali")
+)
+_SOC_CERTIFICATE_OWNERSHIP = frozenset(
+    (
+        "provision.generated-artifact.techvault-soc-certificates",
+        "certificate_bundle",
+        service,
+        "/opt/aptl/soc-certs",
+        "config/soc_certs",
+    )
+    for service in ("misp", "thehive", "cortex", "shuffle-frontend")
+)
 
 
 # Log format string for structured diagnostics. Kept module-level so
@@ -1190,14 +1211,13 @@ def _load_admitted_start_surface(
 ) -> LabResult | None:
     """Admit the selected scenario once and cache what pre-start steps need.
 
-    ``ctx.scenario_path`` is handed to the resolver unchanged. Substituting a
-    default filename here is wrong twice over: ``DEFAULT_RAES_SCENARIO`` names
-    an in-tree document that no longer exists, and it is not where the default
-    env-pack lives, so the substitution made every fresh install admit nothing
-    and then fail the bind-mount pre-flight (issue #951). ``scenario_path=None``
-    means "resolve the configured selection", which is exactly what
+    ``ctx.scenario_path`` is handed to the resolver unchanged. Substituting an
+    in-tree filename here would bypass the configured acquired-pack selection
+    and made fresh installs admit nothing before failing the bind-mount
+    pre-flight (issue #951). ``scenario_path=None`` means "resolve the
+    configured selection", which is exactly what
     ``resolve_scenario_bundle`` does — including staging and validating the
-    bundled env-pack.
+    acquired env-pack.
 
     Admission failure is fatal: continuing with no admitted facts is what
     produced the regression, and every later step would be guessing. Admission
@@ -1245,26 +1265,6 @@ def _ssh_key_step_failure(result: SSHKeyResult, what: str) -> LabResult | None:
     return LabResult(success=False, error=f"{what} failed: {result.error}")
 
 
-def _scenario_is_env_pack(ctx: _LabStartContext) -> bool:
-    """Whether this run realizes a scenario from an env-pack (#875).
-
-    When it does, standup material the pack declares as generated artifacts
-    (SSH pivot keys, authorized-key projections, the SOC CA) is produced during
-    realization from the pack, not by the host-side lab-start steps.
-
-    The answer comes from the *resolved* bundle, not ``config.scenario.source``.
-    An explicit catalog id or scenario path wins selection and resolves to a
-    project-tree bundle even while the configured default names an env-pack, so
-    reading the config flag skipped the host-side producers a curated scenario
-    still depends on (issue #951).
-    """
-
-    from aptl.core.scenario_bundle import ScenarioSourceKind
-
-    surface = ctx.admitted_surface
-    return surface is not None and surface.source_kind is ScenarioSourceKind.ENV_PACK
-
-
 def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
     """Ensure the host-side lab SSH key exists."""
     log.info("Step 3: Generating SSH keys...")
@@ -1278,13 +1278,13 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
         return failure
     ctx.ssh_key_path = ssh_result.key_path or (Path.home() / ".ssh" / "aptl_lab_key")
 
-    if _scenario_is_env_pack(ctx):
+    if _SSH_KEY_BUNDLE_OWNERSHIP <= ctx.stateful_artifact_ownership:
         # The scenario's ssh_key_bundle generated artifact owns the pivot keys
         # and authorized-key projections (generated + placed during realization);
         # only the control-plane key above is host-side. Generating the legacy
         # pivot/authorized-keys here would write dead files the pack never mounts.
         log.info(
-            "Step 3: pivot/authorized keys come from the scenario pack; skipping host generation."
+            "Step 3: pivot/authorized keys are owned by the admitted realization; skipping host generation."
         )
         return None
 
@@ -1594,10 +1594,10 @@ def _step_generate_soc_certs(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 6c: Generating SOC stack lab CA + service certs...")
     # runtime guard above; this assert is for the type-checker.
     assert ctx.config is not None
-    if _scenario_is_env_pack(ctx):
+    if _SOC_CERTIFICATE_OWNERSHIP <= ctx.stateful_artifact_ownership:
         # The pack declares the SOC CA + service certs as certificate_bundle
         # generated artifacts, produced and validated during realization.
-        log.debug("SOC certs come from the scenario pack; skipping host generation.")
+        log.debug("SOC certs are owned by the admitted realization; skipping host generation.")
         return None
     result: LabResult | None = None
     if not ctx.config.containers.soc:

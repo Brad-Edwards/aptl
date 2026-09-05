@@ -18,9 +18,6 @@ if TYPE_CHECKING:
     from aptl.core.runstore import RunStorageBackend
     from aptl.core.scenario_bundle import ScenarioBundle
 
-DEFAULT_RAES_SCENARIO = Path("scenarios") / "techvault-operational.sdl.yaml"
-
-
 @dataclass(frozen=True)
 class AdmittedScenarioStart:
     """One admitted scenario execution, shared by pre-mutation steps and apply.

@@ -128,7 +128,7 @@ jobs:
     name: RAES scenario validation gate (advisory, Phase A)
     runs-on: ubuntu-latest
     # SCN-010E / #322. The static validation gate parses the authoritative
-    # techvault-operational SDL and spawns the `raes conformance backend` CLI,
+    # acquired TechVault SDL and spawns the `raes conformance backend` CLI,
     # so it is integration-marked and runs here rather than in the fast
     # python-tests suite. Advisory in Phase A — `continue-on-error` surfaces
     # failures on the PR without blocking merge; the Phase B cutover PR removes
@@ -166,7 +166,7 @@ jobs:
           assert ensure_pivot_key(pivot_dir=pivot_dir).success
           assert ensure_target_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir).success
           "
-      - name: RAES static validation gate (techvault-operational)
+      - name: RAES static validation gate (acquired techvault)
         # -n auto runs the parse / compile / conformance-CLI checks in parallel
         # via pytest-xdist. No coverage is collected here, so xdist worker
         # measurement is not a concern.
@@ -176,7 +176,7 @@ jobs:
     name: Fresh-install lab-start pre-flight (issue #951)
     runs-on: ubuntu-latest
     # Blocking, and deliberately separate from `python-tests`: admitting the
-    # bundled env-pack needs Docker and takes minutes, which does not belong in
+    # acquired env-pack needs Docker and takes minutes, which does not belong in
     # the fast coverage run. It is the unit-level counterpart to
     # `clean-install-lab-boot` — same regression, checked from a materialized
     # project directory without booting containers.
@@ -200,8 +200,8 @@ jobs:
     # checkout carries gitignored generated state (config/soc_certs/, .aptl/)
     # that hides a fresh-install failure entirely. Issue #951 shipped exactly
     # that failure to PyPI in 5.2.0 — the quick start failed in nine seconds for
-    # every scenario. This boots the smallest curated scenario from the built
-    # wheel in a clean environment so the released artifact is what gets tested.
+    # every scenario. This boots the full acquired pack from the built wheels in
+    # a clean environment so the released artifacts are what get tested.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -211,11 +211,11 @@ jobs:
         run: |
           pip install --require-hashes -r requirements/ci.txt
           python -m build --wheel --no-isolation --outdir dist/
+          python -m build --wheel --no-isolation --outdir dist/ plugins/aptl-techvault-pack-interaction
       - name: Install the wheel into a clean virtual environment
-        # Deliberately NOT `pip install -e .`, not the checkout's CLI, and not
-        # the local pack-interaction plugin: any of those would test something
-        # other than the artifact users install. `--no-deps` after the locked
-        # runtime set keeps the dependency closure pinned and hash-verified.
+        # Deliberately not editable: install both packaged artifacts exactly as
+        # users do. `--no-deps` after the locked runtime set keeps the dependency
+        # closure pinned and hash-verified.
         run: |
           python -m venv "$RUNNER_TEMP/clean-venv"
           "$RUNNER_TEMP/clean-venv/bin/pip" install --require-hashes -r requirements/runtime.txt
@@ -227,16 +227,17 @@ jobs:
           mkdir -p "$RUNNER_TEMP/clean-install"
           cd "$RUNNER_TEMP/clean-install"
           "$RUNNER_TEMP/clean-venv/bin/aptl" lab init ci-lab
+          test ! -e ci-lab/scenarios
           test ! -e ci-lab/config/soc_certs
           test ! -e ci-lab/.aptl
-      - name: Start the smallest curated scenario
+      - name: Start the full acquired TechVault pack
         # `aptl lab start` enforces the documented vm.max_map_count prerequisite
         # on a native Linux Docker Engine, so the runner satisfies it the same
         # way docs/getting-started/prerequisites.md tells an operator to.
         run: |
           sudo sysctl -w vm.max_map_count=262144
           cd "$RUNNER_TEMP/clean-install/ci-lab"
-          "$RUNNER_TEMP/clean-venv/bin/aptl" lab start --scenario techvault-observability-core
+          "$RUNNER_TEMP/clean-venv/bin/aptl" lab start --scenario techvault
       - name: Stop the lab and remove its volumes
         if: always()
         run: |

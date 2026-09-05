@@ -38,13 +38,12 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING
 
-from aptl.backends.raes import DEFAULT_RAES_SCENARIO
-
 if TYPE_CHECKING:
     from raes.scenario import Scenario
 
     from aptl.core.config import AptlConfig
     from aptl.core.runstore import RunStorageBackend
+    from aptl.core.scenario_bundle import ScenarioBundle
 
 DEFAULT_PROFILE = "full-remote-control-plane"
 
@@ -188,6 +187,7 @@ class _RunContext(object):
     """
 
     scenario_path: Path
+    scenario_bundle: ScenarioBundle
     # The selector the boot resolves (``None`` -> configured env-pack). Distinct
     # from ``scenario_path`` (the resolved staged SDL used for parse/digest): the
     # env-pack's content artifacts resolve through the pack resolver, not a
@@ -222,15 +222,16 @@ def validate_live_deployment(
     # Resolve the scenario the same env-pack-aware way `aptl lab start` does: an
     # explicit path uses the project tree, otherwise the configured env-pack is
     # staged and its SDL is the scenario. Issue #875 moved TechVault into the
-    # `raes-env-packs` pack, so the in-tree DEFAULT_RAES_SCENARIO path no longer
-    # exists -- the gate must validate the same scenario the lab actually boots.
+    # `raes-env-packs` pack, so no in-tree default path exists; the gate must
+    # validate the same scenario the lab actually boots.
     from aptl.backends.raes import resolve_scenario_bundle
 
     # The parse/compile/matrix/digest layers validate the exact SDL the env-pack
     # stages; the boot instead resolves the env-pack itself (config-driven), so it
     # keeps the original selector.
     boot_scenario_path = scenario_path
-    scenario_path = resolve_scenario_bundle(project_dir, scenario_path, config).sdl_path
+    scenario_bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
+    scenario_path = scenario_bundle.sdl_path
     run_id = opts.run_id or uuid.uuid4().hex
     state = LiveGateState()
     results: list[LiveGateCheck] = []
@@ -243,7 +244,11 @@ def validate_live_deployment(
     # 1. Static prerequisite — parse/compile/conformance must pass; a
     #    static failure blocks the live boot rather than degrading to a warning.
     scenario, static_check = checks.check_static_prerequisite(
-        scenario_path, project_dir=project_dir, config=config, options=opts
+        scenario_path,
+        project_dir=project_dir,
+        config=config,
+        options=opts,
+        bundle=scenario_bundle,
     )
     results.append(static_check)
     static_passed = scenario is not None and static_check.passed
@@ -265,6 +270,7 @@ def validate_live_deployment(
     if inputs_passed:
         ctx = _RunContext(
             scenario_path=scenario_path,
+            scenario_bundle=scenario_bundle,
             boot_scenario_path=boot_scenario_path,
             project_dir=project_dir,
             config=config,
@@ -342,7 +348,10 @@ def _run_live_checks(
     #    with the returned report.
     results.append(
         checks.check_scenario_variation(
-            project_dir=ctx.project_dir, config=ctx.config, state=state
+            project_dir=ctx.project_dir,
+            config=ctx.config,
+            state=state,
+            bundle=ctx.scenario_bundle,
         )
     )
 
@@ -386,11 +395,18 @@ def _semantic_checks(
     )
     from aptl.validation.scenario_verification_discovery import verify_scenario
 
-    identity = ctx.scenario_path.name.removesuffix(".yaml").removesuffix(".sdl")
-    digest = "sha256:" + hashlib.sha256(ctx.scenario_path.read_bytes()).hexdigest()
+    pack_identity = ctx.scenario_bundle.pack_identity
+    if pack_identity is not None:
+        identity = pack_identity.pack_id
+        digest = pack_identity.set_digest
+    else:
+        identity = ctx.scenario_bundle.identity
+        digest = "sha256:" + hashlib.sha256(ctx.scenario_path.read_bytes()).hexdigest()
     manifest = create_aptl_manifest()
     scenario = ScenarioIdentity(
-        identity=identity, content_digest=digest, source_kind="project-tree"
+        identity=identity,
+        content_digest=digest,
+        source_kind=ctx.scenario_bundle.source_kind.value,
     )
     backend = BackendIdentity(
         target_name=manifest.name,

@@ -7,8 +7,6 @@ from typing import Optional
 import typer
 
 from aptl.cli import lab_init, lifecycle
-from aptl.cli.participant_profile import qualify_profile
-from aptl.cli.participant_readiness import participant_readiness
 from aptl.cli.continuity import continuity_audit
 from aptl.cli.lab_render import (
     emit_lab_access_summary,
@@ -45,8 +43,6 @@ lab_init.register(app)
 # this module stays focused; register them under `lab` (no UX change:
 # `aptl lab enforce` / `monitor` / `policy show`).
 lifecycle.register(app)
-app.command("qualify-profile")(qualify_profile)
-app.command("participant-readiness")(participant_readiness)
 
 
 # Shared destructive-data warning. Both `stop --volumes` and
@@ -99,7 +95,7 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
     scenario: Optional[str] = typer.Option(
         None,
         "--scenario",
-        help="Curated RAES startup scenario id from the catalog.",
+        help="Acquired RAES environment-pack id from the catalog.",
     ),
     scenario_path: Optional[Path] = typer.Option(
         None,
@@ -247,7 +243,11 @@ def scenarios(
 
     for entry in catalog.scenarios:
         description = f" - {entry.description}" if entry.description else ""
-        typer.echo(f"{entry.id}\t{entry.path}\t{entry.name}{description}")
+        identity = catalog.pack_identity
+        typer.echo(
+            f"{entry.id}\t{identity.pack_version}\t{catalog.maturity}\t"
+            f"{identity.set_digest}\t{entry.name}{description}"
+        )
 
 
 @app.command()
@@ -383,7 +383,10 @@ def validate_live(
     scenario: Optional[Path] = typer.Option(
         None,
         "--scenario",
-        help="RAES SDL scenario (default: the configured scenario, the bundled TechVault env-pack).",
+        help=(
+            "Explicit project-tree RAES SDL override "
+            "(default: the configured acquired TechVault pack)."
+        ),
     ),
     profile: str = typer.Option(
         "full-remote-control-plane",

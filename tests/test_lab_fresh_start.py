@@ -13,11 +13,11 @@ So these tests start from a directory materialized by the public ``aptl lab
 init`` path and assert those generated roots are absent before anything runs.
 They then drive the real ordered lab-start steps that produced the failure —
 load the environment, admit the configured scenario, prepare SOC TLS material,
-check bind mounts — against the bundled env-pack default, with no stubs on the
+    check bind mounts — against the acquired env-pack default, with no stubs on the
 admission seam.
 
 Integration-marked and integration-named: admitting the default scenario stages
-the bundled pack and asks the deployment backend for component-image
+the acquired pack and asks the deployment backend for component-image
 availability, so it needs Docker and does not belong in the fast suite. That
 admission is also expensive enough that the module admits **once** and both
 tests assert against the same result — admitting per test built the component
@@ -71,7 +71,7 @@ def test_fresh_init_directory_passes_bind_mount_preflight_integration(
     from aptl.core.lab import _step_check_bind_mounts, _step_generate_soc_certs
 
     ctx = admitted_fresh_lab
-    # The configured default is the bundled env-pack, and admission must have
+    # The configured default is the acquired env-pack, and admission must have
     # resolved it rather than substituting a scenario path deleted in #908.
     assert ctx.admitted_surface is not None
     assert ctx.stateful_artifact_ownership

@@ -332,9 +332,9 @@ Set `"mail": true` in `aptl.json`, restart.
 
 | ID | Test | Expected | How |
 |----|------|----------|-----|
-| SCEN-01 | Curated catalog lists RAES SDL inputs | Catalog rows resolve under the project and end in `.sdl.yaml` | `aptl lab scenarios` |
-| SCEN-02 | Default TechVault startup input parses through RAES | No RAES parser errors | `python -c "from raes import parse_sdl_file; from pathlib import Path; parse_sdl_file(Path('scenarios/techvault-operational.sdl.yaml'))"` |
-| SCEN-03 | Archived legacy YAML is reference-only | Archived files are not catalog rows | `python -c "from aptl.core.scenario_catalog import load_scenario_catalog; from pathlib import Path; c = load_scenario_catalog(Path('.')); assert all('/archive/' not in e.path for e in c.scenarios)"` |
+| SCEN-01 | Acquired catalog reports verified identity | Output includes `techvault`, its version, set digest, and maturity, with no staging path | `aptl lab scenarios` |
+| SCEN-02 | Acquired TechVault pack parses through RAES | Startup reaches admission without pack identity or parser errors | `aptl lab start --scenario techvault` |
+| SCEN-03 | APTL ships no scenario tree | The materialized project has no `scenarios/` directory | `test ! -e scenarios` |
 
 ---
 

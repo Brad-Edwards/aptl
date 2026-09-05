@@ -152,8 +152,17 @@ class ScenarioValidationState(BaseModel):
     detail: Optional[str] = None
 
 
+class ScenarioPackIdentityResponse(BaseModel):
+    """Validated acquired-pack identity shared by list and detail projections."""
+
+    id: str
+    version: str
+    set_digest: str
+    maturity: str
+
+
 class ScenarioSummaryResponse(BaseModel):
-    """Card-summary projection of one curated scenario catalog entry (UI-008d).
+    """Card-summary projection of one acquired scenario catalog entry (UI-008d).
 
     Exposes only card/list facts (design-preflight UI-008d guardrail): id,
     name, and description come from the curated catalog; mode, difficulty,
@@ -174,6 +183,7 @@ class ScenarioSummaryResponse(BaseModel):
     tags: list[str] = Field(default_factory=list)
     required_containers: list[str] = Field(default_factory=list)
     validation: ScenarioValidationState
+    pack: Optional[ScenarioPackIdentityResponse] = None
 
 
 # --- Scenario-detail workbench projection (UI-008d) ---
@@ -297,6 +307,7 @@ class ScenarioDetailResponse(BaseModel):
     tags: list[str] = Field(default_factory=list)
     required_containers: list[str] = Field(default_factory=list)
     validation: ScenarioValidationState
+    pack: Optional[ScenarioPackIdentityResponse] = None
     blocks: list[WorkbenchBlock] = Field(default_factory=list)
 
 

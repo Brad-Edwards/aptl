@@ -21,7 +21,6 @@ config/**/*.rules text eol=lf
 config/**/*.xml text eol=lf
 config/**/*.yaml text eol=lf
 config/**/*.yml text eol=lf
-config/wazuh_cluster/custom-shuffle text eol=lf
 config/wazuh_cluster/etc/lists/active-response-whitelist text eol=lf
 
 containers/**/Dockerfile* text eol=lf
@@ -41,7 +40,6 @@ containers/**/*.txt text eol=lf
 containers/**/*.yaml text eol=lf
 containers/**/*.yml text eol=lf
 containers/**/*.zone text eol=lf
-containers/dns/zones/172.20.rev text eol=lf
 containers/kali/scripts/* text eol=lf
 containers/keys/* text eol=lf
 

@@ -1,16 +1,18 @@
-"""Curated RAES startup scenario catalog resolution."""
+"""Operator catalog projected from the configured acquired environment pack."""
 
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Literal
 
-import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
-from pydantic import model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from aptl.backends._raes_scenario_resolution import resolve_scenario_bundle
+from aptl.core.config import AptlConfig, find_config, load_config
+from aptl.core.scenario_bundle import EnvPackError, PackIdentity, ScenarioBundle
 from aptl.core.scenarios import ScenarioNotFoundError, ScenarioValidationError
 from aptl.utils.pathsafe import (
     REASON_DOT_COMPONENT,
@@ -23,11 +25,6 @@ from aptl.utils.pathsafe import (
 )
 from aptl.utils.redaction import redact
 
-# Reasons that mean "the candidate path's own shape tried to reach outside
-# project_dir" (mirrors the legacy "outside project" ValueError). Every other
-# PathContainmentError reason (missing, symlinked, not-a-regular-file, base
-# dir unavailable) means the *target* did not safely resolve to a contained
-# file, which mirrors the legacy "does not exist or is not a file" message.
 _OUTSIDE_PROJECT_REASONS = frozenset(
     {
         REASON_NOT_RELATIVE,
@@ -37,20 +34,11 @@ _OUTSIDE_PROJECT_REASONS = frozenset(
         REASON_DOT_COMPONENT,
     }
 )
-
-CATALOG_RELATIVE_PATH = Path("scenarios") / "catalog.json"
 _SCENARIO_ID = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 
 class ScenarioCatalogMetadata(BaseModel):
-    """Narrow validated card/detail metadata RAES does not own uniformly.
-
-    UI-008d needs card facts (mode, difficulty, estimated duration, tags) that
-    the RAES SDL does not carry per-scenario today. Rather than infer them in
-    Svelte or revive the deleted in-tree scenario schema, the curated catalog
-    owns them as this strict optional extension. All fields are optional so a
-    catalog entry may omit the block entirely.
-    """
+    """Narrow optional display facts that do not redefine pack semantics."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -68,85 +56,107 @@ class ScenarioCatalogMetadata(BaseModel):
 
 
 class ScenarioCatalogEntry(BaseModel):
-    """One operator-facing scenario alias in the curated catalog."""
+    """One operator-facing selector projected from env-packs' catalog model."""
 
     model_config = ConfigDict(extra="forbid")
 
     id: str
     name: str
-    path: str
     description: str = ""
     metadata: ScenarioCatalogMetadata | None = None
 
     @field_validator("id")
     @classmethod
     def validate_id(cls, value: str) -> str:
-        if not _SCENARIO_ID.match(value):
-            raise ValueError(
-                "scenario id must start with a lowercase alphanumeric "
-                "character and contain only lowercase letters, digits, dots, "
-                "underscores, and hyphens"
-            )
-        return value
-
-    @field_validator("path")
-    @classmethod
-    def validate_path(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("scenario path must not be empty")
+        if not _SCENARIO_ID.fullmatch(value):
+            raise ValueError("invalid scenario id")
         return value
 
 
-class ScenarioCatalog(BaseModel):
-    """Strict schema for the repo-owned curated scenario catalog."""
+@dataclass(frozen=True)
+class ScenarioCatalog:
+    """A catalog and the validated acquired identity it was projected from."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    version: int = Field(default=1)
-    scenarios: list[ScenarioCatalogEntry] = Field(default_factory=list)
-
-    @field_validator("version")
-    @classmethod
-    def validate_version(cls, value: int) -> int:
-        if value != 1:
-            raise ValueError("scenario catalog version must be 1")
-        return value
-
-    @model_validator(mode="after")
-    def validate_unique_ids(self) -> "ScenarioCatalog":
-        ids = [entry.id for entry in self.scenarios]
-        duplicates = sorted(
-            {scenario_id for scenario_id in ids if ids.count(scenario_id) > 1}
-        )
-        if duplicates:
-            raise ValueError(f"duplicate scenario id(s): {', '.join(duplicates)}")
-        return self
+    scenarios: tuple[ScenarioCatalogEntry, ...]
+    pack_identity: PackIdentity
+    maturity: str
+    bundle: ScenarioBundle
+    version: int = 1
 
     def get(self, scenario_id: str) -> ScenarioCatalogEntry | None:
-        """Return the catalog entry for ``scenario_id``, if present."""
-        for entry in self.scenarios:
-            if entry.id == scenario_id:
-                return entry
-        return None
+        return next((entry for entry in self.scenarios if entry.id == scenario_id), None)
 
 
-def load_scenario_catalog(project_dir: Path) -> ScenarioCatalog:
-    """Load the curated RAES startup scenario catalog for ``project_dir``."""
-    catalog_path = project_dir / CATALOG_RELATIVE_PATH
-    if not catalog_path.is_file():
-        raise ValueError(f"Scenario catalog does not exist: {catalog_path}")
+@dataclass(frozen=True)
+class ResolvedScenario:
+    """One parsed catalog selection bound to its validated acquired bundle."""
+
+    entry: ScenarioCatalogEntry
+    scenario: object
+    bundle: ScenarioBundle
+    maturity: str
+
+
+def _config(project_dir: Path) -> AptlConfig:
+    config_path = find_config(project_dir)
+    return load_config(config_path) if config_path is not None else AptlConfig()
+
+
+def _known_text(value: object) -> str:
+    if isinstance(value, dict) and value.get("state") == "known":
+        text = value.get("value")
+        return text if isinstance(text, str) else ""
+    return ""
+
+
+def _entry_from_projection(raw: dict[str, object]) -> ScenarioCatalogEntry:
+    pack_id = str(raw.get("name") or "")
+    title = str(raw.get("title") or pack_id)
+    return ScenarioCatalogEntry(
+        id=pack_id,
+        name=title,
+        description=_known_text(raw.get("purpose")),
+    )
+
+
+def load_scenario_catalog(
+    project_dir: Path, *, config: AptlConfig | None = None
+) -> ScenarioCatalog:
+    """Stage the configured pack once and project env-packs' catalog read model."""
+    selected = config or _config(project_dir)
+    if selected.scenario.source != "env-pack":
+        raise ValueError("scenario catalog requires an acquired env-pack source")
     try:
-        raw = yaml.safe_load(catalog_path.read_text())
-    except yaml.YAMLError as exc:
+        bundle = resolve_scenario_bundle(project_dir, None, selected)
+        identity = bundle.pack_identity
+        if identity is None:
+            raise ValueError("acquired scenario has no validated pack identity")
+        from raes_env_packs.catalog import Source, build_catalog
+
+        document, diagnostics = build_catalog(
+            [
+                Source(
+                    id=identity.pack_id,
+                    revision=identity.set_digest,
+                    root=str(bundle.root),
+                )
+            ],
+            as_of=date.today().isoformat(),
+        )
+    except (EnvPackError, ImportError, OSError, TypeError, ValueError) as exc:
         raise ValueError(
-            f"Invalid scenario catalog data: {catalog_path}: {exc}"
+            f"Acquired scenario catalog unavailable: {redact(str(exc))}"
         ) from exc
-    if not isinstance(raw, dict):
-        raise ValueError(f"Scenario catalog root must be a mapping: {catalog_path}")
-    try:
-        return ScenarioCatalog.model_validate(raw)
-    except ValidationError as exc:
-        raise ValueError(f"Invalid scenario catalog: {catalog_path}: {exc}") from exc
+    blocking = [diagnostic for diagnostic in diagnostics if diagnostic.blocking]
+    if blocking or len(document.entries) != 1:
+        raise ValueError("Acquired scenario catalog failed validation")
+    raw = document.entries[0]
+    return ScenarioCatalog(
+        scenarios=(_entry_from_projection(raw),),
+        pack_identity=identity,
+        maturity=str(raw.get("maturity") or "unknown"),
+        bundle=bundle,
+    )
 
 
 def resolve_scenario_selection(
@@ -155,46 +165,27 @@ def resolve_scenario_selection(
     scenario_id: str | None = None,
     scenario_path: Path | None = None,
 ) -> Path | None:
-    """Resolve an optional catalog id or explicit path into a RAES SDL file."""
+    """Validate a pack selector or an explicit contained development SDL path."""
     if scenario_id and scenario_path is not None:
         raise ValueError("scenario selectors are mutually exclusive")
     if not scenario_id and scenario_path is None:
         return None
     if scenario_id:
-        catalog = load_scenario_catalog(project_dir)
-        entry = catalog.get(scenario_id)
-        if entry is None:
-            available = ", ".join(entry.id for entry in catalog.scenarios) or "none"
+        selected = _config(project_dir).scenario
+        available = selected.identity if selected.source == "env-pack" else "none"
+        if scenario_id != available:
             raise ValueError(
                 f"Unknown scenario id '{scenario_id}'. Available scenarios: {available}"
             )
-        selected = Path(entry.path)
-    else:
-        assert scenario_path is not None
-        selected = scenario_path
-    resolved = _resolve_project_file(project_dir, selected)
+        return None
+    assert scenario_path is not None
+    resolved = _resolve_project_file(project_dir, scenario_path)
     _validate_raes_sdl(resolved)
     return resolved
 
 
 def _resolve_project_file(project_dir: Path, candidate: Path) -> Path:
-    """Resolve ``candidate`` and require it to stay within ``project_dir``.
-
-    Containment walks the relative path component-by-component with
-    :func:`aptl.utils.pathsafe.open_contained_nofollow` (ADR-047 "Scenario
-    containment precedent") instead of a lexical ``resolve()`` +
-    ``is_relative_to()`` check: the lexical check could be defeated by a
-    symlink swapped in between the check and a later open (TOCTOU), and it
-    silently followed symlinks that stayed under ``project_dir``. A
-    previously-followed symlinked scenario path is now rejected outright —
-    see ``test_rejects_symlinked_scenario_path`` /
-    ``test_rejects_symlinked_scenario_directory_component`` in
-    ``tests/test_scenario_catalog.py``.
-
-    An absolute ``candidate`` is still accepted when it is lexically inside
-    ``project_dir`` (preserves the CLI ``--scenario-path`` contract); the
-    derived relative path is what actually walks the no-follow check.
-    """
+    """Resolve an explicit development scenario without following symlinks."""
     project_root = project_dir.resolve()
     if candidate.is_absolute():
         try:
@@ -215,49 +206,42 @@ def _resolve_project_file(project_dir: Path, candidate: Path) -> Path:
     return project_root / relative
 
 
-def resolve_and_parse_scenario(
-    project_dir: Path, scenario_id: str
-) -> tuple[ScenarioCatalogEntry, object]:
-    """Resolve a catalog id and parse its RAES SDL into a ``Scenario``.
-
-    Returns the matched catalog entry and its parsed RAES ``Scenario`` object
-    (the authority the scenario-detail projection reads from). Raises
-    :class:`~aptl.core.scenarios.ScenarioNotFoundError` when no catalog exists
-    or the id is unknown, and :class:`~aptl.core.scenarios.ScenarioValidationError`
-    with a redacted, path-free message when the catalog is malformed or the
-    selected SDL fails to resolve/parse — so callers can map not-found to a
-    404 and invalid to a redacted unavailable state without leaking the
-    internal catalog ``path`` locator or raw parser output.
-    """
-    catalog_path = project_dir / CATALOG_RELATIVE_PATH
-    if not catalog_path.is_file():
-        raise ScenarioNotFoundError(scenario_id)
+def resolve_acquired_scenario(
+    project_dir: Path,
+    scenario_id: str,
+    *,
+    catalog: ScenarioCatalog | None = None,
+) -> ResolvedScenario:
+    """Resolve, validate, and parse one acquired catalog selection once."""
     try:
-        catalog = load_scenario_catalog(project_dir)
+        selected_catalog = catalog or load_scenario_catalog(project_dir)
     except ValueError as exc:
         raise ScenarioValidationError(redact(str(exc))) from exc
-    entry = catalog.get(scenario_id)
+    entry = selected_catalog.get(scenario_id)
     if entry is None:
         raise ScenarioNotFoundError(scenario_id)
     try:
-        resolved = _resolve_project_file(project_dir, Path(entry.path))
-        scenario = _parse_raes_sdl(resolved)
+        scenario = _parse_raes_sdl(selected_catalog.bundle.sdl_path)
     except ValueError as exc:
         raise ScenarioValidationError(redact(str(exc))) from exc
-    return entry, scenario
+    return ResolvedScenario(
+        entry, scenario, selected_catalog.bundle, selected_catalog.maturity
+    )
+
+
+def resolve_and_parse_scenario(
+    project_dir: Path, scenario_id: str
+) -> tuple[ScenarioCatalogEntry, object]:
+    """Compatibility projection returning the entry and parsed RAES scenario."""
+    resolved = resolve_acquired_scenario(project_dir, scenario_id)
+    return resolved.entry, resolved.scenario
 
 
 def _validate_raes_sdl(path: Path) -> None:
-    """Validate selected SDL through the RAES parser authority."""
     _parse_raes_sdl(path)
 
 
 def _parse_raes_sdl(path: Path) -> object:
-    """Parse selected SDL through the RAES parser authority.
-
-    Returns the parsed ``Scenario`` object. Raises a redacted ``ValueError``
-    on any parser failure so the internal SDL contents never surface.
-    """
     sdl_error, parse_sdl_file = _load_raes_sdl_parser()
     try:
         return parse_sdl_file(path)
@@ -267,8 +251,7 @@ def _parse_raes_sdl(path: Path) -> object:
         ) from exc
 
 
-def _load_raes_sdl_parser() -> tuple[type[Exception], Callable[[Path], object]]:
-    """Load the optional RAES SDL parser at validation time."""
+def _load_raes_sdl_parser():
     try:
         from raes import SDLError, parse_sdl_file
     except ImportError as exc:

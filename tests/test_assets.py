@@ -23,10 +23,8 @@ def _make_fake_bundle(root: Path) -> Path:
     """Create a small, already-filtered bundle tree (as the wheel ships)."""
     bundle = root / "_labdata"
     (bundle / "config").mkdir(parents=True)
-    (bundle / "scenarios").mkdir(parents=True)
     (bundle / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
     (bundle / "config" / "certs.yml").write_text("x: 1\n", encoding="utf-8")
-    (bundle / "scenarios" / "catalog.json").write_text("{}\n", encoding="utf-8")
     return bundle
 
 
@@ -47,9 +45,9 @@ def test_materialize_copies_bundle_and_writes_config(
     assert result.config_created is True
     assert (target / "docker-compose.yml").is_file()
     assert (target / "config" / "certs.yml").is_file()
-    assert (target / "scenarios" / "catalog.json").is_file()
+    assert not (target / "scenarios").exists()
     assert (target / "aptl.json").is_file()
-    assert result.files_written == 3
+    assert result.files_written == 2
 
 
 def test_materialize_default_config_is_valid(fake_bundle: Path, tmp_path: Path) -> None:
@@ -328,7 +326,7 @@ def test_real_repo_git_selection_ships_no_secrets() -> None:
     posix = [p.as_posix() for p in tracked]
 
     assert "docker-compose.yml" in posix
-    assert any(p.startswith("scenarios/") for p in posix)
+    assert not any(p.startswith("scenarios/") for p in posix)
     assert any(p.startswith("config/") for p in posix)
 
     for path in posix:
@@ -338,3 +336,35 @@ def test_real_repo_git_selection_ships_no_secrets() -> None:
         assert not path.endswith((".pyc", ".pyo"))
         # Only public key material lives under a tracked keys/ path.
         assert not path.endswith("id_rsa")
+
+
+def test_real_repo_ships_no_techvault_scenario_content_copies() -> None:
+    """Pack-owned SDL and exact content do not re-enter APTL's asset tree."""
+
+    tracked_paths = assets._git_tracked(REPO_ROOT)
+    assert tracked_paths is not None, "expected a git checkout"
+    tracked = {
+        path.as_posix() for path in tracked_paths if (REPO_ROOT / path).is_file()
+    }
+    forbidden = {
+        "config/wazuh_cluster/ad_rules.xml",
+        "config/wazuh_cluster/custom-shuffle",
+        "config/wazuh_cluster/database_rules.xml",
+        "config/wazuh_cluster/falco_rules.xml",
+        "config/wazuh_cluster/postgresql_decoders.xml",
+        "config/wazuh_cluster/samba_decoders.xml",
+        "config/wazuh_cluster/suricata_rules.xml",
+        "config/wazuh_cluster/webapp_rules.xml",
+        "containers/db/init/01-schema.sql",
+        "containers/db/init/02-seed-data.sql",
+        "containers/dns/named.conf",
+        "containers/dns/zones/172.20.rev",
+        "containers/dns/zones/techvault.local.zone",
+        "containers/fileshare/smb.conf",
+        "containers/webapp/app/app.py",
+    }
+
+    assert not (REPO_ROOT / "scenarios").exists()
+    assert not (REPO_ROOT / "participant-profiles").exists()
+    assert tracked.isdisjoint(forbidden)
+    assert all(not (REPO_ROOT / path).exists() for path in forbidden)

@@ -1,4 +1,4 @@
-"""Tests for curated RAES startup scenario catalog resolution."""
+"""Tests for acquired-pack catalog selection and the explicit dev escape hatch."""
 
 import builtins
 import importlib
@@ -8,21 +8,15 @@ import sys
 import pytest
 
 
-def _write_catalog(project_dir: Path, body: str) -> None:
-    scenarios_dir = project_dir / "scenarios"
-    scenarios_dir.mkdir(exist_ok=True)
-    (scenarios_dir / "catalog.json").write_text(body)
+class ParserFailure(Exception):
+    pass
 
 
 def _write_scenario(project_dir: Path, name: str = "custom.sdl.yaml") -> Path:
-    (project_dir / "scenarios").mkdir(exist_ok=True)
-    scenario = project_dir / "scenarios" / name
+    scenario = project_dir / "dev-scenarios" / name
+    scenario.parent.mkdir(exist_ok=True)
     scenario.write_text("name: custom\n")
     return scenario
-
-
-class ParserFailure(Exception):
-    """Synthetic parser exception used to exercise lazy loading."""
 
 
 def _patch_parser(mocker, *, side_effect: Exception | None = None):
@@ -36,7 +30,6 @@ def _patch_parser(mocker, *, side_effect: Exception | None = None):
 
 def test_import_does_not_require_raes_sdl(monkeypatch):
     sys.modules.pop("aptl.core.scenario_catalog", None)
-
     real_import = builtins.__import__
 
     def blocked_import(name, *args, **kwargs):
@@ -45,65 +38,48 @@ def test_import_does_not_require_raes_sdl(monkeypatch):
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", blocked_import)
-
     module = importlib.import_module("aptl.core.scenario_catalog")
-
-    assert module.CATALOG_RELATIVE_PATH == Path("scenarios") / "catalog.json"
-
-
-def test_loads_curated_catalog_entries(mocker, tmp_path):
-    from aptl.core.scenario_catalog import load_scenario_catalog
-
-    _write_catalog(
-        tmp_path,
-        """
-version: 1
-scenarios:
-  - id: custom
-    name: Custom RAES
-    description: Curated cutover input.
-    path: scenarios/custom.sdl.yaml
-""",
-    )
-
-    catalog = load_scenario_catalog(tmp_path)
-
-    assert [entry.id for entry in catalog.scenarios] == ["custom"]
-    assert catalog.scenarios[0].path == "scenarios/custom.sdl.yaml"
+    assert not hasattr(module, "CATALOG_RELATIVE_PATH")
 
 
-def test_repository_catalog_includes_bounded_participant_agency():
+def test_catalog_id_selects_configured_acquired_pack(tmp_path):
+    from aptl.core.scenario_catalog import resolve_scenario_selection
+
+    assert resolve_scenario_selection(tmp_path, scenario_id="techvault") is None
+
+
+def test_unknown_catalog_id_lists_only_configured_pack(tmp_path):
+    from aptl.core.scenario_catalog import resolve_scenario_selection
+
+    with pytest.raises(ValueError, match="Available scenarios: techvault"):
+        resolve_scenario_selection(tmp_path, scenario_id="local-shadow")
+
+
+def test_repository_catalog_projects_validated_pack_identity():
     from aptl.core.scenario_catalog import load_scenario_catalog
 
     project_root = Path(__file__).resolve().parents[1]
     catalog = load_scenario_catalog(project_root)
-    entries = {entry.id: entry for entry in catalog.scenarios}
 
-    scenario = entries["bounded-participant-agency-techvault"]
-    assert scenario.path == "scenarios/bounded-participant-agency-techvault.sdl.yaml"
-    assert (project_root / scenario.path).exists()
+    assert [entry.id for entry in catalog.scenarios] == ["techvault"]
+    assert catalog.pack_identity.pack_id == "techvault"
+    assert catalog.pack_identity.pack_version == "0.1.0"
+    assert catalog.pack_identity.set_digest.startswith("sha256:")
+    assert catalog.maturity == "built"
+    assert not hasattr(catalog.scenarios[0], "path")
 
 
-def test_resolves_catalog_id_to_project_contained_sdl(mocker, tmp_path):
-    from aptl.core.scenario_catalog import resolve_scenario_selection
+def test_rejected_pack_fails_closed_without_local_fallback(mocker, tmp_path):
+    from aptl.core.scenario_bundle import EnvPackError
+    from aptl.core.scenario_catalog import load_scenario_catalog
 
-    selected = _write_scenario(tmp_path)
-    _write_catalog(
-        tmp_path,
-        """
-version: 1
-scenarios:
-  - id: custom
-    name: Custom RAES
-    path: scenarios/custom.sdl.yaml
-""",
+    mocker.patch(
+        "aptl.core.scenario_catalog.resolve_scenario_bundle",
+        side_effect=EnvPackError("digest mismatch"),
     )
-    parser = _patch_parser(mocker)
 
-    resolved = resolve_scenario_selection(tmp_path, scenario_id="custom")
-
-    assert resolved == selected.resolve()
-    parser.assert_called_once_with(selected.resolve())
+    with pytest.raises(ValueError, match="Acquired scenario catalog unavailable"):
+        load_scenario_catalog(tmp_path)
 
 
 def test_resolves_explicit_path_under_project(mocker, tmp_path):
@@ -111,172 +87,40 @@ def test_resolves_explicit_path_under_project(mocker, tmp_path):
 
     selected = _write_scenario(tmp_path)
     parser = _patch_parser(mocker)
-
     resolved = resolve_scenario_selection(
-        tmp_path,
-        scenario_path=Path("scenarios/custom.sdl.yaml"),
+        tmp_path, scenario_path=Path("dev-scenarios/custom.sdl.yaml")
     )
-
     assert resolved == selected.resolve()
     parser.assert_called_once_with(selected.resolve())
 
 
-def test_rejects_catalog_path_outside_project(tmp_path):
+def test_rejects_explicit_path_outside_project(tmp_path):
     from aptl.core.scenario_catalog import resolve_scenario_selection
-
-    _write_catalog(
-        tmp_path,
-        """
-version: 1
-scenarios:
-  - id: escape
-    name: Escape
-    path: ../outside.sdl.yaml
-""",
-    )
 
     with pytest.raises(ValueError, match="outside project"):
-        resolve_scenario_selection(tmp_path, scenario_id="escape")
+        resolve_scenario_selection(tmp_path, scenario_path=Path("../escape.sdl.yaml"))
 
 
-def test_rejects_symlinked_scenario_path(tmp_path):
-    """ADR-047 strengthens ``_resolve_project_file`` to no-follow, one-open
-    containment (``aptl.utils.pathsafe``). A symlinked scenario file is a
-    behavior change from the prior lexical ``resolve()`` +
-    ``is_relative_to()`` check, which *would* have followed it as long as
-    the resolved target stayed under ``project_dir``. That prior check was
-    TOCTOU-able (the symlink could change between check and the later
-    ``parse_sdl_file`` open), so the safer behavior is outright rejection —
-    this pins that as the new, intended contract.
-    """
+def test_rejects_symlinked_explicit_path(tmp_path):
     from aptl.core.scenario_catalog import resolve_scenario_selection
 
-    (tmp_path / "scenarios").mkdir()
-    real_target = tmp_path / "scenarios" / "real.sdl.yaml"
-    real_target.write_text("name: custom\n")
-    (tmp_path / "scenarios" / "custom.sdl.yaml").symlink_to(real_target)
-    _write_catalog(
-        tmp_path,
-        """
-version: 1
-scenarios:
-  - id: custom
-    name: Custom RAES
-    path: scenarios/custom.sdl.yaml
-""",
-    )
-
+    target = _write_scenario(tmp_path, "real.sdl.yaml")
+    (target.parent / "link.sdl.yaml").symlink_to(target)
     with pytest.raises(ValueError, match="does not exist"):
-        resolve_scenario_selection(tmp_path, scenario_id="custom")
-
-
-def test_rejects_symlinked_scenario_directory_component(tmp_path):
-    """A symlinked *directory* component (not just the leaf) is rejected too."""
-    from aptl.core.scenario_catalog import resolve_scenario_selection
-
-    outside_dir = tmp_path.parent / "scenario-catalog-outside-dir"
-    outside_dir.mkdir(exist_ok=True)
-    (outside_dir / "custom.sdl.yaml").write_text("name: custom\n")
-    try:
-        (tmp_path / "scenarios").symlink_to(outside_dir, target_is_directory=True)
-        _write_catalog(
-            tmp_path,
-            """
-version: 1
-scenarios:
-  - id: custom
-    name: Custom RAES
-    path: scenarios/custom.sdl.yaml
-""",
+        resolve_scenario_selection(
+            tmp_path, scenario_path=Path("dev-scenarios/link.sdl.yaml")
         )
-
-        with pytest.raises(ValueError, match="does not exist"):
-            resolve_scenario_selection(tmp_path, scenario_id="custom")
-    finally:
-        import shutil
-
-        shutil.rmtree(outside_dir, ignore_errors=True)
-
-
-def test_rejects_missing_catalog_sdl(tmp_path):
-    from aptl.core.scenario_catalog import resolve_scenario_selection
-
-    _write_catalog(
-        tmp_path,
-        """
-version: 1
-scenarios:
-  - id: missing
-    name: Missing
-    path: scenarios/missing.sdl.yaml
-""",
-    )
-
-    with pytest.raises(ValueError, match="does not exist"):
-        resolve_scenario_selection(tmp_path, scenario_id="missing")
 
 
 def test_rejects_raes_parser_failure(mocker, tmp_path):
     from aptl.core.scenario_catalog import resolve_scenario_selection
 
     _write_scenario(tmp_path)
-    _write_catalog(
-        tmp_path,
-        """
-version: 1
-scenarios:
-  - id: custom
-    name: Custom RAES
-    path: scenarios/custom.sdl.yaml
-""",
-    )
     _patch_parser(mocker, side_effect=ParserFailure("bad sdl"))
-
     with pytest.raises(ValueError, match="RAES SDL"):
-        resolve_scenario_selection(tmp_path, scenario_id="custom")
-
-
-def test_rejects_missing_raes_parser_dependency(monkeypatch, tmp_path):
-    from aptl.core.scenario_catalog import resolve_scenario_selection
-
-    _write_scenario(tmp_path)
-
-    real_import = builtins.__import__
-
-    def blocked_import(name, *args, **kwargs):
-        if name == "raes":
-            raise ImportError("missing raes")
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", blocked_import)
-
-    scenario_path = Path("scenarios/custom.sdl.yaml")
-    with pytest.raises(ValueError, match="RAES runtime handoff unavailable"):
         resolve_scenario_selection(
-            tmp_path,
-            scenario_path=scenario_path,
+            tmp_path, scenario_path=Path("dev-scenarios/custom.sdl.yaml")
         )
-
-
-def test_rejects_duplicate_catalog_ids(tmp_path):
-    from aptl.core.scenario_catalog import load_scenario_catalog
-
-    _write_catalog(
-        tmp_path,
-        """
-version: 1
-scenarios:
-  - id: custom
-    name: One
-    path: scenarios/one.sdl.yaml
-  - id: custom
-    name: Two
-    path: scenarios/two.sdl.yaml
-""",
-    )
-
-    with pytest.raises(ValueError, match="duplicate"):
-        load_scenario_catalog(tmp_path)
 
 
 def test_rejects_selecting_both_id_and_path(tmp_path):
@@ -285,142 +129,29 @@ def test_rejects_selecting_both_id_and_path(tmp_path):
     with pytest.raises(ValueError, match="mutually exclusive"):
         resolve_scenario_selection(
             tmp_path,
-            scenario_id="custom",
-            scenario_path=Path("scenarios/custom.sdl.yaml"),
+            scenario_id="techvault",
+            scenario_path=Path("dev-scenarios/custom.sdl.yaml"),
         )
 
 
-def test_catalog_metadata_extension_parses(tmp_path):
-    from aptl.core.scenario_catalog import load_scenario_catalog
-
-    _write_catalog(
-        tmp_path,
-        """
-version: 1
-scenarios:
-  - id: custom
-    name: Custom RAES
-    path: scenarios/custom.sdl.yaml
-    metadata:
-      mode: purple
-      difficulty: advanced
-      estimated_minutes: 60
-      tags: [web, detection]
-""",
+def test_resolve_acquired_scenario_returns_same_validated_bundle():
+    from aptl.core.scenario_catalog import (
+        load_scenario_catalog,
+        resolve_acquired_scenario,
     )
 
-    entry = load_scenario_catalog(tmp_path).scenarios[0]
+    project_root = Path(__file__).resolve().parents[1]
+    catalog = load_scenario_catalog(project_root)
+    resolved = resolve_acquired_scenario(project_root, "techvault", catalog=catalog)
 
-    assert entry.metadata is not None
-    assert entry.metadata.mode == "purple"
-    assert entry.metadata.difficulty == "advanced"
-    assert entry.metadata.estimated_minutes == 60
-    assert entry.metadata.tags == ["web", "detection"]
-
-
-def test_catalog_metadata_is_optional(tmp_path):
-    from aptl.core.scenario_catalog import load_scenario_catalog
-
-    _write_catalog(
-        tmp_path,
-        """
-version: 1
-scenarios:
-  - id: custom
-    name: Custom RAES
-    path: scenarios/custom.sdl.yaml
-""",
-    )
-
-    assert load_scenario_catalog(tmp_path).scenarios[0].metadata is None
+    assert resolved.entry.id == "techvault"
+    assert resolved.scenario.name == "techvault"
+    assert resolved.bundle is catalog.bundle
 
 
-def test_catalog_metadata_rejects_nonpositive_minutes(tmp_path):
-    from aptl.core.scenario_catalog import load_scenario_catalog
-
-    _write_catalog(
-        tmp_path,
-        """
-version: 1
-scenarios:
-  - id: custom
-    name: Custom RAES
-    path: scenarios/custom.sdl.yaml
-    metadata:
-      estimated_minutes: 0
-""",
-    )
-
-    with pytest.raises(ValueError, match="positive"):
-        load_scenario_catalog(tmp_path)
-
-
-def test_catalog_metadata_forbids_unknown_fields(tmp_path):
-    from aptl.core.scenario_catalog import load_scenario_catalog
-
-    _write_catalog(
-        tmp_path,
-        """
-version: 1
-scenarios:
-  - id: custom
-    name: Custom RAES
-    path: scenarios/custom.sdl.yaml
-    metadata:
-      bogus: value
-""",
-    )
-
-    with pytest.raises(ValueError):
-        load_scenario_catalog(tmp_path)
-
-
-def test_resolve_and_parse_unknown_id_raises_not_found(tmp_path):
-    from aptl.core.scenario_catalog import resolve_and_parse_scenario
-    from aptl.core.scenarios import ScenarioNotFoundError
-
-    _write_catalog(
-        tmp_path,
-        """
-version: 1
-scenarios:
-  - id: custom
-    name: Custom RAES
-    path: scenarios/custom.sdl.yaml
-""",
-    )
-
-    with pytest.raises(ScenarioNotFoundError):
-        resolve_and_parse_scenario(tmp_path, "nope")
-
-
-def test_resolve_and_parse_missing_catalog_raises_not_found(tmp_path):
-    from aptl.core.scenario_catalog import resolve_and_parse_scenario
+def test_resolve_acquired_scenario_unknown_id_is_not_found():
+    from aptl.core.scenario_catalog import resolve_acquired_scenario
     from aptl.core.scenarios import ScenarioNotFoundError
 
     with pytest.raises(ScenarioNotFoundError):
-        resolve_and_parse_scenario(tmp_path, "anything")
-
-
-def test_resolve_and_parse_returns_entry_and_scenario(tmp_path):
-    from aptl.core.scenario_catalog import resolve_and_parse_scenario
-
-    (tmp_path / "scenarios").mkdir(exist_ok=True)
-    (tmp_path / "scenarios" / "custom.sdl.yaml").write_text(
-        "name: custom\nnodes:\n  h:\n    type: vm\n    os: linux\n"
-    )
-    _write_catalog(
-        tmp_path,
-        """
-version: 1
-scenarios:
-  - id: custom
-    name: Custom RAES
-    path: scenarios/custom.sdl.yaml
-""",
-    )
-
-    entry, scenario = resolve_and_parse_scenario(tmp_path, "custom")
-
-    assert entry.id == "custom"
-    assert scenario.name == "custom"
+        resolve_acquired_scenario(Path(__file__).resolve().parents[1], "nope")

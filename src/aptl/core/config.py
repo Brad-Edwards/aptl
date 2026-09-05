@@ -113,9 +113,9 @@ class ScenarioSourceConfig(BaseModel):
     operator decision made before ``aptl lab start`` rather than something the
     backend decides or switches at runtime, so it lives here.
 
-    ``root`` is where the scenario's own inputs — its start-state document and
-    the content it declares — are anchored. ``None`` keeps the historical
-    behaviour of resolving them inside the APTL checkout. A configured root is
+    ``root`` applies only to an explicitly selected project-tree development
+    scenario. Acquired packs are staged and validated beneath APTL's private
+    project state instead of being read from the checkout. A configured root is
     operator input and is treated as untrusted: it must be a relative path that
     cannot escape the project.
     """
@@ -125,7 +125,7 @@ class ScenarioSourceConfig(BaseModel):
     identity: str = "techvault"
     root: str | None = None
     # ``env-pack`` (the default since #875) resolves the scenario from the
-    # bundled ``raes-env-packs`` pack named by ``identity``, staged and validated
+    # installed ``raes-env-packs`` pack named by ``identity``, staged and validated
     # before use, with no host paths in the document. ``project-tree`` is the
     # legacy path that resolves it from the APTL checkout and requires an explicit
     # scenario. The operator selects the source; the backend never switches it.

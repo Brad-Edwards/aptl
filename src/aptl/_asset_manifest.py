@@ -41,8 +41,6 @@ ASSET_ROOTS: tuple[str, ...] = (
     "README.md",
     "hatch_build.py",
     "src",
-    "scenarios",
-    "participant-profiles",
     "appliance",
     "config",
     "containers",

@@ -1,8 +1,8 @@
 """Real-Docker proof: a real TechVault node (dns) boots working image-free.
 
 Authors the dns node from its real bind9 config + zones as declared RAES state
-(admitted straight from `scenarios/techvault-operational.sdl.yaml`, not a
-reauthored fixture), realizes it via the generic materializer, and asserts
+(admitted straight from the verified acquired pack, not a reauthored fixture),
+realizes it via the generic materializer, and asserts
 named is active and resolves the real TechVault zone. Zero product code.
 Marked `integration`; skipped without Docker.
 """

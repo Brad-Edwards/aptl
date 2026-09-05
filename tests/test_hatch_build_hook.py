@@ -223,7 +223,7 @@ def test_built_wheel_has_both_package_and_bundle(tmp_path: Path) -> None:
     assert "aptl/core/assets.py" in names
     # Lab bundle, secret-free.
     assert "aptl/_labdata/docker-compose.yml" in names
-    assert any(n.startswith("aptl/_labdata/scenarios/") for n in names)
+    assert not any(n.startswith("aptl/_labdata/scenarios/") for n in names)
     assert not any(
         s in n
         for n in names

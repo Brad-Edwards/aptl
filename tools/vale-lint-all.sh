@@ -17,6 +17,20 @@ if [ ! -x "${VALE_BIN}" ]; then
 fi
 
 cd "${REPO_ROOT}"
-git ls-files '*.md' \
-  | grep -vE '^(\.claude/|\.gc/|\.github/|changelog\.d/|CHANGELOG\.md|AGENTS\.md|CLAUDE\.md)' \
-  | xargs "${VALE_BIN}" --config=.vale.ini
+lintable=()
+while IFS= read -r -d '' path; do
+  case "${path}" in
+    .claude/*|.gc/*|.github/*|changelog.d/*|CHANGELOG.md|AGENTS.md|CLAUDE.md)
+      continue
+      ;;
+  esac
+  # ``git ls-files`` includes tracked paths deleted in the worktree. Ignore
+  # those so policy can validate a cleanup before the publish step stages it.
+  if [ -f "${path}" ]; then
+    lintable+=("${path}")
+  fi
+done < <(git ls-files -z '*.md')
+
+if [ "${#lintable[@]}" -gt 0 ]; then
+  "${VALE_BIN}" --config=.vale.ini "${lintable[@]}"
+fi

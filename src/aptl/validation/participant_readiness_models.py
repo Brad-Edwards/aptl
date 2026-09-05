@@ -20,6 +20,7 @@ class ParticipantReadinessRequest:
     """All inputs required for one bounded readiness trajectory."""
 
     project_dir: Path
+    scenario_path: Path
     config: AptlConfig
     run_store: RunStorageBackend
     provider_name: str

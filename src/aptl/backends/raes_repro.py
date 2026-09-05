@@ -8,6 +8,7 @@ No Docker/curl/ssh calls. All inputs are already-captured objects/dicts.
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -84,7 +85,7 @@ def build_reproducibility_record(inputs: RunRecordInputs) -> dict[str, Any]:
     raes_lock_digest = _raes_lock_digest(inputs.scenario_path)
 
     scenario_section: dict[str, Any] = {
-        "sdl_path": str(inputs.scenario_path) if inputs.scenario_path else None,
+        "sdl_path": _scenario_locator(inputs),
         "display_name": inputs.scenario_display_name,
         "raes_lock_digest": raes_lock_digest,
     }
@@ -116,6 +117,31 @@ def build_reproducibility_record(inputs: RunRecordInputs) -> dict[str, Any]:
             "evidence_references": inputs.evidence_references,
         },
     }
+
+
+_PACK_IDENTITY_TOKEN = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+_PACK_VERSION_TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+_PACK_SET_DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
+
+
+def _scenario_locator(inputs: RunRecordInputs) -> str | None:
+    """Return a durable pack locator, never a per-invocation staging path."""
+    pack = inputs.pack_interaction_evidence.get("pack")
+    if isinstance(pack, dict):
+        pack_id = pack.get("pack_id")
+        version = pack.get("pack_version")
+        digest = pack.get("set_digest")
+        if (
+            isinstance(pack_id, str)
+            and _PACK_IDENTITY_TOKEN.fullmatch(pack_id)
+            and isinstance(version, str)
+            and _PACK_VERSION_TOKEN.fullmatch(version)
+            and isinstance(digest, str)
+            and _PACK_SET_DIGEST.fullmatch(digest)
+        ):
+            return f"env-pack://{pack_id}@{version}/sdl/{pack_id}.sdl.yaml"
+        return None
+    return str(inputs.scenario_path) if inputs.scenario_path else None
 
 
 def _raes_lock_digest(scenario_path: Path | None) -> str | None:

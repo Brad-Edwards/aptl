@@ -632,20 +632,24 @@ class TestLabStartCommand:
         assert "--clean" in plain
 
     def test_lab_scenarios_lists_catalog_entries(self, runner, mocker, tmp_path):
-        """The list command should read catalog rows dynamically."""
+        """The list command reports validated pack identity, never a path."""
         from aptl.cli.main import app
+        from aptl.core.scenario_bundle import PackIdentity
 
         mocker.patch(
             "aptl.cli.lab.load_scenario_catalog",
             return_value=SimpleNamespace(
                 scenarios=[
                     SimpleNamespace(
-                        id="techvault-operational",
-                        name="TechVault Operational",
-                        path="scenarios/techvault-operational.sdl.yaml",
+                        id="techvault",
+                        name="TechVault",
                         description="Default public startup scenario.",
                     )
-                ]
+                ],
+                pack_identity=PackIdentity(
+                    "techvault", "0.1.0", "sha256:" + "a" * 64
+                ),
+                maturity="built",
             ),
         )
 
@@ -655,8 +659,9 @@ class TestLabStartCommand:
         )
 
         assert result.exit_code == 0
-        assert "techvault-operational" in result.stdout
-        assert "scenarios/techvault-operational.sdl.yaml" in result.stdout
+        assert "techvault\t0.1.0\tbuilt" in result.stdout
+        assert "sha256:" + "a" * 64 in result.stdout
+        assert "scenarios/" not in result.stdout
 
     def test_start_ready_outcome_prints_ready(self, runner, mocker):
         """A clean start prints the ready outcome (ADR-030)."""

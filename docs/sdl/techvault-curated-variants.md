@@ -1,101 +1,24 @@
-# TechVault Curated RAES Startup Variants
+# Retired APTL-local TechVault variants
 
-Issue #534 adds small RAES SDL startup variants for TechVault. Their purpose is
-to prove that APTL realizes Compose profiles from declared RAES node content,
-not from the full TechVault scenario name or a preset.
+The four reduced TechVault selectors formerly maintained by APTL are retired:
 
-## Authorities
+- `techvault-attacker-target`
+- `techvault-enterprise-web`
+- `techvault-defensive-min`
+- `techvault-observability-core`
 
-- RAES SDL parsing and semantic validation belong to the installed RAES parser
-  and processor/runtime compiler. APTL must not re-model RAES SDL with local
-  Pydantic classes.
-- APTL realization belongs to `aptl.backends.raes_realization` and the Compose
-  profile index in `aptl.backends.raes_profiles`.
-- Dependency expansion belongs to `aptl.backends.raes_dependency_closure`.
-- Startup aliases belong to the strict `scenarios/catalog.json` schema and
-  `aptl.core.scenario_catalog`; catalog rows are aliases, not behavior.
-- Public startup still defaults to `scenarios/techvault-operational.sdl.yaml`.
+They were APTL-local SDL documents and are not members of the acquired
+`techvault` pack. APTL does not synthesize them, map them to the full pack, or
+retain shadow copies. Selecting any of these identifiers fails closed.
 
-## Guardrails
-
-- Keep variants small: attacker/target, enterprise web, defensive minimum, or
-  observability/core slices are valid only when they parse, compile, and realize
-  without APTL-specific diagnostics.
-- Tests must assert selected Compose profiles for each variant through
-  `interpret_provisioning_plan` / `select_backend_profiles`.
-- Tests must prove content-driven behavior by changing declared node content or
-  using differently named scenarios with equivalent content. Scenario ids,
-  filenames, and catalog names must not drive profile selection.
-- Reuse existing TechVault node names, service aliases, networks, and runtime
-  profile hints. Do not add a second profile map, scenario preset table, parser,
-  exception hierarchy, or validation schema.
-- New docs for each variant should state what it includes, omits, and proves.
-
-## Curated variants
-
-The catalog registers four curated variants alongside the default operational
-scenario. Each one is a small single-file RAES SDL document under `scenarios/`.
-The selected profile set is derived from declared node content and dependency
-closure, then gated by the enabled container profiles in configuration. The
-`otel` profile is always part of the public start set, so every variant includes
-the OTEL core observability nodes.
-
-| Catalog id | Includes | Omits | Selected profiles | Proves |
-|---|---|---|---|---|
-| `techvault-attacker-target` | Kali host and capture sidecar, one monitored victim, Wazuh manager and indexer, OTEL core | Enterprise web tier, the wider SOC stack | `kali`, `victim`, `wazuh`, `otel` | A red-team host against a monitored target; the victim pulls Wazuh through declared dependency content, not through the scenario name |
-| `techvault-enterprise-web` | The enterprise tier (vulnerable webapp, database, AD, workstation), the Wazuh monitoring core, OTEL core | The wider SOC stack (Suricata, MISP, TheHive, Cortex, Shuffle), the red-team apparatus | `enterprise`, `wazuh`, `otel` | The enterprise tier realizes with the Wazuh core it requires and no SOC surface |
-| `techvault-defensive-min` | Wazuh manager, indexer, dashboard, OTEL core | The wider SOC stack, attacker and enterprise components | `wazuh`, `otel` | Wazuh monitoring realizes without pulling the full `soc` profile |
-| `techvault-observability-core` | OTEL collector, Tempo, Grafana | Every attacker, target, enterprise, and defensive component | `otel` | The smallest bounded startup surface APTL realizes from SDL |
-
-Start a variant by catalog id:
+New reduced scenarios must be authored, released, and assigned their own
+verified identity by the environment-pack owner before APTL can consume them.
+Current operators should use:
 
 ```bash
 aptl lab scenarios
-aptl lab start --scenario techvault-attacker-target
+aptl lab start --scenario techvault
 ```
 
-The static realization proof for these variants lives in
-`tests/test_techvault_curated_variants.py`. It parses, compiles, and realizes
-each variant through `interpret_provisioning_plan` with no error-severity
-`aptl.provisioner.*` diagnostics, asserts the selected Compose profile set for a
-configuration that enables exactly the variant profiles, and proves the result is
-content-driven through anti-collapse and rename checks.
-
-Live proof for these variants is a separate concern from the static authoring
-proof. Before implementing or recording that evidence, use
-[`docs/raes/techvault-curated-live-validation-preflight.md`](../raes/techvault-curated-live-validation-preflight.md)
-as the boundary guide: compare each booted range to its RAES-realized reduced
-profile set, not to the full TechVault live gate. The recorded live-boot evidence
-and reproduction commands live in the
-[curated live validation gate](../raes/techvault-curated-live-validation-gate.md).
-
-Because `aptl lab start` boots with `docker compose --profile <selected>`, which
-activates every service in a selected profile rather than only the declared RAES
-nodes, the provisioner validates that the selected profile set is a valid Compose
-project before starting the backend. When an activated service has a `depends_on`
-target that the selection excludes, the provisioner refuses with an
-`aptl.provisioner.compose-project-invalid` diagnostic instead of failing later
-with a raw Compose error. This is why `techvault-enterprise-web` includes the
-`wazuh` profile: the enterprise `workstation` host depends on `wazuh-manager`, so
-the enterprise tier cannot boot without the Wazuh core.
-
-## Security And Runtime Boundaries
-
-- Catalog and explicit paths must remain project-contained and parser-validated.
-- Static proof must use `_NoStartBackend` or equivalent no-start wiring; it must
-  not start Docker while asserting parse/compile/realization behavior.
-- Diagnostics and failures must use the existing RAES diagnostic path and APTL
-  redaction helpers. Do not print raw SDL dumps, backend stderr, secrets, or
-  rendered config.
-- Variants must not introduce new config or environment keys. Durable
-  non-secret knobs belong in `AptlConfig`; secret-bearing runtime artifacts stay
-  under the existing ADR-028 / ADR-029 boundaries.
-- Host port exposure, networks, volumes, and service dependencies remain
-  Compose-owned. A variant can select profiles; it must not redefine Compose.
-
-## Non-Goals
-
-- No dependency closure beyond the curated slices needed here; broad subset
-  closure belongs to #532.
-- No arbitrary app or package installation from RAES feature descriptors.
-- No change to the default operational startup scenario.
+Historical architecture and recorded validation evidence remain available for
+design archaeology, but they are not current startup guidance.

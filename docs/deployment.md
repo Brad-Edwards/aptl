@@ -186,7 +186,7 @@ The lab can auto-teardown on a TTL or idle timeout and provision on a schedule
   volumes (a full clean teardown).
 - `schedule` provisions a clean range at each `HH:MM` UTC time. `days` is an
   optional weekday filter (empty means every day); `scenario` is an optional
-  curated scenario id.
+  acquired-pack selector.
 
 Enforcement is a single idempotent tick that you schedule yourself:
 

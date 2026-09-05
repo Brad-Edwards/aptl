@@ -1,6 +1,6 @@
 """RAES scenario-detail workbench projection (UI-008d).
 
-Turns a curated catalog entry plus its parsed RAES ``Scenario`` into the
+Turns an acquired-pack catalog entry plus its parsed RAES ``Scenario`` into the
 backend-owned wire DTOs in :mod:`aptl.api.schemas`: the enriched card summary
 and the scenario-detail response (header facts + an ordered ``WorkbenchBlock``
 discriminated union).
@@ -8,7 +8,7 @@ discriminated union).
 The block families are projected from whatever the RAES SDL actually owns and
 are omitted when their source section is empty — the projection never
 fabricates steps, objectives, or SIEM queries for infra-only scenarios. The
-catalog ``path`` locator is never read into any wire field.
+private bundle root and SDL locator are never exposed in a wire field.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from aptl.api.schemas import (
     ScenarioDetailResponse,
     ScenarioDifficultyLiteral,
     ScenarioModeLiteral,
+    ScenarioPackIdentityResponse,
     ScenarioSummaryResponse,
     ScenarioValidationState,
     SectionDividerBlock,
@@ -205,7 +206,9 @@ def build_workbench_blocks(
 
 
 def build_scenario_detail(
-    entry: ScenarioCatalogEntry, scenario: object
+    entry: ScenarioCatalogEntry,
+    scenario: object,
+    pack: ScenarioPackIdentityResponse | None = None,
 ) -> ScenarioDetailResponse:
     """Build the scenario-detail response from a catalog entry + parsed SDL."""
     facts = _metadata_facts(entry)
@@ -219,12 +222,15 @@ def build_scenario_detail(
         tags=facts["tags"],
         required_containers=scenario_required_containers(scenario),
         validation=ScenarioValidationState(valid=True),
+        pack=pack,
         blocks=build_workbench_blocks(entry, scenario, facts),
     )
 
 
 def build_scenario_summary(
-    entry: ScenarioCatalogEntry, scenario: object
+    entry: ScenarioCatalogEntry,
+    scenario: object,
+    pack: ScenarioPackIdentityResponse | None = None,
 ) -> ScenarioSummaryResponse:
     """Build an enriched card summary from a catalog entry + parsed SDL."""
     facts = _metadata_facts(entry)
@@ -238,10 +244,14 @@ def build_scenario_summary(
         tags=facts["tags"],
         required_containers=scenario_required_containers(scenario),
         validation=ScenarioValidationState(valid=True),
+        pack=pack,
     )
 
 
-def invalid_scenario_summary(entry: ScenarioCatalogEntry) -> ScenarioSummaryResponse:
+def invalid_scenario_summary(
+    entry: ScenarioCatalogEntry,
+    pack: ScenarioPackIdentityResponse | None = None,
+) -> ScenarioSummaryResponse:
     """Build a card summary for an entry whose RAES SDL failed to project.
 
     Carries the catalog-owned facts (id/name/description/metadata) and a
@@ -261,4 +271,5 @@ def invalid_scenario_summary(entry: ScenarioCatalogEntry) -> ScenarioSummaryResp
         validation=ScenarioValidationState(
             valid=False, detail="Scenario projection is currently unavailable."
         ),
+        pack=pack,
     )

@@ -1,25 +1,17 @@
 """The scenario bundle APTL realizes, and where its content is anchored.
 
-APTL currently resolves every scenario asset relative to its own checkout: the
-SDL lives under ``scenarios/``, planted content under ``scenarios/fixtures/``,
-component build contexts under ``containers/``, and containment is checked
-against the project directory. That single assumption is what makes a scenario
-inseparable from the engine — every content path, build context, and profile is
-anchored to APTL's working tree.
-
 A bundle names the thing being realized and, crucially, the root its content is
-anchored to. Once callers ask the bundle where content lives instead of assuming
-the project directory, the scenario can move without touching realization: only
-the resolver that produces the bundle changes.
+anchored to. Acquired packs are staged and identity-validated before callers
+receive the bundle. Explicit project-tree scenarios remain a development path,
+but ordinary startup never assumes that scenario content lives in APTL.
 
 This is deliberately not a pack reader. RAES owns portable scenario semantics
 and env-packs owns the pack format and its content-identity model; APTL owns
 admitted-plan realization and trusted source acquisition. The bundle is APTL's
 side of that seam and defines no scenario semantics of its own.
 
-Today one resolver exists and it returns the project directory as the root, so
-behaviour is unchanged. A pack-backed resolver returns a staged pack root
-instead, and every consumer already asks the right question.
+The resolver returns either the validated staged pack root or the explicit
+project root, and every content consumer asks the bundle which one applies.
 """
 
 from __future__ import annotations
@@ -39,7 +31,7 @@ _ENV_PACK_PACKAGE = "raes_env_packs"
 
 
 class EnvPackError(Exception):
-    """A bundled env-pack could not be acquired, staged, or validated.
+    """An env-pack could not be acquired, staged, or validated.
 
     Raised — never swallowed — so acquisition fails closed: APTL refuses to
     realize a scenario from a pack that is missing, malformed, or rejected by

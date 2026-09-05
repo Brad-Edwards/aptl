@@ -56,7 +56,7 @@ def _admitted_surface(
 
     Admission is a RAES boundary, so orchestration tests stub it exactly as they
     stub the start handoff: planning a real scenario here would make every lab
-    orchestration test stage and admit the bundled env-pack.
+    orchestration test stage and admit the acquired env-pack.
     """
     from aptl.backends._raes_scenario_queries import AdmittedStartSurface
     from aptl.core.scenario_bundle import ScenarioSourceKind
@@ -1524,7 +1524,7 @@ class TestOrchestrateLabStart:
         )
 
         # Mock the single scenario admission (#951). The default config selects
-        # the bundled env-pack, so without this every orchestration test would
+        # the acquired env-pack, so without this every orchestration test would
         # stage and plan the real pack. The staged pack root carries no
         # docker-compose.yml, which is what makes the bind-mount pre-flight a
         # no-op on that path.
@@ -2160,8 +2160,8 @@ class TestAdmittedStartSurface:
         assert ctx.admitted_surface is None
 
 
-class TestScenarioSourceKindIsResolved:
-    """`_scenario_is_env_pack` reads the resolved bundle, not the config flag."""
+class TestGeneratedArtifactOwnershipDrivesPreparation:
+    """Preparation follows admitted ownership, not bundle provenance."""
 
     def _ctx(self, tmp_path, surface):
         from aptl.core.config import AptlConfig
@@ -2177,31 +2177,43 @@ class TestScenarioSourceKindIsResolved:
         ctx.admitted_surface = surface
         return ctx
 
-    def test_explicit_project_tree_selection_is_not_an_env_pack_run(self, tmp_path):
-        """A catalog id resolves to a project-tree bundle even under the default.
+    def test_project_tree_with_complete_ssh_ownership_skips_legacy_generation(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _SSH_KEY_BUNDLE_OWNERSHIP, _step_ensure_ssh_keys
+        from aptl.core.ssh import SSHKeyResult
 
-        Reading `config.scenario.source` made a curated scenario skip the
-        host-side SOC CA it still depends on (issue #951).
-        """
-        from aptl.core.lab import _scenario_is_env_pack
+        surface = _admitted_surface(
+            tmp_path, env_pack=False, ownership=_SSH_KEY_BUNDLE_OWNERSHIP
+        )
+        ctx = self._ctx(tmp_path, surface)
+        ctx.stateful_artifact_ownership = surface.stateful_artifact_ownership
+        mocker.patch(
+            "aptl.core.lab.ensure_ssh_keys",
+            return_value=SSHKeyResult(True, False, tmp_path / "operator-key"),
+        )
+        legacy = mocker.patch("aptl.core.lab._generate_host_side_pivot_keys")
 
-        ctx = self._ctx(tmp_path, _admitted_surface(tmp_path, env_pack=False))
+        assert _step_ensure_ssh_keys(ctx) is None
+        legacy.assert_not_called()
 
-        assert ctx.config.scenario.source == "env-pack"
-        assert _scenario_is_env_pack(ctx) is False
+    def test_env_pack_without_ssh_ownership_keeps_legacy_generation(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _step_ensure_ssh_keys
+        from aptl.core.ssh import SSHKeyResult
 
-    def test_configured_env_pack_selection_is_an_env_pack_run(self, tmp_path):
-        from aptl.core.lab import _scenario_is_env_pack
+        ctx = self._ctx(tmp_path, _admitted_surface(tmp_path, env_pack=True))
+        mocker.patch(
+            "aptl.core.lab.ensure_ssh_keys",
+            return_value=SSHKeyResult(True, False, tmp_path / "operator-key"),
+        )
+        legacy = mocker.patch(
+            "aptl.core.lab._generate_host_side_pivot_keys", return_value=None
+        )
 
-        ctx = self._ctx(tmp_path, _admitted_surface(tmp_path / "pack"))
-
-        assert _scenario_is_env_pack(ctx) is True
-
-    def test_unadmitted_context_is_not_an_env_pack_run(self, tmp_path):
-        """Without an admission the legacy host-side producers stay enabled."""
-        from aptl.core.lab import _scenario_is_env_pack
-
-        assert _scenario_is_env_pack(self._ctx(tmp_path, None)) is False
+        assert _step_ensure_ssh_keys(ctx) is None
+        legacy.assert_called_once()
 
 
 class TestSyncCredentialsStep:
@@ -4772,6 +4784,36 @@ class TestGenerateSocCertsStep:
         ctx = self._ctx(tmp_path, soc=True)
         result = _step_generate_soc_certs(ctx)
         assert result is None
+        spy.assert_called_once_with(tmp_path)
+
+    def test_complete_admitted_soc_ownership_skips_host_generator(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _SOC_CERTIFICATE_OWNERSHIP, _step_generate_soc_certs
+
+        ctx = self._ctx(tmp_path, soc=True)
+        ctx.stateful_artifact_ownership = _SOC_CERTIFICATE_OWNERSHIP
+        spy = mocker.patch("aptl.core.lab.ensure_soc_certs")
+
+        assert _step_generate_soc_certs(ctx) is None
+        spy.assert_not_called()
+
+    def test_partial_admitted_soc_ownership_keeps_host_generator(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _SOC_CERTIFICATE_OWNERSHIP, _step_generate_soc_certs
+        from aptl.core.soc_ca import CertResult
+
+        ctx = self._ctx(tmp_path, soc=True)
+        ctx.stateful_artifact_ownership = frozenset(
+            {next(iter(_SOC_CERTIFICATE_OWNERSHIP))}
+        )
+        spy = mocker.patch(
+            "aptl.core.lab.ensure_soc_certs",
+            return_value=CertResult(success=True, generated=True, certs_dir=tmp_path),
+        )
+
+        assert _step_generate_soc_certs(ctx) is None
         spy.assert_called_once_with(tmp_path)
 
     def test_returns_failed_labresult_on_cert_generation_failure(

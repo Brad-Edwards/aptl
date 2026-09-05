@@ -50,6 +50,12 @@ function detail(overrides: Partial<ScenarioDetail> = {}): ScenarioDetail {
 		tags: ['demo'],
 		required_containers: ['host-a'],
 		validation: { valid: true, detail: null },
+		pack: {
+			id: 'techvault',
+			version: '0.1.0',
+			set_digest: `sha256:${'a'.repeat(64)}`,
+			maturity: 'built'
+		},
 		blocks: [
 			{ type: 'narrative', key: 'n', content: '# Heading\n\nBody text.' },
 			{ type: 'container-status', key: 'cs', containers: ['host-a'] },

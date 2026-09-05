@@ -352,17 +352,96 @@ def test_manifest_requires_payload_parity_and_immutable_upgrade() -> None:
 def _write_signed_release(root: Path) -> tuple[ApplianceReleaseManifest, bytes]:
     root.mkdir()
     base = _manifest()
-    project_root = Path(__file__).resolve().parents[1]
-    profile_payload = (
-        project_root / "participant-profiles/guided-purple-v1/profile.json"
-    ).read_bytes()
-    readiness_payload = (
-        project_root / "participant-profiles/guided-purple-v1/readiness.json"
-    ).read_bytes()
-    readiness_document = json.loads(readiness_payload)
-    asset_lock_payload = (
-        project_root / "participant-profiles/guided-purple-v1/asset-lock.json"
-    ).read_bytes()
+    readiness_document = {
+        "schema_version": "aptl.participant-readiness/v1",
+        "suite_id": "guided-purple",
+        "version": 1,
+        "checks": [
+            {
+                "check_id": "red-mcp",
+                "capability_id": "red",
+                "kind": "mcp-tool",
+                "subject_id": "aptl-red",
+                "operation_id": "health",
+                "timeout_seconds": 30,
+            },
+            {
+                "check_id": "guided-blue-browser",
+                "capability_id": "guided-blue",
+                "kind": "browser-operation",
+                "subject_id": "security-onion",
+                "operation_id": "open",
+                "timeout_seconds": 30,
+            },
+        ],
+    }
+    readiness_payload = json.dumps(
+        readiness_document,
+        separators=(",", ":"),
+    ).encode()
+    asset_lock_payload = json.dumps(
+        {
+            "schema_version": "aptl.participant-asset-lock/v1",
+            "profile_id": "guided-purple",
+            "profile_version": 1,
+            "assets": [
+                {
+                    "asset_id": "release-fixture",
+                    "kind": "project-file",
+                    "source": "fixtures/release",
+                    "sha256": "3" * 64,
+                    "services": [],
+                }
+            ],
+        },
+        separators=(",", ":"),
+    ).encode()
+    profile_payload = json.dumps(
+        {
+            "schema_version": "aptl.participant-profile/v1",
+            "profile_id": "guided-purple",
+            "version": 1,
+            "narrative": {"path": "fixtures/narrative.json", "sha256": "4" * 64},
+            "scenario": {
+                "path": "fixtures/scenario.sdl.yaml",
+                "sha256": "5" * 64,
+                "catalog_id": "techvault",
+            },
+            "config": {"path": "fixtures/aptl.yaml", "sha256": "6" * 64},
+            "readiness": {
+                "path": "evidence/readiness.json",
+                "sha256": hashlib.sha256(readiness_payload).hexdigest(),
+            },
+            "capabilities": {"workbench_profiles": ["red", "guided-blue"]},
+            "release_evidence": {
+                "asset_lock_schema": "aptl.participant-asset-lock/v1",
+                "qualification_report_schema": "aptl.participant-qualification/v1",
+                "asset_lock_ref": "evidence/asset-lock.json",
+                "asset_lock_sha256": hashlib.sha256(asset_lock_payload).hexdigest(),
+                "qualification_report_ref": "evidence/qualification.json",
+            },
+            "budgets": {
+                "minimum_hardware": {
+                    "architecture": "x86_64",
+                    "vcpus": 1,
+                    "memory_bytes": 1,
+                    "disk_bytes": 1,
+                },
+                "maximums": {
+                    "peak_cpu_percent": 100,
+                    "peak_memory_bytes": 1,
+                    "staged_profile_assets_bytes": 1,
+                    "unique_image_compressed_bytes": 1,
+                    "unique_image_expanded_bytes": 1,
+                    "peak_runtime_disk_bytes": 1,
+                    "cold_start_seconds": 1,
+                    "warm_start_seconds": 1,
+                    "clean_reset_seconds": 1,
+                },
+            },
+        },
+        separators=(",", ":"),
+    ).encode()
     qualification_private = Ed25519PrivateKey.generate()
     qualification_public = qualification_private.public_key()
     qualification_public_pem = qualification_public.public_bytes(

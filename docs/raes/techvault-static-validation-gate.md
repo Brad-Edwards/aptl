@@ -6,18 +6,20 @@ conformance-aligned against the canonical RAES `backend-manifest-v2` surface,
 realizable into a concrete provisioning plan, and account-consistent between
 the SDL and the provisioner. It implements requirement SCN-010 (issue #322).
 
-The gate is scenario-generic. `validate_scenario()` takes a scenario path, a
-backend profile, the RAES corpus roots, and a target name, so the next scenario
-in APTL's expressivity class passes through by changing inputs rather than by
-editing the gate. TechVault is the proving input, never a hardcoded branch.
+The gate is scenario-generic. `validate_scenario()` takes a scenario path and
+may also receive its already-validated `ScenarioBundle`, backend profile, RAES
+corpus roots, and target name. TechVault is the proving input, never a hardcoded
+branch. Passing the bundle preserves one acquired identity across the complete
+gate instead of resolving or staging a second copy.
 
 ## What the gate checks
 
 `validate_scenario()` composes existing authorities in order and returns a
 `GateReport`. Each stage is one `GateCheck`:
 
-1. **Parse.** The RAES reference parser (`raes.parse_sdl_file`) accepts
-   `scenarios/techvault-operational.sdl.yaml`.
+1. **Pack identity and parse.** The acquired pack's id, released version, and
+   associated-artifact set digest are recorded, and the RAES reference parser
+   (`raes.parse_sdl_file`) accepts its staged SDL.
 2. **Import lock** (when the scenario declares imports and `check_imports` is
    enabled). `raes sdl verify-imports` verifies the committed
    `raes.lock.json` next to the scenario against a fresh resolution. The
@@ -105,9 +107,9 @@ The fast gate-logic tests run in the default suite:
 pytest tests/test_techvault_static_gate.py -m "not integration"
 ```
 
-The full-scenario gate parses the full TechVault tree and spawns the `raes`
-CLI, which takes minutes, so it is integration-marked. Run it before pushing a
-scenario or manifest change:
+The full-scenario gate stages and verifies the full acquired TechVault pack and
+spawns the `raes` CLI, which takes minutes, so it is integration-marked. Run it
+before pushing a pack-consumer or manifest change:
 
 ```
 pytest tests/test_techvault_static_gate.py -m integration
@@ -119,5 +121,5 @@ or through the manual pre-commit hook:
 pre-commit run raes-scenario-gate --hook-stage manual
 ```
 
-The gate needs only the installed `raes` wheel, which bundles the contract
-corpus, and the `raes` command. It does not require a separate corpus checkout.
+The gate needs the installed `raes` and `raes-env-packs` distributions. It does
+not require a separate corpus or environment-pack checkout.

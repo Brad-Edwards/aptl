@@ -6,7 +6,7 @@ gate, fail-loud on a missing RAES corpus, and the anti-collapse / anti-preset
 proofs that the realization is driven by declared content, not by the
 scenario id.
 
-``techvault-operational.sdl.yaml`` is the authoritative driving scenario the
+The acquired ``techvault`` pack is the authoritative driving scenario the
 gate validates.
 """
 
@@ -65,15 +65,14 @@ from aptl.validation.techvault_gate import (
 from tests.helpers import techvault_scenario_bundle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-# The default TechVault scenario now ships as the bundled env-pack (#875); the
-# in-tree techvault-operational.sdl.yaml was retired. Stage the pack once for the
+# The default TechVault scenario now ships as the acquired env-pack (#875).
+# Stage the pack once for the
 # module and drive the gate from its validated SDL, exactly as config-driven
 # resolution does at lab start.
 _OPERATIONAL_BUNDLE = techvault_scenario_bundle(
     Path(tempfile.mkdtemp(prefix="aptl-static-gate-"))
 )
 OPERATIONAL_SCENARIO = _OPERATIONAL_BUNDLE.sdl_path
-PAPER_SCENARIO = PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
 PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy", "webapp-proxy"})
 
 
@@ -89,7 +88,7 @@ def _bundle(root, sdl_path=None):
 # --------------------------------------------------------------------------- #
 # Authoritative operational scenario gate (integration: backend_conformance
 # spawns the `raes conformance backend` CLI). This is the driving-SDL completion
-# gate — it validates that techvault-operational passes the composed gate.
+# gate — it validates that the full acquired pack passes the composed gate.
 #
 # It calls `validate_scenario()` with default options, exactly as the CI job and
 # the pre-push hook do. Hand-calling the individual checks here would test a
@@ -107,6 +106,7 @@ def test_operational_gate_passes():
         project_dir=PROJECT_ROOT,
         config=config,
         options=GateOptions(),
+        bundle=_OPERATIONAL_BUNDLE,
     )
 
     failed = [(c.name, c.diagnostics) for c in report.checks if not c.passed]
@@ -222,37 +222,6 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
         "provision.node.wazuh-indexer"
         in nodes["wazuh-manager"]["ordering_dependencies"]
     )
-
-
-def test_paper_scenario_lowers_same_wazuh_stateful_contract():
-    config = load_config(PROJECT_ROOT / "aptl.json")
-    scenario, parse_check = check_parse(PAPER_SCENARIO)
-    assert scenario is not None
-    assert parse_check.passed, parse_check.diagnostics
-
-    bundle = _bundle(PROJECT_ROOT, PAPER_SCENARIO)
-    execution_plan = RuntimeManager(
-        create_aptl_runtime_target(
-            project_dir=PROJECT_ROOT,
-            config=config,
-            backend=_NoStartBackend(),
-            bundle=bundle,
-        )
-    ).plan(scenario)
-    realization = interpret_provisioning_plan(
-        plan=execution_plan.provisioning,
-        config=config,
-        bundle=bundle,
-    )
-    details = realization.details()
-
-    assert not [
-        diagnostic
-        for diagnostic in realization.diagnostics
-        if getattr(diagnostic.severity, "value", diagnostic.severity) == "error"
-    ]
-    assert details["resource_counts"]["generated-artifact"] == 3
-    assert details["resource_counts"]["persistent-volume"] == 3
 
 
 # --------------------------------------------------------------------------- #

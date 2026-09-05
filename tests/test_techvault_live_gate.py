@@ -41,11 +41,12 @@ from aptl.validation.techvault_live_gate import (
 from tests.helpers import techvault_scenario_bundle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-# The default TechVault scenario now ships as the bundled env-pack (#875); stage
+# The default TechVault scenario now ships as the acquired env-pack (#875); stage
 # it once for the module and drive the live gate from its validated SDL.
-SCENARIO = techvault_scenario_bundle(
+SCENARIO_BUNDLE = techvault_scenario_bundle(
     Path(tempfile.mkdtemp(prefix="aptl-live-gate-"))
-).sdl_path
+)
+SCENARIO = SCENARIO_BUNDLE.sdl_path
 
 
 # --------------------------------------------------------------------------- #
@@ -193,6 +194,44 @@ def test_check_category_map_covers_every_check_with_valid_categories():
     assert all(cat in FAILURE_CATEGORIES for cat in CHECK_CATEGORY.values())
 
 
+def test_semantic_verifier_receives_validated_pack_identity(monkeypatch):
+    from aptl.validation import scenario_verification_discovery as discovery
+    from aptl.validation.scenario_verification import (
+        VerificationReport,
+        VerificationStatus,
+    )
+
+    captured = {}
+
+    def verify(context):
+        captured["scenario"] = context.scenario
+        return VerificationReport(
+            status=VerificationStatus.BLOCKED,
+            scenario=context.scenario,
+            backend=context.backend,
+        )
+
+    monkeypatch.setattr(discovery, "verify_scenario", verify)
+    ctx = tlg._RunContext(
+        scenario_path=SCENARIO,
+        scenario_bundle=SCENARIO_BUNDLE,
+        boot_scenario_path=None,
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(),
+        run_store=None,
+        run_id="run-identity",
+    )
+
+    tlg._semantic_checks(ctx, LiveGateState(snapshot={"containers": []}))
+
+    identity = SCENARIO_BUNDLE.pack_identity
+    assert identity is not None
+    assert captured["scenario"].identity == identity.pack_id
+    assert captured["scenario"].content_digest == identity.set_digest
+    assert captured["scenario"].source_kind == "env-pack"
+
+
 def test_live_gate_report_passed_failures_categories_and_render():
     ok = LiveGateCheck("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
     bad = LiveGateCheck(
@@ -219,7 +258,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
     # orchestrator's call sites and the check signatures raises TypeError here
     # (the `*a, **k` shape would silently mask a missing kwarg — the live smoke
     # run caught exactly that for `check_scenario_variation(state=...)`).
-    def static(scenario_path, *, project_dir, config, options):
+    def static(scenario_path, *, project_dir, config, options, bundle):
         return object(), LiveGateCheck(
             "static_prerequisite", CATEGORY_RAES_SPECIFICATION, True
         )
@@ -254,7 +293,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
     ):
         return LiveGateCheck("run_archive_manifest", CATEGORY_EVIDENCE_CAPTURE, True)
 
-    def variation(*, project_dir, config, state):
+    def variation(*, project_dir, config, state, bundle):
         return LiveGateCheck(
             "scenario_variation", CATEGORY_BACKEND_INTERPRETATION, True
         )

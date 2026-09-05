@@ -79,6 +79,7 @@ def check_static_prerequisite(
     project_dir: Path,
     config: "AptlConfig",
     options: "LiveGateOptions",
+    bundle=None,
 ) -> tuple[Scenario | None, LiveGateCheck]:
     """Run the static gate; a static failure blocks the live boot.
 
@@ -96,6 +97,7 @@ def check_static_prerequisite(
             profiles_root=options.profiles_root,
             check_imports=options.static_check_imports,
         ),
+        bundle=bundle,
     )
     if not report.passed:
         diagnostics = [
@@ -366,6 +368,7 @@ def check_scenario_variation(
     project_dir: Path,
     config: "AptlConfig",
     state: "LiveGateState",
+    bundle=None,
 ) -> LiveGateCheck:
     """Prove the same interpreter path realizes distinct declared content distinctly.
 
@@ -384,7 +387,7 @@ def check_scenario_variation(
 
     first_node, second_node = pair
     # In-tree booted scenario: the bundle root is the project directory.
-    bundle = resolve_scenario_bundle(project_dir, None, config)
+    bundle = bundle or resolve_scenario_bundle(project_dir, None, config)
     first = interpret_provisioning_plan(
         plan=_single_node_plan(first_node), config=config, bundle=bundle
     )

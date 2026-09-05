@@ -9,10 +9,12 @@ cd my-lab
 aptl lab start
 ```
 
-The published wheel bundles the lab assets, so a PyPI install alone can run a
-lab, no clone required. `aptl lab init <dir>` copies the Compose topology,
-scenarios, config templates, and container build contexts out of the installed
-package into `<dir>`, which becomes your lab project directory.
+The published wheel bundles the APTL runtime assets, so a PyPI install alone can
+run a lab, no clone required. `aptl lab init <dir>` copies the Compose topology,
+config templates, and generic container build contexts out of the installed
+package into `<dir>`, which becomes your lab project directory. Scenario content
+is supplied separately by the installed `raes-env-packs` distribution and is
+staged with verified identity when selected.
 [pipx](https://pipx.pypa.io/) installs the CLI into its own virtualenv, so the
 [PEP 668](https://peps.python.org/pep-0668/) system-`pip` block on modern
 Debian/Ubuntu/WSL2 hosts never applies (`sudo apt install pipx` to get it).

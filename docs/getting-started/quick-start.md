@@ -9,10 +9,12 @@ cd my-lab
 aptl lab start
 ```
 
-The published wheel bundles the lab assets, so a PyPI install alone can run a
-lab, no clone required. `aptl lab init <dir>` copies the Compose topology,
-scenarios, and config templates out of the installed package into `<dir>`, your
-lab project directory. [pipx](https://pipx.pypa.io/) isolates the CLI in its own
+The published wheel bundles the APTL runtime assets, so a PyPI install alone can
+run a lab, no clone required. `aptl lab init <dir>` copies the Compose topology,
+config templates, and generic build contexts out of the installed package into
+`<dir>`, your lab project directory. The `techvault` scenario is acquired from
+the installed environment-pack distribution and verified before startup.
+[pipx](https://pipx.pypa.io/) isolates the CLI in its own
 virtualenv, so the [PEP 668](https://peps.python.org/pep-0668/) system-`pip`
 block on modern Debian/Ubuntu/WSL2 hosts never applies (`sudo apt install pipx`
 to get it). To run from source instead, clone the repo and use a virtualenv
@@ -25,18 +27,19 @@ template placeholder values with lab credentials that match the running
 containers. The startup output points to `.env` for passwords and tokens. Run
 `aptl lab info` later to reprint the same access summary.
 
-`aptl lab start` defaults to the curated TechVault operational RAES SDL. List
-the curated startup inputs with:
+`aptl lab start` defaults to the acquired TechVault RAES pack. Inspect its
+catalog projection with:
 
 ```bash
 aptl lab scenarios
 ```
 
-Start from a catalog id or an explicit project-local SDL path with:
+Start from its catalog id, or use an explicit project-local SDL only for
+development:
 
 ```bash
-aptl lab start --scenario techvault-operational
-aptl lab start --scenario-path scenarios/techvault-operational.sdl.yaml
+aptl lab start --scenario techvault
+aptl lab start --scenario-path examples/local-development.sdl.yaml
 ```
 
 ## Manage Lab

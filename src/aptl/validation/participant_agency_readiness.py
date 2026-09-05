@@ -23,6 +23,7 @@ from aptl.backends.raes_participant_provider import (
 )
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.scenario_bundle import project_tree_bundle
+from aptl.core.scenario_catalog import resolve_scenario_selection
 from aptl.backends.raes_realization_model import AptlRealization
 from aptl.core.deployment import get_backend
 from aptl.validation.participant_readiness_materialization import (
@@ -53,7 +54,6 @@ if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
     from aptl.core.deployment.backend import DeploymentBackend
 
-SCENARIO_RELATIVE_PATH = Path("scenarios/bounded-participant-agency-techvault.sdl.yaml")
 _PROVIDER_VERSION_ENVIRONMENT = {
     "PATH": "/usr/local/bin:/usr/bin:/bin",
     "NO_COLOR": "1",
@@ -182,7 +182,11 @@ def _prepare_readiness_context(
     """Plan, verify, bind, and initialize one exact participant episode."""
 
     deployment = request.backend or get_backend(request.config, request.project_dir)
-    scenario_path = request.project_dir / SCENARIO_RELATIVE_PATH
+    scenario_path = resolve_scenario_selection(
+        request.project_dir,
+        scenario_path=request.scenario_path,
+    )
+    assert scenario_path is not None
     admitted = admit_raes_scenario(
         request.project_dir,
         request.config,

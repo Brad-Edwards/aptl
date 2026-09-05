@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from raes_contracts.diagnostics import Diagnostic
 
     from aptl.core.config import AptlConfig
+    from aptl.core.scenario_bundle import ScenarioBundle
 
 # `raes conformance backend` is ~2s. `raes sdl verify-imports` re-resolves and
 # re-parses a scenario's whole module tree, which scales with that tree rather
@@ -115,6 +116,7 @@ def check_backend_conformance(
     fixtures_root: Path | None,
     profiles_root: Path | None,
     reference_scenario: Scenario | None = None,
+    bundle: ScenarioBundle | None = None,
 ) -> GateCheck:
     """Confirm APTL's canonical manifest passes target + published-CLI conformance."""
     try:
@@ -124,7 +126,7 @@ def check_backend_conformance(
             project_dir=project_dir,
             config=config,
             backend=_NoStartBackend(),
-            bundle=resolve_scenario_bundle(project_dir, None, config),
+            bundle=bundle or resolve_scenario_bundle(project_dir, None, config),
         )
         report = run_target_conformance(
             target,
@@ -147,7 +149,11 @@ def check_backend_conformance(
 
 
 def check_provisioning_realization(
-    *, scenario: Scenario, project_dir: Path, config: AptlConfig
+    *,
+    scenario: Scenario,
+    project_dir: Path,
+    config: AptlConfig,
+    bundle: ScenarioBundle | None = None,
 ) -> tuple[Mapping[str, object] | None, GateCheck]:
     """Interpret the provisioning plan and confirm it realizes nodes/services/networks."""
     try:
@@ -156,7 +162,7 @@ def check_provisioning_realization(
         # root, but APTL's own component build contexts (``containers/``) always
         # resolve from the engine checkout — a pack ships none — so component_root
         # stays project_dir (ADR-051), matching the live start path.
-        bundle = resolve_scenario_bundle(project_dir, None, config)
+        bundle = bundle or resolve_scenario_bundle(project_dir, None, config)
         target = create_aptl_runtime_target(
             project_dir=project_dir,
             config=config,

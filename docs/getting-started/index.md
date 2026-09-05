@@ -9,8 +9,9 @@ pipx install aptl-labs
 aptl lab start
 ```
 
-Clone the repo even with the published package: `aptl lab start` reads the
-Compose topology, scenarios, and config templates from the checkout.
+Clone the repo only for a source-tree development install. A released install
+materializes the Compose topology, config templates, and generic build contexts;
+it acquires scenario content from the installed environment-pack distribution.
 [pipx](https://pipx.pypa.io/) isolates the CLI in its own virtualenv, so the
 [PEP 668](https://peps.python.org/pep-0668/) system-`pip` block on modern
 Debian/Ubuntu/WSL2 hosts never applies (`sudo apt install pipx` to get it). To
@@ -45,7 +46,7 @@ Four isolated Docker networks:
 ## Prerequisites
 
 - Docker with Compose and Buildx
-- 8GB RAM for the curated scenarios; more than 20GB for the full `techvault-operational` stack
+- More than 20GB RAM for the full `techvault` stack
 - Native Linux Docker Engine: `vm.max_map_count >= 262144`
 - Docker Desktop on macOS, Windows, or WSL2: `aptl lab start` skips the host
   `sysctl` check because Docker manages it inside the Linux VM

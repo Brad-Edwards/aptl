@@ -93,6 +93,7 @@ nav:
     - "Issue #866 TechVault Component Realization Preflight": architecture/issue-866-techvault-realization-contract-preflight.md
     - "Issue #874 Scenario-Bundle Realization Roots Preflight": architecture/issue-874-scenario-bundle-realization-roots-preflight.md
     - "Issue #878 Scenario Verification Plugin Seam Preflight": architecture/issue-878-scenario-verification-plugin-seam-preflight.md
+    - "Issue #880 TechVault Env-Pack Consumption Preflight": architecture/issue-880-techvault-env-pack-consumption-preflight.md
     - "Issue #905 Lab Lifecycle Robustness Preflight": architecture/issue-905-lab-lifecycle-robustness-preflight.md
     - "Issue #949 Orborus Control Authority Preflight": architecture/issue-949-orborus-control-authority-preflight.md
     - "Issue #951 Fresh Env-Pack Start Preflight": architecture/issue-951-fresh-env-pack-start-preflight.md
@@ -120,7 +121,7 @@ nav:
     - Appliance Network Boundary: components/appliance-boundary.md
   - Scenarios:
     - Authoring Boundary: sdl/index.md
-    - Curated RAES Variants: sdl/techvault-curated-variants.md
+    - Retired APTL-local Variants: sdl/techvault-curated-variants.md
   - RAES:
     - APP-1 Appliance Boundary Materialization Preflight: raes/app-1-appliance-boundary-materialization-preflight.md
     - TechVault Static Validation Preflight: raes/techvault-static-validation-preflight.md
@@ -128,14 +129,14 @@ nav:
     - TechVault Live Validation Preflight: raes/techvault-live-validation-preflight.md
     - TechVault Live Validation Gate: raes/techvault-live-validation-gate.md
     - TechVault Curated Live Validation Preflight: raes/techvault-curated-live-validation-preflight.md
-    - TechVault Curated Live Validation Gate: raes/techvault-curated-live-validation-gate.md
-    - Bounded Participant Agency Readiness: raes/bounded-participant-agency-readiness.md
+    - Historical Curated Live Evidence: raes/techvault-curated-live-validation-gate.md
+    - Retired Bounded Participant Readiness: raes/bounded-participant-agency-readiness.md
   - Testing:
     - Smoke Test Plan: testing/smoke-test-plan.md
     - Property-Based Parser Tests: testing/property-based-parser-tests.md
   - Reference:
     - Red Team Taxonomy: red-team-taxonomy.md
-    - Guided Purple Participant Profile: reference/participant-profile.md
+    - Retired Guided Purple Participant Profile: reference/participant-profile.md
     - Disposable Appliance Release: reference/appliance-release.md
     - Appliance Seat Launcher: reference/appliance-seat-launcher.md
     - TechVault Scenario Overview: reference/techvault-scenario-overview.md

@@ -52,6 +52,7 @@ def run_boundary_challenge(
     challenge_id: str,
     *,
     project_dir: Path,
+    scenario_path: Path,
     config: AptlConfig,
     run_store: RunStorageBackend,
     parent_run_id: str,
@@ -64,6 +65,7 @@ def run_boundary_challenge(
     )
     context = prepare_challenge_context(
         project_dir=project_dir,
+        scenario_path=scenario_path,
         config=config,
         run_store=run_store,
         run_id=f"{parent_run_id}-{challenge_id.lower()}",

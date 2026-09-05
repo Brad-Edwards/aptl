@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- RAM: 8GB runs the smaller curated scenarios; the full `techvault-operational` stack needs more than 20GB
+- RAM: the full `techvault` stack needs more than 20GB
 - 20GB+ disk
 - Docker Engine 20.10+ on native Linux, or Docker Desktop on macOS, Windows, or Linux
 - Docker Compose 2.0+ (`docker compose version`)
@@ -39,7 +39,7 @@ sudo apt install docker.io docker-compose-v2 docker-buildx
 Docker CE repositories name the last package `docker-buildx-plugin` instead.
 
 **macOS (Docker Desktop):** Install Docker Desktop and allocate enough memory
-in Settings -> Resources. The full `techvault-operational` stack needs more
+in Settings -> Resources. The full `techvault` stack needs more
 than 20GB.
 
 **macOS (Colima alternative, no Docker Desktop):** If you cannot use Docker
@@ -55,7 +55,7 @@ ln -sf "$(brew --prefix docker-compose)/bin/docker-compose" ~/.docker/cli-plugin
 colima start --cpu 4 --memory 8 --disk 60
 ```
 
-Bump the resources for the full `techvault-operational` stack (see the
+Bump the resources for the full `techvault` stack (see the
 RAM/disk requirements above). `colima start` also sets the active `docker`
 context to `colima`; verify with `docker context ls`.
 

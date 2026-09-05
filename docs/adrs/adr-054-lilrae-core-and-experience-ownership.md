@@ -12,13 +12,21 @@ proposed
 
 [Review #962](https://github.com/Brad-Edwards/aptl/issues/962) assesses the
 APTL baseline before migration. [Hub ADR 0005](https://github.com/OpenRAE/hub/blob/dev/docs/decisions/adrs/0005-adopt-personal-and-organizational-backend-products.md)
-defines LilRAE as the complete personal backend generalized from APTL. APTL
-becomes the advanced TechVault experience. Complete means operationally complete
+defines LilRAE as the complete personal backend generalized from APTL.
+TechVault and its selected integrations form an advanced experience on it.
+Complete means operationally complete
 within the declared envelope; it does not mean every imaginable environment.
 
 The current distribution combines generic realization with TechVault startup,
 eight scenario MCPs, research apparatus, a local operator UI, and appliance
 delivery. Renaming that distribution alone preserves the coupling.
+
+TechVault's pack content has already moved to
+[OpenRAE/env-packs/packs/techvault](https://github.com/OpenRAE/env-packs/tree/main/packs/techvault)
+for now. This ADR takes that location as current state and proposes no further
+physical move or permanent repository choice. APTL and LilRAE name the same
+backend project across migration; they are not two runtime layers around the
+pack. Remaining work removes residual coupling and qualifies pack consumption.
 
 ## Proposed decision
 
@@ -38,8 +46,9 @@ the maximum product capability.
 | Local lifecycle and Docker realization | LilRAE; preserve implementation lineage and behavior |
 | RAES adapters and native readback | LilRAE; published public dependencies only |
 | Safe run storage, sealing and export | Generic mechanisms in LilRAE; research policy in an extension |
-| TechVault topology, vulnerable apps, service configuration, assets and answer keys | Released packs and experience plugins |
-| Wazuh, SOC, red and reverse MCP integrations | Explicitly selected APTL experience; no automatic installation in tiny core |
+| TechVault topology, vulnerable apps, service configuration and assets | Existing TechVault pack in OpenRAE/env-packs for now; consume acquired content with verified identity |
+| Scenario verification and answer keys | Selected pack validation and executable verifier plugins, with explicit compatibility |
+| Wazuh, SOC, red and reverse MCP integrations | Explicitly selected TechVault integrations; no automatic installation in tiny core |
 | Plugin discovery and compatibility | One small installed-extension boundary; extensions are trusted executable code |
 | Agent provider adapters and study/campaign features | Optional participant/research extensions over released contracts |
 | Operator web UI | Optional LilRAE surface; scenario pages project acquired pack data |

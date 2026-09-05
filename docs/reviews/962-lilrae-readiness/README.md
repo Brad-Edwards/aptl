@@ -18,11 +18,21 @@ resolve the principal problems.
 
 The intended product is clear in [Hub #3](https://github.com/OpenRAE/hub/issues/3)
 and [Hub ADR 0005](https://github.com/OpenRAE/hub/blob/dev/docs/decisions/adrs/0005-adopt-personal-and-organizational-backend-products.md):
-LilRAE is the complete personal backend; APTL is the advanced TechVault
-pack/plugin/MCP/research experience on it. The tiny quickstart is a bounded
+LilRAE is the complete personal backend generalized from the current APTL
+backend. TechVault and its selected integrations form an advanced experience
+on it. The tiny quickstart is a bounded
 profile on that same product. RAES owns semantics and conformance. Neither
 APTL/LilRAE comparison nor a second reference runtime is the migration target.
 LilRAE's current `dev` CLI is still metadata-only; migration remains real work.
+
+**TechVault content has already moved to
+[OpenRAE/env-packs/packs/techvault](https://github.com/OpenRAE/env-packs/tree/main/packs/techvault)
+for now.** The pack includes its SDL, assets, seeded content and artifact
+manifest. Its README records `built` maturity, with golden-range proof still
+outstanding. This plan consumes that existing pack. #880 covers residual APTL
+copies, packaging/startup coupling and consumer parity; it does not schedule
+the physical pack move again or choose a new permanent home. APTL-to-LilRAE is
+the backend migration, not another runtime layer around TechVault.
 
 ## Evidence and coverage
 

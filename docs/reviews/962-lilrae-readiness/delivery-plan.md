@@ -5,6 +5,13 @@ existing useful issue owners and updated current scope notes where needed.
 Implementation still uses the owning repository's requirement and workflow
 rules; no requirement status or PR merge is implied by this plan.
 
+TechVault already lives in
+[OpenRAE/env-packs/packs/techvault](https://github.com/OpenRAE/env-packs/tree/main/packs/techvault)
+for now. #880's remaining role in this graph is consumer integration and
+residual APTL cleanup/parity, not an outstanding physical pack relocation.
+Pack authoring belongs with the existing env-packs content; backend fixes and
+qualification remain with APTL as it becomes LilRAE.
+
 ## Milestones
 
 | Milestone | Exit gate | Principal work |

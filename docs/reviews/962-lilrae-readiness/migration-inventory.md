@@ -5,6 +5,12 @@ This is a proposed ownership cut at the review baseline. The
 an owner category. A core candidate still needs behavioral and import review;
 the ledger is not an instruction to copy its whole directory.
 
+TechVault's pack content already lives in
+[OpenRAE/env-packs/packs/techvault](https://github.com/OpenRAE/env-packs/tree/main/packs/techvault)
+for now. References below to pack ownership or extraction mean reconciliation
+of residual APTL copies and backend coupling against that existing pack.
+They do not prescribe another content move or a permanent repository decision.
+
 | Area | Baseline assessment | Migration action and acceptance |
 | --- | --- | --- |
 | `src/aptl/cli` | Useful operator entry points; lab, experiment, provider and seat commands share one distribution | Keep local doctor/lifecycle/evidence commands in LilRAE; make experience/seat/campaign commands optional. Test installed human and JSON routes |
@@ -18,7 +24,7 @@ the ledger is not an instruction to copy its whole directory.
 | `core/soc_*`, endpoints, collectors, snapshot and continuity | Mix generic mechanism with named TechVault/SOC assumptions | Move target knowledge and research continuity policy into experience modules; preserve generic observation and capture contracts |
 | `validation` | 37 files, 8,421 lines; generic verification alongside TechVault/research qualifications | Keep generic conformance/extension host; externalize answer keys and profile-specific live probes. Static no-start results remain explicitly static |
 | `workbench` | 11 files; installed provider adapters, private homes, tool-limited decisions | Optional participant extension; generic safe process supervision is a backend primitive. Add real confinement before claiming provider sandboxing |
-| `mcp` | Eight servers and a common library; most servers are configuration wrappers | Package with selected APTL experience. Validate arguments and authority at server boundary. Host process/daemon access is part of their trust model |
+| `mcp` | Eight servers and a common library; most servers are configuration wrappers | Package with selected TechVault integrations. Validate arguments and authority at server boundary. Host process/daemon access is part of their trust model |
 | `plugins` | Verifier and serving-interaction seams already implemented | Finish external installation, compatibility identity and real tests. Keep trusted entry points small; do not add another plugin manager |
 | `api` / `web` | Useful authenticated local UI and sanitized rendering; incomplete scenario/API journeys | Optional operator UI consuming core service interfaces and acquired-pack projections. Preserve access controls; no public multi-user exposure claim |
 | `appliance`, seat/workshop tooling | Substantial optional delivery/security implementation | Keep separate payload/qualification profile. Linux/KVM seat constraints are not the ordinary user's prerequisites |

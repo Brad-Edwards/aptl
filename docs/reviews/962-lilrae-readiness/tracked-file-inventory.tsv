@@ -1,0 +1,1468 @@
+path	proposed_owner	migration_rule
+.claude/hooks/protect_files.sh	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.claude/settings.json	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.claude/skills/gh-workflow-monitor/SKILL.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.claude/skills/ship/SKILL.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.claude/skills/stage/SKILL.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.claude/skills/wave-issue-coverage/SKILL.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.cursor/environment.json	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.cursor/rules/no-jumping-ahead.mdc	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.dockerignore	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.env.example	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.gc/plan-rules.md	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+.gitattributes	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.gitguardian.yaml	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.github/branch-protection-baseline.json	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+.github/copilot-instructions.md	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+.github/dependabot.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+.github/workflows/checks.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+.github/workflows/docs-deploy.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+.github/workflows/pr-title-lint.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+.github/workflows/release-please.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+.github/workflows/scorecard.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+.gitignore	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.ground-control.yaml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+.mcp.json.example	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.pre-commit-config.yaml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+.release-please-manifest.json	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.serena/.gitignore	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.serena/project.yml	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.vale.ini	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.vale/styles/AptlProject/EmDashDensity.yml	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+AGENTS.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+CHANGELOG.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+CLAUDE.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+CODE_OF_CONDUCT.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+CONTRIBUTING.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+LICENSE	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+Makefile	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+README.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+SECURITY.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+SUPPORT.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+appliance/guest/aptl-appliance-first-boot	optional-delivery	Keep sealed-seat boundary outside default install
+appliance/guest/aptl-appliance-first-boot.service	optional-delivery	Keep sealed-seat boundary outside default install
+appliance/guest/provision-offline.sh	optional-delivery	Keep sealed-seat boundary outside default install
+appliance/guest/scan-golden.sh	optional-delivery	Keep sealed-seat boundary outside default install
+aptl.json	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/docs/ai_red_team_test.pdf	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_1.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_10.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_11.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_12.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_13.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_14.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_15.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_16.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_17.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_18.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_19.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_2.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_20.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_21.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_22.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_3.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_4.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_5.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_6.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_7.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_8.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/li_test/cline_red_team_test_9.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/qradar_landing_empty.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+assets/images/qradar_offences.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+bin/install-raes-inventory-skill.sh	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/+git-env-isolation.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/+techvault-live-boot-honesty.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/567.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/577.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/580.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/607.changed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/689.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/690.removed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/691.changed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/692.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/716.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/759.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/790.changed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/824.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/824.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/876.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+config/certs.yml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/cortex/application.conf	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/cortex/thehive-cortex.env	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/otel/grafana-datasources.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/otel/otel-collector-config.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/otel/tempo-config.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/suricata/rules/local.rules	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/suricata/rules/misp/misp-iocs.rules	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/suricata/rules/misp/misp-md5.list	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/suricata/rules/misp/misp-sha1.list	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/suricata/rules/misp/misp-sha256.list	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/suricata/suricata.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/thehive/application.conf	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh-certs-tool.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_cluster/ad_rules.xml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_cluster/custom-shuffle	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_cluster/database_rules.xml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_cluster/etc/lists/active-response-whitelist	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_cluster/falco_rules.xml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_cluster/filebeat_wazuh_module.yml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_cluster/patch-rule-path.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_cluster/postgresql_decoders.xml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_cluster/samba_decoders.xml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_cluster/suricata_rules.xml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_cluster/wazuh_manager.conf	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_cluster/webapp_rules.xml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_dashboard/opensearch_dashboards.yml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_dashboard/wazuh.yml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_indexer/internal_users.yml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/wazuh_indexer/wazuh.indexer.yml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/_wazuh-agent/aptl-firewall-drop.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/_wazuh-agent/install.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/_wazuh-agent/ossec.conf.template	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/_wazuh-agent/wazuh-agent.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/ad/Dockerfile	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/ad/provision-users.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/ad/setup-ad.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/ad/supervisord.conf	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/appliance-egress-proxy/Dockerfile	backend-substrate	Qualify exact host/runtime security and package independently of TechVault
+containers/appliance-egress-proxy/proxy.py	backend-substrate	Qualify exact host/runtime security and package independently of TechVault
+containers/base/Dockerfile.rocky	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/base/Dockerfile.ubuntu	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/base/falco_custom.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/base/scripts/entrypoint-base.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/base/scripts/ossec.conf.template	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/db/init/01-schema.sql	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/db/init/02-seed-data.sql	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/dns/named.conf	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/dns/zones/172.20.rev	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/dns/zones/techvault.local.zone	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/fileshare/smb.conf	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/generic-systemd-base-debian/Dockerfile	backend-substrate	Qualify exact host/runtime security and package independently of TechVault
+containers/generic-systemd-base/Dockerfile	backend-substrate	Qualify exact host/runtime security and package independently of TechVault
+containers/kali-capture/Dockerfile	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/kali-capture/entrypoint.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/kali-capture/writer.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/kali-ssh-proxy/Dockerfile	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/kali-ssh-proxy/proxy.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/kali/audit/aptl.rules	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/kali/scripts/aptl-capture-client	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/kali/scripts/aptl-wrap-shell.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/keys/aptl_lab_key.pub	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/keys/authorized_keys	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/mailserver/setup.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/misp-suricata-sync/Dockerfile	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/network-boundary-helper/Dockerfile	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/network-boundary-helper/helper.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/reverse/Dockerfile	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/reverse/README.md	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/reverse/entrypoint.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/reverse/install-all.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/reverse/install-falco.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/reverse/install-wazuh.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/reverse/rebuild_container.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/reverse/reverse-tools-install.service	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/reverse/setup-reverse-tools.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/wazuh-sidecar/Dockerfile	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/webapp/app/app.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/webapp/app/static/style.css	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/webapp/app/templates/admin.html	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/webapp/app/templates/base.html	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/webapp/app/templates/dashboard.html	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/webapp/app/templates/login.html	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/webapp/app/templates/search.html	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/webapp/app/templates/tools.html	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/webapp/app/templates/upload.html	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/windows-victim/README.md	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/windows-victim/enable-rdp.ps1	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/windows-victim/join-domain.ps1	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/windows-victim/setup-ghidra.ps1	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/windows-victim/setup-python-re.ps1	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/windows-victim/setup-re-tools.ps1	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/windows-victim/setup-ssh.ps1	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/windows-victim/setup-sysinternals.ps1	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/windows-victim/setup-sysmon.ps1	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/windows-victim/setup-vs-buildtools.ps1	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/windows-victim/setup-wazuh-agent.ps1	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/windows-victim/setup-wdk.ps1	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/windows-victim/setup-x64dbg.ps1	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+docker-compose.yml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+docs/adrs/README.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-000-use-adrs.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-001-docker-compose-deployment.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-002-wazuh-siem.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-003-mcp-common-library.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-004-persistent-ssh-sessions.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-005-docker-compose-profiles.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-006-four-network-segmentation.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-007-python-cli-control-plane.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-008-soc-stack-integration.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-009-scenario-engine.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-010-sonarcloud-quality.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-011-web-ui.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-012-opentelemetry-integration.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-013-deployment-abstraction.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-014-scenario-description-language.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-015-declarative-sdl-objectives.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-016-workflows-targetable-subobjects-and-enum-variables.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-017-sdl-runtime-layer.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-018-control-flow-primitives.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-019-suricata-ids-only-prevention-via-wazuh-ar.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-020-wazuh-agents-in-process-vs-sidecar.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-021-active-response-whitelist-via-wrapper.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-022-misp-driven-suricata-rules.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-023-container-interaction-in-deployment-backend.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-024-orchestrator-side-purple-continuity-carve-out.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-025-strict-first-party-config-schema.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-026-advisory-ci-vulnerability-scanning.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-027-red-team-structured-logging.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-028-runtime-rendered-service-config.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-029-control-plane-secret-handling.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-030-startup-partial-readiness-classification.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-031-lab-orchestration-contract-guards.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-032-conversation-surface-hardening.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-033-agent-reasoning-trace-boundary.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-034-lab-managed-soc-tls-ca.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-035-raes-sdl-adoption.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-036-snapshot-endpoint-registry.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-037-docker-compose-backend-cohesion.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-038-docs-style-lint-and-published-site.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-039-web-control-plane-authentication.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-040-terminal-ssh-host-key-verification.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-041-kali-capture-sidecar-ownership-boundary.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-042-sidecar-owned-pty-master.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-043-suricata-runtime-config-ownership-boundary.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-044-raes-aligned-run-reproducibility-record.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-045-ephemeral-lifecycle-policy-enforcement.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-046-dynamic-raes-scenario-realization.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-047-raes-experiment-admission-and-trial-plan-boundary.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-048-image-free-placement-realization.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-049-sealed-disposable-lab-appliance.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-050-terminal-attempt-archival-and-atomic-seal.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-051-component-level-raes-realization.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-052-configured-participant-credential-sourcing.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/adrs/adr-053-pack-backend-deployment-serving-interaction-seam.md	architecture-history	Preserve immutable record with proposed disposition ledger
+docs/architecture/dep-003-ephemeral-lifecycle-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/dep-008-self-contained-lab-assets-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/enterprise-infrastructure.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/exp-005-safe-parameter-binding-provenance-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/exp-008-portable-evidence-bundle-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/exp-009-aces-archival-sealing-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/exp-010-capture-admission-evidence-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/grc-boundary-surface-vocabulary-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/index.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-550-soc-selected-profile-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-557-participant-implementation-binding-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-589-scenario-pack-capture-ownership-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-677-cert-producer-ownership-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-790-ssh-module-split-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-820-resource-bounded-participant-profile-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-821-participant-workbench-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-823-versioned-disposable-appliance-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-824-kiosk-launcher-reset-recovery-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-845-raes-hard-rename-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-847-openssf-scorecard-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-852-devmain-promotion-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-858-bounded-participant-choice-transport-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-859-idempotent-stuttering-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-862-explicit-participant-model-selection-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-866-techvault-realization-contract-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-874-scenario-bundle-realization-roots-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-875-scenario-content-declaration-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-876-dynamic-composition-readback-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-878-scenario-verification-plugin-seam-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-892-dynamic-composition-artifact-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-905-lab-lifecycle-robustness-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-913-shuffle-post-realization-mutation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/issue-951-fresh-env-pack-start-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/networking.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/obs-002-correlation-identity-clock-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/rep-003-run-scoped-provenance-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/architecture/rng-001-ephemeral-environments-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/components/appliance-boundary.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/components/default-defensive-posture.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/components/kali-redteam.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/components/mcp-integration.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/components/mcp-smoke-test-protocol.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/components/participant-workbench.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/components/reverse-engineering-container.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/components/victim-containers.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/components/wazuh-active-response.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/components/wazuh-siem.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/containers/victim-template-guide.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/deployment.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/getting-started/index.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/getting-started/installation.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/getting-started/prerequisites.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/getting-started/quick-start.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/index.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/app-1-appliance-boundary-materialization-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/bounded-participant-agency-readiness.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/dsl-003-runtime-substitution-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/dsl-005-assertion-evaluation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/dsl-008-realization-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/dsl-010-participant-runtime-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/issue-759-libvirt-service-reachability-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/m1-raes-conformance-truth-up-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/orchestration-capable-profile-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/paper-scenario-realization.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-curated-live-validation-gate.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-curated-live-validation-gate/.gitignore	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-curated-live-validation-gate/run-curated-live-proof.sh	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-curated-live-validation-gate/techvault-attacker-target/participant-action.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-curated-live-validation-gate/techvault-attacker-target/result.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-curated-live-validation-gate/techvault-attacker-target/snapshot.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-curated-live-validation-gate/techvault-defensive-min/result.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-curated-live-validation-gate/techvault-defensive-min/snapshot.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-curated-live-validation-gate/techvault-enterprise-web/result.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-curated-live-validation-gate/techvault-enterprise-web/snapshot.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-curated-live-validation-gate/techvault-observability-core/result.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-curated-live-validation-gate/techvault-observability-core/snapshot.json	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-curated-live-validation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-live-validation-gate.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-live-validation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-static-validation-gate.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/raes/techvault-static-validation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/red-team-taxonomy.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/reference/appliance-release.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/reference/appliance-seat-launcher.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/reference/evidence-bundle-export.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/reference/experiment-runs.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/reference/participant-profile.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/reference/techvault-company-profile.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/reference/techvault-osint-readiness.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/reference/techvault-scenario-overview.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/releasing.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/requirements/AGT-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/AGT-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/AGT-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/AGT-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/APP-1/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/APP-2/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/APP-3/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/CLI-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/CLI-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/CLI-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/CLI-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/CLI-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/CLI-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/CLI-007/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DEP-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DEP-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DEP-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DEP-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DEP-007/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DEP-008/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DET-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DET-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DET-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DET-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DET-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DET-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DOC-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DSL-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DSL-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DSL-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DSL-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DSL-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DSL-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DSL-007/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DSL-008/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DSL-009/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/DSL-010/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/ENT-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/ENT-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/ENT-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/ENT-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/ENT-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/ENT-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/ENT-007/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/ENT-008/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/ENT-009/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/EXP-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/EXP-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/EXP-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/EXP-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/EXP-008/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/EXP-009/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/EXP-010/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/EXP-011/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/INF-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/INF-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/INF-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/INF-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/INF-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/INF-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/INF-007/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/INF-010/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/INT-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/INT-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/INT-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/INT-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/INT-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/INT-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/MCP-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/MCP-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/MCP-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/MCP-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/MCP-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/MCP-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/NET-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/NET-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/NET-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/NET-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/NET-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/OBS-001-DUP-1/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/OBS-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/OBS-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/OBS-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/ORC-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/RED-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/RED-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/RED-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/RED-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/REP-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/REP-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/REP-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/REP-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/REP-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/REP-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/RNG-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/RNG-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/RNG-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/RNG-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/RNG-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/RNG-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/RTE-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SAF-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SAF-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SAF-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SAF-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SAF-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SCN-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SCN-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SCN-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SCN-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SCN-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SCN-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SCN-007/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SCN-008/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SCN-009/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SCN-010/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SEC-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SEC-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SEC-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SEC-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SEC-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SEC-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SEC-007/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SIEM-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SIEM-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SIEM-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SIEM-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SIEM-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SIEM-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SIM-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SIM-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SIM-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SOC-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SOC-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SOC-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SOC-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SOC-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SOC-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SYS-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SYS-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SYS-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SYS-004/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SYS-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SYS-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SYS-007/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SYS-008/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SYS-009/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/SYS-010/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/UI-001/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/UI-002/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/UI-003/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/UI-005/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/UI-006/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/UI-007/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/requirements/UI-008/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/sdl/complex-scenario-authoring-notes.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/sdl/complex-scenarios.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/sdl/index.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/sdl/limitations.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/sdl/parser.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/sdl/precedents.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/sdl/runtime-architecture.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/sdl/sections.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/sdl/techvault-curated-variants.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/sdl/testing.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/sdl/validation.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/specs/soc-feature-spec.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/specs/web-component-kit.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/specs/web-gui-design-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/specs/web-gui-design.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/testing/property-based-parser-tests.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/testing/smoke-test-plan.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/troubleshooting/index.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/workshop/emergency-rollout.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/workshop/playbook.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+docs/workshop/walkthrough.md	docs-follow-owner	Separate current user guidance from historical evidence and experience docs
+eslint.config.js	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+examples/aptl-lab-topology.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+examples/hospital-ransomware-surgery-day.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+examples/port-authority-surge-response.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+examples/satcom-release-poisoning.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+generate-indexer-certs.yml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+hatch_build.py	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+lab_connections.txt	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+mcp/aptl-mcp-common/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/captures.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/config.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/endpoint-url.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/http.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/redaction.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/runs.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/server.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/shells.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/ssh-contracts.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/ssh-manager.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/ssh-session.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/ssh.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/telemetry.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/tools/api-definitions.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/tools/api-handlers.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/tools/definitions.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/tools/handlers.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/src/utils.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/tests/api-tools.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/captures.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/config-env-substitution.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/config-logic.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/endpoint-url.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/http-ca.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/http-endpoint-security.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/http-insecure.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/http.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/redaction.parity.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/redaction.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/runs.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/server-hook.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/server-logic.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/shells.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/ssh-facade.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/ssh.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/telemetry.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/tools-definitions.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tests/tools-handlers.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/aptl-mcp-common/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/aptl-mcp-common/vitest.config.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/build-all-mcps.sh	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-casemgmt/.gitignore	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-casemgmt/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-casemgmt/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-casemgmt/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-casemgmt/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-casemgmt/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-casemgmt/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-indexer/.gitignore	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-indexer/build/index.js	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-indexer/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-indexer/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-indexer/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-indexer/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-indexer/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-indexer/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-indexer/vitest.config.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-network/.gitignore	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-network/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-network/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-network/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-network/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-network/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-network/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/.gitignore	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/.prettierrc	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/build/index.js	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/eslint.config.js	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/src/capture.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/src/classifier.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/src/effective-mode.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/src/extractor.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/src/logger.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/tests/capture.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/mcp-red/tests/classifier.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/mcp-red/tests/effective-mode.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/mcp-red/tests/extractor.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/mcp-red/tests/logger.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+mcp/mcp-red/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-red/vitest.config.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-reverse/.gitignore	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-reverse/.prettierrc	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-reverse/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-reverse/eslint.config.js	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-reverse/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-reverse/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-reverse/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-reverse/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-reverse/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-reverse/vitest.config.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-soar/.gitignore	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-soar/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-soar/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-soar/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-soar/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-soar/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-soar/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-threatintel/.gitignore	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-threatintel/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-threatintel/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-threatintel/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-threatintel/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-threatintel/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-threatintel/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-wazuh/build/index.js	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-wazuh/docker-lab-config.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-wazuh/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-wazuh/package.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-wazuh/src/index.ts	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-wazuh/tsconfig.build.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/mcp-wazuh/tsconfig.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mcp/package-lock.json	experience-mcp	Optional scenario MCP packages; shared library follows consumers
+mkdocs.yml	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+participant-profiles/guided-purple-v1/aptl.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+participant-profiles/guided-purple-v1/asset-lock.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+participant-profiles/guided-purple-v1/narrative.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+participant-profiles/guided-purple-v1/profile.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+participant-profiles/guided-purple-v1/readiness.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+plugins/aptl-techvault-pack-interaction/README.md	experience-plugin	Independent trusted executable package with compatibility qualification
+plugins/aptl-techvault-pack-interaction/pyproject.toml	experience-plugin	Independent trusted executable package with compatibility qualification
+plugins/aptl-techvault-pack-interaction/src/aptl_techvault_pack_interaction/__init__.py	experience-plugin	Independent trusted executable package with compatibility qualification
+plugins/aptl-techvault-verifier/README.md	experience-plugin	Independent trusted executable package with compatibility qualification
+plugins/aptl-techvault-verifier/pyproject.toml	experience-plugin	Independent trusted executable package with compatibility qualification
+plugins/aptl-techvault-verifier/src/aptl_techvault_verifier/__init__.py	experience-plugin	Independent trusted executable package with compatibility qualification
+pyproject.toml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+release-please-config.json	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+requirements/ci.txt	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+requirements/dev.txt	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+requirements/docs.txt	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+requirements/runtime.txt	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+requirements/web.txt	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+scenarios/archive/README.md	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/archive/ad-domain-compromise.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/archive/detect-brute-force.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/archive/lateral-movement-data-theft.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/archive/prime-enterprise.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/archive/prime-scenario.md	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/archive/recon-nmap-scan.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/archive/webapp-compromise.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/bounded-participant-agency-techvault.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/catalog.json	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/paper-agent-loop.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/techvault-attacker-target.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/techvault-defensive-min.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/techvault-enterprise-web.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/techvault-observability-core.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/aptl-env.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/aptl-range.service	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/ci/assert_project_teardown.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/cortex-apikey.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/cortex-index-init.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/envpack-kali-fixups.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/envpack-soar-fixups.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/envpack-suricata-fixups.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/generate-ssh-keys.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/launch-ranges.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/provision-range.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/seed-misp.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/seed-prime.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/seed-shuffle.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/setup-purple-demo.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/setup-rdp.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/setup-vulnerable-victim.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/test-continuity-audit.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/test-wazuh-ar-drop.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/test-wazuh-ar-whitelist.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/thehive-apikey.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+sonar-project.properties	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+src/aptl/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/_asset_manifest.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/api/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/api/deps.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/api/main.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/api/middleware/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/api/middleware/bff.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/api/routers/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/api/routers/config.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/api/routers/kill.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/api/routers/lab.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/api/routers/scenarios.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/api/routers/terminal.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/api/scenario_projection.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/api/schemas.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/api/session.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/appliance/__init__.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/bootstrap.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/build.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/errors.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/launch.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/manifest.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/models.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/offline.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/release_models.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/release_validation.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/__init__.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/context.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/errors.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/exposure.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/kiosk.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/lifecycle.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/models.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/observation.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/overlay_cleanup.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/paths.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/persistence.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/prereqs.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/vm.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/versioning.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/backends/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_compose_profile_index.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_apply_helpers.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_conformance_probe.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_content_spec.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_dataset_content.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_evaluator_engine.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_evaluator_progress.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_image_policy.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_observation_helpers.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_proposition_truth.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_realization_diagnostics.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_scenario_queries.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_scenario_resolution.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_service_index_placement.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_stateful_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_runtime_concern_disclosure.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_runtime_concern_excess.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_runtime_mount_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/identity.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/pack_interaction.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/pack_interaction_discovery.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_account_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_acl_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_artifact_availability.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_artifact_mechanisms.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_artifact_satisfaction.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_base_substrate.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_content_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_content_satisfaction.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_content_source_policy.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_dependency_closure.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_diagnostics.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_docker_materializer.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_evaluator.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_execution_helpers.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_image_free_content_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_image_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_manifest.py	split-core-experience	Cut scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
+src/aptl/backends/raes_materializer.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_materializer_engine.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_node_materialization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_orchestrator.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_pack_interaction.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_package_managers.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_actions.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_apparatus.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_apparatus_models.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_bindings.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_candidates.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_control_evidence.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_driver.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_evidence_publication.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_execution_support.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_exposure.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_fixture.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_fixture_blue.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_fixture_core.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_fixture_green.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_fixture_red.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_projection.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_provider.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_realization_execution.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_realizations.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_runtime.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_participant_support.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_placement_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_profiles.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_provisioner.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_realization_envelope.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_realization_model.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_realization_networks.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_realization_values.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_repro.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_runtime_model_artifact.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_runtime_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_service_index_schema.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_start_model.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_stateful_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_substrate.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/_common.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/appliance.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/config.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/container.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/continuity.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/experiment.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/kill.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/lab.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/lab_init.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/lab_render.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/lifecycle.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/main.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/participant_profile.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/participant_readiness.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/runs.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/seat.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/web.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/_soc_ca_builders.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/_soc_ca_chain.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/_soc_ca_generation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/_soc_ca_io.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/appliance_boundary.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/appliance_boundary_gate.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/appliance_boundary_inventory.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/archival/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/archival/context.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/archival/coordinator.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/archival/discovery_index.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/archival/layout.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/archival/legacy_manifest.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/archival/run_record.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/archival/seal.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/archival/status.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/archival/verify.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/assets.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/attacks.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/certs.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/collectors.py	split-core-experience	Cut scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
+src/aptl/core/config.py	split-core-experience	Cut scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
+src/aptl/core/content_seed.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/continuity.py	split-core-experience	Cut scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
+src/aptl/core/contracts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/correlation/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/correlation/_assemble.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/correlation/_extract.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/correlation/builder.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/correlation/clock.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/correlation/identity.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/correlation/models.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/correlation/persistence.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/correlation/rules.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/credentials.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_account_provider.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_account_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_base_substrate.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_boundary.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_boundary_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_build_dedupe.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_content_mounts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_content_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_image_fetch.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_image_free_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_image_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_lifecycle.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_model_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_network_conflicts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_network_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_node_generation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_port_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_post_start.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_project_cleanup.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_queries.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_realization_networks.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_runtime_inventory.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_seed_attribution.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_seed_execution.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_seed_safety.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_service_health.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_service_index_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_stateful_constants.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_stateful_graph.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_stateful_model.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_stateful_readiness.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_stateful_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_stateful_services.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_stop.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_volume_cleanup.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_flag_signing_keys.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_proc_net_listeners.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_service_index_materialization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_ssh_key_bundle.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_stateful_certificates.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_wazuh_identity.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/backend.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/backend_container_ops.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/backend_host_inventory.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/boundary.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/boundary_compiler.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/docker_compose.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/errors.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/ssh_compose.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/detection.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/endpoints.py	split-core-experience	Cut scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
+src/aptl/core/env.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence/_persist.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence/adapters/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence/adapters/builtins.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence/adapters/sources.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence/adapters/wiring.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence/content_store.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence/coordinator.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence/outcomes.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence/protocol.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence/records.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence/visibility.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/_collect.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/_io.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/archive.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/build.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/closure.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/codes.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/envelope.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/errors.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/inventory.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/limits.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/models.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/projections/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/projections/jsonl.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/projections/ocsf.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/projections/parquet.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/projections/registry.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/schemas.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/evidence_bundle/verify.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/execution/__init__.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/execution/apparatus.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/execution/assembly.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/execution/bridges.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/execution/executor.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/__init__.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/admission.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/admission_artifacts.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/admission_steps.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/apparatus.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/bindings.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/capture_mapping.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/capture_registrations.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/capture_registry.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/controller.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/errors.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/policy.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/resolver.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/spec_loading.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/trial_plan.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/trial_plan_models.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/exporter.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/flags.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/health.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/host_keys.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/host_ports.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/hostenv.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/kill.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/lab.py	split-core-experience	Cut scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
+src/aptl/core/lab_types.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/lifecycle_enforce.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/lifecycle_guard.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/lifecycle_policy.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/objectives.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/coordinator.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/identity.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/outcomes.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/protocol.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/providers/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/providers/_degraded.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/providers/apparatus.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/providers/artifacts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/providers/config_identity.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/providers/detection.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/providers/experiment.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/providers/participant.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/providers/runtime_facts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/record.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/registrations.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/provenance/registry.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/runstore.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/runstore_internals.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/runtime/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/runtime/workflow_engine.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/scenario_bundle.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/scenario_catalog.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/scenarios.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/seed_spec.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/services.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/session.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/snapshot.py	split-core-experience	Cut scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
+src/aptl/core/snapshot_models.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/soc_ca.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/ssh.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/suricata_seed.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/sysreqs.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/telemetry.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/services/__init__.py	experience-plugin	SOC-specific service integration
+src/aptl/services/misp_suricata_sync/__init__.py	experience-plugin	SOC-specific service integration
+src/aptl/services/misp_suricata_sync/config.py	experience-plugin	SOC-specific service integration
+src/aptl/services/misp_suricata_sync/main.py	experience-plugin	SOC-specific service integration
+src/aptl/services/misp_suricata_sync/misp_client.py	experience-plugin	SOC-specific service integration
+src/aptl/services/misp_suricata_sync/models.py	experience-plugin	SOC-specific service integration
+src/aptl/services/misp_suricata_sync/rule_writer.py	experience-plugin	SOC-specific service integration
+src/aptl/services/misp_suricata_sync/suricata_reloader.py	experience-plugin	SOC-specific service integration
+src/aptl/services/misp_suricata_sync/translator.py	experience-plugin	SOC-specific service integration
+src/aptl/utils/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/utils/_pathsafe_core.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/utils/_pathsafe_read.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/utils/curl_safe.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/utils/deterministic_archive.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/utils/logging.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/utils/pathsafe.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/utils/placeholders.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/utils/redaction.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/utils/shell.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/validation/__init__.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/_account_parity.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/_gate_checks.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/_gate_no_start_backend.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/_gate_raes_cli.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/_live_gate_checks.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/_live_gate_operations.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/_live_gate_probes.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/_live_gate_readiness.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/_live_gate_telemetry.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/_live_gate_variation.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/curated_live_proof.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/imagefree_gate.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/mcp_protocol.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_agency_qualification.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_agency_readiness.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_live_proof.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_mcp_smoke.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_profile.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_profile_models.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_proof_redaction.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_qualification.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_qualification_boundaries.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_qualification_boundary_environment.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_qualification_challenge_support.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_qualification_evidence.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_qualification_models.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_readiness_materialization.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_readiness_models.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_readiness_outcomes.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_readiness_provider.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/participant_readiness_reports.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/range_snapshot_summary.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/scenario_verification.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/scenario_verification_discovery.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/techvault_gate.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/techvault_live_gate.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/workbench/__init__.py	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+src/aptl/workbench/agent.py	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+src/aptl/workbench/app.py	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+src/aptl/workbench/bootstrap.py	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+src/aptl/workbench/codex_agent.py	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+src/aptl/workbench/credentials.py	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+src/aptl/workbench/decision_schema.py	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+src/aptl/workbench/participant_source_binding.py	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+src/aptl/workbench/process.py	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+src/aptl/workbench/profiles.py	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+src/aptl/workbench/runtime.py	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+tests/__init__.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/_bundle_fixtures.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/archival_fixtures.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/conftest.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/fixtures/redaction_parity_corpus.json	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/fixtures/workbench_mcp_server.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/helpers.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_account_provider.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_adr_049_appliance_contract.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_api_auth.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_api_bff.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_api_config.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_api_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_api_kill.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_api_lab.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_api_scenarios.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_api_terminal.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_boundary_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_boundary_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_boundary_inventory.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_boundary_policy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_build.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_cli.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_egress_proxy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_guest_assets.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_offline_payload.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_offline_start.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_release_manifest.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_seat_cli.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_seat_exposure.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_seat_kiosk.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_seat_lifecycle.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_seat_observation.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_seat_paths.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_seat_persistence.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_seat_prereqs.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_seat_vm.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_archival_discovery_index.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_archival_legacy_manifest.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_archival_run_record.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_archival_seal.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_archival_security.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_archival_status.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_archival_terminal_states.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_assets.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_attacks.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_boundary_compiler.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_bounded_participant_agency_scenario.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_bounded_participant_runtime.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_capture_registry.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_certs.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_cli.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_cli_config.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_cli_container.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_cli_kill.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_cli_lifecycle.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_cli_web.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_collectors.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_compose_base_substrate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_compose_boundary_realization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_compose_platform_boundary.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_compose_port_realization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_compose_service_health.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_compose_volume_cleanup.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_config.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_config_fuzz.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_consistency.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_content_realization_fuzz.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_content_realization_source_policy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_continuity.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_contracts.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_correlation_builder.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_correlation_clock.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_correlation_identity.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_correlation_models.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_correlation_persistence.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_cortex_integration_config.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_credentials.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_credentials_fuzz.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_curated_live_proof.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_curl_safe.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_deployment_backend.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_deployment_stateful_realization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_detection.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_deterministic_archive.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_docker_compose_port_bindings.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_endpoints.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_env.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_env_fuzz.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_env_hydration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_env_pack_bundle.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_env_pack_realization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_evidence_adapters.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_evidence_bundle_archive.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_evidence_bundle_cli.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_evidence_bundle_closure.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_evidence_bundle_fuzz.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_evidence_bundle_inventory.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_evidence_bundle_projections.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_evidence_bundle_security.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_evidence_bundle_verify.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_evidence_coordinator.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_evidence_correlation.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_evidence_fuzz.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_evidence_records.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_evidence_security.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_execution_bridges.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_execution_executor.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_experiment_admission.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_experiment_apparatus.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_experiment_bindings.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_experiment_capture_mapping.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_experiment_cli.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_experiment_contract.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_experiment_controller.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_experiment_errors.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_experiment_persistence.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_experiment_policy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_experiment_resolver.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_experiment_spec_loading.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_experiment_trial_plan.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_exporter.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_flag_signing_keys.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_hashed_requirements.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_hatch_build_hook.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_health.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_host_keys.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_host_ports.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_hostenv.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_imagefree_admission_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_imagefree_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_in_process_agents.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_kali_capture_compose.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_kali_capture_writer.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_kill.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_lab.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_lab_fresh_start.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_lab_init_cli.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_lifecycle_guard.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_lifecycle_policy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_line_endings.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_listener_observation_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_live_gate_operations.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_live_helpers.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_logging.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_manifest_observation.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_materializer_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_mcp_config_example.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_mcp_protocol.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_misp_suricata_sync.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_mixed_realization_dispatch.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_mixed_realization_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_network_boundary_helper.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_no_silent_privilege_escalation.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_node_materialization_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_obs003_kali_capture.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_out_of_tree_bundle_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_pack_backend_interaction.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_pack_backend_realization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_pack_content_resolution.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_paper_scenario_static_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_participant_mcp_smoke.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_participant_profile.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_participant_qualification.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_participant_workbench.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_participant_workbench_adapter.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_pathsafe.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_pr_title_guard.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_precommit_config.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_proc_net_listeners.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_promotion_workflow.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_provenance_apparatus.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_provenance_artifacts_host.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_provenance_builtin_fleet.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_provenance_config_runtime.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_provenance_coordinator.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_provenance_detection.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_provenance_identity.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_provenance_outcomes.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_provenance_record.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_provenance_registry.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_provenance_review_fixes.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_acl_realization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_artifact_availability.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_artifact_mechanisms.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_artifact_satisfaction.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_authored_artifact_authority.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_backend.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_base_substrate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_content_satisfaction.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_diagnostics.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_docker_materializer.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_dynamic_composition.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_evaluator.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_materializer.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_materializer_engine.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_namespace_cutover.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_node_desired_state.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_node_materialization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_observation.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_orchestrator.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_package_managers.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_realization_service_ports.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_repro.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_runtime_environment.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_runtime_observation.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_service_index_schema.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_service_index_schema_lowering.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_stateful_realization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_range_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_realization_declaration_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_realization_routing.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_redaction.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_redaction_fuzz.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_redaction_parity.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_runstore.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_runstore_content_store.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_scenario_bundle.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_scenario_bundle_realization_roots.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_scenario_bundle_wiring.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_scenario_catalog.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_scenario_detail.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_scenario_pack_ownership_contract.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_scenario_source_config.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_scenario_verification_seam.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_scenarios.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_scorecard_workflow.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_seed_misp_script.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_seed_prime_failures.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_seed_script_env.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_service_index_materialization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_services.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_session.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_shell.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_shuffle_realization_contract.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_smoke.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_snapshot.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_snapshot_status.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_soc_ca.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_sonar_assert_no_new_issues.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_ssh.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_ssh_key_bundle.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_supply_chain_pinning.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_sysreqs.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_techvault_curated_variants.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_techvault_dns_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_techvault_live_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_techvault_pack_interaction_provider.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_techvault_static_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_techvault_telemetry_spine.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_telemetry.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_version.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_version_consistency.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_wazuh_active_response.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_wazuh_identity.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_web_dockerfile_cmd.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_workflow_engine.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tools/.gitignore	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+tools/check_pr_title.py	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+tools/install-vale.sh	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+tools/sonar/README.md	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+tools/sonar/assert_no_new_issues.py	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+tools/vale-lint-all.sh	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+tools/vale-lint-hook.sh	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+uv.lock	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+web/.dockerignore	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/Caddyfile	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/Dockerfile	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/Dockerfile.api	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/package-lock.json	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/package.json	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/app.css	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/app.html	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/api.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/bff.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/ConfigSummaryList.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/ContainerCard.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/ContainerGrid.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/KillConfirmDialog.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/LabStartNotice.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/LabStatusBadge.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/LocalUseNoticeDialog.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/NavBar.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/PrivacyDetailsPanel.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/ScenarioCard.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/SettingsDialog.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/Terminal.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/kit/Badge.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/kit/Button.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/kit/Dialog.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/kit/Field.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/kit/Menu.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/kit/Select.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/kit/StatusBadge.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/kit/Table.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/kit/TextInput.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/kit/field-context.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/kit/focus-trap.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/kit/id.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/kit/index.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/kit/tone.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/workbench/ContainerStatusBlock.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/workbench/NarrativeBlock.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/workbench/ObjectiveBlock.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/workbench/SectionDivider.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/workbench/SiemQueryBlock.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/workbench/StepBlock.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/workbench/TerminalBlock.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/components/workbench/WorkbenchStatusBar.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/container-state.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/markdown.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/session.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/stores/lab.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/stores/preferences.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/stores/ui.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/time.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/lib/types.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/routes/+error.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/routes/+layout.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/routes/+layout.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/routes/+page.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/routes/+page.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/routes/config/+page.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/routes/config/+page.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/routes/scenarios/[id]/+page.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/routes/scenarios/[id]/+page.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/src/routes/terminal/[container]/+page.svelte	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/svelte.config.js	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/tests/components/ConfigSummaryList.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/KillConfirmDialog.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/LabStartNotice.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/LabStatusBadge.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/LocalUseNoticeDialog.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/NavBar.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/PrivacyDetailsPanel.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/ScenarioCard.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/SettingsDialog.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/Terminal.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/Badge.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/Button.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/Dialog.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/Field.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/Menu.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/Select.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/StatusBadge.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/Table.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/TextInput.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/fixtures/DialogHarness.svelte	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/fixtures/FieldHarness.svelte	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/fixtures/SelectHarness.svelte	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/fixtures/TableHarness.svelte	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/fixtures/TextInputHarness.svelte	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/focus-trap.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/helpers.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/kit/tone.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/components/workbench/blocks.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/lib/api.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/lib/bff.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/lib/container-state.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/lib/markdown.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/lib/preferences.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/lib/routes.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/lib/session.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/lib/stores.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/lib/time.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/lib/ui.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/routes/config-page.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/routes/fixtures/LayoutHarness.svelte	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/routes/layout.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/routes/page.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/routes/scenario-workbench.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/routes/terminal-page.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tests/setup.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+web/tsconfig.json	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/vite.config.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+web/vitest.config.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data

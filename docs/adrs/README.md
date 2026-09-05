@@ -75,3 +75,8 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [051](adr-051-component-level-raes-realization.md) | Component-Level RAES Realization | accepted | 2026-07-28 |
 | [052](adr-052-configured-participant-credential-sourcing.md) | Configured Participant Credential Sourcing | proposed | 2026-08-12 |
 | [053](adr-053-pack-backend-deployment-serving-interaction-seam.md) | Pack-Backend Deployment-Serving Interaction Seam | accepted | 2026-08-10 |
+| [054](adr-054-lilrae-core-and-experience-ownership.md) | LilRAE Core and Experience Ownership | proposed | 2026-09-05 |
+| [055](adr-055-local-runtime-authority-and-ownership.md) | Local Runtime Authority and Ownership | proposed | 2026-09-05 |
+| [056](adr-056-scenario-led-capability-qualification.md) | Scenario-Led Capability Qualification | proposed | 2026-09-05 |
+| [057](adr-057-agent-execution-compartments.md) | Agent Execution Compartments | proposed | 2026-09-05 |
+| [058](adr-058-adoption-and-security-release-gates.md) | Adoption and Security Release Gates | proposed | 2026-09-05 |

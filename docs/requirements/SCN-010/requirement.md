@@ -108,6 +108,7 @@ APTL and ACES are co-developed inside a single research agenda. ACES's core rese
 - IMPLEMENTS → GITHUB_ISSUE `#580` (Backend manifest truth-up + conformance re-verification)
 - IMPLEMENTS → PULL_REQUEST `792` (fix(aces): truth up backend manifest)
 - IMPLEMENTS → DOCUMENTATION `docs/architecture/issue-589-scenario-pack-capture-ownership-preflight.md` (RAES environment-pack ownership decision)
+- IMPLEMENTS → DOCUMENTATION `docs/architecture/issue-592-scenario-pack-terminology-preflight.md` (RAES scenario-pack terminology and ownership boundary)
 - TESTS → TEST `tests/test_scenario_pack_ownership_contract.py` (Scenario-pack ownership contract test)
 - IMPLEMENTS → GITHUB_ISSUE `589` (Review APTL ownership for scenario-pack capture workflows)
 - IMPLEMENTS → CODE_FILE `src/aptl/backends/raes_realization.py`

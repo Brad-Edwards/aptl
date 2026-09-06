@@ -134,7 +134,7 @@ Scenarios are [Reproducible Agentic Environments SDL](docs/sdl/index.md) documen
 
 The SDL language and the reusable environment-pack format live in the RAES companion repositories—[OpenRAE/rae](https://github.com/OpenRAE/rae) (SDL and semantics) and [OpenRAE/env-packs](https://github.com/OpenRAE/env-packs) (pack definitions, templates, schemas, and authoring support). APTL consumes those definitions and realizes them as a running Docker lab; the lab lifecycle and runtime stay APTL-owned.
 
-The catalog ships the operational default plus four curated slices:
+The APTL startup catalog ships the operational default plus four curated slices:
 
 | Scenario id | Boots | Omits |
 |---|---|---|

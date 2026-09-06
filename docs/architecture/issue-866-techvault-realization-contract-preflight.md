@@ -10,11 +10,48 @@ The parity baseline is `docker-compose.yml` at commit
 generic-materialization change. The baseline is evidence only. It must never be
 read by the planner or deployment backend at runtime.
 
+### Current implementation handoff for issue #869
+
+The full `techvault-operational` SDL is now owned by the pinned
+`raes-env-packs` dependency, validated and staged as a `ScenarioBundle`. There
+is no authoritative in-tree `scenarios/techvault-operational.sdl.yaml` to
+restore. Scenario content resolves under the validated bundle root; APTL-owned
+component build contexts resolve under the project/component root. Changes to
+the authored graph or component contracts therefore arrive through a pinned
+environment-pack release, while component Dockerfiles and invariant assets
+remain packaged APTL assets.
+
+RAES 3.3 and the work through issues #874-#876 now provide the artifact
+mechanisms, address-scoped availability, runtime-concern admission, independent
+readback, and artifact satisfaction paths described below. The older
+“admission blockers” section is retained as historical rationale, not current
+state. Issue #869 must extend the existing declarations, component assets, and
+readiness evidence through those paths rather than recreate their schemas or
+workflow.
+
+Two boundaries are especially easy to violate during the restoration:
+
+- Backend dispatch follows the admitted selected route carried by the typed
+  realization (`dynamic_composition` for route G), not the inference
+  “runtime exists and image is absent.” Exactly one artifact-backed or dynamic
+  route applies to each VM node.
+- `_component_profiles.py` is temporary operator-start packaging only. It does
+  not select a source, define a component contract, or prove readiness.
+
+Component-local invariant health and runtime readback belong to the component
+and deployment paths. Cross-service TechVault answer keys belong to the
+installed, digest-bound scenario-verifier seam from issue #878, not to a
+TechVault branch in RAES or deployment core. Cortex index creation remains a
+native service-materialization operation; it must not regress to a synthetic
+participant node or one-shot Compose peer. Wazuh endpoint enrollment and
+correlation remain the separate issue #809 integration boundary.
+
 ## Architecture Decisions
 
 - Keep the authority chain unchanged:
-  `techvault-operational.sdl.yaml` → RAES parse/compile/plan → typed APTL
-  interpretation → `DeploymentBackend` → observed runtime snapshot.
+  validated `techvault` environment-pack `ScenarioBundle` → RAES
+  parse/compile/plan → typed APTL interpretation → `DeploymentBackend` →
+  observed runtime snapshot.
 - Reuse RAES artifact admission. `Source.artifact_requirement`,
   `ArtifactMechanismCapability`, `ArtifactAvailabilityContext`, planner
   artifact diagnostics, and `ArtifactSatisfactionDisclosureModel` are the
@@ -78,7 +115,7 @@ mechanism/profile, never by `techvault`, node name, Compose service, or local
 cache contents. The selected route and artifact identity travel with the
 existing typed node/image realization and are disclosed in the RAES snapshot.
 
-### Current admission blockers
+### Historical admission blockers at issue #866 preflight
 
 The installed RAES 2.0 contracts contain the required artifact mechanism,
 availability, satisfaction, and rich `RuntimeConfiguration` models, but the
@@ -213,7 +250,8 @@ systems. The APTL web services remain outside the scenario authority boundary.
 
 The seam is:
 
-`(compiled resource address, ArtifactRequirement, ArtifactAvailabilityContext,
+`(validated ScenarioBundle identity and content digest, component root,
+compiled resource address, ArtifactRequirement, ArtifactAvailabilityContext,
 manifest artifact mechanisms, deterministic route preference,
 RuntimeConfiguration concerns, DeploymentBackend)`
 
@@ -236,11 +274,12 @@ does not add a product-specific provisioner.
   admission, availability, satisfaction disclosure, planner, manifest, and
   conformance.
 - Scenario authority:
-  `scenarios/techvault-operational.sdl.yaml`, `scenarios/catalog.json`,
-  generated artifacts, persistent volumes, accounts, content, conditions, and
-  participant projection.
+  the pinned `raes-env-packs` TechVault pack, `ScenarioBundle`, pack-content
+  validation/resolution, generated artifacts, persistent volumes, accounts,
+  content, conditions, and participant projection. The environment pack owns
+  scenario declarations; the APTL project root owns component build contexts.
 - APTL adapter:
-  `src/aptl/backends/raes_{manifest,realization,realization_model,image_realization}.py`,
+  `src/aptl/backends/raes_{manifest,artifact_mechanisms,artifact_availability,artifact_satisfaction,realization,realization_model,image_realization,runtime_observation}.py`,
   placement/content/account/stateful resolvers, diagnostics, observation, and
   reproducibility records.
 - Generic materializer:
@@ -278,6 +317,13 @@ does not add a product-specific provisioner.
 - Do not dispatch generic composition merely because `runtime` is non-null.
   Vendor images also need runtime configuration, so that test conflates source
   choice with effective state.
+- Do not treat a Dockerfile-only checksum as complete build provenance when its
+  context contains copied scripts, packages, manifests, or configuration. A
+  component materialization requirement must bind every build input that can
+  affect the artifact and disclose the resulting artifact identity.
+- Do not infer source or semantic completeness from `_component_profiles.py`,
+  a terminal node name, a legacy Compose service, a package-name resolution,
+  or an existing local image.
 - Do not declare artifact mechanisms, service-materialization profiles, or
   realization-envelope observation strength ahead of the corresponding
   backend execution and independent readback. Manifest overclaim turns planner
@@ -322,7 +368,8 @@ This issue does not implement Kubernetes, cloud fleets, nested virtualization,
 or a mandatory appliance boundary. It does not create a reduced or
 event-specific TechVault, require full-range CI, redesign participant agency,
 replace the endpoint registry, change web/terminal authentication, or make the
-old Compose file authoritative again.
+old Compose file authoritative again. It does not absorb Wazuh endpoint
+enrollment and correlation from issue #809.
 
 The implementation boundary is component admission, realization, runtime
 wiring, semantic readiness, and evidence on the local packaged Docker path.

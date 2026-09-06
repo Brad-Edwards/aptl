@@ -20,6 +20,7 @@ class ParticipantMcpSmokeError(ValueError):
 PARTICIPANT_SMOKE_ENTRY_POINT_GROUP = "aptl.participant_mcp_smoke_plans"
 _SAFE_ID = re.compile(r"[a-z0-9][a-z0-9._-]{0,127}")
 _MAX_OPERATIONS = 64
+_MALFORMED_PLAN_MESSAGE = "participant smoke plan is malformed"
 
 
 @dataclass(frozen=True)
@@ -116,14 +117,14 @@ def _validated_operations(loaded: object) -> tuple[McpSmokeOperation, ...]:
     """Return one bounded, typed, immutable installed operation plan."""
 
     if not isinstance(loaded, tuple):
-        raise ParticipantMcpSmokeError("participant smoke plan is malformed")
+        raise ParticipantMcpSmokeError(_MALFORMED_PLAN_MESSAGE)
     valid_container = bool(loaded) and len(loaded) <= _MAX_OPERATIONS
     valid_items = all(isinstance(item, McpSmokeOperation) for item in loaded)
     if not valid_container or not valid_items:
-        raise ParticipantMcpSmokeError("participant smoke plan is malformed")
+        raise ParticipantMcpSmokeError(_MALFORMED_PLAN_MESSAGE)
     operations = tuple(loaded)
     if not all(_valid_operation(operation) for operation in operations):
-        raise ParticipantMcpSmokeError("participant smoke plan is malformed")
+        raise ParticipantMcpSmokeError(_MALFORMED_PLAN_MESSAGE)
     return operations
 
 

@@ -1,6 +1,8 @@
 """Tests for the APTL RAES runtime handoff."""
 
 import inspect
+import subprocess
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import ANY, MagicMock
 
@@ -93,7 +95,7 @@ def _node_resource(node_name: str) -> PlannedResource:
     payload = {
         "name": node_name,
         "node_name": node_name,
-        "node_type": "vm",
+        "node_type": "compute",
         "os_family": "linux",
         "spec": {"node": {"name": node_name}, "infrastructure": {}},
     }
@@ -212,6 +214,19 @@ class _RealizedBackend(MagicMock):
             "NetworkSettings": {"Networks": {}},
         }
 
+    def container_exec(
+        self, name: str, cmd: list[str], *, timeout: int | None = None
+    ) -> subprocess.CompletedProcess:
+        del timeout
+        output = (
+            'ID=ubuntu\nVERSION_ID="22.04"\n'
+            if self._platform == "linux"
+            and name in self._containers
+            and cmd == ["cat", "/etc/os-release"]
+            else ""
+        )
+        return subprocess.CompletedProcess(cmd, 0 if output else 1, output, "")
+
     def host_list_lab_networks(self, name_prefix: str) -> list[str]:
         return list(self._networks)
 
@@ -263,16 +278,20 @@ def _execution_plan_with_realization_requirements():
             name: disclosure-test
             nodes:
               vm:
-                type: vm
+                type: compute
                 os: linux
                 resources: {ram: 1 gib, cpu: 1}
             """
         )
     )
-    return plan(
+    execution = plan(
         compile_runtime_model(scenario),
         create_aptl_manifest(),
         target_name=APTL_RAES_TARGET_NAME,
+    )
+    return replace(
+        execution,
+        provisioning=replace(execution.provisioning, operation_id="test-operation"),
     )
 
 
@@ -282,7 +301,7 @@ def _execution_plan_with_derived_realization_requirements():
     The author writes ``os: ${node_os}``, so the processor — not the author —
     supplies the concrete value. RAES classifies that concern
     ``CONSTRAINED`` / ``PROCESSOR_DERIVED`` (substitution downgrades exactness),
-    while the literal ``type: vm`` stays ``EXACT`` / ``AUTHOR_DECLARED``. One
+    while the literal ``type: compute`` stays ``EXACT`` / ``AUTHOR_DECLARED``. One
     scenario therefore exercises both halves of the SEM-218 contract.
 
     raes 0.19.1 could not express this: the compiler dropped the classifier's
@@ -309,16 +328,20 @@ def _execution_plan_with_derived_realization_requirements():
                 default: linux
             nodes:
               vm:
-                type: vm
+                type: compute
                 os: ${node_os}
                 resources: {ram: 1 gib, cpu: 1}
             """
         )
     )
-    return plan(
+    execution = plan(
         compile_runtime_model(scenario),
         create_aptl_manifest(),
         target_name=APTL_RAES_TARGET_NAME,
+    )
+    return replace(
+        execution,
+        provisioning=replace(execution.provisioning, operation_id="test-operation"),
     )
 
 
@@ -338,7 +361,7 @@ def _execution_plan_with_content_realization_requirement():
             name: disclosure-content
             nodes:
               fileshare:
-                type: vm
+                type: compute
                 os: linux
                 resources: {ram: 1 gib, cpu: 1}
             content:
@@ -350,10 +373,14 @@ def _execution_plan_with_content_realization_requirement():
             """
         )
     )
-    return plan(
+    execution = plan(
         compile_runtime_model(scenario),
         create_aptl_manifest(),
         target_name=APTL_RAES_TARGET_NAME,
+    )
+    return replace(
+        execution,
+        provisioning=replace(execution.provisioning, operation_id="test-operation"),
     )
 
 
@@ -612,7 +639,7 @@ def test_manifest_provisioner_declares_only_realized_capabilities():
     manifest = create_aptl_manifest()
     provisioner = manifest.provisioner
 
-    assert provisioner.supported_node_types == frozenset({"switch", "vm"})
+    assert provisioner.supported_node_types == frozenset({"compute", "switch"})
     assert provisioner.supported_os_families == frozenset({"linux"})
     assert provisioner.supported_content_types == frozenset(
         {"dataset", "directory", "file"}
@@ -632,14 +659,14 @@ def test_manifest_realization_support_matches_exercised_concerns():
 
     assert support.domain == "runtime-realization"
     assert support.supported_constraint_kinds == frozenset(
-        {"os-family", "source-artifact"}
+        {"compute-substrate", "os-family", "source-artifact"}
     )
-    assert support.supported_exact_requirement_kinds == frozenset(
-        {
-            "declared-capability-match",
-            "service-search-index-schema-materialization",
-        }
-    )
+    assert {
+        "declared-capability-match",
+        "service-search-index-schema-materialization",
+        "runtime-environment",
+        "runtime-orchestration-authorities",
+    } <= support.supported_exact_requirement_kinds
     assert support.disclosure_kinds == frozenset(
         {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
     )
@@ -1801,6 +1828,49 @@ def test_start_raes_scenario_threads_resolved_run_target(mocker, tmp_path):
     assert run_plan.call_args.kwargs == {"run_store": store, "run_id": "run-1"}
 
 
+def test_pre_admitted_start_preserves_the_exact_run_target(mocker, tmp_path):
+    """Admission and apply must share one run/attempt authority scope."""
+
+    from aptl.backends import raes
+    from aptl.backends.raes_start_model import AcesRunTarget, AcesStartOutcome
+
+    _write_compose(tmp_path, {"aptl-victim": ["victim"]})
+    mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=object())
+
+    class FakeRuntimeManager(_FakeRuntimeManager):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
+            return _FakeExecutionPlan(_plan_for_nodes("victim"))
+
+    mocker.patch("aptl.backends.raes.RuntimeManager", FakeRuntimeManager)
+    outcome = AcesStartOutcome(
+        lab_result=LabResult(success=True),
+        final_snapshot=RuntimeSnapshot(),
+        realization_details={},
+        selected_profiles=["victim"],
+        scenario_path=None,
+    )
+    mocker.patch("aptl.backends.raes._run_execution_plan", return_value=outcome)
+    run_target = AcesRunTarget(
+        run_store=object(), run_id="run-974", attempt_id="attempt-974"
+    )
+    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+    backend = MagicMock()
+
+    admitted = raes.admit_raes_scenario(
+        tmp_path, config, backend, run_target=run_target
+    )
+    result = raes.start_raes_scenario(
+        tmp_path,
+        config,
+        backend,
+        run_target=run_target,
+        admitted=admitted,
+    )
+
+    assert admitted.run_target is run_target
+    assert result is outcome
+
+
 def test_start_raes_scenario_uses_planned_runtime_model_for_participant_actions(
     mocker, tmp_path
 ):
@@ -1814,9 +1884,7 @@ def test_start_raes_scenario_uses_planned_runtime_model_for_participant_actions(
     class FakeRuntimeManager(_FakeRuntimeManager):
         def plan(self, parsed_scenario, *, artifact_availability=None):
             assert parsed_scenario is scenario
-            return _FakeExecutionPlan(
-                _plan_for_nodes("victim"), model=planned_model
-            )
+            return _FakeExecutionPlan(_plan_for_nodes("victim"), model=planned_model)
 
     mocker.patch("aptl.backends.raes.RuntimeManager", FakeRuntimeManager)
     planned_specs = mocker.patch.object(
@@ -1988,7 +2056,11 @@ def test_start_raes_scenario_applies_a_supplied_admission_without_replanning(
     )
     bundle = project_tree_bundle(tmp_path, tmp_path / "scenarios" / "x.sdl.yaml")
     admitted = SimpleNamespace(
-        bundle=bundle, target=object(), execution_plan=object(), realization=None
+        bundle=bundle,
+        target=object(),
+        execution_plan=object(),
+        realization=None,
+        run_target=None,
     )
 
     result = raes.start_raes_scenario(
@@ -2089,7 +2161,7 @@ def _workflow_and_evaluation_execution_plan():
             name: wf
             nodes:
               vm:
-                type: vm
+                type: compute
                 os: linux
                 resources: {ram: 1 gib, cpu: 1}
                 conditions: {health: ops}
@@ -2341,6 +2413,8 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
         participant_action_specs=None,
         bundle,
         artifact_availability=None,
+        operator_policy=None,
+        run_target=None,
     ):
         from aptl.backends.raes_participant_runtime import AptlParticipantRuntime
 
@@ -2353,6 +2427,11 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
                 config=config,
                 deployment_backend=backend,
                 artifact_availability=artifact_availability,
+                operator_policy=operator_policy,
+                run_id=run_target.run_id if run_target is not None else "",
+                attempt_id=(
+                    run_target.resolved_attempt_id if run_target is not None else ""
+                ),
             ),
             orchestrator=RecordingOrchestrator(),
             evaluator=raes.AptlEvaluator(),
@@ -2478,7 +2557,9 @@ def test_provisioner_profiles_are_derived_from_plan_content(tmp_path):
     assert _realize_profiles(backend.realize.call_args_list[1]) == ["victim", "otel"]
 
 
-def test_provisioner_threads_availability_verified_substrate_digest_to_realize(tmp_path):
+def test_provisioner_threads_availability_verified_substrate_digest_to_realize(
+    tmp_path,
+):
     # Cycle-6 review: the address-scoped config id availability verified for a
     # dynamic-composition node is carried into realize(), so the base start uses
     # that exact id and never re-resolves the mutable tag. A non-route-3 node's
@@ -4220,7 +4301,10 @@ def test_apply_provisioning_discloses_author_declared_provenance(tmp_path):
 
     assert result.success is True, [d.message for d in result.diagnostics]
     provenances = {entry.provenance for entry in result.snapshot.realization_provenance}
-    assert provenances == {ExplicitnessProvenance.AUTHOR_DECLARED}
+    assert provenances == {
+        ExplicitnessProvenance.AUTHOR_DECLARED,
+        ExplicitnessProvenance.BACKEND_REALIZED,
+    }
 
 
 def test_apply_provisioning_discloses_processor_derived_provenance(tmp_path):
@@ -4260,16 +4344,8 @@ def test_apply_provisioning_discloses_processor_derived_provenance(tmp_path):
     assert by_explicitness["os-family"] is ExplicitnessClass.CONSTRAINED
 
 
-def test_apply_provisioning_accepts_constrained_concern_realized_in_bounds(tmp_path):
-    """A CONSTRAINED concern the backend realized differently is allowed, not rejected.
-
-    ``os: ${node_os}`` is CONSTRAINED (substitution downgrades exactness), so a
-    backend that realizes a different OS family is making an allowed choice
-    rather than a silent approximation — but it must *say so*: the concern is
-    disclosed as ``backend-realized``, not passed off as the author's. Contrast
-    with the EXACT case, which is rejected outright.
-    """
-    from raes.explicitness import ExplicitnessProvenance
+def test_apply_provisioning_rejects_constrained_os_outside_coupled_domain(tmp_path):
+    """A constrained family still cannot escape APTL's coupled OS rows."""
 
     backend = _RealizedBackend(containers=("vm",), platform="windows")
 
@@ -4279,12 +4355,10 @@ def test_apply_provisioning_accepts_constrained_concern_realized_in_bounds(tmp_p
         execution_plan=_execution_plan_with_derived_realization_requirements(),
     )
 
-    assert result.success is True, [d.message for d in result.diagnostics]
-    by_kind = {
-        entry.requirement_kind: entry.provenance
-        for entry in result.snapshot.realization_provenance
+    assert result.success is False
+    assert "runtime.backend-contract-invalid" in {
+        diagnostic.code for diagnostic in result.diagnostics
     }
-    assert by_kind["os-family"] == ExplicitnessProvenance.BACKEND_REALIZED
 
 
 def test_shared_build_context_does_not_shadow_the_service_it_names(tmp_path):

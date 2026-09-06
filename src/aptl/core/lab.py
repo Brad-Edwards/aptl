@@ -272,14 +272,25 @@ def admit_start_surface(
     config: AptlConfig,
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
+    run_target: AcesRunTarget | None = None,
 ) -> tuple["AdmittedScenarioStart", "AdmittedStartSurface"]:
-    """Lazy RAES import for the one admitted execution lab start reuses."""
+    """Lazy RAES import for the one admitted execution lab start reuses.
+
+    The run target is part of admission identity, so the pre-mutation surface
+    and later apply share the same persisted execution scope.
+    """
 
     from aptl.backends._raes_scenario_queries import (
         admit_start_surface as _admit,
     )
 
-    return _admit(project_dir, config, backend, scenario_path=scenario_path)
+    return _admit(
+        project_dir,
+        config,
+        backend,
+        scenario_path=scenario_path,
+        run_target=run_target,
+    )
 
 
 WAZUH_IMAGE_VERSION = "4.12.0"
@@ -502,6 +513,7 @@ def clean_boot_lab(
     backend: Optional["DeploymentBackend"] = None,
     progress: ProgressCallback | None = None,
     appliance: ApplianceStartOptions | None = None,
+    run_target: "AcesRunTarget | None" = None,
 ) -> LabResult:
     """Boot the lab into a guaranteed clean state (RNG-001).
 
@@ -549,6 +561,7 @@ def clean_boot_lab(
                 backend=backend,
                 progress=progress,
                 appliance=appliance,
+                run_target=run_target,
             )
     except LifecycleBusyError:
         result = _lifecycle_busy_result("start --clean")
@@ -566,6 +579,7 @@ def _clean_boot_lab_owned(
     backend: Optional["DeploymentBackend"],
     progress: ProgressCallback | None,
     appliance: ApplianceStartOptions | None,
+    run_target: "AcesRunTarget | None",
 ) -> LabResult:
     """Clean and restart the lab while the caller owns lifecycle mutation."""
 
@@ -585,12 +599,14 @@ def _clean_boot_lab_owned(
             outcome=StartupOutcome.FAILED,
         )
     appliance_kwargs = {"appliance": appliance} if appliance is not None else {}
+    run_target_kwargs = {"run_target": run_target} if run_target is not None else {}
     return orchestrate_lab_start(
         project_root,
         skip_seed=skip_seed,
         scenario_path=scenario_path,
         progress=progress,
         **appliance_kwargs,
+        **run_target_kwargs,
     )
 
 
@@ -1070,6 +1086,8 @@ def _step_load_config(ctx: _LabStartContext) -> LabResult | None:
             )
             result = _configure_verified_appliance_launch(ctx)
         if result is None:
+            if ctx.run_store is None or ctx.run_id is None:
+                ctx.run_store, ctx.run_id = _resolve_run_target(ctx)
             result = _load_admitted_start_surface(ctx)
     return result
 
@@ -1210,15 +1228,19 @@ def _load_admitted_start_surface(
     from raes import SDLError, SDLInstantiationError
 
     from aptl.backends.raes import INSTANTIATION_FAILURE_MESSAGE
+    from aptl.backends.raes_start_model import AcesRunTarget
     from aptl.core.scenario_bundle import EnvPackError
 
     assert ctx.config is not None and ctx.backend is not None
+    if ctx.run_store is None or ctx.run_id is None:
+        ctx.run_store, ctx.run_id = _resolve_run_target(ctx)
     try:
         admitted, surface = admit_start_surface(
             ctx.project_dir,
             ctx.config,
             ctx.backend,
             scenario_path=ctx.scenario_path,
+            run_target=AcesRunTarget(run_store=ctx.run_store, run_id=ctx.run_id),
         )
     except SDLInstantiationError:
         return LabResult(success=False, error=INSTANTIATION_FAILURE_MESSAGE)
@@ -1810,7 +1832,8 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     # GAP 4: resolve the single run target ONCE, before the RAES handoff, so
     # orchestration persists workflow artifacts and the later run-record step
     # write to the same run directory / run_id.
-    ctx.run_store, ctx.run_id = _resolve_run_target(ctx)
+    if ctx.run_store is None or ctx.run_id is None:
+        ctx.run_store, ctx.run_id = _resolve_run_target(ctx)
     from aptl.backends.raes_start_model import AcesRunTarget
 
     outcome = start_raes_scenario(
@@ -2015,6 +2038,40 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
         return None
     for name, user in _ssh_test_targets(ctx):
         _probe_ssh_target(ctx, name, user)
+    return None
+
+
+def _step_prepare_ssh_compatibility(ctx: _LabStartContext) -> LabResult | None:
+    """Apply the installed-pack Kali wrapper compatibility before SSH readiness.
+
+    The released TechVault wrapper requires a capture capability the current
+    control plane cannot issue. The existing idempotent compatibility script
+    keeps the captured path intact when a token exists and restores key-gated
+    SSH otherwise; it must run before the readiness probe, not later during SOC
+    seeding after readiness has already timed out.
+    """
+
+    if "kali" not in ctx.selected_profiles:
+        return None
+    script = ctx.project_dir / "scripts" / "envpack-kali-fixups.sh"
+    if not script.is_file():
+        return None
+    try:
+        from aptl.utils.shell import run_shell_script
+
+        result = run_shell_script(
+            script,
+            cwd=ctx.project_dir,
+            env={**os.environ, **ctx.raw_env},
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        log.warning("Kali SSH compatibility preparation failed: %s", type(exc).__name__)
+        return None
+    if result.returncode != 0:
+        log.warning(
+            "Kali SSH compatibility preparation returned %s", result.returncode
+        )
     return None
 
 
@@ -2697,6 +2754,7 @@ _LAB_START_STEPS = (
     _step_pull_images,
     _step_start_containers,
     _step_wait_for_services,
+    _step_prepare_ssh_compatibility,
     _step_test_ssh,
     _step_capture_snapshot,
     _step_write_run_record,
@@ -2724,6 +2782,7 @@ _LAB_START_PROGRESS_MESSAGES = {
         "several minutes while images build."
     ),
     "_step_wait_for_services": "Waiting for Wazuh services to become ready.",
+    "_step_prepare_ssh_compatibility": "Preparing Kali SSH compatibility.",
     "_step_test_ssh": "Testing SSH reachability.",
     "_step_capture_snapshot": "Capturing a range snapshot.",
     "_step_write_run_record": "Writing the run reproducibility record.",
@@ -2746,6 +2805,7 @@ def orchestrate_lab_start(
     scenario_path: Path | None = None,
     progress: ProgressCallback | None = None,
     appliance: ApplianceStartOptions | None = None,
+    run_target: "AcesRunTarget | None" = None,
 ) -> LabResult:
     """Own and orchestrate the complete lab startup process."""
 
@@ -2757,6 +2817,7 @@ def orchestrate_lab_start(
                 scenario_path=scenario_path,
                 progress=progress,
                 appliance=appliance,
+                run_target=run_target,
             )
     except LifecycleBusyError:
         return _lifecycle_busy_result("start")
@@ -2770,6 +2831,7 @@ def _orchestrate_lab_start_owned(
     scenario_path: Path | None = None,
     progress: ProgressCallback | None = None,
     appliance: ApplianceStartOptions | None = None,
+    run_target: "AcesRunTarget | None" = None,
 ) -> LabResult:
     """Orchestrate the complete lab startup process.
 
@@ -2799,6 +2861,8 @@ def _orchestrate_lab_start_owned(
         appliance_qualification_public_key=appliance.qualification_public_key,
         scenario_path=scenario_path,
         progress=progress,
+        run_store=run_target.run_store if run_target is not None else None,
+        run_id=run_target.run_id if run_target is not None else None,
     )
 
     for step in _LAB_START_STEPS:

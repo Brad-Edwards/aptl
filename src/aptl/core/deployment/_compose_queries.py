@@ -8,6 +8,8 @@ into ``DockerComposeBackend``, which supplies ``_run``, ``_run_streaming``, and
 
 import subprocess
 import json
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from aptl.core.deployment._proc_net_listeners import (
@@ -424,6 +426,40 @@ class ComposeQueryMixin(object):
             )
             return {}
         return _decode_first_object(result.stdout)
+
+    def container_os_release(self, name: str) -> str | None:
+        """Read bounded guest OS-release data through the Docker daemon.
+
+        ``docker exec`` cannot inspect a successfully completed one-shot, but
+        Docker retains that container's root filesystem. Copy only the standard
+        non-secret OS identity file into an isolated temporary directory and
+        return it when it is a small regular file. ``/etc/os-release`` is the
+        preferred location; many images make it a symlink, so the canonical
+        ``/usr/lib/os-release`` fallback is tried explicitly rather than
+        following an arbitrary container-controlled link on the host.
+        """
+
+        if not self.container_exists(name):
+            return None
+        with tempfile.TemporaryDirectory(prefix="aptl-os-release-") as raw_dir:
+            target_root = Path(raw_dir)
+            for index, source in enumerate(
+                ("/etc/os-release", "/usr/lib/os-release")
+            ):
+                target = target_root / f"os-release-{index}"
+                result = self._run(
+                    ["docker", "cp", f"{name}:{source}", str(target)],
+                    timeout=_HOST_INVENTORY_TIMEOUT,
+                )
+                if result.returncode != 0 or target.is_symlink() or not target.is_file():
+                    continue
+                try:
+                    if target.stat().st_size > 16_384:
+                        return None
+                    return target.read_text(encoding="utf-8")
+                except (OSError, UnicodeError):
+                    return None
+        return None
 
     def observe_container_listeners(self, name: str) -> ContainerListeners | None:
         """Read a container's listeners from OUTSIDE its own trust boundary (#876).

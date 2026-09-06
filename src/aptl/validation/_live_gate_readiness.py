@@ -43,9 +43,7 @@ def _node_readiness_diagnostics(
             )
             continue
         matched_names.add(container.get("name", ""))
-        diagnostics.extend(
-            _container_health_diagnostics(node.get("name", "?"), container)
-        )
+        diagnostics.extend(_container_health_diagnostics(node, container))
     return diagnostics, matched_names
 
 
@@ -78,7 +76,7 @@ def _undeclared_container_diagnostics(
 
 
 def _container_health_diagnostics(
-    node_name: str,
+    node: Mapping[str, Any],
     container: Mapping[str, Any],
 ) -> list[str]:
     """Return hard-failure diagnostics for one realized node's container.
@@ -95,11 +93,14 @@ def _container_health_diagnostics(
     reports nothing, and only has to be running.
 
     A service (``always`` / ``unless-stopped``) that has exited is a real
-    failure, so a stopped container is always reported.
+    failure. Only a node whose admitted realization explicitly identifies it as
+    run-to-completion may be stopped, and then only ``Exited (0)`` is accepted.
     """
+    node_name = str(node.get("name", "?"))
     status = str(container.get("status", ""))
     health = str(container.get("health", ""))
-    if not status.startswith("Up"):
+    completed = bool(node.get("run_to_completion")) and status.startswith("Exited (0)")
+    if not status.startswith("Up") and not completed:
         diag = f"node {node_name!r} container not running (status={status!r})"
     elif health and health != "healthy":
         diag = (

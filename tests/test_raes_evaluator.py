@@ -14,7 +14,9 @@ from raes_contracts.planning import RuntimeDomain
 from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot, SnapshotEntry
 from raes_processor.compiler import compile_runtime_model
 from raes_processor.planner import plan
-from raes_runtime.evaluation_result_contracts import evaluation_result_contract_diagnostics
+from raes_runtime.evaluation_result_contracts import (
+    evaluation_result_contract_diagnostics,
+)
 from raes.parser import parse_sdl
 
 from aptl.backends.raes_evaluator import AptlEvaluator
@@ -27,7 +29,7 @@ _EVALUATION_SCENARIO = dedent(
     name: evaluator-test
     nodes:
       vm:
-        type: vm
+        type: compute
         os: linux
         resources: {ram: 1 gib, cpu: 1}
         conditions: {health: ops}
@@ -86,6 +88,7 @@ _EVALUATION_SCENARIO = dedent(
           finish: {type: end}
     """
 )
+
 
 def _evaluation_plan():
     scenario = parse_sdl(_EVALUATION_SCENARIO)
@@ -376,7 +379,8 @@ def test_start_preserves_existing_provisioning_entries():
 
     assert "provision.node.vm" in result.snapshot.entries
     assert any(
-        entry.domain == RuntimeDomain.EVALUATION for entry in result.snapshot.entries.values()
+        entry.domain == RuntimeDomain.EVALUATION
+        for entry in result.snapshot.entries.values()
     )
 
 
@@ -421,7 +425,10 @@ def test_start_fails_closed_on_evaluation_missing_result_contract():
     )
 
     assert result.success is False
-    assert any(d.code == "aptl.evaluator.evaluation-contract-missing" for d in result.diagnostics)
+    assert any(
+        d.code == "aptl.evaluator.evaluation-contract-missing"
+        for d in result.diagnostics
+    )
 
 
 def test_start_fails_closed_on_invalid_result_contract():
@@ -436,7 +443,10 @@ def test_start_fails_closed_on_invalid_result_contract():
     )
 
     assert result.success is False
-    assert any(d.code == "aptl.evaluator.evaluation-contract-invalid" for d in result.diagnostics)
+    assert any(
+        d.code == "aptl.evaluator.evaluation-contract-invalid"
+        for d in result.diagnostics
+    )
 
 
 def test_start_fails_closed_on_scoring_chain_resource():

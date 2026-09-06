@@ -154,7 +154,7 @@ def snapshot_after_apply(
             refresh_dependencies=resource.refresh_dependencies,
             status="ready",
         )
-    observations_disclosure = _realization_observation_disclosures(observations)
+    observations_disclosure = _realization_observation_disclosures(plan, observations)
     updated = snapshot.with_entries(entries)
     if observations_disclosure:
         updated = dataclasses.replace(
@@ -168,35 +168,79 @@ def snapshot_after_apply(
 
 
 def _realization_observation_disclosures(
+    plan: ProvisioningPlan,
     observations: Mapping[str, ObservedResource],
 ) -> tuple[RealizationObservationDisclosure, ...]:
     """Disclose how APTL corroborated each realized ``configuration``-scope concern.
 
-    raes 3.3.0's runtime gate accepts an EXACT concern with a non-null
+    RAES's runtime gate accepts an EXACT concern with a non-null
     verification scope only when the returned snapshot carries a matching
     observation disclosure whose scope + strength the backend manifest also
-    declares. Today that is forwarding-agents: for every node whose forwarding
-    agents the observer corroborated (present in its observed concerns), disclose
-    that APTL read them back at ``configuration`` scope, ``daemon-observed``
-    strength — the same corroboration the manifest advertises, so the claim is
-    backed by real readback rather than a bare capability assertion.
+    declares. For every concern the realization observer corroborated (present
+    in its observed concerns), this emits the value-free evidence classification
+    from the manifest. The concern value itself remains solely in the protected
+    snapshot projection.
     """
 
+    from aptl.backends.raes_manifest import create_aptl_manifest
+
+    capabilities = (
+        create_aptl_manifest().realization_support[0].observation_capabilities
+    )
     disclosures: list[RealizationObservationDisclosure] = []
-    for address, observed in observations.items():
-        if _FORWARDING_AGENTS_PATH not in observed.concerns:
+    disclosed: set[tuple[str, str]] = set()
+    for authority in plan.realization_authority:
+        capability = capabilities.get(authority.requirement_kind)
+        observed = observations.get(authority.address)
+        path = CONCERN_PAYLOAD_PATH.get(authority.requirement_kind)
+        if (
+            capability is None
+            or observed is None
+            or path is None
+            or path not in observed.concerns
+            or authority.requirement_kind
+            in {"compute-substrate", "operating-system", "os-family"}
+        ):
             continue
-        node_name = address.removeprefix("provision.node.")
         disclosures.append(
             RealizationObservationDisclosure(
-                address=address,
-                field_path=f"nodes.{node_name}.runtime.forwarding_agents",
-                domain="runtime-realization",
-                requirement_kind="forwarding-agents",
-                verification_scope=RealizationVerificationScope.CONFIGURATION,
-                observation_strength=ObservationStrength.DAEMON_OBSERVED,
+                address=authority.address,
+                field_path=authority.field_path,
+                domain=authority.domain,
+                requirement_kind=authority.requirement_kind,
+                verification_scope=capability.verification_scope,
+                observation_strength=capability.observation_strength,
             )
         )
+        disclosed.add((authority.address, authority.requirement_kind))
+    # Hand-constructed backend tests and direct callers can legitimately omit
+    # the planner's authority ledger.  Preserve the former value-free
+    # corroboration shape by deriving the canonical node field path from the
+    # observed concern path when no authority entry already supplied it.
+    kind_by_path = {path: kind for kind, path in CONCERN_PAYLOAD_PATH.items()}
+    for address, observed in observations.items():
+        node_name = address.removeprefix("provision.node.")
+        for path in observed.concerns:
+            kind = kind_by_path.get(path)
+            capability = capabilities.get(kind or "")
+            if (
+                kind is None
+                or capability is None
+                or (address, kind) in disclosed
+                or kind in {"compute-substrate", "operating-system", "os-family"}
+            ):
+                continue
+            field_suffix = ".".join(path[2:])
+            disclosures.append(
+                RealizationObservationDisclosure(
+                    address=address,
+                    field_path=f"nodes.{node_name}.{field_suffix}",
+                    domain="runtime-realization",
+                    requirement_kind=kind,
+                    verification_scope=capability.verification_scope,
+                    observation_strength=capability.observation_strength,
+                )
+            )
     return tuple(disclosures)
 
 
@@ -247,6 +291,30 @@ def _observed_payload(
             "published-ports",
             "forwarding-agents",
             "service-listeners",
+            # RAES 3.5 exact runtime concerns.  Each is replaced by the
+            # post-realization projection recorded by the observer; omission
+            # removes the planned value and therefore fails closed.
+            "runtime-packages",
+            "runtime-service-manager-units",
+            "runtime-local-identity",
+            "runtime-datastore-services",
+            "runtime-platform-applications",
+            "runtime-filesystem-inventory",
+            "runtime-container-entrypoint",
+            "runtime-container-command",
+            "runtime-local-control-interfaces",
+            "runtime-container-namespaces",
+            "runtime-container-autoremove",
+            "runtime-file-services",
+            "runtime-applications",
+            "runtime-database-services",
+            "runtime-dns-services",
+            "runtime-network-sensors",
+            "runtime-network-detection-engines",
+            "runtime-security-monitoring-managers",
+            "runtime-orchestration-authorities",
+            "runtime-app-authorizations",
+            "runtime-dependency-manifests",
         ),
         # ADR-088 (#889): a content-placement carrying a service materialization
         # exposes the service-search-index-schema-materialization concern, which
@@ -267,9 +335,7 @@ def _observed_payload(
     return payload
 
 
-def _set_path(
-    payload: dict[str, object], path: tuple[str, ...], value: object
-) -> None:
+def _set_path(payload: dict[str, object], path: tuple[str, ...], value: object) -> None:
     """Set a nested concern value, building intermediate mappings as needed."""
 
     current = payload

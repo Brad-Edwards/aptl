@@ -32,6 +32,53 @@ Edit `aptl.json` to enable/disable containers:
 }
 ```
 
+### Runtime Docker authority
+
+A scenario pack may declare that a component needs an in-world Docker control
+endpoint and may inventory the exact images it can spawn. That portable
+declaration does not grant access to the host daemon. Local Docker access is
+enabled only when the separate `operator-policy.json` independently grants the
+immutable pack revision, compiled component address, authority, endpoint, and
+template inventory:
+
+```json
+{
+  "schema_version": "aptl.operator-policy/v1",
+  "docker_authority_grants": [
+    {
+      "pack_id": "techvault",
+      "pack_version": "0.1.0",
+      "pack_set_digest": "sha256:<64 lowercase hexadecimal characters>",
+      "component_address": "provision.node.shuffle-orborus",
+      "authority_id": "shuffle-orborus",
+      "endpoint_source": "/var/run/docker.sock",
+      "image_template_ids": ["shuffle-worker", "shuffle-http-1-4-0"],
+      "delegated_template_ids": ["shuffle-worker"]
+    }
+  ]
+}
+```
+
+The grant above admits the socket for Orborus and delegates it only to the
+named worker template. The HTTP app template and unrelated services remain
+socket-free. A missing, duplicate, stale, or broader grant fails before Docker
+endpoint binding. Treat this as host-root-equivalent authority: use it only on
+an isolated lab host and do not add application templates to
+`delegated_template_ids`.
+
+APTL also binds the authority to the run and attempt before admission. A
+post-work verifier must bind the exact Shuffle execution identifier returned by
+the triggering operation before child observation. Workers and apps are owned
+only when their product-provided `EXECUTIONID`, parent relationship, selected
+daemon, and immutable image identity all match that run-scoped admission.
+
+Spawn-template images must use digest-qualified references. APTL verifies the
+exact digest and platform. When a template uses `repository:tag@sha256:...`, it
+also verifies or creates the local `repository:tag` alias that the product
+launches. In `--offline-staged` mode this is limited to local inspect and tag
+operations; APTL never contacts a registry and refuses to overwrite a stale
+alias.
+
 For prebuilt, checkout-free QEMU/KVM delivery, see the
 [disposable appliance release guide](reference/appliance-release.md). Appliance
 guests start only from already staged wheels, project assets, and OCI images.

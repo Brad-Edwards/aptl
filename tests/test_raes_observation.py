@@ -9,6 +9,7 @@ fails closed (no snapshot entry) rather than being assumed realized.
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 from types import SimpleNamespace
 
 from raes_contracts.planning import (
@@ -18,7 +19,10 @@ from raes_contracts.planning import (
     ProvisionOp,
     RuntimeDomain,
 )
+from raes_contracts.runtime_state import RuntimeSnapshot
 
+from aptl.backends._raes_observation_helpers import ObservedResource
+from aptl.backends.raes_execution_observation import bind_execution_observations
 from aptl.backends.raes_observation import observe_realization
 from aptl.backends.raes_realization_model import (
     AptlRealization,
@@ -67,6 +71,7 @@ class _Backend:
         realization_root=None,
         bind_source_types=None,
         bind_probe_raises=False,
+        os_release=None,
     ):
         self._containers = set(containers)
         self._networks = [
@@ -90,6 +95,7 @@ class _Backend:
         self.realization_root = realization_root
         self._bind_source_types = bind_source_types or {}
         self._bind_probe_raises = bind_probe_raises
+        self._os_release = os_release
 
     def container_exec(self, name, cmd, *, timeout=None):
         if self._exec_raises:
@@ -105,6 +111,9 @@ class _Backend:
         else:
             returncode, stdout = entry
         return SimpleNamespace(returncode=returncode, stdout=stdout, stderr="")
+
+    def container_os_release(self, name):
+        return self._os_release
 
     def container_exists(self, name):
         return self._project_owned and name in self._containers
@@ -145,7 +154,7 @@ class _Backend:
 
 def _node_plan(name="vm"):
     address = f"provision.node.{name}"
-    payload = {"name": name, "node_type": "vm", "os_family": "linux"}
+    payload = {"name": name, "node_type": "compute", "os_family": "linux"}
     resource = PlannedResource(
         address=address,
         domain=RuntimeDomain.PROVISIONING,
@@ -197,6 +206,156 @@ def _node_realization(name="vm", container="aptl-vm", *, imaged=False):
     )
 
 
+def _execution_plan_with_realization_envelope():
+    """Compile one node through the public RAES 3.5 planning surface."""
+
+    from raes.parser import parse_sdl
+    from raes_processor.compiler import compile_runtime_model
+    from raes_processor.planner import plan
+
+    from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, create_aptl_manifest
+
+    scenario = parse_sdl(
+        """
+        name: execution-observation-test
+        nodes:
+          vm:
+            type: compute
+            os: linux
+            resources: {ram: 1 gib, cpu: 1}
+        realization:
+          constraints:
+            - field_pointer: /nodes/vm
+              concern: compute-substrate
+              posture: exact
+              domain: {kind: exact, value: operating-system-container}
+        """
+    )
+    execution = plan(
+        compile_runtime_model(scenario),
+        create_aptl_manifest(),
+        target_name=APTL_RAES_TARGET_NAME,
+    )
+    return replace(
+        execution.provisioning,
+        operation_id="execution-observation-test-operation",
+    )
+
+
+def test_execution_observation_binds_substrate_and_guest_os():
+    """Native readback is bound to the selected envelope and operation."""
+
+    plan = _execution_plan_with_realization_envelope()
+    address = "provision.node.vm"
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization(),),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+    )
+    backend = _Backend(
+        containers=("aptl-vm",),
+        exec_results={"aptl-vm": (0, 'ID=ubuntu\nVERSION_ID="22.04"\n')},
+    )
+
+    snapshot = bind_execution_observations(
+        backend,
+        realization,
+        plan,
+        RuntimeSnapshot(),
+        {address: ObservedResource(realized=True)},
+    )
+
+    disclosures = {
+        disclosure.requirement_kind: disclosure
+        for disclosure in snapshot.realization_observations
+    }
+    assert snapshot.realization_envelope == plan.realization_envelope
+    assert disclosures["compute-substrate"].observed_value == (
+        "operating-system-container"
+    )
+    operating_system = disclosures["operating-system"]
+    assert operating_system.observation_strength.value == "guest-observed"
+    assert operating_system.operating_system is not None
+    assert operating_system.operating_system.family == "linux"
+    assert operating_system.operating_system.distribution == "ubuntu"
+    assert operating_system.operating_system.version == "22.04"
+    assert disclosures["os-family"].observation_strength.value == "guest-observed"
+    assert {
+        disclosure.operation_id
+        for kind, disclosure in disclosures.items()
+        if kind in {"compute-substrate", "operating-system"}
+    } == {plan.operation_id}
+
+
+def test_execution_observation_omits_unreadable_guest_os():
+    """A failed guest readback cannot become an OS disclosure."""
+
+    plan = _execution_plan_with_realization_envelope()
+    address = "provision.node.vm"
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization(),),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+    )
+    backend = _Backend(
+        containers=("aptl-vm",),
+        exec_results={"aptl-vm": (1, "")},
+    )
+
+    snapshot = bind_execution_observations(
+        backend,
+        realization,
+        plan,
+        RuntimeSnapshot(),
+        {address: ObservedResource(realized=True)},
+    )
+
+    assert {
+        disclosure.requirement_kind for disclosure in snapshot.realization_observations
+    } == {"compute-substrate"}
+
+
+def test_execution_observation_reads_guest_os_from_completed_container():
+    """A zero-exit one-shot retains guest identity after exec becomes impossible."""
+
+    plan = _execution_plan_with_realization_envelope()
+    address = "provision.node.vm"
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization(),),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+    )
+    backend = _Backend(
+        containers=("aptl-vm",),
+        exec_results={"aptl-vm": (1, "")},
+        os_release='ID=debian\nVERSION_ID="11"\n',
+    )
+
+    snapshot = bind_execution_observations(
+        backend,
+        realization,
+        plan,
+        RuntimeSnapshot(),
+        {address: ObservedResource(realized=True)},
+    )
+
+    disclosures = {
+        disclosure.requirement_kind: disclosure
+        for disclosure in snapshot.realization_observations
+    }
+    operating_system = disclosures["operating-system"]
+    assert operating_system.operating_system is not None
+    assert operating_system.operating_system.distribution == "debian"
+    assert operating_system.operating_system.version == "11"
+    assert disclosures["os-family"].observation_strength.value == "guest-observed"
+
+
 def test_running_healthy_node_is_realized_with_concerns(tmp_path):
     address, plan = _node_plan()
     realization = AptlRealization(
@@ -210,7 +369,10 @@ def test_running_healthy_node_is_realized_with_concerns(tmp_path):
         _Backend(containers=("aptl-vm",)), realization, plan, scenario_root=tmp_path
     )
     assert obs[address].realized is True
-    assert obs[address].concerns == {("node_type",): "vm", ("os_family",): "linux"}
+    assert obs[address].concerns == {
+        ("node_kind",): "compute",
+        ("os_family",): "linux",
+    }
 
 
 _DECLARED_TOPOLOGY = {
@@ -236,7 +398,7 @@ def _domain_node_plan():
     address = "provision.node.ad"
     payload = {
         "name": "ad",
-        "node_type": "vm",
+        "node_type": "compute",
         "os_family": "linux",
         "domain_topology": dict(_DECLARED_TOPOLOGY),
     }
@@ -341,7 +503,7 @@ def test_starting_node_settles_before_judgment(monkeypatch, tmp_path):
     )
     obs = observe_realization(backend, realization, plan, scenario_root=tmp_path)
     assert obs[address].realized is True
-    assert obs[address].concerns[("node_type",)] == "vm"
+    assert obs[address].concerns[("node_kind",)] == "compute"
 
 
 def test_settle_deadline_returns_transitional_info_instead_of_hanging(monkeypatch):
@@ -403,7 +565,10 @@ def test_node_without_declared_topology_is_never_probed(tmp_path):
     backend = _Backend(containers=("aptl-vm",))
     obs = observe_realization(backend, realization, plan, scenario_root=tmp_path)
     assert obs[address].realized is True
-    assert obs[address].concerns == {("node_type",): "vm", ("os_family",): "linux"}
+    assert obs[address].concerns == {
+        ("node_kind",): "compute",
+        ("os_family",): "linux",
+    }
 
 
 def test_non_running_node_is_not_realized(tmp_path):
@@ -516,7 +681,7 @@ def test_switch_network_realized_under_project_prefixed_name(tmp_path):
     backend = _Backend(networks=("redteam-net",))
     obs = observe_realization(backend, realization, plan, scenario_root=tmp_path)
     assert obs[address].realized is True
-    assert obs[address].concerns == {("node_type",): "switch"}
+    assert obs[address].concerns == {("node_kind",): "switch"}
 
 
 def test_network_list_timeout_fails_closed(tmp_path):
@@ -659,10 +824,12 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
             {
                 "node": "wazuh-indexer",
                 "target_address": "provision.node.wazuh-indexer",
-                "mount_destination": "/usr/share/wazuh-indexer/certs",
-                "access_mode": "read_only",
-            }
-        ],
+                    "mount_destination": "/usr/share/wazuh-indexer/certs",
+                    "access_mode": "read_only",
+                    "delivery_mode": "mount",
+                }
+            ],
+            "environment_consumers": [],
         # raes 0.23 carries dependency wiring inside the declared spec;
         # the observed spec renders the DTO's realized wiring in the same
         # author vocabulary (issue #677).
@@ -732,9 +899,9 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
         },
     )
 
-    observed = observe_realization(
-        backend, realization, plan, scenario_root=tmp_path
-    )[address]
+    observed = observe_realization(backend, realization, plan, scenario_root=tmp_path)[
+        address
+    ]
 
     assert observed.realized is True
     assert observed.concerns == {("spec",): spec}
@@ -870,9 +1037,9 @@ def test_persistent_volume_is_observed_from_project_scoped_mount(tmp_path):
             {
                 "node": "wazuh-indexer",
                 "target_address": "provision.node.wazuh-indexer",
-                "mount_destination": "/var/lib/wazuh-indexer",
-                "access_mode": "read_write",
-            }
+                    "mount_destination": "/var/lib/wazuh-indexer",
+                    "access_mode": "read_write",
+                }
         ],
         "ordering_dependencies": [],
         "refresh_dependencies": [],
@@ -922,9 +1089,9 @@ def test_persistent_volume_is_observed_from_project_scoped_mount(tmp_path):
         },
     )
 
-    observed = observe_realization(
-        backend, realization, plan, scenario_root=tmp_path
-    )[address]
+    observed = observe_realization(backend, realization, plan, scenario_root=tmp_path)[
+        address
+    ]
 
     assert observed.realized is True
     assert observed.concerns == {("spec",): spec}
@@ -1184,9 +1351,7 @@ def _ssh_bundle_fixture(*, imaged, selected=("labadmin-key",)):
     )
     realization = AptlRealization(
         profiles=frozenset(),
-        nodes=(
-            _node_realization("workstation", "aptl-workstation", imaged=imaged),
-        ),
+        nodes=(_node_realization("workstation", "aptl-workstation", imaged=imaged),),
         networks=(),
         placements=(),
         diagnostics=(),
@@ -1351,7 +1516,9 @@ def test_image_free_consumer_exec_failure_is_not_read_as_delivery(tmp_path):
     assert observed.realized is False
 
 
-def _bind_content_placement_fixture(container="aptl-vm", dest="etc/otelcol/config.yaml"):
+def _bind_content_placement_fixture(
+    container="aptl-vm", dest="etc/otelcol/config.yaml"
+):
     """A content placement delivered to an image node as a read-only bind.
 
     An image node is a Compose service with a fixed image, so its config is
@@ -1447,7 +1614,9 @@ def test_bind_delivered_content_type_read_from_the_daemon_not_the_container(tmp_
     assert observation.concerns == {("spec", "type"): "file"}
 
 
-def test_bind_delivered_content_placement_is_unrealized_on_a_stopped_container(tmp_path):
+def test_bind_delivered_content_placement_is_unrealized_on_a_stopped_container(
+    tmp_path,
+):
     """A stopped target container is never realized, bind mount aside.
 
     ADR-088 (issue #889) retired APTL's only run-to-completion service (the
@@ -1549,6 +1718,13 @@ def test_container_realized_rejects_any_stopped_container():
         "HostConfig": {"RestartPolicy": {"Name": "no"}},
     }
     assert container_realized(exited_no_restart) is False
+    assert container_realized(exited_no_restart, run_to_completion=True) is True
+
+    exited_nonzero = {
+        "State": {"Running": False, "Status": "exited", "ExitCode": 1},
+        "HostConfig": {"RestartPolicy": {"Name": "no"}},
+    }
+    assert container_realized(exited_nonzero, run_to_completion=True) is False
 
     # A stay-up service that exited is still a real failure.
     dead_service = {
@@ -1558,5 +1734,8 @@ def test_container_realized_rejects_any_stopped_container():
     assert container_realized(dead_service) is False
 
     # A running healthy service is realized as before.
-    running = {"State": {"Running": True}, "HostConfig": {"RestartPolicy": {"Name": "always"}}}
+    running = {
+        "State": {"Running": True},
+        "HostConfig": {"RestartPolicy": {"Name": "always"}},
+    }
     assert container_realized(running) is True

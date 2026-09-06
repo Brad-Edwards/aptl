@@ -68,6 +68,7 @@ from aptl.backends.raes_realization_values import (
     static_addresses as _static_addresses,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.operator_policy import OperatorPolicy
 from aptl.core.scenario_bundle import ScenarioBundle
 from aptl.utils.redaction import redact
 
@@ -78,6 +79,9 @@ def interpret_provisioning_plan(
     config: AptlConfig,
     bundle: ScenarioBundle,
     component_root: Path | None = None,
+    operator_policy: OperatorPolicy | None = None,
+    run_id: str = "",
+    attempt_id: str = "",
 ) -> AptlRealization:
     """Interpret RAES provisioning resources as an APTL realization plan.
 
@@ -169,6 +173,12 @@ def interpret_provisioning_plan(
         ),
         pack_identity=bundle.pack_identity,
         pack_interaction=pack_interaction,
+        deployment_project_name=config.deployment.project_name,
+        runtime_authority_run_id=run_id,
+        runtime_authority_attempt_id=attempt_id,
+        runtime_authority_grants=tuple(
+            (operator_policy or OperatorPolicy()).docker_authority_grants
+        ),
     )
 
 

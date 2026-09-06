@@ -88,20 +88,51 @@ def _find_container(
 
 
 def _compute_realization(
-    scenario: Scenario, project_dir: Path, config: "AptlConfig"
+    scenario: Scenario,
+    project_dir: Path,
+    config: "AptlConfig",
+    *,
+    scenario_path: Path | None = None,
+    run_id: str = "",
 ) -> tuple[AptlRealization | None, list[str]]:
     """Interpret the scenario's provisioning plan, returning (realization, diags)."""
     try:
+        from aptl.backends.raes_start_model import AcesRunTarget
+        from aptl.core.operator_policy import load_operator_policy
+        from aptl.core.runstore import LocalRunStore
+
         backend = get_backend(config, project_dir)
-        # Config-driven bundle: the configured env-pack when selected, else the
-        # in-tree scenario (issue #875). Scenario content anchors to the bundle
-        # root; component build contexts always resolve from the engine checkout
-        # (an env-pack ships none), so component_root stays project_dir (ADR-051).
-        bundle = resolve_scenario_bundle(project_dir, None, config)
-        target = create_aptl_runtime_target(
-            project_dir=project_dir, config=config, backend=backend, bundle=bundle
+        # Resolve the same selector the public boot receives: ``None`` selects
+        # the configured env-pack, while an explicit path selects the project
+        # tree. Scenario content anchors to that bundle root; component build
+        # contexts always resolve from the engine checkout (ADR-051).
+        bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
+        policy = load_operator_policy(project_dir)
+        run_target = (
+            AcesRunTarget(
+                run_store=LocalRunStore(project_dir / ".aptl" / "runs"),
+                run_id=run_id,
+            )
+            if run_id
+            else None
         )
-        prepare_runtime_orchestration_for_scenario(scenario, backend)
+        target = create_aptl_runtime_target(
+            project_dir=project_dir,
+            config=config,
+            backend=backend,
+            bundle=bundle,
+            operator_policy=policy,
+            run_target=run_target,
+        )
+        prepare_runtime_orchestration_for_scenario(
+            scenario,
+            backend,
+            pack_identity=bundle.pack_identity,
+            project_name=config.deployment.project_name,
+            run_id=run_id,
+            attempt_id=run_id,
+            grants=tuple(policy.docker_authority_grants),
+        )
         # Gather artifact availability at the backend trust boundary before
         # planning, exactly as `aptl lab start` does (`admit_raes_scenario`): the image
         # policy trusts a node's source image only against verified availability,
@@ -118,6 +149,9 @@ def _compute_realization(
             config=config,
             bundle=bundle,
             component_root=project_dir,
+            operator_policy=policy,
+            run_id=run_id,
+            attempt_id=run_id,
         )
     # broad-except: RAES planning/interpretation surfaces diverse error types.
     except Exception as exc:
@@ -139,6 +173,7 @@ def _boot_lab(
     options: "LiveGateOptions",
     state: "LiveGateState",
     scenario_path: Path | None = None,
+    run_target: object | None = None,
 ) -> list[str]:
     """Run the destructive cleanup + public boot; return failure diagnostics.
 
@@ -162,6 +197,7 @@ def _boot_lab(
         project_dir,
         remove_volumes=options.clean_volumes,
         scenario_path=scenario_path,
+        run_target=run_target,
     )
     if boot_result.outcome is StartupOutcome.FAILED:
         diagnostics.append(
@@ -268,7 +304,9 @@ def _prioritise_ssh_targets(
     whose failed auth is being generated, rather than naming any node.
     """
 
-    listening = [target for target in targets if _ssh_reachable_from_kali(backend, target[1])]
+    listening = [
+        target for target in targets if _ssh_reachable_from_kali(backend, target[1])
+    ]
     remaining = [target for target in targets if target not in listening]
     return listening + remaining
 

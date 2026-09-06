@@ -30,6 +30,7 @@ pytestmark = pytest.mark.integration
 def _bundle(root):
     return project_tree_bundle(root, root / "scenarios" / "demo.sdl.yaml")
 
+
 _SDL = """\
 name: imagefree-admission-smoke
 description: Minimal image-free scenario (ADR-048 full-stack validation).
@@ -38,7 +39,7 @@ nodes:
     type: switch
     description: smoke net
   smoke-box:
-    type: vm
+    type: compute
     os: linux
     runtime:
       packages:
@@ -54,7 +55,10 @@ nodes:
 def _docker_available() -> bool:
     if shutil.which("docker") is None:
         return False
-    return subprocess.run(["docker", "info"], capture_output=True, text=True).returncode == 0
+    return (
+        subprocess.run(["docker", "info"], capture_output=True, text=True).returncode
+        == 0
+    )
 
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
@@ -65,7 +69,9 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
     subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
 
     cfg = AptlConfig(lab={"name": "smoke"}, containers={})
-    backend = DockerComposeBackend(project_dir=tmp_path, project_name="aptl-imagefree-admit")
+    backend = DockerComposeBackend(
+        project_dir=tmp_path, project_name="aptl-imagefree-admit"
+    )
 
     # Admit through the real RAES compiler/planner/interpreter.
     scenario = parse_sdl_file(sdl)
@@ -89,15 +95,23 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
     try:
         result = backend.realize(spec, scenario_root=tmp_path)
         assert result.success, result.error
-        assert "curl" in backend.container_exec(
-            container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
-        ).stdout
-        assert backend.container_exec(container, ["id", "-u", "analyst"]).returncode == 0
+        assert (
+            "curl"
+            in backend.container_exec(
+                container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
+            ).stdout
+        )
+        assert (
+            backend.container_exec(container, ["id", "-u", "analyst"]).returncode == 0
+        )
     finally:
-        subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
+        subprocess.run(
+            ["docker", "rm", "-f", container], capture_output=True, text=True
+        )
         subprocess.run(
             ["docker", "network", "rm", "aptl-imagefree-admit_aptl-smoke"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
 
 
@@ -109,7 +123,7 @@ nodes:
     type: switch
     description: svc net
   svc-box:
-    type: vm
+    type: compute
     os: linux
     runtime:
       packages:
@@ -123,9 +137,16 @@ nodes:
 def test_admit_and_realize_service_node_boots_a_real_service(tmp_path):
     # Ensure the generic systemd base exists (built from the checked-in Dockerfile).
     subprocess.run(
-        ["docker", "build", "-t", "aptl/generic-systemd-base:latest",
-         "containers/generic-systemd-base"],
-        capture_output=True, text=True, timeout=600,
+        [
+            "docker",
+            "build",
+            "-t",
+            "aptl/generic-systemd-base:latest",
+            "containers/generic-systemd-base",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=600,
     )
     sdl = tmp_path / "svc.sdl.yaml"
     sdl.write_text(_SERVICE_SDL, encoding="utf-8")
@@ -133,7 +154,9 @@ def test_admit_and_realize_service_node_boots_a_real_service(tmp_path):
     subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
 
     cfg = AptlConfig(lab={"name": "svc"}, containers={})
-    backend = DockerComposeBackend(project_dir=tmp_path, project_name="aptl-imagefree-svc")
+    backend = DockerComposeBackend(
+        project_dir=tmp_path, project_name="aptl-imagefree-svc"
+    )
     scenario = parse_sdl_file(sdl)
     bundle = _bundle(tmp_path)
     target = create_aptl_runtime_target(
@@ -155,11 +178,16 @@ def test_admit_and_realize_service_node_boots_a_real_service(tmp_path):
         result = backend.realize(spec, scenario_root=tmp_path)
         assert result.success, result.error
         # The service the SDL declared is really running.
-        active = backend.container_exec(container, ["systemctl", "is-active", "sshd.service"])
+        active = backend.container_exec(
+            container, ["systemctl", "is-active", "sshd.service"]
+        )
         assert active.stdout.strip() == "active"
     finally:
-        subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
+        subprocess.run(
+            ["docker", "rm", "-f", container], capture_output=True, text=True
+        )
         subprocess.run(
             ["docker", "network", "rm", "aptl-imagefree-svc_aptl-svc"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )

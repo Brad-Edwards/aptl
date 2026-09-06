@@ -42,14 +42,14 @@ class MetadataFacts(TypedDict):
 
 
 def _node_type(node: object) -> str:
-    """Return the node's RAES type string (``vm`` / ``switch``), or ``""``."""
+    """Return the node's RAES type string (``compute`` / ``switch``), or ``""``."""
     node_type = getattr(node, "type", None)
     return getattr(node_type, "value", node_type) or ""
 
 
 def _is_vm(node: object) -> bool:
     """Return whether a RAES node is a VM (a candidate required container)."""
-    return _node_type(node) == "vm"
+    return _node_type(node) == "compute"
 
 
 def _exposes_ssh(node: object) -> bool:

@@ -73,6 +73,28 @@ def container_running(info: dict[str, Any]) -> bool:
     return bool(state.get("Running")) if isinstance(state, dict) else False
 
 
+def runtime_runs_to_completion(runtime: object | None) -> bool:
+    """Return whether an authored runtime declares a one-shot container."""
+
+    container = getattr(runtime, "container", None) if runtime is not None else None
+    value = getattr(container, "autoremove", None) if container is not None else None
+    if isinstance(value, bool):
+        return value
+    return isinstance(value, str) and value.strip().lower() in {"true", "1", "yes"}
+
+
+def container_completed_successfully(info: dict[str, Any]) -> bool:
+    """Return whether an inspected run-to-completion container exited zero."""
+
+    state = info.get("State")
+    return bool(
+        isinstance(state, dict)
+        and not state.get("Running")
+        and state.get("Status") == "exited"
+        and state.get("ExitCode") == 0
+    )
+
+
 def container_settled(info: dict[str, Any]) -> bool:
     """Return whether a container has reached its final, realized state."""
 
@@ -148,6 +170,75 @@ def wait_for_realized_health(
         time_source=time_source,
         sleep=sleep,
     )
+
+
+def wait_for_run_to_completion(
+    backend: "DeploymentBackend",
+    container_names: Sequence[str],
+    *,
+    timeout: int = REALIZATION_HEALTH_TIMEOUT,
+    interval: int = REALIZATION_HEALTH_INTERVAL,
+    time_source: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> list[str]:
+    """Wait for authored one-shot jobs, retrying an early failure exactly once.
+
+    Compose's ``depends_on`` only establishes start ordering. A declared
+    run-to-completion job can therefore race a dependency whose listener is up
+    before its application is ready. The steady-state services are settled by
+    the caller first; a job already observed to have failed may then be retried
+    once. Only an exact ``exited``/zero state is accepted as realized.
+    """
+
+    names = [name for name in container_names if name]
+    if not names:
+        return []
+    missing = [
+        f"run-to-completion container {name!r} was never created"
+        for name in names
+        if not backend.container_inspect(name)
+    ]
+    if missing:
+        return missing
+
+    retried: set[str] = set()
+    deadline = time_source() + timeout
+    while True:
+        pending = False
+        failures: list[str] = []
+        for name in names:
+            info = backend.container_inspect(name)
+            if container_completed_successfully(info):
+                continue
+            if container_running(info):
+                pending = True
+                continue
+            if name not in retried:
+                backend.container_restart(name, timeout=60)
+                retried.add(name)
+                pending = True
+                continue
+            state = info.get("State") if isinstance(info, dict) else None
+            status = state.get("Status") if isinstance(state, dict) else "unknown"
+            exit_code = state.get("ExitCode") if isinstance(state, dict) else "unknown"
+            failures.append(
+                f"run-to-completion container {name!r} finished with "
+                f"status {status!r} and exit code {exit_code!r}"
+            )
+        if failures:
+            return failures
+        if not pending:
+            return []
+        if time_source() >= deadline:
+            return [
+                f"run-to-completion container {name!r} did not finish "
+                f"successfully within {timeout}s"
+                for name in names
+                if not container_completed_successfully(
+                    backend.container_inspect(name)
+                )
+            ]
+        sleep(interval)
 
 
 def _await_all_settled(

@@ -281,6 +281,7 @@ docs/architecture/issue-913-shuffle-post-realization-mutation-preflight.md	docs-
 docs/architecture/issue-934-rename-boundary-preflight.md	architecture-history	Binding #934 rename-boundary inventory and retirement guardrails
 docs/architecture/issue-949-orborus-control-authority-preflight.md	architecture-history	Post-baseline architecture guidance; retain with its owning issue
 docs/architecture/issue-951-fresh-env-pack-start-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-974-shuffle-worker-authority-offline-images-preflight.md	architecture-history	Post-baseline architecture guidance; retain with its owning issue
 docs/architecture/networking.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/obs-002-correlation-identity-clock-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/rep-003-run-scoped-provenance-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
@@ -667,6 +668,7 @@ mcp/mcp-wazuh/tsconfig.build.json	scenario-integration-mcp	TechVault-selected MC
 mcp/mcp-wazuh/tsconfig.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
 mcp/package-lock.json	scenario-integration-mcp	TechVault-selected MCP integration or shared consumer library; retain as a technical capability, not a product layer
 mkdocs.yml	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+operator-policy.json	repository-metadata	Local operator authority policy; reassess with the TechVault pack and ADR-055 implementation owners
 participant-profiles/guided-purple-v1/aptl.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
 participant-profiles/guided-purple-v1/asset-lock.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
 participant-profiles/guided-purple-v1/narrative.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
@@ -798,6 +800,7 @@ src/aptl/backends/raes_dependency_closure.py	core-candidate	Migrate only after p
 src/aptl/backends/raes_diagnostics.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_docker_materializer.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_evaluator.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_execution_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_execution_helpers.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_image_free_content_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_image_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -945,6 +948,7 @@ src/aptl/core/deployment/_compose_volume_cleanup.py	core-candidate	Migrate only 
 src/aptl/core/deployment/_docker_endpoint_binding.py	backend-substrate	Post-baseline Docker endpoint binding; retain with ownership and exposure checks
 src/aptl/core/deployment/_docker_image_identity.py	backend-substrate	Post-baseline Docker image identity helper; retain with digest evidence
 src/aptl/core/deployment/_flag_signing_keys.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_generated_artifact_environment.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_proc_net_listeners.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_service_index_materialization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_ssh_key_bundle.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1027,6 +1031,7 @@ src/aptl/core/lifecycle_enforce.py	core-candidate	Migrate only after public-impo
 src/aptl/core/lifecycle_guard.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/lifecycle_policy.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/objectives.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/operator_policy.py	core-candidate	Post-baseline local operator authority policy contract; retain and assess under #970
 src/aptl/core/provenance/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/provenance/coordinator.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/provenance/identity.py	core-candidate	Migrate only after public-import, history and scenario-independence verification

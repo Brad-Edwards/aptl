@@ -1843,6 +1843,31 @@ class TestDockerComposeBackendContainerInteraction:
             data = backend.container_inspect("aptl-victim")
         assert data == {}
 
+    def test_container_os_release_uses_daemon_copy_for_stopped_container(
+        self, tmp_path
+    ):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+
+        def copied_os_release(command, **_kwargs):
+            target = Path(command[-1])
+            if command[-2].endswith(":/etc/os-release"):
+                target.symlink_to("../usr/lib/os-release")
+            else:
+                target.write_text('ID=debian\nVERSION_ID="11"\n', encoding="utf-8")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with (
+            patch.object(backend, "container_exists", return_value=True),
+            patch.object(backend, "_run", side_effect=copied_os_release) as run,
+        ):
+            observed = backend.container_os_release("aptl-cortex-initializer")
+
+        assert observed == 'ID=debian\nVERSION_ID="11"\n'
+        assert [call.args[0][-2] for call in run.call_args_list] == [
+            "aptl-cortex-initializer:/etc/os-release",
+            "aptl-cortex-initializer:/usr/lib/os-release",
+        ]
+
     # container_exists ----------------------------------------------------
 
     def test_container_exists_true_for_project_container(self, tmp_path):

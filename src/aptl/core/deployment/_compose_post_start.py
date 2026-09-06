@@ -10,7 +10,11 @@ only then are accounts realized.
 
 from __future__ import annotations
 
-from aptl.core.deployment._compose_service_health import wait_for_realized_health
+from aptl.core.deployment._compose_service_health import (
+    runtime_runs_to_completion,
+    wait_for_realized_health,
+    wait_for_run_to_completion,
+)
 from aptl.core.deployment._compose_runtime_observation import (
     ComposeRuntimeOrchestrationObservationMixin,
 )
@@ -89,10 +93,21 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
         healthcheck reports healthy.
         """
 
-        containers = [
-            node.container_name for node in realization.nodes if node.container_name
-        ]
-        return wait_for_realized_health(self, containers)
+        steady_state: list[str] = []
+        run_to_completion: list[str] = []
+        for node in realization.nodes:
+            if not node.container_name:
+                continue
+            target = (
+                run_to_completion
+                if runtime_runs_to_completion(node.runtime)
+                else steady_state
+            )
+            target.append(node.container_name)
+        failures = wait_for_realized_health(self, steady_state)
+        if failures:
+            return failures
+        return wait_for_run_to_completion(self, run_to_completion)
 
     def _realize_accounts_step(
         self,

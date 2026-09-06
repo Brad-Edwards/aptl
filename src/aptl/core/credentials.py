@@ -248,6 +248,22 @@ def _atomic_write_secure(target: Path, content: str) -> None:
     _enforce_mode(target, _FILE_MODE, "file")
 
 
+def _write_secure_if_changed(target: Path, content: str) -> None:
+    """Atomically replace *target* only when its rendered bytes changed.
+
+    Docker file bind mounts follow the source inode selected when a container
+    is created.  Replacing an unchanged generated config during an admitted
+    backend retry therefore leaves the running container pinned to a stale,
+    unlinked inode.  Preserve the existing regular file when its content is
+    already exact, while still repairing its required container-readable mode.
+    """
+
+    if target.is_file() and target.read_text(encoding="utf-8") == content:
+        _enforce_mode(target, _FILE_MODE, "file")
+        return
+    _atomic_write_secure(target, content)
+
+
 def _render_secure(
     project_dir: Path,
     source_relpath: Path,
@@ -303,7 +319,7 @@ def _render_secure(
     # have been re-introduced between the first check and the write.
     _canonical_generated_path(project_dir, output_relpath)
 
-    _atomic_write_secure(output_path, rendered)
+    _write_secure_if_changed(output_path, rendered)
     return output_path
 
 

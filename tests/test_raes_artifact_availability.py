@@ -18,7 +18,9 @@ from pathlib import Path
 
 import pytest
 from raes.parser import parse_sdl_file
-from raes_processor.semantics.artifact_realization import artifact_requirement_diagnostics
+from raes_processor.semantics.artifact_realization import (
+    artifact_requirement_diagnostics,
+)
 from raes_processor.semantics.realization import CompiledRealizationRequirement
 from raes_processor.compiler import compile_runtime_model
 
@@ -57,7 +59,7 @@ def _scenario(tmp_path: Path, digest: str = _DIGEST):
             type: switch
             description: Fixture network.
           target:
-            type: vm
+            type: compute
             os: linux
             source:
               name: example/app
@@ -119,7 +121,9 @@ def test_scenario_authoring_an_artifact_requirement_produces_facts(tmp_path):
 
     context = artifact_availability_for_scenario(scenario, probe)
 
-    assert [entry.address for entry in context.requirements] == ["provision.node.target"]
+    assert [entry.address for entry in context.requirements] == [
+        "provision.node.target"
+    ]
     assert context.requirements[0].available_artifact_digests == [_DIGEST]
     assert probe.calls == [(f"example/app@{_DIGEST}", None)]
 
@@ -188,10 +192,26 @@ def test_shipped_scenario_declares_artifact_demand_for_every_imaged_node(tmp_pat
     # One address per artifact-bearing address — every image-backed node and
     # every digest-pinned content placement in the full TechVault env-pack. The
     # ADR-088 conversion (#889) removed the `cortex-index-init` image-backed node.
-    # Env-packs 4.0.2 then added eight digest-pinned rules/decoder/integration
-    # content placements, taking the reviewed inventory from 43 to 51.
-    assert len(context.requirements) == 51
+    # Env-packs 5.1.0 carries 25 image-backed nodes and 36 digest-pinned content
+    # placements, including the rules/decoder/integration set introduced in
+    # 4.0.2. Keep both sides explicit so a missing image cannot be hidden by a
+    # newly added content object (or vice versa).
+    assert len(context.requirements) == 61
     addresses = {requirement.address for requirement in context.requirements}
+    assert (
+        len({address for address in addresses if address.startswith("provision.node.")})
+        == 25
+    )
+    assert (
+        len(
+            {
+                address
+                for address in addresses
+                if address.startswith("provision.content.")
+            }
+        )
+        == 36
+    )
     assert {
         "provision.content.ad-rules",
         "provision.content.database-rules",
@@ -342,4 +362,6 @@ def test_a_requirement_routed_to_a_registry_pull_is_not_pack_content(
         timing="backend-preparation",
     )
 
-    assert _env_pack_digest_and_provenance(_pack_requirement(route=pull), tmp_path) is None
+    assert (
+        _env_pack_digest_and_provenance(_pack_requirement(route=pull), tmp_path) is None
+    )

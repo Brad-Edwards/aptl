@@ -37,6 +37,7 @@ PROJECT_DIR="${APTL_PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 SURICATA_CTR="${SURICATA_CONTAINER:-aptl-suricata}"
 AUTHORED_RULES="$PROJECT_DIR/config/suricata/rules/local.rules"
 AUTHORED_YAML="$PROJECT_DIR/config/suricata/suricata.yaml"
+AUTHORED_WAZUH_RULES="$PROJECT_DIR/config/wazuh_cluster/suricata_rules.xml"
 
 command -v docker >/dev/null 2>&1 || exit 0
 
@@ -104,6 +105,27 @@ fix_suricata_config() {
     cat "$AUTHORED_YAML" > "$src"
 }
 
+# --- Wazuh child rule: preserve the gate marker through the SIEM ------------
+fix_wazuh_suricata_rules() {
+    local dest="/var/ossec/etc/rules/suricata_rules.xml"
+    local src
+    src="$(_mount_src aptl-wazuh-manager "$dest")"
+    if [ -z "$src" ] || [ ! -e "$src" ]; then
+        log "no bind-mount source for $dest; skipping Wazuh rule restore"
+        return 0
+    fi
+    if [ ! -r "$AUTHORED_WAZUH_RULES" ]; then
+        log "authored Wazuh Suricata rules missing at $AUTHORED_WAZUH_RULES; skipping"
+        return 0
+    fi
+    if cmp -s "$AUTHORED_WAZUH_RULES" "$src"; then
+        log "Wazuh Suricata rules already match authored config; leaving untouched"
+        return 0
+    fi
+    log "restoring authored Wazuh Suricata correlation rules into $src"
+    cat "$AUTHORED_WAZUH_RULES" > "$src"
+}
+
 # --- reload Suricata so the restored corpus + vars take effect --------------
 reload_suricata() {
     # Prefer a live rule reload over the command socket (keeps flow state);
@@ -126,5 +148,6 @@ fi
 log "applying temporary env-pack Suricata content fixups (see header for tracking issues)"
 fix_local_rules
 fix_suricata_config
+fix_wazuh_suricata_rules
 reload_suricata
 log "done"

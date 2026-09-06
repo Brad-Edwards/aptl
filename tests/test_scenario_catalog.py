@@ -407,7 +407,7 @@ def test_resolve_and_parse_returns_entry_and_scenario(tmp_path):
 
     (tmp_path / "scenarios").mkdir(exist_ok=True)
     (tmp_path / "scenarios" / "custom.sdl.yaml").write_text(
-        "name: custom\nnodes:\n  h:\n    type: vm\n    os: linux\n"
+        "name: custom\nnodes:\n  h:\n    type: compute\n    os: linux\n"
     )
     _write_catalog(
         tmp_path,

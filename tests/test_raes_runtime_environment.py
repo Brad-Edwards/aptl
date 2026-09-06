@@ -128,12 +128,14 @@ def test_no_environment_is_bound_when_nothing_is_set(tmp_path, monkeypatch):
     assert _append(_spec(("DB_HOST", "DB_PASSWORD")), tmp_path) == []
 
 
-def test_restored_named_volumes_are_lowered(scenario_path):
-    """The persistent state the refactor dropped is declared and lowered again.
+def test_restored_image_free_named_volumes_are_lowered(scenario_path):
+    """The image-free persistent state is declared and lowered again.
 
     Bind mounts of project keys and certificates are deliberately absent: they
     are authored as content placements, which carry containment, symlink
-    rejection, and sensitivity handling that a raw bind does not.
+    rejection, and sensitivity handling that a raw bind does not. Shared
+    cross-node resources use RAES 3.5's top-level persistent-volume contract
+    and are lowered by the stateful realizer instead of this node-runtime path.
     """
 
     from aptl.backends.raes_base_substrate import _volume_mounts
@@ -149,7 +151,17 @@ def test_restored_named_volumes_are_lowered(scenario_path):
     assert ("webapp_logs", "/var/log/gunicorn") in lowered["webapp"]
     assert ("kali_operations", "/home/kali/operations") in lowered["kali"]
     assert ("fileshare_data", "/srv/shares") in lowered["fileshare"]
-    assert sum(len(v) for v in lowered.values()) == 10
+    assert sum(len(v) for v in lowered.values()) == 8
+    sync_mounts = {
+        volume_name: consumer.mount_destination
+        for volume_name, volume in scenario.persistent_volumes.items()
+        for consumer in volume.consumers
+        if consumer.node == "misp-suricata-sync"
+    }
+    assert sync_mounts == {
+        "suricata_command_socket": "/var/run/suricata",
+        "suricata_misp_rules": "/var/lib/suricata/rules/misp",
+    }
     # No raw host or project bind smuggled in alongside them.
     for mounts in lowered.values():
         assert all(not source.startswith((".", "/")) for source, _ in mounts)
@@ -199,7 +211,9 @@ def test_authored_defaults_are_bound(scenario_path):
     assert defaults["DB_NAME"] == "techvault"
 
 
-def test_credentials_and_operator_overrides_beat_authored_defaults(tmp_path, monkeypatch):
+def test_credentials_and_operator_overrides_beat_authored_defaults(
+    tmp_path, monkeypatch
+):
     """Precedence is operator, then project credentials, then authored default."""
 
     from aptl.backends.raes_base_substrate import BaseContainerSpec
@@ -263,7 +277,9 @@ def test_a_real_operator_secret_is_still_authored_empty(scenario_path):
     assert "MISP_API_KEY" not in sync
 
 
-def test_range_credentials_are_classified_as_fixtures_not_operator_secrets(scenario_path):
+def test_range_credentials_are_classified_as_fixtures_not_operator_secrets(
+    scenario_path,
+):
     """The classification carries the distinction, so tooling can tell them apart."""
 
     scenario = parse_sdl_file(scenario_path)

@@ -124,6 +124,16 @@ class ContainerOpsBackend(Protocol):
         """
         ...
 
+    def container_os_release(self, name: str) -> str | None:
+        """Return bounded guest OS identity, including for a stopped one-shot.
+
+        The implementation reads only the standard non-secret OS-release file
+        through the deployment provider. ``None`` means it could not be safely
+        observed.
+        """
+
+        ...
+
     def observe_container_listeners(self, name: str) -> ContainerListeners | None:
         """Return a container's listeners read from outside its trust boundary.
 

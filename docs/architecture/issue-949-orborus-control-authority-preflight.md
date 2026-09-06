@@ -1,5 +1,13 @@
 # Issue #949 Orborus Control Authority Preflight
 
+> **Correction:** Issue #974 supersedes this note's requirements for a
+> pack-authored host `bind_source`, authored `realized_children`, child counts,
+> `docker-label:` correlation, blanket spawned-child socket rejection, and a
+> ban on verified local alias creation in offline-staged mode. See the
+> [issue #974 preflight](issue-974-shuffle-worker-authority-offline-images-preflight.md).
+> The remaining generic lowering, identity, containment, and observation
+> boundaries continue to apply where they do not conflict with that correction.
+
 This note fixes the repository-wide boundaries for realizing an authored
 runtime orchestration authority and preparing its spawned-image closure. It is
 architecture guidance, not an implementation plan. The issue contract and the

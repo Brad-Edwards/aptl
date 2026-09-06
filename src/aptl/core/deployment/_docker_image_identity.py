@@ -8,8 +8,9 @@ import re
 
 EXACT_IMAGE_INSPECT_FORMAT = (
     "{{json .RepoDigests}}\t{{.Id}}\t{{.Os}}/{{.Architecture}}"
-    "{{if .Variant}}/{{.Variant}}{{end}}"
+    '{{if index . "Variant"}}/{{index . "Variant"}}{{end}}'
 )
+IMAGE_ID_INSPECT_FORMAT = "{{.Id}}"
 _IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
@@ -80,11 +81,37 @@ def exact_inspected_image_identity(
     except (TypeError, ValueError):
         return None
     platform = normalized_platform(platform_raw)
+    canonical_ref = _canonical_repo_digest(image_ref)
     if (
         not isinstance(repo_digests, list)
-        or image_ref not in repo_digests
+        or canonical_ref is None
+        or not {image_ref, canonical_ref}.intersection(repo_digests)
         or not _IMAGE_ID.fullmatch(image_id)
         or platform is None
     ):
         return None
     return ExactDockerImageIdentity(image_id=image_id, platform=platform)
+
+
+def _canonical_repo_digest(image_ref: str) -> str | None:
+    """Return Docker's canonical ``repository@digest`` spelling.
+
+    Docker accepts an authored ``repository:tag@digest`` pull reference but
+    records it in ``RepoDigests`` without the redundant tag. Registry ports are
+    retained because only a colon in the final path component can delimit a tag.
+    """
+
+    repository_and_tag, separator, digest = image_ref.rpartition("@")
+    if not separator or not _IMAGE_ID.fullmatch(digest):
+        return None
+    prefix, slash, leaf = repository_and_tag.rpartition("/")
+    repository_leaf = leaf.split(":", 1)[0]
+    repository = f"{prefix}{slash}{repository_leaf}"
+    return f"{repository}@{digest}" if repository_leaf else None
+
+
+def inspected_image_id(stdout: object) -> str | None:
+    """Return one exact daemon-local config image id from inspect output."""
+
+    image_id = str(stdout or "").strip()
+    return image_id if _IMAGE_ID.fullmatch(image_id) else None

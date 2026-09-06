@@ -27,7 +27,7 @@ from aptl.core.scenario_bundle import ScenarioSourceKind
 
 if TYPE_CHECKING:
     from aptl.backends.raes_realization_model import AptlRealization
-    from aptl.backends.raes_start_model import AdmittedScenarioStart
+    from aptl.backends.raes_start_model import AcesRunTarget, AdmittedScenarioStart
     from aptl.core.deployment.backend import DeploymentBackend
 
 
@@ -62,6 +62,7 @@ def admit_start_surface(
     config: AptlConfig,
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
+    run_target: "AcesRunTarget | None" = None,
 ) -> tuple["AdmittedScenarioStart", AdmittedStartSurface]:
     """Admit the scenario once and project the pre-start facts off it.
 
@@ -72,7 +73,11 @@ def admit_start_surface(
     from aptl.backends.raes import admit_raes_scenario
 
     admitted = admit_raes_scenario(
-        project_dir, config, backend, scenario_path=scenario_path
+        project_dir,
+        config,
+        backend,
+        scenario_path=scenario_path,
+        run_target=run_target,
     )
     return admitted, start_surface_of(admitted, config)
 
@@ -87,9 +92,7 @@ def start_surface_of(
     return AdmittedStartSurface(
         bundle_root=admitted.bundle.root,
         source_kind=admitted.bundle.source_kind,
-        selected_profiles=tuple(
-            select_backend_profiles(config, realization.profiles)
-        ),
+        selected_profiles=tuple(select_backend_profiles(config, realization.profiles)),
         stateful_artifact_ownership=_artifact_ownership(
             admitted.bundle.root, realization
         ),

@@ -204,7 +204,7 @@ class ComposeRealizationModelMixin:
         override that was actually written (issue #875).
         """
 
-        command.extend(["--no-interpolate", "--format", "json"])
+        command.extend(["--no-interpolate", "--no-env-resolution", "--format", "json"])
         result = self._run(command)
         if result.returncode != 0:
             return _COMPOSE_MODEL_VALIDATION_ERROR

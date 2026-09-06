@@ -22,6 +22,7 @@ check branch without a live lab. The boot / telemetry probes that live in
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -170,6 +171,8 @@ def check_raes_driven_boot(
     options: "LiveGateOptions",
     state: "LiveGateState",
     scenario_path: Path | None = None,
+    run_id: str = "",
+    run_store: "RunStorageBackend | None" = None,
 ) -> LiveGateCheck:
     """Clean up and boot through the public RAES start path; tie evidence to RAES.
 
@@ -180,7 +183,13 @@ def check_raes_driven_boot(
     name. Then runs ``stop_lab(-v)`` cleanup and ``orchestrate_lab_start`` (whose
     only container-start path is the RAES handoff) and records the snapshot.
     """
-    realization, interp_errors = _compute_realization(scenario, project_dir, config)
+    realization, interp_errors = _compute_realization(
+        scenario,
+        project_dir,
+        config,
+        scenario_path=scenario_path,
+        run_id=run_id,
+    )
     if realization is None or interp_errors:
         return _check(
             "raes_driven_boot", CATEGORY_BACKEND_INTERPRETATION, interp_errors
@@ -190,12 +199,16 @@ def check_raes_driven_boot(
     state.selected_profiles = select_backend_profiles(config, realization.profiles)
     state.deployment_spec = realization.deployment_spec(state.selected_profiles)
 
+    from aptl.backends.raes_start_model import AcesRunTarget
+
+    target_store = run_store or _default_run_store(project_dir, config)
     boot_diagnostics = _boot_lab(
         project_dir,
         config,
         options,
         state,
         scenario_path=scenario_path,
+        run_target=AcesRunTarget(run_store=target_store, run_id=run_id),
     )
     return _check("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, boot_diagnostics)
 
@@ -216,11 +229,17 @@ def check_runtime_orchestration_containment(
             ["runtime orchestration realization is unavailable"],
         )
     try:
-        result = get_backend(config, project_dir).verify_runtime_orchestration(spec)
+        backend = get_backend(config, project_dir)
+        result = backend.verify_runtime_orchestration(spec)
     except Exception as exc:
         diagnostics = [redact(f"runtime orchestration observation raised: {exc}")]
     else:
         diagnostics = [] if result.success else [redact(result.error or "failed")]
+        observations = getattr(backend, "runtime_orchestration_observations", None)
+        if result.success and callable(observations):
+            state.runtime_orchestration_observations = [
+                dict(item) for item in observations() if isinstance(item, Mapping)
+            ]
     return _check(
         "runtime_orchestration_containment",
         CATEGORY_BACKEND_INSTANTIATION,
@@ -311,6 +330,9 @@ def check_run_archive_manifest(
         },
         "snapshot": state.snapshot,
         "evidence": state.evidence,
+        "runtime_orchestration": {
+            "actual_children": state.runtime_orchestration_observations,
+        },
         "evaluator_surfaces": {
             "profile": "full-remote-control-plane",
             "contracts": [

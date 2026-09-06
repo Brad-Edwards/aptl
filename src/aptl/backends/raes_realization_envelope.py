@@ -37,13 +37,35 @@ _PLACEHOLDER_DIGEST = "sha256:" + "0" * 64
 # feature-binding disclosure. An unsupported concern is the only disposition that
 # carries no observation/mechanism.
 _CONCERNS = (
+    (
+        "compute-substrate",
+        "realized",
+        "daemon-observed",
+        "operating-system-container",
+    ),
+    ("operating-system", "realized", "guest-observed", "guest-os-release-readback"),
     ("topology", "realized", "daemon-observed", "docker-compose-networking"),
     ("architecture", "realized", "daemon-observed", "container-architecture-readback"),
     ("image", "realized", "daemon-observed", "oci-image-inspect-readback"),
-    ("resource-allocation", "realized", "daemon-observed", "compose-resource-limits-readback"),
+    (
+        "resource-allocation",
+        "realized",
+        "daemon-observed",
+        "compose-resource-limits-readback",
+    ),
     ("network", "realized", "daemon-observed", "docker-network-readback"),
-    ("content-placement", "realized", "daemon-observed", "compose-and-service-materialization-readback"),
-    ("account-placement", "realized", "daemon-observed", "container-exec-account-readback"),
+    (
+        "content-placement",
+        "realized",
+        "daemon-observed",
+        "compose-and-service-materialization-readback",
+    ),
+    (
+        "account-placement",
+        "realized",
+        "daemon-observed",
+        "container-exec-account-readback",
+    ),
     ("feature-binding", "unsupported", "none", None),
     ("service", "realized", "daemon-observed", "compose-service-readback"),
     ("acl", "realized", "daemon-observed", "nftables-owner-scoped-readback"),
@@ -61,6 +83,14 @@ def _configuration_payload(provisioner: ProvisionerCapabilities) -> dict[str, ob
         "network_policy": "docker-compose-managed",
         "supported_node_types": sorted(provisioner.supported_node_types),
         "supported_os_families": sorted(provisioner.supported_os_families),
+        "operating_systems": [
+            {
+                "family": item.family,
+                "distribution": item.distribution,
+                "versions": sorted(item.versions),
+            }
+            for item in provisioner.operating_systems
+        ],
         "supported_content_types": sorted(provisioner.supported_content_types),
         "supported_account_features": sorted(provisioner.supported_account_features),
         "supported_domain_profiles": sorted(provisioner.supported_domain_profiles),

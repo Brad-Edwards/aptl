@@ -18,6 +18,7 @@ from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 from aptl.core.deployment._compose_realization_networks import _concrete_network_name
+from aptl.core.deployment._proc_net_listeners import ContainerListeners
 from aptl.core.lab_types import LabResult, LabStatus
 
 if TYPE_CHECKING:
@@ -59,9 +60,7 @@ class _NoStartBackend(object):
     # provisioner builds is stable across runs.
 
     @staticmethod
-    def artifact_available(
-        image_ref: str, *, allow_remote: bool | None = None
-    ) -> bool:
+    def artifact_available(image_ref: str, *, allow_remote: bool | None = None) -> bool:
         """Report every declared artifact as obtainable in the offline gate."""
 
         del image_ref, allow_remote
@@ -88,6 +87,7 @@ class _NoStartBackend(object):
         self._content_root: TemporaryDirectory[str] | None = None
         self._content_paths: dict[str, Path] = {}
         self._image_free_destinations: dict[str, str] = {}
+        self._runtime_by_container: dict[str, object] = {}
 
     def realize(
         self,
@@ -106,6 +106,12 @@ class _NoStartBackend(object):
             node.container_name
             for node in getattr(realization, "nodes", ())
             if getattr(node, "container_name", None)
+        }
+        self._runtime_by_container = {
+            node.container_name: node.runtime
+            for node in getattr(realization, "nodes", ())
+            if getattr(node, "container_name", None)
+            and getattr(node, "runtime", None) is not None
         }
         # Report networks under the project-scoped name Compose actually creates
         # (`<project>_aptl-<stem>`), not the bare declared name, so the offline
@@ -169,7 +175,13 @@ class _NoStartBackend(object):
         for image-free content (ADR-048); it is not a general exec simulator.
         """
 
-        del name, timeout
+        del timeout
+        if name in self._container_names and cmd == ["cat", "/etc/os-release"]:
+            return subprocess.CompletedProcess(
+                args=cmd,
+                returncode=0,
+                stdout='ID=ubuntu\nVERSION_ID="22.04"\n',
+            )
         kind = self._image_free_destinations.get(cmd[-1]) if len(cmd) >= 2 else None
         matched = bool(cmd) and (
             (cmd[0:2] == ["test", "-d"] and kind == "directory")
@@ -210,6 +222,38 @@ class _NoStartBackend(object):
         honours the same project scoping the observer relies on.
         """
         return [name for name in self._network_names if name_prefix in name]
+
+    def observe_container_listeners(self, name: str) -> ContainerListeners | None:
+        """Project declared listener shapes for the offline simulation."""
+
+        runtime = self._runtime_by_container.get(name)
+        if runtime is None:
+            return None
+        sockets: list[tuple[str, str, int]] = []
+        unix_paths: set[str] = set()
+        for listener in getattr(runtime, "service_listeners", ()):
+            protocol = str(
+                getattr(getattr(listener, "protocol", ""), "value", "")
+                or getattr(listener, "protocol", "")
+            )
+            if protocol == "unix":
+                path = str(getattr(listener, "socket_path", "") or "")
+                if path:
+                    unix_paths.add(path)
+                continue
+            port = getattr(listener, "port", None)
+            if protocol in {"tcp", "udp"} and port is not None:
+                sockets.append(
+                    (
+                        protocol,
+                        str(getattr(listener, "address", "") or ""),
+                        int(port),
+                    )
+                )
+        return ContainerListeners(
+            sockets=tuple(sockets),
+            unix_socket_paths=frozenset(unix_paths),
+        )
 
     def observe_content_type(
         self,

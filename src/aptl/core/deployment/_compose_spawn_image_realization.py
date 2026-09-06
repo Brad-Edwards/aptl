@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import Enum
+import re
+
 from aptl.core.deployment._compose_runtime_orchestration import (
     deployment_spawn_image_requirements,
 )
 from aptl.core.deployment._docker_image_identity import (
     EXACT_IMAGE_INSPECT_FORMAT,
+    IMAGE_ID_INSPECT_FORMAT,
     DockerPlatform,
     exact_inspected_image_identity,
+    inspected_image_id,
     normalized_platform,
     platform_is_compatible,
 )
@@ -18,6 +24,25 @@ from aptl.core.lab_types import LabResult
 from aptl.runtime_authority import DeploymentSpawnImageRequirement
 
 _IMAGE_REALIZATION_TIMEOUT = 2400
+_ALIAS_NOT_FOUND = re.compile(
+    r"^(?:(?:error response from daemon|error): )?no such (?:image|object)(?::|$)"
+)
+
+
+class _AliasState(str, Enum):
+    """Whether one local alias was positively found, absent, or unreadable."""
+
+    PRESENT = "present"
+    ABSENT = "absent"
+    ERROR = "error"
+
+
+@dataclass(frozen=True)
+class _AliasInspection:
+    """Typed alias readback that never conflates absence with an error."""
+
+    state: _AliasState
+    image_id: str | None = None
 
 
 def prepare_spawn_images(
@@ -178,7 +203,93 @@ def _inspect_spawn_image(
         and not platform_is_compatible(expected, identity.platform)
     ):
         failure = _spawn_image_failure("platform incompatible", requirement)
+    if failure is None and identity is not None and requirement.runtime_alias:
+        failure = _prepare_runtime_alias(
+            backend,
+            requirement,
+            expected_image_id=identity.image_id,
+            timeout=timeout,
+        )
     return failure
+
+
+def _prepare_runtime_alias(
+    backend: object,
+    requirement: DeploymentSpawnImageRequirement,
+    *,
+    expected_image_id: str,
+    timeout: int,
+) -> LabResult | None:
+    """Verify or locally create one tag alias without overwriting stale state."""
+
+    assert requirement.runtime_alias is not None
+    inspected = _inspect_alias(
+        backend,
+        requirement.runtime_alias,
+        timeout=timeout,
+    )
+    if inspected.state is _AliasState.PRESENT:
+        return (
+            None
+            if inspected.image_id == expected_image_id
+            else _spawn_image_failure("runtime alias stale", requirement)
+        )
+    if inspected.state is not _AliasState.ABSENT:
+        return _spawn_image_failure("runtime alias inspection failed", requirement)
+    try:
+        tagged = backend._run(
+            [
+                "docker",
+                "tag",
+                requirement.image_ref,
+                requirement.runtime_alias,
+            ],
+            timeout=timeout,
+        )
+    except BackendTimeoutError:
+        tagged = None
+    if tagged is None or tagged.returncode != 0:
+        return _spawn_image_failure("runtime alias unavailable", requirement)
+    inspected = _inspect_alias(
+        backend,
+        requirement.runtime_alias,
+        timeout=timeout,
+    )
+    if (
+        inspected.state is not _AliasState.PRESENT
+        or inspected.image_id != expected_image_id
+    ):
+        return _spawn_image_failure("runtime alias unavailable", requirement)
+    return None
+
+
+def _inspect_alias(backend: object, alias: str, *, timeout: int) -> _AliasInspection:
+    """Read one alias while distinguishing a proven miss from every error."""
+
+    try:
+        result = backend._run(
+            [
+                "docker",
+                "image",
+                "inspect",
+                "--format",
+                IMAGE_ID_INSPECT_FORMAT,
+                alias,
+            ],
+            timeout=timeout,
+        )
+    except BackendTimeoutError:
+        return _AliasInspection(_AliasState.ERROR)
+    if result.returncode == 0:
+        image_id = inspected_image_id(result.stdout)
+        return _AliasInspection(
+            _AliasState.PRESENT if image_id is not None else _AliasState.ERROR,
+            image_id,
+        )
+    error = result.stderr.strip().lower()
+    if not result.stdout.strip() and _ALIAS_NOT_FOUND.match(error):
+        return _AliasInspection(_AliasState.ABSENT)
+    return _AliasInspection(_AliasState.ERROR)
 
 
 def _spawn_image_failure(

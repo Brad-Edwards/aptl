@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
@@ -10,7 +11,11 @@ from aptl.runtime_authority import (
     DOCKER_SOCKET_PATH,
     DeploymentDockerAuthorityAdmission,
     DeploymentSpawnImageRequirement,
+    exact_docker_image_reference_is_valid,
     mount_exposes_or_mentions_docker_socket,
+    runtime_alias_for_exact_image,
+    runtime_product_execution_id_is_valid,
+    sha256_identity_is_valid,
 )
 
 DOCKER_SOCKET_HOST = "unix:///var/run/docker.sock"
@@ -44,7 +49,6 @@ def _spawn_requirement_is_complete(
             node_address=node_address,
         )
         and _positive_int(requirement.execution_timeout_seconds)
-        and _positive_int(requirement.expected_count)
     )
 
 
@@ -55,14 +59,14 @@ def _spawn_requirement_identity_is_complete(
 ) -> bool:
     """Whether a child contract carries its complete immutable identity."""
 
-    label_name, _separator, label_value = requirement.child_label.partition("=")
     return bool(
         requirement.node_address == node_address
         and requirement.authority_id
         and requirement.template_id
-        and requirement.image_ref
-        and label_name
-        and label_value
+        and exact_docker_image_reference_is_valid(requirement.image_ref)
+        and requirement.runtime_alias
+        == runtime_alias_for_exact_image(requirement.image_ref)
+        and isinstance(requirement.delegated_docker_authority, bool)
     )
 
 
@@ -101,19 +105,27 @@ def docker_authority_admissions(
     nodes = {node.address: node for node in realization.nodes}
     addresses = [admission.node_address for admission in admissions]
     services = [admission.service_name for admission in admissions]
-    labels = [
-        requirement.child_label
-        for admission in admissions
-        for requirement in admission.spawn_requirements
-    ]
+    correlations = [admission.correlation_id for admission in admissions]
     valid = bool(
         len(addresses) == len(set(addresses))
         and len(services) == len(set(services))
-        and len(labels) == len(set(labels))
+        and len(correlations) == len(set(correlations))
         and all(
             admission.node_address in nodes
             and nodes[admission.node_address].service_name == admission.service_name
             and _admission_endpoint_is_supported(admission)
+            and admission.pack_id
+            and admission.pack_version
+            and sha256_identity_is_valid(admission.pack_set_digest)
+            and admission.run_id
+            and admission.attempt_id
+            and sha256_identity_is_valid(admission.correlation_id)
+            and len(admission.product_execution_ids)
+            == len(set(admission.product_execution_ids))
+            and all(
+                runtime_product_execution_id_is_valid(identity)
+                for identity in admission.product_execution_ids
+            )
             and admission.spawn_requirements
             and all(
                 _spawn_requirement_is_complete(
@@ -131,6 +143,35 @@ def docker_authority_admissions(
             "Docker authority graph admission is incomplete or stale."
         )
     return admissions
+
+
+def bind_runtime_product_execution(
+    realization: DeploymentRealizationSpec,
+    *,
+    authority_correlation_id: str,
+    product_execution_id: str,
+) -> DeploymentRealizationSpec:
+    """Bind trusted product execution evidence to one exact run admission."""
+
+    admissions = docker_authority_admissions(realization)
+    matches = [
+        admission
+        for admission in admissions
+        if admission.correlation_id == authority_correlation_id
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            "aptl.provisioner.runtime-authority-admission-invalid: "
+            "runtime execution authority is missing or ambiguous."
+        )
+    selected = matches[0]
+    bound = selected.bind_product_execution(product_execution_id)
+    return replace(
+        realization,
+        docker_authority_admissions=tuple(
+            bound if admission is selected else admission for admission in admissions
+        ),
+    )
 
 
 def docker_authority_admissions_by_address(

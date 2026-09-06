@@ -377,6 +377,31 @@ class DeploymentGeneratedArtifactOutput(object):
 
 
 @dataclass(frozen=True)
+class DeploymentGeneratedArtifactEnvironmentConsumer(object):
+    """One generated output delivered as a runtime environment variable.
+
+    Only binding metadata belongs in this DTO.  The generated value remains in
+    the scenario-local credential tree and is never copied into realization
+    details, diagnostics, or evidence.
+    """
+
+    target_address: str
+    node_name: str
+    service_name: str
+    output_name: str
+    environment_variable: str
+
+    def details(self) -> dict[str, object]:
+        return {
+            "target_address": self.target_address,
+            "node_name": self.node_name,
+            "service_name": self.service_name,
+            "output_name": self.output_name,
+            "environment_variable": self.environment_variable,
+        }
+
+
+@dataclass(frozen=True)
 class DeploymentGeneratedArtifactRealization(object):
     """One RAES generated-artifact operation admitted for deployment."""
 
@@ -387,6 +412,9 @@ class DeploymentGeneratedArtifactRealization(object):
     provenance: str
     outputs: tuple[DeploymentGeneratedArtifactOutput, ...]
     consumers: tuple[DeploymentStatefulConsumer, ...]
+    environment_consumers: tuple[
+        DeploymentGeneratedArtifactEnvironmentConsumer, ...
+    ] = ()
     ordering_dependencies: tuple[str, ...] = ()
     refresh_dependencies: tuple[str, ...] = ()
 
@@ -399,6 +427,9 @@ class DeploymentGeneratedArtifactRealization(object):
             "provenance": self.provenance,
             "outputs": [output.details() for output in self.outputs],
             "consumers": [consumer.details() for consumer in self.consumers],
+            "environment_consumers": [
+                consumer.details() for consumer in self.environment_consumers
+            ],
             "ordering_dependencies": list(self.ordering_dependencies),
             "refresh_dependencies": list(self.refresh_dependencies),
         }

@@ -17,11 +17,12 @@ from aptl.core.config import AptlConfig
 from aptl.validation import _live_gate_operations as ops
 from aptl.validation import _live_gate_probes as lgp
 from aptl.validation import _live_gate_telemetry as lgt
-from aptl.validation._live_gate_operations import LiveGateOperations
+from aptl.validation._live_gate_operations import LiveGateOperations, ProductApiEndpoint
 from aptl.validation.techvault_live_gate import LiveGateOptions, LiveGateState
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ATTACKER = "aptl-kali"
+SENSOR = "aptl-suricata"
 
 
 class _Backend:
@@ -118,6 +119,7 @@ def _telemetry_state():
     return _state(
         [
             _container(ATTACKER, networks={"aptl-dmz-net": "172.20.1.30"}),
+            _container(SENSOR, networks={"aptl-dmz-net": "172.20.1.40"}),
             _container("aptl-webapp", networks={"aptl-dmz-net": "172.20.1.10"}),
         ]
     )
@@ -153,9 +155,9 @@ def test_detection_fails_when_only_suricata_traffic_is_collected(monkeypatch):
     )
     monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
     state = _telemetry_state()
-    result = _operations(state, LiveGateOptions(event_window_seconds=10)).detection_evidence(
-        ATTACKER, 10
-    )
+    result = _operations(
+        state, LiveGateOptions(event_window_seconds=10)
+    ).detection_evidence(ATTACKER, SENSOR, 10)
     assert not result.observed
     telemetry = state.evidence["telemetry"]
     assert telemetry["suricata_traffic_event_count"] == 2
@@ -164,7 +166,9 @@ def test_detection_fails_when_only_suricata_traffic_is_collected(monkeypatch):
 
 def test_detection_passes_when_a_correlated_wazuh_alert_is_collected(monkeypatch):
     _wire_telemetry(monkeypatch)
-    monkeypatch.setattr(lgp, "collect_suricata_eve", lambda s, e, b: [{"event_type": "flow"}])
+    monkeypatch.setattr(
+        lgp, "collect_suricata_eve", lambda s, e, b: [{"event_type": "flow"}]
+    )
 
     def collect_wazuh(start, end, **kwargs):
         return [
@@ -178,9 +182,9 @@ def test_detection_passes_when_a_correlated_wazuh_alert_is_collected(monkeypatch
 
     monkeypatch.setattr(lgp, "collect_wazuh_alerts", collect_wazuh)
     state = _telemetry_state()
-    result = _operations(state, LiveGateOptions(event_window_seconds=10)).detection_evidence(
-        ATTACKER, 10
-    )
+    result = _operations(
+        state, LiveGateOptions(event_window_seconds=10)
+    ).detection_evidence(ATTACKER, SENSOR, 10)
     assert result.observed
     telemetry = state.evidence["telemetry"]
     assert telemetry["wazuh_correlated_alert_count"] == 1
@@ -194,12 +198,14 @@ def test_detection_rejects_an_unrelated_wazuh_alert(monkeypatch):
     monkeypatch.setattr(
         lgp,
         "collect_wazuh_alerts",
-        lambda s, e, **kwargs: [{"rule": {"id": "1002"}, "full_log": "Unrelated event"}],
+        lambda s, e, **kwargs: [
+            {"rule": {"id": "1002"}, "full_log": "Unrelated event"}
+        ],
     )
     state = _telemetry_state()
-    result = _operations(state, LiveGateOptions(event_window_seconds=10)).detection_evidence(
-        ATTACKER, 10
-    )
+    result = _operations(
+        state, LiveGateOptions(event_window_seconds=10)
+    ).detection_evidence(ATTACKER, SENSOR, 10)
     assert not result.observed
     assert state.evidence["telemetry"]["wazuh_correlated_alert_count"] == 0
 
@@ -213,15 +219,109 @@ def test_detection_fails_on_stats_only_events(monkeypatch):
     )
     monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
     state = _telemetry_state()
-    result = _operations(state, LiveGateOptions(event_window_seconds=10)).detection_evidence(
-        ATTACKER, 10
-    )
+    result = _operations(
+        state, LiveGateOptions(event_window_seconds=10)
+    ).detection_evidence(ATTACKER, SENSOR, 10)
     assert not result.observed
     assert state.evidence["telemetry"]["suricata_traffic_event_count"] == 0
 
 
 def test_detection_fails_without_a_reachable_target():
     state = _state([_container(ATTACKER, networks={"n": "1.1.1.1"})])
-    result = _operations(state).detection_evidence(ATTACKER, 10)
+    result = _operations(state).detection_evidence(ATTACKER, SENSOR, 10)
     assert not result.observed
     assert any("no reachable target" in d for d in result.diagnostics)
+
+
+# --------------------------------------------------------------------------- #
+# Authenticated product API boundary.
+# --------------------------------------------------------------------------- #
+
+
+def test_product_json_calls_only_the_configured_localhost_endpoint(monkeypatch):
+    endpoint = ProductApiEndpoint("PRODUCT_API_KEY", "PRODUCT_API_PORT", 9443)
+    monkeypatch.setattr(
+        ops,
+        "load_dotenv",
+        lambda _path: {"PRODUCT_API_KEY": "secret", "PRODUCT_API_PORT": "8443"},
+    )
+    monkeypatch.setattr(ops, "_resolve_lab_ca_path", lambda _path: Path("lab-ca.pem"))
+    observed = {}
+
+    def fake_curl_json(url, **kwargs):
+        observed.update(url=url, **kwargs)
+        return {"status": "ok"}
+
+    monkeypatch.setattr(ops, "curl_json", fake_curl_json)
+
+    result = _operations(_state([])).product_json(
+        endpoint,
+        "/api/v1/executions?limit=1",
+        method="POST",
+        body={"run": "accepted"},
+    )
+
+    assert result == {"status": "ok"}
+    assert observed == {
+        "url": "https://localhost:8443/api/v1/executions?limit=1",
+        "auth_header": "Bearer secret",
+        "body": {"run": "accepted"},
+        "method": "POST",
+        "ca_cert_path": Path("lab-ca.pem"),
+    }
+
+
+def test_product_json_rejects_unbounded_configuration_and_request_inputs(monkeypatch):
+    monkeypatch.setattr(
+        ops,
+        "load_dotenv",
+        lambda _path: {"PRODUCT_API_KEY": "secret", "PRODUCT_API_PORT": "8443"},
+    )
+    monkeypatch.setattr(
+        ops,
+        "curl_json",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("invalid product API input reached curl")
+        ),
+    )
+    operations = _operations(_state([]))
+    valid = ProductApiEndpoint("PRODUCT_API_KEY", "PRODUCT_API_PORT", 9443)
+
+    invalid_calls = (
+        (
+            ProductApiEndpoint("product_api_key", "PRODUCT_API_PORT", 9443),
+            "/api",
+            "GET",
+        ),
+        (
+            ProductApiEndpoint("PRODUCT_API_KEY", "product_api_port", 9443),
+            "/api",
+            "GET",
+        ),
+        (valid, "https://example.test/api", "GET"),
+        (valid, "//example.test/api", "GET"),
+        (valid, "/api", "DELETE"),
+    )
+    for endpoint, path, method in invalid_calls:
+        assert operations.product_json(endpoint, path, method=method) is None
+
+
+def test_product_json_rejects_invalid_or_placeholder_credentials(monkeypatch):
+    endpoint = ProductApiEndpoint("PRODUCT_API_KEY", "PRODUCT_API_PORT", 9443)
+    operations = _operations(_state([]))
+    monkeypatch.setattr(
+        ops,
+        "curl_json",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("invalid credentials reached curl")
+        ),
+    )
+
+    for environment in (
+        {"PRODUCT_API_KEY": "changeme", "PRODUCT_API_PORT": "8443"},
+        {"PRODUCT_API_KEY": "secret", "PRODUCT_API_PORT": "0"},
+        {"PRODUCT_API_KEY": "secret", "PRODUCT_API_PORT": "65536"},
+        {"PRODUCT_API_KEY": "secret", "PRODUCT_API_PORT": "not-a-port"},
+    ):
+        monkeypatch.setattr(ops, "load_dotenv", lambda _path, env=environment: env)
+        assert operations.product_json(endpoint, "/api") is None

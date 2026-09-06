@@ -23,6 +23,7 @@ from aptl.backends.raes_artifact_mechanisms import (
 )
 from aptl.backends.raes_artifact_satisfaction import satisfactions_for_plan
 from aptl.backends.raes_content_satisfaction import content_satisfactions_for_plan
+from aptl.backends.raes_execution_observation import bind_execution_observations
 from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.backends.raes_observation import observation_evidence, observe_realization
 from aptl.backends.raes_realization import (
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
     from raes_contracts.contracts import ArtifactAvailabilityContext
 
     from aptl.core.deployment.backend import DeploymentBackend
+    from aptl.core.operator_policy import OperatorPolicy
     from aptl.core.scenario_bundle import ScenarioBundle
 
 
@@ -67,6 +69,9 @@ class AptlProvisioner(object):
     # exact id rather than resolving the mutable tag a second time at apply
     # (issue #876 cycle-6 review). None for a scenario with no artifact demand.
     artifact_availability: ArtifactAvailabilityContext | None = None
+    operator_policy: OperatorPolicy | None = None
+    run_id: str = ""
+    attempt_id: str = ""
     _cached_plan: object | None = field(default=None, init=False, repr=False)
     _cached_realization: AptlRealization | None = field(
         default=None, init=False, repr=False
@@ -176,6 +181,13 @@ class AptlProvisioner(object):
         )
         realized_snapshot = self._with_artifact_satisfactions(
             plan, snapshot_after_apply(plan, snapshot, observations), realization
+        )
+        realized_snapshot = bind_execution_observations(
+            self.deployment_backend,
+            realization,
+            plan,
+            realized_snapshot,
+            observations,
         )
         return ApplyResult(
             success=True,
@@ -331,6 +343,9 @@ class AptlProvisioner(object):
             config=self.config,
             bundle=self.bundle,
             component_root=self.project_dir,
+            operator_policy=self.operator_policy,
+            run_id=self.run_id,
+            attempt_id=self.attempt_id,
         )
         self._cached_plan = plan
         self._cached_realization = realization

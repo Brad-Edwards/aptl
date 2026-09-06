@@ -32,6 +32,9 @@ from raes_backend_protocols.capabilities import (
     ParticipantRuntimeCapabilities,
     ProvisionerCapabilities,
 )
+from raes_backend_protocols.provisioner_capabilities import (
+    OperatingSystemCompatibility,
+)
 from raes_backend_protocols.manifest import backend_manifest_v2_model
 from raes_contracts.apparatus import (
     ConceptBinding,
@@ -70,9 +73,7 @@ from aptl.core.experiment.capture_registry import (
     OBSERVATION_EVIDENCE_CONTRACTS,
 )
 
-APTL_EXPERIMENT_ACTION_TIMEOUT_TARGET = (
-    "participant-runtime.action-timeout-seconds"
-)
+APTL_EXPERIMENT_ACTION_TIMEOUT_TARGET = "participant-runtime.action-timeout-seconds"
 
 _EXPERIMENT_CONFIGURATION_REGISTRY = ConfigurationTargetRegistryModel(
     owner=BindingOwnerModel(
@@ -184,7 +185,7 @@ _EVALUATOR = EvaluatorCapabilities(
     supported_predicate_families=frozenset({"boolean"}),
     supported_quantifiers=frozenset({"all"}),
     supported_truth_outcomes=frozenset({"true", "false", "unknown", "unsupported"}),
-    supported_evidence_channels=frozenset({"api_response"}),
+    supported_evidence_channels=frozenset({"api_response", "log"}),
     supported_time_domains=frozenset({"scenario_time"}),
     preserves_binding_provenance=True,
 )
@@ -216,12 +217,66 @@ _PARTICIPANT_RUNTIME = ParticipantRuntimeCapabilities(
     },
 )
 
+_CONFIGURATION_OBSERVATION_KINDS = frozenset(
+    {
+        "runtime-environment",
+        "runtime-mounts",
+        "published-ports",
+        "runtime-packages",
+        "runtime-service-manager-units",
+        "linux-capabilities",
+        "forwarding-agents",
+        "runtime-local-identity",
+        "runtime-datastore-services",
+        "runtime-platform-applications",
+        "runtime-filesystem-inventory",
+        "runtime-container-entrypoint",
+        "runtime-container-command",
+        "service-listeners",
+        "runtime-local-control-interfaces",
+        "runtime-container-namespaces",
+        "runtime-container-autoremove",
+        "runtime-file-services",
+        "runtime-applications",
+        "runtime-database-services",
+        "runtime-dns-services",
+        "runtime-network-sensors",
+        "runtime-network-detection-engines",
+        "runtime-security-monitoring-managers",
+        "runtime-orchestration-authorities",
+        "runtime-app-authorizations",
+        "runtime-dependency-manifests",
+    }
+)
+
 # Provisioner capability declaration, using only published controlled-vocabulary
 # terms (validated against contracts/concept-authority/controlled-vocabularies-v1).
 _PROVISIONER = ProvisionerCapabilities(
     name="aptl-docker-compose-provisioner",
-    supported_node_types=frozenset({"switch", "vm"}),
+    supported_node_types=frozenset({"compute", "switch"}),
     supported_os_families=frozenset({"linux"}),
+    # Coupled guest identities APTL can read from the current pinned appliance
+    # images and its two generic base substrates.  Extension distributions cover
+    # Linux product lines absent from RAES's portable core vocabulary.
+    operating_systems=(
+        OperatingSystemCompatibility("linux", "ubuntu", frozenset({"20.04", "22.04"})),
+        OperatingSystemCompatibility("linux", "debian", frozenset({"11", "12", "13"})),
+        OperatingSystemCompatibility("linux", "rocky-linux", frozenset({"9", "9.3"})),
+        OperatingSystemCompatibility(
+            "linux",
+            "x-aptl:alpine",
+            frozenset(
+                {"3.19", "3.20", "3.21.3", "3.21.7", "3.22.1", "3.22.2", "3.24.1"}
+            ),
+        ),
+        OperatingSystemCompatibility("linux", "x-aptl:almalinux", frozenset({"9.8"})),
+        OperatingSystemCompatibility(
+            "linux", "x-aptl:amazon-linux", frozenset({"2023"})
+        ),
+        OperatingSystemCompatibility(
+            "linux", "x-aptl:distroless", frozenset({"0.123.0"})
+        ),
+    ),
     supported_content_types=frozenset({"dataset", "directory", "file"}),
     # Manifest honesty (#577, ADR-046 addendum): advertise only the account
     # features the backend materializes AND verifies by read-after-write — the
@@ -260,6 +315,7 @@ _PROVISIONER = ProvisionerCapabilities(
     supported_generated_artifact_kinds=frozenset(
         {"certificate_bundle", "rendered_config", "ssh_key_bundle"}
     ),
+    supported_generated_artifact_delivery_modes=frozenset({"mount", "environment"}),
     supports_persistent_volumes=True,
 )
 
@@ -276,12 +332,12 @@ _REALIZATION_ENVELOPE = build_aptl_realization_envelope(_PROVISIONER)
 # capabilities against its provisioner support and discloses the result through
 # the backend-manifest / operation-status / runtime-snapshot contracts. The
 # constrained-kind set is intentionally narrower than the provisioner vocabulary:
-# RAES 0.21.x publishes runtime concern paths for node type, OS family, and
-# content type, but only OS family is currently expressible by APTL's regression
-# scenario as a constrained (processor-derived) requirement. Node/content exact
-# requirements are covered by ``declared-capability-match``; account features are
-# realized through the account provider's typed read-after-write path but are not
-# yet a RAES runtime realization concern.
+# RAES 3.5 publishes exact runtime concern paths for the typed node configuration,
+# while only OS family is currently expressible by APTL's regression scenario as
+# a constrained (processor-derived) requirement. Node/content exact requirements
+# are covered by ``declared-capability-match``; account features are realized
+# through the account provider's typed read-after-write path but are not yet a
+# RAES runtime realization concern.
 #
 # ``artifact_mechanisms`` declares which RAES artifact-satisfaction routes APTL
 # can admit (ADR-050, RAES ADR-098). It is deliberately narrow: a mechanism is
@@ -305,7 +361,9 @@ _REALIZATION_SUPPORT = (
     RealizationSupportDeclaration(
         domain="runtime-realization",
         support_mode=RealizationSupportMode.OPEN_REALIZATION,
-        supported_constraint_kinds=frozenset({"os-family", "source-artifact"}),
+        supported_constraint_kinds=frozenset(
+            {"compute-substrate", "os-family", "source-artifact"}
+        ),
         # ``service-search-index-schema-materialization`` (ADR-088, #889) is an
         # exact requirement kind APTL genuinely realizes through the native ES
         # materializer and reads back through the service's native interface, so
@@ -315,21 +373,69 @@ _REALIZATION_SUPPORT = (
             {
                 "declared-capability-match",
                 "service-search-index-schema-materialization",
+                "runtime-environment",
+                "runtime-mounts",
+                "published-ports",
+                "runtime-packages",
+                "runtime-service-manager-units",
+                "linux-capabilities",
+                "forwarding-agents",
+                "runtime-local-identity",
+                "runtime-datastore-services",
+                "runtime-platform-applications",
+                "runtime-filesystem-inventory",
+                "runtime-container-entrypoint",
+                "runtime-container-command",
+                "service-listeners",
+                "runtime-local-control-interfaces",
+                "runtime-container-namespaces",
+                "runtime-container-autoremove",
+                "runtime-file-services",
+                "runtime-applications",
+                "runtime-database-services",
+                "runtime-dns-services",
+                "runtime-network-sensors",
+                "runtime-network-detection-engines",
+                "runtime-security-monitoring-managers",
+                "runtime-orchestration-authorities",
+                "runtime-app-authorizations",
+                "runtime-dependency-manifests",
             }
         ),
         disclosure_kinds=frozenset(
             {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
         ),
-        # Per-concern observation capability (raes 3.3.0). Only concerns raes
-        # compiles with a non-null verification_scope need one; today that is
-        # forwarding-agents, whose scope is `configuration` when the agent
-        # declares any sources/transforms/ship_targets/reload_channels/settings.
-        # APTL corroborates it by reading the realized container's declared
-        # forwarding data-path footprint back off host-side `docker inspect`
-        # (daemon-observed), and discloses only corroborated agents — so this
-        # declaration is honest: it is backed by real readback
-        # (raes_runtime_observation._observe_forwarding_agents), not an echo.
+        # Per-concern observation capabilities for the RAES 3.5 runtime surface.
+        # Forwarding agents retain their narrower daemon-observed claim because
+        # APTL corroborates their data-path footprint from Docker mounts. The
+        # remaining configuration concerns describe guest runtime state and are
+        # disclosed only after the realization observer accepts the corresponding
+        # container/materializer readback.
         observation_capabilities={
+            **{
+                kind: RealizationObservationCapability(
+                    verification_scope=RealizationVerificationScope.CONFIGURATION,
+                    # These concern values describe the realized guest runtime.
+                    # APTL reads them through the Docker boundary (inspect,
+                    # namespace probes, or the generic materializer's in-guest
+                    # read-after-write checks), then projects protected values
+                    # before disclosure.
+                    observation_strength=ObservationStrength.GUEST_OBSERVED,
+                )
+                for kind in _CONFIGURATION_OBSERVATION_KINDS
+            },
+            "compute-substrate": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.PRESENCE,
+                observation_strength=ObservationStrength.DAEMON_OBSERVED,
+            ),
+            "operating-system": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.PRESENCE,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
+            ),
+            "os-family": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.PRESENCE,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
+            ),
             "forwarding-agents": RealizationObservationCapability(
                 verification_scope=RealizationVerificationScope.CONFIGURATION,
                 observation_strength=ObservationStrength.DAEMON_OBSERVED,

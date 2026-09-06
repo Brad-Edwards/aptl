@@ -25,8 +25,10 @@ from aptl.backends.raes_materializer import (
 )
 from aptl.backends.raes_node_materialization import realize_node
 from aptl.backends.raes_realization import interpret_provisioning_plan
+from aptl.backends.raes_start_model import AcesRunTarget
 from aptl.core.config import AptlConfig
 from aptl.core.deployment.docker_compose import DockerComposeBackend
+from aptl.core.operator_policy import load_operator_policy
 from tests.helpers import techvault_scenario_bundle
 
 pytestmark = pytest.mark.integration
@@ -35,29 +37,56 @@ pytestmark = pytest.mark.integration
 def _docker_available() -> bool:
     if shutil.which("docker") is None:
         return False
-    return subprocess.run(["docker", "info"], capture_output=True, text=True).returncode == 0
+    return (
+        subprocess.run(["docker", "info"], capture_output=True, text=True).returncode
+        == 0
+    )
 
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
 def test_dns_node_boots_image_free_and_resolves(tmp_path):
     repo = Path(__file__).resolve().parent.parent
     subprocess.run(
-        ["docker", "build", "-t", "aptl/generic-systemd-base-debian:latest",
-         str(repo / "containers/generic-systemd-base-debian")],
-        capture_output=True, text=True, timeout=600,
+        [
+            "docker",
+            "build",
+            "-t",
+            "aptl/generic-systemd-base-debian:latest",
+            str(repo / "containers/generic-systemd-base-debian"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=600,
     )
     subprocess.run(["docker", "rm", "-f", "aptl-dns"], capture_output=True, text=True)
 
     cfg = AptlConfig(lab={"name": "x"}, containers={})
     be = DockerComposeBackend(project_dir=repo, project_name="aptl")
     bundle = techvault_scenario_bundle(tmp_path)
+    operator_policy = load_operator_policy(repo)
+    run_target = AcesRunTarget(
+        run_store=object(),
+        run_id="dns-integration",
+        attempt_id="dns-integration-attempt",
+    )
     plan = RuntimeManager(
         create_aptl_runtime_target(
-            project_dir=repo, config=cfg, backend=be, bundle=bundle
+            project_dir=repo,
+            config=cfg,
+            backend=be,
+            bundle=bundle,
+            operator_policy=operator_policy,
+            run_target=run_target,
         )
     ).plan(parse_sdl_file(bundle.sdl_path))
     real = interpret_provisioning_plan(
-        plan=plan.provisioning, config=cfg, bundle=bundle, component_root=repo
+        plan=plan.provisioning,
+        config=cfg,
+        bundle=bundle,
+        component_root=repo,
+        operator_policy=operator_policy,
+        run_id=run_target.run_id,
+        attempt_id=run_target.resolved_attempt_id,
     )
     assert [x.message for x in real.diagnostics if x.is_error] == []
     spec = real.deployment_spec([])
@@ -93,19 +122,27 @@ def test_dns_node_boots_image_free_and_resolves(tmp_path):
     try:
         result = realize_node(dns_node, be, tuple(ops), scenario_root=bundle.root)
         assert result is None, getattr(result, "error", None)
-        assert be.container_exec(
-            "aptl-dns", ["systemctl", "is-active", "named.service"]
-        ).stdout.strip() == "active"
+        assert (
+            be.container_exec(
+                "aptl-dns", ["systemctl", "is-active", "named.service"]
+            ).stdout.strip()
+            == "active"
+        )
         # The real named.conf's custom log channels wrote into a directory
         # this materialization must create and chown to bind:bind (the user
         # named drops privileges to via `-u bind`); prove it actually did.
-        assert be.container_exec(
-            "aptl-dns", ["stat", "-c", "%U:%G", "/var/log/named"]
-        ).stdout.strip() == "bind:bind"
+        assert (
+            be.container_exec(
+                "aptl-dns", ["stat", "-c", "%U:%G", "/var/log/named"]
+            ).stdout.strip()
+            == "bind:bind"
+        )
         # named serves the real TechVault zone.
         dig = be.container_exec(
             "aptl-dns", ["dig", "+short", "@127.0.0.1", "webapp.techvault.local"]
         )
         assert "172.20.1.20" in dig.stdout
     finally:
-        subprocess.run(["docker", "rm", "-f", "aptl-dns"], capture_output=True, text=True)
+        subprocess.run(
+            ["docker", "rm", "-f", "aptl-dns"], capture_output=True, text=True
+        )

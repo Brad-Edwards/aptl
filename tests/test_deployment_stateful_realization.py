@@ -18,6 +18,7 @@ from aptl.core.credentials import PathContainmentError
 from aptl.core.certs import CertResult
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment._compose_stateful_realization import (
+    effective_stateful_model_errors,
     stateful_override_payload,
     stateful_realization_errors,
     write_stateful_override,
@@ -27,6 +28,7 @@ from aptl.core.deployment._stateful_certificates import (
     validate_certificate_bundle,
 )
 from aptl.core.deployment.realization import (
+    DeploymentGeneratedArtifactEnvironmentConsumer,
     DeploymentGeneratedArtifactOutput,
     DeploymentGeneratedArtifactRealization,
     DeploymentImageRealization,
@@ -588,9 +590,10 @@ def test_generated_compose_model_is_validated_before_up(
     config_index = next(i for i, cmd in enumerate(commands) if "config" in cmd)
     up_index = next(i for i, cmd in enumerate(commands) if "up" in cmd)
     assert config_index < up_index
-    assert commands[config_index][-4:] == [
+    assert commands[config_index][-5:] == [
         "config",
         "--no-interpolate",
+        "--no-env-resolution",
         "--format",
         "json",
     ]
@@ -1016,7 +1019,9 @@ def test_image_free_consumers_receive_their_selected_outputs_as_placed_files(
         ),
     )
     realization = DeploymentRealizationSpec(
-        profiles=(), nodes=(), networks=(),
+        profiles=(),
+        nodes=(),
+        networks=(),
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
@@ -1043,7 +1048,9 @@ def test_an_artifact_with_no_image_free_consumer_is_not_generated_here(
     staged = _stub_ssh_generator(monkeypatch)
     consumer = _image_free_consumer("kali", selected=("target-authorized-keys",))
     realization = DeploymentRealizationSpec(
-        profiles=(), nodes=(), networks=(),
+        profiles=(),
+        nodes=(),
+        networks=(),
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
@@ -1064,7 +1071,9 @@ def test_a_generator_failure_stops_image_free_placement(
     _stub_ssh_generator(monkeypatch, error="no entropy source")
     consumer = _image_free_consumer("workstation", selected=("target-authorized-keys",))
     realization = DeploymentRealizationSpec(
-        profiles=(), nodes=(), networks=(),
+        profiles=(),
+        nodes=(),
+        networks=(),
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
@@ -1085,11 +1094,15 @@ def test_a_declared_output_that_never_materialized_stops_image_free_placement(
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     monkeypatch.setattr(
         "aptl.core.deployment._compose_stateful_realization.realize_ssh_key_bundle",
-        lambda artifact, staging_root, **kwargs: None,  # reports success, writes nothing
+        lambda artifact, staging_root, **kwargs: (
+            None
+        ),  # reports success, writes nothing
     )
     consumer = _image_free_consumer("workstation", selected=("target-authorized-keys",))
     realization = DeploymentRealizationSpec(
-        profiles=(), nodes=(), networks=(),
+        profiles=(),
+        nodes=(),
+        networks=(),
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
@@ -1160,9 +1173,7 @@ def test_the_soc_service_set_is_derived_from_the_declared_bundle_outputs(
 
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     artifact = _soc_artifact()
-    requested = _stub_soc_certs(
-        monkeypatch, written=[o.path for o in artifact.outputs]
-    )
+    requested = _stub_soc_certs(monkeypatch, written=[o.path for o in artifact.outputs])
 
     assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
 
@@ -1298,16 +1309,23 @@ def _content_override_spec(tmp_path: Path):
         profiles=(),
         nodes=(
             DeploymentNodeRealization(
-                address="provision.node.tempo", name="tempo", service_name="tempo",
-                container_name="aptl-tempo", networks=(),
+                address="provision.node.tempo",
+                name="tempo",
+                service_name="tempo",
+                container_name="aptl-tempo",
+                networks=(),
             ),
         ),
         networks=(),
         images=(
             DeploymentImageRealization(
-                address="provision.node.tempo", service_name="tempo",
-                source_name="img", source_version="1", image_ref="img:1",
-                mode="pull", policy_rule="allowed-source",
+                address="provision.node.tempo",
+                service_name="tempo",
+                source_name="img",
+                source_version="1",
+                image_ref="img:1",
+                mode="pull",
+                policy_rule="allowed-source",
             ),
         ),
         content=(
@@ -1368,9 +1386,7 @@ def test_no_image_node_content_means_no_override_file(tmp_path: Path) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     empty = DeploymentRealizationSpec(profiles=(), nodes=(), networks=())
 
-    assert (
-        backend._write_image_node_content_override(empty, tmp_path, tmp_path) is None
-    )
+    assert backend._write_image_node_content_override(empty, tmp_path, tmp_path) is None
     assert not (tmp_path / ".aptl/realization/compose.content.yml").exists()
 
 
@@ -1484,3 +1500,127 @@ def test_a_spec_with_no_content_seeds_nothing(tmp_path: Path, monkeypatch) -> No
     empty = DeploymentRealizationSpec(profiles=(), nodes=(), networks=())
 
     assert backend._realize_content(empty, tmp_path) is None
+
+
+# -- Generated-artifact environment delivery (env-packs #322) ---------------
+
+
+def _cortex_credentials_spec() -> DeploymentRealizationSpec:
+    artifact = DeploymentGeneratedArtifactRealization(
+        address="provision.generated-artifact.cortex-service-credentials",
+        name="cortex-service-credentials",
+        generator="rendered_config",
+        lifecycle="reuse_valid",
+        provenance="techvault:cortex-service-credentials/v1",
+        outputs=(
+            DeploymentGeneratedArtifactOutput(
+                "initializer-api-key",
+                "cortex/initializer-api-key",
+                "secret",
+            ),
+            DeploymentGeneratedArtifactOutput(
+                "connector-api-key",
+                "cortex/connector-api-key",
+                "secret",
+            ),
+        ),
+        consumers=(),
+        environment_consumers=(
+            DeploymentGeneratedArtifactEnvironmentConsumer(
+                target_address="provision.node.cortex-initializer",
+                node_name="cortex-initializer",
+                service_name="cortex-initializer",
+                output_name="initializer-api-key",
+                environment_variable="CORTEX_ADMIN_KEY",
+            ),
+            DeploymentGeneratedArtifactEnvironmentConsumer(
+                target_address="provision.node.cortex-initializer",
+                node_name="cortex-initializer",
+                service_name="cortex-initializer",
+                output_name="connector-api-key",
+                environment_variable="CORTEX_CONNECTOR_KEY",
+            ),
+            DeploymentGeneratedArtifactEnvironmentConsumer(
+                target_address="provision.node.thehive",
+                node_name="thehive",
+                service_name="thehive",
+                output_name="connector-api-key",
+                environment_variable="TH_CORTEX_KEYS",
+            ),
+        ),
+    )
+    nodes = tuple(
+        DeploymentNodeRealization(
+            address=f"provision.node.{name}",
+            name=name,
+            service_name=name,
+            container_name=f"aptl-{name}",
+            networks=(),
+        )
+        for name in ("cortex-initializer", "thehive")
+    )
+    images = tuple(
+        DeploymentImageRealization(
+            address=node.address,
+            service_name=node.service_name,
+            source_name=node.name,
+            source_version="1",
+            image_ref=f"example/{node.name}:1",
+            mode="pull",
+            policy_rule="test",
+        )
+        for node in nodes
+    )
+    return DeploymentRealizationSpec(
+        profiles=("soc",),
+        nodes=nodes,
+        networks=(),
+        images=images,
+        generated_artifacts=(artifact,),
+    )
+
+
+def test_cortex_credentials_are_distinct_reused_and_owner_only(tmp_path: Path) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    spec = _cortex_credentials_spec()
+
+    assert backend._realize_stateful_prerequisites(spec, tmp_path) is None
+    root = (
+        tmp_path
+        / ".aptl/realization/generated-artifacts/cortex-service-credentials/cortex"
+    )
+    first = (root / "initializer-api-key").read_text(encoding="utf-8").strip()
+    second = (root / "connector-api-key").read_text(encoding="utf-8").strip()
+    assert first and second and first != second
+    assert (root / "initializer-api-key").stat().st_mode & 0o777 == 0o600
+
+    assert backend._realize_stateful_prerequisites(spec, tmp_path) is None
+    assert (root / "initializer-api-key").read_text(encoding="utf-8").strip() == first
+
+    env_paths = backend._generated_environment_files_by_address
+    initializer_env = env_paths["provision.node.cortex-initializer"]
+    assert initializer_env.stat().st_mode & 0o777 == 0o600
+    assert f"CORTEX_ADMIN_KEY={first}\n" in initializer_env.read_text(encoding="utf-8")
+
+
+def test_generated_compose_references_credentials_without_rendering_them(
+    tmp_path: Path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    spec = _cortex_credentials_spec()
+    assert backend._realize_stateful_prerequisites(spec, tmp_path) is None
+
+    payload = stateful_override_payload(tmp_path, "aptl-test", spec)
+    rendered = yaml.safe_dump(payload, sort_keys=True)
+    credential_root = (
+        tmp_path
+        / ".aptl/realization/generated-artifacts/cortex-service-credentials/cortex"
+    )
+    secrets = [
+        (credential_root / name).read_text(encoding="utf-8").strip()
+        for name in ("initializer-api-key", "connector-api-key")
+    ]
+
+    assert "env_file:" in rendered
+    assert all(secret not in rendered for secret in secrets)
+    assert effective_stateful_model_errors(payload, tmp_path, "aptl-test", spec) == []

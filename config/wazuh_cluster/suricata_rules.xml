@@ -81,6 +81,17 @@
     <group>suricata,ids,credential_theft,</group>
   </rule>
 
+  <!-- The live gate's bounded, rate-limited sensor probe.  Extend Wazuh's
+       native Suricata alert rule directly: sibling decoded_as rules do not
+       supersede the native 86601 match, so this explicit child is what raises
+       the marker to the SOAR integration's level-10 threshold. -->
+  <rule id="303070" level="10">
+    <if_sid>86601</if_sid>
+    <field name="alert.signature">^APTL live gate correlation aptl-live-gate-invalid$</field>
+    <description>APTL live gate correlated sensor probe</description>
+    <group>suricata,ids,web_attack,live_gate,</group>
+  </rule>
+
   <!-- Suricata flow events (for network monitoring) -->
   <rule id="303100" level="0">
     <decoded_as>json</decoded_as>

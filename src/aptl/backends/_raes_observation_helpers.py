@@ -131,7 +131,14 @@ def artifact_spec(
         "lifecycle": artifact.lifecycle,
         "provenance": artifact.provenance,
         "outputs": [output.details() for output in artifact.outputs],
-        "consumers": [consumer_spec(consumer) for consumer in artifact.consumers],
+        "consumers": [
+            consumer_spec(consumer, delivery_mode="mount")
+            for consumer in artifact.consumers
+        ],
+        "environment_consumers": [
+            environment_consumer_spec(consumer)
+            for consumer in artifact.environment_consumers
+        ],
         "ordering_dependencies": _author_dependencies(artifact.ordering_dependencies),
         "refresh_dependencies": _author_dependencies(artifact.refresh_dependencies),
     }
@@ -149,7 +156,9 @@ def volume_spec(volume: DeploymentPersistentVolumeRealization) -> dict[str, obje
     }
 
 
-def consumer_spec(consumer: DeploymentStatefulConsumer) -> dict[str, object]:
+def consumer_spec(
+    consumer: DeploymentStatefulConsumer, *, delivery_mode: str | None = None
+) -> dict[str, object]:
     """Render one stateful consumer as a non-secret concern value.
 
     ``selected_outputs`` is rendered only when the consumer declares it (a
@@ -164,9 +173,23 @@ def consumer_spec(consumer: DeploymentStatefulConsumer) -> dict[str, object]:
         "access_mode": consumer.access_mode,
         "target_address": consumer.target_address,
     }
+    if delivery_mode is not None:
+        spec["delivery_mode"] = delivery_mode
     if consumer.selected_outputs:
         spec["selected_outputs"] = list(consumer.selected_outputs)
     return spec
+
+
+def environment_consumer_spec(consumer: object) -> dict[str, object]:
+    """Render an environment delivery in the RAES author vocabulary."""
+
+    return {
+        "node": getattr(consumer, "node_name"),
+        "output": getattr(consumer, "output_name"),
+        "environment_variable": getattr(consumer, "environment_variable"),
+        "target_address": getattr(consumer, "target_address"),
+        "delivery_mode": "environment",
+    }
 
 
 def safe_inspect(backend: "DeploymentBackend", name: str) -> dict[str, Any]:
@@ -222,15 +245,26 @@ def _transitional_state(info: Mapping[str, Any]) -> bool:
     return container_running(info) and container_health(info) == "starting"
 
 
-def container_realized(info: Mapping[str, Any]) -> bool:
+def container_realized(
+    info: Mapping[str, Any], *, run_to_completion: bool = False
+) -> bool:
     """Return whether an inspected container has reached its realized state.
 
-    A running, healthy container is realized. A container that merely exited
-    never matches, and a non-zero exit is a real failure.
+    A running, healthy container is realized. An authored run-to-completion
+    container is also realized after an exact zero exit; an arbitrary stopped
+    service never inherits that exception from its restart policy alone.
     """
 
     if not info:
         return False
+    if run_to_completion:
+        state = info.get("State")
+        if isinstance(state, Mapping):
+            return bool(
+                not state.get("Running")
+                and state.get("Status") == "exited"
+                and state.get("ExitCode") == 0
+            )
     health = container_health(info)
     return container_running(info) and (not health or health == "healthy")
 

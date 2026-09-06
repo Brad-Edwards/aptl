@@ -10,6 +10,7 @@ in :mod:`aptl.backends.raes_observation`.
 from __future__ import annotations
 
 import hashlib
+import hmac
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
@@ -34,6 +35,9 @@ from aptl.core.deployment._compose_stateful_model import (
     _uses_per_output_mounts,
 )
 from aptl.core.deployment._compose_stateful_realization import artifact_source_path
+from aptl.core.deployment._generated_artifact_environment import (
+    _read_environment_scalar,
+)
 from aptl.core.deployment._stateful_certificates import certificate_bundle_evidence
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import (
@@ -56,6 +60,7 @@ def _observe_generated_artifact(
     node_containers: dict[str, str],
     realization_root: Path,
     image_free_addresses: frozenset[str],
+    run_to_completion_addresses: frozenset[str],
 ) -> ObservedResource:
     """Observe verified outputs and realized delivery for one artifact.
 
@@ -71,10 +76,26 @@ def _observe_generated_artifact(
     source = artifact_source_path(realization_root, artifact)
     outputs_present = _artifact_outputs_present(source, artifact)
     consumers_mounted = outputs_present and _artifact_consumers_mounted(
-        backend, artifact, node_containers, source, image_free_addresses
+        backend,
+        artifact,
+        node_containers,
+        source,
+        image_free_addresses,
+        run_to_completion_addresses,
     )
-    consumers_ready = consumers_mounted and _authenticated_consumers_ready(
-        backend, artifact.consumers
+    environment_delivered = outputs_present and _artifact_environment_consumers_realized(
+        backend,
+        artifact,
+        node_containers,
+        source,
+        run_to_completion_addresses,
+    )
+    consumers_ready = (
+        consumers_mounted
+        and environment_delivered
+        and _authenticated_consumers_ready(
+            backend, artifact.consumers
+        )
     )
     realized = consumers_ready
     evidence = (
@@ -91,10 +112,12 @@ def _observe_generated_artifact(
         # booleans only — never artifact bytes).
         log.warning(
             "artifact %s not observed as realized "
-            "(outputs=%s consumers_mounted=%s consumers_ready=%s evidence=%s)",
+            "(outputs=%s consumers_mounted=%s environment_delivered=%s "
+            "consumers_ready=%s evidence=%s)",
             artifact.address,
             outputs_present,
             consumers_mounted,
+            environment_delivered,
             consumers_ready,
             bool(evidence),
         )
@@ -122,6 +145,7 @@ def _observe_persistent_volume(
     volume: DeploymentPersistentVolumeRealization | None,
     node_containers: dict[str, str],
     project_name: str,
+    run_to_completion_addresses: frozenset[str],
 ) -> ObservedResource:
     """Observe project-scoped named-volume mounts for one desired volume."""
 
@@ -133,6 +157,7 @@ def _observe_persistent_volume(
         node_containers,
         mount_type="volume",
         source=f"{project_name}_{volume.name}",
+        run_to_completion_addresses=run_to_completion_addresses,
     )
     ready = mounted and _authenticated_consumers_ready(backend, volume.consumers)
     if not ready:
@@ -231,12 +256,20 @@ def _consumers_mounted(
     *,
     mount_type: str,
     source: str,
+    run_to_completion_addresses: frozenset[str],
 ) -> bool:
     """Return whether every consumer has the exact observed mount contract."""
 
     return all(
         _consumer_volume_mounted(
-            backend, consumer, node_containers, mount_type=mount_type, source=source
+            backend,
+            consumer,
+            node_containers,
+            mount_type=mount_type,
+            source=source,
+            run_to_completion=(
+                consumer.target_address in run_to_completion_addresses
+            ),
         )
         for consumer in consumers
     )
@@ -249,6 +282,7 @@ def _consumer_volume_mounted(
     *,
     mount_type: str,
     source: str,
+    run_to_completion: bool,
 ) -> bool:
     """Return whether one consumer's container shows the desired mount."""
 
@@ -260,7 +294,7 @@ def _consumer_volume_mounted(
         )
         return False
     info = _settled_inspect(backend, container)
-    if not _container_realized(info):
+    if not _container_realized(info, run_to_completion=run_to_completion):
         log.warning(
             "consumer container %s not settled/healthy for observation",
             container,
@@ -283,6 +317,7 @@ def _artifact_consumers_mounted(
     node_containers: dict[str, str],
     source: Path,
     image_free_addresses: frozenset[str],
+    run_to_completion_addresses: frozenset[str],
 ) -> bool:
     """Return whether every consumer received exactly its declared outputs."""
 
@@ -294,9 +329,69 @@ def _artifact_consumers_mounted(
             node_containers,
             source,
             consumer.target_address in image_free_addresses,
+            consumer.target_address in run_to_completion_addresses,
         )
         for consumer in artifact.consumers
     )
+
+
+def _artifact_environment_consumers_realized(
+    backend: "DeploymentBackend",
+    artifact: DeploymentGeneratedArtifactRealization,
+    node_containers: dict[str, str],
+    source: Path,
+    run_to_completion_addresses: frozenset[str],
+) -> bool:
+    """Confirm every environment delivery carries its generated output value.
+
+    Docker inspection exposes the effective environment even after a one-shot
+    exits. Compare the value locally with the generated output using a
+    constant-time equality check; neither value is returned, logged, or placed
+    in observation evidence.
+    """
+
+    outputs = {output.name: output for output in artifact.outputs}
+    for consumer in artifact.environment_consumers:
+        settled = _settled_consumer_container(
+            backend,
+            consumer,
+            node_containers,
+            run_to_completion=(
+                consumer.target_address in run_to_completion_addresses
+            ),
+        )
+        output = outputs.get(consumer.output_name)
+        if settled is None or output is None:
+            return False
+        _container, info = settled
+        expected = _read_environment_scalar(source / output.path)
+        realized = _container_environment_value(info, consumer.environment_variable)
+        if expected is None or realized is None or not hmac.compare_digest(
+            expected, realized
+        ):
+            log.warning(
+                "artifact environment delivery not corroborated for consumer %s",
+                consumer.target_address,
+            )
+            return False
+    return True
+
+
+def _container_environment_value(
+    info: Mapping[str, Any], variable: str
+) -> str | None:
+    """Return one effective environment value without disclosing it."""
+
+    config = info.get("Config")
+    entries = config.get("Env") if isinstance(config, Mapping) else None
+    if not isinstance(entries, list):
+        return None
+    prefix = f"{variable}="
+    for entry in entries:
+        if isinstance(entry, str) and entry.startswith(prefix):
+            value = entry[len(prefix) :]
+            return value or None
+    return None
 
 
 def _artifact_consumer_realized(
@@ -306,6 +401,7 @@ def _artifact_consumer_realized(
     node_containers: dict[str, str],
     source: Path,
     image_free: bool,
+    run_to_completion: bool,
 ) -> bool:
     """Return whether one consumer received the artifact the way it was delivered.
 
@@ -317,7 +413,12 @@ def _artifact_consumer_realized(
     actually delivered it.
     """
 
-    settled = _settled_consumer_container(backend, consumer, node_containers)
+    settled = _settled_consumer_container(
+        backend,
+        consumer,
+        node_containers,
+        run_to_completion=run_to_completion,
+    )
     if settled is None:
         return False
     container, info = settled
@@ -341,6 +442,8 @@ def _settled_consumer_container(
     backend: "DeploymentBackend",
     consumer: DeploymentStatefulConsumer,
     node_containers: dict[str, str],
+    *,
+    run_to_completion: bool,
 ) -> tuple[str, dict[str, Any]] | None:
     """Return a consumer's settled container name and inspect record, or None.
 
@@ -356,7 +459,7 @@ def _settled_consumer_container(
         )
         return None
     info = _settled_inspect(backend, container)
-    if not _container_realized(info):
+    if not _container_realized(info, run_to_completion=run_to_completion):
         log.warning(
             "artifact consumer container %s not settled/healthy for observation",
             container,

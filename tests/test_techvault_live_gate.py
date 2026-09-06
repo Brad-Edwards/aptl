@@ -12,6 +12,7 @@ import json
 import os
 import tempfile
 import types
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ from aptl.validation import _live_gate_checks as lgc
 from aptl.validation import techvault_live_gate as tlg
 from aptl.validation import _live_gate_probes as lgp
 from aptl.validation import _live_gate_telemetry as lgt
+from aptl.validation import _live_gate_operations as lgo
 from aptl.validation.techvault_live_gate import (
     CATEGORY_RAES_SPECIFICATION,
     CATEGORY_BACKEND_INSTANTIATION,
@@ -112,12 +114,15 @@ def _config():
     return AptlConfig(lab={"name": "techvault"})
 
 
-def _node(name, profiles, aliases=None, declared_health=None):
+def _node(
+    name, profiles, aliases=None, declared_health=None, run_to_completion=False
+):
     return {
         "name": name,
         "aliases": aliases or [name],
         "profiles": list(profiles),
         "declared_health": declared_health,
+        "run_to_completion": run_to_completion,
     }
 
 
@@ -163,8 +168,8 @@ def _wire_boot(
     monkeypatch.setattr(
         lgp,
         "clean_boot_lab",
-        lambda p, *, remove_volumes=True, scenario_path=None: LabResult(
-            success=True, outcome=outcome
+        lambda p, *, remove_volumes=True, scenario_path=None, run_target=None: (
+            LabResult(success=True, outcome=outcome)
         ),
     )
     monkeypatch.setattr(
@@ -229,8 +234,20 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
             "boot_inputs_match_public_path", CATEGORY_BACKEND_INSTANTIATION, True
         )
 
-    def boot(scenario, *, project_dir, config, options, state, scenario_path):
+    def boot(
+        scenario,
+        *,
+        project_dir,
+        config,
+        options,
+        state,
+        scenario_path,
+        run_id,
+        run_store,
+    ):
         assert scenario_path == SCENARIO
+        assert run_id
+        assert run_store is None
         return LiveGateCheck("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
 
     def readiness(*, state):
@@ -244,9 +261,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
         # composition, not discovery (the seam has its own tests).
         return [
             LiveGateCheck("kali_reachability", CATEGORY_KALI_REACHABILITY, True),
-            LiveGateCheck(
-                "telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, True
-            ),
+            LiveGateCheck("telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, True),
         ]
 
     def archive(
@@ -406,14 +421,46 @@ def test_check_raes_driven_boot_happy_populates_state(monkeypatch):
     assert state.snapshot["containers"]
 
 
+def test_check_raes_driven_boot_uses_the_same_explicit_scenario_selector(monkeypatch):
+    _wire_boot(monkeypatch)
+    selected = []
+    explicit = PROJECT_ROOT / "scenarios" / "techvault-defensive-min.sdl.yaml"
+
+    def resolve(project_dir, scenario_path, config):
+        selected.append((project_dir, scenario_path, config))
+        return types.SimpleNamespace(root=PROJECT_ROOT, pack_identity=None)
+
+    monkeypatch.setattr(lgp, "resolve_scenario_bundle", resolve)
+
+    check = lgc.check_raes_driven_boot(
+        object(),
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(),
+        state=LiveGateState(),
+        scenario_path=explicit,
+    )
+
+    assert check.passed
+    assert selected[0][0:2] == (PROJECT_ROOT, explicit)
+
+
 def test_runtime_orchestration_containment_uses_post_work_backend_attestation(
     monkeypatch,
 ):
     spec = object()
+    observations = (
+        {
+            "template_id": "worker",
+            "container_id": "worker-id",
+            "terminal": True,
+        },
+    )
     backend = types.SimpleNamespace(
         verify_runtime_orchestration=lambda observed: (
             LabResult(success=True) if observed is spec else LabResult(success=False)
-        )
+        ),
+        runtime_orchestration_observations=lambda: observations,
     )
     monkeypatch.setattr(lgc, "get_backend", lambda *_args: backend)
     state = LiveGateState(deployment_spec=spec)
@@ -425,6 +472,7 @@ def test_runtime_orchestration_containment_uses_post_work_backend_attestation(
     )
 
     assert check.passed
+    assert state.runtime_orchestration_observations == list(observations)
 
 
 def test_runtime_orchestration_containment_fails_closed(monkeypatch):
@@ -445,6 +493,84 @@ def test_runtime_orchestration_containment_fails_closed(monkeypatch):
 
     assert not check.passed
     assert "spawned child" in check.diagnostics[0]
+
+
+def test_accepted_workflow_execution_is_bound_before_runtime_containment(
+    monkeypatch, tmp_path
+):
+    """The product-issued execution ID must narrow the active run admission."""
+
+    from tests.test_raes_runtime_orchestration import _spec
+
+    bound_spec = _spec()
+    unbound_spec = replace(
+        bound_spec,
+        docker_authority_admissions=tuple(
+            replace(admission, product_execution_ids=())
+            for admission in bound_spec.docker_authority_admissions
+        ),
+    )
+    (tmp_path / ".env").write_text(
+        "SHUFFLE_API_KEY=workflow-key\nTHEHIVE_API_KEY=case-key\n",
+        encoding="utf-8",
+    )
+    marker = "aptl-live-gate-invalid"
+    execution_id = "execution-974"
+
+    def fake_curl(url, **kwargs):
+        if url.endswith("/api/v1/workflows"):
+            return [{"id": "workflow-1", "name": "APTL Alert to Case"}]
+        if url.endswith("/workflow-1/executions"):
+            return (
+                [
+                    {
+                        "execution_id": execution_id,
+                        "execution_argument": marker,
+                    }
+                ]
+                if checkpoint_captured[0]
+                else []
+            )
+        if url.endswith("/api/v1/streams/results"):
+            return {
+                "execution_id": execution_id,
+                "execution_argument": marker,
+                "status": "FINISHED",
+                "results": [{"status": "SUCCESS"}, {"status": "SUCCESS"}],
+            }
+        if url.endswith("/api/v1/query"):
+            return [{"_id": "case-1", "description": marker}]
+        raise AssertionError(url)
+
+    checkpoint_captured = [False]
+    monkeypatch.setattr(lgo, "curl_json", fake_curl)
+    state = LiveGateState(deployment_spec=unbound_spec)
+    operations = lgo.LiveGateOperations(
+        project_dir=tmp_path,
+        config=_config(),
+        options=LiveGateOptions(),
+        state=state,
+    )
+
+    from aptl_techvault_verifier import TechVaultVerifier
+
+    verifier = TechVaultVerifier()
+    checkpoint = verifier._workflow_checkpoint(operations)
+    checkpoint_captured[0] = True
+    evidence = verifier._await_workflow_case_evidence(
+        operations,
+        checkpoint,
+        marker,
+        30,
+        sleep_fn=lambda _seconds: None,
+    )
+
+    assert evidence.status == "FINISHED"
+    assert evidence.action_statuses == ("SUCCESS", "SUCCESS")
+    assert evidence.correlated_case_count == 1
+    assert state.deployment_spec.docker_authority_admissions[
+        0
+    ].product_execution_ids == (execution_id,)
 
 
 def test_check_raes_driven_boot_fails_on_interpretation_error(monkeypatch):
@@ -549,7 +675,7 @@ def test_check_raes_driven_boot_passes_selected_scenario_to_public_start(monkeyp
     monkeypatch.setattr(
         lgp,
         "clean_boot_lab",
-        lambda p, *, remove_volumes=True, scenario_path=None: (
+        lambda p, *, remove_volumes=True, scenario_path=None, run_target=None: (
             boots.append((p, scenario_path))
             or LabResult(success=True, outcome=StartupOutcome.READY)
         ),
@@ -713,17 +839,11 @@ def test_readiness_fails_on_a_container_no_declared_node_accounts_for():
     assert any("no declared node accounts for it" in d for d in check.diagnostics)
 
 
-def test_readiness_fails_an_exited_run_to_completion_container():
-    """A restart:"no" container that exited is a readiness failure, no exemption.
-
-    ADR-088 (issue #889) retired APTL's only run-to-completion service (the
-    Cortex Elasticsearch index initializer, replaced by the native
-    service-search-index-schema materializer): every declared node must now be
-    running, restart policy notwithstanding.
-    """
+def test_readiness_accepts_an_authored_run_to_completion_container():
+    """An admitted one-shot node is ready only after an exact zero exit."""
 
     state = _readiness_state(
-        [_node("webapp", ["dmz"])],
+        [_node("webapp", ["dmz"], run_to_completion=True)],
         [
             _container(
                 "aptl-webapp",
@@ -733,6 +853,17 @@ def test_readiness_fails_an_exited_run_to_completion_container():
             ),
         ],
     )
+    check = lgc.check_defensive_stack_readiness(state=state)
+
+    assert check.passed
+
+
+def test_readiness_fails_a_nonzero_run_to_completion_container():
+    state = _readiness_state(
+        [_node("webapp", ["dmz"], run_to_completion=True)],
+        [_container("aptl-webapp", status="Exited (1) 5 seconds ago", health="")],
+    )
+
     check = lgc.check_defensive_stack_readiness(state=state)
 
     assert not check.passed
@@ -885,6 +1016,13 @@ def _archive_state():
     state.selected_profiles = ["dmz", "soc"]
     state.snapshot = {"containers": [_container("aptl-webapp")]}
     state.evidence = {"telemetry": {"suricata_eve_count": 3}}
+    state.runtime_orchestration_observations = [
+        {
+            "template_id": "worker",
+            "container_id": "worker-id",
+            "terminal": True,
+        }
+    ]
     return state
 
 
@@ -908,6 +1046,13 @@ def test_run_archive_writes_manifest_through_redacting_boundary():
     assert path == "live-gate/manifest.json"
     assert manifest["raes_provenance"]["realization"]["nodes"]
     assert manifest["raes_provenance"]["selected_profiles"] == ["dmz", "soc"]
+    assert manifest["runtime_orchestration"]["actual_children"] == [
+        {
+            "template_id": "worker",
+            "container_id": "worker-id",
+            "terminal": True,
+        }
+    ]
     assert manifest["evaluator_surfaces"]["profile"] == "full-remote-control-plane"
     assert (
         manifest["evaluator_surfaces"]["execution_state_integration"]
@@ -1124,7 +1269,11 @@ def test_live_gate_passes_on_techvault():
     from aptl.core.config import load_config
 
     config = load_config(PROJECT_ROOT / "aptl.json")
-    report = validate_live_deployment(SCENARIO, project_dir=PROJECT_ROOT, config=config)
+    # Use the same config-driven env-pack selector as ``aptl lab start``. Passing
+    # this module's temporary staged SDL as an explicit project-tree scenario
+    # would deliberately discard its validated pack identity, so a provenance-
+    # bound Docker-authority grant must reject it.
+    report = validate_live_deployment(project_dir=PROJECT_ROOT, config=config)
     assert report.passed, report.render()
 
 
@@ -1241,7 +1390,12 @@ def test_trigger_is_redriven_on_every_poll(monkeypatch):
         # Correlates only once the trigger has been re-driven, mimicking a path
         # that becomes ready partway through the window.
         if attempts["n"] >= 2:
-            return [{"rule": {"id": "5710"}, "data": {"dstuser": probes._WAZUH_TRIGGER_IDENTITY}}]
+            return [
+                {
+                    "rule": {"id": "5710"},
+                    "data": {"dstuser": probes._WAZUH_TRIGGER_IDENTITY},
+                }
+            ]
         return [{"rule": {"id": "1002"}, "data": {"srcip": "10.0.0.1"}}]
 
     monkeypatch.setattr(probes, "collect_wazuh_alerts", _alerts)
@@ -1292,7 +1446,11 @@ def test_ssh_listening_targets_are_probed_first(monkeypatch):
     """
     from aptl.validation import _live_gate_probes as probes
 
-    targets = [("no-ssh-a", "10.0.0.1"), ("no-ssh-b", "10.0.0.2"), ("has-ssh", "10.0.0.9")]
+    targets = [
+        ("no-ssh-a", "10.0.0.1"),
+        ("no-ssh-b", "10.0.0.2"),
+        ("has-ssh", "10.0.0.9"),
+    ]
     monkeypatch.setattr(
         probes, "_ssh_reachable_from_kali", lambda _b, ip: ip == "10.0.0.9"
     )

@@ -7,6 +7,11 @@ from pathlib import Path, PurePosixPath
 
 from aptl.core.credentials import RENDERED_MANAGER_RELPATH
 from aptl.core.deployment._flag_signing_keys import FLAG_SIGNING_PROFILE_V2
+from aptl.core.deployment._generated_artifact_environment import (
+    CORTEX_SERVICE_CREDENTIALS_PROFILE,
+    cortex_credentials_root,
+    generated_environment_file,
+)
 from aptl.core.deployment._compose_stateful_constants import (
     CERTIFICATE_ROOT_RELPATH,
     FLAG_SIGNING_ROOT_RELPATH,
@@ -44,6 +49,7 @@ def stateful_override_payload(
 
     services = wazuh_service_definitions()
     _append_artifact_mounts(services, scenario_root, realization)
+    _append_artifact_environment_files(services, scenario_root, realization)
     volumes = _append_volume_mounts(services, project_name, realization)
     payload: dict[str, object] = {"services": services}
     if volumes:
@@ -99,9 +105,34 @@ def artifact_source_path(
         relative = Path(SSH_KEY_BUNDLE_ROOT_RELPATH) / artifact.name
     elif provenance == FLAG_SIGNING_PROFILE_V2:
         relative = Path(FLAG_SIGNING_ROOT_RELPATH) / artifact.name
+    elif provenance == CORTEX_SERVICE_CREDENTIALS_PROFILE:
+        return cortex_credentials_root(scenario_root, artifact)
     else:
         relative = Path(RENDERED_MANAGER_RELPATH)
     return scenario_root.resolve() / relative
+
+
+def _append_artifact_environment_files(
+    services: dict[str, dict[str, object]],
+    scenario_root: Path,
+    realization: DeploymentRealizationSpec,
+) -> None:
+    """Append secret-bearing env-file references, never their contents."""
+
+    image_free = _non_compose_consumer_addresses(realization)
+    for artifact in realization.generated_artifacts:
+        for consumer in artifact.environment_consumers:
+            if consumer.target_address in image_free:
+                continue
+            service = services.setdefault(consumer.service_name, {"volumes": []})
+            env_files = service.setdefault("env_file", [])
+            if not isinstance(env_files, list):
+                raise ValueError("Generated service env_file entries are not a list.")
+            path = str(
+                generated_environment_file(scenario_root, consumer.target_address)
+            )
+            if path not in env_files:
+                env_files.append(path)
 
 
 def _consumer_output_names(
@@ -121,9 +152,7 @@ def _consumer_output_names(
         names = [name for name in selected if name in by_name]
     else:
         names = [output.name for output in artifact.outputs]
-    return [
-        name for name in names if by_name[name].disposition != "producer_private"
-    ]
+    return [name for name in names if by_name[name].disposition != "producer_private"]
 
 
 def _non_compose_consumer_addresses(
@@ -306,7 +335,28 @@ def _effective_service_errors(
             errors.append(
                 f"Effective stateful service {service_name} is missing a declared mount."
             )
+        elif not _env_file_contract(expected_service).issubset(
+            _env_file_contract(observed_service)
+        ):
+            errors.append(
+                f"Effective stateful service {service_name} is missing a declared "
+                "environment file."
+            )
     return errors
+
+
+def _env_file_contract(service: Mapping[str, object]) -> set[str]:
+    """Return normalized env-file paths from a Compose service definition."""
+
+    raw = service.get("env_file")
+    if isinstance(raw, str):
+        return {raw}
+    if not isinstance(raw, list):
+        return set()
+    return {
+        str(item.get("path")) if isinstance(item, Mapping) else str(item)
+        for item in raw
+    }
 
 
 def _mount_contract(service: Mapping[str, object]) -> set[tuple[object, ...]]:
@@ -428,8 +478,7 @@ def _compose_persistent_volumes(
         volume
         for volume in realization.persistent_volumes
         if any(
-            consumer.target_address not in non_compose
-            for consumer in volume.consumers
+            consumer.target_address not in non_compose for consumer in volume.consumers
         )
     ]
 

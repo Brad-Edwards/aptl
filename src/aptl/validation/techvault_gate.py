@@ -127,7 +127,11 @@ def validate_scenario(
             profile=opts.profile,
             fixtures_root=opts.fixtures_root,
             profiles_root=opts.profiles_root,
-            reference_scenario=scenario,
+            # Target-adapter conformance is hermetic and cannot supply the
+            # selected pack's external artifact-availability facts. Exercise
+            # the artifact-free in-tree target witness here; the actual selected
+            # scenario is compiled above and interpreted below against its pack.
+            reference_scenario=None,
         )
     )
 

@@ -23,11 +23,14 @@ Exposure Amendment, ADR-046 runtime addendum):
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 from aptl.core.deployment.realization import (
+    DeploymentNodeRealization,
     DeploymentPublishedPort,
     DeploymentRealizationSpec,
 )
@@ -36,7 +39,14 @@ from aptl.core.host_ports import port_available
 _PORT_OVERRIDE_RELATIVE_PATH = Path(".aptl") / "realization" / "compose.ports.yml"
 
 
-def published_port_conflicts(realization: DeploymentRealizationSpec) -> list[str]:
+def published_port_conflicts(
+    realization: DeploymentRealizationSpec,
+    *,
+    occupied_by: Callable[
+        [DeploymentNodeRealization, DeploymentPublishedPort], bool
+    ]
+    | None = None,
+) -> list[str]:
     """Return one message per exact host binding that cannot be published.
 
     Only bindings with an author-declared ``host_port`` are exact; a binding
@@ -66,7 +76,7 @@ def published_port_conflicts(realization: DeploymentRealizationSpec) -> list[str
                 binding.host_port,
                 binding.protocol,
                 binding.host_ip,
-            ):
+            ) and not (occupied_by and occupied_by(node, binding)):
                 conflicts.append(
                     f"node {node.name!r} declares host port "
                     f"{binding.host_ip}:{binding.host_port}/{binding.protocol} "
@@ -76,6 +86,31 @@ def published_port_conflicts(realization: DeploymentRealizationSpec) -> list[str
                     f"elsewhere — free the port or change the scenario."
                 )
     return conflicts
+
+
+def container_owns_published_port(
+    info: Mapping[str, Any], binding: DeploymentPublishedPort
+) -> bool:
+    """Return whether a running container holds this exact Docker binding."""
+
+    state = info.get("State")
+    if not isinstance(state, Mapping) or state.get("Running") is not True:
+        return False
+    host_config = info.get("HostConfig")
+    bindings = (
+        host_config.get("PortBindings") if isinstance(host_config, Mapping) else None
+    )
+    if not isinstance(bindings, Mapping):
+        return False
+    entries = bindings.get(f"{binding.container_port}/{binding.protocol}")
+    if not isinstance(entries, list):
+        return False
+    return any(
+        isinstance(entry, Mapping)
+        and entry.get("HostIp") == binding.host_ip
+        and entry.get("HostPort") == str(binding.host_port)
+        for entry in entries
+    )
 
 
 def compose_port_entry(binding: DeploymentPublishedPort) -> dict[str, object]:

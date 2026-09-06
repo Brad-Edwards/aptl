@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from raes_contracts.planning import (
     ChangeAction,
     PlannedResource,
@@ -90,9 +91,111 @@ def test_manifest_advertises_released_stateful_contract() -> None:
 
     assert manifest.provisioner.supports_generated_artifacts is True
     assert manifest.provisioner.supports_persistent_volumes is True
+    assert manifest.provisioner.supported_generated_artifact_delivery_modes == {
+        "mount",
+        "environment",
+    }
 
 
-def test_interpreter_lowers_stateful_resources_into_deployment_spec(tmp_path: Path) -> None:
+def test_interpreter_lowers_generated_environment_consumers(tmp_path: Path) -> None:
+    _write_compose(tmp_path)
+    artifact = _resource(
+        "generated-artifact",
+        "service-credentials",
+        {
+            "generator": "rendered_config",
+            "lifecycle": "reuse_valid",
+            "provenance": "techvault:cortex-service-credentials/v1",
+            "outputs": [
+                {
+                    "name": "api-key",
+                    "path": "service/api-key",
+                    "sensitivity": "secret",
+                }
+            ],
+            "consumers": [],
+            "environment_consumers": [
+                {
+                    "node": "wazuh-indexer",
+                    "target_address": "provision.node.wazuh-indexer",
+                    "delivery_mode": "environment",
+                    "output": "api-key",
+                    "environment_variable": "SERVICE_API_KEY",
+                }
+            ],
+        },
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan(_node("wazuh-indexer"), artifact),
+        config=_config(),
+        bundle=_bundle(tmp_path),
+    )
+
+    assert realization.diagnostics == ()
+    (consumer,) = realization.generated_artifacts[0].environment_consumers
+    assert consumer.target_address == "provision.node.wazuh-indexer"
+    assert consumer.service_name == "wazuh-indexer"
+    assert consumer.output_name == "api-key"
+    assert consumer.environment_variable == "SERVICE_API_KEY"
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "expected_code"),
+    [
+        ("delivery_mode", "env_file", "aptl.provisioner.stateful-resource-invalid"),
+        ("output", "private", "aptl.provisioner.stateful-output-not-selectable"),
+    ],
+)
+def test_interpreter_rejects_invalid_generated_environment_consumers(
+    tmp_path: Path,
+    field: str,
+    value: str,
+    expected_code: str,
+) -> None:
+    _write_compose(tmp_path)
+    consumer = {
+        "node": "wazuh-indexer",
+        "target_address": "provision.node.wazuh-indexer",
+        "delivery_mode": "environment",
+        "output": "public",
+        "environment_variable": "SERVICE_API_KEY",
+    }
+    consumer[field] = value
+    artifact = _resource(
+        "generated-artifact",
+        "service-credentials",
+        {
+            "generator": "rendered_config",
+            "lifecycle": "reuse_valid",
+            "provenance": "test",
+            "outputs": [
+                {"name": "public", "path": "public", "sensitivity": "secret"},
+                {
+                    "name": "private",
+                    "path": "private",
+                    "sensitivity": "secret",
+                    "disposition": "producer_private",
+                },
+            ],
+            "consumers": [],
+            "environment_consumers": [consumer],
+        },
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan(_node("wazuh-indexer"), artifact),
+        config=_config(),
+        bundle=_bundle(tmp_path),
+    )
+
+    assert realization.generated_artifacts == ()
+    assert expected_code in {item.code for item in realization.diagnostics}
+
+
+def test_interpreter_lowers_stateful_resources_into_deployment_spec(
+    tmp_path: Path,
+) -> None:
     _write_compose(tmp_path)
     artifact = _resource(
         "generated-artifact",
@@ -160,7 +263,9 @@ def test_interpreter_lowers_stateful_resources_into_deployment_spec(tmp_path: Pa
     assert spec.persistent_volumes == realization.persistent_volumes
 
 
-def test_interpreter_rejects_unknown_stateful_consumer_before_backend(tmp_path: Path) -> None:
+def test_interpreter_rejects_unknown_stateful_consumer_before_backend(
+    tmp_path: Path,
+) -> None:
     _write_compose(tmp_path)
     artifact = _resource(
         "generated-artifact",
@@ -170,7 +275,11 @@ def test_interpreter_rejects_unknown_stateful_consumer_before_backend(tmp_path: 
             "lifecycle": "regenerate_on_change",
             "provenance": "config/wazuh-manager.conf.template",
             "outputs": [
-                {"name": "manager-conf", "path": "ossec.conf", "sensitivity": "restricted"}
+                {
+                    "name": "manager-conf",
+                    "path": "ossec.conf",
+                    "sensitivity": "restricted",
+                }
             ],
             "consumers": [
                 {

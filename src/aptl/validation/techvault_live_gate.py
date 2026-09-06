@@ -175,6 +175,9 @@ class LiveGateState(object):
     selected_profiles: list[str] = field(default_factory=list)
     snapshot: dict | None = None
     evidence: dict | None = None
+    runtime_orchestration_observations: list[dict[str, object]] = field(
+        default_factory=list
+    )
     diagnostics_seen: int = 0
 
 
@@ -303,6 +306,8 @@ def _run_live_checks(
         options=ctx.options,
         state=state,
         scenario_path=ctx.boot_scenario_path,
+        run_id=ctx.run_id,
+        run_store=ctx.run_store,
     )
     results.append(boot_check)
     if not boot_check.passed:

@@ -63,6 +63,7 @@ if TYPE_CHECKING:
     from raes_processor.models import ExecutionPlan
 
     from aptl.core.deployment.backend import DeploymentBackend
+    from aptl.core.operator_policy import OperatorPolicy
     from aptl.core.runstore import RunStorageBackend
 
 log = get_logger("raes-backend")
@@ -86,6 +87,8 @@ def create_aptl_runtime_target(
     participant_plan_authority: ParticipantPlanAuthority | None = None,
     bundle: ScenarioBundle,
     artifact_availability: ArtifactAvailabilityContext | None = None,
+    operator_policy: OperatorPolicy | None = None,
+    run_target: AcesRunTarget | None = None,
 ) -> RuntimeTarget:
     """Build APTL's canonical ``full-remote-control-plane`` runtime target.
 
@@ -105,6 +108,9 @@ def create_aptl_runtime_target(
         deployment_backend=backend,
         bundle=bundle,
         artifact_availability=artifact_availability,
+        operator_policy=operator_policy,
+        run_id=run_target.run_id if run_target is not None else "",
+        attempt_id=(run_target.resolved_attempt_id if run_target is not None else ""),
     )
     orchestrator = AptlOrchestrator()
     action_specs = dict(DEFAULT_PARTICIPANT_ACTIONS)
@@ -159,13 +165,16 @@ def start_raes_scenario(
                 config,
                 backend,
                 scenario_path=scenario_path,
+                run_target=run_target,
             )
+        elif run_target is not None and admitted.run_target != run_target:
+            raise ValueError("admitted run scope does not match apply run scope")
         resolved_scenario = admitted.bundle.sdl_path
         return _apply_with_backend_retry(
             admitted.target,
             admitted.execution_plan,
             resolved_scenario,
-            run_target,
+            admitted.run_target or run_target,
             before_backend_retry,
         )
     except (
@@ -179,9 +188,7 @@ def start_raes_scenario(
         return _start_failure_outcome(exc, resolved_scenario)
 
 
-def _start_failure_outcome(
-    exc: Exception, resolved_scenario: Path
-) -> AcesStartOutcome:
+def _start_failure_outcome(exc: Exception, resolved_scenario: Path) -> AcesStartOutcome:
     """Map a scenario-start failure onto its unretryable failure outcome.
 
     Each cause keeps the disclosure it always had: a pack acquisition failure and
@@ -213,6 +220,8 @@ def admit_raes_scenario(
     *,
     scenario_path: Path | None = None,
     parameters: Mapping[str, object] | None = None,
+    run_target: AcesRunTarget | None = None,
+    operator_policy: OperatorPolicy | None = None,
 ) -> AdmittedScenarioStart:
     """Admit one scenario execution: resolve, parse, plan, and interpret it once.
 
@@ -229,10 +238,22 @@ def admit_raes_scenario(
     # this rather than the engine's checkout, so rehoming changes only the
     # resolver (issue #874 / #875).
     bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
+    if operator_policy is None:
+        from aptl.core.operator_policy import load_operator_policy
+
+        operator_policy = load_operator_policy(project_dir)
     scenario = parse_sdl_file(bundle.sdl_path)
     # A runtime authority is joined and bound before any artifact probe, so
     # every image fact and later mutation targets the same exact local daemon.
-    prepare_runtime_orchestration_for_scenario(scenario, backend)
+    prepare_runtime_orchestration_for_scenario(
+        scenario,
+        backend,
+        pack_identity=bundle.pack_identity,
+        project_name=config.deployment.project_name,
+        run_id=run_target.run_id if run_target is not None else "",
+        attempt_id=(run_target.resolved_attempt_id if run_target is not None else ""),
+        grants=tuple(operator_policy.docker_authority_grants),
+    )
     # Artifact availability is a trusted input to planning, gathered at the
     # backend trust boundary before the single admitted plan() call (ADR-051); a
     # no-op for a scenario that authors no artifact_requirement. The scenario's
@@ -247,6 +268,8 @@ def admit_raes_scenario(
         backend=backend,
         bundle=bundle,
         artifact_availability=availability,
+        operator_policy=operator_policy,
+        run_target=run_target,
     )
     manager = RuntimeManager(target)
     execution_plan = (
@@ -283,6 +306,7 @@ def admit_raes_scenario(
         target=target,
         execution_plan=execution_plan,
         realization=realization,
+        run_target=run_target,
     )
 
 

@@ -44,3 +44,8 @@ alert tcp $HOME_NET any -> !$HOME_NET [4444,4445,4446,5555,6666,7777,8888,9999] 
 
 # Detect Metasploit default payloads
 alert tcp any any -> $HOME_NET any (msg:"APTL Metasploit Meterpreter Detected"; content:"|00 00 00|"; depth:4; content:"metsrv"; classtype:trojan-activity; sid:1000091; rev:1;)
+
+# The live gate targets the declared sensor on TCP/445 as part of its bounded
+# nmap probe. Limit this marker to one alert per source in the whole evidence
+# window so re-driving a delayed trigger cannot create duplicate SOAR cases.
+alert tcp any any -> $HOME_NET 445 (msg:"APTL live gate correlation aptl-live-gate-invalid"; flags:S; threshold:type limit, track by_src, count 1, seconds 300; classtype:web-application-attack; sid:1000092; rev:1;)

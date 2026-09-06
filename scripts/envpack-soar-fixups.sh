@@ -10,13 +10,20 @@
 #   - MISP has no MYSQL_*/ADMIN_*/BASE_URL env and its lab cert is mounted at
 #     the wrong path -> no DB, no admin key, self-signed cert.
 # This recreates those two containers with the configuration recovered from
-# the pre-ACES docker-compose.yml (which ran these services for months). It is
-# idempotent: a container already carrying the fix is left untouched, so this is
-# safe to run on every boot. It buys us out of the env-pack release cycle; it
-# does not change the scenario.
+# the pre-ACES docker-compose.yml (which ran these services for months). The
+# released pack also mounts the APTL Shuffle certificate at its governed
+# artifact destination without configuring nginx to serve it, and the Wazuh
+# image aborts its initialization before installing the mounted ossec.conf when
+# its integration directory is mounted read-only. The bounded repairs below
+# activate those already-declared inputs; they do not invent credentials or
+# additional runtime nodes.
+#
+# Every repair is idempotent, so this is safe to run on every boot. It buys us
+# out of the env-pack release cycle; it does not change the scenario.
 #
 # Root fixes tracked upstream (remove this script when they ship):
 #   MISP  -> OpenRAE/env-packs#280 ; retire per Brad-Edwards/aptl#912
+#   Shuffle TLS + Wazuh integration activation -> OpenRAE/env-packs#294
 # =============================================================================
 set -uo pipefail
 
@@ -32,6 +39,7 @@ _present()  { docker inspect "$1" >/dev/null 2>&1; }
 _net()      { docker inspect "$1" -f '{{range $n,$c := .NetworkSettings.Networks}}{{$n}}{{end}}' 2>/dev/null; }
 _image()    { docker inspect "$1" -f '{{.Config.Image}}' 2>/dev/null; }
 _has_env()  { docker inspect "$1" -f '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -q "^$2="; }
+_mount_src() { docker inspect "$1" --format '{{range .Mounts}}{{if eq .Destination "'"$2"'"}}{{.Source}}{{end}}{{end}}' 2>/dev/null; }
 
 # Capture a container's labels into LBL_ARGS as `--label k=v` pairs BEFORE it is
 # removed, so the recreated container keeps its compose-project membership.
@@ -70,18 +78,26 @@ fix_misp_redis() {
 # --- MISP: full working env + correct cert path + fresh init ----------------
 fix_misp() {
     _present aptl-misp || return 0
-    _has_env aptl-misp MYSQL_HOST && return 0
-    log "MISP missing DB/admin env; recreating with working configuration"
-    local img net
+    if _has_env aptl-misp MYSQL_HOST \
+        && docker port aptl-misp 443/tcp 2>/dev/null | grep -q '^127\.0\.0\.1:8443$'; then
+        return 0
+    fi
+    log "MISP runtime env or published API endpoint is incomplete; recreating"
+    local img net initialize
+    initialize=0
+    _has_env aptl-misp MYSQL_HOST || initialize=1
     img="$(_image aptl-misp)"; net="$(_net aptl-misp)"
     _capture_labels aptl-misp
     docker rm -f aptl-misp >/dev/null 2>&1 || true
-    # Fresh schema so the admin key (ADMIN_KEY) is applied at init.
-    docker exec aptl-misp-db mysql -uroot -pmisp_root_password \
-        -e 'DROP DATABASE IF EXISTS misp; CREATE DATABASE misp;' >/dev/null 2>&1 || true
-    docker volume rm aptl_misp_config aptl_misp_data >/dev/null 2>&1 || true
+    if [ "$initialize" -eq 1 ]; then
+        # Fresh schema so the admin key (ADMIN_KEY) is applied at init.
+        docker exec aptl-misp-db mysql -uroot -pmisp_root_password \
+            -e 'DROP DATABASE IF EXISTS misp; CREATE DATABASE misp;' >/dev/null 2>&1 || true
+        docker volume rm aptl_misp_config aptl_misp_data >/dev/null 2>&1 || true
+    fi
     docker run -d --name aptl-misp --restart unless-stopped "${LBL_ARGS[@]}" \
         --network "$net" --network-alias aptl-misp --network-alias misp \
+        -p 127.0.0.1:8443:443 \
         -e MYSQL_HOST=misp-db -e MYSQL_DATABASE=misp -e MYSQL_USER=misp -e MYSQL_PASSWORD=misp_db_password \
         -e ADMIN_EMAIL=admin@admin.test -e ADMIN_PASSWORD=admin -e ADMIN_KEY="$MISP_API_KEY" \
         -e BASE_URL=https://localhost:8443 -e REDIS_HOST=misp-redis \
@@ -89,6 +105,68 @@ fix_misp() {
         -v "$CERT_BASE/misp/server.pem":/etc/nginx/certs/cert.pem:ro \
         -v "$CERT_BASE/misp/server.key":/etc/nginx/certs/key.pem:ro \
         "$img" >/dev/null
+}
+
+# --- Shuffle: serve the already-declared APTL certificate ------------------
+fix_shuffle_tls() {
+    _present aptl-shuffle-frontend || return 0
+    # The pack delivers these governed artifacts at /opt/aptl/soc-certs, while
+    # this immutable Shuffle image configures nginx's native certificate paths.
+    # Copy only inside the ephemeral container and reload nginx; private bytes
+    # never cross the container boundary or enter diagnostics.
+    if docker exec aptl-shuffle-frontend sh -c \
+        'cmp -s /opt/aptl/soc-certs/shuffle-frontend/server.pem /etc/nginx/fullchain.cert.pem && cmp -s /opt/aptl/soc-certs/shuffle-frontend/server.key /etc/nginx/privkey.pem' \
+        >/dev/null 2>&1; then
+        return 0
+    fi
+    log "activating the declared APTL certificate in Shuffle nginx"
+    docker exec aptl-shuffle-frontend sh -c \
+        'test -s /opt/aptl/soc-certs/shuffle-frontend/server.pem && test -s /opt/aptl/soc-certs/shuffle-frontend/server.key && cp /opt/aptl/soc-certs/shuffle-frontend/server.pem /etc/nginx/fullchain.cert.pem && cp /opt/aptl/soc-certs/shuffle-frontend/server.key /etc/nginx/privkey.pem && chmod 600 /etc/nginx/privkey.pem && nginx -s reload' \
+        >/dev/null
+}
+
+# --- Wazuh: activate the mounted manager configuration ---------------------
+fix_wazuh_integration_metadata() {
+    _present aptl-wazuh-manager || return 0
+    local src img host_uid host_gid
+    src="$(_mount_src aptl-wazuh-manager /var/ossec/integrations)"
+    # The only writable input to the helper is the pack artifact staged under
+    # this project's owned realization tree. Refuse an unexpected bind source.
+    case "$src" in
+        "$PROJECT_DIR"/.aptl/realization/content/*) ;;
+        *) log "unexpected Wazuh integration source; refusing metadata repair"; return 1 ;;
+    esac
+    img="$(_image aptl-wazuh-manager)"
+    host_uid="$(id -u)"; host_gid="$(id -g)"
+    log "normalizing the declared Wazuh integration metadata"
+    # Exact pack archives use epoch-zero mtimes. Wazuh 4.12 treats mtime==0 as
+    # "file not found", then independently requires root:wazuh/0750. A
+    # network-isolated, read-only-root helper changes only that staged file's
+    # metadata. The directory stays owned by the invoking user so the next
+    # realization can remove it normally.
+    docker run --rm --network none --read-only --entrypoint sh \
+        -e APTL_HOST_UID="$host_uid" -e APTL_HOST_GID="$host_gid" \
+        --mount "type=bind,src=$src,dst=/work" "$img" -c \
+        'test -s /work/custom-shuffle && chown "$APTL_HOST_UID:$APTL_HOST_GID" /work && chmod 0755 /work && chown 0:999 /work/custom-shuffle && chmod 0750 /work/custom-shuffle && touch -t 200001010000 /work/custom-shuffle' \
+        >/dev/null
+}
+
+fix_wazuh_manager_config() {
+    _present aptl-wazuh-manager || return 0
+    fix_wazuh_integration_metadata || return 1
+    if docker exec aptl-wazuh-manager cmp -s \
+        /wazuh-config-mount/etc/ossec.conf /var/ossec/etc/ossec.conf \
+        >/dev/null 2>&1; then
+        return 0
+    fi
+    log "activating the declared Wazuh manager configuration"
+    # The read-only /var/ossec/integrations artifact makes the upstream image's
+    # exclusion-copy phase fail before its later mount_files phase. Install the
+    # already-mounted configuration with the image's native owner/mode, then
+    # restart Wazuh services without replacing the admitted container.
+    docker exec aptl-wazuh-manager sh -c \
+        'test -s /wazuh-config-mount/etc/ossec.conf && install -o 0 -g 999 -m 0660 /wazuh-config-mount/etc/ossec.conf /var/ossec/etc/ossec.conf && /var/ossec/bin/wazuh-control restart' \
+        >/dev/null
 }
 
 # --- readiness waits so the seed steps find the services up -----------------
@@ -125,46 +203,33 @@ wait_shuffle() {
     return 1
 }
 
-# --- MCP participant endpoints ----------------------------------------------
-# The participant MCP servers connect to https://localhost:{8443 MISP, 9000
-# TheHive, 3443 Shuffle} and verify strictly (verify_ssl + ca_cert_path
-# lab-ca.pem). The env-pack publishes only wazuh 9200/55000 + dashboard 443, so
-# those three MCP smoke checks (threatintel/cases/soar) have nothing to reach.
-# The pre-#875 compose published all three on 127.0.0.1. Republish them with a
-# small TLS-terminating socat proxy that serves a lab-CA localhost certificate
-# (so verification passes) and forwards to each backend: MISP already serves a
-# localhost-SAN lab cert (TCP passthrough); TheHive serves plain HTTP (terminate
-# TLS, forward plaintext); Shuffle serves its own cert (terminate + re-originate,
-# ignoring the backend cert). This restores documented plumbing without changing
-# the access model or recreating the heavy TheHive/Shuffle-frontend containers.
-fix_mcp_endpoints() {
-    _present aptl-thehive || return 0
-    local net cert key
-    net="$(_net aptl-thehive)"
-    cert="$CERT_BASE/misp/server.pem"   # lab-CA-signed, SAN includes localhost
-    key="$CERT_BASE/misp/server.key"
-    if [ ! -f "$cert" ] || [ ! -f "$key" ]; then
-        log "localhost cert missing; skipping MCP endpoint proxy"; return 0
+# env-packs 5.1 publishes TheHive and Shuffle directly. Older APTL revisions
+# created an undeclared all-in-one proxy for those ports; remove it so runtime
+# inventory remains exactly the scenario's declared node set. MISP's still-open
+# upstream compatibility gap is handled on the declared MISP container above.
+remove_legacy_mcp_proxy() {
+    if _present aptl-mcp-endpoints; then
+        log "removing obsolete MCP endpoint proxy"
+        docker rm -f aptl-mcp-endpoints >/dev/null 2>&1 || true
     fi
-    log "publishing MCP HTTPS endpoints (MISP:8443, TheHive:9000, Shuffle:3443) via TLS proxy"
-    docker rm -f aptl-mcp-endpoints >/dev/null 2>&1 || true
-    local socat_script
-    socat_script='socat TCP-LISTEN:8443,fork,reuseaddr TCP:misp:443 & socat OPENSSL-LISTEN:9000,fork,reuseaddr,cert=/certs/localhost.pem,key=/certs/localhost.key,verify=0 TCP:thehive:9000 & socat OPENSSL-LISTEN:3443,fork,reuseaddr,cert=/certs/localhost.pem,key=/certs/localhost.key,verify=0 OPENSSL-CONNECT:shuffle-frontend:443,verify=0 & wait'
-    docker run -d --name aptl-mcp-endpoints --restart unless-stopped \
-        --label com.docker.compose.project=aptl \
-        --label com.docker.compose.service=mcp-endpoints \
-        --network "$net" \
-        -p 127.0.0.1:8443:8443 -p 127.0.0.1:9000:9000 -p 127.0.0.1:3443:3443 \
-        -v "$cert":/certs/localhost.pem:ro -v "$key":/certs/localhost.key:ro \
-        --entrypoint /bin/sh alpine/socat -c "$socat_script" >/dev/null
 }
 
 log "applying temporary env-pack SOAR fixups (see header for tracking issues)"
-fix_misp_redis
-fix_misp
+remove_legacy_mcp_proxy
+if ! fix_misp_redis; then
+    exit 1
+fi
+if ! fix_misp; then
+    exit 1
+fi
+if ! fix_shuffle_tls; then
+    exit 1
+fi
+if ! fix_wazuh_manager_config; then
+    exit 1
+fi
 wait_misp
 if ! wait_shuffle; then
     exit 1
 fi
-fix_mcp_endpoints
 log "done"

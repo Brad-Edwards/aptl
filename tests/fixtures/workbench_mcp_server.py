@@ -6,15 +6,14 @@ import asyncio
 
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool
+from mcp.types import ListToolsResult, Tool
 
 
-async def main() -> None:
-    server = Server("aptl-workbench-fixture")
+async def list_tools(_context: object, _params: object) -> ListToolsResult:
+    """Return the fixture's fixed inventory through MCP 2's handler seam."""
 
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
+    return ListToolsResult(
+        tools=[
             Tool(
                 name="fixture_read",
                 description="Read fixture state",
@@ -26,6 +25,11 @@ async def main() -> None:
                 inputSchema={"type": "object", "properties": {}},
             ),
         ]
+    )
+
+
+async def main() -> None:
+    server = Server("aptl-workbench-fixture", on_list_tools=list_tools)
 
     async with stdio_server() as (read_stream, write_stream):
         await server.run(

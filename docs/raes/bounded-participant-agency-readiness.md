@@ -13,9 +13,9 @@ The privileged 26-action realization registry is available only when both
 authorities match the approved pre-capture candidate:
 
 - authored source SHA-256:
-  `9683f2539bdefbd99635924d2a6fce27b144e12f382cd74d2f3e10d10ecb7616`;
+  `a06a7ef898fabc9c54663131a3a3d3e47be68b6dfa31a39ef30a18c245582099`;
 - compiled model SHA-256:
-  `7a29b45d3949ccf083ea048261421096ab81d94b4524a3ac37426a8ed09998f7`.
+  `9ca389f929ad978ceca9c5e5598e5604d6836f4b62defc05e6b7f688588f01a4`.
 
 The compiled digest covers the complete model in the versioned
 `aptl.raes-runtime-model-artifact/v1` envelope, serialized as RFC 8785

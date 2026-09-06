@@ -74,7 +74,7 @@ def _single_node_plan(node_name: str) -> ProvisioningPlan:
         payload={
             "name": node_name,
             "node_name": node_name,
-            "node_type": "vm",
+            "node_type": "compute",
             "os_family": "linux",
             "spec": {"node": {"name": node_name}, "infrastructure": {}},
         },

@@ -24,6 +24,8 @@ from aptl.core.deployment.realization import (
 )
 from aptl.backends.pack_interaction import ResolvedPackBackendInteraction
 from aptl.backends.raes_runtime_orchestration import admit_docker_authorities
+from aptl.core.deployment._compose_service_health import runtime_runs_to_completion
+from aptl.core.operator_policy import DockerAuthorityGrant
 from aptl.core.scenario_bundle import PackIdentity
 
 
@@ -95,6 +97,8 @@ class NodeRealization(object):
                 ),
                 "service_units": len(self.runtime.service_manager_units),
             }
+            if runtime_runs_to_completion(self.runtime):
+                details["run_to_completion"] = True
         if self.image is not None:
             details["image"] = self.image.details()
         if self.dynamic_composition:
@@ -197,6 +201,10 @@ class AptlRealization(object):
     # which is embedded in portable RAES realization state.
     pack_identity: PackIdentity | None = None
     pack_interaction: ResolvedPackBackendInteraction | None = None
+    deployment_project_name: str = "aptl"
+    runtime_authority_run_id: str = ""
+    runtime_authority_attempt_id: str = ""
+    runtime_authority_grants: tuple[DockerAuthorityGrant, ...] = ()
 
     def deployment_spec(self, profiles: list[str]) -> DeploymentRealizationSpec:
         """Return typed backend realization input for this RAES realization."""
@@ -218,7 +226,14 @@ class AptlRealization(object):
                 )
                 for network in self.networks
             ),
-            docker_authority_admissions=admit_docker_authorities(nodes),
+            docker_authority_admissions=admit_docker_authorities(
+                nodes,
+                pack_identity=self.pack_identity,
+                project_name=self.deployment_project_name,
+                run_id=self.runtime_authority_run_id,
+                attempt_id=self.runtime_authority_attempt_id,
+                grants=self.runtime_authority_grants,
+            ),
             acls=self.acls,
             images=tuple(node.image for node in self.nodes if node.image is not None),
             content=tuple(

@@ -254,6 +254,24 @@ class TestSyncManagerConfig:
         assert "real-cluster-secret" not in source.read_text()
         assert '<key>real-cluster-secret</key>' in _rendered_manager(tmp_path).read_text()
 
+    def test_identical_retry_preserves_rendered_file_inode(self, tmp_path):
+        """A backend retry must not detach an existing Docker file bind."""
+        from aptl.core.credentials import sync_manager_config
+
+        _layout_manager(
+            tmp_path,
+            "<ossec_config>\n  <cluster>\n    <key>old</key>\n"
+            "  </cluster>\n</ossec_config>\n",
+        )
+
+        rendered = sync_manager_config(tmp_path, "stable-cluster-key")
+        first_inode = rendered.stat().st_ino
+
+        second = sync_manager_config(tmp_path, "stable-cluster-key")
+
+        assert second.stat().st_ino == first_inode
+        assert "<key>stable-cluster-key</key>" in second.read_text()
+
     def test_rendered_manager_config_is_lf_even_from_crlf_template(
         self, tmp_path, mocker,
     ):

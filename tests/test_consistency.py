@@ -3,6 +3,7 @@
 These tests validate that docker-compose.yml, aptl.json, scripts, and code
 references are internally consistent. No running Docker environment needed.
 """
+
 import json
 import re
 from pathlib import Path
@@ -95,29 +96,27 @@ class TestComposeConsistency:
                 else:
                     seen[key] = service_name
 
-        assert not dupes, (
-            "Duplicate static ipv4_address assignments:\n"
-            + "\n".join(
-                f"  {network}: {ip} used by {first} and {second}"
-                for network, ip, first, second in dupes
-            )
+        assert not dupes, "Duplicate static ipv4_address assignments:\n" + "\n".join(
+            f"  {network}: {ip} used by {first} and {second}"
+            for network, ip, first, second in dupes
         )
 
-    def test_misp_suricata_rules_mount_named_volume(self, compose_config, techvault_sdl):
+    def test_misp_suricata_rules_mount_named_volume(
+        self, compose_config, techvault_sdl
+    ):
         """ADR-043: MISP rules ride a shared named volume, never a host bind.
 
         Nothing checked-in or under ``.aptl/`` may be bind-mounted onto a
         path the Suricata image entrypoint chowns (that rewrote host-side
         ownership, issue #325). ``suricata`` (still Compose-managed) and
         ``misp-suricata-sync`` (realized generically from the SDL, issue
-        #581, via ``runtime.mounts`` — never a Compose volume mount) share
-        the ``suricata_misp_rules`` named volume instead. The env-var side
+        #581, via the RAES 3.5 persistent-volume contract — never a Compose
+        volume mount) share the ``suricata_misp_rules`` named volume instead. The env-var side
         of misp-suricata-sync's config (RULES_OUT_PATH, MISP_API_KEY, ...)
         is a separate, not-yet-built secrets-injection concern for
         image-free nodes (tracked alongside #809) and is not asserted here.
         """
         from raes import parse_sdl_file
-        from raes.runtime_mounts import RuntimeMountSourceKind
 
         services = compose_config["services"]
         suricata_volumes = services["suricata"]["volumes"]
@@ -137,14 +136,14 @@ class TestComposeConsistency:
         assert "suricata_config_seed" in top_level
 
         scenario = parse_sdl_file(techvault_sdl)
-        sync_node = scenario.nodes["misp-suricata-sync"]
-        volume_mounts = {
-            mount.source: mount.target
-            for mount in sync_node.runtime.mounts
-            if mount.source_kind == RuntimeMountSourceKind.VOLUME
+        sync_mounts = {
+            volume_name: consumer.mount_destination
+            for volume_name, volume in scenario.persistent_volumes.items()
+            for consumer in volume.consumers
+            if consumer.node == "misp-suricata-sync"
         }
-        assert volume_mounts.get("suricata_misp_rules") == "/var/lib/suricata/rules/misp"
-        assert volume_mounts.get("suricata_command_socket") == "/var/run/suricata"
+        assert sync_mounts.get("suricata_misp_rules") == "/var/lib/suricata/rules/misp"
+        assert sync_mounts.get("suricata_command_socket") == "/var/run/suricata"
 
     def test_suricata_config_seeded_not_bind_mounted(self, compose_config):
         """ADR-043: suricata.yaml / local.rules are seeded via a named volume
@@ -154,9 +153,7 @@ class TestComposeConsistency:
         volumes = suricata["volumes"]
 
         assert "suricata_config_seed:/seed:ro" in volumes
-        assert not any(
-            volume.startswith("./config/suricata/") for volume in volumes
-        )
+        assert not any(volume.startswith("./config/suricata/") for volume in volumes)
         # Wrapper entrypoint stages the seed into image-owned /etc/suricata
         # then delegates to the upstream entrypoint.
         entrypoint = "\n".join(suricata["entrypoint"])
@@ -177,9 +174,7 @@ class TestComposeConsistency:
             "/etc/otelcol-contrib/config.yaml",
         ]
 
-    def test_thehive_elasticsearch_stays_writable_on_full_host(
-        self, compose_config
-    ):
+    def test_thehive_elasticsearch_stays_writable_on_full_host(self, compose_config):
         """Fresh TheHive and Cortex bootstrap must not depend on host usage.
 
         Elasticsearch's percentage flood-stage can reject the first Cortex
@@ -189,14 +184,9 @@ class TestComposeConsistency:
         """
         environment = compose_config["services"]["thehive-es"]["environment"]
 
-        assert (
-            "cluster.routing.allocation.disk.threshold_enabled=false"
-            in environment
-        )
+        assert "cluster.routing.allocation.disk.threshold_enabled=false" in environment
 
-    def test_shuffle_opensearch_stays_writable_on_full_host(
-        self, compose_config
-    ):
+    def test_shuffle_opensearch_stays_writable_on_full_host(self, compose_config):
         """Shuffle's lab datastore must not use host percentage watermarks.
 
         A container can share a large, mostly-full host filesystem and still
@@ -204,23 +194,16 @@ class TestComposeConsistency:
         watermark then makes indices read-only while its healthcheck remains
         green, so the first-load Shuffle workflow silently fails to seed.
         """
-        environment = compose_config["services"]["shuffle-opensearch"][
-            "environment"
-        ]
+        environment = compose_config["services"]["shuffle-opensearch"]["environment"]
 
-        assert (
-            "cluster.routing.allocation.disk.threshold_enabled=false"
-            in environment
-        )
+        assert "cluster.routing.allocation.disk.threshold_enabled=false" in environment
 
     def test_web_api_token_does_not_block_inactive_profiles(self, compose_config):
         """Compose expands environment substitutions for inactive profiles, so
         the optional web token must be validated by the web runtime instead of
         by `${VAR:?}` interpolation in docker-compose.yml."""
         api_env = compose_config["services"]["aptl-web-api"]["environment"]
-        token_lines = [
-            line for line in api_env if line.startswith("APTL_API_TOKEN=")
-        ]
+        token_lines = [line for line in api_env if line.startswith("APTL_API_TOKEN=")]
 
         assert token_lines == ["APTL_API_TOKEN=${APTL_API_TOKEN:-}"]
         assert not any(":?" in line for line in token_lines)
@@ -231,9 +214,9 @@ class TestComposeConsistency:
         receive APTL_API_TOKEN — it holds no secret and enforces no auth."""
         ui = compose_config["services"]["aptl-web-ui"]
         env_lines = ui.get("environment", []) or []
-        assert not any(
-            "APTL_API_TOKEN" in line for line in env_lines
-        ), "aptl-web-ui must not carry the control-plane token (UI-008a)"
+        assert not any("APTL_API_TOKEN" in line for line in env_lines), (
+            "aptl-web-ui must not carry the control-plane token (UI-008a)"
+        )
 
 
 class TestKaliContainerLifecycle:
@@ -277,9 +260,7 @@ class TestKaliContainerLifecycle:
         does not report ready if either is not observed active) replaces
         the old aptl-healthcheck.sh script."""
         kali = self._kali_node(techvault_sdl)
-        unit_names = {
-            unit.unit_name for unit in kali.runtime.service_manager_units
-        }
+        unit_names = {unit.unit_name for unit in kali.runtime.service_manager_units}
         assert "ssh.service" in unit_names, "kali must run and verify sshd"
         assert "kali-capture-bootstrap.service" in unit_names, (
             "kali must run and verify the unit that wires the OBS-003 "
@@ -303,9 +284,7 @@ class TestKaliContainerLifecycle:
 
         proxy = services["kali-ssh-proxy"]
         assert proxy["container_name"] == "aptl-kali-ssh-proxy"
-        resolved_ports = [
-            _resolve_compose_vars(str(p)) for p in proxy.get("ports", [])
-        ]
+        resolved_ports = [_resolve_compose_vars(str(p)) for p in proxy.get("ports", [])]
         assert "127.0.0.1:2023:2023" in resolved_ports, (
             "kali-ssh-proxy must publish 127.0.0.1:2023 by default so host-run "
             "MCP clients work on Docker Desktop, Colima, and WSL2"
@@ -351,9 +330,7 @@ class TestCodeReferencesMatchCompose:
                 for match in pattern.finditer(text):
                     ref = match.group(1)
                     if ref not in valid_names:
-                        bad_refs.append(
-                            (str(fpath.relative_to(PROJECT_ROOT)), ref)
-                        )
+                        bad_refs.append((str(fpath.relative_to(PROJECT_ROOT)), ref))
 
         assert not bad_refs, (
             "docker exec references to non-existent container names:\n"

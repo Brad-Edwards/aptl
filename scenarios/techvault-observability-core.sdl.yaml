@@ -13,21 +13,36 @@ nodes:
     description: SOC and security tooling network.
 
   aptl-otel-collector:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: otlp-grpc, port: 4317, protocol: tcp}
       - {name: otlp-http, port: 4318, protocol: tcp}
   aptl-tempo:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: tempo-http, port: 3200, protocol: tcp}
   aptl-grafana-otel:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: grafana, port: 3000, protocol: tcp}
+
+realization:
+  constraints:
+    - field_pointer: /nodes/aptl-otel-collector
+      concern: compute-substrate
+      posture: exact
+      domain: {kind: exact, value: operating-system-container}
+    - field_pointer: /nodes/aptl-tempo
+      concern: compute-substrate
+      posture: exact
+      domain: {kind: exact, value: operating-system-container}
+    - field_pointer: /nodes/aptl-grafana-otel
+      concern: compute-substrate
+      posture: exact
+      domain: {kind: exact, value: operating-system-container}
 
 infrastructure:
   security-net:

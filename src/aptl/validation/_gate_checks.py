@@ -23,6 +23,7 @@ from raes.scenario import Scenario
 from aptl.backends.raes import create_aptl_runtime_target, resolve_scenario_bundle
 from aptl.backends.raes_profiles import public_start_profiles, select_backend_profiles
 from aptl.backends.raes_realization import interpret_provisioning_plan
+from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.utils.redaction import redact
 from aptl.validation._gate_no_start_backend import _NoStartBackend
 from aptl.validation._gate_raes_cli import (
@@ -118,14 +119,30 @@ def check_backend_conformance(
 ) -> GateCheck:
     """Confirm APTL's canonical manifest passes target + published-CLI conformance."""
     try:
-        # Conformance validates APTL's own in-tree configuration, so the bundle
-        # is the in-tree bundle (root == project_dir); only the manifest is read.
+        from aptl.backends.raes_start_model import AcesRunTarget
+        from aptl.core.operator_policy import load_operator_policy
+
+        # Conformance validates the generic APTL target adapter, not the
+        # selected pack's provider interaction. Keep its bundle project-local
+        # so a hermetic generic probe cannot accidentally inherit a pack identity.
+        conformance_bundle = project_tree_bundle(
+            project_dir,
+            project_dir / "scenarios" / "techvault-defensive-min.sdl.yaml",
+        )
         target = create_aptl_runtime_target(
             project_dir=project_dir,
             config=config,
             backend=_NoStartBackend(),
-            bundle=resolve_scenario_bundle(project_dir, None, config),
+            bundle=conformance_bundle,
+            operator_policy=load_operator_policy(project_dir),
+            run_target=AcesRunTarget(
+                run_store=object(),
+                run_id="static-conformance",
+                attempt_id="static-conformance-attempt",
+            ),
         )
+        if reference_scenario is None:
+            reference_scenario = parse_sdl_file(conformance_bundle.sdl_path)
         report = run_target_conformance(
             target,
             profile=profile,
@@ -136,7 +153,9 @@ def check_backend_conformance(
     # broad-except: RAES surfaces diverse errors
     except Exception as exc:
         return GateCheck(
-            "backend_conformance", False, (redact(f"run_target_conformance raised: {exc}"),)
+            "backend_conformance",
+            False,
+            (redact(f"run_target_conformance raised: {exc}"),),
         )
 
     diagnostics = _target_conformance_diagnostics(report)
@@ -229,7 +248,10 @@ def _requires_live_realization_harness(case: object) -> bool:
         getattr(case, "contract_name", "") == "realization-envelope-v1"
         and not getattr(case, "passed", True)
         and bool(diagnostics)
-        and all(getattr(d, "code", "") in _LIVE_HARNESS_REALIZATION_CODES for d in diagnostics)
+        and all(
+            getattr(d, "code", "") in _LIVE_HARNESS_REALIZATION_CODES
+            for d in diagnostics
+        )
     )
 
 
@@ -261,10 +283,14 @@ def _target_conformance_diagnostics(report: BackendConformanceReport) -> list[st
     """Turn a target conformance report into gate diagnostics."""
     diagnostics: list[str] = []
     failing_cases = [case for case in getattr(report, "cases", ()) if not case.passed]
-    tolerated_cases = [case for case in failing_cases if _requires_live_realization_harness(case)]
+    tolerated_cases = [
+        case for case in failing_cases if _requires_live_realization_harness(case)
+    ]
     blocking_cases = [case for case in failing_cases if case not in tolerated_cases]
     report_codes = sorted({d.code for d in report.diagnostics})
-    failure = _report_failure_diagnostic(report, tolerated_cases, blocking_cases, report_codes)
+    failure = _report_failure_diagnostic(
+        report, tolerated_cases, blocking_cases, report_codes
+    )
     if failure is not None:
         diagnostics.append(failure)
     if report.unsupported_contract_gaps:

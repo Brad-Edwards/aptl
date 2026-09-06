@@ -159,7 +159,7 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
     assert scenario is not None
     assert parse_check.passed, parse_check.diagnostics
 
-    bundle = _bundle(PROJECT_ROOT, OPERATIONAL_SCENARIO)
+    bundle = _OPERATIONAL_BUNDLE
     execution_plan = RuntimeManager(
         create_aptl_runtime_target(
             project_dir=PROJECT_ROOT,
@@ -172,6 +172,7 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
         plan=execution_plan.provisioning,
         config=config,
         bundle=bundle,
+        component_root=PROJECT_ROOT,
     )
     details = realization.details()
 
@@ -185,17 +186,23 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
     generators = {item["generator"] for item in details["generated_artifacts"]}
     assert generators == {"certificate_bundle", "rendered_config", "ssh_key_bundle"}
     artifacts = {item["name"]: item for item in details["generated_artifacts"]}
-    assert {output["path"] for output in artifacts["wazuh-indexer-certs"]["outputs"]} == {
+    assert {
+        output["path"] for output in artifacts["wazuh-indexer-certs"]["outputs"]
+    } == {
         "root-ca.pem",
         "wazuh.indexer-key.pem",
         "wazuh.indexer.pem",
     }
-    assert {output["path"] for output in artifacts["wazuh-manager-certs"]["outputs"]} == {
+    assert {
+        output["path"] for output in artifacts["wazuh-manager-certs"]["outputs"]
+    } == {
         "root-ca-manager.pem",
         "wazuh.manager-key.pem",
         "wazuh.manager.pem",
     }
-    assert {output["path"] for output in artifacts["wazuh-dashboard-certs"]["outputs"]} == {
+    assert {
+        output["path"] for output in artifacts["wazuh-dashboard-certs"]["outputs"]
+    } == {
         "root-ca.pem",
         "wazuh.dashboard-key.pem",
         "wazuh.dashboard.pem",
@@ -412,7 +419,7 @@ def _write_compose(project_dir, services):
     (project_dir / "docker-compose.yml").write_text("\n".join(lines))
 
 
-def _node_plan(node_name, *, node_type="vm", os_family="linux"):
+def _node_plan(node_name, *, node_type="compute", os_family="linux"):
     address = f"provision.node.{node_name}"
     resource = PlannedResource(
         address=address,
@@ -621,9 +628,7 @@ def test_check_import_lock_missing_and_unavailable(tmp_path, monkeypatch):
 
     check = check_import_lock(path, scenario)
     assert not check.passed
-    assert any(
-        "missing import lockfile" in d for d in check.diagnostics
-    )
+    assert any("missing import lockfile" in d for d in check.diagnostics)
 
     (tmp_path / LOCKFILE_NAME).write_text("{}")
     monkeypatch.setattr(gc, "run_raes", lambda *a, **k: None)
@@ -684,7 +689,7 @@ def test_check_provisioning_realization_fails_on_profile_mismatch(tmp_path):
               internal-net:
                 type: switch
               kali:
-                type: vm
+                type: compute
                 services:
                   - {name: ssh, port: 22, protocol: tcp}
             infrastructure:
@@ -751,14 +756,15 @@ def test_operational_scenario_content_and_accounts_are_honest():
     ]
     assert content_placements
     # A content-placement lowers to exactly one typed realization: an ordinary
-    # file/directory ("content"), a logical evidence dataset ("dataset"), or (ADR-088,
-    # issue #889) a service-search-index-schema materialization
-    # ("service_index_schema") -- the Cortex job index is realized honestly.
+    # file/directory ("content"), a logical evidence dataset ("dataset"), or an
+    # ADR-088 service-search-index-schema materialization ("service_index_schema").
+    # Env-packs 5.1 removed the historical Cortex job-index declaration; the
+    # scenario-independent service-index path has dedicated lowering tests.
     assert all(
         "content" in p or "dataset" in p or "service_index_schema" in p
         for p in content_placements
     )
-    assert any("service_index_schema" in p for p in content_placements)
+    assert any("content" in p for p in content_placements)
     assert account_placements
     assert all("account" in p for p in account_placements)
 
@@ -775,7 +781,7 @@ def test_provisioning_realization_fails_on_unrealizable_content(tmp_path):
             name: bad-content
             nodes:
               fileshare:
-                type: vm
+                type: compute
                 services:
                   - {name: smb, port: 445, protocol: tcp}
             content:

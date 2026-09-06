@@ -31,6 +31,7 @@ def _realize_pack(tmp_path):
     from aptl.backends.raes import create_aptl_runtime_target, parse_sdl_file
     from aptl.backends.raes_realization import interpret_provisioning_plan
     from aptl.core.config import AptlConfig
+    from aptl.core.operator_policy import OperatorPolicy
     from aptl.core.scenario_bundle import env_pack_bundle
 
     bundle = env_pack_bundle(tmp_path, identity="techvault", source_pack=_pack_root())
@@ -46,8 +47,30 @@ def _realize_pack(tmp_path):
             "dns": True,
         },
     )
+    assert bundle.pack_identity is not None
+    policy = OperatorPolicy(
+        docker_authority_grants=[
+            {
+                "pack_id": bundle.pack_identity.pack_id,
+                "pack_version": bundle.pack_identity.pack_version,
+                "pack_set_digest": bundle.pack_identity.set_digest,
+                "component_address": "provision.node.shuffle-orborus",
+                "authority_id": "shuffle-orborus",
+                "endpoint_source": "/var/run/docker.sock",
+                "image_template_ids": [
+                    "shuffle-worker",
+                    "shuffle-http-1-4-0",
+                ],
+                "delegated_template_ids": ["shuffle-worker"],
+            }
+        ]
+    )
     target = create_aptl_runtime_target(
-        project_dir=PROJECT_ROOT, config=config, backend=MagicMock(), bundle=bundle
+        project_dir=PROJECT_ROOT,
+        config=config,
+        backend=MagicMock(),
+        bundle=bundle,
+        operator_policy=policy,
     )
     scenario = parse_sdl_file(bundle.sdl_path)
     plan = RuntimeManager(target).plan(scenario)
@@ -56,6 +79,9 @@ def _realize_pack(tmp_path):
         config=config,
         bundle=bundle,
         component_root=PROJECT_ROOT,
+        operator_policy=policy,
+        run_id="env-pack-test-run",
+        attempt_id="env-pack-test-attempt",
     )
 
 
@@ -98,9 +124,9 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(tmp_path):
 
     realization = _realize_pack(tmp_path)
     # This #875 rendering test is intentionally independent of env-packs #285,
-    # which must replace Shuffle's mutable child image and author the realized
-    # child correlation before APTL can admit its Docker authority. Strip only
-    # that downstream declaration so the generic Compose surface remains covered.
+    # which replaces Shuffle's authored host path and mutable image inventory.
+    # Strip only that downstream declaration so the generic Compose surface
+    # remains covered while the released dependency is still behind that PR.
     spec = _without_downstream_orborus_authority(realization).deployment_spec(
         sorted(realization.profiles)
     )
@@ -129,15 +155,41 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(tmp_path):
             assert dependency in defined
 
 
-def test_techvault_deployment_waits_for_downstream_child_closure(tmp_path):
-    """APTL rejects the current incomplete downstream child closure (#285)."""
+def test_released_techvault_pack_uses_the_portable_orborus_contract(tmp_path):
+    """The released pack leaves Docker source resolution to APTL policy."""
 
     realization = _realize_pack(tmp_path)
+    spec = realization.deployment_spec(sorted(realization.profiles))
 
-    with pytest.raises(
-        ValueError, match="aptl.provisioner.spawn-child-correlation-invalid"
-    ):
-        realization.deployment_spec(sorted(realization.profiles))
+    (admission,) = spec.docker_authority_admissions
+    assert admission.node_address == "provision.node.shuffle-orborus"
+    assert admission.endpoint_source == "/var/run/docker.sock"
+
+
+def test_portable_techvault_orborus_contract_admits_without_observed_children(
+    tmp_path,
+):
+    """Exercise the released portable shape at the real pack boundary."""
+
+    realization = _realize_pack(tmp_path)
+    spec = realization.deployment_spec(sorted(realization.profiles))
+
+    (admission,) = spec.docker_authority_admissions
+    assert admission.node_address == "provision.node.shuffle-orborus"
+    assert admission.endpoint_source == "/var/run/docker.sock"
+    assert [item.template_id for item in admission.spawn_requirements] == [
+        "shuffle-worker",
+        "shuffle-http-1-4-0",
+    ]
+    assert [
+        item.template_id
+        for item in admission.spawn_requirements
+        if item.delegated_docker_authority
+    ] == ["shuffle-worker"]
+    assert admission.spawn_requirements[0].runtime_alias is None
+    assert admission.spawn_requirements[1].runtime_alias == (
+        "frikky/shuffle:http_1.4.0"
+    )
 
 
 def test_generated_base_compose_is_written_under_realization_root_not_the_pack(

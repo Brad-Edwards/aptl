@@ -34,12 +34,12 @@ nodes:
     type: switch
     description: network switch, never a container
   ssh-target:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: ssh, port: 22, protocol: tcp}
   quiet-host:
-    type: vm
+    type: compute
     os: linux
     services: []
 """
@@ -116,9 +116,7 @@ class TestBlockProjection:
         from tests.helpers import techvault_scenario_path
 
         scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
-        detail = build_scenario_detail(
-            _entry("techvault-operational"), scenario
-        )
+        detail = build_scenario_detail(_entry("techvault-operational"), scenario)
         types = set(_block_types(detail))
         assert "objective" not in types
         assert "step" not in types

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import asdict, dataclass
+import re
 from aptl.core.deployment._compose_child_lifecycle import (
     ComposeSpawnedChildLifecycleMixin,
 )
@@ -23,9 +25,26 @@ from aptl.core.lab_types import LabResult
 from aptl.runtime_authority import (
     DeploymentDockerAuthorityAdmission,
     DeploymentSpawnImageRequirement,
+    DeploymentSpawnedChildObservation,
     has_undeclared_runtime_mounts,
     mount_exposes_or_mentions_docker_socket,
+    runtime_child_correlation_id,
 )
+
+_SAFE_CONTAINER_ID = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
+
+
+@dataclass(frozen=True)
+class _OwnedChildCandidate:
+    """One inspected child whose ownership must pass before any mutation."""
+
+    container_id: str
+    parent_container_id: str
+    image_id: str
+    info: object
+    requirement: DeploymentSpawnImageRequirement
+    admission: DeploymentDockerAuthorityAdmission
+    product_execution_id: str
 
 
 def _spawn_failure(
@@ -62,6 +81,18 @@ def _inspect_environment(info: object) -> Sequence[object]:
     if isinstance(raw_env, Sequence) and not isinstance(raw_env, (str, bytes)):
         return raw_env
     return ()
+
+
+def _inspect_environment_value(info: object, name: str) -> str | None:
+    """Return one exact non-empty environment value, rejecting ambiguity."""
+
+    prefix = f"{name}="
+    values = [
+        str(item)[len(prefix) :]
+        for item in _inspect_environment(info)
+        if str(item).startswith(prefix)
+    ]
+    return values[0] if len(values) == 1 and values[0] else None
 
 
 def _inspect_has_endpoint_override(info: object) -> bool:
@@ -112,6 +143,8 @@ def _mount_is_canonical_authority_socket(mount: object) -> bool:
 def _authority_mount_is_valid(
     entries: Sequence[object],
     admission: DeploymentDockerAuthorityAdmission,
+    *,
+    allow_holder_mounts: bool = True,
 ) -> bool:
     """Whether a holder exposes only its admitted runtime mount footprint."""
 
@@ -126,12 +159,15 @@ def _authority_mount_is_valid(
             bind_type="bind",
         )
     ]
+    holder_targets = (
+        set(admission.allowed_mount_targets) if allow_holder_mounts else set()
+    )
     return bool(
         len(socket_mounts) == 1
         and _mount_is_canonical_authority_socket(socket_mounts[0])
         and not has_undeclared_runtime_mounts(
             entries,
-            allowed_targets=set(admission.allowed_mount_targets),
+            allowed_targets=holder_targets,
             docker_authority_admitted=True,
         )
     )
@@ -154,6 +190,7 @@ class ComposeRuntimeOrchestrationObservationMixin(
             admissions = docker_authority_admissions(realization)
         except ValueError as exc:
             return LabResult(success=False, error=str(exc))
+        self._runtime_orchestration_observations = ()
         admitted_addresses = {item.node_address for item in admissions}
         authority_nodes = tuple(
             node for node in realization.nodes if node.address in admitted_addresses
@@ -162,12 +199,18 @@ class ComposeRuntimeOrchestrationObservationMixin(
         if authority_nodes:
             endpoint = self.revalidate_local_docker_socket()
             failure = None if endpoint.success else endpoint
+        holder_ids: dict[str, str] = {}
         if failure is None and authority_nodes:
-            failure = self._verify_authority_holders(authority_nodes, admissions)
-        if failure is None and authority_nodes:
+            failure, holder_ids = self._verify_authority_holders(
+                authority_nodes,
+                admissions,
+                require_identity=require_children,
+            )
+        if failure is None and authority_nodes and require_children:
             failure = self._verify_spawned_child_containment(
                 realization,
-                require_children=require_children,
+                admissions,
+                holder_ids,
             )
         if failure is None and authority_nodes:
             failure = self._verify_authority_non_propagation(
@@ -180,18 +223,25 @@ class ComposeRuntimeOrchestrationObservationMixin(
         self,
         authority_nodes: tuple[DeploymentNodeRealization, ...],
         admissions: tuple[DeploymentDockerAuthorityAdmission, ...],
-    ) -> LabResult | None:
+        *,
+        require_identity: bool,
+    ) -> tuple[LabResult | None, dict[str, str]]:
         """Attest the admitted socket and daemon identity on each holder."""
 
         admissions_by_address = {
             admission.node_address: admission for admission in admissions
         }
         failure = None
+        holder_ids: dict[str, str] = {}
         for node in authority_nodes:
-            if not node.container_name or not self._runtime_authority_matches(
-                node.container_name,
-                admissions_by_address[node.address],
-            ):
+            matched = False
+            container_id = None
+            if node.container_name:
+                matched, container_id = self._runtime_authority_identity(
+                    node.container_name,
+                    admissions_by_address[node.address],
+                )
+            if not matched or (require_identity and not container_id):
                 failure = LabResult(
                     success=False,
                     error=(
@@ -200,7 +250,9 @@ class ComposeRuntimeOrchestrationObservationMixin(
                     ),
                 )
                 break
-        return failure
+            if container_id is not None:
+                holder_ids[node.address] = container_id
+        return failure, holder_ids
 
     def _verify_authority_non_propagation(
         self,
@@ -230,67 +282,89 @@ class ComposeRuntimeOrchestrationObservationMixin(
     def _verify_spawned_child_containment(
         self,
         realization: DeploymentRealizationSpec,
-        *,
-        require_children: bool,
+        admissions: tuple[DeploymentDockerAuthorityAdmission, ...],
+        holder_ids: Mapping[str, str],
     ) -> LabResult | None:
-        """Attest the exact label-correlated child set on the bound daemon."""
+        """Prove the whole parent/image graph before supervising owned children."""
 
         try:
             requirements = deployment_spawn_image_requirements(realization)
         except ValueError as exc:
             return LabResult(success=False, error=str(exc))
+        admissions_by_authority = {
+            (admission.node_address, admission.spawn_requirements[0].authority_id): (
+                admission
+            )
+            for admission in admissions
+        }
+        ordered = tuple(
+            requirement
+            for delegated in (True, False)
+            for requirement in requirements
+            if requirement.delegated_docker_authority is delegated
+        )
+        candidates: list[_OwnedChildCandidate] = []
+        delegated_ids: dict[tuple[str, str, str], set[str]] = {}
+        seen_ids: set[str] = set()
         failure = None
-        for requirement in requirements:
-            failure = self._verify_spawn_requirement(
+        for requirement in ordered:
+            admission = admissions_by_authority.get(
+                (requirement.node_address, requirement.authority_id)
+            )
+            if admission is None:
+                failure = _spawn_failure(
+                    "Spawned-child correlation unavailable",
+                    requirement,
+                )
+                break
+            failure, discovered = self._owned_spawn_candidates(
                 requirement,
-                require_children=require_children,
+                admission,
+                holder_ids,
+                delegated_ids,
             )
             if failure is not None:
                 break
-        return failure
-
-    def _verify_spawn_requirement(
-        self,
-        requirement: DeploymentSpawnImageRequirement,
-        *,
-        require_children: bool,
-    ) -> LabResult | None:
-        """Attest one template's correlated child set and lifecycle."""
-
-        failure, container_ids = self._correlated_child_ids(
-            requirement,
-            require_children=require_children,
-        )
-        expected_image_id = None
-        if failure is None and container_ids:
-            expected_image_id = self._exact_spawn_image_id(
-                requirement.image_ref,
-                timeout=requirement.execution_timeout_seconds,
-            )
-            if expected_image_id is None:
-                failure = _spawn_failure(
-                    "Spawned-child image identity unavailable",
-                    requirement,
-                )
-        if failure is None and expected_image_id is not None:
-            for container_id in container_ids:
-                failure = self._verify_spawned_child(
-                    container_id,
-                    expected_image_id,
-                    requirement,
-                )
-                if failure is not None:
+            for candidate in discovered:
+                if candidate.container_id in seen_ids:
+                    failure = _spawn_failure(
+                        "Spawned-child correlation unavailable",
+                        requirement,
+                    )
                     break
+                seen_ids.add(candidate.container_id)
+                candidates.append(candidate)
+                if requirement.delegated_docker_authority:
+                    delegated_ids.setdefault(
+                        (
+                            requirement.node_address,
+                            requirement.authority_id,
+                            candidate.product_execution_id,
+                        ),
+                        set(),
+                    ).add(candidate.container_id)
+            if failure is not None:
+                break
+        if failure is None:
+            failure = self._supervise_owned_children(candidates)
         return failure
 
-    def _correlated_child_ids(
+    def _owned_spawn_candidates(
         self,
         requirement: DeploymentSpawnImageRequirement,
-        *,
-        require_children: bool,
-    ) -> tuple[LabResult | None, tuple[str, ...]]:
-        """Query one exact image-label pair and enforce its declared count."""
+        admission: DeploymentDockerAuthorityAdmission,
+        holder_ids: Mapping[str, str],
+        delegated_ids: Mapping[tuple[str, str, str], set[str]],
+    ) -> tuple[LabResult | None, tuple[_OwnedChildCandidate, ...]]:
+        """Inspect and validate every image-matching child without mutation."""
 
+        admitted_execution_ids = set(admission.product_execution_ids)
+        if not admitted_execution_ids:
+            return (
+                _spawn_failure("Spawned-child correlation unavailable", requirement),
+                (),
+            )
+        runtime_ref = requirement.runtime_alias or requirement.image_ref
         try:
             result = self._run(
                 [
@@ -298,15 +372,13 @@ class ComposeRuntimeOrchestrationObservationMixin(
                     "ps",
                     "-aq",
                     "--filter",
-                    f"ancestor={requirement.image_ref}",
-                    "--filter",
-                    f"label={requirement.child_label}",
+                    f"ancestor={runtime_ref}",
                 ],
                 timeout=requirement.execution_timeout_seconds,
             )
         except BackendTimeoutError:
             result = None
-        failure = None
+        failure: LabResult | None = None
         container_ids: tuple[str, ...] = ()
         if result is None or result.returncode != 0:
             failure = _spawn_failure("Spawned-child observation failed", requirement)
@@ -318,68 +390,208 @@ class ComposeRuntimeOrchestrationObservationMixin(
                     if container_id.strip()
                 )
             )
-        count_required = bool(container_ids or require_children)
-        if (
-            failure is None
-            and count_required
-            and len(container_ids) != requirement.expected_count
-        ):
-            failure = _spawn_failure(
-                "Spawned-child correlation count mismatch",
-                requirement,
-            )
-        return failure, container_ids
-
-    def _verify_spawned_child(
-        self,
-        container_id: str,
-        expected_image_id: str,
-        requirement: DeploymentSpawnImageRequirement,
-    ) -> LabResult | None:
-        """Attest one child's identity, correlation, isolation, and deadline."""
-
-        info = self.container_inspect(container_id)
-        failure: LabResult | None = None
-        if not info:
-            failure = _spawn_failure("Spawned-child observation failed", requirement)
-        if failure is None and info.get("Image") != expected_image_id:
-            failure = _spawn_failure(
-                "Spawned-child image identity mismatch",
-                requirement,
-            )
-        if failure is None and not self._child_has_correlation(info, requirement):
+        if failure is None and not container_ids:
             failure = _spawn_failure(
                 "Spawned-child correlation unavailable",
                 requirement,
             )
-        if failure is None and self._inspected_container_has_docker_authority(info):
-            failure = _spawn_failure(
-                "Docker authority propagated to spawned child",
-                requirement,
-                separator=" ",
-            )
+        expected_image_id = None
         if failure is None:
+            expected_image_id = self._exact_spawn_image_id(
+                requirement.image_ref,
+                timeout=requirement.execution_timeout_seconds,
+            )
+            if expected_image_id is None:
+                failure = _spawn_failure(
+                    "Spawned-child image identity unavailable",
+                    requirement,
+                )
+        candidates: list[_OwnedChildCandidate] = []
+        if failure is None and expected_image_id is not None:
+            for query_id in container_ids:
+                failure, candidate = self._inspect_owned_child(
+                    query_id,
+                    expected_image_id,
+                    requirement,
+                    admission,
+                    holder_ids,
+                    delegated_ids,
+                )
+                if failure is not None:
+                    break
+                if candidate is not None:
+                    candidates.append(candidate)
+        if failure is None:
+            observed_execution_ids = {
+                candidate.product_execution_id for candidate in candidates
+            }
+            if observed_execution_ids != admitted_execution_ids:
+                failure = _spawn_failure(
+                    "Spawned-child correlation unavailable",
+                    requirement,
+                )
+        return failure, tuple(candidates)
+
+    def _inspect_owned_child(
+        self,
+        query_id: str,
+        expected_image_id: str,
+        requirement: DeploymentSpawnImageRequirement,
+        admission: DeploymentDockerAuthorityAdmission,
+        holder_ids: Mapping[str, str],
+        delegated_ids: Mapping[tuple[str, str, str], set[str]],
+    ) -> tuple[LabResult | None, _OwnedChildCandidate | None]:
+        """Prove immutable identity, parent ownership, and authority footprint."""
+
+        info = self.container_inspect(query_id)
+        product_execution_id = _inspect_environment_value(info, "EXECUTIONID")
+        if product_execution_id not in admission.product_execution_ids:
+            return None, None
+        container_id = self._inspect_container_id(info)
+        parent_id = self._inspect_parent_container_id(info)
+        failure: LabResult | None = None
+        if container_id is None or parent_id is None:
+            failure = _spawn_failure(
+                "Spawned-child correlation unavailable",
+                requirement,
+            )
+        elif not isinstance(info, Mapping) or info.get("Image") != expected_image_id:
+            failure = _spawn_failure(
+                "Spawned-child image identity mismatch",
+                requirement,
+            )
+        elif requirement.delegated_docker_authority:
+            if parent_id != holder_ids.get(requirement.node_address):
+                failure = _spawn_failure(
+                    "Spawned-child correlation unavailable",
+                    requirement,
+                )
+            elif not self._delegated_authority_is_valid(info, admission):
+                failure = _spawn_failure(
+                    "Delegated Docker authority unavailable",
+                    requirement,
+                )
+        else:
+            owned_workers = delegated_ids.get(
+                (
+                    requirement.node_address,
+                    requirement.authority_id,
+                    product_execution_id,
+                ),
+                set(),
+            )
+            if parent_id not in owned_workers:
+                failure = _spawn_failure(
+                    "Spawned-child correlation unavailable",
+                    requirement,
+                )
+            elif self._inspected_container_has_docker_authority(
+                info
+            ) or self._inspected_container_has_host_bind(info):
+                failure = _spawn_failure(
+                    "Docker authority propagated to spawned child",
+                    requirement,
+                    separator=" ",
+                )
+        candidate = None
+        if failure is None and container_id is not None and parent_id is not None:
+            candidate = _OwnedChildCandidate(
+                container_id=container_id,
+                parent_container_id=parent_id,
+                image_id=expected_image_id,
+                info=info,
+                requirement=requirement,
+                admission=admission,
+                product_execution_id=product_execution_id,
+            )
+        return failure, candidate
+
+    def _supervise_owned_children(
+        self,
+        candidates: Sequence[_OwnedChildCandidate],
+    ) -> LabResult | None:
+        """Enforce deadlines only after the complete candidate set is owned."""
+
+        observations: list[DeploymentSpawnedChildObservation] = []
+        failure = None
+        for candidate in candidates:
+            requirement = candidate.requirement
             failure = self._enforce_spawned_child_deadline(
-                container_id,
-                info,
+                candidate.container_id,
+                candidate.info,
                 timeout=requirement.execution_timeout_seconds,
                 node_address=requirement.node_address,
                 template_id=requirement.template_id,
             )
+            if failure is not None:
+                break
+            observations.append(
+                DeploymentSpawnedChildObservation(
+                    node_address=requirement.node_address,
+                    authority_id=requirement.authority_id,
+                    template_id=requirement.template_id,
+                    correlation_id=runtime_child_correlation_id(
+                        candidate.admission,
+                        requirement,
+                        candidate.product_execution_id,
+                    ),
+                    authority_correlation_id=candidate.admission.correlation_id,
+                    run_id=candidate.admission.run_id,
+                    attempt_id=candidate.admission.attempt_id,
+                    product_execution_id=candidate.product_execution_id,
+                    container_id=candidate.container_id,
+                    image_id=candidate.image_id,
+                    parent_container_id=candidate.parent_container_id,
+                    delegated_docker_authority=(requirement.delegated_docker_authority),
+                    terminal=True,
+                )
+            )
+        if failure is None:
+            self._runtime_orchestration_observations = tuple(observations)
         return failure
 
     @staticmethod
-    def _child_has_correlation(
-        info: object,
-        requirement: DeploymentSpawnImageRequirement,
-    ) -> bool:
-        """Whether inspect output carries the exact admitted child label."""
+    def _inspect_container_id(info: object) -> str | None:
+        """Return the inspect-native child ID, never the query alias."""
 
-        config = info.get("Config") if isinstance(info, Mapping) else None
-        labels = config.get("Labels") if isinstance(config, Mapping) else None
-        label_name, label_value = requirement.child_label.split("=", 1)
+        raw = info.get("Id") if isinstance(info, Mapping) else None
+        normalized = str(raw or "").strip()
+        return normalized if _SAFE_CONTAINER_ID.fullmatch(normalized) else None
+
+    @staticmethod
+    def _inspect_parent_container_id(info: object) -> str | None:
+        """Return an exact Docker container-network parent identity."""
+
+        host = info.get("HostConfig") if isinstance(info, Mapping) else None
+        mode = host.get("NetworkMode") if isinstance(host, Mapping) else None
+        raw = str(mode or "")
+        parent = raw.removeprefix("container:") if raw.startswith("container:") else ""
+        return parent if _SAFE_CONTAINER_ID.fullmatch(parent) else None
+
+    @staticmethod
+    def _delegated_authority_is_valid(
+        info: object,
+        admission: DeploymentDockerAuthorityAdmission,
+    ) -> bool:
+        """Whether a delegated worker has only the exact admitted control route."""
+
         return bool(
-            isinstance(labels, Mapping) and labels.get(label_name) == label_value
+            _authority_mount_is_valid(
+                _inspect_mounts(info),
+                admission,
+                allow_holder_mounts=False,
+            )
+            and not _inspect_has_endpoint_override(info)
+            and not _inspect_is_privileged(info)
+        )
+
+    def runtime_orchestration_observations(self) -> tuple[dict[str, object], ...]:
+        """Return redaction-safe evidence from the last complete attestation."""
+
+        return tuple(
+            asdict(item)
+            for item in getattr(self, "_runtime_orchestration_observations", ())
+            if isinstance(item, DeploymentSpawnedChildObservation)
         )
 
     def _exact_spawn_image_id(self, image_ref: str, *, timeout: int) -> str | None:
@@ -411,8 +623,23 @@ class ComposeRuntimeOrchestrationObservationMixin(
     ) -> bool:
         """Whether one holder exposes only the admitted endpoint to the same daemon."""
 
+        matched, _container_id = self._runtime_authority_identity(
+            container_name,
+            admission,
+        )
+        return matched
+
+    def _runtime_authority_identity(
+        self,
+        container_name: str,
+        admission: DeploymentDockerAuthorityAdmission,
+    ) -> tuple[bool, str | None]:
+        """Attest one holder and return its inspect-native parent identity."""
+
         info = self.container_inspect(container_name)
+        container_id = self._inspect_container_id(info)
         daemon_id = getattr(self, "_docker_daemon_id", None)
+        socket_identity = getattr(self, "_docker_socket_identity", None)
         configuration_ok = bool(
             _authority_mount_is_valid(_inspect_mounts(info), admission)
             and not _inspect_has_endpoint_override(info)
@@ -420,7 +647,7 @@ class ComposeRuntimeOrchestrationObservationMixin(
             and daemon_id
         )
         if not configuration_ok:
-            return False
+            return False, None
         try:
             observed = self.container_exec(
                 container_name,
@@ -428,8 +655,38 @@ class ComposeRuntimeOrchestrationObservationMixin(
                 timeout=30,
             )
         except BackendTimeoutError:
+            observed = None
+        matched = bool(
+            observed is not None
+            and observed.returncode == 0
+            and observed.stdout.strip() == daemon_id
+        )
+        if not matched and socket_identity is not None:
+            matched = self._runtime_authority_socket_identity_matches(
+                container_name,
+                socket_identity,
+            )
+        return matched, container_id
+
+    def _runtime_authority_socket_identity_matches(
+        self,
+        container_name: str,
+        expected: tuple[int, int],
+    ) -> bool:
+        """Prove the holder sees the exact host socket when no CLI is shipped."""
+
+        try:
+            observed = self.container_exec(
+                container_name,
+                ["stat", "-Lc", "%d:%i", "/var/run/docker.sock"],
+                timeout=30,
+            )
+        except BackendTimeoutError:
             return False
-        return observed.returncode == 0 and observed.stdout.strip() == daemon_id
+        return bool(
+            observed.returncode == 0
+            and observed.stdout.strip() == f"{expected[0]}:{expected[1]}"
+        )
 
     def _container_has_docker_authority(self, container_name: str) -> bool:
         """Whether an unauthorized service carries a Docker control route."""
@@ -445,4 +702,13 @@ class ComposeRuntimeOrchestrationObservationMixin(
             _inspect_has_socket_route(info)
             or _inspect_has_endpoint_override(info)
             or _inspect_is_privileged(info)
+        )
+
+    @staticmethod
+    def _inspected_container_has_host_bind(info: object) -> bool:
+        """Whether a product child has any ungranted host bind."""
+
+        return any(
+            isinstance(mount, Mapping) and mount.get("Type") == "bind"
+            for mount in _inspect_mounts(info)
         )

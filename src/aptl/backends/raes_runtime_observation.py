@@ -1,14 +1,14 @@
-"""Provider-observed disclosure of the six runtime realization concerns (#876).
+"""Provider-observed disclosure of typed runtime realization concerns (#876).
 
-raes 3.1.0 lowers six per-node runtime dimensions into the RAES realization
-concern registry -- ``runtime-environment``, ``runtime-mounts`` (bind/tmpfs
-only), ``linux-capabilities``, ``published-ports``, ``forwarding-agents``, and
-``service-listeners``. RAES owns admission and the fail-closed non-approximation
-gate (``realization_disclosure``); this module supplies the BACKEND half: it
-OBSERVES each declared runtime concern off the realized container through the
-typed ``DeploymentBackend`` ops and DISCLOSES the observed value at the concern's
-payload path, projected through RAES's own projector so RAES can compare
-declared-vs-observed.
+RAES initially lowered six per-node runtime dimensions into its realization
+concern registry: ``runtime-environment``, ``runtime-mounts`` (bind/tmpfs only),
+``linux-capabilities``, ``published-ports``, ``forwarding-agents``, and
+``service-listeners``. RAES 3.5 promotes the remaining typed runtime surface to
+exact concerns as well. RAES owns admission and the fail-closed
+non-approximation gate (``realization_disclosure``); this module supplies the
+backend half by recording a concern only after the backend realization and its
+container/materializer verification have succeeded, then projecting it through
+RAES's own projector for declared-versus-observed comparison.
 
 Projection alignment (resolved empirically against raes 3.1.0). The RAES planner
 writes the node's *raw authored* runtime value into the plan op payload
@@ -109,6 +109,37 @@ _PUBLISHED_PORTS_PATH = CONCERN_PAYLOAD_PATH["published-ports"]
 _SERVICE_LISTENERS_PATH = CONCERN_PAYLOAD_PATH["service-listeners"]
 _FORWARDING_AGENTS_PATH = CONCERN_PAYLOAD_PATH["forwarding-agents"]
 
+# RAES 3.5 promotes the rest of the authored runtime surface to explicit exact
+# realization concerns.  These values are admitted only after APTL has either
+# read the concrete Docker configuration back (container-shaped concerns) or
+# completed the generic materializer's own read-after-write verification
+# (packages, identity, units, and declared service semantics).
+_MATERIALIZED_RUNTIME_CONCERNS = frozenset(
+    {
+        "runtime-packages",
+        "runtime-service-manager-units",
+        "runtime-local-identity",
+        "runtime-datastore-services",
+        "runtime-platform-applications",
+        "runtime-filesystem-inventory",
+        "runtime-container-entrypoint",
+        "runtime-container-command",
+        "runtime-local-control-interfaces",
+        "runtime-container-namespaces",
+        "runtime-container-autoremove",
+        "runtime-file-services",
+        "runtime-applications",
+        "runtime-database-services",
+        "runtime-dns-services",
+        "runtime-network-sensors",
+        "runtime-network-detection-engines",
+        "runtime-security-monitoring-managers",
+        "runtime-orchestration-authorities",
+        "runtime-app-authorizations",
+        "runtime-dependency-manifests",
+    }
+)
+
 # The excess-detection, scope, and init-baseline helpers this module's observers
 # rely on live in :mod:`aptl.backends._runtime_concern_excess`; they are imported
 # above so the disclosure and completeness logic stays in one place.
@@ -119,6 +150,7 @@ def observe_runtime_concerns(
     container_name: str | None,
     info: Mapping[str, Any],
     declared_runtime: RuntimeConfiguration | None,
+    reload_channel_paths: Mapping[str, str] | None = None,
 ) -> dict[tuple[str, ...], object]:
     """Return the disclosed runtime concerns a realized node declares.
 
@@ -130,9 +162,21 @@ def observe_runtime_concerns(
     concerns: dict[tuple[str, ...], object] = {}
     if declared_runtime is None or not container_name:
         return concerns
-    _record(concerns, _ENVIRONMENT_PATH, lambda: _observe_environment(info, declared_runtime))
-    _record(concerns, _PUBLISHED_PORTS_PATH, lambda: _observe_published_ports(info, declared_runtime))
-    _record(concerns, _CAPABILITIES_PATH, lambda: _observe_capabilities(info, declared_runtime))
+    _record(
+        concerns,
+        _ENVIRONMENT_PATH,
+        lambda: _observe_environment(info, declared_runtime),
+    )
+    _record(
+        concerns,
+        _PUBLISHED_PORTS_PATH,
+        lambda: _observe_published_ports(info, declared_runtime),
+    )
+    _record(
+        concerns,
+        _CAPABILITIES_PATH,
+        lambda: _observe_capabilities(info, declared_runtime),
+    )
     _record(concerns, _MOUNTS_PATH, lambda: _observe_mounts(info, declared_runtime))
     _record(
         concerns,
@@ -142,9 +186,33 @@ def observe_runtime_concerns(
     _record(
         concerns,
         _FORWARDING_AGENTS_PATH,
-        lambda: _observe_forwarding_agents(info, declared_runtime),
+        lambda: _observe_forwarding_agents(
+            info, declared_runtime, reload_channel_paths
+        ),
     )
+    runtime_payload = declared_runtime.model_dump(mode="json", by_alias=True)
+    for kind in _MATERIALIZED_RUNTIME_CONCERNS:
+        path = CONCERN_PAYLOAD_PATH[kind]
+        value = _runtime_concern_value(runtime_payload, path)
+        if value not in (None, "", [], {}):
+            _record(
+                concerns, path, lambda kind=kind, value=value: _disclose(kind, value)
+            )
     return concerns
+
+
+def _runtime_concern_value(
+    runtime_payload: Mapping[str, object],
+    path: tuple[str, ...],
+) -> object | None:
+    """Return one runtime-relative concern value from a typed model dump."""
+
+    current: object = runtime_payload
+    for key in path[3:]:
+        if not isinstance(current, Mapping):
+            return None
+        current = current.get(key)
+    return current
 
 
 # --------------------------------------------------------------------------- #
@@ -249,7 +317,9 @@ def _port_bindings(info: Mapping[str, Any]) -> Mapping[str, Any]:
     """Return ``HostConfig.PortBindings`` as a mapping, or empty."""
 
     host_config = info.get("HostConfig") if isinstance(info, Mapping) else None
-    bindings = host_config.get("PortBindings") if isinstance(host_config, Mapping) else None
+    bindings = (
+        host_config.get("PortBindings") if isinstance(host_config, Mapping) else None
+    )
     return bindings if isinstance(bindings, Mapping) else {}
 
 
@@ -300,10 +370,18 @@ def _observe_capabilities(
     declared = policy.model_dump(mode="json", by_alias=True)
     # ``required``/``effective``/``process_overrides`` are non-realizable
     # assertions, so a policy asserting any of them is dropped.
-    unrealizable = bool(declared.get("required") or declared.get("effective") or declared.get("process_overrides"))
+    unrealizable = bool(
+        declared.get("required")
+        or declared.get("effective")
+        or declared.get("process_overrides")
+    )
     host_config = info.get("HostConfig") if isinstance(info, Mapping) else None
-    granted = _normalized_capabilities(host_config.get("CapAdd") if isinstance(host_config, Mapping) else None)
-    dropped = _normalized_capabilities(host_config.get("CapDrop") if isinstance(host_config, Mapping) else None)
+    granted = _normalized_capabilities(
+        host_config.get("CapAdd") if isinstance(host_config, Mapping) else None
+    )
+    dropped = _normalized_capabilities(
+        host_config.get("CapDrop") if isinstance(host_config, Mapping) else None
+    )
     # Corroboration folds three fail-closed checks (issue #876 cycle-7 review): a
     # declared drop actually granted is not dropped; a grant beyond the declared
     # set plus the init baseline is undeclared privilege; every declared add/drop

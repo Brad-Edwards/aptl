@@ -44,6 +44,11 @@ from aptl.core.deployment._flag_signing_keys import (
     FLAG_SIGNING_PROFILE_V2,
     realize_flag_signing_keys,
 )
+from aptl.core.deployment._generated_artifact_environment import (
+    CORTEX_SERVICE_CREDENTIALS_PROFILE,
+    materialize_generated_environment_files,
+    realize_cortex_service_credentials,
+)
 from aptl.core.deployment._ssh_key_bundle import realize_ssh_key_bundle
 from aptl.core.deployment._stateful_certificates import validate_certificate_bundle
 from aptl.core.deployment.errors import BackendTimeoutError
@@ -122,6 +127,14 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
             failure = self._realize_one_generated_artifact(artifact, scenario_root)
             if failure is not None:
                 break
+        if failure is None:
+            environment_files, error = materialize_generated_environment_files(
+                realization, scenario_root
+            )
+            if error is not None:
+                failure = LabResult(success=False, error=error)
+            else:
+                self._generated_environment_files_by_address = environment_files
         return failure
 
     def _realize_one_generated_artifact(
@@ -191,6 +204,9 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
 
         if artifact.provenance == FLAG_SIGNING_PROFILE_V2:
             return self._realize_flag_signing_keys(artifact, scenario_root)
+        if artifact.provenance == CORTEX_SERVICE_CREDENTIALS_PROFILE:
+            error = realize_cortex_service_credentials(artifact, scenario_root)
+            return LabResult(success=False, error=error) if error is not None else None
 
         unsupported_binding = (
             artifact.provenance not in WAZUH_MANAGER_CONFIG_PROVENANCES

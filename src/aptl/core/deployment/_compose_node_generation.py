@@ -169,6 +169,11 @@ def _environment_config(runtime: object) -> dict[str, str]:
         name = getattr(variable, "name", "")
         if not name:
             continue
+        # A value_from binding is delivered from the generated-artifact
+        # credential tree through an owner-only env file.  Emitting its authored
+        # empty placeholder here would override that generated value.
+        if getattr(variable, "value_from", None) is not None:
+            continue
         raw = getattr(variable, "value_classification", "")
         classification = str(getattr(raw, "value", raw) or "")
         if classification == _OPERATOR_SECRET_CLASSIFICATION:

@@ -13,6 +13,7 @@ import yaml
 
 from aptl.core.deployment._compose_port_realization import (
     compose_port_entry,
+    container_owns_published_port,
     published_port_conflicts,
     write_port_override,
 )
@@ -100,6 +101,42 @@ def test_conflict_when_declared_host_port_is_taken():
         assert "will not silently publish it" in conflicts[0]
     finally:
         sock.close()
+
+
+def test_retry_allows_the_current_container_exact_binding(monkeypatch):
+    binding = DeploymentPublishedPort(container_port=443, host_port=3443)
+    node = _node("web", "web", [binding])
+    monkeypatch.setattr(
+        "aptl.core.deployment._compose_port_realization.port_available",
+        lambda *_args: False,
+    )
+
+    conflicts = published_port_conflicts(
+        _spec([node]), occupied_by=lambda candidate, port: (candidate, port) == (node, binding)
+    )
+
+    assert conflicts == []
+
+
+def test_container_port_ownership_requires_running_exact_mapping():
+    binding = DeploymentPublishedPort(container_port=443, host_port=3443)
+    info = {
+        "State": {"Running": True},
+        "HostConfig": {
+            "PortBindings": {
+                "443/tcp": [{"HostIp": "127.0.0.1", "HostPort": "3443"}]
+            }
+        },
+    }
+
+    assert container_owns_published_port(info, binding)
+    assert not container_owns_published_port(
+        {**info, "State": {"Running": False}}, binding
+    )
+    assert not container_owns_published_port(
+        info,
+        DeploymentPublishedPort(container_port=443, host_port=3444),
+    )
 
 
 def test_conflict_when_node_has_no_resolvable_service():

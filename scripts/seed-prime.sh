@@ -80,6 +80,13 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "[0/6] Waiting for SOC tools to be healthy..."
 
+# Restore the temporary env-pack detection content before the SOAR/Wazuh
+# activation below. Wazuh must see the restored child rules before its manager
+# configuration is installed and its services are restarted.
+if [ -x "$SCRIPT_DIR/envpack-suricata-fixups.sh" ]; then
+    "$SCRIPT_DIR/envpack-suricata-fixups.sh" || echo "  WARNING: env-pack Suricata fixups reported issues"
+fi
+
 # Apply the remaining temporary env-pack SOAR fixups before waiting on health.
 # The released pack now owns Shuffle's complete backend runtime contract; this
 # helper only repairs the independently tracked MISP/Redis contract and publishes
@@ -92,16 +99,6 @@ if [ -x "$SCRIPT_DIR/envpack-soar-fixups.sh" ]; then
         echo "  ERROR: Shuffle readiness failed; refusing to seed scenario content"
         exit 1
     fi
-fi
-
-# Apply the temporary env-pack Suricata content fixups. The frozen env-pack
-# materializes suricata-local-rules as a header-only file (0 signatures) and
-# suricata.yaml with an incomplete address-groups/port-groups block, so the
-# authored 46-rule corpus never loads and ~10 rules fail on undefined vars.
-# This restores the authored corpus + complete vars from config/suricata/ and
-# reloads the sensor (see scripts/envpack-suricata-fixups.sh).
-if [ -x "$SCRIPT_DIR/envpack-suricata-fixups.sh" ]; then
-    "$SCRIPT_DIR/envpack-suricata-fixups.sh" || echo "  WARNING: env-pack Suricata fixups reported issues"
 fi
 
 # Apply the temporary env-pack Kali capture-wrapper fixup. The frozen env-pack
@@ -181,7 +178,17 @@ fi
 echo ""
 echo "[2/6] Provisioning Cortex API key..."
 
-if [ -x "$SCRIPT_DIR/cortex-apikey.sh" ]; then
+GENERATED_CORTEX_KEY="$PROJECT_DIR/.aptl/realization/generated-artifacts/cortex-service-credentials/cortex/connector-api-key"
+if [ -s "$GENERATED_CORTEX_KEY" ]; then
+    IFS= read -r CORTEX_API_KEY < "$GENERATED_CORTEX_KEY" || true
+    if [ -n "${CORTEX_API_KEY:-}" ]; then
+        export CORTEX_API_KEY
+        update_env_var CORTEX_API_KEY "$CORTEX_API_KEY"
+        echo "  Reused the generated Cortex connector key and wrote it to .env (mode 600)"
+    else
+        record_seed_failure "Cortex API key" "Generated Cortex connector key is empty"
+    fi
+elif [ -x "$SCRIPT_DIR/cortex-apikey.sh" ]; then
     if CORTEX_API_KEY=$("$SCRIPT_DIR/cortex-apikey.sh") && \
         [ -n "$CORTEX_API_KEY" ]; then
         export CORTEX_API_KEY

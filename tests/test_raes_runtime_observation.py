@@ -127,7 +127,7 @@ def _node_realization(runtime: RuntimeConfiguration) -> NodeRealization:
 def _plan(runtime: RuntimeConfiguration) -> ProvisioningPlan:
     payload = {
         "name": "vm",
-        "node_type": "vm",
+        "node_type": "compute",
         "os_family": "linux",
         "spec": {"node": {"runtime": runtime.model_dump(mode="json", by_alias=True)}},
     }
@@ -202,7 +202,9 @@ def test_environment_realized_and_matched_is_disclosed_and_passes():
     codes, provenance, observations = _gate(runtime, backend, "runtime-environment")
     assert codes == []
     assert _ENV_PATH in observations[_ADDRESS].concerns
-    assert [p.provenance for p in provenance] == [ExplicitnessProvenance.AUTHOR_DECLARED]
+    assert [p.provenance for p in provenance] == [
+        ExplicitnessProvenance.AUTHOR_DECLARED
+    ]
 
 
 def test_environment_realized_differently_is_rejected():
@@ -227,7 +229,9 @@ def test_environment_secret_fixture_discloses_commitment_not_raw_value():
     assert codes == []
     disclosed = observations[_ADDRESS].concerns[_ENV_PATH]
     assert "planted" not in str(disclosed)
-    assert disclosed[0]["value_commitment"].startswith("raes-runtime-value-jcs-sha256-v1:")
+    assert disclosed[0]["value_commitment"].startswith(
+        "raes-runtime-value-jcs-sha256-v1:"
+    )
     assert "value" not in disclosed[0]
 
 
@@ -310,7 +314,11 @@ def _ports_runtime(host_ip="127.0.0.1", host_port=8080):
 def test_published_port_realized_and_matched_passes():
     runtime = _ports_runtime()
     backend = _Backend(
-        {_CONTAINER: _inspect(ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}]})}
+        {
+            _CONTAINER: _inspect(
+                ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}]}
+            )
+        }
     )
     codes, _provenance, observations = _gate(runtime, backend, "published-ports")
     assert codes == []
@@ -322,7 +330,11 @@ def test_published_port_omitted_host_ip_corroborated_on_loopback():
     # expects the loopback binding, not the raw declared empty string.
     runtime = _ports_runtime(host_ip="")
     backend = _Backend(
-        {_CONTAINER: _inspect(ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}]})}
+        {
+            _CONTAINER: _inspect(
+                ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}]}
+            )
+        }
     )
     codes, _provenance, _observations = _gate(runtime, backend, "published-ports")
     assert codes == []
@@ -339,7 +351,11 @@ def test_published_port_not_bound_is_omitted_and_rejected():
 def test_published_port_different_host_port_is_rejected():
     runtime = _ports_runtime(host_port=8080)
     backend = _Backend(
-        {_CONTAINER: _inspect(ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "9999"}]})}
+        {
+            _CONTAINER: _inspect(
+                ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "9999"}]}
+            )
+        }
     )
     codes, _provenance, _observations = _gate(runtime, backend, "published-ports")
     assert _GATE_REJECT in codes
@@ -362,7 +378,11 @@ def test_published_port_wildcard_bind_does_not_satisfy_loopback_declaration():
 def test_published_port_explicit_wildcard_bind_does_not_satisfy_loopback_declaration():
     runtime = _ports_runtime(host_ip="127.0.0.1")
     backend = _Backend(
-        {_CONTAINER: _inspect(ports={"8080/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8080"}]})}
+        {
+            _CONTAINER: _inspect(
+                ports={"8080/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8080"}]}
+            )
+        }
     )
     codes, _provenance, _observations = _gate(runtime, backend, "published-ports")
     assert _GATE_REJECT in codes
@@ -394,7 +414,11 @@ def test_wildcard_declared_port_realized_only_on_loopback_is_rejected():
     # loopback is under-exposed and must not be echoed back as an exact match.
     runtime = _ports_runtime(host_ip="0.0.0.0")
     backend = _Backend(
-        {_CONTAINER: _inspect(ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}]})}
+        {
+            _CONTAINER: _inspect(
+                ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}]}
+            )
+        }
     )
     codes, _provenance, observations = _gate(runtime, backend, "published-ports")
     assert _PORTS_PATH not in observations[_ADDRESS].concerns
@@ -434,9 +458,7 @@ def test_capability_beyond_declared_and_init_baseline_is_rejected():
     # gets no init baseline, so an undeclared SYS_ADMIN must fail closed rather
     # than pass behind the echoed declared policy.
     runtime = _runtime(linux_capabilities={"add": ["CAP_NET_ADMIN"]})
-    backend = _Backend(
-        {_CONTAINER: _inspect(cap_add=["NET_ADMIN", "SYS_ADMIN"])}
-    )
+    backend = _Backend({_CONTAINER: _inspect(cap_add=["NET_ADMIN", "SYS_ADMIN"])})
     codes, _provenance, observations = _gate(runtime, backend, "linux-capabilities")
     assert _CAPS_PATH not in observations[_ADDRESS].concerns
     assert _GATE_REJECT in codes
@@ -553,8 +575,18 @@ def test_undeclared_bind_mount_is_rejected():
         {
             _CONTAINER: _inspect(
                 mounts=[
-                    {"Type": "bind", "Source": "/host/data", "Destination": "/data", "RW": False},
-                    {"Type": "bind", "Source": "/host/secret", "Destination": "/secret", "RW": True},
+                    {
+                        "Type": "bind",
+                        "Source": "/host/data",
+                        "Destination": "/data",
+                        "RW": False,
+                    },
+                    {
+                        "Type": "bind",
+                        "Source": "/host/secret",
+                        "Destination": "/secret",
+                        "RW": True,
+                    },
                 ]
             )
         }
@@ -568,15 +600,32 @@ def test_systemd_cgroup_bind_is_a_known_baseline_not_excess():
     # A systemd node's init adds the /sys/fs/cgroup bind; it is the one baseline
     # mount docker inspect reports, so it must not count as undeclared excess.
     runtime = _runtime(
-        mounts=[{"target": "/data", "source": "/host/data", "source_kind": "bind", "read_only": True}],
+        mounts=[
+            {
+                "target": "/data",
+                "source": "/host/data",
+                "source_kind": "bind",
+                "read_only": True,
+            }
+        ],
         service_manager_units=_systemd_units(),
     )
     backend = _Backend(
         {
             _CONTAINER: _inspect(
                 mounts=[
-                    {"Type": "bind", "Source": "/host/data", "Destination": "/data", "RW": False},
-                    {"Type": "bind", "Source": "/sys/fs/cgroup", "Destination": "/sys/fs/cgroup", "RW": True},
+                    {
+                        "Type": "bind",
+                        "Source": "/host/data",
+                        "Destination": "/data",
+                        "RW": False,
+                    },
+                    {
+                        "Type": "bind",
+                        "Source": "/sys/fs/cgroup",
+                        "Destination": "/sys/fs/cgroup",
+                        "RW": True,
+                    },
                 ]
             )
         }
@@ -601,7 +650,11 @@ def _tmpfs_mount_runtime(read_only=True):
 def test_tmpfs_mount_realized_and_matched_passes():
     runtime = _tmpfs_mount_runtime(read_only=True)
     backend = _Backend(
-        {_CONTAINER: _inspect(mounts=[{"Type": "tmpfs", "Destination": "/scratch", "RW": False}])}
+        {
+            _CONTAINER: _inspect(
+                mounts=[{"Type": "tmpfs", "Destination": "/scratch", "RW": False}]
+            )
+        }
     )
     codes, _provenance, observations = _gate(runtime, backend, "runtime-mounts")
     assert codes == []
@@ -614,7 +667,11 @@ def test_tmpfs_mount_wrong_read_only_state_is_rejected():
     # (issue #876 core review).
     runtime = _tmpfs_mount_runtime(read_only=True)
     backend = _Backend(
-        {_CONTAINER: _inspect(mounts=[{"Type": "tmpfs", "Destination": "/scratch", "RW": True}])}
+        {
+            _CONTAINER: _inspect(
+                mounts=[{"Type": "tmpfs", "Destination": "/scratch", "RW": True}]
+            )
+        }
     )
     codes, _provenance, observations = _gate(runtime, backend, "runtime-mounts")
     assert _MOUNTS_PATH not in observations[_ADDRESS].concerns
@@ -944,7 +1001,12 @@ def _log_forwarder_runtime():
 
     return _runtime(
         mounts=[
-            {"target": "/logs", "source": "db_data", "source_kind": "volume", "read_only": True}
+            {
+                "target": "/logs",
+                "source": "db_data",
+                "source_kind": "volume",
+                "read_only": True,
+            }
         ],
         forwarding_agents=[
             {
@@ -1054,7 +1116,14 @@ def test_log_forwarder_with_realized_source_mount_is_corroborated():
     backend = _Backend(
         {
             _CONTAINER: _inspect(
-                mounts=[{"Type": "volume", "Source": "db_data", "Destination": "/logs", "RW": False}]
+                mounts=[
+                    {
+                        "Type": "volume",
+                        "Source": "db_data",
+                        "Destination": "/logs",
+                        "RW": False,
+                    }
+                ]
             )
         }
     )
@@ -1062,10 +1131,14 @@ def test_log_forwarder_with_realized_source_mount_is_corroborated():
     assert codes == []
     assert _FORWARDING_PATH in observations[_ADDRESS].concerns
     disclosures = [
-        d for d in snapshot.realization_observations if d.requirement_kind == "forwarding-agents"
+        d
+        for d in snapshot.realization_observations
+        if d.requirement_kind == "forwarding-agents"
     ]
     assert disclosures
-    assert disclosures[0].verification_scope is RealizationVerificationScope.CONFIGURATION
+    assert (
+        disclosures[0].verification_scope is RealizationVerificationScope.CONFIGURATION
+    )
 
 
 def test_content_sync_reload_socket_mount_is_corroborated():
@@ -1089,6 +1162,84 @@ def test_content_sync_reload_socket_mount_is_corroborated():
     assert _FORWARDING_PATH in observations[_ADDRESS].concerns
 
 
+def _observe_cross_node_content_sync(control_path: str):
+    """Observe an agent through an exact control-channel ref on another node."""
+
+    sync_payload = _content_sync_runtime().model_dump(mode="json", by_alias=True)
+    sync_payload["mounts"] = []
+    sync_payload["forwarding_agents"][0]["reload_channels"][0]["target_ref"] = (
+        "nodes.suricata.runtime.network_detection_engines.suricata-engine."
+        "control_channels.command-socket"
+    )
+    sync_runtime = _runtime(**sync_payload)
+    suricata_runtime = _runtime(
+        network_detection_engines=[
+            {
+                "network_detection_engine_id": "suricata-engine",
+                "implementation": "suricata",
+                "engine_kind": "ids",
+                "control_channels": [
+                    {
+                        "channel_id": "command-socket",
+                        "kind": "unix_socket",
+                        "path": control_path,
+                        "capabilities": ["rule_reload"],
+                    }
+                ],
+            }
+        ]
+    )
+    plan = _plan(sync_runtime)
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(
+            _node_realization(sync_runtime),
+            NodeRealization(
+                address="provision.node.suricata",
+                name="suricata",
+                aliases=(),
+                profiles=(),
+                backend_services=("suricata",),
+                container_name="aptl-suricata",
+                services=(),
+                networks=(),
+                static_addresses=(),
+                runtime=suricata_runtime,
+            ),
+        ),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+    )
+    backend = _Backend(
+        {
+            _CONTAINER: _inspect(
+                mounts=[
+                    {
+                        "Type": "volume",
+                        "Source": "aptl_suricata_command_socket",
+                        "Destination": "/var/run/suricata",
+                        "RW": True,
+                    }
+                ]
+            )
+        }
+    )
+    return observe_realization(backend, realization, plan, Path("."))
+
+
+def test_cross_node_reload_channel_path_is_corroborated_by_realized_mount():
+    observations = _observe_cross_node_content_sync(
+        "/var/run/suricata/suricata-command.socket"
+    )
+    assert _FORWARDING_PATH in observations[_ADDRESS].concerns
+
+
+def test_cross_node_reload_channel_path_without_covering_mount_is_rejected():
+    observations = _observe_cross_node_content_sync("/run/not-mounted/control.socket")
+    assert _FORWARDING_PATH not in observations[_ADDRESS].concerns
+
+
 def test_forwarding_agent_without_realized_footprint_is_dropped_and_rejected():
     # The declared tailed source has no covering mount on the realized container,
     # so the agent is not corroborated: the concern is dropped and the EXACT
@@ -1107,7 +1258,9 @@ def test_log_forwarder_on_node_declaring_no_mounts_is_dropped_and_rejected():
     # rejected, so an agent tailing a path that does not exist is never reported
     # as realized SIEM coverage.
     runtime = _runtime(
-        forwarding_agents=_log_forwarder_runtime().model_dump(mode="json")["forwarding_agents"]
+        forwarding_agents=_log_forwarder_runtime().model_dump(mode="json")[
+            "forwarding_agents"
+        ]
     )
     assert not runtime.mounts
     backend = _Backend({_CONTAINER: _inspect(mounts=[])})
@@ -1170,4 +1323,4 @@ def test_node_without_runtime_declares_no_runtime_concerns():
     backend = _Backend({_CONTAINER: _inspect()})
     _plan_, observations = _observe(runtime, backend)
     concerns = observations[_ADDRESS].concerns
-    assert concerns == {("node_type",): "vm", ("os_family",): "linux"}
+    assert concerns == {("node_kind",): "compute", ("os_family",): "linux"}

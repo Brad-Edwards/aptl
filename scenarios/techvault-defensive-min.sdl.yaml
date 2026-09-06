@@ -13,39 +13,66 @@ nodes:
     description: SOC and security tooling network.
 
   wazuh-manager:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: wazuh-api, port: 55000, protocol: tcp}
       - {name: agent-events, port: 1514, protocol: tcp}
       - {name: syslog, port: 514, protocol: udp}
   wazuh-indexer:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: indexer-api, port: 9200, protocol: tcp}
   wazuh-dashboard:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: dashboard, port: 5601, protocol: tcp}
 
   aptl-otel-collector:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: otlp-grpc, port: 4317, protocol: tcp}
       - {name: otlp-http, port: 4318, protocol: tcp}
   aptl-tempo:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: tempo-http, port: 3200, protocol: tcp}
   aptl-grafana-otel:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: grafana, port: 3000, protocol: tcp}
+
+realization:
+  constraints:
+    - field_pointer: /nodes/wazuh-manager
+      concern: compute-substrate
+      posture: exact
+      domain: {kind: exact, value: operating-system-container}
+    - field_pointer: /nodes/wazuh-indexer
+      concern: compute-substrate
+      posture: exact
+      domain: {kind: exact, value: operating-system-container}
+    - field_pointer: /nodes/wazuh-dashboard
+      concern: compute-substrate
+      posture: exact
+      domain: {kind: exact, value: operating-system-container}
+    - field_pointer: /nodes/aptl-otel-collector
+      concern: compute-substrate
+      posture: exact
+      domain: {kind: exact, value: operating-system-container}
+    - field_pointer: /nodes/aptl-tempo
+      concern: compute-substrate
+      posture: exact
+      domain: {kind: exact, value: operating-system-container}
+    - field_pointer: /nodes/aptl-grafana-otel
+      concern: compute-substrate
+      posture: exact
+      domain: {kind: exact, value: operating-system-container}
 
 infrastructure:
   security-net:

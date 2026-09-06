@@ -19,7 +19,7 @@ nodes:
     type: switch
     description: Evaluator and defensive telemetry network.
   red-workbench:
-    type: vm
+    type: compute
     os: linux
     resources:
       ram: 1 GiB
@@ -37,7 +37,7 @@ nodes:
       participant-observation-recorded: paper-evaluator
       boundary-checks-recorded: paper-evaluator
   customer-portal:
-    type: vm
+    type: compute
     os: linux
     source:
       name: customer-portal-app
@@ -50,7 +50,7 @@ nodes:
       port: 8080
       protocol: tcp
   customer-db:
-    type: vm
+    type: compute
     os: linux
     source:
       name: postgres
@@ -63,7 +63,7 @@ nodes:
       port: 5432
       protocol: tcp
   wazuh-manager:
-    type: vm
+    type: compute
     os: linux
     source:
       name: wazuh/wazuh-manager
@@ -89,7 +89,7 @@ nodes:
     conditions:
       wazuh-evidence-recorded: paper-evaluator
   wazuh-indexer:
-    type: vm
+    type: compute
     os: linux
     source:
       name: wazuh/wazuh-indexer
@@ -101,6 +101,29 @@ nodes:
     - name: indexer-api
       port: 9200
       protocol: tcp
+realization:
+  constraints:
+    - field_pointer: /nodes/red-workbench
+      concern: compute-substrate
+      posture: exact
+      domain: {kind: exact, value: operating-system-container}
+    - field_pointer: /nodes/customer-portal
+      concern: compute-substrate
+      posture: exact
+      domain: {kind: exact, value: operating-system-container}
+    - field_pointer: /nodes/customer-db
+      concern: compute-substrate
+      posture: exact
+      domain: {kind: exact, value: operating-system-container}
+    - field_pointer: /nodes/wazuh-manager
+      concern: compute-substrate
+      posture: exact
+      domain: {kind: exact, value: operating-system-container}
+    - field_pointer: /nodes/wazuh-indexer
+      concern: compute-substrate
+      posture: exact
+      domain: {kind: exact, value: operating-system-container}
+
 infrastructure:
   redteam-net:
     count: 1

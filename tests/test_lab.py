@@ -922,9 +922,7 @@ class TestCheckBindMounts:
 
         assert _step_check_bind_mounts(ctx) is None
 
-    def test_step_reads_the_compose_model_from_the_admitted_bundle_root(
-        self, tmp_path
-    ):
+    def test_step_reads_the_compose_model_from_the_admitted_bundle_root(self, tmp_path):
         """The Compose model is scenario input, read from the admitted bundle.
 
         An env-pack bundle ships no ``docker-compose.yml``; the backend
@@ -945,15 +943,11 @@ class TestCheckBindMounts:
         pack_root = tmp_path / ".aptl" / "staged-packs" / "fixture"
         pack_root.mkdir(parents=True)
         ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
-        ctx.admitted_surface = _admitted_surface(
-            pack_root, selected_profiles=("soc",)
-        )
+        ctx.admitted_surface = _admitted_surface(pack_root, selected_profiles=("soc",))
 
         assert _step_check_bind_mounts(ctx) is None
 
-    def test_step_filters_by_admitted_profiles_not_the_config_ceiling(
-        self, tmp_path
-    ):
+    def test_step_filters_by_admitted_profiles_not_the_config_ceiling(self, tmp_path):
         """A reduced scenario is not judged against services it never starts.
 
         ``containers.enabled_profiles()`` is the operator's capability ceiling;
@@ -981,9 +975,7 @@ class TestCheckBindMounts:
         assert "soc" in ctx.config.containers.enabled_profiles()
         assert _step_check_bind_mounts(ctx) is None
 
-    def test_step_still_fails_an_admitted_service_with_a_missing_source(
-        self, tmp_path
-    ):
+    def test_step_still_fails_an_admitted_service_with_a_missing_source(self, tmp_path):
         """The compatibility guard still protects the project-tree model."""
         from aptl.core.lab import _LabStartContext, _step_check_bind_mounts
 
@@ -2024,10 +2016,11 @@ class TestAdmittedStartSurface:
         assert _load_admitted_start_surface(ctx) is None
 
         assert admit.call_args.kwargs["scenario_path"] is None
+        run_target = admit.call_args.kwargs["run_target"]
+        assert run_target.run_store is ctx.run_store
+        assert run_target.run_id == ctx.run_id
 
-    def test_explicit_selection_reaches_the_resolver_unchanged(
-        self, mocker, tmp_path
-    ):
+    def test_explicit_selection_reaches_the_resolver_unchanged(self, mocker, tmp_path):
         """An operator-selected scenario path is not rewritten before resolution."""
         from aptl.core.lab import _load_admitted_start_surface
 
@@ -3108,6 +3101,33 @@ class TestStartupClassificationWiring:
         assert ctx.diagnostics == []
 
     # -- test_ssh (readiness) ------------------------------------------
+
+    def test_kali_compatibility_runs_before_ssh_readiness(self):
+        from aptl.core.lab import _LAB_START_STEPS
+
+        names = [step.__name__ for step in _LAB_START_STEPS]
+        assert names.index("_step_prepare_ssh_compatibility") < names.index(
+            "_step_test_ssh"
+        )
+
+    def test_kali_compatibility_executes_installed_fixup(self, tmp_path, mocker):
+        from aptl.core.lab import _step_prepare_ssh_compatibility
+
+        ctx = self._ctx(tmp_path, selected_profiles={"kali"})
+        ctx.raw_env = {"APTL_TEST_MARKER": "present"}
+        script = tmp_path / "scripts/envpack-kali-fixups.sh"
+        script.parent.mkdir()
+        script.write_text("#!/bin/bash\n", encoding="utf-8")
+        run = mocker.patch(
+            "aptl.utils.shell.run_shell_script",
+            return_value=MagicMock(returncode=0),
+        )
+
+        assert _step_prepare_ssh_compatibility(ctx) is None
+        run.assert_called_once()
+        assert run.call_args.args[0] == script
+        assert run.call_args.kwargs["cwd"] == tmp_path
+        assert run.call_args.kwargs["env"]["APTL_TEST_MARKER"] == "present"
 
     def test_test_ssh_per_target_timeout_emits_readiness_warning(
         self, tmp_path, mocker

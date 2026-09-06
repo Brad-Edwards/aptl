@@ -23,7 +23,10 @@ from aptl.core.deployment._compose_mixed_realization import (
 from aptl.core.deployment._compose_post_start import (
     ComposeRealizationPostStartMixin,
 )
-from aptl.core.deployment._compose_port_realization import published_port_conflicts
+from aptl.core.deployment._compose_port_realization import (
+    container_owns_published_port,
+    published_port_conflicts,
+)
 from aptl.core.deployment._compose_service_index_realization import (
     ComposeRealizationServiceIndexMixin,
 )
@@ -51,7 +54,11 @@ from aptl.core.deployment._compose_realization_networks import (
 from aptl.core.deployment._compose_runtime_orchestration import (
     ComposeRuntimeOrchestrationRouteMixin,
 )
-from aptl.core.deployment.realization import DeploymentRealizationSpec
+from aptl.core.deployment.realization import (
+    DeploymentNodeRealization,
+    DeploymentPublishedPort,
+    DeploymentRealizationSpec,
+)
 from aptl.core.lab_types import LabResult
 
 __all__ = [
@@ -126,6 +133,7 @@ class ComposeRealizationMixin(
         # Request-scoped, like the network bindings below: the base start reads it
         # by node address and never re-resolves the tag it was verified from.
         self._realization_substrate_digests = dict(substrate_digests or {})
+        self._generated_environment_files_by_address = {}
         failure = self._runtime_orchestration_preflight(realization)
         if failure is not None:
             return failure
@@ -174,6 +182,13 @@ class ComposeRealizationMixin(
         """
 
         realization_root = realization_root or scenario_root
+        failure = self._validate_stateful_realization(realization)
+        if failure is None:
+            failure = self._realize_stateful_prerequisites(
+                realization, realization_root
+            )
+        if failure is not None:
+            return failure
         substrate_failure = self._realize_networks_and_boundaries(realization)
         if substrate_failure is not None:
             return substrate_failure
@@ -249,6 +264,13 @@ class ComposeRealizationMixin(
         substrate_failure = self._realize_networks_and_boundaries(realization)
         if substrate_failure is not None:
             return substrate_failure
+        stateful_failure = self._validate_stateful_realization(realization)
+        if stateful_failure is None:
+            stateful_failure = self._realize_stateful_prerequisites(
+                realization, self.realization_root
+            )
+        if stateful_failure is not None:
+            return stateful_failure
         addresses = frozenset(node.address for node in realization.nodes)
         failure, extra_ops = self._image_free_generated_artifact_ops(
             realization, addresses, self.realization_root
@@ -277,7 +299,24 @@ class ComposeRealizationMixin(
         remapped the way the checked-in stack's convenience ports are.
         """
 
-        conflicts = published_port_conflicts(realization)
+        def occupied_by_current_node(
+            node: DeploymentNodeRealization,
+            binding: DeploymentPublishedPort,
+        ) -> bool:
+            """Recognize the exact binding retained by an admitted-plan retry."""
+
+            container_name = getattr(node, "container_name", None)
+            if not isinstance(container_name, str) or not self.container_exists(
+                container_name
+            ):
+                return False
+            return container_owns_published_port(
+                self.container_inspect(container_name), binding
+            )
+
+        conflicts = published_port_conflicts(
+            realization, occupied_by=occupied_by_current_node
+        )
         if not conflicts:
             return None
         return LabResult(success=False, error="; ".join(conflicts[:5]))

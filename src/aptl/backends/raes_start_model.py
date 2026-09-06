@@ -37,6 +37,7 @@ class AdmittedScenarioStart:
     target: RuntimeTarget
     execution_plan: ExecutionPlan
     realization: AptlRealization | None
+    run_target: AcesRunTarget | None = None
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,13 @@ class AcesRunTarget:
 
     run_store: RunStorageBackend
     run_id: str
+    attempt_id: str | None = None
+
+    @property
+    def resolved_attempt_id(self) -> str:
+        """Return the explicit attempt identity, or the one-attempt run identity."""
+
+        return self.attempt_id or self.run_id
 
 
 @dataclass

@@ -11,6 +11,9 @@ from aptl.core.deployment._compose_stateful_constants import (
     WAZUH_CERT_PROFILES,
 )
 from aptl.core.deployment._flag_signing_keys import FLAG_SIGNING_PROFILE_V2
+from aptl.core.deployment._generated_artifact_environment import (
+    CORTEX_SERVICE_CREDENTIALS_PROFILE,
+)
 from aptl.core.deployment._wazuh_identity import wazuh_cluster_identity
 
 # Certificate-bundle provenances APTL can realize: the in-tree provenance file
@@ -114,7 +117,8 @@ def _artifact_errors(realization: DeploymentRealizationSpec) -> list[str]:
             )
         if (
             artifact.generator == "rendered_config"
-            and artifact.provenance != FLAG_SIGNING_PROFILE_V2
+            and artifact.provenance
+            not in {FLAG_SIGNING_PROFILE_V2, CORTEX_SERVICE_CREDENTIALS_PROFILE}
             and len(artifact.outputs) != 1
         ):
             # The wazuh manager config renders a single file; the flag-signing

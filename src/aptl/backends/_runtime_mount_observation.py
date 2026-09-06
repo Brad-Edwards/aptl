@@ -56,7 +56,9 @@ def _observe_mounts(
 
 
 def _observe_forwarding_agents(
-    info: Mapping[str, Any], runtime: RuntimeConfiguration
+    info: Mapping[str, Any],
+    runtime: RuntimeConfiguration,
+    reload_channel_paths: Mapping[str, str] | None = None,
 ) -> object | None:
     """Disclose declared forwarding agents whose realized footprint is present.
 
@@ -72,7 +74,11 @@ def _observe_forwarding_agents(
     host-observable footprint at all — the whole concern is dropped (``None``),
     so the realized set diverges from the declared one and the EXACT requirement
     is rejected rather than handed a fabricated match. This is disclosure of real
-    container state, not an echo of the plan.
+    container state, not an echo of the plan. A reload channel may target a
+    control interface declared on a *different* node (for example, a MISP sync
+    sidecar driving Suricata's command socket). ``reload_channel_paths`` is the
+    exact realization-wide reference-to-path index for that case; the legacy
+    same-node mount lookup remains as a compatibility fallback.
     """
 
     declared = list(getattr(runtime, "forwarding_agents", ()) or ())
@@ -87,19 +93,27 @@ def _observe_forwarding_agents(
     declared_mounts = list(getattr(runtime, "mounts", ()) or ())
     disclosed = []
     for agent in declared:
-        if not _forwarding_agent_corroborated(agent, realized_dests, declared_mounts):
+        if not _forwarding_agent_corroborated(
+            agent,
+            realized_dests,
+            declared_mounts,
+            reload_channel_paths or {},
+        ):
             return None
         disclosed.append(agent.model_dump(mode="json", by_alias=True))
     return _disclose("forwarding-agents", disclosed)
 
 
 def _forwarding_agent_corroborated(
-    agent: object, realized_dests: set[object], declared_mounts: Sequence[object]
+    agent: object,
+    realized_dests: set[object],
+    declared_mounts: Sequence[object],
+    reload_channel_paths: Mapping[str, str],
 ) -> bool:
     """Return whether a declared agent's realized mount footprint is present."""
 
     required_paths = _agent_source_paths(agent) | _agent_reload_channel_paths(
-        agent, declared_mounts
+        agent, declared_mounts, reload_channel_paths
     )
     if not required_paths:
         # No host-observable footprint means the honest observation is absence.
@@ -118,7 +132,9 @@ def _agent_source_paths(agent: object) -> set[str]:
 
 
 def _agent_reload_channel_paths(
-    agent: object, declared_mounts: Sequence[object]
+    agent: object,
+    declared_mounts: Sequence[object],
+    reload_channel_paths: Mapping[str, str],
 ) -> set[str]:
     """Return the mount targets serving an agent's ``unix_socket`` reload channels."""
 
@@ -129,7 +145,11 @@ def _agent_reload_channel_paths(
         target_ref = str(getattr(channel, "target_ref", "") or "")
         if not target_ref:
             continue
-        paths.update(_volume_targets_for_ref(target_ref, declared_mounts))
+        realized_path = reload_channel_paths.get(target_ref)
+        if realized_path:
+            paths.add(realized_path)
+        else:
+            paths.update(_volume_targets_for_ref(target_ref, declared_mounts))
     return paths
 
 

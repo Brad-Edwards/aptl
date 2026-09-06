@@ -10,11 +10,13 @@ from __future__ import annotations
 import pytest
 
 from aptl.core.deployment._compose_service_health import (
+    container_completed_successfully,
     container_health,
     container_running,
     container_settled,
     unhealthy_container_reasons,
     wait_for_realized_health,
+    wait_for_run_to_completion,
 )
 
 
@@ -75,6 +77,7 @@ class _FakeBackend:
         # states: {name: info dict or list of info dicts polled in order}
         self._states = {k: (v if isinstance(v, list) else [v]) for k, v in states.items()}
         self._calls = {k: 0 for k in states}
+        self.restarts = []
 
     def container_inspect(self, name):
         if name not in self._states:
@@ -83,6 +86,9 @@ class _FakeBackend:
         idx = min(self._calls[name], len(seq) - 1)
         self._calls[name] += 1
         return seq[idx]
+
+    def container_restart(self, name, *, timeout=None):
+        self.restarts.append((name, timeout))
 
 
 def test_unhealthy_container_reasons_enumerates_each_failure():
@@ -174,3 +180,49 @@ def test_unhealthy_reasons_reports_a_stopped_container():
     joined = " ".join(reasons)
     assert "aptl-stopped" in joined
     assert "not running" in joined
+
+
+def test_run_to_completion_accepts_only_exited_zero():
+    assert container_completed_successfully(
+        _info(running=False, status="exited", exit_code=0, restart="no")
+    )
+    assert not container_completed_successfully(
+        _info(running=False, status="exited", exit_code=1, restart="no")
+    )
+    assert not container_completed_successfully(_info(running=True))
+
+
+def test_run_to_completion_retries_early_failure_after_services_settle():
+    failed = _info(running=False, status="exited", exit_code=1, restart="no")
+    running = _info(running=True, status="running", restart="no")
+    complete = _info(running=False, status="exited", exit_code=0, restart="no")
+    backend = _FakeBackend({"aptl-init": [failed, failed, running, complete]})
+
+    reasons = wait_for_run_to_completion(
+        backend,
+        ["aptl-init"],
+        timeout=10,
+        interval=1,
+        time_source=iter([0.0, 1.0, 2.0, 3.0]).__next__,
+        sleep=lambda _: None,
+    )
+
+    assert reasons == []
+    assert backend.restarts == [("aptl-init", 60)]
+
+
+def test_run_to_completion_fails_after_one_unsuccessful_retry():
+    failed = _info(running=False, status="exited", exit_code=1, restart="no")
+    backend = _FakeBackend({"aptl-init": failed})
+
+    reasons = wait_for_run_to_completion(
+        backend,
+        ["aptl-init"],
+        timeout=10,
+        interval=1,
+        time_source=iter([0.0, 1.0]).__next__,
+        sleep=lambda _: None,
+    )
+
+    assert backend.restarts == [("aptl-init", 60)]
+    assert "exit code 1" in " ".join(reasons)

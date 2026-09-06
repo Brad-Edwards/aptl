@@ -255,7 +255,7 @@ def test_blocked_is_distinct_from_both_other_outcomes(status):
 
 
 def test_the_techvault_verifier_is_a_separate_distribution():
-    """"Core ships zero adapters" has to be checkable, not just asserted.
+    """ "Core ships zero adapters" has to be checkable, not just asserted.
 
     The TechVault verifier lives in this repository for now, but it builds and
     installs as its own distribution. If it were ever folded into ``aptl-labs``,
@@ -312,3 +312,80 @@ def test_core_holds_no_techvault_answer_key_behind_the_seam():
 
     # And the retired in-core scenario module is gone, not merely bypassed.
     assert not (root / "_live_gate_semantic.py").exists()
+
+
+def test_techvault_verifier_requires_terminal_actions_and_one_correlated_case():
+    """The plugin owns the issue #974 workflow/case acceptance semantics."""
+
+    from types import SimpleNamespace
+
+    from aptl_techvault_verifier import TechVaultVerifier
+
+    class Operations:
+        def __init__(self):
+            self.execution_queries = 0
+            self.bound_execution_id = ""
+
+        def product_json(self, endpoint, path, *, body=None, method="GET"):
+            if path == "/api/v1/workflows":
+                return [{"id": "workflow-1", "name": "APTL Alert to Case"}]
+            if path == "/api/v1/workflows/workflow-1/executions":
+                self.execution_queries += 1
+                return (
+                    []
+                    if self.execution_queries == 1
+                    else [
+                        {
+                            "execution_id": "execution-1",
+                            "execution_argument": "run-marker",
+                        }
+                    ]
+                )
+            if path == "/api/v1/streams/results":
+                assert method == "POST"
+                assert body == {"execution_id": "execution-1"}
+                return {
+                    "status": "FINISHED",
+                    "execution_argument": "run-marker",
+                    "results": [{"status": "SUCCESS"}, {"status": "SUCCESS"}],
+                }
+            if path == "/api/v1/query":
+                return [{"_id": "case-1", "description": "run-marker"}]
+            raise AssertionError((endpoint, path))
+
+        def bind_runtime_execution(self, execution_id):
+            self.bound_execution_id = execution_id
+
+        def reachability_from(self, origin):
+            return SimpleNamespace(reached=True, diagnostics=())
+
+        def detection_evidence(self, origin, sensor, deadline_seconds):
+            assert sensor == "aptl-suricata"
+            return SimpleNamespace(
+                observed=True,
+                diagnostics=(),
+                correlation_marker="run-marker",
+            )
+
+    operations = Operations()
+    context = VerificationContext(
+        run_id="run",
+        attempt_id="attempt",
+        scenario=ScenarioIdentity("techvault", "sha256:" + "a" * 64),
+        backend=BACKEND,
+        deadline_seconds=30,
+        operations=operations,
+        observations={
+            "containers": ("aptl-kali", "aptl-wazuh-manager", "aptl-suricata")
+        },
+    )
+
+    report = TechVaultVerifier().run(context)
+
+    assert report.status is VerificationStatus.PASSED
+    assert operations.bound_execution_id == "execution-1"
+    assert {check.check_id for check in report.checks} >= {
+        "workflow-terminal-success",
+        "workflow-action-results",
+        "workflow-case-correlation",
+    }

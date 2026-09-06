@@ -1,0 +1,20 @@
+{
+    "schema_version": "aptl.operator-policy/v1",
+    "docker_authority_grants": [
+        {
+            "pack_id": "techvault",
+            "pack_version": "0.1.0",
+            "pack_set_digest": "sha256:0393903deb959127a3132cbff28d9c1996e0d05d793fccfe61124534205e0109",
+            "component_address": "provision.node.shuffle-orborus",
+            "authority_id": "shuffle-orborus",
+            "endpoint_source": "/var/run/docker.sock",
+            "image_template_ids": [
+                "shuffle-worker",
+                "shuffle-http-1-4-0"
+            ],
+            "delegated_template_ids": [
+                "shuffle-worker"
+            ]
+        }
+    ]
+}

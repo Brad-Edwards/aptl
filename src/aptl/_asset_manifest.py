@@ -37,6 +37,7 @@ ASSET_ROOTS: tuple[str, ...] = (
     "generate-indexer-certs.yml",
     ".env.example",
     ".mcp.json.example",
+    "operator-policy.json",
     "pyproject.toml",
     "README.md",
     "hatch_build.py",

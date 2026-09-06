@@ -52,6 +52,7 @@ from aptl.backends.raes_realization_model import (
     ParticipantDatasetRealization,
 )
 from aptl.backends.raes_runtime_observation import observe_runtime_concerns
+from aptl.core.deployment._compose_service_health import runtime_runs_to_completion
 from aptl.utils.logging import get_logger
 
 log = get_logger("realization-observe")
@@ -66,18 +67,21 @@ if TYPE_CHECKING:
 # different project exposes its own ``project_name``.
 _DEFAULT_PROJECT_NAME = "aptl"
 
-# RAES node vocabulary for the two things APTL can realize. A VM node becomes a
-# container; a switch node compiles to a network resource and becomes a Docker
-# network. These are what APTL *realized*, reported only once the corresponding
-# object is observed to exist — never read back off the plan.
-_REALIZED_NODE_TYPE = "vm"
+# RAES node vocabulary for the two things APTL can realize. A compute node
+# becomes an operating-system container; a switch node compiles to a network
+# resource and becomes a Docker network. These are what APTL *realized*,
+# reported only once the corresponding object is observed to exist — never read
+# back off the plan.
+_REALIZED_NODE_TYPE = "compute"
 _REALIZED_SWITCH_TYPE = "switch"
 
 _NODE_TYPE_PATH = CONCERN_PAYLOAD_PATH["node-type"]
 _OS_FAMILY_PATH = CONCERN_PAYLOAD_PATH["os-family"]
 _CONTENT_TYPE_PATH = CONCERN_PAYLOAD_PATH["content-type"]
 _DOMAIN_TOPOLOGY_PATH = CONCERN_PAYLOAD_PATH["domain-topology"]
-_SERVICE_INDEX_SCHEMA_PATH = CONCERN_PAYLOAD_PATH["service-search-index-schema-materialization"]
+_SERVICE_INDEX_SCHEMA_PATH = CONCERN_PAYLOAD_PATH[
+    "service-search-index-schema-materialization"
+]
 
 
 def observe_realization(
@@ -108,6 +112,12 @@ def observe_realization(
         for node in realization.nodes
         if node.runtime is not None
     }
+    run_to_completion_addresses = frozenset(
+        node.address
+        for node in realization.nodes
+        if runtime_runs_to_completion(node.runtime)
+    )
+    reload_channel_paths = _reload_channel_paths(realization)
     network_names = {network.address: network.name for network in realization.networks}
     placement_targets = {
         placement.address: placement.target_address
@@ -140,6 +150,7 @@ def observe_realization(
                 node_containers.get(address),
                 declared_domain_topology=_declared_domain_topology(resource),
                 declared_runtime=node_runtimes.get(address),
+                reload_channel_paths=reload_channel_paths,
             )
         elif resource.resource_type == "network":
             observations[address] = _observe_network(
@@ -152,6 +163,7 @@ def observe_realization(
                 node_containers,
                 realization_root,
                 image_free,
+                run_to_completion_addresses,
             )
         elif resource.resource_type == "persistent-volume":
             observations[address] = _observe_persistent_volume(
@@ -159,6 +171,7 @@ def observe_realization(
                 volumes.get(address),
                 node_containers,
                 project_name,
+                run_to_completion_addresses,
             )
         elif address in placement_service_index_schemas:
             observations[address] = _observe_service_content(
@@ -173,6 +186,7 @@ def observe_realization(
                 placement_targets.get(address),
                 placement_content.get(address),
                 placement_datasets.get(address),
+                run_to_completion_addresses,
             )
     return observations
 
@@ -217,6 +231,39 @@ def _image_free_addresses(realization: AptlRealization) -> frozenset[str]:
     return frozenset(node.address for node in realization.nodes if node.image is None)
 
 
+def _reload_channel_paths(realization: AptlRealization) -> dict[str, str]:
+    """Index exact authored control-channel references by realized socket path.
+
+    A forwarding agent can target a control channel on another node, while the
+    mount proving access to that socket is carried by the agent container. Build
+    the reference from typed runtime identities instead of guessing from volume
+    names, then let the agent observer require the resolved path in Docker's
+    realized mount table.
+    """
+
+    paths: dict[str, str] = {}
+    for node in realization.nodes:
+        runtime = node.runtime
+        if runtime is None:
+            continue
+        for engine in getattr(runtime, "network_detection_engines", ()) or ():
+            engine_id = str(
+                getattr(engine, "network_detection_engine_id", "") or ""
+            )
+            if not engine_id:
+                continue
+            for channel in getattr(engine, "control_channels", ()) or ():
+                channel_id = str(getattr(channel, "channel_id", "") or "")
+                path = str(getattr(channel, "path", "") or "")
+                if channel_id and path.startswith("/"):
+                    reference = (
+                        f"nodes.{node.name}.runtime.network_detection_engines."
+                        f"{engine_id}.control_channels.{channel_id}"
+                    )
+                    paths[reference] = path
+    return paths
+
+
 def _declared_domain_topology(
     resource: "PlannedResource",
 ) -> Mapping[str, object] | None:
@@ -234,13 +281,16 @@ def _observe_node(
     container_name: str | None,
     declared_domain_topology: Mapping[str, object] | None = None,
     declared_runtime: RuntimeConfiguration | None = None,
+    reload_channel_paths: Mapping[str, str] | None = None,
 ) -> ObservedResource:
     """Observe one RAES node through the container the backend realized for it."""
 
     if not container_name:
         return ObservedResource(realized=False)
     info = _settled_inspect(backend, container_name)
-    if not _container_realized(info):
+    if not _container_realized(
+        info, run_to_completion=runtime_runs_to_completion(declared_runtime)
+    ):
         return ObservedResource(realized=False)
 
     concerns: dict[tuple[str, ...], object] = {
@@ -256,7 +306,13 @@ def _observe_node(
         if topology is not None:
             concerns[_DOMAIN_TOPOLOGY_PATH] = topology
     concerns.update(
-        observe_runtime_concerns(backend, container_name, info, declared_runtime)
+        observe_runtime_concerns(
+            backend,
+            container_name,
+            info,
+            declared_runtime,
+            reload_channel_paths,
+        )
     )
     return ObservedResource(realized=True, concerns=concerns)
 
@@ -284,6 +340,7 @@ def _observe_placement(
     target_address: str | None,
     content: DeploymentContentRealization | None,
     dataset: ParticipantDatasetRealization | None,
+    run_to_completion_addresses: frozenset[str],
 ) -> ObservedResource:
     """Observe a node-scoped placement through the node that received it.
 
@@ -308,7 +365,12 @@ def _observe_placement(
     else:
         container_name = node_containers.get(target_address) if target_address else None
         info = _settled_inspect(backend, container_name) if container_name else {}
-        if not container_name or not _container_realized(info):
+        if not container_name or not _container_realized(
+            info,
+            run_to_completion=bool(
+                target_address and target_address in run_to_completion_addresses
+            ),
+        ):
             observed = ObservedResource(realized=False)
         else:
             concerns: dict[tuple[str, ...], object] = {}
@@ -338,7 +400,9 @@ def _observe_service_content(
     projection, digest, and readback strength — never a raw native response.
     """
 
-    evidence_by_address = getattr(backend, "_service_index_materialization_evidence", {})
+    evidence_by_address = getattr(
+        backend, "_service_index_materialization_evidence", {}
+    )
     receipt = (
         evidence_by_address.get(address)
         if isinstance(evidence_by_address, Mapping)
@@ -357,9 +421,13 @@ def _observe_service_content(
     # that concern alongside the materialization concern; otherwise the
     # non-approximation gate reads content-type as an unrealized (omitted) exact
     # requirement and rejects the placement (issue #889).
-    spec = resource_payload.get("spec") if isinstance(resource_payload, Mapping) else None
+    spec = (
+        resource_payload.get("spec") if isinstance(resource_payload, Mapping) else None
+    )
     content_type = spec.get("type") if isinstance(spec, Mapping) else None
-    concerns: dict[tuple[str, ...], object] = {_SERVICE_INDEX_SCHEMA_PATH: dict(binding)}
+    concerns: dict[tuple[str, ...], object] = {
+        _SERVICE_INDEX_SCHEMA_PATH: dict(binding)
+    }
     if isinstance(content_type, str) and content_type:
         concerns[_CONTENT_TYPE_PATH] = content_type
     return ObservedResource(

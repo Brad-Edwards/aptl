@@ -192,6 +192,11 @@ class DeploymentBackend(HostInventoryBackend, ContainerOpsBackend, Protocol):
 
         ...
 
+    def runtime_orchestration_observations(self) -> tuple[dict[str, object], ...]:
+        """Return safe normalized observations from the most recent attestation."""
+
+        ...
+
     def revalidate_local_docker_socket(self) -> LabResult:
         """Prove the bound socket and daemon identities are unchanged."""
         ...

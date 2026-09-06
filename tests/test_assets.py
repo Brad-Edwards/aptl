@@ -25,6 +25,9 @@ def _make_fake_bundle(root: Path) -> Path:
     (bundle / "config").mkdir(parents=True)
     (bundle / "scenarios").mkdir(parents=True)
     (bundle / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    (bundle / "operator-policy.json").write_text(
+        '{"schema_version":"aptl.operator-policy/v1"}\n', encoding="utf-8"
+    )
     (bundle / "config" / "certs.yml").write_text("x: 1\n", encoding="utf-8")
     (bundle / "scenarios" / "catalog.json").write_text("{}\n", encoding="utf-8")
     return bundle
@@ -46,10 +49,11 @@ def test_materialize_copies_bundle_and_writes_config(
     assert result.from_bundle is True
     assert result.config_created is True
     assert (target / "docker-compose.yml").is_file()
+    assert (target / "operator-policy.json").is_file()
     assert (target / "config" / "certs.yml").is_file()
     assert (target / "scenarios" / "catalog.json").is_file()
     assert (target / "aptl.json").is_file()
-    assert result.files_written == 3
+    assert result.files_written == 4
 
 
 def test_materialize_default_config_is_valid(fake_bundle: Path, tmp_path: Path) -> None:
@@ -189,6 +193,7 @@ def test_iter_source_files_checkout_uses_git(tmp_path: Path) -> None:
         p.as_posix() for p in assets._iter_source_files(REPO_ROOT, from_bundle=False)
     }
     assert "docker-compose.yml" in rels
+    assert "operator-policy.json" in rels
     assert not any("soc_certs" in r for r in rels)
 
 

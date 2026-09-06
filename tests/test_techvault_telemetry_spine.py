@@ -89,7 +89,10 @@ def test_misp_intelligence_becomes_loadable_suricata_content(scenario):
     assert any(t["kind"] == "ioc_to_rule" for t in sync["transforms"])
 
     reload_channel = sync["reload_channels"][0]
-    assert reload_channel["target_ref"] == "suricata"
+    assert reload_channel["target_ref"] == (
+        "nodes.suricata.runtime.network_detection_engines."
+        "suricata-engine.control_channels.command-socket"
+    )
 
     # The engine must actually consume what the sync writes, and say so.
     engine = _runtime(scenario, "suricata")["network_detection_engines"][0]

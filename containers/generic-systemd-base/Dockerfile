@@ -5,9 +5,17 @@
 # container in which declared `service_manager_units` actually run under
 # systemd (`systemctl enable/start`, verified by `systemctl is-active`).
 #
-# Validated locally against Docker with the run flags APTL already uses for its
-# systemd nodes (cgroupns=host, /sys/fs/cgroup:rw, tmpfs /run+/tmp,
-# cap SYS_ADMIN/SYS_NICE/SYS_RESOURCE, seccomp:unconfined, /usr/sbin/init).
+# Validated locally against Docker with the run flags APTL uses for its systemd
+# nodes (issue #955): cgroupns=private, security-opt writable-cgroups=true,
+# tmpfs /run+/run/lock+/tmp, NO added capabilities, the daemon's default seccomp
+# profile, AppArmor docker-default, /usr/sbin/init. Reaches
+# `systemctl is-system-running` = running with zero failed units.
+#
+# systemd needs a WRITABLE cgroup filesystem, not a privileged one. Docker
+# Engine 28.0+ is required: `writable-cgroups=true` (moby#48828) clears the
+# read-only flag on the container's own namespace-scoped cgroup2 mount, which
+# replaces the retired cgroup-v1-era recipe (host cgroup namespace plus a
+# read-write bind of the host's /sys/fs/cgroup).
 FROM rockylinux:9@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6
 
 RUN dnf -y install systemd systemd-sysv && dnf clean all && \

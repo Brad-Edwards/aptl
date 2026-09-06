@@ -412,10 +412,12 @@ def _systemd_units():
     return [{"unit_id": "svc", "unit_name": "svc.service", "active_state": "active"}]
 
 
-def test_capabilities_realized_among_init_grants_still_matches():
-    # A systemd node legitimately gets APTL's init capabilities beyond the
-    # declared one; the observer allows exactly that fixed init baseline plus the
-    # declared set and discloses the declared policy.
+def test_systemd_node_capabilities_beyond_the_declared_set_are_now_rejected():
+    # issue #955 inverts the retired expectation. The init baseline is empty, so
+    # a systemd node no longer gets a free pass for SYS_ADMIN/SYS_NICE/
+    # SYS_RESOURCE: anything beyond the declared set is undeclared privilege.
+    # This is the check that would catch a node started by an older APTL, or by
+    # a hand-edited Compose file, still carrying the retired grant.
     runtime = _runtime(
         linux_capabilities={"add": ["CAP_NET_ADMIN"]},
         service_manager_units=_systemd_units(),
@@ -423,6 +425,18 @@ def test_capabilities_realized_among_init_grants_still_matches():
     backend = _Backend(
         {_CONTAINER: _inspect(cap_add=["NET_ADMIN", "SYS_ADMIN", "SYS_NICE"])}
     )
+    codes, _provenance, _observations = _gate(runtime, backend, "linux-capabilities")
+    assert _GATE_REJECT in codes
+
+
+def test_systemd_node_granting_exactly_its_declared_capability_matches():
+    # The inverse: with the baseline empty, a declared capability is the ENTIRE
+    # expected grant, and a container carrying exactly it corroborates.
+    runtime = _runtime(
+        linux_capabilities={"add": ["CAP_NET_ADMIN"]},
+        service_manager_units=_systemd_units(),
+    )
+    backend = _Backend({_CONTAINER: _inspect(cap_add=["NET_ADMIN"])})
     codes, _provenance, observations = _gate(runtime, backend, "linux-capabilities")
     assert codes == []
     assert _CAPS_PATH in observations[_ADDRESS].concerns
@@ -564,9 +578,13 @@ def test_undeclared_bind_mount_is_rejected():
     assert _GATE_REJECT in codes
 
 
-def test_systemd_cgroup_bind_is_a_known_baseline_not_excess():
-    # A systemd node's init adds the /sys/fs/cgroup bind; it is the one baseline
-    # mount docker inspect reports, so it must not count as undeclared excess.
+def test_systemd_cgroup_bind_is_now_undeclared_excess():
+    # issue #955 inverts the retired expectation. The substrate no longer binds
+    # the host cgroupfs, so a systemd node carrying that bind is undeclared
+    # privilege -- exactly what this check exists to catch -- and must fail the
+    # concern instead of being subtracted as a known init baseline. Keeping the
+    # old exemption would have made the hardening unverifiable: a container that
+    # still carried the bind would still have passed.
     runtime = _runtime(
         mounts=[{"target": "/data", "source": "/host/data", "source_kind": "bind", "read_only": True}],
         service_manager_units=_systemd_units(),
@@ -577,6 +595,26 @@ def test_systemd_cgroup_bind_is_a_known_baseline_not_excess():
                 mounts=[
                     {"Type": "bind", "Source": "/host/data", "Destination": "/data", "RW": False},
                     {"Type": "bind", "Source": "/sys/fs/cgroup", "Destination": "/sys/fs/cgroup", "RW": True},
+                ]
+            )
+        }
+    )
+    codes, _provenance, _observations = _gate(runtime, backend, "runtime-mounts")
+    assert _GATE_REJECT in codes
+
+
+def test_systemd_node_declaring_only_its_own_mounts_still_passes():
+    # The inverse of the above: with no cgroup bind present, a systemd node whose
+    # realized mounts exactly match its declaration is corroborated as before.
+    runtime = _runtime(
+        mounts=[{"target": "/data", "source": "/host/data", "source_kind": "bind", "read_only": True}],
+        service_manager_units=_systemd_units(),
+    )
+    backend = _Backend(
+        {
+            _CONTAINER: _inspect(
+                mounts=[
+                    {"Type": "bind", "Source": "/host/data", "Destination": "/data", "RW": False},
                 ]
             )
         }
@@ -930,6 +968,49 @@ def test_init_capability_baseline_matches_the_substrate_init_requirements():
     assert _INIT_CAPABILITY_BASELINE == _normalized_capabilities(
         InitRequirements().capabilities
     )
+
+
+def test_init_baselines_are_empty_because_the_substrate_adds_nothing():
+    """issue #955: the substrate contributes no undeclared capability or bind.
+
+    The old posture added three capabilities and a `/sys/fs/cgroup` bind, so the
+    excess-detection had to subtract them as a known baseline before judging a
+    container. The measured cgroup v2 posture adds neither, so both baselines
+    collapse to empty -- and every capability and bind on a realized container
+    now traces to an SDL declaration with nothing subtracted.
+
+    A non-empty baseline here is a blanket exemption: it would let a container
+    carry that exact state undeclared and still pass the closed-world
+    comparison.
+    """
+
+    from aptl.backends._runtime_concern_excess import (
+        _INIT_BIND_MOUNT_TARGETS,
+        _INIT_CAPABILITY_BASELINE,
+    )
+
+    assert _INIT_CAPABILITY_BASELINE == frozenset()
+    assert _INIT_BIND_MOUNT_TARGETS == frozenset()
+
+
+def test_init_bind_mount_baseline_matches_the_substrate_init_requirements():
+    """The mount half of the drift guard, which previously had none.
+
+    `_INIT_CAPABILITY_BASELINE` was guarded against drift from
+    `InitRequirements`; `_INIT_BIND_MOUNT_TARGETS` was not, so the substrate
+    could stop binding `/sys/fs/cgroup` while the observer went on exempting it.
+    Derive the expectation from the substrate rather than restating a literal.
+    """
+
+    from aptl.backends._runtime_concern_excess import _INIT_BIND_MOUNT_TARGETS
+    from aptl.backends.raes_base_substrate import InitRequirements
+
+    init = InitRequirements()
+    expected = frozenset({"/sys/fs/cgroup"}) if getattr(
+        init, "cgroupfs_rw_mount", False
+    ) else frozenset()
+
+    assert _INIT_BIND_MOUNT_TARGETS == expected
 
 
 # --------------------------------------------------------------------------- #

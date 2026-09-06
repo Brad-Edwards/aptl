@@ -6,9 +6,11 @@ realized container that carries security-relevant state its contract does not
 declare -- an undeclared host-published port, a capability beyond the declared
 set, an undeclared bind mount, or a tcp/udp listener the contract omits -- must
 fail the concern rather than pass behind an echoed declaration. Only the fixed
-state APTL's own generic-substrate init adds (the init capabilities and the
-cgroup bind of a systemd node) is subtracted as a known baseline; a plain node
-adds nothing.
+state APTL's own generic-substrate init adds is subtracted as a known baseline.
+Since issue #955 that baseline is empty: the cgroup v2 substrate posture adds no
+capability and binds no host path, so a systemd node and a plain node both
+contribute nothing and every realized capability and mount must trace to an SDL
+declaration.
 
 The scope helpers here also decide when a realized bind address EXACTLY matches
 the declared scope, normalizing the wildcard spellings Docker and ``ss`` use.
@@ -21,6 +23,7 @@ from typing import Any
 
 from raes.runtime_configuration import RuntimeConfiguration
 
+from aptl.backends.raes_base_substrate import InitRequirements as _InitRequirements
 from aptl.runtime_authority import has_undeclared_runtime_mounts
 
 _STATEFUL_MOUNT_KINDS = frozenset({"bind", "tmpfs"})
@@ -28,22 +31,28 @@ _STATEFUL_MOUNT_KINDS = frozenset({"bind", "tmpfs"})
 # ``0.0.0.0`` / ``::``. Both are wildcards — broader than any concrete address.
 _WILDCARD_ADDRESSES = frozenset({"", "*", "0.0.0.0", "::", "[::]"})
 
-# The ONLY undeclared realized state APTL's own generic substrate contributes,
-# fixed and known (issue #876 cycle-7 review). The excess-detection below
-# subtracts exactly this baseline before rejecting a concern for undeclared
-# state, so a container carrying anything beyond declared-plus-baseline (a
-# leftover port from a reused container, a hostile extra listener, an
-# undeclared capability or bind mount) is refused rather than silently passed.
+# The ONLY undeclared realized state APTL's own generic substrate contributes
+# (issue #876 cycle-7 review). The excess-detection below subtracts exactly this
+# baseline before rejecting a concern for undeclared state, so a container
+# carrying anything beyond declared-plus-baseline (a leftover port from a reused
+# container, a hostile extra listener, an undeclared capability or bind mount) is
+# refused rather than silently passed.
 #
-# Determined empirically against a booted container, not from static reading: a
-# plain node adds nothing (no CapAdd, no PortBindings, an empty ``Mounts``); a
-# systemd node adds exactly the init capabilities and the cgroup bind (its
-# ``--tmpfs`` mounts do not appear in ``Mounts`` at all). ``test_init_baseline_*``
-# guards these against drift from the substrate's own init requirements.
+# Determined empirically against a booted container, not from static reading:
+# neither a plain node nor a systemd node adds anything under the current posture
+# (no CapAdd, no PortBindings, an empty ``Mounts`` -- the ``--tmpfs`` mounts do
+# not appear in ``Mounts`` at all).
+#
+# Derived from the substrate's own init policy rather than restated, so the two
+# can never drift (issue #955). Both are EMPTY under the current cgroup v2
+# posture: it adds no capability and binds no host path, so every capability and
+# every mount on a realized container traces to an SDL declaration with nothing
+# subtracted as baseline. A non-empty entry here is a blanket exemption — it
+# lets a container carry exactly that state undeclared and still pass.
 _INIT_CAPABILITY_BASELINE = frozenset(
-    {"CAP_SYS_ADMIN", "CAP_SYS_NICE", "CAP_SYS_RESOURCE"}
+    f"CAP_{capability}" for capability in _InitRequirements().capabilities
 )
-_INIT_BIND_MOUNT_TARGETS = frozenset({"/sys/fs/cgroup"})
+_INIT_BIND_MOUNT_TARGETS: frozenset[str] = frozenset()
 
 # The listener half of that same baseline. Docker attaches its embedded DNS
 # resolver to every container on a user-defined network, listening on this

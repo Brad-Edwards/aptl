@@ -19,6 +19,7 @@ from raes.runtime_configuration import (
 )
 
 from aptl.backends.raes_base_substrate import (
+    InitRequirements,
     UnauthorizedCapabilityError,
     base_container_spec,
     plan_node,
@@ -75,12 +76,32 @@ class TestBaseContainerSpec:
         assert spec.image_ref != non_service.image_ref
         # The validated systemd run requirements are carried, not fabricated per call.
         assert spec.init is not None
-        assert "SYS_ADMIN" in spec.init.capabilities
-        assert spec.init.cgroup_host is True
-        assert spec.init.seccomp_unconfined is True
+        # issue #955: the measured cgroup v2 posture. systemd needs a WRITABLE
+        # cgroup filesystem, not a privileged one: `--security-opt
+        # writable-cgroups=true` (Docker Engine 28.0+, moby#48828) clears the
+        # read-only flag on the container's OWN namespace-scoped cgroup2 mount,
+        # so no host cgroup namespace, no host cgroupfs bind, and no added
+        # capability is required. Granting SYS_ADMIN was actively harmful: it
+        # made systemd attempt host operations (dev-hugepages.mount,
+        # sys-fs-fuse-connections.mount, logind) that then failed, booting the
+        # substrate `degraded` with six failed units instead of `running`.
+        assert spec.init.capabilities == ()
+        assert spec.init.cgroup_private is True
+        assert spec.init.writable_cgroups is True
         assert ("container", "docker") in spec.init.env
         assert spec.init.stop_signal == "SIGRTMIN+3"
         assert "/run/lock" in spec.init.tmpfs
+
+    def test_init_requirements_cannot_express_the_retired_privileged_recipe(self):
+        # The retired flags are REMOVED, not defaulted false: a field that still
+        # exists is a field a future caller can set back to True. Nothing may
+        # re-enable a host cgroup namespace, a host cgroupfs bind, or an
+        # unconfined seccomp profile through this dataclass.
+        init = InitRequirements()
+        for retired in ("cgroup_host", "cgroupfs_rw_mount", "seccomp_unconfined"):
+            assert not hasattr(init, retired), (
+                f"{retired} must be removed, not set False -- issue #955"
+            )
 
     def test_unknown_os_fails_closed(self):
         with pytest.raises(UnsupportedOsFamilyError):
@@ -95,9 +116,11 @@ class TestBaseContainerSpec:
         )
         spec = base_container_spec("n.node", os="linux", os_version="", runtime=runtime)
         assert spec.init is not None
-        assert "NET_ADMIN" in spec.init.capabilities
-        # The fixed systemd requirements are still present alongside the addition.
-        assert "SYS_ADMIN" in spec.init.capabilities
+        # The init baseline is now empty (issue #955), so a declared extra is the
+        # ENTIRE grant. That is what makes the closed-world capability readback
+        # exact: every CapAdd on a realized container traces to an SDL
+        # declaration, with nothing subtracted as substrate baseline.
+        assert spec.init.capabilities == ("NET_ADMIN",)
 
     def test_declared_capability_outside_the_allowlist_is_rejected(self):
         # issue #816: a scenario declaring a host-impacting capability APTL
@@ -111,12 +134,15 @@ class TestBaseContainerSpec:
         with pytest.raises(UnauthorizedCapabilityError, match="CAP_SYS_ADMIN"):
             base_container_spec("n.node", os="linux", os_version="", runtime=runtime)
 
-    def test_no_declared_capabilities_keeps_the_fixed_default_set(self):
+    def test_no_declared_capabilities_grants_nothing(self):
+        # issue #955: the init baseline is empty. A systemd node that declares no
+        # extra capability gets NO CapAdd at all -- measured as sufficient for
+        # systemd on cgroup v2, and strictly healthier than the retired grant.
         spec = base_container_spec(
             "n.node", os="linux", os_version="", runtime=_runtime_with_service()
         )
         assert spec.init is not None
-        assert spec.init.capabilities == ("SYS_ADMIN", "SYS_NICE", "SYS_RESOURCE")
+        assert spec.init.capabilities == ()
 
     def test_declared_published_ports_are_lowered(self):
         from raes.runtime_network import (

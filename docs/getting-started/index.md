@@ -44,7 +44,13 @@ Four isolated Docker networks:
 
 ## Prerequisites
 
-- Docker with Compose and Buildx
+- Docker Engine 28.0+ with Compose and Buildx, on a cgroup v2 host. Nodes that
+  run service units boot systemd inside their container, which needs a writable
+  cgroup filesystem; APTL obtains one with `--security-opt
+  writable-cgroups=true`, added in Engine 28.0. `aptl lab start` checks the
+  daemon before creating anything and stops with a clear message on an older
+  engine or a cgroup v1 host, rather than falling back to the privileged
+  container recipe that option replaced
 - 8GB RAM for the curated scenarios; more than 20GB for the full `techvault-operational` stack
 - Native Linux Docker Engine: `vm.max_map_count >= 262144`
 - Docker Desktop on macOS, Windows, or WSL2: `aptl lab start` skips the host

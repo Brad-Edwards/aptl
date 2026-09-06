@@ -1359,3 +1359,72 @@ def test_running_child_is_supervised_until_terminal_before_success(
 
     assert result is None
     inspected.assert_called_once_with("spawned-child-id")
+
+
+def test_service_manager_holder_no_longer_exempts_the_cgroup_bind() -> None:
+    """issue #955: the fourth cgroup allowance, alongside the documented three.
+
+    `_allowed_mount_targets()` used to add `/sys/fs/cgroup` unconditionally for
+    any holder declaring `service_manager_units`, independently of
+    `_INIT_BIND_MOUNT_TARGETS`. Removing the substrate's cgroupfs bind while
+    leaving this exemption would make the acceptance criterion pass vacuously:
+    the closed-world comparison would keep passing for a node that still carried
+    the bind, because this path would go on admitting it. The admitted footprint
+    is now exactly the declared `runtime.mounts` targets.
+    """
+
+    payload = _runtime().model_dump(mode="json")
+    payload["mounts"] = [
+        {
+            "target": "/data",
+            "source": "/host/data",
+            "source_kind": "bind",
+            "read_only": True,
+        }
+    ]
+    payload["service_manager_units"] = [
+        {
+            "unit_id": "svc",
+            "unit_name": "svc.service",
+            "enabled_state": "enabled",
+            "active_state": "active",
+        }
+    ]
+    spec = _spec(RuntimeConfiguration.model_validate(payload))
+    admission = spec.docker_authority_admissions[0]
+
+    assert "/sys/fs/cgroup" not in admission.allowed_mount_targets
+    assert admission.allowed_mount_targets == ("/data",)
+
+
+def test_service_manager_node_cgroup_bind_is_undeclared_excess() -> None:
+    """The excess detector must now REJECT a cgroup bind on a systemd node.
+
+    Same property from the readback side: with the substrate no longer binding
+    `/sys/fs/cgroup`, a container that carries one is undeclared privilege and
+    must fail the concern rather than be subtracted as init baseline.
+    """
+
+    payload = _runtime().model_dump(mode="json")
+    payload["service_manager_units"] = [
+        {
+            "unit_id": "svc",
+            "unit_name": "svc.service",
+            "enabled_state": "enabled",
+            "active_state": "active",
+        }
+    ]
+    runtime = RuntimeConfiguration.model_validate(payload)
+
+    assert _has_undeclared_mounts(
+        [
+            {
+                "Type": "bind",
+                "Source": "/sys/fs/cgroup",
+                "Destination": "/sys/fs/cgroup",
+                "RW": True,
+            }
+        ],
+        [],
+        runtime,
+    )

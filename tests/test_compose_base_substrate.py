@@ -11,6 +11,7 @@ cannot regress silently again.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -22,12 +23,29 @@ from aptl.backends.raes_base_substrate import (
     PublishedPort,
     VolumeMount,
 )
+from aptl.core.deployment._compose_base_substrate import _init_run_flags
 from aptl.core.deployment import (
     DeploymentNetworkAttachment,
     DockerComposeBackend,
 )
 from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.lab_types import LabResult
+
+
+# The substrate's daemon gate (issue #955) probes the TARGET daemon before any
+# systemd node is created. Tests that start an init container answer those two
+# probes rather than bypassing the gate, so the start path stays exercised as
+# operators actually run it.
+def _supported_daemon(*, cgroup_version="2", engine_version="29.5.0"):
+    def run(cmd, *args, **kwargs):
+        del args, kwargs
+        if "info" in cmd:
+            return MagicMock(returncode=0, stdout=f"{cgroup_version}\n", stderr="")
+        if "version" in " ".join(cmd):
+            return MagicMock(returncode=0, stdout=f"{engine_version}\n", stderr="")
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    return run
 
 
 def _backend(tmp_path: Path) -> DockerComposeBackend:
@@ -171,8 +189,7 @@ def test_start_base_container_with_init_still_carries_the_label(tmp_path):
         init=InitRequirements(),
     )
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+    with patch("subprocess.run", side_effect=_supported_daemon()) as mock_run:
         backend.start_base_container(spec)
 
     run_call = next(
@@ -589,3 +606,291 @@ class TestRemoveGenericMaterializerContainers:
             failures = backend.remove_generic_materializer_containers()
 
         assert failures == ["failed to remove generic-materializer containers"]
+
+
+class TestInitRunFlagsPosture:
+    """issue #955: the exact `docker run` flags a systemd node is started with.
+
+    Measured on Docker 29.5.0 / runc 1.3.5 / cgroup v2: with
+    `--cgroupns=private --security-opt writable-cgroups=true` and NO added
+    capability, no cgroupfs bind and no seccomp override, both generic
+    substrates reach `systemctl is-system-running` = `running` with zero failed
+    units and PID 1 seccomp filtering enabled. These assertions pin that
+    posture as argv, because argv is what the daemon actually receives.
+    """
+
+    def test_emits_the_private_writable_cgroup_posture(self):
+        flags = _init_run_flags(InitRequirements())
+
+        assert "--cgroupns=private" in flags
+        # Adjacency matters: `--security-opt` and its value must stay paired.
+        assert ["--security-opt", "writable-cgroups=true"] == flags[
+            flags.index("--security-opt") : flags.index("--security-opt") + 2
+        ]
+        assert "--stop-signal" in flags and "SIGRTMIN+3" in flags
+        for path in ("/run", "/run/lock", "/tmp"):
+            assert path in flags
+
+    def test_never_emits_the_retired_privileged_flags(self):
+        flags = _init_run_flags(InitRequirements())
+        joined = " ".join(flags)
+
+        # A host cgroup namespace, a host cgroupfs bind, and an unconfined
+        # seccomp profile are the three things this issue removes. Assert on the
+        # rendered argv rather than on dataclass fields: a future regression is
+        # far likelier to reintroduce a literal flag than to resurrect a field.
+        assert "--cgroupns=host" not in flags
+        assert "/sys/fs/cgroup" not in joined
+        assert "seccomp" not in joined
+        assert "unconfined" not in joined
+        assert "--privileged" not in flags
+
+    def test_grants_no_capability_by_default(self):
+        assert "--cap-add" not in _init_run_flags(InitRequirements())
+
+    def test_grants_exactly_the_declared_extra_capability(self):
+        flags = _init_run_flags(InitRequirements(capabilities=("NET_ADMIN",)))
+
+        # The whole grant, so closed-world readback subtracts no baseline.
+        assert [f for f, _ in zip(flags, flags[1:]) if f == "--cap-add"] == ["--cap-add"]
+        assert flags[flags.index("--cap-add") + 1] == "NET_ADMIN"
+
+
+class TestBaseContainerReuseRejectsDrift:
+    """issue #955: a running container is reused only when it still matches the
+    spec that would be created now.
+
+    The check used to be `running and image == run_image_ref` and nothing else.
+    A container created under the RETIRED privileged recipe is byte-identical to
+    a new one on name and image, so it would be silently reused -- meaning the
+    hardening would not apply on any machine carrying a warm lab, while the
+    fresh-directory boot gate (which runs on a clean tree) passed. That is the
+    #581 failure mode this module already carries a comment about.
+    """
+
+    def _spec(self) -> BaseContainerSpec:
+        return BaseContainerSpec(
+            node_address="provision.node.db",
+            container_name="aptl-db",
+            image_ref="aptl/generic-systemd-base-debian:latest",
+            runs_services=True,
+            init=InitRequirements(),
+        )
+
+    def _inspect(self, **overrides):
+        """A realized container matching the current spec, before overrides."""
+
+        info = {
+            "State": {"Running": True},
+            "Config": {
+                "Image": "aptl/generic-systemd-base-debian:latest",
+                "Env": ["container=docker"],
+            },
+            "HostConfig": {
+                "CgroupnsMode": "private",
+                "SecurityOpt": ["writable-cgroups=true"],
+                "CapAdd": None,
+                "Binds": None,
+                "Tmpfs": {"/run": "", "/run/lock": "", "/tmp": ""},
+                "PortBindings": {},
+            },
+            "Mounts": [],
+        }
+        info["HostConfig"].update(overrides.pop("HostConfig", {}))
+        info.update(overrides)
+        return info
+
+    def test_a_matching_container_is_still_reused(self, tmp_path):
+        backend = _backend(tmp_path)
+        backend.container_inspect = MagicMock(return_value=self._inspect())
+
+        assert backend._base_container_already_realized(
+            self._spec(), "aptl/generic-systemd-base-debian:latest"
+        )
+
+    @pytest.mark.parametrize(
+        "drift",
+        [
+            pytest.param({"CgroupnsMode": "host"}, id="host-cgroup-namespace"),
+            pytest.param(
+                {"SecurityOpt": ["seccomp:unconfined"]}, id="unconfined-seccomp"
+            ),
+            pytest.param({"SecurityOpt": []}, id="cgroups-not-writable"),
+            pytest.param(
+                {"CapAdd": ["SYS_ADMIN", "SYS_NICE", "SYS_RESOURCE"]},
+                id="retired-capability-grant",
+            ),
+            pytest.param(
+                {"Binds": ["/sys/fs/cgroup:/sys/fs/cgroup:rw"]}, id="host-cgroup-bind"
+            ),
+            pytest.param({"PortBindings": {"22/tcp": [{"HostPort": "2222"}]}},
+                         id="undeclared-published-port"),
+            pytest.param({"Tmpfs": {"/run": ""}}, id="drifted-tmpfs-set"),
+        ],
+    )
+    def test_drift_from_the_current_spec_is_not_reused(self, tmp_path, drift):
+        backend = _backend(tmp_path)
+        backend.container_inspect = MagicMock(
+            return_value=self._inspect(HostConfig=drift)
+        )
+
+        assert not backend._base_container_already_realized(
+            self._spec(), "aptl/generic-systemd-base-debian:latest"
+        )
+
+    def test_a_missing_declared_volume_is_not_reused(self, tmp_path):
+        backend = _backend(tmp_path)
+        spec = replace(
+            self._spec(),
+            volume_mounts=(VolumeMount(target="/var/lib/pgsql", source="db_data"),),
+        )
+        backend.container_inspect = MagicMock(return_value=self._inspect())
+
+        assert not backend._base_container_already_realized(
+            spec, "aptl/generic-systemd-base-debian:latest"
+        )
+
+    def test_an_image_declared_anonymous_volume_is_not_treated_as_drift(self, tmp_path):
+        """An image's own VOLUME must not force a recreate on every start.
+
+        Docker realizes an image-declared VOLUME as an anonymous volume the spec
+        never named. Rejecting it would recreate a correct container on every
+        `aptl lab start`, defeating the idempotent retry this check protects --
+        a live-lab failure far worse than the drift it would be guarding
+        against. Anonymous volumes carry no privilege, unlike a bind.
+        """
+
+        backend = _backend(tmp_path)
+        info = self._inspect()
+        info["Mounts"] = [{"Type": "volume", "Destination": "/var/lib/anon"}]
+        backend.container_inspect = MagicMock(return_value=info)
+
+        assert backend._base_container_already_realized(
+            self._spec(), "aptl/generic-systemd-base-debian:latest"
+        )
+
+    def test_any_bind_mount_is_drift_even_at_an_unexpected_target(self, tmp_path):
+        """Generic base containers get named volumes only, so a bind is foreign."""
+
+        backend = _backend(tmp_path)
+        info = self._inspect()
+        info["Mounts"] = [
+            {"Type": "bind", "Source": "/sys/fs/cgroup", "Destination": "/sys/fs/cgroup"}
+        ]
+        backend.container_inspect = MagicMock(return_value=info)
+
+        assert not backend._base_container_already_realized(
+            self._spec(), "aptl/generic-systemd-base-debian:latest"
+        )
+
+    def test_a_plain_node_without_init_is_unaffected(self, tmp_path):
+        # A node declaring no service units has no init posture to compare; it
+        # must keep reusing on the existing running+image test.
+        backend = _backend(tmp_path)
+        spec = BaseContainerSpec(
+            node_address="provision.node.kali",
+            container_name="aptl-kali",
+            image_ref="debian:12-slim",
+            runs_services=False,
+        )
+        backend.container_inspect = MagicMock(
+            return_value={
+                "State": {"Running": True},
+                "Config": {"Image": "debian:12-slim"},
+                "HostConfig": {"CgroupnsMode": "host"},
+            }
+        )
+
+        assert backend._base_container_already_realized(spec, "debian:12-slim")
+
+
+class TestSubstrateDaemonGateInStartPath:
+    """The daemon gate runs before any mutation, and only for systemd nodes.
+
+    Ordering is the point: an unsupported host must be refused before the image
+    build, the stale-container removal, and the create -- not after a half-built
+    project has to be cleaned up.
+    """
+
+    def _init_spec(self) -> BaseContainerSpec:
+        return BaseContainerSpec(
+            node_address="provision.node.db",
+            container_name="aptl-db",
+            image_ref="aptl/generic-systemd-base-debian:latest",
+            runs_services=True,
+            init=InitRequirements(),
+        )
+
+    def test_an_unsupported_daemon_refuses_before_any_mutation(self, tmp_path):
+        backend = _backend(tmp_path)
+
+        with patch(
+            "subprocess.run", side_effect=_supported_daemon(cgroup_version="1")
+        ) as mock_run:
+            with pytest.raises(BackendSeedError):
+                backend.start_base_container(self._init_spec())
+
+        mutations = [
+            call.args[0][:2]
+            for call in mock_run.call_args_list
+            if call.args[0][:2]
+            in (["docker", "rm"], ["docker", "run"], ["docker", "create"])
+        ]
+        assert mutations == [], "no container may be touched on an unsupported daemon"
+
+    def test_an_old_engine_refuses_before_any_mutation(self, tmp_path):
+        backend = _backend(tmp_path)
+
+        with patch(
+            "subprocess.run", side_effect=_supported_daemon(engine_version="27.5.1")
+        ) as mock_run:
+            with pytest.raises(BackendSeedError):
+                backend.start_base_container(self._init_spec())
+
+        assert not any(
+            call.args[0][:2] == ["docker", "run"] for call in mock_run.call_args_list
+        )
+
+    def test_a_plain_node_does_not_require_the_substrate_daemon(self, tmp_path):
+        # A node with no service units never asks for writable cgroups, so it
+        # must not be blocked by a daemon that cannot provide them.
+        backend = _backend(tmp_path)
+        spec = BaseContainerSpec(
+            node_address="provision.node.kali",
+            container_name="aptl-kali",
+            image_ref="debian:12-slim",
+            runs_services=False,
+        )
+
+        with patch(
+            "subprocess.run", side_effect=_supported_daemon(cgroup_version="1")
+        ) as mock_run:
+            backend.start_base_container(spec)
+
+        assert any(
+            call.args[0][:2] == ["docker", "run"] for call in mock_run.call_args_list
+        )
+
+    def test_the_daemon_is_probed_once_across_many_systemd_nodes(self, tmp_path):
+        backend = _backend(tmp_path)
+
+        with patch("subprocess.run", side_effect=_supported_daemon()) as mock_run:
+            backend.start_base_container(self._init_spec())
+            backend.start_base_container(self._init_spec())
+
+        probes = [
+            call.args[0]
+            for call in mock_run.call_args_list
+            if call.args[0][:2] == ["docker", "info"]
+        ]
+        assert len(probes) == 1
+
+    def test_a_refusal_is_not_cached_as_a_pass(self, tmp_path):
+        # One node must never be admitted because another was checked first.
+        backend = _backend(tmp_path)
+
+        with patch("subprocess.run", side_effect=_supported_daemon(cgroup_version="1")):
+            with pytest.raises(BackendSeedError):
+                backend.start_base_container(self._init_spec())
+            with pytest.raises(BackendSeedError):
+                backend.start_base_container(self._init_spec())

@@ -281,6 +281,7 @@ docs/architecture/issue-913-shuffle-post-realization-mutation-preflight.md	docs-
 docs/architecture/issue-934-rename-boundary-preflight.md	architecture-history	Binding #934 rename-boundary inventory and retirement guardrails
 docs/architecture/issue-949-orborus-control-authority-preflight.md	architecture-history	Post-baseline architecture guidance; retain with its owning issue
 docs/architecture/issue-951-fresh-env-pack-start-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-955-systemd-substrate-privilege-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/networking.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/obs-002-correlation-identity-clock-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/rep-003-run-scoped-provenance-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
@@ -941,6 +942,7 @@ src/aptl/core/deployment/_compose_stateful_readiness.py	core-candidate	Migrate o
 src/aptl/core/deployment/_compose_stateful_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_stateful_services.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_stop.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_substrate_gate.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_volume_cleanup.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_docker_endpoint_binding.py	backend-substrate	Post-baseline Docker endpoint binding; retain with ownership and exposure checks
 src/aptl/core/deployment/_docker_image_identity.py	backend-substrate	Post-baseline Docker image identity helper; retain with digest evidence
@@ -1373,6 +1375,9 @@ tests/test_soc_ca.py	tests-follow-owner	Retain meaningful boundary and parity te
 tests/test_sonar_assert_no_new_issues.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_ssh.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_ssh_key_bundle.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_compose_capability_necessity.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_substrate_posture_real_docker.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_substrate_daemon_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_supply_chain_pinning.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_sysreqs.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_curated_variants.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

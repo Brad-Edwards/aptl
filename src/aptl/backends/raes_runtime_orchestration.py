@@ -278,16 +278,24 @@ def _authority_holder_is_management_only(node: DeploymentNodeRealization) -> boo
 
 
 def _allowed_mount_targets(node: DeploymentNodeRealization) -> set[str]:
-    """Return the admitted runtime mount footprint for one holder."""
+    """Return the admitted runtime mount footprint for one holder.
 
-    targets = {
+    Exactly the declared ``runtime.mounts`` targets. This used to add
+    ``/sys/fs/cgroup`` unconditionally for any holder declaring
+    ``service_manager_units`` -- a fourth cgroup allowance independent of the
+    three in the substrate and the excess baselines. The generic substrate no
+    longer binds the host cgroupfs (issue #955), and leaving the exemption would
+    have made the hardening unverifiable rather than merely redundant: the
+    closed-world comparison would have gone on admitting a `/sys/fs/cgroup` bind
+    on a systemd node, so a container that still carried one would still have
+    passed. Nothing about cgroups is inferred from ``service_manager_units``.
+    """
+
+    return {
         str(getattr(mount, "target", "") or "")
         for mount in getattr(node.runtime, "mounts", ())
         if getattr(mount, "target", "")
     }
-    if getattr(node.runtime, "service_manager_units", ()):
-        targets.add("/sys/fs/cgroup")
-    return targets
 
 
 def admit_docker_authorities(

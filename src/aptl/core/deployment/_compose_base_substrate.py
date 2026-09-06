@@ -24,6 +24,10 @@ from typing import TYPE_CHECKING
 from aptl.core.deployment._compose_realization_networks import (
     _match_managed_network,
 )
+from aptl.core.deployment._compose_substrate_gate import (
+    WRITABLE_CGROUPS_OPTION,
+    require_substrate_daemon_support,
+)
 from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.deployment.realization import DeploymentNetworkAttachment
 
@@ -45,24 +49,165 @@ _GENERIC_BASE_IMAGE_BUILD_CONTEXTS: dict[str, str] = {
 
 
 def _init_run_flags(init: "InitRequirements") -> list[str]:
-    """Build the `docker run` flags a systemd-capable base container needs."""
+    """Build the `docker run` flags a systemd-capable base container needs.
+
+    Issue #955: a private cgroup namespace plus `writable-cgroups=true` gives
+    systemd the writable, namespace-scoped cgroup2 it needs without a host
+    cgroup namespace, a host cgroupfs bind, an unconfined seccomp profile, or
+    any added capability. `--cgroupns=private` is requested explicitly rather
+    than relied on as the cgroup v2 default, so the inspected contract is
+    deterministic and the start-time attestation has an exact value to compare.
+    """
 
     flags: list[str] = []
-    if init.cgroup_host:
-        flags.append("--cgroupns=host")
-    if init.cgroupfs_rw_mount:
-        flags += ["-v", "/sys/fs/cgroup:/sys/fs/cgroup:rw"]
+    if init.cgroup_private:
+        flags.append("--cgroupns=private")
+    if init.writable_cgroups:
+        flags += ["--security-opt", WRITABLE_CGROUPS_OPTION]
     for path in init.tmpfs:
         flags += ["--tmpfs", path]
     for capability in init.capabilities:
         flags += ["--cap-add", capability]
-    if init.seccomp_unconfined:
-        flags += ["--security-opt", "seccomp:unconfined"]
     for env_name, env_value in init.env:
         flags += ["-e", f"{env_name}={env_value}"]
     if init.stop_signal:
         flags += ["--stop-signal", init.stop_signal]
     return flags
+
+
+def _host_config(info: dict) -> dict:
+    """Return a container's ``HostConfig``, or an empty mapping."""
+
+    host = info.get("HostConfig")
+    return host if isinstance(host, dict) else {}
+
+
+def _normalized_capabilities(values: object) -> frozenset[str]:
+    """Normalize a capability list to bare, upper-case names.
+
+    Docker echoes back whatever form the grant was written in, so the same
+    capability can read as ``SYS_ADMIN`` or ``CAP_SYS_ADMIN``. Comparing raw
+    strings would call an identical grant a drift.
+    """
+
+    if not isinstance(values, (list, tuple)):
+        return frozenset()
+    return frozenset(
+        str(value).upper().removeprefix("CAP_") for value in values if value
+    )
+
+
+def _realized_bind_targets(info: dict, host: dict) -> frozenset[str]:
+    """Return every host path bind-mounted into the container.
+
+    ``Mounts`` carries binds as structured entries; ``HostConfig.Binds`` carries
+    the raw ``source:target[:mode]`` strings. A bind can appear through either,
+    so both are read rather than trusting one.
+
+    Binds are read separately from volumes because they are the
+    privilege-relevant kind: a generic base container is created with named
+    volumes only, so ANY bind on one is state APTL did not put there -- the
+    retired ``/sys/fs/cgroup:rw`` bind among them.
+    """
+
+    targets: set[str] = set()
+    mounts = info.get("Mounts")
+    if isinstance(mounts, (list, tuple)):
+        for mount in mounts:
+            if isinstance(mount, dict) and mount.get("Type") == "bind":
+                if mount.get("Destination"):
+                    targets.add(str(mount["Destination"]))
+    binds = host.get("Binds")
+    if isinstance(binds, (list, tuple)):
+        for bind in binds:
+            parts = str(bind).split(":")
+            if len(parts) >= 2 and parts[0].startswith("/"):
+                targets.add(parts[1])
+    return frozenset(targets)
+
+
+def _realized_mount_destinations(info: dict) -> frozenset[str]:
+    """Return every destination the container has a mount at, of any kind."""
+
+    mounts = info.get("Mounts")
+    if not isinstance(mounts, (list, tuple)):
+        return frozenset()
+    return frozenset(
+        str(mount["Destination"])
+        for mount in mounts
+        if isinstance(mount, dict) and mount.get("Destination")
+    )
+
+
+def _published_ports_match(host: dict, spec: "BaseContainerSpec") -> bool:
+    """Whether the container publishes exactly the spec's declared ports."""
+
+    expected = {
+        f"{port.container_port}/{port.protocol}" for port in spec.published_ports
+    }
+    bindings = host.get("PortBindings")
+    realized = set()
+    if isinstance(bindings, dict):
+        realized = {key for key, value in bindings.items() if value}
+    return realized == expected
+
+
+def _init_posture_matches(info: dict, host: dict, init: "InitRequirements") -> bool:
+    """Whether a realized systemd node still carries the code-owned posture.
+
+    Compares the four facts that distinguish the current posture from the
+    retired privileged recipe: cgroup namespace mode, the writable-cgroups
+    security option (and the absence of any unconfined one), the exact added
+    capability set, and the tmpfs set. A container failing any of these was
+    created by a different substrate policy than the one in force now.
+    """
+
+    if init.cgroup_private and str(host.get("CgroupnsMode") or "") != "private":
+        return False
+    options = host.get("SecurityOpt")
+    options = [str(option) for option in options] if isinstance(options, (list, tuple)) else []
+    if any("unconfined" in option for option in options):
+        return False
+    if init.writable_cgroups and WRITABLE_CGROUPS_OPTION not in options:
+        return False
+    if _normalized_capabilities(host.get("CapAdd")) != _normalized_capabilities(
+        init.capabilities
+    ):
+        return False
+    tmpfs = host.get("Tmpfs")
+    realized_tmpfs = frozenset(tmpfs) if isinstance(tmpfs, dict) else frozenset()
+    return realized_tmpfs == frozenset(init.tmpfs)
+
+
+def _realized_container_matches_spec(info: dict, spec: "BaseContainerSpec") -> bool:
+    """Whether a running container still matches the spec that would create it.
+
+    Deliberately excludes network attachments: the post-start reconcile owns
+    them and a preserved container keeps what it had. Deliberately excludes
+    declared environment *names* too — those bind through an env file, and a
+    variable absent from the operator environment is legitimately omitted, so
+    requiring presence would recreate a correct container on every start.
+    """
+
+    host = _host_config(info)
+    if not _published_ports_match(host, spec):
+        return False
+    # Binds must be exactly absent: APTL creates generic base containers with
+    # named volumes only, so any bind is state it did not put there.
+    if _realized_bind_targets(info, host):
+        return False
+    # Every declared volume must actually be mounted. Deliberately a subset test
+    # rather than equality: an image may declare its own VOLUME, which Docker
+    # realizes as an anonymous volume the spec never named. That is not drift
+    # and not privilege — failing on it would recreate a correct container on
+    # every start, breaking the idempotent retry this function exists to
+    # protect. A missing declared volume is the real drift, and is caught.
+    expected_mounts = {mount.target for mount in spec.volume_mounts}
+    if not expected_mounts <= _realized_mount_destinations(info):
+        return False
+    if spec.init is None:
+        return True
+    return _init_posture_matches(info, host, spec.init)
 
 
 class ComposeBaseSubstrateMixin(object):
@@ -120,6 +265,8 @@ class ComposeBaseSubstrateMixin(object):
         the RAES `LabResult` envelope.
         """
 
+        if spec.init is not None:
+            self._require_substrate_daemon()
         network_bindings = getattr(self, "_base_networks_by_address", {}).get(
             spec.node_address
         )
@@ -144,6 +291,26 @@ class ComposeBaseSubstrateMixin(object):
         )
         result = self._run(argv, timeout=180)
         self._complete_base_container_start(spec, network_bindings, result)
+
+    def _require_substrate_daemon(self) -> None:
+        """Prove the target daemon can run the substrate posture, once per run.
+
+        Resolved on first use and cached for the process: the answer is a
+        property of the daemon, not of the node, and re-probing per node would
+        add two subprocess round trips per systemd container for an answer that
+        cannot change mid-start. A refusal is re-raised on every subsequent
+        node rather than cached as a pass, so one node cannot be admitted
+        because another was checked first.
+
+        Called before the image build, network attachment, and stale-container
+        removal in ``start_base_container``, so an unsupported host fails
+        before any mutation.
+        """
+
+        if getattr(self, "_substrate_daemon_verified", False):
+            return
+        require_substrate_daemon_support(self._run)
+        self._substrate_daemon_verified = True
 
     def _resolve_base_run_image(self, spec: "BaseContainerSpec") -> str:
         """Return the exact image reference a node's base container runs from.
@@ -182,11 +349,30 @@ class ComposeBaseSubstrateMixin(object):
         True only when a container of the exact name is running the exact image
         the spec calls for — ``run_image_ref``, which for a dynamic-composition
         node is the verified config id (the value ``docker run`` recorded as
-        ``Config.Image``), and for an ordinary node is the declared tag. A
-        stopped, missing, or wrong-image container returns False so it is
-        recreated cleanly. Network attachments are deliberately not part of the
-        test: the post-start reconcile owns them, and a preserved container keeps
-        whatever it already had.
+        ``Config.Image``), and for an ordinary node is the declared tag —  AND
+        still matches the spec that would be created now. A stopped, missing,
+        wrong-image, or drifted container returns False so it is recreated
+        cleanly. Network attachments are deliberately not part of the test: the
+        post-start reconcile owns them, and a preserved container keeps whatever
+        it already had.
+
+        The drift comparison exists because image identity is not realization
+        identity (issue #955). A container created under the retired privileged
+        recipe is byte-identical to a new one on name and image, so on any
+        machine carrying a warm lab it would be silently reused and the
+        substrate hardening would never apply — while the fresh-directory boot
+        gate, which runs on a clean tree, passed. That is the same class of
+        cache-masked gap that hid the missing generic base image builds until a
+        real fresh-machine boot surfaced it (#581, see
+        ``_GENERIC_BASE_IMAGE_BUILD_CONTEXTS``). The same blindness applied to
+        every other realized fact — published ports, mounts, environment, tmpfs
+        — so the comparison covers those too rather than only the posture that
+        prompted it.
+
+        A mismatch returns False and nothing more: the caller's ordinary
+        recreate path owns removal, and that path carries the project-ownership
+        proof (#964). Posture drift is never licence to force-remove a
+        same-named container APTL cannot prove it owns.
         """
 
         try:
@@ -200,7 +386,9 @@ class ComposeBaseSubstrateMixin(object):
         running = isinstance(state, dict) and bool(state.get("Running"))
         config = info.get("Config")
         image = config.get("Image") if isinstance(config, dict) else None
-        return running and image == run_image_ref
+        if not (running and image == run_image_ref):
+            return False
+        return _realized_container_matches_spec(info, spec)
 
     def _base_container_create_command(
         self,

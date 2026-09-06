@@ -832,6 +832,23 @@ services:
       - ad_data:/var/lib/samba
       - ad_logs:/var/log/samba
     cap_add:
+      # issue #955, kept on measured necessity rather than inheritance. This
+      # container runs supervisord, not systemd, so it never shared the generic
+      # substrate's retired systemd recipe and its grant had to be judged on its
+      # own evidence.
+      #
+      # `samba-tool domain provision` stores NT ACLs for the sysvol share in the
+      # `security.NTACL` extended attribute, and writing ANY `security.*` xattr
+      # requires CAP_SYS_ADMIN. Measured: without it, provisioning dies at
+      # `setsysvolacl` -> `smbd.set_nt_acl` with
+      # `set_nt_acl_no_snum: fset_nt_acl returned NT_STATUS_ACCESS_DENIED` and
+      # the container exits 255 before the domain exists; with it, provisioning
+      # completes and `samba-tool domain info` answers. (`user.*` xattrs need no
+      # capability, so this is specific to the security namespace, and no
+      # narrower Linux capability grants it.)
+      #
+      # tests/test_compose_capability_necessity.py holds that measurement, so this
+      # grant cannot be stripped blindly on the assumption it is cargo cult.
       - SYS_ADMIN
       - NET_ADMIN  # required so the in-process agent's `firewall-drop` AR can iptables on this container's namespace
     healthcheck:
@@ -1116,7 +1133,16 @@ services:
     container_name: aptl-reverse
     hostname: reverse-host
     restart: unless-stopped
-    cgroup: host
+    # issue #955: the same cgroup v2 posture the generic substrate uses. systemd
+    # needs a WRITABLE cgroup filesystem, not a privileged one, so
+    # `writable-cgroups=true` (Docker Engine 28.0+) makes this container's OWN
+    # namespace-scoped cgroup2 mount writable. That replaces the retired recipe
+    # here too -- a host cgroup namespace, a read-write bind of the host's
+    # /sys/fs/cgroup, an unconfined seccomp profile, and three added
+    # capabilities. This service sits behind the `reverse` profile rather than
+    # the default range, but leaving the old flags would mean claiming the range
+    # is hardened while a shipped compatibility model still emits them.
+    cgroup: private
     networks:
       aptl-security:
         ipv4_address: 172.20.0.27
@@ -1126,11 +1152,21 @@ services:
       - SIEM_IP=172.20.0.10  # wazuh.manager
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
     cap_add:
-      - SYS_NICE        # For process scheduling
-      - SYS_ADMIN       # Required for systemd in container
-      - SYS_RESOURCE    # For setting limits and OOM score
+      # issue #955, kept on measured necessity, not inheritance. Bisected on a
+      # real boot: this container's first-boot `reverse-tools-install.service`
+      # installs falco, whose dpkg post-install runs `falcoctl driver install`
+      # (driver type kmod). Without CAP_SYS_ADMIN that postinst exits 1, dpkg
+      # aborts, and the whole tools install fails ~40s in, leaving the RE lab
+      # without its tooling.
+      #
+      # The bisect isolated the cause rather than assuming it: with the default
+      # seccomp profile and CAP_SYS_ADMIN the unit reaches `active`; with
+      # `seccomp:unconfined` and NO capability it still fails. So the
+      # requirement is the capability, and the unconfined seccomp profile,
+      # SYS_NICE, SYS_RESOURCE, the host cgroup namespace, and the host
+      # /sys/fs/cgroup bind that used to accompany it were all unnecessary.
+      - SYS_ADMIN
     volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
       # SEC #417: targets receive only PUBLIC keys, never a private key. The
       # control-plane pubkey authorizes operator/MCP host access; the kali
       # pivot pubkey authorizes kali's in-scenario pivot into this target.
@@ -1142,7 +1178,7 @@ services:
       - /run/lock # Ubuntu systemd mounts a nested /run/lock tmpfs itself; AppArmor docker-default denies that mount, so pre-create it
       - /tmp
     security_opt:
-      - seccomp:unconfined
+      - writable-cgroups=true
     healthcheck:
       test: ["CMD-SHELL", "ss -tlnp | grep ':22' || exit 1"]
       interval: 15s

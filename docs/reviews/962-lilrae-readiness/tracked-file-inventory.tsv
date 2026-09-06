@@ -678,6 +678,7 @@ plugins/aptl-techvault-pack-interaction/src/aptl_techvault_pack_interaction/__in
 plugins/aptl-techvault-verifier/README.md	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
 plugins/aptl-techvault-verifier/pyproject.toml	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
 plugins/aptl-techvault-verifier/src/aptl_techvault_verifier/__init__.py	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
+plugins/aptl-techvault-verifier/src/aptl_techvault_verifier/participant_smoke.py	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
 pyproject.toml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 release-please-config.json	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 requirements/ci.txt	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
@@ -1087,11 +1088,13 @@ src/aptl/validation/_gate_checks.py	split-verification	Keep generic conformance/
 src/aptl/validation/_gate_no_start_backend.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/_gate_raes_cli.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/_live_gate_checks.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/_live_gate_models.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/_live_gate_operations.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/_live_gate_probes.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/_live_gate_readiness.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/_live_gate_telemetry.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/_live_gate_variation.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/_scenario_verification_contract.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/curated_live_proof.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/imagefree_gate.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/mcp_protocol.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
@@ -1355,6 +1358,7 @@ tests/test_scenario_catalog.py	tests-follow-owner	Retain meaningful boundary and
 tests/test_scenario_detail.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_scenario_pack_ownership_contract.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_scenario_source_config.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_scenario_verification_artifacts.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_scenario_verification_seam.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_scenarios.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_scorecard_workflow.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1379,6 +1383,7 @@ tests/test_techvault_curated_variants.py	tests-follow-owner	Retain meaningful bo
 tests/test_techvault_dns_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_live_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_pack_interaction_provider.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_techvault_scenario_verifier.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_static_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_telemetry_spine.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_telemetry.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

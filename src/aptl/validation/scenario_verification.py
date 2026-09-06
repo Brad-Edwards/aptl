@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol
 
 from aptl.backends.identity import BackendIdentity
 
@@ -48,6 +48,11 @@ ENTRY_POINT_GROUP = "aptl.scenario_verifiers"
 #: against and is refused when it does not match, rather than being run against a
 #: context whose meaning has changed underneath it.
 EXTENSION_API_VERSION = "1"
+
+#: Version of the normalized report emitted by core.  This is independent of
+#: the extension API: the former is persisted/projection data, while the latter
+#: is the callable contract an installed verifier implements.
+REPORT_API_VERSION = "1"
 
 
 class VerificationStatus(str, Enum):
@@ -96,6 +101,25 @@ class VerificationCheck(object):
     check_id: str
     status: VerificationStatus
     diagnostic: str = ""
+    category: str = "semantic_verification"
+
+    @property
+    def name(self) -> str:
+        """Return the historical live-gate name for compatibility callers."""
+
+        return self.check_id
+
+    @property
+    def diagnostics(self) -> tuple[str, ...]:
+        """Return the diagnostic through the historical tuple projection."""
+
+        return (self.diagnostic,) if self.diagnostic else ()
+
+    @property
+    def passed(self) -> bool:
+        """Return whether this check reached the sole successful outcome."""
+
+        return self.status is VerificationStatus.PASSED
 
 
 @dataclass(frozen=True)
@@ -110,6 +134,7 @@ class ScenarioIdentity(object):
     identity: str
     content_digest: str
     source_kind: str = ""
+    version: str = ""
 
 
 @dataclass(frozen=True)
@@ -133,7 +158,10 @@ class VerificationContext(object):
     scenario: ScenarioIdentity
     backend: BackendIdentity
     extension_api_version: str = EXTENSION_API_VERSION
-    deadline_seconds: int = 0
+    #: Absolute deadline on the host monotonic clock.  Wall time is evidence,
+    #: never timeout authority.
+    deadline_monotonic: float = float("inf")
+    poll_interval_seconds: float = 10.0
     operations: object | None = None
     #: Narrow, already-redacted facts the framework observed while booting, for
     #: a plugin to read rather than rediscover. Never credentials.
@@ -144,27 +172,51 @@ class VerificationContext(object):
 class VerificationReport(object):
     """The one report shape, replacing the live gate's own.
 
-    ``status`` is the single authoritative outcome. There is deliberately no
-    boolean named ``passed``: the shared redactor treats keys containing ``pass``
-    as credential-shaped, and a second field could contradict the first.
+    ``status`` is the single authoritative outcome. The derived ``passed``
+    property exists only for compatibility with older gate callers; it is not a
+    serialized field and therefore cannot contradict ``status``.
     """
 
     status: VerificationStatus
     scenario: ScenarioIdentity
     backend: BackendIdentity
+    api_version: str = REPORT_API_VERSION
     run_id: str = ""
     attempt_id: str = ""
     plugin_id: str = ""
     distribution: str = ""
     distribution_version: str = ""
+    entry_point: str = ""
     extension_api_version: str = EXTENSION_API_VERSION
     prerequisites: tuple[PrerequisiteResult, ...] = ()
     checks: tuple[VerificationCheck, ...] = ()
     diagnostics: tuple[str, ...] = ()
+    elapsed_seconds: float = 0.0
+
+    @property
+    def passed(self) -> bool:
+        """Return whether this report reached the sole successful outcome."""
+
+        return self.status is VerificationStatus.PASSED
 
     def failures(self) -> tuple[VerificationCheck, ...]:
-        """Return the semantic checks that disproved an expectation."""
-        return tuple(c for c in self.checks if c.status is VerificationStatus.FAILED)
+        """Return checks that either failed or could not run."""
+
+        return tuple(
+            check
+            for check in self.checks
+            if check.status is not VerificationStatus.PASSED
+        )
+
+    def failure_categories(self) -> tuple[str, ...]:
+        """Return distinct categories in their first-failing-check order."""
+
+        categories: list[str] = []
+        for check in self.failures():
+            category = check.category
+            if category and category not in categories:
+                categories.append(category)
+        return tuple(categories)
 
     def render(self) -> str:
         """Render a bounded, human-readable summary."""
@@ -179,15 +231,18 @@ class VerificationReport(object):
             if prerequisite.diagnostic:
                 lines.append(f"        - {prerequisite.diagnostic}")
         for check in self.checks:
-            lines.append(f"  [{check.status.value}] {check.check_id}")
-            if check.diagnostic:
-                lines.append(f"        - {check.diagnostic}")
+            suffix = f" ({check.category})" if check.category else ""
+            lines.append(f"  [{check.status.value}] {check.check_id}{suffix}")
+            for diagnostic in check.diagnostics:
+                lines.append(f"        - {diagnostic}")
         for diagnostic in self.diagnostics:
             lines.append(f"  - {diagnostic}")
+        categories = self.failure_categories()
+        if categories:
+            lines.append("  failing layers: " + ", ".join(categories))
         return "\n".join(lines)
 
 
-@runtime_checkable
 class ScenarioVerifier(Protocol):
     """What an installed plugin must provide.
 
@@ -202,13 +257,18 @@ class ScenarioVerifier(Protocol):
     extension_api_version: str
     #: Scenario identity this verifier is written for.
     scenario_identity: str
-    #: Admitted content digests this verifier accepts. Empty means the plugin
-    #: has not pinned content, which is allowed but recorded.
+    #: Admitted source kinds, versions, and content digests this verifier accepts.
+    #: Each declaration is explicit; empty never means wildcard.
+    scenario_source_kinds: Sequence[str]
+    scenario_versions: Sequence[str]
     scenario_content_digests: Sequence[str]
     #: RAES target name this verifier supports.
     backend_target_name: str
-    #: Backend capability profiles this verifier supports.
+    #: Exact backend revisions, profiles, providers, and transports supported.
+    backend_target_versions: Sequence[str]
     backend_profiles: Sequence[str]
+    backend_providers: Sequence[str]
+    backend_transports: Sequence[str]
 
     def run(self, context: VerificationContext) -> VerificationReport:
         """Evaluate the scenario's semantic expectations against a live range."""
@@ -218,6 +278,7 @@ class ScenarioVerifier(Protocol):
 __all__ = [
     "ENTRY_POINT_GROUP",
     "EXTENSION_API_VERSION",
+    "REPORT_API_VERSION",
     "BackendIdentity",
     "PrerequisiteResult",
     "PrerequisiteStatus",

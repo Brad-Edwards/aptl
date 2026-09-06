@@ -35,8 +35,10 @@ pack. Remaining work removes residual coupling and qualifies pack consumption.
 Keep one backend execution path. LilRAE owns local admission, host diagnostics,
 realization, readiness, native observation, evidence capture, recovery, reset,
 and teardown. RAES remains the authority for portable meaning, processing,
-runtime/control contracts, diagnostics, and conformance. Catalogs and env-packs
-own scenario content and pack acquisition contracts.
+runtime/control contracts, diagnostics, and conformance. `OpenRAE/env-packs`
+owns the environment-pack format, validation, tooling, and released pack bytes.
+Downstream scenario authors own authored scenario content. LilRAE owns the APTL
+startup catalog, pack admission and acquisition, and runtime realization.
 
 Here, LilRAE names the same product after the rename. It does not name a new
 host for APTL code or a parallel runtime.

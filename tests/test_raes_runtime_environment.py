@@ -119,6 +119,23 @@ def test_node_declaring_no_environment_binds_nothing(tmp_path):
     assert not (tmp_path / ".aptl" / "realization" / "env").exists()
 
 
+def test_generated_environment_file_is_bound_by_path_only(tmp_path):
+    generated = tmp_path / "generated.env"
+    generated.write_text("SERVICE_API_KEY=generated-secret\n", encoding="utf-8")
+    spec = _spec(())
+    spec = BaseContainerSpec(
+        **{
+            **spec.__dict__,
+            "environment_files": (str(generated),),
+        }
+    )
+
+    argv = _append(spec, tmp_path)
+
+    assert argv == ["--env-file", str(generated)]
+    assert "generated-secret" not in " ".join(argv)
+
+
 def test_no_environment_is_bound_when_nothing_is_set(tmp_path, monkeypatch):
     """All declared variables absent yields no file rather than an empty one."""
 
@@ -149,7 +166,7 @@ def test_restored_named_volumes_are_lowered(scenario_path):
     assert ("webapp_logs", "/var/log/gunicorn") in lowered["webapp"]
     assert ("kali_operations", "/home/kali/operations") in lowered["kali"]
     assert ("fileshare_data", "/srv/shares") in lowered["fileshare"]
-    assert sum(len(v) for v in lowered.values()) == 10
+    assert sum(len(v) for v in lowered.values()) == 8
     # No raw host or project bind smuggled in alongside them.
     for mounts in lowered.values():
         assert all(not source.startswith((".", "/")) for source, _ in mounts)

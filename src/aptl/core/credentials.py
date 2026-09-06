@@ -192,16 +192,21 @@ def _ensure_secure_dir(directory: Path) -> None:
     Parents are created with the OS default mode; *directory* itself is
     ``0o700`` (owner-only) — the real host-side access control for the
     credentialized files underneath, since no other local user can
-    traverse into it, even though the files themselves are ``0o644`` so a
-    container process can read them across a bind mount. A chmod that
-    fails or doesn't stick aborts the render (see :func:`_enforce_mode`).
+    traverse into it. Bind-mounted configuration files may be ``0o644`` for a
+    container process, while generated secret leaves remain ``0o600``. A chmod
+    that fails or doesn't stick aborts the render (see :func:`_enforce_mode`).
     """
     directory.mkdir(parents=True, exist_ok=True)
     _enforce_mode(directory, _DIR_MODE, "directory")
 
 
-def _atomic_write_secure(target: Path, content: str) -> None:
-    """Write *content* to *target* atomically, then chmod it to ``_FILE_MODE``.
+def _atomic_write_secure(
+    target: Path,
+    content: str,
+    *,
+    mode: int = _FILE_MODE,
+) -> None:
+    """Write *content* to *target* atomically with the requested final mode.
 
     Writes to a freshly created temp file in *target*'s (already
     containment-checked) parent directory, then ``os.replace`` onto
@@ -211,10 +216,9 @@ def _atomic_write_secure(target: Path, content: str) -> None:
     (mode ``0o600`` transiently), so a pre-planted ``<name>.tmp`` symlink
     can neither redirect the secret outside the project nor be renamed
     into *target*; the parent dir was resolved and containment-checked by
-    the caller before this point. The final ``chmod`` widens the file to
-    ``_FILE_MODE`` (``0o644``) so the container process can read it across
-    its bind mount — the ``0o700`` parent directory is what keeps other
-    local users out.
+    the caller before this point. The final ``chmod`` applies *mode*.
+    Credentialized bind-mounted files use ``0o644`` inside an owner-only parent;
+    secret-only callers retain the original ``0o600`` leaf mode.
     """
     parent = target.parent
     fd, tmp_name = tempfile.mkstemp(
@@ -240,12 +244,18 @@ def _atomic_write_secure(target: Path, content: str) -> None:
         # itself rather than following it). The temp file disappears on a
         # successful rename; on failure the cleanup below removes it so a
         # secret-bearing temp file is never left behind. The chmod that
-        # follows widens it from the transient 0o600 to _FILE_MODE.
+        # follows applies the caller's required final mode.
         os.replace(tmp, target)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
-    _enforce_mode(target, _FILE_MODE, "file")
+    _enforce_mode(target, mode, "file")
+
+
+def _atomic_write_owner_only(target: Path, content: str) -> None:
+    """Atomically write secret content and enforce an owner-only leaf mode."""
+
+    _atomic_write_secure(target, content, mode=0o600)
 
 
 def _render_secure(

@@ -6,15 +6,16 @@ import asyncio
 
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool
+from mcp.types import ListToolsResult, PaginatedRequestParams, Tool
+from mcp.server.context import ServerRequestContext
 
 
 async def main() -> None:
-    server = Server("aptl-workbench-fixture")
-
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
+    async def list_tools(
+        _context: ServerRequestContext[object],
+        _params: PaginatedRequestParams | None,
+    ) -> ListToolsResult:
+        return ListToolsResult(tools=[
             Tool(
                 name="fixture_read",
                 description="Read fixture state",
@@ -25,7 +26,9 @@ async def main() -> None:
                 description="Write fixture state",
                 inputSchema={"type": "object", "properties": {}},
             ),
-        ]
+        ])
+
+    server = Server("aptl-workbench-fixture", on_list_tools=list_tools)
 
     async with stdio_server() as (read_stream, write_stream):
         await server.run(

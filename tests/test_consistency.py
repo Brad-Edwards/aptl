@@ -109,16 +109,11 @@ class TestComposeConsistency:
         Nothing checked-in or under ``.aptl/`` may be bind-mounted onto a
         path the Suricata image entrypoint chowns (that rewrote host-side
         ownership, issue #325). ``suricata`` (still Compose-managed) and
-        ``misp-suricata-sync`` (realized generically from the SDL, issue
-        #581, via ``runtime.mounts`` — never a Compose volume mount) share
-        the ``suricata_misp_rules`` named volume instead. The env-var side
-        of misp-suricata-sync's config (RULES_OUT_PATH, MISP_API_KEY, ...)
-        is a separate, not-yet-built secrets-injection concern for
-        image-free nodes (tracked alongside #809) and is not asserted here.
+        ``misp-suricata-sync`` share the ``suricata_misp_rules`` named volume.
+        The pack authors the paths consumed by the sync and Suricata while
+        APTL owns the local Compose mount that materializes that relationship.
         """
         from raes import parse_sdl_file
-        from raes.runtime_mounts import RuntimeMountSourceKind
-
         services = compose_config["services"]
         suricata_volumes = services["suricata"]["volumes"]
 
@@ -137,14 +132,16 @@ class TestComposeConsistency:
         assert "suricata_config_seed" in top_level
 
         scenario = parse_sdl_file(techvault_sdl)
-        sync_node = scenario.nodes["misp-suricata-sync"]
-        volume_mounts = {
-            mount.source: mount.target
-            for mount in sync_node.runtime.mounts
-            if mount.source_kind == RuntimeMountSourceKind.VOLUME
+        sync_runtime = scenario.nodes["misp-suricata-sync"].runtime
+        sync_environment = {
+            variable.name: variable.value for variable in sync_runtime.environment
         }
-        assert volume_mounts.get("suricata_misp_rules") == "/var/lib/suricata/rules/misp"
-        assert volume_mounts.get("suricata_command_socket") == "/var/run/suricata"
+        assert sync_environment["RULES_OUT_PATH"].startswith(
+            "/var/lib/suricata/rules/misp/"
+        )
+        assert sync_environment["SURICATA_SOCKET_PATH"].startswith(
+            "/var/run/suricata/"
+        )
 
     def test_suricata_config_seeded_not_bind_mounted(self, compose_config):
         """ADR-043: suricata.yaml / local.rules are seeded via a named volume

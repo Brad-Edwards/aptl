@@ -44,7 +44,7 @@ def test_env_pack_bundle_stages_and_validates_the_bundled_techvault_pack(
         pack_id="techvault",
         pack_version="0.1.0",
         set_digest=(
-            "sha256:c532775575d99438f4b4890d49a4fdb7354921f0405afdaa9f370ea4fe3f5a20"
+            "sha256:0393903deb959127a3132cbff28d9c1996e0d05d793fccfe61124534205e0109"
         ),
     )
     # The bundle roots at the staged copy, never at the installed package.
@@ -53,6 +53,47 @@ def test_env_pack_bundle_stages_and_validates_the_bundled_techvault_pack(
     assert bundle.sdl_path.is_file()
     assert (bundle.root / "pack.yaml").is_file()
     assert (bundle.root / "associated-artifacts.json").is_file()
+
+
+def test_techvault_pack_declares_generated_cortex_credentials_and_readiness(
+    tmp_path: Path,
+) -> None:
+    from raes import parse_sdl_file
+
+    scenario = parse_sdl_file(
+        env_pack_bundle(tmp_path / "staged", "techvault").sdl_path
+    )
+    artifact = scenario.generated_artifacts["cortex-service-credentials"]
+    assert {output.name for output in artifact.outputs} == {
+        "initializer-api-key",
+        "connector-api-key",
+    }
+    bindings = {
+        (node_name, variable.name): (
+            variable.value_from.generated_artifact,
+            variable.value_from.output,
+        )
+        for node_name in ("thehive", "cortex-initializer")
+        for variable in scenario.nodes[node_name].runtime.environment
+        if variable.value_from is not None
+    }
+    assert bindings == {
+        ("thehive", "TH_CORTEX_KEYS"): (
+            "cortex-service-credentials",
+            "connector-api-key",
+        ),
+        ("cortex-initializer", "CORTEX_ADMIN_KEY"): (
+            "cortex-service-credentials",
+            "initializer-api-key",
+        ),
+        ("cortex-initializer", "CORTEX_CONNECTOR_KEY"): (
+            "cortex-service-credentials",
+            "connector-api-key",
+        ),
+    }
+    proposition = scenario.propositions["cortex-enrichment-ready"]
+    assert proposition.predicate.expected is True
+    assert proposition.evidence_requirements == ["cortex-enrichment-readback"]
 
 
 def test_staged_pack_members_are_singly_linked_regular_files(tmp_path: Path) -> None:

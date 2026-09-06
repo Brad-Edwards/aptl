@@ -42,14 +42,14 @@ class MetadataFacts(TypedDict):
 
 
 def _node_type(node: object) -> str:
-    """Return the node's RAES type string (``vm`` / ``switch``), or ``""``."""
+    """Return the node's RAES type string (``compute`` / ``switch``), or ``""``."""
     node_type = getattr(node, "type", None)
     return getattr(node_type, "value", node_type) or ""
 
 
-def _is_vm(node: object) -> bool:
-    """Return whether a RAES node is a VM (a candidate required container)."""
-    return _node_type(node) == "vm"
+def _is_compute(node: object) -> bool:
+    """Return whether a RAES node is compute (a candidate required container)."""
+    return _node_type(node) == "compute"
 
 
 def _exposes_ssh(node: object) -> bool:
@@ -64,15 +64,17 @@ def _exposes_ssh(node: object) -> bool:
 
 
 def scenario_required_containers(scenario: object) -> list[str]:
-    """Return the required-container names: the scenario's RAES VM nodes."""
+    """Return the required-container names: the scenario's RAES compute nodes."""
     nodes = getattr(scenario, "nodes", {}) or {}
-    return [name for name, node in nodes.items() if _is_vm(node)]
+    return [name for name, node in nodes.items() if _is_compute(node)]
 
 
 def _ssh_containers(scenario: object) -> list[str]:
-    """Return the VM node names that expose an SSH service."""
+    """Return the compute-node names that expose an SSH service."""
     nodes = getattr(scenario, "nodes", {}) or {}
-    return [name for name, node in nodes.items() if _is_vm(node) and _exposes_ssh(node)]
+    return [
+        name for name, node in nodes.items() if _is_compute(node) and _exposes_ssh(node)
+    ]
 
 
 def _metadata_facts(entry: ScenarioCatalogEntry) -> MetadataFacts:

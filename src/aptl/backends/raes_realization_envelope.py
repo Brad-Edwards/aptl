@@ -47,6 +47,18 @@ _CONCERNS = (
     ("feature-binding", "unsupported", "none", None),
     ("service", "realized", "daemon-observed", "compose-service-readback"),
     ("acl", "realized", "daemon-observed", "nftables-owner-scoped-readback"),
+    (
+        "compute-substrate",
+        "realized",
+        "daemon-observed",
+        "operating-system-container",
+    ),
+    (
+        "operating-system",
+        "realized",
+        "guest-observed",
+        "container-uname-readback",
+    ),
 )
 
 
@@ -61,6 +73,14 @@ def _configuration_payload(provisioner: ProvisionerCapabilities) -> dict[str, ob
         "network_policy": "docker-compose-managed",
         "supported_node_types": sorted(provisioner.supported_node_types),
         "supported_os_families": sorted(provisioner.supported_os_families),
+        "operating_systems": [
+            {
+                "family": item.family,
+                "distribution": item.distribution,
+                "versions": sorted(item.versions),
+            }
+            for item in provisioner.operating_systems
+        ],
         "supported_content_types": sorted(provisioner.supported_content_types),
         "supported_account_features": sorted(provisioner.supported_account_features),
         "supported_domain_profiles": sorted(provisioner.supported_domain_profiles),

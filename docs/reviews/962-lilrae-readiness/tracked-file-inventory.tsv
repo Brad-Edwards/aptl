@@ -272,6 +272,7 @@ docs/architecture/issue-858-bounded-participant-choice-transport-preflight.md	do
 docs/architecture/issue-859-idempotent-stuttering-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-862-explicit-participant-model-selection-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-866-techvault-realization-contract-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-910-generated-secret-environment-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-874-scenario-bundle-realization-roots-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-875-scenario-content-declaration-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-876-dynamic-composition-readback-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs

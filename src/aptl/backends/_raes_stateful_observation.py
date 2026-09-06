@@ -10,6 +10,8 @@ in :mod:`aptl.backends.raes_observation`.
 from __future__ import annotations
 
 import hashlib
+import hmac
+import re
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
@@ -25,6 +27,8 @@ from aptl.backends._raes_observation_helpers import (
     settled_inspect as _settled_inspect,
     volume_spec as _volume_spec,
 )
+from aptl.backends.raes_runtime_observation import _container_environment
+from aptl.core.credentials import _canonical_generated_path
 from aptl.core.deployment._compose_stateful_constants import (
     CERTIFICATE_PROVENANCE,
     SOC_CERT_PROFILE,
@@ -73,8 +77,13 @@ def _observe_generated_artifact(
     consumers_mounted = outputs_present and _artifact_consumers_mounted(
         backend, artifact, node_containers, source, image_free_addresses
     )
-    consumers_ready = consumers_mounted and _authenticated_consumers_ready(
-        backend, artifact.consumers
+    environment_delivered = outputs_present and _artifact_environment_delivered(
+        backend, artifact, node_containers, realization_root, source
+    )
+    consumers_ready = (
+        consumers_mounted
+        and environment_delivered
+        and _authenticated_consumers_ready(backend, artifact.consumers)
     )
     realized = consumers_ready
     evidence = (
@@ -91,10 +100,12 @@ def _observe_generated_artifact(
         # booleans only — never artifact bytes).
         log.warning(
             "artifact %s not observed as realized "
-            "(outputs=%s consumers_mounted=%s consumers_ready=%s evidence=%s)",
+            "(outputs=%s consumers_mounted=%s environment_delivered=%s "
+            "consumers_ready=%s evidence=%s)",
             artifact.address,
             outputs_present,
             consumers_mounted,
+            environment_delivered,
             consumers_ready,
             bool(evidence),
         )
@@ -169,6 +180,24 @@ def _artifact_evidence(
         "address": artifact.address,
         "status": "ready",
         "consumer_mounts": _consumer_mount_evidence(artifact.consumers),
+        "environment_bindings": [
+            {
+                "target_address": consumer.target_address,
+                "delivery_mode": consumer.delivery_mode,
+                "output": consumer.output,
+                **(
+                    {"environment_variable": consumer.environment_variable}
+                    if consumer.environment_variable is not None
+                    else {}
+                ),
+                **(
+                    {"environment_file": consumer.environment_file}
+                    if consumer.environment_file is not None
+                    else {}
+                ),
+            }
+            for consumer in artifact.environment_consumers
+        ],
     }
     readiness = getattr(backend, "authenticated_readiness", {})
     if isinstance(readiness, Mapping):
@@ -188,6 +217,83 @@ def _artifact_evidence(
         if certificate is not None:
             evidence["certificate"] = certificate
     return evidence
+
+
+def _artifact_environment_delivered(
+    backend: "DeploymentBackend",
+    artifact: DeploymentGeneratedArtifactRealization,
+    node_containers: dict[str, str],
+    realization_root: Path,
+    source: Path,
+) -> bool:
+    """Verify every generated environment value inside its target container."""
+
+    outputs = {output.name: output for output in artifact.outputs}
+    for consumer in artifact.environment_consumers:
+        output = outputs.get(consumer.output)
+        container = node_containers.get(consumer.target_address)
+        if output is None or not container:
+            return False
+        info = _settled_inspect(backend, container)
+        if not _container_realized(info):
+            return False
+        try:
+            source_relative = source.relative_to(realization_root.resolve())
+            output_path = _canonical_generated_path(
+                realization_root, source_relative / output.path
+            )
+            value = output_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError, ValueError):
+            return False
+        actual = _container_environment(backend, container, info)
+        if consumer.delivery_mode == "environment":
+            name = consumer.environment_variable
+            if (
+                not name
+                or not _valid_generated_scalar(value)
+                or name not in actual
+                or not hmac.compare_digest(value, actual[name])
+            ):
+                return False
+        elif consumer.delivery_mode == "env_file":
+            expected = _parse_generated_env_file(value)
+            if expected is None or any(
+                name not in actual
+                or not hmac.compare_digest(expected_value, actual[name])
+                for name, expected_value in expected.items()
+            ):
+                return False
+        else:
+            return False
+    return True
+
+
+def _valid_generated_scalar(value: str) -> bool:
+    """Return whether a generated value is one bounded environment scalar."""
+
+    return bool(value) and len(value) <= 4096 and not any(
+        token in value for token in ("\0", "\n", "\r")
+    )
+
+
+def _parse_generated_env_file(value: str) -> dict[str, str] | None:
+    """Parse the assignment-only env-file shape accepted by realization."""
+
+    if not value or len(value) > 65536 or "\0" in value:
+        return None
+    parsed: dict[str, str] = {}
+    for line in value.splitlines():
+        if not line or "=" not in line:
+            return None
+        name, _separator, item = line.partition("=")
+        if (
+            re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) is None
+            or name in parsed
+            or not item
+        ):
+            return None
+        parsed[name] = item
+    return parsed
 
 
 def _certificate_evidence(

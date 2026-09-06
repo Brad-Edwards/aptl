@@ -123,7 +123,7 @@ context = VerificationContext(
         identity="techvault",
         version="0.1.0",
         source_kind="env-pack",
-        content_digest="sha256:f1c807f70540ca68c640cde72e8b5606b928f4ec40cc00a44d7fd37d6bbfd55f",
+        content_digest="sha256:0393903deb959127a3132cbff28d9c1996e0d05d793fccfe61124534205e0109",
     ),
     backend=BackendIdentity(
         target_name="aptl",

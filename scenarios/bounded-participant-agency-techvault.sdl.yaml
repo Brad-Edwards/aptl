@@ -22,7 +22,7 @@ nodes:
     description: Red participant workbench network.
 
   webapp:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: http, port: 8080, protocol: tcp}
@@ -35,7 +35,7 @@ nodes:
       service_manager_units:
         - {unit_id: bounded-participant-web, unit_name: bounded-participant-web.service, enabled_state: enabled, active_state: active}
   db:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: postgres, port: 5432, protocol: tcp}
@@ -45,7 +45,7 @@ nodes:
       service_manager_units:
         - {unit_id: postgresql, unit_name: postgresql.service, enabled_state: enabled, active_state: active}
   workstation:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: ssh, port: 22, protocol: tcp}
@@ -53,18 +53,18 @@ nodes:
       packages:
         - {manager: apt, name: coreutils, version: "*"}
   kali:
-    type: vm
+    type: compute
     os: linux
     services: []
     runtime:
       packages:
         - {manager: apt, name: curl, version: "*"}
   kali-capture:
-    type: vm
+    type: compute
     os: linux
     services: []
   defender-console:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: defender-api, port: 55000, protocol: tcp}
@@ -72,7 +72,7 @@ nodes:
       packages:
         - {manager: apt, name: coreutils, version: "*"}
   event-store:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: event-api, port: 9200, protocol: tcp}
@@ -80,18 +80,18 @@ nodes:
       packages:
         - {manager: apt, name: coreutils, version: "*"}
   aptl-otel-collector:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: otlp-grpc, port: 4317, protocol: tcp}
       - {name: otlp-http, port: 4318, protocol: tcp}
   aptl-tempo:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: tempo-http, port: 3200, protocol: tcp}
   aptl-grafana-otel:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: grafana, port: 3000, protocol: tcp}

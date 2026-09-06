@@ -289,7 +289,7 @@ class ComposeBaseSubstrateMixin(object):
         path instead of starting with a silently blank credential.
         """
 
-        if not spec.environment_names:
+        if not spec.environment_names and not spec.environment_files:
             return
         # Values come from the project's own credential boundary first: APTL
         # keeps them in the generated `.env`, which is never exported into this
@@ -309,20 +309,23 @@ class ComposeBaseSubstrateMixin(object):
             for name in spec.environment_names
             if name in available
         }
-        if not bindings:
-            return
-        env_dir = self._project_dir / ".aptl" / "realization" / "env"
-        env_dir.mkdir(parents=True, exist_ok=True)
-        env_path = env_dir / f"{spec.container_name}.env"
-        # Create restricted before writing so the values are never briefly
-        # world-readable between creation and chmod.
-        descriptor = os.open(
-            env_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, stat.S_IRUSR | stat.S_IWUSR
-        )
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            for name, value in bindings.items():
-                handle.write(f"{name}={value}\n")
-        argv.extend(("--env-file", str(env_path)))
+        if bindings:
+            env_dir = self._project_dir / ".aptl" / "realization" / "env"
+            env_dir.mkdir(parents=True, exist_ok=True)
+            env_path = env_dir / f"{spec.container_name}.env"
+            # Create restricted before writing so the values are never briefly
+            # world-readable between creation and chmod.
+            descriptor = os.open(
+                env_path,
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                stat.S_IRUSR | stat.S_IWUSR,
+            )
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                for name, value in bindings.items():
+                    handle.write(f"{name}={value}\n")
+            argv.extend(("--env-file", str(env_path)))
+        for generated_path in spec.environment_files:
+            argv.extend(("--env-file", generated_path))
 
     def _append_base_mounts(self, argv: list[str], spec: "BaseContainerSpec") -> None:
         """Append declared named-volume mounts to a base-container command."""

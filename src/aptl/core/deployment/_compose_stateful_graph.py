@@ -116,6 +116,7 @@ def _artifact_errors(realization: DeploymentRealizationSpec) -> list[str]:
             artifact.generator == "rendered_config"
             and artifact.provenance != FLAG_SIGNING_PROFILE_V2
             and len(artifact.outputs) != 1
+            and not artifact.environment_consumers
         ):
             # The wazuh manager config renders a single file; the flag-signing
             # profile legitimately renders a seed plus one key per node (#875).

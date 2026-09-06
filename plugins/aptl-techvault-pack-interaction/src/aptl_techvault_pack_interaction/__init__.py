@@ -17,7 +17,7 @@ from aptl.backends.pack_interaction import (
 __version__ = "0.1.0"
 
 _PACK_SET_DIGEST = (
-    "sha256:c532775575d99438f4b4890d49a4fdb7354921f0405afdaa9f370ea4fe3f5a20"
+    "sha256:0393903deb959127a3132cbff28d9c1996e0d05d793fccfe61124534205e0109"
 )
 
 _GROUP_BY_COMPONENT = {
@@ -35,6 +35,7 @@ _GROUP_BY_COMPONENT = {
     "provision.node.thehive-cassandra": "soc",
     "provision.node.thehive-es": "soc",
     "provision.node.cortex": "soc",
+    "provision.node.cortex-initializer": "soc",
     "provision.node.shuffle-backend": "soc",
     "provision.node.shuffle-frontend": "soc",
     "provision.node.shuffle-opensearch": "soc",

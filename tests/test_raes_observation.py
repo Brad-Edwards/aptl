@@ -29,12 +29,14 @@ from aptl.backends.raes_realization_model import (
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactOutput,
     DeploymentGeneratedArtifactRealization,
+    DeploymentGeneratedEnvironmentConsumer,
     DeploymentImageRealization,
     DeploymentPersistentVolumeRealization,
     DeploymentStatefulConsumer,
 )
 from aptl.core.deployment.realization import DeploymentContentRealization
 from aptl.core.deployment._compose_realization_networks import _concrete_network_name
+from aptl.core.deployment._compose_stateful_model import artifact_source_path
 from aptl.core.deployment.errors import BackendTimeoutError
 
 _PROJECT = "aptl"
@@ -94,6 +96,8 @@ class _Backend:
     def container_exec(self, name, cmd, *, timeout=None):
         if self._exec_raises:
             raise BackendTimeoutError("docker exec timed out")
+        if cmd == ["uname", "-s"] and self._exec_results is None:
+            return SimpleNamespace(returncode=0, stdout="Linux\n", stderr="")
         assert self._exec_results is not None, "container_exec must not be called"
         entry = self._exec_results[name]
         if isinstance(entry, list):
@@ -210,7 +214,10 @@ def test_running_healthy_node_is_realized_with_concerns(tmp_path):
         _Backend(containers=("aptl-vm",)), realization, plan, scenario_root=tmp_path
     )
     assert obs[address].realized is True
-    assert obs[address].concerns == {("node_type",): "vm", ("os_family",): "linux"}
+    assert obs[address].concerns == {
+        ("node_kind",): "compute",
+        ("os_family",): "linux",
+    }
 
 
 _DECLARED_TOPOLOGY = {
@@ -341,7 +348,7 @@ def test_starting_node_settles_before_judgment(monkeypatch, tmp_path):
     )
     obs = observe_realization(backend, realization, plan, scenario_root=tmp_path)
     assert obs[address].realized is True
-    assert obs[address].concerns[("node_type",)] == "vm"
+    assert obs[address].concerns[("node_kind",)] == "compute"
 
 
 def test_settle_deadline_returns_transitional_info_instead_of_hanging(monkeypatch):
@@ -399,11 +406,14 @@ def test_node_without_declared_topology_is_never_probed(tmp_path):
         placements=(),
         diagnostics=(),
     )
-    # No exec_results configured: the fake asserts if container_exec is called.
+    # No topology probe is configured; only the fixed OS identity probe runs.
     backend = _Backend(containers=("aptl-vm",))
     obs = observe_realization(backend, realization, plan, scenario_root=tmp_path)
     assert obs[address].realized is True
-    assert obs[address].concerns == {("node_type",): "vm", ("os_family",): "linux"}
+    assert obs[address].concerns == {
+        ("node_kind",): "compute",
+        ("os_family",): "linux",
+    }
 
 
 def test_non_running_node_is_not_realized(tmp_path):
@@ -516,7 +526,7 @@ def test_switch_network_realized_under_project_prefixed_name(tmp_path):
     backend = _Backend(networks=("redteam-net",))
     obs = observe_realization(backend, realization, plan, scenario_root=tmp_path)
     assert obs[address].realized is True
-    assert obs[address].concerns == {("node_type",): "switch"}
+    assert obs[address].concerns == {("node_kind",): "switch"}
 
 
 def test_network_list_timeout_fails_closed(tmp_path):
@@ -663,6 +673,7 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
                 "access_mode": "read_only",
             }
         ],
+        "environment_consumers": [],
         # raes 0.23 carries dependency wiring inside the declared spec;
         # the observed spec renders the DTO's realized wiring in the same
         # author vocabulary (issue #677).
@@ -764,6 +775,113 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
         ].realized
         is False
     )
+
+
+def _generated_environment_artifact(tmp_path, realized_value):
+    address = "provision.generated-artifact.service-credentials"
+    spec = {
+        "generator": "rendered_config",
+        "lifecycle": "reuse_valid",
+        "provenance": "demo:service-credentials/v1",
+        "outputs": [
+            {
+                "name": "api-key",
+                "path": "api-key",
+                "sensitivity": "secret",
+                "disposition": "consumer_selected",
+            }
+        ],
+        "consumers": [],
+        "environment_consumers": [
+            {
+                "node": "demo",
+                "target_address": "provision.node.demo",
+                "delivery_mode": "environment",
+                "output": "api-key",
+                "environment_variable": "SERVICE_API_KEY",
+            }
+        ],
+        "ordering_dependencies": [],
+        "refresh_dependencies": [],
+    }
+    resource = PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="generated-artifact",
+        payload={"name": "service-credentials", "spec": spec},
+    )
+    consumer = DeploymentGeneratedEnvironmentConsumer(
+        target_address="provision.node.demo",
+        node_name="demo",
+        service_name="demo",
+        delivery_mode="environment",
+        output="api-key",
+        environment_variable="SERVICE_API_KEY",
+    )
+    artifact = DeploymentGeneratedArtifactRealization(
+        address=address,
+        name="service-credentials",
+        generator="rendered_config",
+        lifecycle="reuse_valid",
+        provenance="demo:service-credentials/v1",
+        outputs=(
+            DeploymentGeneratedArtifactOutput(
+                name="api-key", path="api-key", sensitivity="secret"
+            ),
+        ),
+        consumers=(),
+        environment_consumers=(consumer,),
+    )
+    source = artifact_source_path(tmp_path, artifact)
+    source.mkdir(parents=True)
+    (source / "api-key").write_text("generated-secret-value", encoding="utf-8")
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization("demo", "aptl-demo", imaged=True),),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+        generated_artifacts=(artifact,),
+    )
+    backend = _Backend(
+        containers=("aptl-demo",),
+        project_dir=tmp_path,
+        exec_results={"aptl-demo": (0, f"SERVICE_API_KEY={realized_value}\n")},
+    )
+    return address, resource, realization, backend
+
+
+def test_generated_environment_artifact_requires_exact_guest_value(tmp_path):
+    address, resource, realization, backend = _generated_environment_artifact(
+        tmp_path, "generated-secret-value"
+    )
+
+    observed = observe_realization(
+        backend,
+        realization,
+        ProvisioningPlan(resources={address: resource}),
+        scenario_root=tmp_path,
+    )[address]
+
+    assert observed.realized is True
+    assert observed.concerns == {("spec",): resource.payload["spec"]}
+    assert "generated-secret-value" not in str(observed.evidence)
+
+
+def test_generated_environment_artifact_mismatch_is_unrealized(tmp_path):
+    address, resource, realization, backend = _generated_environment_artifact(
+        tmp_path, "wrong-value"
+    )
+
+    observed = observe_realization(
+        backend,
+        realization,
+        ProvisioningPlan(resources={address: resource}),
+        scenario_root=tmp_path,
+    )[address]
+
+    assert observed.realized is False
+    assert "generated-secret-value" not in str(observed)
 
 
 def test_rendered_config_observation_records_digest_not_content(tmp_path):

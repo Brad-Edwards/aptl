@@ -169,6 +169,8 @@ def _environment_config(runtime: object) -> dict[str, str]:
         name = getattr(variable, "name", "")
         if not name:
             continue
+        if getattr(variable, "value_from", None) is not None:
+            continue
         raw = getattr(variable, "value_classification", "")
         classification = str(getattr(raw, "value", raw) or "")
         if classification == _OPERATOR_SECRET_CLASSIFICATION:

@@ -52,6 +52,8 @@ from aptl.backends.raes_realization_model import (
     ParticipantDatasetRealization,
 )
 from aptl.backends.raes_runtime_observation import observe_runtime_concerns
+from aptl.core.deployment._compose_stateful_model import artifact_source_path
+from aptl.core.credentials import _canonical_generated_path
 from aptl.utils.logging import get_logger
 
 log = get_logger("realization-observe")
@@ -70,7 +72,7 @@ _DEFAULT_PROJECT_NAME = "aptl"
 # container; a switch node compiles to a network resource and becomes a Docker
 # network. These are what APTL *realized*, reported only once the corresponding
 # object is observed to exist — never read back off the plan.
-_REALIZED_NODE_TYPE = "vm"
+_REALIZED_NODE_TYPE = "compute"
 _REALIZED_SWITCH_TYPE = "switch"
 
 _NODE_TYPE_PATH = CONCERN_PAYLOAD_PATH["node-type"]
@@ -97,6 +99,9 @@ def observe_realization(
 
     observations: dict[str, ObservedResource] = {}
     realization_root = _realization_root(backend, scenario_root)
+    generated_environment = _generated_environment_values(
+        backend, realization, realization_root
+    )
     image_free = _image_free_addresses(realization)
     node_containers = {
         node.address: node.container_name
@@ -140,6 +145,7 @@ def observe_realization(
                 node_containers.get(address),
                 declared_domain_topology=_declared_domain_topology(resource),
                 declared_runtime=node_runtimes.get(address),
+                generated_environment=generated_environment.get(address, {}),
             )
         elif resource.resource_type == "network":
             observations[address] = _observe_network(
@@ -204,6 +210,47 @@ def _realization_root(backend: "DeploymentBackend", scenario_root: Path) -> Path
     return root if isinstance(root, Path) else scenario_root
 
 
+def _generated_environment_values(
+    backend: "DeploymentBackend",
+    realization: AptlRealization,
+    realization_root: Path,
+) -> dict[str, dict[str, str]]:
+    """Read expected generated values for exact in-memory runtime comparison."""
+
+    expected: dict[str, dict[str, str]] = {}
+    simulated = getattr(backend, "observed_generated_environment_value", None)
+    for artifact in realization.generated_artifacts:
+        outputs = {output.name: output for output in artifact.outputs}
+        source = artifact_source_path(realization_root, artifact)
+        for consumer in artifact.environment_consumers:
+            if consumer.delivery_mode != "environment":
+                continue
+            value: object = None
+            if callable(simulated):
+                value = simulated(artifact.address, consumer.output)
+            if not isinstance(value, str):
+                output = outputs.get(consumer.output)
+                if output is None:
+                    continue
+                try:
+                    relative = source.relative_to(realization_root.resolve()) / output.path
+                    path = _canonical_generated_path(realization_root, relative)
+                    value = path.read_text(encoding="utf-8")
+                except (OSError, UnicodeError, ValueError):
+                    continue
+            if (
+                not value
+                or "\0" in value
+                or "\n" in value
+                or "\r" in value
+            ):
+                continue
+            name = consumer.environment_variable
+            if name:
+                expected.setdefault(consumer.target_address, {})[name] = value
+    return expected
+
+
 def _image_free_addresses(realization: AptlRealization) -> frozenset[str]:
     """Return the node addresses that are not Compose services.
 
@@ -234,6 +281,7 @@ def _observe_node(
     container_name: str | None,
     declared_domain_topology: Mapping[str, object] | None = None,
     declared_runtime: RuntimeConfiguration | None = None,
+    generated_environment: Mapping[str, str] | None = None,
 ) -> ObservedResource:
     """Observe one RAES node through the container the backend realized for it."""
 
@@ -246,7 +294,7 @@ def _observe_node(
     concerns: dict[tuple[str, ...], object] = {
         _NODE_TYPE_PATH: _REALIZED_NODE_TYPE,
     }
-    os_family = _observed_os_family(info)
+    os_family = _observed_os_family(backend, container_name, info)
     if os_family is not None:
         concerns[_OS_FAMILY_PATH] = os_family
     if declared_domain_topology is not None:
@@ -256,7 +304,13 @@ def _observe_node(
         if topology is not None:
             concerns[_DOMAIN_TOPOLOGY_PATH] = topology
     concerns.update(
-        observe_runtime_concerns(backend, container_name, info, declared_runtime)
+        observe_runtime_concerns(
+            backend,
+            container_name,
+            info,
+            declared_runtime,
+            generated_environment=generated_environment or {},
+        )
     )
     return ObservedResource(realized=True, concerns=concerns)
 

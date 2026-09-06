@@ -26,9 +26,9 @@ projects to something else and the EXACT gate rejects it.
 
 Two disclosure shapes are used, each honest about what the container reveals:
 
-* ``runtime-environment`` takes the *actual realized value* out of the
-  container's ``Config.Env`` for each declared variable, so the committed value
-  differs the moment the realized value diverges from the declaration. A
+* ``runtime-environment`` takes the *actual realized value* from a fixed guest
+  ``env`` readback for each declared variable, so the committed value differs
+  the moment the realized value diverges from the declaration. A
   ``redacted`` / ``operator_secret`` variable carries only presence (its raw
   value never leaves the container); a ``secret_fixture`` value is committed to a
   hash, never disclosed raw.
@@ -71,6 +71,7 @@ fabricated match.
 
 from __future__ import annotations
 
+import hmac
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -94,6 +95,7 @@ from aptl.backends._runtime_mount_observation import (
     _observe_mounts,
 )
 from aptl.core.deployment.realization import LOOPBACK_HOST_IP
+from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -119,6 +121,8 @@ def observe_runtime_concerns(
     container_name: str | None,
     info: Mapping[str, Any],
     declared_runtime: RuntimeConfiguration | None,
+    *,
+    generated_environment: Mapping[str, str] | None = None,
 ) -> dict[tuple[str, ...], object]:
     """Return the disclosed runtime concerns a realized node declares.
 
@@ -130,7 +134,17 @@ def observe_runtime_concerns(
     concerns: dict[tuple[str, ...], object] = {}
     if declared_runtime is None or not container_name:
         return concerns
-    _record(concerns, _ENVIRONMENT_PATH, lambda: _observe_environment(info, declared_runtime))
+    _record(
+        concerns,
+        _ENVIRONMENT_PATH,
+        lambda: _observe_environment(
+            backend,
+            container_name,
+            info,
+            declared_runtime,
+            generated_environment or {},
+        ),
+    )
     _record(concerns, _PUBLISHED_PORTS_PATH, lambda: _observe_published_ports(info, declared_runtime))
     _record(concerns, _CAPABILITIES_PATH, lambda: _observe_capabilities(info, declared_runtime))
     _record(concerns, _MOUNTS_PATH, lambda: _observe_mounts(info, declared_runtime))
@@ -153,15 +167,18 @@ def observe_runtime_concerns(
 
 
 def _observe_environment(
+    backend: "DeploymentBackend",
+    container_name: str,
     info: Mapping[str, Any],
     runtime: RuntimeConfiguration,
+    generated_environment: Mapping[str, str],
 ) -> object | None:
-    """Disclose declared env variables carrying their realized container values."""
+    """Disclose variables corroborated through fixed guest environment readback."""
 
     declared = runtime.environment
     if not declared:
         return None
-    realized = _container_environment(info)
+    realized = _container_environment(backend, container_name, info)
     records: list[dict[str, object]] = []
     for variable in declared:
         name = getattr(variable, "name", "")
@@ -170,6 +187,16 @@ def _observe_environment(
         record = variable.model_dump(mode="json", by_alias=True)
         classification = record.get("value_classification")
         declared_value = record.get("value")
+        if getattr(variable, "value_from", None) is not None:
+            expected = generated_environment.get(name)
+            actual = realized.get(name)
+            if expected is None or actual is None or not hmac.compare_digest(
+                expected, actual
+            ):
+                continue
+            record["value"] = ""
+            records.append(record)
+            continue
         if classification not in _PROTECTED and not declared_value:
             # A valueless non-secret variable is faithfully realized as "no value"
             # when the container omits it or carries it empty (a plain variable
@@ -198,11 +225,25 @@ def _observe_environment(
     return _disclose("runtime-environment", records)
 
 
-def _container_environment(info: Mapping[str, Any]) -> dict[str, str]:
-    """Parse the realized container's ``Config.Env`` into a name -> value map."""
+def _container_environment(
+    backend: "DeploymentBackend",
+    container_name: str,
+    info: Mapping[str, Any],
+) -> dict[str, str]:
+    """Read the guest environment, falling back only for bounded test doubles."""
 
-    config = info.get("Config") if isinstance(info, Mapping) else None
-    entries = config.get("Env") if isinstance(config, Mapping) else None
+    entries: object = None
+    try:
+        result = backend.container_exec(container_name, ["env"], timeout=10)
+    except (BackendSeedError, BackendTimeoutError, OSError):
+        return {}
+    if result is not None and isinstance(getattr(result, "returncode", None), int):
+        if result.returncode != 0 or not isinstance(result.stdout, str):
+            return {}
+        entries = result.stdout.splitlines()
+    else:
+        config = info.get("Config") if isinstance(info, Mapping) else None
+        entries = config.get("Env") if isinstance(config, Mapping) else None
     realized: dict[str, str] = {}
     if isinstance(entries, list):
         for entry in entries:

@@ -11,11 +11,13 @@ from raes_contracts.planning import PlannedResource
 from aptl.backends.raes_diagnostics import diagnostic
 from aptl.backends.raes_realization_model import NodeRealization
 from aptl.core.deployment.realization import (
+    DeploymentGeneratedEnvironmentConsumer,
     DeploymentGeneratedArtifactOutput,
     DeploymentGeneratedArtifactRealization,
     DeploymentPersistentVolumeRealization,
     DeploymentStatefulConsumer,
     GeneratedArtifactKind,
+    GeneratedArtifactDeliveryMode,
     GeneratedArtifactLifecycle,
     GeneratedArtifactOutputDisposition,
     ResourceSensitivity,
@@ -29,6 +31,7 @@ _ARTIFACT_LIFECYCLES = frozenset({"regenerate_on_change", "reuse_valid"})
 _SENSITIVITIES = frozenset({"public", "restricted", "secret"})
 _DISPOSITIONS = frozenset({"consumer_selected", "producer_private"})
 _CONSUMER_ACCESS_MODES = frozenset({"read_only", "read_write"})
+_ENVIRONMENT_DELIVERY_MODES = frozenset({"environment", "env_file"})
 _VOLUME_LIFECYCLES = frozenset({"retain", "ephemeral"})
 _VOLUME_ACCESS_MODES = frozenset(
     {"read_write_once", "read_write_many", "read_only_many"}
@@ -84,19 +87,31 @@ def _generated_artifact(
     provenance = _text(spec.get("provenance"))
     outputs = _outputs(resource, spec.get("outputs"), diagnostics)
     consumers = _consumers(resource, spec.get("consumers"), nodes, diagnostics)
+    environment_consumers = _environment_consumers(
+        resource,
+        spec.get("environment_consumers"),
+        nodes,
+        diagnostics,
+    )
     incomplete = (
         generator is None
         or lifecycle is None
         or provenance is None
         or not outputs
-        or not consumers
+        or not (consumers or environment_consumers)
     )
     if incomplete:
         _append_invalid(resource, diagnostics)
     # Selection is checked only for a complete declaration: an incomplete one is
     # already rejected, and re-reporting it as a selection failure would
     # double-count the same resource.
-    if incomplete or not _selection_valid(resource, outputs, consumers, diagnostics):
+    if incomplete or not _selection_valid(
+        resource,
+        outputs,
+        consumers,
+        environment_consumers,
+        diagnostics,
+    ):
         return None
     return DeploymentGeneratedArtifactRealization(
         address=resource.address,
@@ -106,6 +121,7 @@ def _generated_artifact(
         provenance=provenance,
         outputs=tuple(outputs),
         consumers=tuple(consumers),
+        environment_consumers=tuple(environment_consumers),
         ordering_dependencies=resource.ordering_dependencies,
         refresh_dependencies=resource.refresh_dependencies,
     )
@@ -115,6 +131,7 @@ def _selection_valid(
     resource: PlannedResource,
     outputs: list[DeploymentGeneratedArtifactOutput],
     consumers: list[DeploymentStatefulConsumer],
+    environment_consumers: list[DeploymentGeneratedEnvironmentConsumer],
     diagnostics: list[Diagnostic],
 ) -> bool:
     """Reject a consumer that selects an undeclared or producer-private output.
@@ -138,7 +155,102 @@ def _selection_valid(
                     )
                 )
                 return False
+    for consumer in environment_consumers:
+        output = by_name.get(consumer.output)
+        if output is None or output.disposition == "producer_private":
+            diagnostics.append(
+                diagnostic(
+                    "aptl.provisioner.stateful-output-not-selectable",
+                    resource.address,
+                    "Consumer selects an undeclared or producer-private "
+                    "generated-artifact output.",
+                )
+            )
+            return False
     return True
+
+
+def _environment_consumers(
+    resource: PlannedResource,
+    raw_consumers: object,
+    nodes: dict[str, NodeRealization],
+    diagnostics: list[Diagnostic],
+) -> list[DeploymentGeneratedEnvironmentConsumer]:
+    """Parse compiler-derived environment consumer projections."""
+
+    if raw_consumers is None:
+        return []
+    if not isinstance(raw_consumers, list):
+        _append_invalid(resource, diagnostics)
+        return []
+    consumers: list[DeploymentGeneratedEnvironmentConsumer] = []
+    for raw in raw_consumers:
+        consumer = _environment_consumer(resource, raw, nodes, diagnostics)
+        if consumer is None:
+            return []
+        consumers.append(consumer)
+    return consumers
+
+
+def _environment_consumer(
+    resource: PlannedResource,
+    raw: object,
+    nodes: dict[str, NodeRealization],
+    diagnostics: list[Diagnostic],
+) -> DeploymentGeneratedEnvironmentConsumer | None:
+    """Resolve one environment projection to exactly one backend service."""
+
+    if not isinstance(raw, Mapping):
+        _append_invalid(resource, diagnostics)
+        return None
+    target_address = _text(raw.get("target_address"))
+    node_name = _text(raw.get("node"))
+    delivery_mode = _choice(raw, "delivery_mode", _ENVIRONMENT_DELIVERY_MODES)
+    output = _text(raw.get("output"))
+    environment_variable = _text(raw.get("environment_variable"))
+    environment_file = _text(raw.get("environment_file"))
+    node = nodes.get(target_address or "")
+    service_name = _only(node.backend_services) if node is not None else None
+    if node is None:
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.stateful-consumer-unresolved",
+                resource.address,
+                "Generated environment consumer does not resolve to an admitted node.",
+            )
+        )
+        return None
+    if service_name is None:
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.stateful-consumer-service-unresolved",
+                resource.address,
+                "Generated environment consumer does not resolve to one backend service.",
+            )
+        )
+        return None
+    has_variable = delivery_mode == "environment" and environment_variable is not None
+    has_file = delivery_mode == "env_file" and environment_file is not None
+    if (
+        node_name is None
+        or node_name != node.name
+        or delivery_mode is None
+        or output is None
+        or has_variable == has_file
+        or (environment_variable is not None and not has_variable)
+        or (environment_file is not None and not has_file)
+    ):
+        _append_invalid(resource, diagnostics)
+        return None
+    return DeploymentGeneratedEnvironmentConsumer(
+        target_address=node.address,
+        node_name=node_name,
+        service_name=service_name,
+        delivery_mode=cast(GeneratedArtifactDeliveryMode, delivery_mode),
+        output=output,
+        environment_variable=environment_variable,
+        environment_file=environment_file,
+    )
 
 
 def _persistent_volume(
@@ -336,6 +448,20 @@ def _append_destination_conflicts(
                         "Stateful resources claim the same consumer mount destination.",
                     )
                 )
+    environment_targets: set[tuple[str, str, str]] = set()
+    for artifact in artifacts:
+        for consumer in artifact.environment_consumers:
+            target = consumer.environment_variable or consumer.environment_file or ""
+            destination = (consumer.target_address, consumer.delivery_mode, target)
+            if destination in environment_targets:
+                diagnostics.append(
+                    diagnostic(
+                        "aptl.provisioner.stateful-environment-conflict",
+                        artifact.address,
+                        "Generated artifacts claim the same consumer environment target.",
+                    )
+                )
+            environment_targets.add(destination)
 
 
 def _append_invalid(

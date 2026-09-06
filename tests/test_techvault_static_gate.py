@@ -159,7 +159,7 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
     assert scenario is not None
     assert parse_check.passed, parse_check.diagnostics
 
-    bundle = _bundle(PROJECT_ROOT, OPERATIONAL_SCENARIO)
+    bundle = _OPERATIONAL_BUNDLE
     execution_plan = RuntimeManager(
         create_aptl_runtime_target(
             project_dir=PROJECT_ROOT,
@@ -172,6 +172,7 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
         plan=execution_plan.provisioning,
         config=config,
         bundle=bundle,
+        component_root=PROJECT_ROOT,
     )
     details = realization.details()
 
@@ -684,7 +685,7 @@ def test_check_provisioning_realization_fails_on_profile_mismatch(tmp_path):
               internal-net:
                 type: switch
               kali:
-                type: vm
+                type: compute
                 services:
                   - {name: ssh, port: 22, protocol: tcp}
             infrastructure:
@@ -750,15 +751,9 @@ def test_operational_scenario_content_and_accounts_are_honest():
         p for p in placements if p["resource_type"] == "account-placement"
     ]
     assert content_placements
-    # A content-placement lowers to exactly one typed realization: an ordinary
-    # file/directory ("content"), a logical evidence dataset ("dataset"), or (ADR-088,
-    # issue #889) a service-search-index-schema materialization
-    # ("service_index_schema") -- the Cortex job index is realized honestly.
-    assert all(
-        "content" in p or "dataset" in p or "service_index_schema" in p
-        for p in content_placements
-    )
-    assert any("service_index_schema" in p for p in content_placements)
+    # Pack 5.1 delegates Cortex bootstrap to its native initializer. Remaining
+    # authored content lowers to ordinary files/directories or evidence datasets.
+    assert all("content" in p or "dataset" in p for p in content_placements)
     assert account_placements
     assert all("account" in p for p in account_placements)
 
@@ -775,7 +770,7 @@ def test_provisioning_realization_fails_on_unrealizable_content(tmp_path):
             name: bad-content
             nodes:
               fileshare:
-                type: vm
+                type: compute
                 services:
                   - {name: smb, port: 445, protocol: tcp}
             content:

@@ -34,11 +34,11 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 __version__ = "0.1.0"
 
-# Exact content identity of raes-env-packs 4.0.2's TechVault 0.1.0 pack.  A
+# Exact content identity of raes-env-packs 5.1.0's TechVault 0.1.0 pack.  A
 # verifier update must deliberately admit a changed pack; an empty claim is not
 # a wildcard for future scenario content.
 TECHVAULT_PACK_SET_DIGEST = (
-    "sha256:f1c807f70540ca68c640cde72e8b5606b928f4ec40cc00a44d7fd37d6bbfd55f"
+    "sha256:0393903deb959127a3132cbff28d9c1996e0d05d793fccfe61124534205e0109"
 )
 
 #: The attacker node. TechVault's whole premise is that traffic originates here.

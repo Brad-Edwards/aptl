@@ -129,14 +129,14 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(tmp_path):
             assert dependency in defined
 
 
-def test_techvault_deployment_waits_for_downstream_child_closure(tmp_path):
-    """APTL rejects the current incomplete downstream child closure (#285)."""
+def test_techvault_deployment_rejects_unimplemented_orchestration_authority(
+    tmp_path,
+):
+    """APTL rejects the pack's authority until its runtime concern is supported."""
 
     realization = _realize_pack(tmp_path)
 
-    with pytest.raises(
-        ValueError, match="aptl.provisioner.spawn-child-correlation-invalid"
-    ):
+    with pytest.raises(ValueError, match="unsupported orchestration authority"):
         realization.deployment_spec(sorted(realization.profiles))
 
 

@@ -443,7 +443,7 @@ def _substrate_digest_and_provenance(
 
 
 def _nodes_by_address(scenario: object) -> dict[str, object]:
-    """Map each vm node's compiled address to its typed scenario node.
+    """Map each compute node's compiled address to its typed scenario node.
 
     Built with RAES's canonical ``_node_address`` factory (never by parsing an
     address), so the open-substrate resolution reads a node's typed OS and

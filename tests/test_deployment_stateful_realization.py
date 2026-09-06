@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -18,6 +19,8 @@ from aptl.core.credentials import PathContainmentError
 from aptl.core.certs import CertResult
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment._compose_stateful_realization import (
+    artifact_source_path,
+    generated_environment_file_path,
     stateful_override_payload,
     stateful_realization_errors,
     write_stateful_override,
@@ -27,6 +30,7 @@ from aptl.core.deployment._stateful_certificates import (
     validate_certificate_bundle,
 )
 from aptl.core.deployment.realization import (
+    DeploymentGeneratedEnvironmentConsumer,
     DeploymentGeneratedArtifactOutput,
     DeploymentGeneratedArtifactRealization,
     DeploymentImageRealization,
@@ -160,6 +164,59 @@ def _rendered_config_spec() -> DeploymentRealizationSpec:
             ),
         ),
         networks=(),
+        generated_artifacts=(artifact,),
+    )
+
+
+def _generated_environment_spec() -> DeploymentRealizationSpec:
+    artifact = DeploymentGeneratedArtifactRealization(
+        address="provision.generated-artifact.service-credentials",
+        name="service-credentials",
+        generator="rendered_config",
+        lifecycle="reuse_valid",
+        provenance="demo:service-credentials/v1",
+        outputs=(
+            DeploymentGeneratedArtifactOutput(
+                name="api-key",
+                path="keys/api-key",
+                sensitivity="secret",
+            ),
+        ),
+        consumers=(),
+        environment_consumers=(
+            DeploymentGeneratedEnvironmentConsumer(
+                target_address="provision.node.demo",
+                node_name="demo",
+                service_name="demo",
+                delivery_mode="environment",
+                output="api-key",
+                environment_variable="SERVICE_API_KEY",
+            ),
+        ),
+    )
+    return DeploymentRealizationSpec(
+        profiles=(),
+        nodes=(
+            DeploymentNodeRealization(
+                address="provision.node.demo",
+                name="demo",
+                service_name="demo",
+                container_name="aptl-demo",
+                networks=(),
+            ),
+        ),
+        networks=(),
+        images=(
+            DeploymentImageRealization(
+                address="provision.node.demo",
+                service_name="demo",
+                source_name="demo",
+                source_version="sha256:" + "1" * 64,
+                image_ref="example.invalid/demo@sha256:" + "1" * 64,
+                mode="pull",
+                policy_rule="digest-pinned",
+            ),
+        ),
         generated_artifacts=(artifact,),
     )
 
@@ -452,6 +509,87 @@ def test_rendered_config_materializes_at_canonical_contained_path(
     assert "bounded-test-cluster-key" in rendered.read_text()
 
 
+def test_generated_environment_secret_is_reused_and_bound_by_path(
+    tmp_path: Path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    spec = _generated_environment_spec()
+    artifact = spec.generated_artifacts[0]
+    consumer = artifact.environment_consumers[0]
+
+    assert backend._realize_stateful_prerequisites(spec, tmp_path) is None
+    output_path = artifact_source_path(tmp_path, artifact) / "keys/api-key"
+    first = output_path.read_text(encoding="utf-8")
+    assert first
+    assert "\n" not in first
+    assert output_path.stat().st_mode & 0o777 == 0o600
+
+    assert backend._realize_stateful_prerequisites(spec, tmp_path) is None
+    assert output_path.read_text(encoding="utf-8") == first
+
+    payload = stateful_override_payload(tmp_path, "aptl-test", spec)
+    service = payload["services"]["demo"]
+    expected_path = generated_environment_file_path(tmp_path, artifact, consumer)
+    assert service["env_file"] == [str(expected_path)]
+    assert expected_path.read_text(encoding="utf-8") == f"SERVICE_API_KEY={first}\n"
+    assert expected_path.stat().st_mode & 0o777 == 0o600
+    assert first not in json.dumps(payload)
+
+
+def test_generated_environment_binding_rejects_symlinked_output_root(
+    tmp_path: Path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    spec = _generated_environment_spec()
+    artifact = spec.generated_artifacts[0]
+    source = artifact_source_path(tmp_path, artifact)
+    source.parent.mkdir(parents=True)
+    source.symlink_to(tmp_path / "outside", target_is_directory=True)
+
+    result = backend._realize_stateful_prerequisites(spec, tmp_path)
+
+    assert result is not None
+    assert result.success is False
+    assert "containment" in result.error.lower()
+
+
+def test_generated_env_file_is_delivered_by_path_and_requires_assignments(
+    tmp_path: Path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    base = _generated_environment_spec()
+    artifact = base.generated_artifacts[0]
+    output = replace(artifact.outputs[0], path="keys/service.env")
+    consumer = replace(
+        artifact.environment_consumers[0],
+        delivery_mode="env_file",
+        environment_variable=None,
+        environment_file="service-auth",
+    )
+    artifact = replace(
+        artifact,
+        outputs=(output,),
+        environment_consumers=(consumer,),
+    )
+    spec = replace(base, generated_artifacts=(artifact,))
+    output_path = artifact_source_path(tmp_path, artifact) / output.path
+    output_path.parent.mkdir(parents=True)
+    output_path.write_text("SERVICE_USER=demo\nSERVICE_TOKEN=generated\n")
+
+    assert (
+        backend._realize_generated_environment_consumers(artifact, tmp_path) is None
+    )
+    payload = stateful_override_payload(tmp_path, "aptl-test", spec)
+    assert payload["services"]["demo"]["env_file"] == [str(output_path)]
+    assert output_path.stat().st_mode & 0o777 == 0o600
+
+    output_path.write_text("SERVICE_TOKEN=\n")
+    failure = backend._realize_generated_environment_consumers(artifact, tmp_path)
+    assert failure is not None
+    assert failure.success is False
+    assert "value validation" in failure.error
+
+
 def test_certificate_bundle_validates_pair_chain_san_and_permissions(
     tmp_path: Path,
 ) -> None:
@@ -588,9 +726,10 @@ def test_generated_compose_model_is_validated_before_up(
     config_index = next(i for i, cmd in enumerate(commands) if "config" in cmd)
     up_index = next(i for i, cmd in enumerate(commands) if "up" in cmd)
     assert config_index < up_index
-    assert commands[config_index][-4:] == [
+    assert commands[config_index][-5:] == [
         "config",
         "--no-interpolate",
+        "--no-env-resolution",
         "--format",
         "json",
     ]
@@ -1020,7 +1159,7 @@ def test_image_free_consumers_receive_their_selected_outputs_as_placed_files(
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
-    failure, ops = backend._image_free_generated_artifact_ops(
+    failure, ops, environment_files = backend._image_free_generated_artifact_ops(
         realization, frozenset({"provision.node.workstation"}), tmp_path
     )
 
@@ -1032,6 +1171,7 @@ def test_image_free_consumers_receive_their_selected_outputs_as_placed_files(
         ("/home/labadmin/.ssh/authorized_keys", "0644"),
     ]
     assert placed[0].content == "material for workstation-dev-private-key\n"
+    assert environment_files == {}
 
 
 def test_an_artifact_with_no_image_free_consumer_is_not_generated_here(
@@ -1047,11 +1187,11 @@ def test_an_artifact_with_no_image_free_consumer_is_not_generated_here(
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
-    failure, ops = backend._image_free_generated_artifact_ops(
+    failure, ops, environment_files = backend._image_free_generated_artifact_ops(
         realization, frozenset({"provision.node.workstation"}), tmp_path
     )
 
-    assert (failure, ops) == (None, {})
+    assert (failure, ops, environment_files) == (None, {}, {})
     assert staged == []
 
 
@@ -1068,13 +1208,14 @@ def test_a_generator_failure_stops_image_free_placement(
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
-    failure, ops = backend._image_free_generated_artifact_ops(
+    failure, ops, environment_files = backend._image_free_generated_artifact_ops(
         realization, frozenset({"provision.node.workstation"}), tmp_path
     )
 
     assert failure is not None
     assert failure.success is False
     assert ops == {}
+    assert environment_files == {}
 
 
 def test_a_declared_output_that_never_materialized_stops_image_free_placement(
@@ -1093,7 +1234,7 @@ def test_a_declared_output_that_never_materialized_stops_image_free_placement(
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
-    failure, ops = backend._image_free_generated_artifact_ops(
+    failure, ops, environment_files = backend._image_free_generated_artifact_ops(
         realization, frozenset({"provision.node.workstation"}), tmp_path
     )
 
@@ -1102,6 +1243,28 @@ def test_a_declared_output_that_never_materialized_stops_image_free_placement(
     assert "missing for image-free consumer" in failure.error
     assert "labadmin/.ssh/authorized_keys" in failure.error
     assert ops == {}
+    assert environment_files == {}
+
+
+def test_image_free_generated_environment_is_bound_from_owner_only_file(
+    tmp_path: Path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    realization = _generated_environment_spec()
+
+    failure, ops, environment_files = backend._image_free_generated_artifact_ops(
+        realization, frozenset({"provision.node.demo"}), tmp_path
+    )
+
+    assert failure is None
+    assert ops == {}
+    path = Path(environment_files["provision.node.demo"][0])
+    assert path == generated_environment_file_path(
+        tmp_path,
+        realization.generated_artifacts[0],
+        realization.generated_artifacts[0].environment_consumers[0],
+    )
+    assert path.stat().st_mode & 0o777 == 0o600
 
 
 # -- SOC certificate bundle and flag-signing keys (issue #875) ---------------

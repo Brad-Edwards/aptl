@@ -45,7 +45,7 @@ nodes:
     type: switch
     description: switch node
   ssh-host:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: ssh, port: 22, protocol: tcp}

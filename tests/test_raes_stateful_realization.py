@@ -89,7 +89,13 @@ def test_manifest_advertises_released_stateful_contract() -> None:
     manifest = create_aptl_manifest()
 
     assert manifest.provisioner.supports_generated_artifacts is True
+    assert manifest.provisioner.supported_generated_artifact_delivery_modes == {
+        "mount",
+        "environment",
+        "env_file",
+    }
     assert manifest.provisioner.supports_persistent_volumes is True
+    assert manifest.provisioner.supported_node_types == {"compute", "switch"}
 
 
 def test_interpreter_lowers_stateful_resources_into_deployment_spec(tmp_path: Path) -> None:
@@ -192,5 +198,153 @@ def test_interpreter_rejects_unknown_stateful_consumer_before_backend(tmp_path: 
     assert realization.generated_artifacts == ()
     assert any(
         item.code == "aptl.provisioner.stateful-consumer-unresolved"
+        for item in realization.diagnostics
+    )
+
+
+def test_interpreter_lowers_generated_environment_consumers(tmp_path: Path) -> None:
+    _write_compose(tmp_path)
+    artifact = _resource(
+        "generated-artifact",
+        "service-credentials",
+        {
+            "generator": "rendered_config",
+            "lifecycle": "reuse_valid",
+            "provenance": "demo:service-credentials/v1",
+            "outputs": [
+                {"name": "api-key", "path": "keys/api-key", "sensitivity": "secret"},
+                {"name": "env", "path": "keys/service.env", "sensitivity": "secret"},
+            ],
+            "consumers": [],
+            "environment_consumers": [
+                {
+                    "node": "wazuh-indexer",
+                    "target_address": "provision.node.wazuh-indexer",
+                    "delivery_mode": "environment",
+                    "output": "api-key",
+                    "environment_variable": "SERVICE_API_KEY",
+                },
+                {
+                    "node": "wazuh-manager",
+                    "target_address": "provision.node.wazuh-manager",
+                    "delivery_mode": "env_file",
+                    "output": "env",
+                    "environment_file": "service-auth",
+                },
+            ],
+        },
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan(_node("wazuh-indexer"), _node("wazuh-manager"), artifact),
+        config=_config(),
+        bundle=_bundle(tmp_path),
+    )
+
+    assert realization.diagnostics == ()
+    generated = realization.generated_artifacts[0]
+    assert generated.consumers == ()
+    assert [consumer.details() for consumer in generated.environment_consumers] == [
+        {
+            "target_address": "provision.node.wazuh-indexer",
+            "node_name": "wazuh-indexer",
+            "service_name": "wazuh-indexer",
+            "delivery_mode": "environment",
+            "output": "api-key",
+            "environment_variable": "SERVICE_API_KEY",
+            "environment_file": None,
+        },
+        {
+            "target_address": "provision.node.wazuh-manager",
+            "node_name": "wazuh-manager",
+            "service_name": "wazuh-manager",
+            "delivery_mode": "env_file",
+            "output": "env",
+            "environment_variable": None,
+            "environment_file": "service-auth",
+        },
+    ]
+
+
+def test_interpreter_rejects_generated_environment_private_output(tmp_path: Path) -> None:
+    _write_compose(tmp_path)
+    artifact = _resource(
+        "generated-artifact",
+        "private-credentials",
+        {
+            "generator": "rendered_config",
+            "lifecycle": "reuse_valid",
+            "provenance": "demo:private-credentials/v1",
+            "outputs": [
+                {
+                    "name": "private-key",
+                    "path": "private-key",
+                    "sensitivity": "secret",
+                    "disposition": "producer_private",
+                }
+            ],
+            "consumers": [],
+            "environment_consumers": [
+                {
+                    "node": "wazuh-indexer",
+                    "target_address": "provision.node.wazuh-indexer",
+                    "delivery_mode": "environment",
+                    "output": "private-key",
+                    "environment_variable": "PRIVATE_KEY",
+                }
+            ],
+        },
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan(_node("wazuh-indexer"), artifact),
+        config=_config(),
+        bundle=_bundle(tmp_path),
+    )
+
+    assert realization.generated_artifacts == ()
+    assert any(
+        item.code == "aptl.provisioner.stateful-output-not-selectable"
+        for item in realization.diagnostics
+    )
+
+
+def test_interpreter_rejects_duplicate_generated_environment_target(
+    tmp_path: Path,
+) -> None:
+    _write_compose(tmp_path)
+    artifact = _resource(
+        "generated-artifact",
+        "service-credentials",
+        {
+            "generator": "rendered_config",
+            "lifecycle": "reuse_valid",
+            "provenance": "demo:service-credentials/v1",
+            "outputs": [
+                {"name": "first", "path": "first", "sensitivity": "secret"},
+                {"name": "second", "path": "second", "sensitivity": "secret"},
+            ],
+            "consumers": [],
+            "environment_consumers": [
+                {
+                    "node": "wazuh-indexer",
+                    "target_address": "provision.node.wazuh-indexer",
+                    "delivery_mode": "environment",
+                    "output": output,
+                    "environment_variable": "SERVICE_API_KEY",
+                }
+                for output in ("first", "second")
+            ],
+        },
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan(_node("wazuh-indexer"), artifact),
+        config=_config(),
+        bundle=_bundle(tmp_path),
+    )
+
+    assert any(
+        item.code == "aptl.provisioner.stateful-environment-conflict"
         for item in realization.diagnostics
     )

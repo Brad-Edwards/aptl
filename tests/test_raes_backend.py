@@ -263,7 +263,7 @@ def _execution_plan_with_realization_requirements():
             name: disclosure-test
             nodes:
               vm:
-                type: vm
+                type: compute
                 os: linux
                 resources: {ram: 1 gib, cpu: 1}
             """
@@ -282,7 +282,7 @@ def _execution_plan_with_derived_realization_requirements():
     The author writes ``os: ${node_os}``, so the processor — not the author —
     supplies the concrete value. RAES classifies that concern
     ``CONSTRAINED`` / ``PROCESSOR_DERIVED`` (substitution downgrades exactness),
-    while the literal ``type: vm`` stays ``EXACT`` / ``AUTHOR_DECLARED``. One
+    while the literal ``type: compute`` stays ``EXACT`` / ``AUTHOR_DECLARED``. One
     scenario therefore exercises both halves of the SEM-218 contract.
 
     raes 0.19.1 could not express this: the compiler dropped the classifier's
@@ -309,7 +309,7 @@ def _execution_plan_with_derived_realization_requirements():
                 default: linux
             nodes:
               vm:
-                type: vm
+                type: compute
                 os: ${node_os}
                 resources: {ram: 1 gib, cpu: 1}
             """
@@ -338,7 +338,7 @@ def _execution_plan_with_content_realization_requirement():
             name: disclosure-content
             nodes:
               fileshare:
-                type: vm
+                type: compute
                 os: linux
                 resources: {ram: 1 gib, cpu: 1}
             content:
@@ -612,7 +612,7 @@ def test_manifest_provisioner_declares_only_realized_capabilities():
     manifest = create_aptl_manifest()
     provisioner = manifest.provisioner
 
-    assert provisioner.supported_node_types == frozenset({"switch", "vm"})
+    assert provisioner.supported_node_types == frozenset({"compute", "switch"})
     assert provisioner.supported_os_families == frozenset({"linux"})
     assert provisioner.supported_content_types == frozenset(
         {"dataset", "directory", "file"}
@@ -632,11 +632,15 @@ def test_manifest_realization_support_matches_exercised_concerns():
 
     assert support.domain == "runtime-realization"
     assert support.supported_constraint_kinds == frozenset(
-        {"os-family", "source-artifact"}
+        {"compute-substrate", "os-family", "source-artifact"}
+    )
+    assert support.observation_capabilities["compute-substrate"].observation_strength.value == (
+        "daemon-observed"
     )
     assert support.supported_exact_requirement_kinds == frozenset(
         {
             "declared-capability-match",
+            "runtime-environment",
             "service-search-index-schema-materialization",
         }
     )
@@ -2089,7 +2093,7 @@ def _workflow_and_evaluation_execution_plan():
             name: wf
             nodes:
               vm:
-                type: vm
+                type: compute
                 os: linux
                 resources: {ram: 1 gib, cpu: 1}
                 conditions: {health: ops}
@@ -4219,8 +4223,13 @@ def test_apply_provisioning_discloses_author_declared_provenance(tmp_path):
     result = _apply_disclosure_scenario(tmp_path, backend)
 
     assert result.success is True, [d.message for d in result.diagnostics]
-    provenances = {entry.provenance for entry in result.snapshot.realization_provenance}
-    assert provenances == {ExplicitnessProvenance.AUTHOR_DECLARED}
+    by_kind = {
+        entry.requirement_kind: entry.provenance
+        for entry in result.snapshot.realization_provenance
+    }
+    assert by_kind["node-type"] == ExplicitnessProvenance.AUTHOR_DECLARED
+    assert by_kind["os-family"] == ExplicitnessProvenance.AUTHOR_DECLARED
+    assert by_kind["compute-substrate"] == ExplicitnessProvenance.BACKEND_REALIZED
 
 
 def test_apply_provisioning_discloses_processor_derived_provenance(tmp_path):
@@ -4260,17 +4269,16 @@ def test_apply_provisioning_discloses_processor_derived_provenance(tmp_path):
     assert by_explicitness["os-family"] is ExplicitnessClass.CONSTRAINED
 
 
-def test_apply_provisioning_accepts_constrained_concern_realized_in_bounds(tmp_path):
-    """A CONSTRAINED concern the backend realized differently is allowed, not rejected.
+def test_apply_provisioning_rejects_constrained_os_outside_backend_compatibility(
+    tmp_path,
+):
+    """A constrained concern still stays inside backend compatibility.
 
     ``os: ${node_os}`` is CONSTRAINED (substitution downgrades exactness), so a
-    backend that realizes a different OS family is making an allowed choice
-    rather than a silent approximation — but it must *say so*: the concern is
-    disclosed as ``backend-realized``, not passed off as the author's. Contrast
-    with the EXACT case, which is rejected outright.
+    APTL's container backend declares Linux compatibility only, so a Windows
+    readback cannot satisfy the resolved authority merely because the authored
+    variable was constrained rather than exact.
     """
-    from raes.explicitness import ExplicitnessProvenance
-
     backend = _RealizedBackend(containers=("vm",), platform="windows")
 
     result = _apply_disclosure_scenario(
@@ -4279,12 +4287,11 @@ def test_apply_provisioning_accepts_constrained_concern_realized_in_bounds(tmp_p
         execution_plan=_execution_plan_with_derived_realization_requirements(),
     )
 
-    assert result.success is True, [d.message for d in result.diagnostics]
-    by_kind = {
-        entry.requirement_kind: entry.provenance
-        for entry in result.snapshot.realization_provenance
-    }
-    assert by_kind["os-family"] == ExplicitnessProvenance.BACKEND_REALIZED
+    assert result.success is False
+    assert any(
+        "resolved realization authority" in diagnostic.message
+        for diagnostic in result.diagnostics
+    )
 
 
 def test_shared_build_context_does_not_shadow_the_service_it_names(tmp_path):

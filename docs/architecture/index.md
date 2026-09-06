@@ -160,6 +160,7 @@ The victim and kali containers publish no host ports; use
 - [Issue #592 Scenario-Pack Terminology](issue-592-scenario-pack-terminology-preflight.md)
 - [Issue #951 Fresh Env-Pack Start](issue-951-fresh-env-pack-start-preflight.md)
 - [Issue #913 Shuffle Post-Realization Mutation](issue-913-shuffle-post-realization-mutation-preflight.md)
+- [Issue #910 Generated-Secret Environment Binding](issue-910-generated-secret-environment-preflight.md)
 - [Issue #905 Lab Lifecycle Robustness](issue-905-lab-lifecycle-robustness-preflight.md)
 - [Issue #874 Scenario-Bundle Realization Roots](issue-874-scenario-bundle-realization-roots-preflight.md)
 - [Issue #878 Scenario Verification Plugin Seam](issue-878-scenario-verification-plugin-seam-preflight.md)

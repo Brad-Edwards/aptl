@@ -3,6 +3,8 @@
 from pathlib import Path
 
 STATEFUL_OVERRIDE_RELPATH = Path(".aptl/realization/compose.stateful.yml")
+GENERATED_ARTIFACTS_ROOT_RELPATH = Path(".aptl/realization/generated-artifacts")
+GENERATED_ENVIRONMENT_ROOT_RELPATH = Path(".aptl/realization/generated-environment")
 CERTIFICATE_ROOT_RELPATH = Path("config/wazuh_indexer_ssl_certs")
 # Owner-only staging root for ssh_key_bundle generated artifacts (gitignored,
 # under the scenario bundle root). Each declared output lands at its relative

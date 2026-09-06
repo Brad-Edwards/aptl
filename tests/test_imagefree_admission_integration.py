@@ -38,7 +38,7 @@ nodes:
     type: switch
     description: smoke net
   smoke-box:
-    type: vm
+    type: compute
     os: linux
     runtime:
       packages:
@@ -109,7 +109,7 @@ nodes:
     type: switch
     description: svc net
   svc-box:
-    type: vm
+    type: compute
     os: linux
     runtime:
       packages:

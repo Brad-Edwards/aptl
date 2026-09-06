@@ -52,17 +52,17 @@ KNOWN_PRIVATE_RAES_IMPORTS = {
 }
 
 
-def test_project_depends_on_exact_raes_3_3_release() -> None:
+def test_project_depends_on_exact_raes_3_5_release() -> None:
     """The qualified backend and semantic freeze use the same RAES release."""
 
     project = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text())
 
-    assert "raes==3.3.0" in project["project"]["dependencies"]
+    assert "raes==3.5.0" in project["project"]["dependencies"]
     assert all(
         not dependency.startswith("aces-sdl")
         for dependency in project["project"]["dependencies"]
     )
-    assert raes.__version__ == "3.3.0"
+    assert raes.__version__ == "3.5.0"
 
 
 def test_runtime_and_tests_do_not_import_removed_aces_packages() -> None:

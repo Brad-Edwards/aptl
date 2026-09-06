@@ -17,6 +17,7 @@ GeneratedArtifactKind = Literal[
     "certificate_bundle", "rendered_config", "ssh_key_bundle"
 ]
 GeneratedArtifactLifecycle = Literal["regenerate_on_change", "reuse_valid"]
+GeneratedArtifactDeliveryMode = Literal["environment", "env_file"]
 GeneratedArtifactOutputDisposition = Literal["consumer_selected", "producer_private"]
 ResourceSensitivity = Literal["public", "restricted", "secret"]
 VolumeLifecycle = Literal["retain", "ephemeral"]
@@ -353,6 +354,30 @@ class DeploymentStatefulConsumer(object):
 
 
 @dataclass(frozen=True)
+class DeploymentGeneratedEnvironmentConsumer(object):
+    """One generated output projected into a node's runtime environment."""
+
+    target_address: str
+    node_name: str
+    service_name: str
+    delivery_mode: GeneratedArtifactDeliveryMode
+    output: str
+    environment_variable: str | None = None
+    environment_file: str | None = None
+
+    def details(self) -> dict[str, object]:
+        return {
+            "target_address": self.target_address,
+            "node_name": self.node_name,
+            "service_name": self.service_name,
+            "delivery_mode": self.delivery_mode,
+            "output": self.output,
+            "environment_variable": self.environment_variable,
+            "environment_file": self.environment_file,
+        }
+
+
+@dataclass(frozen=True)
 class DeploymentGeneratedArtifactOutput(object):
     """One declared output from a backend-owned generated artifact.
 
@@ -387,6 +412,7 @@ class DeploymentGeneratedArtifactRealization(object):
     provenance: str
     outputs: tuple[DeploymentGeneratedArtifactOutput, ...]
     consumers: tuple[DeploymentStatefulConsumer, ...]
+    environment_consumers: tuple[DeploymentGeneratedEnvironmentConsumer, ...] = ()
     ordering_dependencies: tuple[str, ...] = ()
     refresh_dependencies: tuple[str, ...] = ()
 
@@ -399,6 +425,9 @@ class DeploymentGeneratedArtifactRealization(object):
             "provenance": self.provenance,
             "outputs": [output.details() for output in self.outputs],
             "consumers": [consumer.details() for consumer in self.consumers],
+            "environment_consumers": [
+                consumer.details() for consumer in self.environment_consumers
+            ],
             "ordering_dependencies": list(self.ordering_dependencies),
             "refresh_dependencies": list(self.refresh_dependencies),
         }

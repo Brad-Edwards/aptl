@@ -69,6 +69,7 @@ def realize_node(
     content: tuple[MaterializationOp, ...] = (),
     scenario_root: Path | None = None,
     extra_volume_mounts: tuple[VolumeMount, ...] = (),
+    extra_environment_files: tuple[str, ...] = (),
 ) -> LabResult | None:
     """Materialize one node's declared state onto its generic base container.
 
@@ -86,6 +87,7 @@ def realize_node(
         content=content,
         dynamic_composition=node.dynamic_composition,
         extra_volume_mounts=extra_volume_mounts,
+        extra_environment_files=extra_environment_files,
     )
     container = spec.container_name
 
@@ -119,6 +121,7 @@ def realize_nodes(
     content_by_node: dict[str, tuple[MaterializationOp, ...]] | None = None,
     scenario_root: Path | None = None,
     volume_mounts_by_node: dict[str, tuple[VolumeMount, ...]] | None = None,
+    environment_files_by_node: dict[str, tuple[str, ...]] | None = None,
 ) -> LabResult | None:
     """Materialize every node that declares desired state, failing closed.
 
@@ -132,6 +135,7 @@ def realize_nodes(
 
     content_by_node = content_by_node or {}
     volume_mounts_by_node = volume_mounts_by_node or {}
+    environment_files_by_node = environment_files_by_node or {}
     materializable = [node for node in nodes if node.os]
     if not materializable:
         return None
@@ -146,6 +150,9 @@ def realize_nodes(
             extra_volume_mounts=volume_mounts_by_node.get(
                 materializable[0].address, ()
             ),
+            extra_environment_files=environment_files_by_node.get(
+                materializable[0].address, ()
+            ),
         )
 
     return _realize_nodes_concurrently(
@@ -154,6 +161,7 @@ def realize_nodes(
         content_by_node,
         scenario_root,
         volume_mounts_by_node,
+        environment_files_by_node,
         workers,
     )
 
@@ -164,6 +172,7 @@ def _realize_nodes_concurrently(
     content_by_node: dict[str, tuple[MaterializationOp, ...]],
     scenario_root: Path | None,
     volume_mounts_by_node: dict[str, tuple[VolumeMount, ...]],
+    environment_files_by_node: dict[str, tuple[str, ...]],
     workers: int,
 ) -> LabResult | None:
     """Materialize the nodes in a bounded pool, returning the first failure."""
@@ -178,6 +187,9 @@ def _realize_nodes_concurrently(
                 content_by_node.get(node.address, ()),
                 scenario_root=scenario_root,
                 extra_volume_mounts=volume_mounts_by_node.get(node.address, ()),
+                extra_environment_files=environment_files_by_node.get(
+                    node.address, ()
+                ),
             ): node
             for node in materializable
         }

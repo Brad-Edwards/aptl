@@ -31,6 +31,7 @@ from raes_backend_protocols.capabilities import (
     ParticipantFeatureSupport,
     ParticipantRuntimeCapabilities,
     ProvisionerCapabilities,
+    OperatingSystemCompatibility,
 )
 from raes_backend_protocols.manifest import backend_manifest_v2_model
 from raes_contracts.apparatus import (
@@ -220,8 +221,15 @@ _PARTICIPANT_RUNTIME = ParticipantRuntimeCapabilities(
 # terms (validated against contracts/concept-authority/controlled-vocabularies-v1).
 _PROVISIONER = ProvisionerCapabilities(
     name="aptl-docker-compose-provisioner",
-    supported_node_types=frozenset({"switch", "vm"}),
+    supported_node_types=frozenset({"compute", "switch"}),
     supported_os_families=frozenset({"linux"}),
+    operating_systems=(
+        OperatingSystemCompatibility(
+            family="linux",
+            distribution="x-aptl:container-image",
+            versions=frozenset({"container-image"}),
+        ),
+    ),
     supported_content_types=frozenset({"dataset", "directory", "file"}),
     # Manifest honesty (#577, ADR-046 addendum): advertise only the account
     # features the backend materializes AND verifies by read-after-write — the
@@ -251,7 +259,7 @@ _PROVISIONER = ProvisionerCapabilities(
     supports_acls=True,
     supports_accounts=True,
     supports_generated_artifacts=True,
-    # RAES 3.3 makes the generated-artifact kinds an explicit capability rather
+    # RAES makes the generated-artifact kinds an explicit capability rather
     # than an implicit "any". Manifest honesty (#577): declare only the kinds the
     # backend actually materializes AND verifies by read-after-write —
     # certificate bundles (SOC/Wazuh TLS), rendered config, and ssh_key_bundle
@@ -259,6 +267,9 @@ _PROVISIONER = ProvisionerCapabilities(
     # back present with producer-private material kept off consumers).
     supported_generated_artifact_kinds=frozenset(
         {"certificate_bundle", "rendered_config", "ssh_key_bundle"}
+    ),
+    supported_generated_artifact_delivery_modes=frozenset(
+        {"mount", "environment", "env_file"}
     ),
     supports_persistent_volumes=True,
 )
@@ -275,23 +286,21 @@ _REALIZATION_ENVELOPE = build_aptl_realization_envelope(_PROVISIONER)
 # What APTL realizes from a provisioning plan, and how. APTL matches declared
 # capabilities against its provisioner support and discloses the result through
 # the backend-manifest / operation-status / runtime-snapshot contracts. The
-# constrained-kind set is intentionally narrower than the provisioner vocabulary:
-# RAES 0.21.x publishes runtime concern paths for node type, OS family, and
-# content type, but only OS family is currently expressible by APTL's regression
-# scenario as a constrained (processor-derived) requirement. Node/content exact
-# requirements are covered by ``declared-capability-match``; account features are
-# realized through the account provider's typed read-after-write path but are not
-# yet a RAES runtime realization concern.
+# constrained-kind set is intentionally narrower than the provisioner vocabulary.
+# RAES 3.5 projects compute-substrate, OS-family, and source-artifact constraints
+# that APTL can bind. Node/content exact requirements are covered by
+# ``declared-capability-match``; account features are realized through the account
+# provider's typed read-after-write path but are not yet a RAES runtime concern.
 #
 # ``artifact_mechanisms`` declares which RAES artifact-satisfaction routes APTL
 # can admit (ADR-050, RAES ADR-098). It is deliberately narrow: a mechanism is
 # advertised only once APTL can both materialize it and read the result back
-# (SEM-218 I4). ``support_mode`` is OPEN_REALIZATION because APTL now supports the
-# generic ``dynamic-composition`` route (issue #876): it composes a node's runtime
-# onto a pinned substrate and reads every declared runtime concern back off the
-# realized container (raes 3.1.0 lowers those concerns, OpenRAE/rae#985). The
-# mode is the most-open posture for the domain; the exact and constrained branches
-# still apply independently through the per-kind support sets below.
+# (SEM-218 I4). ``support_mode`` is OPEN_REALIZATION because APTL supports the
+# generic ``dynamic-composition`` route (issue #876): where the author permits
+# that route, it composes the supported runtime concerns onto a pinned substrate
+# and reads those concerns back from the realized container. Backend capability
+# does not widen an author's closed posture; exact and constrained branches still
+# apply independently through the per-kind support sets below.
 #
 # ``source-artifact`` appears on the mechanism's ``supported_requirement_kinds``
 # and on ``supported_constraint_kinds``, but deliberately NOT on
@@ -305,7 +314,9 @@ _REALIZATION_SUPPORT = (
     RealizationSupportDeclaration(
         domain="runtime-realization",
         support_mode=RealizationSupportMode.OPEN_REALIZATION,
-        supported_constraint_kinds=frozenset({"os-family", "source-artifact"}),
+        supported_constraint_kinds=frozenset(
+            {"compute-substrate", "os-family", "source-artifact"}
+        ),
         # ``service-search-index-schema-materialization`` (ADR-088, #889) is an
         # exact requirement kind APTL genuinely realizes through the native ES
         # materializer and reads back through the service's native interface, so
@@ -314,25 +325,37 @@ _REALIZATION_SUPPORT = (
         supported_exact_requirement_kinds=frozenset(
             {
                 "declared-capability-match",
+                "runtime-environment",
                 "service-search-index-schema-materialization",
             }
         ),
         disclosure_kinds=frozenset(
             {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
         ),
-        # Per-concern observation capability (raes 3.3.0). Only concerns raes
-        # compiles with a non-null verification_scope need one; today that is
-        # forwarding-agents, whose scope is `configuration` when the agent
-        # declares any sources/transforms/ship_targets/reload_channels/settings.
-        # APTL corroborates it by reading the realized container's declared
-        # forwarding data-path footprint back off host-side `docker inspect`
-        # (daemon-observed), and discloses only corroborated agents — so this
-        # declaration is honest: it is backed by real readback
-        # (raes_runtime_observation._observe_forwarding_agents), not an echo.
+        # Per-concern observation capability. RAES 3.5 requires a declared
+        # observation for every exact concern with a verification scope. APTL
+        # advertises only the concerns it corroborates from the daemon or guest;
+        # unsupported authored exact concerns therefore fail admission.
         observation_capabilities={
+            "compute-substrate": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.PRESENCE,
+                observation_strength=ObservationStrength.DAEMON_OBSERVED,
+            ),
+            "operating-system": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.PRESENCE,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
+            ),
+            "runtime-environment": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.CONFIGURATION,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
+            ),
             "forwarding-agents": RealizationObservationCapability(
                 verification_scope=RealizationVerificationScope.CONFIGURATION,
                 observation_strength=ObservationStrength.DAEMON_OBSERVED,
+            ),
+            "service-listeners": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.CONFIGURATION,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
             ),
         },
         artifact_mechanisms=list(aptl_artifact_mechanisms()),

@@ -88,6 +88,9 @@ class _NoStartBackend(object):
         self._content_root: TemporaryDirectory[str] | None = None
         self._content_paths: dict[str, Path] = {}
         self._image_free_destinations: dict[str, str] = {}
+        self._generated_environment_values: dict[tuple[str, str], str] = {}
+        self._container_environments: dict[str, dict[str, str]] = {}
+        self._container_inspects: dict[str, dict[str, object]] = {}
 
     def realize(
         self,
@@ -115,8 +118,62 @@ class _NoStartBackend(object):
             for network in getattr(realization, "networks", ())
             if getattr(network, "name", None)
         ]
+        nodes = tuple(getattr(realization, "nodes", ()))
+        containers_by_address = {
+            node.address: node.container_name
+            for node in nodes
+            if getattr(node, "container_name", None)
+        }
+        self._generated_environment_values = {}
+        self._container_environments = {
+            container: {} for container in containers_by_address.values()
+        }
+        self._container_inspects = {}
+        for artifact in getattr(realization, "generated_artifacts", ()):
+            for consumer in getattr(artifact, "environment_consumers", ()):
+                if getattr(consumer, "delivery_mode", None) != "environment":
+                    continue
+                value = _simulated_digest(f"{artifact.address}:{consumer.output}")
+                self._generated_environment_values[
+                    (artifact.address, consumer.output)
+                ] = value
+                container = containers_by_address.get(consumer.target_address)
+                if container and consumer.environment_variable:
+                    self._container_environments[container][
+                        consumer.environment_variable
+                    ] = value
+        for node in nodes:
+            container = containers_by_address.get(node.address)
+            runtime = getattr(node, "runtime", None)
+            if not container:
+                continue
+            environment = self._container_environments[container]
+            for variable in getattr(runtime, "environment", ()):
+                name = getattr(variable, "name", "")
+                if not name or getattr(variable, "value_from", None) is not None:
+                    continue
+                value = getattr(variable, "value", "") or "static-offline-value"
+                environment[name] = value
+            self._container_inspects[container] = {
+                "State": {"Running": True, "Health": {"Status": "healthy"}},
+                "Platform": "linux",
+                "Config": {
+                    "Env": [
+                        f"{key}={value}"
+                        for key, value in sorted(environment.items())
+                    ]
+                },
+                "NetworkSettings": {"Networks": {}},
+            }
         self._materialize_content_shapes(getattr(realization, "content", ()))
         return LabResult(success=True, message="Static validation realization accepted")
+
+    def observed_generated_environment_value(
+        self, artifact_address: str, output: str
+    ) -> str | None:
+        """Return the deterministic generated value used by the offline simulation."""
+
+        return self._generated_environment_values.get((artifact_address, output))
 
     def _materialize_content_shapes(self, content: Sequence[object]) -> None:
         """Create empty filesystem shapes for offline content observation.
@@ -165,11 +222,24 @@ class _NoStartBackend(object):
     ) -> subprocess.CompletedProcess[str]:
         """Answer the image-free content-type readback probe from simulated shapes.
 
-        This mirrors only the ``test -d``/``test -f`` probes observation issues
-        for image-free content (ADR-048); it is not a general exec simulator.
+        This mirrors the ``test -d``/``test -f`` probes used for image-free
+        content, the fixed guest OS-family probe, and the fixed guest environment
+        readback used for generated environment bindings.
         """
 
-        del name, timeout
+        del timeout
+        if cmd == ["uname", "-s"]:
+            return subprocess.CompletedProcess(
+                args=cmd, returncode=0, stdout="Linux\n", stderr=""
+            )
+        if cmd == ["env"]:
+            body = "".join(
+                f"{key}={value}\n"
+                for key, value in sorted(self._container_environments.get(name, {}).items())
+            )
+            return subprocess.CompletedProcess(
+                args=cmd, returncode=0, stdout=body, stderr=""
+            )
         kind = self._image_free_destinations.get(cmd[-1]) if len(cmd) >= 2 else None
         matched = bool(cmd) and (
             (cmd[0:2] == ["test", "-d"] and kind == "directory")
@@ -191,17 +261,7 @@ class _NoStartBackend(object):
         """
         if name not in self._container_names:
             return {}
-        # Platform is linux because that is what APTL's Docker Compose backend
-        # actually produces — every realized node is a Linux container. This is
-        # the honest observed OS family, not a convenience: a node declared
-        # os: windows as an EXACT concern genuinely cannot be honoured by a Linux
-        # container, and the conformance gate rejecting that is correct behaviour,
-        # here as in a live run.
-        return {
-            "State": {"Running": True, "Health": {"Status": "healthy"}},
-            "Platform": "linux",
-            "NetworkSettings": {"Networks": {}},
-        }
+        return self._container_inspects.get(name, {})
 
     def host_list_lab_networks(self, name_prefix: str) -> list[str]:
         """Report the declared scenario networks as present, project-scoped.

@@ -57,7 +57,7 @@ def _scenario(tmp_path: Path, digest: str = _DIGEST):
             type: switch
             description: Fixture network.
           target:
-            type: vm
+            type: compute
             os: linux
             source:
               name: example/app
@@ -187,10 +187,9 @@ def test_shipped_scenario_declares_artifact_demand_for_every_imaged_node(tmp_pat
 
     # One address per artifact-bearing address — every image-backed node and
     # every digest-pinned content placement in the full TechVault env-pack. The
-    # ADR-088 conversion (#889) removed the `cortex-index-init` image-backed node.
-    # Env-packs 4.0.2 then added eight digest-pinned rules/decoder/integration
-    # content placements, taking the reviewed inventory from 43 to 51.
-    assert len(context.requirements) == 51
+    # Env-packs 5.1.0 adds the operational Cortex initialization and analyzer
+    # assets, taking the reviewed exact-artifact inventory from 51 to 61.
+    assert len(context.requirements) == 61
     addresses = {requirement.address for requirement in context.requirements}
     assert {
         "provision.content.ad-rules",

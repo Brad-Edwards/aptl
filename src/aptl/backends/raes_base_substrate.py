@@ -118,6 +118,9 @@ class BaseContainerSpec:
     # operator secret is authored empty and supplied by the credential boundary,
     # so it cannot travel here.
     environment_defaults: tuple[tuple[str, str], ...] = ()
+    # Prevalidated owner-only files containing generated-artifact environment
+    # assignments. The Docker backend passes paths only; values never enter argv.
+    environment_files: tuple[str, ...] = ()
     # ADR-051 route 3 (issue #876): the node authored an open dynamic-composition
     # source, so it composes onto the generic substrate and proves its runtime by
     # readback. Its base container must start immutably — never pull, and run the
@@ -145,6 +148,7 @@ def base_container_spec(
     runtime: RuntimeConfiguration | None,
     dynamic_composition: bool = False,
     extra_volume_mounts: tuple[VolumeMount, ...] = (),
+    extra_environment_files: tuple[str, ...] = (),
 ) -> BaseContainerSpec:
     """Return the generic base-container decision for one node.
 
@@ -171,6 +175,7 @@ def base_container_spec(
         volume_mounts=_volume_mounts(runtime) + tuple(extra_volume_mounts),
         environment_names=_environment_names(runtime),
         environment_defaults=_environment_defaults(runtime),
+        environment_files=extra_environment_files,
         dynamic_composition=dynamic_composition,
     )
 
@@ -297,6 +302,7 @@ def plan_node(
     content: tuple[MaterializationOp, ...] = (),
     dynamic_composition: bool = False,
     extra_volume_mounts: tuple[VolumeMount, ...] = (),
+    extra_environment_files: tuple[str, ...] = (),
 ) -> tuple[BaseContainerSpec, tuple[MaterializationOp, ...]]:
     """Plan one node: its generic base container plus its materialization ops.
 
@@ -315,6 +321,7 @@ def plan_node(
         runtime=runtime,
         dynamic_composition=dynamic_composition,
         extra_volume_mounts=extra_volume_mounts,
+        extra_environment_files=extra_environment_files,
     )
     ops = plan_node_materialization(
         os=os, os_version=os_version, runtime=runtime, content=content

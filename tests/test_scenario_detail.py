@@ -34,12 +34,12 @@ nodes:
     type: switch
     description: network switch, never a container
   ssh-target:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: ssh, port: 22, protocol: tcp}
   quiet-host:
-    type: vm
+    type: compute
     os: linux
     services: []
 """
@@ -60,7 +60,7 @@ def _block_types(detail):
 
 
 class TestHeaderFacts:
-    def test_required_containers_are_vm_nodes_only(self):
+    def test_required_containers_are_compute_nodes_only(self):
         scenario = parse_sdl(EDGE_SDL)
         assert scenario_required_containers(scenario) == ["ssh-target", "quiet-host"]
 
@@ -101,7 +101,7 @@ class TestBlockProjection:
         assert "Edge Scenario" in first.content
         assert "A catalog description." in first.content
 
-    def test_container_status_block_lists_vm_nodes(self):
+    def test_container_status_block_lists_compute_nodes(self):
         detail = build_scenario_detail(_entry(), parse_sdl(EDGE_SDL))
         status = [b for b in detail.blocks if b.type == "container-status"]
         assert len(status) == 1

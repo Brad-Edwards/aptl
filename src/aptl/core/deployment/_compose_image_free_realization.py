@@ -122,6 +122,7 @@ def _realize_node_subset(
     scenario_root: Path,
     extra_ops: dict[str, tuple[object, ...]] | None = None,
     persistent_volumes: tuple[object, ...] = (),
+    environment_files: dict[str, tuple[str, ...]] | None = None,
 ) -> LabResult | None:
     """Materialize a node subset's declared state via the generic materializer.
 
@@ -156,6 +157,7 @@ def _realize_node_subset(
         {addr: tuple(ops) for addr, ops in content_by_node.items()},
         scenario_root=scenario_root,
         volume_mounts_by_node=volume_mounts_by_node,
+        environment_files_by_node=environment_files,
     )
 
 

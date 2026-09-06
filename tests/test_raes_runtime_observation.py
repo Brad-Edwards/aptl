@@ -1,6 +1,6 @@
 """Fail-closed tests for provider-observed runtime realization concerns (#876).
 
-These pin the backend half of raes 3.1.0's runtime non-approximation gate: APTL
+These pin the backend half of RAES's runtime non-approximation gate: APTL
 reads each declared per-node runtime concern back off the realized container and
 discloses the observed value at its payload path, so RAES's own
 ``realization_disclosure`` gate can compare declared-vs-observed. A concern APTL
@@ -37,6 +37,12 @@ from aptl.backends.raes_diagnostics import snapshot_after_apply
 from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.backends.raes_observation import observe_realization
 from aptl.backends.raes_realization_model import AptlRealization, NodeRealization
+from aptl.core.deployment._compose_stateful_model import artifact_source_path
+from aptl.core.deployment.realization import (
+    DeploymentGeneratedArtifactOutput,
+    DeploymentGeneratedArtifactRealization,
+    DeploymentGeneratedEnvironmentConsumer,
+)
 from aptl.core.deployment.errors import BackendTimeoutError
 
 _ADDRESS = "provision.node.vm"
@@ -76,7 +82,13 @@ class _Backend:
         if self._exec_raises:
             raise BackendTimeoutError("docker exec timed out")
         table = self._exec_results.get(name, {})
-        returncode, stdout = table.get(cmd[0], (1, ""))
+        if cmd == ["uname", "-s"] and "uname" not in table:
+            returncode, stdout = 0, "Linux\n"
+        elif cmd == ["env"] and "env" not in table:
+            entries = self._inspect.get(name, {}).get("Config", {}).get("Env", [])
+            returncode, stdout = 0, "".join(f"{entry}\n" for entry in entries)
+        else:
+            returncode, stdout = table.get(cmd[0], (1, ""))
         return SimpleNamespace(returncode=returncode, stdout=stdout, stderr="")
 
     def observe_container_listeners(self, name):
@@ -146,7 +158,13 @@ def _plan(runtime: RuntimeConfiguration) -> ProvisioningPlan:
     return ProvisioningPlan(resources={_ADDRESS: resource}, operations=[op])
 
 
-def _observe(runtime: RuntimeConfiguration, backend: _Backend):
+def _observe(
+    runtime: RuntimeConfiguration,
+    backend: _Backend,
+    *,
+    generated_artifacts=(),
+    scenario_root=Path("."),
+):
     plan = _plan(runtime)
     realization = AptlRealization(
         profiles=frozenset(),
@@ -154,8 +172,9 @@ def _observe(runtime: RuntimeConfiguration, backend: _Backend):
         networks=(),
         placements=(),
         diagnostics=(),
+        generated_artifacts=tuple(generated_artifacts),
     )
-    return plan, observe_realization(backend, realization, plan, Path("."))
+    return plan, observe_realization(backend, realization, plan, scenario_root)
 
 
 def _gate(runtime: RuntimeConfiguration, backend: _Backend, kind: str):
@@ -283,6 +302,106 @@ def test_environment_probe_missing_config_fails_closed():
     codes, _provenance, observations = _gate(runtime, backend, "runtime-environment")
     assert _ENV_PATH not in observations[_ADDRESS].concerns
     assert _GATE_REJECT in codes
+
+
+def test_environment_guest_probe_failure_does_not_fall_back_to_daemon_metadata():
+    runtime = _env_runtime("bar")
+    backend = _Backend(
+        {_CONTAINER: _inspect(env=["FOO=bar"])},
+        exec_raises=True,
+    )
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-environment"
+    )
+
+    assert _ENV_PATH not in observations[_ADDRESS].concerns
+    assert _GATE_REJECT in codes
+
+
+def _generated_environment_fixture(tmp_path: Path, value: str):
+    runtime = _runtime(
+        environment=[
+            {
+                "name": "FOO",
+                "value": "",
+                "value_from": {
+                    "generated_artifact": "service-credentials",
+                    "output": "api-key",
+                },
+                "value_classification": "redacted",
+                "provenance": "runtime",
+                "source": "",
+            }
+        ]
+    )
+    artifact = DeploymentGeneratedArtifactRealization(
+        address="provision.generated-artifact.service-credentials",
+        name="service-credentials",
+        generator="rendered_config",
+        lifecycle="reuse_valid",
+        provenance="demo:service-credentials/v1",
+        outputs=(
+            DeploymentGeneratedArtifactOutput(
+                name="api-key", path="api-key", sensitivity="secret"
+            ),
+        ),
+        consumers=(),
+        environment_consumers=(
+            DeploymentGeneratedEnvironmentConsumer(
+                target_address=_ADDRESS,
+                node_name="vm",
+                service_name="vm",
+                delivery_mode="environment",
+                output="api-key",
+                environment_variable="FOO",
+            ),
+        ),
+    )
+    source = artifact_source_path(tmp_path, artifact)
+    source.mkdir(parents=True)
+    (source / "api-key").write_text(value, encoding="utf-8")
+    return runtime, artifact
+
+
+def test_generated_environment_exact_match_is_disclosed_without_secret(
+    tmp_path: Path,
+):
+    secret = "generated-value-that-must-not-be-disclosed"
+    runtime, artifact = _generated_environment_fixture(tmp_path, secret)
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={_CONTAINER: {"env": (0, f"FOO={secret}\n")}},
+    )
+
+    _plan_value, observations = _observe(
+        runtime,
+        backend,
+        generated_artifacts=(artifact,),
+        scenario_root=tmp_path,
+    )
+
+    assert _ENV_PATH in observations[_ADDRESS].concerns
+    assert secret not in str(observations)
+
+
+def test_generated_environment_mismatch_is_omitted_without_secret(tmp_path: Path):
+    secret = "expected-generated-value"
+    runtime, artifact = _generated_environment_fixture(tmp_path, secret)
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={_CONTAINER: {"env": (0, "FOO=different-value\n")}},
+    )
+
+    _plan_value, observations = _observe(
+        runtime,
+        backend,
+        generated_artifacts=(artifact,),
+        scenario_root=tmp_path,
+    )
+
+    assert _ENV_PATH not in observations[_ADDRESS].concerns
+    assert secret not in str(observations)
 
 
 # --------------------------------------------------------------------------- #
@@ -1170,4 +1289,4 @@ def test_node_without_runtime_declares_no_runtime_concerns():
     backend = _Backend({_CONTAINER: _inspect()})
     _plan_, observations = _observe(runtime, backend)
     concerns = observations[_ADDRESS].concerns
-    assert concerns == {("node_type",): "vm", ("os_family",): "linux"}
+    assert concerns == {("node_kind",): "compute", ("os_family",): "linux"}

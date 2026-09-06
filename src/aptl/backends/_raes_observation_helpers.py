@@ -132,9 +132,31 @@ def artifact_spec(
         "provenance": artifact.provenance,
         "outputs": [output.details() for output in artifact.outputs],
         "consumers": [consumer_spec(consumer) for consumer in artifact.consumers],
+        "environment_consumers": [
+            environment_consumer_spec(consumer)
+            for consumer in artifact.environment_consumers
+        ],
         "ordering_dependencies": _author_dependencies(artifact.ordering_dependencies),
         "refresh_dependencies": _author_dependencies(artifact.refresh_dependencies),
     }
+
+
+def environment_consumer_spec(consumer: object) -> dict[str, object]:
+    """Render one generated environment consumer in the authored vocabulary."""
+
+    spec: dict[str, object] = {
+        "node": getattr(consumer, "node_name"),
+        "target_address": getattr(consumer, "target_address"),
+        "delivery_mode": getattr(consumer, "delivery_mode"),
+        "output": getattr(consumer, "output"),
+    }
+    variable = getattr(consumer, "environment_variable", None)
+    environment_file = getattr(consumer, "environment_file", None)
+    if variable is not None:
+        spec["environment_variable"] = variable
+    if environment_file is not None:
+        spec["environment_file"] = environment_file
+    return spec
 
 
 def volume_spec(volume: DeploymentPersistentVolumeRealization) -> dict[str, object]:
@@ -372,9 +394,26 @@ def _observed_bind_source_type(
     return observed if observed in ("file", "directory") else None
 
 
-def observed_os_family(info: Mapping[str, Any]) -> str | None:
-    """Return the container platform in the RAES OS-family vocabulary."""
+def observed_os_family(
+    backend: "DeploymentBackend",
+    container: str,
+    info: Mapping[str, Any],
+) -> str | None:
+    """Return the guest-observed OS family, with a test-double fallback."""
 
+    execute = getattr(backend, "container_exec", None)
+    if callable(execute):
+        try:
+            result = execute(container, ["uname", "-s"], timeout=10)
+        except (BackendSeedError, BackendTimeoutError, OSError):
+            return None
+        returncode = getattr(result, "returncode", None)
+        stdout = getattr(result, "stdout", None)
+        if isinstance(returncode, int):
+            if returncode != 0 or not isinstance(stdout, str):
+                return None
+            observed = stdout.strip().lower()
+            return "linux" if observed == "linux" else observed or None
     platform = info.get("Platform")
     if isinstance(platform, str) and platform.strip():
         return platform.strip().lower()

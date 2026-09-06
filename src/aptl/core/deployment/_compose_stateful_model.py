@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import hashlib
 from pathlib import Path, PurePosixPath
 
 from aptl.core.credentials import RENDERED_MANAGER_RELPATH
 from aptl.core.deployment._flag_signing_keys import FLAG_SIGNING_PROFILE_V2
 from aptl.core.deployment._compose_stateful_constants import (
     CERTIFICATE_ROOT_RELPATH,
+    GENERATED_ARTIFACTS_ROOT_RELPATH,
+    GENERATED_ENVIRONMENT_ROOT_RELPATH,
     FLAG_SIGNING_ROOT_RELPATH,
     SOC_CERT_PROFILE,
     SOC_CERTS_ROOT_RELPATH,
@@ -22,6 +25,7 @@ from aptl.core.deployment._compose_stateful_services import (
     wazuh_service_definitions,
 )
 from aptl.core.deployment.realization import (
+    DeploymentGeneratedEnvironmentConsumer,
     DeploymentGeneratedArtifactRealization,
     DeploymentPersistentVolumeRealization,
     DeploymentRealizationSpec,
@@ -44,6 +48,7 @@ def stateful_override_payload(
 
     services = wazuh_service_definitions()
     _append_artifact_mounts(services, scenario_root, realization)
+    _append_artifact_environment(services, scenario_root, realization)
     volumes = _append_volume_mounts(services, project_name, realization)
     payload: dict[str, object] = {"services": services}
     if volumes:
@@ -99,9 +104,45 @@ def artifact_source_path(
         relative = Path(SSH_KEY_BUNDLE_ROOT_RELPATH) / artifact.name
     elif provenance == FLAG_SIGNING_PROFILE_V2:
         relative = Path(FLAG_SIGNING_ROOT_RELPATH) / artifact.name
+    elif artifact.environment_consumers:
+        relative = Path(GENERATED_ARTIFACTS_ROOT_RELPATH) / _identity_token(
+            artifact.address
+        )
     else:
         relative = Path(RENDERED_MANAGER_RELPATH)
     return scenario_root.resolve() / relative
+
+
+def generated_environment_file_path(
+    scenario_root: Path,
+    artifact: DeploymentGeneratedArtifactRealization,
+    consumer: DeploymentGeneratedEnvironmentConsumer,
+) -> Path:
+    """Return the contained host path used to deliver one environment binding."""
+
+    if consumer.delivery_mode == "env_file":
+        by_name = {output.name: output for output in artifact.outputs}
+        return artifact_source_path(scenario_root, artifact) / by_name[consumer.output].path
+    identity = "\0".join(
+        (
+            artifact.address,
+            consumer.target_address,
+            consumer.output,
+            consumer.environment_variable or "",
+        )
+    )
+    return (
+        scenario_root.resolve()
+        / GENERATED_ENVIRONMENT_ROOT_RELPATH
+        / _identity_token(artifact.address)
+        / f"{_identity_token(identity)}.env"
+    )
+
+
+def _identity_token(value: str) -> str:
+    """Return a stable path-safe token without embedding authored identifiers."""
+
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:24]
 
 
 def _consumer_output_names(
@@ -171,6 +212,29 @@ def _append_artifact_mounts(
                         "read_only": True,
                     }
                 )
+
+
+def _append_artifact_environment(
+    services: dict[str, dict[str, object]],
+    scenario_root: Path,
+    realization: DeploymentRealizationSpec,
+) -> None:
+    """Attach generated environment inputs to image-backed Compose services."""
+
+    non_compose = _non_compose_consumer_addresses(realization)
+    for artifact in realization.generated_artifacts:
+        for consumer in artifact.environment_consumers:
+            if consumer.target_address in non_compose:
+                continue
+            service = services.setdefault(consumer.service_name, {})
+            env_files = service.setdefault("env_file", [])
+            if not isinstance(env_files, list):
+                raise ValueError("Generated service env_file is not a list.")
+            path = str(
+                generated_environment_file_path(scenario_root, artifact, consumer)
+            )
+            if path not in env_files:
+                env_files.append(path)
 
 
 def _uses_per_output_mounts(
@@ -306,7 +370,25 @@ def _effective_service_errors(
             errors.append(
                 f"Effective stateful service {service_name} is missing a declared mount."
             )
+        elif not _env_file_contract(expected_service).issubset(
+            _env_file_contract(observed_service)
+        ):
+            errors.append(
+                f"Effective stateful service {service_name} is missing a declared env file."
+            )
     return errors
+
+
+def _env_file_contract(service: Mapping[str, object]) -> set[str]:
+    """Return env-file paths without resolving or inspecting their contents."""
+
+    values = service.get("env_file")
+    if not isinstance(values, list):
+        return set()
+    return {
+        str(value.get("path")) if isinstance(value, Mapping) else str(value)
+        for value in values
+    }
 
 
 def _mount_contract(service: Mapping[str, object]) -> set[tuple[object, ...]]:

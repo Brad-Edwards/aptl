@@ -181,8 +181,10 @@ class ComposeRealizationMixin(
         content = tuple(
             item for item in realization.content if item.target_address in addresses
         )
-        failure, extra_ops = self._image_free_generated_artifact_ops(
-            realization, addresses, realization_root
+        failure, extra_ops, environment_files = (
+            self._image_free_generated_artifact_ops(
+                realization, addresses, realization_root
+            )
         )
         if failure is not None:
             return failure
@@ -193,6 +195,7 @@ class ComposeRealizationMixin(
             scenario_root,
             extra_ops,
             persistent_volumes=realization.persistent_volumes,
+            environment_files=environment_files,
         )
 
     def _image_free_generated_artifact_ops(
@@ -200,26 +203,40 @@ class ComposeRealizationMixin(
         realization: DeploymentRealizationSpec,
         addresses: frozenset[str],
         realization_root: Path,
-    ) -> tuple[LabResult | None, dict[str, tuple[object, ...]]]:
+    ) -> tuple[
+        LabResult | None,
+        dict[str, tuple[object, ...]],
+        dict[str, tuple[str, ...]],
+    ]:
         """Generate and lower each image-free consumer's generated-artifact outputs.
 
-        Compose nodes receive generated artifacts as bind mounts; an image-free
-        node has no Compose service to mount into, so its consumer's selected,
-        non-producer-private outputs are placed into the container as files
-        instead (issue #875). The artifact is generated under ``realization_root``
-        (never the pristine pack) once here, before the node is materialized, so
-        its outputs exist to place; the generators are idempotent, so a later
-        compose-side generation reuses the same material.
+        Compose nodes receive generated artifacts as bind mounts or environment
+        files. An image-free node has no Compose service, so mounted outputs are
+        placed into the container as files and environment outputs are passed to
+        the base-container start as owner-only ``--env-file`` inputs. The artifact
+        is generated under ``realization_root`` (never the pristine pack) once
+        here, before the node is materialized; idempotent generators let a later
+        compose-side generation reuse the same material.
         """
 
+        from aptl.core.deployment._compose_stateful_model import (
+            generated_environment_file_path,
+        )
+
         ops_by_address: dict[str, list[object]] = {}
+        environment_files_by_address: dict[str, list[str]] = {}
         for artifact in realization.generated_artifacts:
             consumers = [
                 consumer
                 for consumer in artifact.consumers
                 if consumer.target_address in addresses
             ]
-            if not consumers:
+            environment_consumers = [
+                consumer
+                for consumer in artifact.environment_consumers
+                if consumer.target_address in addresses
+            ]
+            if not consumers and not environment_consumers:
                 continue
             failure = self._realize_one_generated_artifact(artifact, realization_root)
             if failure is None:
@@ -227,8 +244,25 @@ class ComposeRealizationMixin(
                     ops_by_address, artifact, consumers, realization_root
                 )
             if failure is not None:
-                return failure, {}
-        return None, {addr: tuple(ops) for addr, ops in ops_by_address.items()}
+                return failure, {}, {}
+            for consumer in environment_consumers:
+                environment_files_by_address.setdefault(
+                    consumer.target_address, []
+                ).append(
+                    str(
+                        generated_environment_file_path(
+                            realization_root, artifact, consumer
+                        )
+                    )
+                )
+        return (
+            None,
+            {addr: tuple(ops) for addr, ops in ops_by_address.items()},
+            {
+                addr: tuple(paths)
+                for addr, paths in environment_files_by_address.items()
+            },
+        )
 
     def _realize_without_compose(
         self,
@@ -250,8 +284,10 @@ class ComposeRealizationMixin(
         if substrate_failure is not None:
             return substrate_failure
         addresses = frozenset(node.address for node in realization.nodes)
-        failure, extra_ops = self._image_free_generated_artifact_ops(
-            realization, addresses, self.realization_root
+        failure, extra_ops, environment_files = (
+            self._image_free_generated_artifact_ops(
+                realization, addresses, self.realization_root
+            )
         )
         if failure is not None:
             return failure
@@ -262,6 +298,7 @@ class ComposeRealizationMixin(
             scenario_root,
             extra_ops,
             persistent_volumes=realization.persistent_volumes,
+            environment_files=environment_files,
         )
         return node_result if node_result is not None else LabResult(success=True)
 

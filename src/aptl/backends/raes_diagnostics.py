@@ -14,12 +14,17 @@ from raes_contracts.runtime_state import (
     RuntimeSnapshot,
     SnapshotEntry,
 )
+from raes_contracts.realization_observation import ObservedOperatingSystemIdentity
 from raes_contracts.vocabulary import ObservationStrength
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 
 _FORWARDING_AGENTS_PATH = CONCERN_PAYLOAD_PATH["forwarding-agents"]
+_NODE_KIND_PATH = CONCERN_PAYLOAD_PATH["node-type"]
+_OS_FAMILY_PATH = CONCERN_PAYLOAD_PATH["os-family"]
+_RUNTIME_ENVIRONMENT_PATH = CONCERN_PAYLOAD_PATH["runtime-environment"]
 
 from aptl.backends.raes_observation import ObservedResource
+from aptl.backends.identity import APTL_RAES_TARGET_VERSION
 from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
 
@@ -154,8 +159,11 @@ def snapshot_after_apply(
             refresh_dependencies=resource.refresh_dependencies,
             status="ready",
         )
-    observations_disclosure = _realization_observation_disclosures(observations)
-    updated = snapshot.with_entries(entries)
+    observations_disclosure = _realization_observation_disclosures(observations, plan)
+    updated = dataclasses.replace(
+        snapshot.with_entries(entries),
+        realization_envelope=plan.realization_envelope,
+    )
     if observations_disclosure:
         updated = dataclasses.replace(
             updated,
@@ -169,34 +177,95 @@ def snapshot_after_apply(
 
 def _realization_observation_disclosures(
     observations: Mapping[str, ObservedResource],
+    plan: ProvisioningPlan,
 ) -> tuple[RealizationObservationDisclosure, ...]:
     """Disclose how APTL corroborated each realized ``configuration``-scope concern.
 
-    raes 3.3.0's runtime gate accepts an EXACT concern with a non-null
+    RAES 3.5's runtime gate accepts an EXACT concern with a non-null
     verification scope only when the returned snapshot carries a matching
     observation disclosure whose scope + strength the backend manifest also
-    declares. Today that is forwarding-agents: for every node whose forwarding
-    agents the observer corroborated (present in its observed concerns), disclose
-    that APTL read them back at ``configuration`` scope, ``daemon-observed``
-    strength — the same corroboration the manifest advertises, so the claim is
-    backed by real readback rather than a bare capability assertion.
+    declares. For every corroborated concern, disclose the scope and strength
+    actually used by the observer so the claim is backed by real readback rather
+    than a bare capability assertion.
     """
 
     disclosures: list[RealizationObservationDisclosure] = []
+    envelope = plan.realization_envelope
     for address, observed in observations.items():
-        if _FORWARDING_AGENTS_PATH not in observed.concerns:
-            continue
         node_name = address.removeprefix("provision.node.")
-        disclosures.append(
-            RealizationObservationDisclosure(
-                address=address,
-                field_path=f"nodes.{node_name}.runtime.forwarding_agents",
-                domain="runtime-realization",
-                requirement_kind="forwarding-agents",
-                verification_scope=RealizationVerificationScope.CONFIGURATION,
-                observation_strength=ObservationStrength.DAEMON_OBSERVED,
+        node_kind = observed.concerns.get(_NODE_KIND_PATH)
+        if (
+            observed.realized
+            and node_kind == "compute"
+            and plan.operation_id
+            and envelope is not None
+        ):
+            disclosures.append(
+                RealizationObservationDisclosure(
+                    address=address,
+                    field_path=f"nodes.{node_name}.realization.compute-substrate",
+                    domain="runtime-realization",
+                    requirement_kind="compute-substrate",
+                    verification_scope=RealizationVerificationScope.PRESENCE,
+                    observation_strength=ObservationStrength.DAEMON_OBSERVED,
+                    observed_value="operating-system-container",
+                    operation_id=plan.operation_id,
+                    envelope_digest=envelope.digest,
+                    configuration_digest=envelope.configuration_digest,
+                    observer_version=APTL_RAES_TARGET_VERSION,
+                    sequence=len(disclosures),
+                    binding_verified=True,
+                )
             )
-        )
+        os_family = observed.concerns.get(_OS_FAMILY_PATH)
+        if (
+            isinstance(os_family, str)
+            and plan.operation_id
+            and envelope is not None
+        ):
+            disclosures.append(
+                RealizationObservationDisclosure(
+                    address=address,
+                    field_path=f"nodes.{node_name}.os",
+                    domain="runtime-realization",
+                    requirement_kind="operating-system",
+                    verification_scope=RealizationVerificationScope.PRESENCE,
+                    observation_strength=ObservationStrength.GUEST_OBSERVED,
+                    operating_system=ObservedOperatingSystemIdentity(
+                        family=os_family,
+                        distribution="x-aptl:container-image",
+                        version="container-image",
+                    ),
+                    operation_id=plan.operation_id,
+                    envelope_digest=envelope.digest,
+                    configuration_digest=envelope.configuration_digest,
+                    observer_version=APTL_RAES_TARGET_VERSION,
+                    sequence=len(disclosures),
+                    binding_verified=True,
+                )
+            )
+        if _FORWARDING_AGENTS_PATH in observed.concerns:
+            disclosures.append(
+                RealizationObservationDisclosure(
+                    address=address,
+                    field_path=f"nodes.{node_name}.runtime.forwarding_agents",
+                    domain="runtime-realization",
+                    requirement_kind="forwarding-agents",
+                    verification_scope=RealizationVerificationScope.CONFIGURATION,
+                    observation_strength=ObservationStrength.DAEMON_OBSERVED,
+                )
+            )
+        if _RUNTIME_ENVIRONMENT_PATH in observed.concerns:
+            disclosures.append(
+                RealizationObservationDisclosure(
+                    address=address,
+                    field_path=f"nodes.{node_name}.runtime.environment",
+                    domain="runtime-realization",
+                    requirement_kind="runtime-environment",
+                    verification_scope=RealizationVerificationScope.CONFIGURATION,
+                    observation_strength=ObservationStrength.GUEST_OBSERVED,
+                )
+            )
     return tuple(disclosures)
 
 

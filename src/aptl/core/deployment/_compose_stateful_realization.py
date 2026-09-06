@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import secrets
 import subprocess
 from pathlib import Path
 
@@ -11,8 +13,10 @@ from aptl.core.certs import CertResult, ensure_ssl_certs
 from aptl.core.soc_ca import derive_soc_service_certs, ensure_soc_certs
 from aptl.core.credentials import (
     RENDERED_MANAGER_RELPATH,
+    _atomic_write_owner_only,
     _atomic_write_secure,
     _canonical_generated_path,
+    _enforce_mode,
     _ensure_secure_dir,
     sync_manager_config,
 )
@@ -33,6 +37,7 @@ from aptl.core.deployment._compose_stateful_graph import (
 from aptl.core.deployment._compose_stateful_model import (
     artifact_source_path as _artifact_source_path,
     effective_stateful_model_errors as _effective_stateful_model_errors,
+    generated_environment_file_path as _generated_environment_file_path,
     stateful_override_payload,
 )
 from aptl.core.deployment._compose_stateful_readiness import (
@@ -55,6 +60,11 @@ from aptl.core.lab_types import LabResult
 
 artifact_source_path = _artifact_source_path
 effective_stateful_model_errors = _effective_stateful_model_errors
+generated_environment_file_path = _generated_environment_file_path
+
+_ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_MAX_GENERATED_VALUE_LENGTH = 4096
+_MAX_ENV_FILE_LENGTH = 65536
 
 
 class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
@@ -144,7 +154,10 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
                     f"generator {artifact.generator!r}."
                 ),
             )
-        return realizer(artifact, scenario_root)
+        failure = realizer(artifact, scenario_root)
+        if failure is not None:
+            return failure
+        return self._realize_generated_environment_consumers(artifact, scenario_root)
 
     @staticmethod
     def _realize_ssh_key_bundle(
@@ -191,6 +204,8 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
 
         if artifact.provenance == FLAG_SIGNING_PROFILE_V2:
             return self._realize_flag_signing_keys(artifact, scenario_root)
+        if artifact.environment_consumers and not artifact.consumers:
+            return self._realize_generated_secret_outputs(artifact, scenario_root)
 
         unsupported_binding = (
             artifact.provenance not in WAZUH_MANAGER_CONFIG_PROVENANCES
@@ -241,6 +256,90 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
                 ),
             )
         return failure
+
+    @staticmethod
+    def _realize_generated_secret_outputs(
+        artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Generate opaque values for an environment-only rendered artifact."""
+
+        if any(
+            consumer.delivery_mode != "environment"
+            for consumer in artifact.environment_consumers
+        ):
+            return LabResult(
+                success=False,
+                error=(
+                    f"Generated artifact {artifact.address} has an unsupported "
+                    "generic env-file producer binding."
+                ),
+            )
+        source = artifact_source_path(scenario_root, artifact)
+        try:
+            source_relative = source.relative_to(scenario_root.resolve())
+            _canonical_generated_path(scenario_root, source_relative)
+            for output in artifact.outputs:
+                target_relative = source_relative / output.path
+                target = _canonical_generated_path(scenario_root, target_relative)
+                value: str | None = None
+                if artifact.lifecycle == "reuse_valid" and target.exists():
+                    value = target.read_text(encoding="utf-8")
+                    _validate_generated_scalar(value)
+                if value is None:
+                    value = secrets.token_urlsafe(48)
+                _ensure_secure_dir(target.parent)
+                target = _canonical_generated_path(scenario_root, target_relative)
+                _atomic_write_owner_only(target, value)
+        except (OSError, UnicodeError, ValueError):
+            return LabResult(
+                success=False,
+                error="Generated environment artifact failed containment or value validation.",
+            )
+        return None
+
+    @staticmethod
+    def _realize_generated_environment_consumers(
+        artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Create or validate secret-safe host env files for declared consumers."""
+
+        outputs = {output.name: output for output in artifact.outputs}
+        source = artifact_source_path(scenario_root, artifact)
+        try:
+            source_relative = source.relative_to(scenario_root.resolve())
+            for consumer in artifact.environment_consumers:
+                output = outputs[consumer.output]
+                output_relative = source_relative / output.path
+                output_path = _canonical_generated_path(scenario_root, output_relative)
+                value = output_path.read_text(encoding="utf-8")
+                if consumer.delivery_mode == "env_file":
+                    _validate_env_file(value)
+                    _enforce_mode(output_path, 0o600, "generated env file")
+                    continue
+                _validate_generated_scalar(value)
+                name = consumer.environment_variable or ""
+                if _ENVIRONMENT_NAME.fullmatch(name) is None:
+                    raise ValueError("invalid environment variable name")
+                delivery_path = generated_environment_file_path(
+                    scenario_root, artifact, consumer
+                )
+                delivery_relative = delivery_path.relative_to(scenario_root.resolve())
+                delivery_path = _canonical_generated_path(
+                    scenario_root, delivery_relative
+                )
+                _ensure_secure_dir(delivery_path.parent)
+                delivery_path = _canonical_generated_path(
+                    scenario_root, delivery_relative
+                )
+                _atomic_write_owner_only(delivery_path, f"{name}={value}\n")
+        except (KeyError, OSError, UnicodeError, ValueError):
+            return LabResult(
+                success=False,
+                error="Generated environment binding failed containment or value validation.",
+            )
+        return None
 
     @staticmethod
     def _realize_flag_signing_keys(
@@ -359,6 +458,38 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
             return self._run(command, timeout=timeout)
         except BackendTimeoutError as exc:
             raise subprocess.TimeoutExpired(command, timeout) from exc
+
+
+def _validate_generated_scalar(value: str) -> None:
+    """Reject values that cannot be represented as one Compose env assignment."""
+
+    if (
+        not value
+        or len(value) > _MAX_GENERATED_VALUE_LENGTH
+        or "\0" in value
+        or "\n" in value
+        or "\r" in value
+    ):
+        raise ValueError("generated environment value is invalid")
+
+
+def _validate_env_file(value: str) -> None:
+    """Validate a bounded assignment-only env file without exposing its values."""
+
+    if not value or len(value) > _MAX_ENV_FILE_LENGTH or "\0" in value:
+        raise ValueError("generated env file is invalid")
+    names: set[str] = set()
+    for line in value.splitlines():
+        if not line or "=" not in line:
+            raise ValueError("generated env file is invalid")
+        name, _separator, secret = line.partition("=")
+        if (
+            _ENVIRONMENT_NAME.fullmatch(name) is None
+            or name in names
+            or not secret
+        ):
+            raise ValueError("generated env file is invalid")
+        names.add(name)
 
 
 def _certificate_bundle_failure(

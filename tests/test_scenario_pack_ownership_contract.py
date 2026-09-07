@@ -1,13 +1,19 @@
 """Structural contracts for scenario-pack ownership and terminology."""
 
+import json
 import re
 from collections import Counter
+from importlib import resources
 from pathlib import Path
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _OWNERSHIP_NOTE = (
     _REPO_ROOT / "docs/architecture/issue-589-scenario-pack-capture-ownership-preflight.md"
+)
+_ASSET_OWNERSHIP_NOTE = (
+    _REPO_ROOT
+    / "docs/architecture/issue-591-scenario-pack-capture-asset-ownership-preflight.md"
 )
 _README = _REPO_ROOT / "README.md"
 _SDL_BOUNDARY = _REPO_ROOT / "docs/sdl/index.md"
@@ -45,6 +51,23 @@ def _terminology_rows(note: str) -> dict[str, str]:
         block.splitlines()
         for block in decision.split("\n\n")
         if block.startswith("| Meaning | Canonical wording | Boundary |")
+    )
+    rows = [line for line in table if line.startswith("|")][2:]
+    return {
+        cells[1].strip(): f"{cells[2]} {cells[3]}"
+        for line in rows
+        if len(cells := line.split("|")) >= 4
+    }
+
+
+def _asset_ownership_rows(note: str) -> dict[str, str]:
+    decision = note.split(
+        "## Ownership Decision And Source Inventory\n", maxsplit=1
+    )[1].split("## ", maxsplit=1)[0]
+    table = next(
+        block.splitlines()
+        for block in decision.split("\n\n")
+        if block.startswith("| Historical APTL source | What it was |")
     )
     rows = [line for line in table if line.startswith("|")][2:]
     return {
@@ -99,6 +122,64 @@ def test_scenario_pack_ownership_remains_four_way_and_current() -> None:
     assert "Brad-Edwards/aces" not in note
     # The RAESystem org was renamed to OpenRAE; the stale name must not return.
     assert "RAESystem" not in note
+
+
+def test_capture_asset_placement_is_current_and_adapter_explicit() -> None:
+    note = _ASSET_OWNERSHIP_NOTE.read_text(encoding="utf-8")
+    rows = _asset_ownership_rows(note)
+
+    methodology = next(
+        value
+        for source, value in rows.items()
+        if "asset-inventory-methodology.md" in source
+    )
+    pack_source, pack_adapter = next(
+        (source, value)
+        for source, value in rows.items()
+        if "aptl-capture-client" in source
+    )
+    runtime_source, runtime = next(
+        (source, value)
+        for source, value in rows.items()
+        if "kali-capture/**" in source
+    )
+
+    assert "RAES-owned" in methodology
+    assert "OpenRAE/env-packs/packs/techvault/assets/content" in pack_source
+    assert "explicit APTL backend adapters" in pack_adapter
+    assert "Capture consumer contract" in pack_adapter
+    assert "mcp/aptl-mcp-common/src/captures.ts" in runtime_source
+    assert "APTL-owned runtime apparatus" in runtime
+    assert "https://github.com/OpenRAE/env-packs/tree/main/packs/techvault" in note
+    assert "there is no additional APTL asset to move" in " ".join(note.split())
+
+
+def test_pinned_techvault_pack_carries_capture_adapters_and_contract() -> None:
+    pack_root = Path(
+        str(resources.files("raes_env_packs") / "resources" / "packs" / "techvault")
+    )
+    manifest = json.loads(
+        (pack_root / "associated-artifacts.json").read_text(encoding="utf-8")
+    )
+    artifacts = manifest["artifacts"]
+    expected_adapters = {
+        "techvault-kali-capture-client": (
+            "raes-environment-pack:/assets/content/kali-capture-client"
+        ),
+        "techvault-kali-wrap-shell": (
+            "raes-environment-pack:/assets/content/kali-wrap-shell.sh"
+        ),
+    }
+
+    for artifact_id, expected_uri in expected_adapters.items():
+        artifact = artifacts[artifact_id]
+        assert artifact["uri"] == expected_uri
+        assert artifact["source"].startswith("aptl@")
+        assert (pack_root / expected_uri.removeprefix("raes-environment-pack:/")).is_file()
+
+    readme = (pack_root / "README.md").read_text(encoding="utf-8")
+    assert "## Capture consumer contract" in readme
+    assert "APTL_CAPTURE_CAPABILITY" in readme
 
 
 def test_user_docs_cross_reference_env_pack_companion_repo() -> None:

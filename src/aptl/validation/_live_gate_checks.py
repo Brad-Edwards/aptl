@@ -47,6 +47,9 @@ from aptl.validation._live_gate_variation import (
     _single_node_plan,
     _variation_diagnostics,
 )
+from aptl.validation._live_gate_models import (
+    verification_provenance as _verification_provenance,
+)
 from aptl.validation._live_gate_readiness import (
     _node_readiness_diagnostics,
     _undeclared_container_diagnostics,
@@ -310,6 +313,11 @@ def check_run_archive_manifest(
         "validation": {
             "checks": [_check_to_dict(check) for check in prior_checks],
             "status": validation_status,
+            # Which installed answer key reached the semantic verdict, observed
+            # by discovery from installed package metadata. ``None`` when no
+            # plugin answered, so an unattributed verdict is explicit rather
+            # than an absent key (#879).
+            "verification": _verification_provenance(state.verification),
         },
         "snapshot": state.snapshot,
         "evidence": state.evidence,

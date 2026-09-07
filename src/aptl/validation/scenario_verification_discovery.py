@@ -25,7 +25,7 @@ from aptl.validation._scenario_verification_contract import (
     MAX_DIAGNOSTIC_LENGTH as _MAX_DIAGNOSTIC_LENGTH,
     VerifierContractError as _VerifierContractError,
     identifier as _identifier,
-    sequence as _sequence,
+    qualified_targets as _qualified_targets,
     text as _text,
     validate_context as _validate_context,
     validated_report as _validated_report,
@@ -34,6 +34,7 @@ from aptl.validation.scenario_verification import (
     ENTRY_POINT_GROUP,
     EXTENSION_API_VERSION,
     BackendIdentity,
+    QualifiedTarget,
     ScenarioIdentity,
     VerificationContext,
     VerificationReport,
@@ -169,83 +170,96 @@ def _incompatibility(
 ) -> str:
     """Return why this verifier does not fit, or an empty string if it does.
 
-    Matching is exact in every dimension. A verifier that pinned content digests
-    must match the admitted digest: content that changed is content the plugin
-    was not written against, even when the scenario still answers to the same
-    name.
+    A qualified target is admitted whole. The admitted scenario and backend must
+    equal one declared pair exactly, because a pair is the unit the plugin
+    release actually qualified -- mixing dimensions across pairs would run
+    against a combination nothing ever qualified.
     """
 
     verifier = discovered.verifier
-    scalar_matches = (
-        _text(getattr(verifier, "extension_api_version", None)) == EXTENSION_API_VERSION
-        and _text(getattr(verifier, "scenario_identity", None)) == scenario.identity
-        and _text(getattr(verifier, "backend_target_name", None)) == backend.target_name
+    declared_api = _text(getattr(verifier, "extension_api_version", None))
+    if declared_api != EXTENSION_API_VERSION:
+        return "incompatible extension api version"
+    targets = _qualified_targets(verifier)
+    if QualifiedTarget(scenario=scenario, backend=backend) in targets:
+        return ""
+    return _nearest_mismatch(discovered, targets, scenario, backend)
+
+
+def _mismatched_dimensions(
+    target: QualifiedTarget,
+    scenario: ScenarioIdentity,
+    backend: BackendIdentity,
+) -> tuple[str, ...]:
+    """Return the reasons one declared pair does not admit this run."""
+
+    reasons = (
+        (
+            target.scenario.identity != scenario.identity,
+            f"does not support scenario {scenario.identity!r}",
+        ),
+        (
+            target.scenario.source_kind != scenario.source_kind,
+            f"does not support scenario source {scenario.source_kind!r}",
+        ),
+        (
+            target.scenario.version != scenario.version,
+            f"does not support scenario version {scenario.version!r}",
+        ),
+        (
+            target.scenario.content_digest != scenario.content_digest,
+            "is pinned to different scenario content than the admitted scenario",
+        ),
+        (
+            target.backend.target_name != backend.target_name,
+            f"does not support backend {backend.target_name!r}",
+        ),
+        (
+            target.backend.target_version != backend.target_version,
+            f"does not support backend version {backend.target_version!r}",
+        ),
+        (
+            target.backend.profile != backend.profile,
+            f"does not support backend profile {backend.profile!r}",
+        ),
+        (
+            target.backend.provider != backend.provider,
+            f"does not support backend provider {backend.provider!r}",
+        ),
+        (
+            target.backend.transport != backend.transport,
+            f"does not support backend transport {backend.transport!r}",
+        ),
     )
-    if not scalar_matches:
-        return "incompatible scalar claim"
-    return _capability_mismatch(discovered, scenario, backend)
+    return tuple(reason for mismatched, reason in reasons if mismatched)
 
 
-def _capability_mismatch(
+def _nearest_mismatch(
     discovered: DiscoveredVerifier,
+    targets: tuple[QualifiedTarget, ...],
     scenario: ScenarioIdentity,
     backend: BackendIdentity,
 ) -> str:
-    """Return why a name-matched verifier still does not fit, or an empty string.
+    """Return the most specific reason no declared pair admits this run.
 
-    Content, backend target, and profile are each matched exactly; the first
-    dimension that does not line up is the reported reason.
+    With several declared pairs, the one that disagrees in the fewest dimensions
+    is the closest thing to a qualification for this range, so its first
+    disagreement is the actionable reason -- a digest divergence against the
+    otherwise-matching release, rather than a scenario-name mismatch against
+    some unrelated pair.
     """
 
-    verifier = discovered.verifier
-    source_kinds = _sequence(verifier, "scenario_source_kinds")
-    scenario_versions = _sequence(verifier, "scenario_versions")
-    digests = _sequence(verifier, "scenario_content_digests")
-    target_versions = _sequence(verifier, "backend_target_versions")
-    profiles = _sequence(verifier, "backend_profiles")
-    providers = _sequence(verifier, "backend_providers")
-    transports = _sequence(verifier, "backend_transports")
-    checks = (
-        (
-            scenario.source_kind not in source_kinds,
-            f"plugin {discovered.plugin_id!r} does not support scenario source "
-            f"{scenario.source_kind!r}",
-        ),
-        (
-            scenario.version not in scenario_versions,
-            f"plugin {discovered.plugin_id!r} does not support scenario version "
-            f"{scenario.version!r}",
-        ),
-        (
-            scenario.content_digest not in digests,
-            f"plugin {discovered.plugin_id!r} is pinned to different scenario "
-            "content than the admitted scenario",
-        ),
-        (
-            backend.target_version not in target_versions,
-            f"plugin {discovered.plugin_id!r} does not support backend version "
-            f"{backend.target_version!r}",
-        ),
-        (
-            backend.profile not in profiles,
-            f"plugin {discovered.plugin_id!r} does not support backend profile "
-            f"{backend.profile!r}",
-        ),
-        (
-            backend.provider not in providers,
-            f"plugin {discovered.plugin_id!r} does not support backend provider "
-            f"{backend.provider!r}",
-        ),
-        (
-            backend.transport not in transports,
-            f"plugin {discovered.plugin_id!r} does not support backend transport "
-            f"{backend.transport!r}",
-        ),
+    nearest = min(
+        (_mismatched_dimensions(target, scenario, backend) for target in targets),
+        key=len,
     )
-    for failed, reason in checks:
-        if failed:
-            return reason
-    return ""
+    if not nearest:
+        # No declared pair equals this range, yet no named dimension disagrees:
+        # an identity gained a field the reasons above do not cover. Refusing
+        # generically keeps discovery fail-closed, where indexing an empty
+        # reason list would raise straight through the gate instead.
+        return f"plugin {discovered.plugin_id!r} is not qualified for this range"
+    return f"plugin {discovered.plugin_id!r} {nearest[0]}"
 
 
 def select_verifier(

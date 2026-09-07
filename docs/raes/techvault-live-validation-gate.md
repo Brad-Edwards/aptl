@@ -126,8 +126,36 @@ The gate boots the full lab, so the runner needs:
   sensitive values are still `.env.example` placeholders.
 - The installed `raes` wheel and the `raes` command for the static
   prerequisite.
+- The scenario's semantic verifier, installed as its own distribution (see
+  below). Without it the gate cannot reach a verdict.
 - An isolated, project-scoped Docker daemon. The destructive cleanup removes the
   `aptl` compose project's volumes, so do not run it against a shared daemon.
+
+## The semantic verifier is a separate install
+
+APTL core ships no scenario answer keys: which node is the attacker, what the
+defensive stack is, and what proves a detection traversed it is knowledge about
+one scenario on one backend. The gate discovers that knowledge as an installed
+distribution registered under the `aptl.scenario_verifiers` entry-point group.
+For TechVault, install it beside APTL before running the gate:
+
+```
+pip install -e ./plugins/aptl-techvault-verifier --no-deps
+```
+
+With no compatible verifier installed, semantic verification is terminal
+`blocked` and the gate reports no verdict. That is deliberate and is not the
+same as a pass, a skip, or a detection failure. A range whose verification
+could not run has not been verified. The same outcome covers a verifier whose declared
+qualification does not match the range: admission requires an exact match on the
+extension API, the admitted pack's identity, version and content digest, and the
+backend's target, version, profile, and transport. Empty declarations are not
+wildcards. `plugins/aptl-techvault-verifier/README.md` states which combinations
+a release admits and what a pack change requires of it.
+
+Installing a verifier grants code execution with APTL's authority. Entry-point
+discovery is a lookup mechanism, not a sandbox, so installation stays an
+explicit operator action: the gate never downloads, installs, or scans for one.
 
 ## Running the gate
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from importlib import metadata
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,10 +22,12 @@ import pytest
 
 from aptl.validation.scenario_verification import (
     ENTRY_POINT_GROUP,
+    EXTENSION_API_MIN_CORE_RELEASE,
     EXTENSION_API_VERSION,
     BackendIdentity,
     PrerequisiteResult,
     PrerequisiteStatus,
+    QualifiedTarget,
     ScenarioIdentity,
     VerificationCheck,
     VerificationContext,
@@ -46,6 +49,7 @@ BACKEND = BackendIdentity(
     provider="docker-compose",
     transport="docker-compose",
 )
+TARGET = QualifiedTarget(scenario=SCENARIO, backend=BACKEND)
 
 
 def _context(*, deadline_monotonic: float = float("inf")) -> VerificationContext:
@@ -66,23 +70,7 @@ class _Verifier(object):
         self.extension_api_version = overrides.get(
             "extension_api_version", EXTENSION_API_VERSION
         )
-        self.scenario_identity = overrides.get("scenario_identity", SCENARIO.identity)
-        self.scenario_source_kinds = overrides.get(
-            "scenario_source_kinds", (SCENARIO.source_kind,)
-        )
-        self.scenario_versions = overrides.get("scenario_versions", (SCENARIO.version,))
-        self.scenario_content_digests = overrides.get(
-            "scenario_content_digests", (SCENARIO.content_digest,)
-        )
-        self.backend_target_name = overrides.get("backend_target_name", "aptl")
-        self.backend_target_versions = overrides.get(
-            "backend_target_versions", (BACKEND.target_version,)
-        )
-        self.backend_profiles = overrides.get("backend_profiles", (BACKEND.profile,))
-        self.backend_providers = overrides.get("backend_providers", (BACKEND.provider,))
-        self.backend_transports = overrides.get(
-            "backend_transports", (BACKEND.transport,)
-        )
+        self.qualified_targets = overrides.get("qualified_targets", (TARGET,))
         self._status = status
         self._raises = overrides.get("raises", False)
         self._malformed = overrides.get("malformed", False)
@@ -229,20 +217,25 @@ def test_unrelated_entry_points_are_filtered_before_loading(monkeypatch):
 @pytest.mark.parametrize(
     ("metadata_name", "metadata_value"),
     [
-        ("scenario_source_kinds", ()),
-        ("scenario_versions", ()),
-        ("scenario_content_digests", ()),
-        ("backend_target_versions", ()),
-        ("backend_profiles", ()),
-        ("backend_providers", ()),
-        ("backend_transports", ()),
+        ("qualified_targets", ()),
+        ("qualified_targets", [TARGET]),
+        ("qualified_targets", (TARGET, TARGET)),
+        ("qualified_targets", ("techvault.aptl",)),
+        (
+            "qualified_targets",
+            (replace(TARGET, scenario=replace(SCENARIO, content_digest="any")),),
+        ),
+        (
+            "qualified_targets",
+            (replace(TARGET, scenario=replace(SCENARIO, identity="not a safe id")),),
+        ),
         ("plugin_id", "not a bounded plugin id"),
     ],
 )
 def test_malformed_or_wildcard_metadata_blocks(
     monkeypatch, metadata_name, metadata_value
 ):
-    """An omitted compatibility dimension cannot silently claim future inputs."""
+    """An omitted or unqualified declaration cannot silently claim future inputs."""
 
     _install(monkeypatch, _Verifier(**{metadata_name: metadata_value}))
 
@@ -253,19 +246,18 @@ def test_malformed_or_wildcard_metadata_blocks(
 
 
 @pytest.mark.parametrize(
-    ("metadata_name", "metadata_value"),
+    "target",
     [
-        ("scenario_source_kinds", ("project-tree",)),
-        ("scenario_versions", ("0.0.9",)),
-        ("backend_target_versions", ("0.0.9",)),
-        ("backend_providers", ("other-provider",)),
-        ("backend_transports", ("ssh-compose",)),
+        replace(TARGET, scenario=replace(SCENARIO, source_kind="project-tree")),
+        replace(TARGET, scenario=replace(SCENARIO, version="0.0.9")),
+        replace(TARGET, backend=replace(BACKEND, target_version="0.0.9")),
+        replace(TARGET, backend=replace(BACKEND, provider="other-provider")),
+        replace(TARGET, backend=replace(BACKEND, transport="ssh-compose")),
+        replace(TARGET, backend=replace(BACKEND, profile="provisioning-only")),
     ],
 )
-def test_every_compatibility_dimension_is_matched_exactly(
-    monkeypatch, metadata_name, metadata_value
-):
-    _install(monkeypatch, _Verifier(**{metadata_name: metadata_value}))
+def test_every_compatibility_dimension_is_matched_exactly(monkeypatch, target):
+    _install(monkeypatch, _Verifier(qualified_targets=(target,)))
 
     report = discovery.verify_scenario(_context())
 
@@ -278,7 +270,14 @@ def test_pinned_content_digest_must_match_the_admitted_scenario(monkeypatch):
 
     _install(
         monkeypatch,
-        _Verifier(scenario_content_digests=("sha256:" + "b" * 64,)),
+        _Verifier(
+            qualified_targets=(
+                replace(
+                    TARGET,
+                    scenario=replace(SCENARIO, content_digest="sha256:" + "b" * 64),
+                ),
+            )
+        ),
     )
     report = discovery.verify_scenario(_context())
 
@@ -286,13 +285,106 @@ def test_pinned_content_digest_must_match_the_admitted_scenario(monkeypatch):
     assert "pinned to different scenario content" in report.diagnostics[0]
 
 
-def test_backend_profile_mismatch_blocks(monkeypatch):
-    """A verifier written for another profile cannot judge this range."""
+def test_an_unqualified_combination_of_qualified_declarations_blocks(monkeypatch):
+    """Qualification is atomic: a pair is admitted, never a dimension.
 
-    _install(monkeypatch, _Verifier(backend_profiles=("provisioning-only",)))
+    This is what parallel version and digest lists could not express. A plugin
+    that qualified release 0.1.0 at digest A and release 0.2.0 at digest B has
+    said nothing about 0.1.0 at digest B, and running against that combination
+    would be running against content no release ever qualified.
+    """
+
+    release_a = replace(TARGET, scenario=replace(SCENARIO, version="0.1.0"))
+    release_b = replace(
+        TARGET,
+        scenario=replace(
+            SCENARIO, version="0.2.0", content_digest="sha256:" + "b" * 64
+        ),
+    )
+    _install(monkeypatch, _Verifier(qualified_targets=(release_a, release_b)))
+
+    # The cross combination: release A's version with release B's content.
+    unqualified = replace(
+        _context(),
+        scenario=replace(
+            SCENARIO, version="0.1.0", content_digest="sha256:" + "b" * 64
+        ),
+    )
+    report = discovery.verify_scenario(unqualified)
+
+    assert report.status is VerificationStatus.BLOCKED
+    assert "pinned to different scenario content" in report.diagnostics[0]
+
+    # Both declared pairs themselves still run.
+    for qualified in (release_a, release_b):
+        admitted = replace(
+            _context(), scenario=qualified.scenario, backend=qualified.backend
+        )
+        assert discovery.verify_scenario(admitted).status is VerificationStatus.PASSED
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        QualifiedTarget(scenario=object(), backend=BACKEND),
+        QualifiedTarget(scenario=SCENARIO, backend=object()),
+        QualifiedTarget(scenario=SCENARIO, backend=["unhashable"]),
+    ],
+)
+def test_a_malformed_qualified_target_member_blocks(monkeypatch, target):
+    """A wrong member type must block, not raise through the gate.
+
+    ``QualifiedTarget`` is an ordinary dataclass, so a plugin can put anything
+    in it. Reading a wrong type raises AttributeError and hashing an unhashable
+    one raises TypeError; discovery catches neither, so without a type check the
+    promised terminal blocked report becomes an exception escaping
+    ``verify_scenario``.
+    """
+
+    _install(monkeypatch, _Verifier(qualified_targets=(target,)))
+
     report = discovery.verify_scenario(_context())
 
     assert report.status is VerificationStatus.BLOCKED
+    assert "metadata" in report.diagnostics[0]
+
+
+def test_an_unnamed_identity_dimension_still_blocks(monkeypatch):
+    """Fail closed when a mismatch has no name yet.
+
+    The refusal reason enumerates the identity fields by hand, so an identity
+    that gains a field would leave a pair that is unequal while no named
+    dimension disagrees. Discovery must still refuse: the alternative is
+    indexing an empty reason list, which raises through the gate rather than
+    blocking it.
+    """
+
+    _install(monkeypatch, _Verifier())
+    monkeypatch.setattr(discovery, "_mismatched_dimensions", lambda *_a: ())
+    monkeypatch.setattr(
+        discovery, "QualifiedTarget", lambda **_k: object()
+    )
+
+    report = discovery.verify_scenario(_context())
+
+    assert report.status is VerificationStatus.BLOCKED
+    assert "is not qualified for this range" in report.diagnostics[0]
+
+
+def test_a_second_qualified_backend_needs_no_core_change(monkeypatch):
+    """Extensibility: another qualified transport is a plugin declaration."""
+
+    ssh_backend = replace(BACKEND, provider="ssh-compose", transport="ssh-compose")
+    _install(
+        monkeypatch,
+        _Verifier(
+            qualified_targets=(TARGET, replace(TARGET, backend=ssh_backend)),
+        ),
+    )
+
+    report = discovery.verify_scenario(replace(_context(), backend=ssh_backend))
+
+    assert report.status is VerificationStatus.PASSED
 
 
 def test_a_plugin_that_raises_blocks_without_leaking_the_exception(monkeypatch):
@@ -514,6 +606,44 @@ def test_the_techvault_verifier_is_a_separate_distribution():
             "aptl_techvault_verifier.participant_smoke:PARTICIPANT_SMOKE_OPERATIONS"
         )
     }
+
+
+def test_the_plugin_floor_names_the_release_that_carries_its_contract():
+    """A dependency floor below the contract is a broken install, not a refusal.
+
+    The plugin imports types this extension API introduced. Admitting an earlier
+    released core means pip can install the pair, and then the entry point fails
+    at *import* -- before the version admission that exists to refuse exactly
+    this. So the floor must be the first release carrying the API, which is not
+    the same as the newest release: this repository's source still builds as the
+    already-published 5.2.0 while the API moved on after it.
+    """
+
+    import tomllib
+
+    root = Path(__file__).resolve().parents[1]
+    plugin = tomllib.loads(
+        (root / "plugins/aptl-techvault-verifier/pyproject.toml").read_text(
+            encoding="utf-8"
+        )
+    )
+    released = json.loads(
+        (root / ".release-please-manifest.json").read_text(encoding="utf-8")
+    )["."]
+
+    assert plugin["project"]["dependencies"] == [
+        f"aptl-labs>={EXTENSION_API_MIN_CORE_RELEASE},<6"
+    ]
+    # And the recorded first-carrying release is not one that shipped before the
+    # current API existed. Equality is the post-release steady state; anything
+    # lower means the floor admits a core without the contract.
+    assert _version(EXTENSION_API_MIN_CORE_RELEASE) >= _version(released)
+
+
+def _version(value: str) -> tuple[int, ...]:
+    """Return a comparable release tuple for a plain ``x.y.z`` version."""
+
+    return tuple(int(part) for part in value.split("."))
 
 
 def test_core_holds_no_techvault_answer_key_behind_the_seam():

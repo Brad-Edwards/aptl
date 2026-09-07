@@ -4,13 +4,21 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aptl-techvault-verifier"
-version = "0.1.0"
+version = "0.2.0"
 description = "Semantic verification for the TechVault scenario on the APTL backend."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Brad Edwards", email = "brad@autarchy.ai" }]
-dependencies = []
+# The released core that supplies the imported extension contract. The floor is
+# the first release carrying extension API 2 (`EXTENSION_API_MIN_CORE_RELEASE`
+# in aptl.validation.scenario_verification), NOT the newest release: 5.2.0
+# shipped before `QualifiedTarget` existed, so admitting it would let the plugin
+# install against a core whose import fails before runtime version admission can
+# refuse it. This is Python dependency compatibility, a different concern from
+# the exact extension API version discovery enforces at runtime and from the
+# pack qualification declared in `qualified_targets`.
+dependencies = ["aptl-labs>=5.3.0,<6"]
 
 # The seam. APTL core registers nothing in this group; a scenario gains
 # verification by installing a distribution like this one.

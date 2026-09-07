@@ -70,6 +70,7 @@ jobs:
           pip install --require-hashes -r requirements/dev.txt
           pip install -e . --no-deps --no-build-isolation
           pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
+          pip install -e ./plugins/aptl-techvault-verifier --no-deps --no-build-isolation
       - run: |
           coverage run -m pytest tests/ -q -k "not integration"
           coverage xml -o coverage.xml
@@ -93,6 +94,52 @@ jobs:
         run: >-
           python -m pytest tests/test_scenario_verification_artifacts.py -q
           -m integration
+
+  pack-identity-compatibility:
+    name: Admitted pack identity and plugin qualification
+    runs-on: ubuntu-latest
+    # Issue #879: the verifier declared scenario content the admitted pack does
+    # not carry, and no gate noticed, because every other test built its context
+    # from the plugin's own declaration. These tests resolve the identity through
+    # env-packs' real validation path and fail on any drift. They are
+    # integration-marked (staging and validating a pack is not fast-suite work)
+    # but need no Docker, so they run here rather than nowhere.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: |
+          pip install --require-hashes -r requirements/dev.txt
+          pip install -e . --no-deps --no-build-isolation
+          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
+          pip install -e ./plugins/aptl-techvault-verifier --no-deps --no-build-isolation
+      - name: Bind every installed plugin's declaration to the admitted pack
+        run: >-
+          python -m pytest tests/test_env_pack_bundle.py
+          tests/test_plugin_pack_compatibility.py -q -m integration
+
+  verifier-release-artifacts:
+    name: Verifier release artifacts build independently
+    runs-on: ubuntu-latest
+    # The verifier is an independently releasable distribution, so its wheel and
+    # sdist must build from the plugin root with the locked toolchain and must
+    # never appear in core's `dist/`, which the release job uploads with a glob
+    # (issue #879).
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r requirements/ci.txt
+      - name: Build core release artifacts exactly as the release job does
+        run: python -m build --no-isolation
+      - name: Build the verifier's own wheel and sdist from the plugin root
+        run: >-
+          python -m build --no-isolation --outdir plugin-dist
+          plugins/aptl-techvault-verifier
+      - name: Assert the release glob carries no plugin artifact
+        run: python scripts/ci/assert_release_artifact_boundary.py dist plugin-dist
 
   python-cross-platform:
     name: Python cross-platform smoke (${{ matrix.os }})

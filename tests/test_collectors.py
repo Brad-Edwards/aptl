@@ -239,6 +239,31 @@ class TestCollectWazuhAlerts:
         assert kwargs["auth_header"].startswith("Basic ")
         assert "SecretPassword" not in kwargs["auth_header"]
 
+    @patch("aptl.core.collectors._curl_json")
+    def test_a_failure_logs_the_exception_type_not_its_text(self, mock_curl, caplog):
+        """This is the credentialed indexer path, so its failures stay opaque.
+
+        An exception raised anywhere under the query can carry the URL, the
+        response body, or a credential in its message. Interpolating it into a
+        log record publishes that to whatever the log goes to, and a caller-side
+        redaction after the fact is too late. The class name says what broke.
+        """
+        mock_curl.side_effect = RuntimeError(
+            "https://admin:SecretPassword@localhost:9200 refused the query"
+        )
+
+        with caplog.at_level("WARNING"):
+            result = collect_wazuh_alerts(
+                "2025-01-01T00:00:00+00:00",
+                "2025-01-01T23:59:59+00:00",
+            )
+
+        assert result == []
+        logged = " ".join(record.getMessage() for record in caplog.records)
+        assert "SecretPassword" not in logged
+        assert "localhost:9200" not in logged
+        assert "RuntimeError" in logged
+
 
 class TestCollectSuricataEve:
     """Tests for Suricata EVE collection."""

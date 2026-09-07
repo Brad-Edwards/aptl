@@ -73,15 +73,21 @@ def _context(operations: object | None = None) -> VerificationContext:
     return VerificationContext(
         run_id="run",
         attempt_id="attempt",
+        # This file tests what `run()` does, and `run()` reads neither identity
+        # -- admission is discovery's job. So the context carries a deliberately
+        # synthetic identity rather than the plugin's own declaration: binding a
+        # declared digest to the pack APTL admits is proved against
+        # `env_pack_bundle()` in tests/test_plugin_pack_compatibility.py, never
+        # by asserting a constant against itself.
         scenario=ScenarioIdentity(
             identity="techvault",
-            version="0.1.0",
+            version="0.0.0-test",
             source_kind="env-pack",
-            content_digest=plugin.TECHVAULT_PACK_SET_DIGEST,
+            content_digest="sha256:" + "0" * 64,
         ),
         backend=BackendIdentity(
             target_name="aptl",
-            target_version="0.1.0",
+            target_version="0.0.0-test",
             profile="full-remote-control-plane",
             provider="docker-compose",
             transport="docker-compose",
@@ -99,16 +105,36 @@ def _context(operations: object | None = None) -> VerificationContext:
     )
 
 
-def test_verifier_declares_every_exact_compatibility_dimension() -> None:
-    verifier = plugin.TechVaultVerifier()
+def test_every_qualified_pair_is_declared_whole() -> None:
+    """A release admits pairs, so no pair may be assembled from parts.
 
-    assert verifier.scenario_source_kinds == ("env-pack",)
-    assert verifier.scenario_versions == ("0.1.0",)
-    assert verifier.scenario_content_digests == (plugin.TECHVAULT_PACK_SET_DIGEST,)
-    assert verifier.backend_target_versions == ("0.1.0",)
-    assert verifier.backend_profiles == ("full-remote-control-plane",)
-    assert verifier.backend_providers == ("docker-compose", "ssh-compose")
-    assert verifier.backend_transports == ("docker-compose", "ssh-compose")
+    The values themselves are not the subject here -- what they must equal is
+    the admitted pack, proved in tests/test_plugin_pack_compatibility.py against
+    `env_pack_bundle()`. What this asserts is the shape that makes the claim
+    honest: every declared pair is complete in every dimension, and the pack
+    content is identical across them, so no combination is admitted that the
+    release did not qualify as a whole.
+    """
+
+    targets = plugin.TechVaultVerifier().qualified_targets
+
+    assert targets, "an empty declaration qualifies nothing"
+    assert len({target.scenario for target in targets}) == 1
+    for target in targets:
+        assert target.scenario.identity == "techvault"
+        assert target.scenario.source_kind == "env-pack"
+        assert target.scenario.version
+        assert target.scenario.content_digest.startswith("sha256:")
+        assert target.backend.target_name == "aptl"
+        assert target.backend.target_version
+        assert target.backend.profile == "full-remote-control-plane"
+        # Transport is the one dimension that varies, and it varies as a whole
+        # pair rather than as a second list crossed with the first.
+        assert target.backend.provider == target.backend.transport
+    assert {target.backend.provider for target in targets} == {
+        "docker-compose",
+        "ssh-compose",
+    }
 
 
 def test_answer_key_drives_activity_and_correlation_from_the_plugin() -> None:

@@ -6,12 +6,15 @@ from collections.abc import Mapping
 from math import isfinite
 import re
 
+from aptl.backends.identity import BackendIdentity
 from aptl.utils.redaction import redact
 from aptl.validation.scenario_verification import (
     EXTENSION_API_VERSION,
     REPORT_API_VERSION,
     PrerequisiteResult,
     PrerequisiteStatus,
+    QualifiedTarget,
+    ScenarioIdentity,
     VerificationCheck,
     VerificationContext,
     VerificationReport,
@@ -47,44 +50,56 @@ def text(value: object, code: str = "verifier-metadata-invalid") -> str:
     return value
 
 
-def sequence(verifier: object, name: str) -> tuple[str, ...]:
-    """Read one explicit, bounded tuple-of-strings compatibility claim."""
+def qualified_targets(verifier: object) -> tuple[QualifiedTarget, ...]:
+    """Read one explicit, bounded set of atomically qualified pairs.
 
-    value = getattr(verifier, name, None)
-    if not isinstance(value, tuple):
+    Declared identities go through the same validators as the admitted ones, so
+    a plugin cannot qualify a digest or profile the host would refuse to accept
+    as input. An empty declaration is rejected rather than read as a wildcard.
+    """
+
+    value = getattr(verifier, "qualified_targets", None)
+    if not isinstance(value, tuple) or not value or len(value) > MAX_METADATA_ITEMS:
         raise VerifierContractError("verifier-metadata-invalid")
-    valid_items = all(
-        isinstance(item, str) and bool(item) and len(item) <= 256 for item in value
-    )
-    if (
-        not valid_items
-        or not value
-        or len(value) > MAX_METADATA_ITEMS
-        or len(set(value)) != len(value)
-    ):
+    for target in value:
+        # ``QualifiedTarget`` is an ordinary dataclass, so its members are
+        # whatever the plugin put there. Check their types before reading or
+        # hashing them: dereferencing a wrong type would raise AttributeError,
+        # and an unhashable one would raise TypeError at the duplicate check --
+        # neither is a VerifierContractError, so both would escape discovery
+        # instead of becoming the blocked report it promises.
+        if (
+            not isinstance(target, QualifiedTarget)
+            or not isinstance(target.scenario, ScenarioIdentity)
+            or not isinstance(target.backend, BackendIdentity)
+        ):
+            raise VerifierContractError("verifier-metadata-invalid")
+        _validate_scenario_identity(target.scenario, "verifier-metadata-invalid")
+        _validate_backend_identity(target.backend, "verifier-metadata-invalid")
+    if len(set(value)) != len(value):
         raise VerifierContractError("verifier-metadata-invalid")
     return value
 
 
-def _validate_scenario(context: VerificationContext) -> None:
-    """Validate the admitted scenario identity and its exact content digest."""
+def _validate_scenario_identity(scenario: ScenarioIdentity, code: str) -> None:
+    """Validate one scenario identity and its exact content digest."""
 
-    identifier(context.scenario.identity, "verification-context-invalid")
-    identifier(context.scenario.source_kind, "verification-context-invalid")
-    text(context.scenario.version, "verification-context-invalid")
-    digest = context.scenario.content_digest
+    identifier(scenario.identity, code)
+    identifier(scenario.source_kind, code)
+    text(scenario.version, code)
+    digest = scenario.content_digest
     if not isinstance(digest, str) or SHA256_DIGEST.fullmatch(digest) is None:
-        raise VerifierContractError("verification-context-invalid")
+        raise VerifierContractError(code)
 
 
-def _validate_backend(context: VerificationContext) -> None:
+def _validate_backend_identity(backend: BackendIdentity, code: str) -> None:
     """Validate every backend compatibility dimension exposed to plugins."""
 
-    identifier(context.backend.target_name, "verification-context-invalid")
-    text(context.backend.target_version, "verification-context-invalid")
-    identifier(context.backend.profile, "verification-context-invalid")
-    identifier(context.backend.provider, "verification-context-invalid")
-    identifier(context.backend.transport, "verification-context-invalid")
+    identifier(backend.target_name, code)
+    text(backend.target_version, code)
+    identifier(backend.profile, code)
+    identifier(backend.provider, code)
+    identifier(backend.transport, code)
 
 
 def _valid_schedule_number(value: object, *, finite: bool) -> bool:
@@ -160,8 +175,8 @@ def validate_context(context: VerificationContext) -> None:
         raise VerifierContractError("verification-context-invalid")
     identifier(context.run_id, "verification-context-invalid")
     identifier(context.attempt_id, "verification-context-invalid")
-    _validate_scenario(context)
-    _validate_backend(context)
+    _validate_scenario_identity(context.scenario, "verification-context-invalid")
+    _validate_backend_identity(context.backend, "verification-context-invalid")
     if context.extension_api_version != EXTENSION_API_VERSION:
         raise VerifierContractError("verification-context-invalid")
     _validate_schedule(context)

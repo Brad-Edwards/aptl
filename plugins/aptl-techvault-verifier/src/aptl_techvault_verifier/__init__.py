@@ -20,10 +20,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from aptl.backends.identity import BackendIdentity
 from aptl.validation.scenario_verification import (
     EXTENSION_API_VERSION,
     PrerequisiteResult,
     PrerequisiteStatus,
+    QualifiedTarget,
+    ScenarioIdentity,
     VerificationCheck,
     VerificationReport,
     VerificationStatus,
@@ -32,14 +35,41 @@ from aptl.validation.scenario_verification import (
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from aptl.validation.scenario_verification import VerificationContext
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
-# Exact content identity of raes-env-packs 4.0.2's TechVault 0.1.0 pack.  A
-# verifier update must deliberately admit a changed pack; an empty claim is not
-# a wildcard for future scenario content.
+#: Exact content identity of the TechVault 0.1.0 pack this release qualified,
+#: as ``raes-env-packs`` admits it through ``env_pack_bundle()``. A pack release
+#: that changes these bytes is a pack this verifier has not been qualified
+#: against, and it takes a verifier release -- not a wider declaration -- to
+#: admit one. An empty claim is not a wildcard for future scenario content.
 TECHVAULT_PACK_SET_DIGEST = (
-    "sha256:f1c807f70540ca68c640cde72e8b5606b928f4ec40cc00a44d7fd37d6bbfd55f"
+    "sha256:c532775575d99438f4b4890d49a4fdb7354921f0405afdaa9f370ea4fe3f5a20"
 )
+
+#: The pack release these bytes belong to. Version and digest are declared as
+#: one atomic pair below, never as parallel lists: a release qualifies content,
+#: not a version number that content might later change under.
+TECHVAULT_PACK_VERSION = "0.1.0"
+
+_QUALIFIED_SCENARIO = ScenarioIdentity(
+    identity="techvault",
+    content_digest=TECHVAULT_PACK_SET_DIGEST,
+    source_kind="env-pack",
+    version=TECHVAULT_PACK_VERSION,
+)
+
+
+def _qualified_backend(provider: str) -> BackendIdentity:
+    """Return the APTL backend identity this release qualified for ``provider``."""
+
+    return BackendIdentity(
+        target_name="aptl",
+        target_version="0.1.0",
+        profile="full-remote-control-plane",
+        provider=provider,
+        transport=provider,
+    )
+
 
 #: The attacker node. TechVault's whole premise is that traffic originates here.
 ATTACKER_NODE = "aptl-kali"
@@ -65,15 +95,20 @@ class TechVaultVerifier(object):
 
     plugin_id = "techvault"
     extension_api_version = EXTENSION_API_VERSION
-    scenario_identity = "techvault"
-    scenario_source_kinds = ("env-pack",)
-    scenario_versions = ("0.1.0",)
-    scenario_content_digests = (TECHVAULT_PACK_SET_DIGEST,)
-    backend_target_name = "aptl"
-    backend_target_versions = ("0.1.0",)
-    backend_profiles: tuple[str, ...] = ("full-remote-control-plane",)
-    backend_providers = ("docker-compose", "ssh-compose")
-    backend_transports = ("docker-compose", "ssh-compose")
+    #: What this release admits, pair by pair. Both entries name the same
+    #: qualified pack content on the same APTL target and profile; they differ
+    #: only in the Compose transport, which ADR-013 makes a daemon location
+    #: rather than a difference in what the range realizes. Anything not listed
+    #: -- another pack digest, another profile, another target version -- is
+    #: unqualified and stays terminal ``blocked``.
+    qualified_targets = (
+        QualifiedTarget(
+            scenario=_QUALIFIED_SCENARIO, backend=_qualified_backend("docker-compose")
+        ),
+        QualifiedTarget(
+            scenario=_QUALIFIED_SCENARIO, backend=_qualified_backend("ssh-compose")
+        ),
+    )
 
     def run(self, context: "VerificationContext") -> VerificationReport:
         """Evaluate TechVault's semantic expectations against the live range."""
@@ -298,6 +333,7 @@ __all__ = [
     "SENSOR_NODE",
     "SIEM_NODE",
     "TECHVAULT_PACK_SET_DIGEST",
+    "TECHVAULT_PACK_VERSION",
     "TechVaultVerifier",
     "verifier",
 ]

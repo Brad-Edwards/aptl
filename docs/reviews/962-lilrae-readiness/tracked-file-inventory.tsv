@@ -705,6 +705,7 @@ scenarios/techvault-observability-core.sdl.yaml	split-pack-delivery	Inventory ex
 scripts/aptl-env.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/aptl-range.service	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/ci/assert_project_teardown.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scripts/ci/assert_release_artifact_boundary.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/cortex-apikey.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/cortex-index-init.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/envpack-kali-fixups.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
@@ -1301,6 +1302,7 @@ tests/test_participant_qualification.py	tests-follow-owner	Retain meaningful bou
 tests/test_participant_workbench.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_participant_workbench_adapter.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_pathsafe.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_plugin_pack_compatibility.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_pr_title_guard.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_precommit_config.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_proc_net_listeners.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1350,6 +1352,7 @@ tests/test_realization_routing.py	tests-follow-owner	Retain meaningful boundary 
 tests/test_redaction.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_redaction_fuzz.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_redaction_parity.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_release_artifact_boundary.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_runstore.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_runstore_content_store.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_scenario_bundle.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

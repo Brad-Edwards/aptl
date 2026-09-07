@@ -47,7 +47,19 @@ ENTRY_POINT_GROUP = "aptl.scenario_verifiers"
 #: The extension contract version. A plugin declares the version it was built
 #: against and is refused when it does not match, rather than being run against a
 #: context whose meaning has changed underneath it.
-EXTENSION_API_VERSION = "1"
+#:
+#: ``2`` replaced the parallel per-dimension compatibility lists with atomic
+#: :class:`QualifiedTarget` pairs (#879), so a plugin built against ``1`` must be
+#: refused rather than reinterpreted.
+EXTENSION_API_VERSION = "2"
+
+#: The first ``aptl-labs`` release that ships the extension API above. A plugin
+#: distribution's dependency floor must name this release: an earlier one is a
+#: core whose installed package does not define the types the plugin imports, so
+#: the plugin would fail at import rather than at the version admission that is
+#: supposed to refuse it. Bump this together with ``EXTENSION_API_VERSION``, to
+#: the next unreleased core version, and the plugin floor with it.
+EXTENSION_API_MIN_CORE_RELEASE = "5.3.0"
 
 #: Version of the normalized report emitted by core.  This is independent of
 #: the extension API: the former is persisted/projection data, while the latter
@@ -138,6 +150,25 @@ class ScenarioIdentity(object):
 
 
 @dataclass(frozen=True)
+class QualifiedTarget(object):
+    """One scenario-and-backend combination a plugin release has qualified.
+
+    Qualification is atomic, and that is the whole point of the type. Declaring
+    admitted versions and admitted content digests as separate lists silently
+    admits their cross product: a plugin that qualified release 0.1.0 at one
+    digest and release 0.2.0 at another has said nothing about 0.1.0 at the
+    second digest, yet parallel lists would run against it (#879).
+
+    A pair is a claim that *this* content on *this* backend was qualified
+    together. Naming several pairs is allowed; each one is its own claim and
+    needs its own evidence.
+    """
+
+    scenario: ScenarioIdentity
+    backend: BackendIdentity
+
+
+@dataclass(frozen=True)
 class VerificationContext(object):
     """Everything a plugin is given, and nothing more.
 
@@ -219,11 +250,22 @@ class VerificationReport(object):
         return tuple(categories)
 
     def render(self) -> str:
-        """Render a bounded, human-readable summary."""
+        """Render a bounded, human-readable summary.
+
+        The distribution and version are named alongside the plugin id: an
+        operator reading a verdict needs to know which installed release
+        produced it, and the id alone does not say that.
+        """
+        origin = (
+            f"{self.distribution}=={self.distribution_version}"
+            if self.distribution
+            else "(none)"
+        )
         lines = [
             f"scenario verification — scenario={self.scenario.identity} "
             f"backend={self.backend.target_name} "
-            f"plugin={self.plugin_id or '(none)'}: {self.status.value.upper()}"
+            f"plugin={self.plugin_id or '(none)'} from {origin}: "
+            f"{self.status.value.upper()}"
         ]
         for prerequisite in self.prerequisites:
             marker = "ok" if prerequisite.satisfied else "UNMET"
@@ -255,20 +297,10 @@ class ScenarioVerifier(Protocol):
     plugin_id: str
     #: Extension contract version this plugin was built against.
     extension_api_version: str
-    #: Scenario identity this verifier is written for.
-    scenario_identity: str
-    #: Admitted source kinds, versions, and content digests this verifier accepts.
-    #: Each declaration is explicit; empty never means wildcard.
-    scenario_source_kinds: Sequence[str]
-    scenario_versions: Sequence[str]
-    scenario_content_digests: Sequence[str]
-    #: RAES target name this verifier supports.
-    backend_target_name: str
-    #: Exact backend revisions, profiles, providers, and transports supported.
-    backend_target_versions: Sequence[str]
-    backend_profiles: Sequence[str]
-    backend_providers: Sequence[str]
-    backend_transports: Sequence[str]
+    #: Every scenario-and-backend combination this release qualified, each one
+    #: exact and atomic. An empty declaration is not a wildcard: it qualifies
+    #: nothing, so every run against it is blocked.
+    qualified_targets: Sequence[QualifiedTarget]
 
     def run(self, context: VerificationContext) -> VerificationReport:
         """Evaluate the scenario's semantic expectations against a live range."""
@@ -277,11 +309,13 @@ class ScenarioVerifier(Protocol):
 
 __all__ = [
     "ENTRY_POINT_GROUP",
+    "EXTENSION_API_MIN_CORE_RELEASE",
     "EXTENSION_API_VERSION",
     "REPORT_API_VERSION",
     "BackendIdentity",
     "PrerequisiteResult",
     "PrerequisiteStatus",
+    "QualifiedTarget",
     "ScenarioIdentity",
     "ScenarioVerifier",
     "VerificationCheck",

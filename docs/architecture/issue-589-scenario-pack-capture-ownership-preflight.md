@@ -59,7 +59,8 @@ capture/inventory ownership and
 [env-packs #138](https://github.com/OpenRAE/env-packs/issues/138) for the
 environment-pack format reference. There is no APTL asset migration to create:
 the former APTL capture/parity surfaces were intentionally removed under
-#690/#757.
+#690/#757. The historical source-path audit and migration rejection record is
+[issue #591](issue-591-scenario-pack-capture-asset-ownership-preflight.md).
 
 ## Required Reuse And Validation Passage
 

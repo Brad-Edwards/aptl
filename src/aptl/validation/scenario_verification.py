@@ -249,36 +249,54 @@ class VerificationReport(object):
                 categories.append(category)
         return tuple(categories)
 
-    def render(self) -> str:
-        """Render a bounded, human-readable summary.
+    def _headline(self) -> str:
+        """Return the one-line verdict, naming the release that produced it.
 
-        The distribution and version are named alongside the plugin id: an
+        The distribution and version sit alongside the plugin id because an
         operator reading a verdict needs to know which installed release
-        produced it, and the id alone does not say that.
+        reached it, and the id alone does not say that.
         """
+
         origin = (
             f"{self.distribution}=={self.distribution_version}"
             if self.distribution
             else "(none)"
         )
-        lines = [
+        return (
             f"scenario verification — scenario={self.scenario.identity} "
             f"backend={self.backend.target_name} "
             f"plugin={self.plugin_id or '(none)'} from {origin}: "
             f"{self.status.value.upper()}"
-        ]
+        )
+
+    def _rendered_prerequisites(self) -> list[str]:
+        """Return the prerequisite lines, each with its bounded diagnostic."""
+
+        lines: list[str] = []
         for prerequisite in self.prerequisites:
             marker = "ok" if prerequisite.satisfied else "UNMET"
             lines.append(f"  [{marker}] prerequisite {prerequisite.prerequisite_id}")
             if prerequisite.diagnostic:
                 lines.append(f"        - {prerequisite.diagnostic}")
+        return lines
+
+    def _rendered_checks(self) -> list[str]:
+        """Return the semantic-check lines, each with its diagnostics."""
+
+        lines: list[str] = []
         for check in self.checks:
             suffix = f" ({check.category})" if check.category else ""
             lines.append(f"  [{check.status.value}] {check.check_id}{suffix}")
-            for diagnostic in check.diagnostics:
-                lines.append(f"        - {diagnostic}")
-        for diagnostic in self.diagnostics:
-            lines.append(f"  - {diagnostic}")
+            lines.extend(f"        - {item}" for item in check.diagnostics)
+        return lines
+
+    def render(self) -> str:
+        """Render a bounded, human-readable summary."""
+
+        lines = [self._headline()]
+        lines.extend(self._rendered_prerequisites())
+        lines.extend(self._rendered_checks())
+        lines.extend(f"  - {diagnostic}" for diagnostic in self.diagnostics)
         categories = self.failure_categories()
         if categories:
             lines.append("  failing layers: " + ", ".join(categories))

@@ -21,12 +21,8 @@ from aptl.validation.participant_profile import load_participant_profile
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(
-    0,
-    str(PROJECT_ROOT / "plugins" / "aptl-techvault-verifier" / "src"),
-)
-techvault_verifier = importlib.import_module("aptl_techvault_verifier")
-participant_smoke = importlib.import_module("aptl_techvault_verifier.participant_smoke")
+techvault_verifier = importlib.import_module("aptl_techvault.verification")
+participant_smoke = importlib.import_module("aptl_techvault.participant_smoke")
 SMOKE_OPERATIONS = participant_smoke.PARTICIPANT_SMOKE_OPERATIONS
 PROFILE_PATH = (
     PROJECT_ROOT / "participant-profiles" / "guided-purple-v1" / "profile.json"

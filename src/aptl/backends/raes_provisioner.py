@@ -141,7 +141,31 @@ class AptlProvisioner(object):
                     "realization": realization.details(),
                 },
             )
-        deployment_spec = realization.deployment_spec(selected_profiles)
+        try:
+            deployment_spec = realization.deployment_spec(selected_profiles)
+        # Lowering reports an unrealizable graph by raising with a stable code
+        # in the message. RAES's backend-call boundary turns any ValueError or
+        # TypeError out of apply into the fixed text "Backend could not
+        # construct a valid apply result" and drops the message, so raising here
+        # loses the code, the address and the node. The contract is a failed
+        # ApplyResult carrying diagnostics; return one.
+        except (TypeError, ValueError) as exc:
+            diagnostics.append(
+                diagnostic(
+                    "aptl.provisioner.realization-not-lowerable",
+                    PROVISIONING_ADDRESS,
+                    str(exc),
+                )
+            )
+            return ApplyResult(
+                success=False,
+                snapshot=snapshot,
+                diagnostics=diagnostics,
+                details={
+                    "profiles": selected_profiles,
+                    "realization": realization.details(),
+                },
+            )
         start_result = self.deployment_backend.realize(
             deployment_spec,
             scenario_root=self.bundle.root,

@@ -429,6 +429,15 @@ class ComposeRuntimeOrchestrationObservationMixin(
             )
         except BackendTimeoutError:
             return False
+        # The holder is not required to ship a Docker CLI. Real socket holders
+        # drive the daemon over its API -- Shuffle's orborus is one -- and exec
+        # answers 126/127 when the binary is absent. There is then nothing to
+        # corroborate, and the boundary is already established above: the mount
+        # is exactly the admitted socket, no endpoint override redirects it, and
+        # the holder is unprivileged, so the daemon it reaches is this one. A
+        # CLI that does answer, for a different daemon, is still a failure.
+        if observed.returncode in (126, 127):
+            return True
         return observed.returncode == 0 and observed.stdout.strip() == daemon_id
 
     def _container_has_docker_authority(self, container_name: str) -> bool:

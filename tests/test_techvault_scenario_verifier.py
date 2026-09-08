@@ -1,10 +1,7 @@
-"""TechVault answer-key tests for the separately built verifier package."""
+"""TechVault answer-key tests for the scenario adapter package."""
 
 from __future__ import annotations
 
-import importlib
-from pathlib import Path
-import sys
 from types import SimpleNamespace
 
 from aptl.backends.identity import BackendIdentity
@@ -13,12 +10,7 @@ from aptl.validation.scenario_verification import (
     VerificationContext,
     VerificationStatus,
 )
-
-PLUGIN_SRC = (
-    Path(__file__).resolve().parents[1] / "plugins" / "aptl-techvault-verifier" / "src"
-)
-sys.path.insert(0, str(PLUGIN_SRC))
-plugin = importlib.import_module("aptl_techvault_verifier")
+from aptl_techvault import verification as plugin
 
 
 class _Operations:
@@ -27,13 +19,10 @@ class _Operations:
         targets=(("aptl-webapp", "172.20.1.10"),),
         *,
         reached: bool = True,
-        observed: bool = True,
     ) -> None:
         self.executed: list[tuple[str, tuple[str, ...], int]] = []
         self.targets = targets
         self.reached = reached
-        self.observed = observed
-        self.nonmatching_alert_rejected = False
 
     def reachability_from(self, origin: str) -> object:
         return SimpleNamespace(
@@ -53,20 +42,6 @@ class _Operations:
         self.executed.append((origin, argv, timeout_seconds))
         return True
 
-    def collect_evidence(self, **kwargs: object) -> object:
-        trigger = kwargs["trigger"]
-        alert_matches = kwargs["alert_matches"]
-        trigger()
-        assert alert_matches(
-            {"rule": {"id": "5710"}, "full_log": "aptl-live-gate-invalid"}
-        )
-        self.nonmatching_alert_rejected = not alert_matches(
-            {"rule": {"id": "1002"}, "full_log": "unrelated"}
-        )
-        return SimpleNamespace(
-            observed=self.observed,
-            diagnostics=() if self.observed else ("not observed",),
-        )
 
 
 def _context(operations: object | None = None) -> VerificationContext:
@@ -137,19 +112,21 @@ def test_every_qualified_pair_is_declared_whole() -> None:
     }
 
 
-def test_answer_key_drives_activity_and_correlation_from_the_plugin() -> None:
+def test_the_answer_key_names_the_attacker_and_generates_nothing() -> None:
+    """The adapter reports on the range; it does not act on it.
+
+    The removed detection check drove nmap and failed SSH authentication, whose
+    alerts and sensor records outlived the run. Asserting the empty argv list is
+    the guard: reintroducing any activity in this adapter fails here.
+    """
+
     operations = _Operations()
 
     report = plugin.TechVaultVerifier().run(_context(operations))
 
     assert report.status is VerificationStatus.PASSED
-    assert {check.check_id for check in report.checks} == {
-        "attacker-reachability",
-        "detection-traversal",
-    }
-    assert any(argv[0] == "nmap" for _, argv, _ in operations.executed)
-    assert any(argv[0] == "ssh" for _, argv, _ in operations.executed)
-    assert operations.nonmatching_alert_rejected is True
+    assert {check.check_id for check in report.checks} == {"attacker-reachability"}
+    assert operations.executed == []
 
 
 def test_failed_attacker_reachability_produces_a_failed_verdict() -> None:
@@ -159,16 +136,6 @@ def test_failed_attacker_reachability_produces_a_failed_verdict() -> None:
 
     assert report.status is VerificationStatus.FAILED
     assert {check.check_id for check in report.failures()} == {"attacker-reachability"}
-
-
-def test_missing_correlated_evidence_produces_a_failed_verdict() -> None:
-    operations = _Operations(observed=False)
-
-    report = plugin.TechVaultVerifier().run(_context(operations))
-
-    assert operations.nonmatching_alert_rejected is True
-    assert report.status is VerificationStatus.FAILED
-    assert {check.check_id for check in report.failures()} == {"detection-traversal"}
 
 
 def test_missing_prerequisite_blocks_before_scenario_activity() -> None:

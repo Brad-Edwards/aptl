@@ -11,11 +11,19 @@ the machinery into a stable ``blocked`` outcome. What a plugin owns: which node
 is the attacker, what the defensive stack is, and what evidence proves detection
 traversed it.
 
-**Core ships zero adapters.** Not a fallback, not an example, not a test-only
-one. ``aptl``'s own distribution registers nothing in the entry-point group, and
-a conformance test asserts it. Verification for a scenario arrives by installing
-a distribution, never by editing this file — if adding a second scenario required
-a change here, the seam would be decorative.
+**This framework holds no scenario knowledge.** Not a fallback, not an example,
+not a test-only branch. Every scenario-specific fact lives in its own top-level
+adapter package — ``aptl_techvault`` is the first — reached only through
+installed entry-point metadata, and a conformance test asserts that no entry
+point resolves into ``aptl.`` itself. Adding a second scenario adds a package;
+it never edits this file. If it did, the seam would be decorative.
+
+Those adapter packages ship in this distribution and release with it, because
+an adapter is specific to one scenario *and* one backend, and only the backend
+can write it: a scenario author cannot write an adapter for a backend they have
+never seen, and many backends are private. Owning them here is also what lets a
+single install give an operator every extension surface a scenario needs. The
+boundary that matters is the code boundary above, not a packaging boundary.
 
 Discovery is fail-closed on purpose. No match, several matches, a version
 mismatch, or a plugin that fails to load all produce ``blocked``: no complete
@@ -23,10 +31,10 @@ semantic verdict was possible. That is terminal and non-successful, and must
 never be reported as passed, skipped, or degraded — a range whose verification
 could not run has not been verified.
 
-Installing a plugin grants code execution with this process's authority. Entry
-points are a discovery mechanism, not a sandbox, so installation stays an
-explicit operator action: nothing here downloads, auto-installs, scans a range
-directory, or accepts a module path from scenario data or configuration.
+Loading an entry point executes installed Python with this process's authority.
+Entry points are a discovery mechanism, not a sandbox, so nothing here
+downloads, auto-installs, scans a range directory, or accepts a module path from
+scenario data or configuration.
 """
 
 from __future__ import annotations
@@ -40,8 +48,9 @@ from aptl.backends.identity import BackendIdentity
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-#: The single entry-point group a scenario verifier registers under. Core
-#: declares no entry in it; see ``pyproject.toml`` and the conformance test.
+#: The single entry-point group a scenario verifier registers under. Entries
+#: resolve into per-scenario adapter packages, never into ``aptl.`` itself; see
+#: ``pyproject.toml`` and the conformance test.
 ENTRY_POINT_GROUP = "aptl.scenario_verifiers"
 
 #: The extension contract version. A plugin declares the version it was built
@@ -52,14 +61,6 @@ ENTRY_POINT_GROUP = "aptl.scenario_verifiers"
 #: :class:`QualifiedTarget` pairs (#879), so a plugin built against ``1`` must be
 #: refused rather than reinterpreted.
 EXTENSION_API_VERSION = "2"
-
-#: The first ``aptl-labs`` release that ships the extension API above. A plugin
-#: distribution's dependency floor must name this release: an earlier one is a
-#: core whose installed package does not define the types the plugin imports, so
-#: the plugin would fail at import rather than at the version admission that is
-#: supposed to refuse it. Bump this together with ``EXTENSION_API_VERSION``, to
-#: the next unreleased core version, and the plugin floor with it.
-EXTENSION_API_MIN_CORE_RELEASE = "5.3.0"
 
 #: Version of the normalized report emitted by core.  This is independent of
 #: the extension API: the former is persisted/projection data, while the latter
@@ -327,7 +328,6 @@ class ScenarioVerifier(Protocol):
 
 __all__ = [
     "ENTRY_POINT_GROUP",
-    "EXTENSION_API_MIN_CORE_RELEASE",
     "EXTENSION_API_VERSION",
     "REPORT_API_VERSION",
     "BackendIdentity",

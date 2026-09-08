@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 from importlib import metadata
-import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -22,7 +21,6 @@ import pytest
 
 from aptl.validation.scenario_verification import (
     ENTRY_POINT_GROUP,
-    EXTENSION_API_MIN_CORE_RELEASE,
     EXTENSION_API_VERSION,
     BackendIdentity,
     PrerequisiteResult,
@@ -152,22 +150,33 @@ def _install_entry_points(monkeypatch, *entry_points: _EntryPoint) -> None:
     monkeypatch.setattr(discovery, "_entry_points", lambda: list(entry_points))
 
 
-def test_core_registers_no_scenario_verifier():
-    """The whole rule of the seam: core ships the framework and zero adapters.
+def test_the_framework_holds_no_scenario_knowledge():
+    """The rule of the seam is a code boundary, not a distribution boundary.
 
-    Not a fallback, not an example, not a test-only adapter. If APTL's own
-    distribution ever registers one, every scenario silently gains a verifier it
-    did not install, and "blocked" stops meaning anything.
+    An adapter is specific to one scenario on one backend, and only the backend
+    can write it: a scenario author cannot write an adapter for a backend they
+    have never seen, and many backends are private. So adapters belong to the
+    backend and ship in the backend's release.
+
+    What must stay true is that the *framework* knows no scenario. Every
+    scenario-specific fact lives in its own top-level adapter package resolved
+    through installed entry-point metadata, so a second scenario adds a package
+    and never edits a framework module. An earlier form of this test asserted
+    that the distribution registered nothing at all, which measured packaging
+    rather than the boundary that matters.
     """
 
-    aptl_entry_points = [
-        entry_point
+    targets = {
+        entry_point.name: entry_point.value
         for entry_point in metadata.entry_points(group=ENTRY_POINT_GROUP)
-        if getattr(entry_point, "dist", None) is not None
-        and entry_point.dist.name in {"aptl", "aptl-labs"}
-    ]
+    }
 
-    assert aptl_entry_points == []
+    assert "techvault.aptl" in targets
+    for name, value in targets.items():
+        assert not value.startswith("aptl."), (
+            f"{name} resolves into the framework package; a scenario adapter "
+            "must live in its own top-level package"
+        )
 
 
 def test_no_installed_verifier_blocks(monkeypatch):
@@ -575,75 +584,40 @@ def test_blocked_is_distinct_from_both_other_outcomes(status):
     assert VerificationStatus.BLOCKED is not status
 
 
-def test_the_techvault_verifier_is_a_separate_distribution():
-    """ "Core ships zero adapters" has to be checkable, not just asserted.
+def test_the_techvault_adapter_is_its_own_package_in_the_one_distribution():
+    """One release, and the adapter is reached only through its entry points.
 
-    The TechVault verifier lives in this repository for now, but it builds and
-    installs as its own distribution. If it were ever folded into ``aptl-labs``,
-    every scenario would silently gain a verifier nobody installed and the
-    blocked outcome would stop meaning anything — so the distribution boundary is
-    the thing worth testing, not the file layout.
+    All three entry points TechVault owns are declared by this distribution and
+    resolve into ``aptl_techvault``. That is the shape the seam needs: a single
+    install gives an operator every extension surface the scenario owns, while
+    no framework module is ever named as an extension target.
     """
 
     import tomllib
 
     root = Path(__file__).resolve().parents[1]
     core = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    plugin = tomllib.loads(
-        (root / "plugins/aptl-techvault-verifier/pyproject.toml").read_text(
-            encoding="utf-8"
-        )
-    )
+    entry_points = core["project"]["entry-points"]
 
     assert core["project"]["name"] == "aptl-labs"
-    assert "aptl.scenario_verifiers" not in core["project"].get("entry-points", {})
-    assert plugin["project"]["name"] == "aptl-techvault-verifier"
-    assert plugin["project"]["entry-points"][ENTRY_POINT_GROUP] == {
-        "techvault.aptl": "aptl_techvault_verifier:verifier"
+    assert entry_points[ENTRY_POINT_GROUP] == {
+        "techvault.aptl": "aptl_techvault.verification:verifier"
     }
-    assert plugin["project"]["entry-points"]["aptl.participant_mcp_smoke_plans"] == {
+    assert entry_points["aptl.pack_backend_interactions"] == {
+        "techvault.aptl": "aptl_techvault.serving:provider"
+    }
+    assert entry_points["aptl.participant_mcp_smoke_plans"] == {
         "guided-purple.techvault-attacker-target": (
-            "aptl_techvault_verifier.participant_smoke:PARTICIPANT_SMOKE_OPERATIONS"
+            "aptl_techvault.participant_smoke:PARTICIPANT_SMOKE_OPERATIONS"
         )
     }
-
-
-def test_the_plugin_floor_names_the_release_that_carries_its_contract():
-    """A dependency floor below the contract is a broken install, not a refusal.
-
-    The plugin imports types this extension API introduced. Admitting an earlier
-    released core means pip can install the pair, and then the entry point fails
-    at *import* -- before the version admission that exists to refuse exactly
-    this. So the floor must be the first release carrying the API, which is not
-    the same as the newest release: this repository's source still builds as the
-    already-published 5.2.0 while the API moved on after it.
-    """
-
-    import tomllib
-
-    root = Path(__file__).resolve().parents[1]
-    plugin = tomllib.loads(
-        (root / "plugins/aptl-techvault-verifier/pyproject.toml").read_text(
-            encoding="utf-8"
-        )
-    )
-    released = json.loads(
-        (root / ".release-please-manifest.json").read_text(encoding="utf-8")
-    )["."]
-
-    assert plugin["project"]["dependencies"] == [
-        f"aptl-labs>={EXTENSION_API_MIN_CORE_RELEASE},<6"
+    # A sibling of the framework in the wheel, never inside it.
+    assert core["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"] == [
+        "src/aptl",
+        "src/aptl_techvault",
     ]
-    # And the recorded first-carrying release is not one that shipped before the
-    # current API existed. Equality is the post-release steady state; anything
-    # lower means the floor admits a core without the contract.
-    assert _version(EXTENSION_API_MIN_CORE_RELEASE) >= _version(released)
-
-
-def _version(value: str) -> tuple[int, ...]:
-    """Return a comparable release tuple for a plain ``x.y.z`` version."""
-
-    return tuple(int(part) for part in value.split("."))
+    assert (root / "src" / "aptl_techvault").is_dir()
+    assert not (root / "plugins").exists()
 
 
 def test_core_holds_no_techvault_answer_key_behind_the_seam():
@@ -685,13 +659,14 @@ def test_core_source_contains_no_known_verification_answer_keys():
     """The wheel bundles all of ``src``, so ownership must cover the whole tree."""
 
     root = Path(__file__).resolve().parent.parent / "src" / "aptl"
+    # Every marker below is a real string in `aptl_techvault` today. A marker
+    # that exists nowhere would make this assertion vacuous, which is what
+    # happened to the removed detection check's `aptl-live-gate-invalid`.
     markers = (
-        "aptl-live-gate-invalid",
-        "_RECENT_SSH_ALERT_QUERY",
+        "provision.node.wazuh-manager",
         "mcp.red.ssh-authentication-attack",
-        "_PLUGIN_CHECK_CATEGORY",
-        "_is_correlated_wazuh_alert",
-        "kali nmap + failed-ssh-auth",
+        "ATTACKER_NODE",
+        "TECHVAULT_PACK_SET_DIGEST",
     )
     offenders = {
         str(path.relative_to(root)): [marker for marker in markers if marker in text]

@@ -1,18 +1,22 @@
-"""Built-artifact proof for the scenario-verification extension boundary.
+"""Built-artifact proof for the scenario-adapter boundary.
 
-Two things are being proved, and both need real artifacts rather than the
-checkout. First, that core ships zero adapters: its wheel registers nothing in
-the seam's entry-point group and carries no answer key, in either the importable
-package or the bundled ``_labdata/src`` copy. Second, that the verifier is an
-independently installable, independently releasable distribution: it builds a
-wheel and an sdist from its own root, declares the released core it imports,
-installs and uninstalls without an editable checkout, and is discovered from
-installed metadata.
+Two claims, and both need a real built wheel installed into a clean
+environment rather than the checkout.
 
-Every compatibility context here is derived from the pack ``env_pack_bundle()``
-actually admits (#879). A digest copied into this file would let the test agree
-with a stale plugin declaration -- which is exactly how the original mismatch
-survived a passing suite.
+First, the code boundary: the wheel registers the entry points a scenario owns,
+they resolve into the scenario's own top-level package, and the *framework*
+package carries no scenario knowledge — in either the importable copy or the
+bundled ``_labdata/src`` copy, since ``ASSET_ROOTS`` ships ``src`` twice over.
+
+Second, the install: one install of one distribution is enough for semantic
+verification to reach a verdict. That is the point of the adapter shipping with
+the backend, and it is what an operator on the packaged path (DEP-008,
+``pipx install aptl-labs``, no git clone) actually gets.
+
+Every compatibility context is derived from the pack ``env_pack_bundle()``
+admits (#879). A digest copied into this file would let the test agree with a
+stale declaration, which is exactly how the original mismatch survived a
+passing suite.
 """
 
 from __future__ import annotations
@@ -27,22 +31,26 @@ import zipfile
 import pytest
 
 from aptl.core.scenario_bundle import env_pack_bundle
-from aptl.validation.scenario_verification import (
-    EXTENSION_API_MIN_CORE_RELEASE,
-    EXTENSION_API_VERSION,
-)
+from aptl.validation.scenario_verification import EXTENSION_API_VERSION
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PLUGIN_ROOT = REPO_ROOT / "plugins" / "aptl-techvault-verifier"
 
+#: Answer-key knowledge that must never appear in the framework package. Each
+#: is a real string in the adapter today, so the negative assertion has teeth.
+#:
+#: Deliberately not the lab's container names: the framework legitimately knows
+#: `aptl-kali` and `aptl-wazuh-manager` because they are APTL's own Compose
+#: services, which it snapshots, reaches over SSH and exposes endpoints for.
+#: What it must not hold is the scenario's *verdict* logic -- which components
+#: serve which operator group, and which participant operations qualify it.
 ANSWER_KEY_MARKERS = (
-    b"aptl-live-gate-invalid",
+    b"provision.node.wazuh-manager",
     b"mcp.red.ssh-authentication-attack",
-    b"kali nmap + failed-ssh-auth",
 )
 
-#: Driven by the installed plugin through core's operations surface. The wheel
-#: test supplies these as fakes, so this is contract evidence, not live proof.
+#: The adapter reads the range through core's operations surface. Supplying it
+#: as a double keeps this contract evidence over installed artifacts; it is not
+#: live proof, which belongs to the ``APTL_LIVE_GATE`` gate.
 OPERATIONS_DOUBLE = """
 from types import SimpleNamespace
 class Operations:
@@ -50,22 +58,11 @@ class Operations:
         return SimpleNamespace(reached=True, diagnostics=())
     def shared_network_targets(self, origin):
         return (("target", "192.0.2.10"),)
-    def tcp_reachable_from(self, origin, address, port):
-        return True
-    def execute_in_node(self, origin, argv, *, timeout_seconds):
-        return True
-    def collect_evidence(self, **kwargs):
-        kwargs["trigger"]()
-        assert kwargs["alert_matches"](
-            {"rule": {}, "marker": "aptl-live-gate-invalid"}
-        )
-        assert not kwargs["alert_matches"]({"rule": {}, "marker": "unrelated"})
-        return SimpleNamespace(observed=True, diagnostics=())
 """
 
 
-def _build(source: Path, output: Path, *, sdist: bool = False) -> list[Path]:
-    """Build ``source`` with the repository's locked build toolchain."""
+def _build_wheel(output: Path) -> Path:
+    """Build the distribution with the repository's locked build toolchain."""
 
     if shutil.which("uv") is None:
         pytest.skip("uv is required for the repository's locked build proof")
@@ -73,53 +70,58 @@ def _build(source: Path, output: Path, *, sdist: bool = False) -> list[Path]:
         [
             "uv",
             "build",
-            "--wheel" if not sdist else "--sdist",
+            "--wheel",
             "--no-build-isolation",
             "--out-dir",
             str(output),
-            str(source),
+            str(REPO_ROOT),
         ],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
     )
     # A build failure is a failure, never a skip -- but say why. Without the
-    # backend's own stderr this surfaces as a bare CalledProcessError and reads
-    # like a broken test rather than a missing locked build dependency.
+    # backend's stderr this surfaces as a bare CalledProcessError and reads like
+    # a broken test rather than a missing locked build dependency.
     assert completed.returncode == 0, (
-        f"building {source.name} with the locked toolchain failed:\n"
-        f"{completed.stderr}"
+        f"building the wheel with the locked toolchain failed:\n{completed.stderr}"
     )
-    return sorted(output.glob("*.whl" if not sdist else "*.tar.gz"))
-
-
-def _build_wheel(source: Path, output: Path) -> Path:
-    wheels = _build(source, output)
+    wheels = sorted(output.glob("*.whl"))
     assert len(wheels) == 1
     return wheels[0]
 
 
-def _wheel_members(wheel: Path) -> dict[str, bytes]:
+def _members(wheel: Path) -> dict[str, bytes]:
     with zipfile.ZipFile(wheel) as archive:
         return {name: archive.read(name) for name in archive.namelist()}
-
-
-def _metadata(members: dict[str, bytes]) -> str:
-    """Return the wheel's core metadata as text."""
-
-    return "\n".join(
-        content.decode("utf-8")
-        for name, content in members.items()
-        if name.endswith(".dist-info/METADATA")
-    )
 
 
 def _python(venv: Path) -> Path:
     return venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 
 
+def _clean_install(tmp_path: Path, wheel: Path) -> Path:
+    """Return a fresh virtual environment holding only the built wheel."""
+
+    venv = tmp_path / "clean-venv"
+    subprocess.run(
+        [sys.executable, "-m", "venv", str(venv)],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+    )
+    pip = venv / ("Scripts/pip.exe" if sys.platform == "win32" else "bin/pip")
+    subprocess.run(
+        [str(pip), "install", "--no-deps", str(wheel)],
+        cwd=venv,
+        check=True,
+        capture_output=True,
+    )
+    return venv
+
+
 def _run(venv: Path, script: str) -> None:
-    """Run ``script`` in ``venv``, failing with its stderr if it exits non-zero."""
+    """Run ``script`` in ``venv``, failing with its stderr on a non-zero exit."""
 
     completed = subprocess.run(
         [str(_python(venv)), "-c", script],
@@ -130,20 +132,13 @@ def _run(venv: Path, script: str) -> None:
     assert completed.returncode == 0, completed.stderr
 
 
-def _pip(venv: Path, *arguments: str) -> None:
-    executable = venv / ("Scripts/pip.exe" if sys.platform == "win32" else "bin/pip")
-    subprocess.run(
-        [str(executable), *arguments], cwd=venv, check=True, capture_output=True
-    )
-
-
 def _admitted_context(tmp_path: Path) -> str:
     """Return a context script bound to the pack env-packs actually admits.
 
     The identity is resolved here, in a process that has ``raes-env-packs``
-    installed, and injected as data. The clean virtual environment under test
-    deliberately has only core and the plugin, so it could not resolve the pack
-    itself -- and a literal in this file would prove nothing about the pack.
+    installed, and injected as data. The clean environment under test holds only
+    the built wheel, so it could not resolve the pack itself -- and a literal in
+    this file would prove nothing about the pack.
     """
 
     bundle = env_pack_bundle(tmp_path / "admitted-pack", "techvault")
@@ -189,136 +184,59 @@ def context(scenario=ADMITTED, operations=None, containers=()):
 
 
 @pytest.mark.integration
-def test_core_wheel_ships_no_adapter_and_no_answer_key(tmp_path: Path) -> None:
-    """Zero adapters means zero adapters, in both wheel payload locations."""
+def test_the_wheel_keeps_scenario_knowledge_out_of_the_framework_package(
+    tmp_path: Path,
+) -> None:
+    """The adapter ships in the wheel; the framework package stays scenario-free."""
 
-    core_wheel = _build_wheel(REPO_ROOT, tmp_path / "core-dist")
-    core_members = _wheel_members(core_wheel)
+    members = _members(_build_wheel(tmp_path / "dist"))
 
-    core_entry_points = b"\n".join(
+    entry_points = b"\n".join(
         content
-        for name, content in core_members.items()
+        for name, content in members.items()
         if name.endswith("entry_points.txt")
     )
-    assert b"aptl.scenario_verifiers" not in core_entry_points
-    assert b"aptl.participant_mcp_smoke_plans" not in core_entry_points
-    assert not any("aptl_techvault_verifier" in name for name in core_members)
-    # ASSET_ROOTS bundles `src`, so the answer keys would ship twice over:
-    # inspect the importable package and the bundled copy alike.
-    payload = b"\n".join(
-        content for name, content in core_members.items() if name.endswith(".py")
+    for group in (
+        b"aptl.scenario_verifiers",
+        b"aptl.pack_backend_interactions",
+        b"aptl.participant_mcp_smoke_plans",
+    ):
+        assert group in entry_points
+    # Every registered target resolves into the adapter package, never into the
+    # framework. That is the boundary; the distribution boundary is not.
+    assert b"aptl_techvault." in entry_points
+    assert b"= aptl.validation" not in entry_points
+
+    assert any(name.startswith("aptl_techvault/") for name in members)
+
+    # ``ASSET_ROOTS`` bundles ``src``, so scenario code ships as both an
+    # importable package and a ``_labdata/src`` copy. Neither may sit inside
+    # ``aptl/`` itself.
+    framework = b"\n".join(
+        content
+        for name, content in members.items()
+        if name.startswith("aptl/")
+        and name.endswith(".py")
+        and "_labdata/src/aptl_techvault/" not in name
     )
-    assert not any(marker in payload for marker in ANSWER_KEY_MARKERS)
+    offenders = [marker for marker in ANSWER_KEY_MARKERS if marker in framework]
+    assert not offenders, f"scenario knowledge in the framework package: {offenders}"
 
 
 @pytest.mark.integration
-def test_the_verifier_builds_as_an_independently_releasable_distribution(
+def test_one_install_reaches_a_verdict_and_records_its_provenance(
     tmp_path: Path,
 ) -> None:
-    """A locally importable package is not yet a releasable artifact (#879).
+    """A single install of a single distribution is enough (#879).
 
-    Release readiness is four separate claims: both artifact kinds build from
-    the plugin's own root, the wheel registers the seam entry points, it declares
-    the released core whose extension types it imports, and it supports the same
-    Python versions core does -- otherwise TechVault verification silently
-    vanishes on a host APTL supports.
+    The operator on the packaged path installs one thing. If semantic
+    verification needed a second install they could never obtain it, and the
+    gate would be permanently blocked for them.
     """
 
-    output = tmp_path / "plugin-dist"
-    wheel = _build_wheel(PLUGIN_ROOT, output)
-    sdists = _build(PLUGIN_ROOT, output, sdist=True)
-
-    assert len(sdists) == 1
-    assert wheel.name.startswith("aptl_techvault_verifier-")
-    assert sdists[0].name.startswith("aptl_techvault_verifier-")
-
-    members = _wheel_members(wheel)
-    entry_points = b"\n".join(
-        content for name, content in members.items()
-        if name.endswith("entry_points.txt")
-    )
-    assert b"aptl.scenario_verifiers" in entry_points
-    assert b"techvault.aptl" in entry_points
-    assert b"aptl.participant_mcp_smoke_plans" in entry_points
-    assert b"guided-purple.techvault-attacker-target" in entry_points
-    assert ANSWER_KEY_MARKERS[0] in b"\n".join(members.values())
-
-    metadata = _metadata(members)
-    # The exact floor, not merely the presence of a header: a floor below the
-    # release that first carried this extension API lets pip install the pair
-    # and then fail at import, before version admission can refuse it. The
-    # specifiers are compared as a set because wheel metadata normalizes their
-    # order.
-    assert _core_requirement(metadata) == {
-        f">={EXTENSION_API_MIN_CORE_RELEASE}",
-        "<6",
-    }
-
-    core_wheel = _build_wheel(REPO_ROOT, tmp_path / "core")
-    core_metadata = _metadata(_wheel_members(core_wheel))
-    plugin_python = _requires_python(metadata)
-    assert plugin_python == _requires_python(core_metadata), (
-        "a narrower plugin floor leaves a host APTL supports with no TechVault "
-        "verification and no statement that it is unsupported"
-    )
-
-
-def _core_requirement(metadata: str) -> set[str]:
-    """Return the version specifiers the wheel declares against core."""
-
-    for line in metadata.splitlines():
-        if line.startswith("Requires-Dist:") and "aptl-labs" in line:
-            specifiers = line.split(":", 1)[1].strip().removeprefix("aptl-labs")
-            return {part.strip() for part in specifiers.split(",") if part.strip()}
-    raise AssertionError(
-        "the plugin imports core's public verifier types, so its distribution "
-        "must declare the released core range that supplies them"
-    )
-
-
-def _requires_python(metadata: str) -> str:
-    """Return the ``Requires-Python`` constraint declared in wheel metadata."""
-
-    for line in metadata.splitlines():
-        if line.startswith("Requires-Python:"):
-            return line.split(":", 1)[1].strip()
-    raise AssertionError("wheel metadata declares no Requires-Python")
-
-
-@pytest.mark.integration
-def test_core_only_install_blocks_until_the_verifier_wheel_is_installed(
-    tmp_path: Path,
-) -> None:
-    """The seam, end to end, over installed artifacts and the admitted pack."""
-
-    core_wheel = _build_wheel(REPO_ROOT, tmp_path / "core-dist")
-    plugin_wheel = _build_wheel(PLUGIN_ROOT, tmp_path / "plugin-dist")
     header = _admitted_context(tmp_path)
+    venv = _clean_install(tmp_path, _build_wheel(tmp_path / "dist"))
 
-    venv = tmp_path / "clean-venv"
-    subprocess.run(
-        [sys.executable, "-m", "venv", str(venv)],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-    )
-    _pip(venv, "install", "--no-deps", str(core_wheel))
-
-    # Core alone: no verdict is possible, and that is terminal, not a pass.
-    _run(
-        venv,
-        header
-        + """
-report = verify_scenario(context())
-assert report.status is VerificationStatus.BLOCKED
-assert report.status is not VerificationStatus.PASSED
-assert report.distribution == ""
-""",
-    )
-
-    _pip(venv, "install", "--no-deps", str(plugin_wheel))
-
-    # Installed: the qualified pack runs, and provenance is host-observed.
     _run(
         venv,
         header
@@ -332,14 +250,14 @@ report = verify_scenario(
 )
 assert report.status is VerificationStatus.PASSED, report.diagnostics
 assert report.plugin_id == "techvault"
-assert report.distribution == "aptl-techvault-verifier"
+assert report.distribution == "aptl-labs"
 assert report.distribution_version, "the version comes from installed metadata"
 assert report.entry_point == "techvault.aptl"
 """,
     )
 
     # A pack whose content moved on is content this release never qualified,
-    # even though the plugin is installed and its scenario name still matches.
+    # even though the adapter is installed and the scenario name still matches.
     _run(
         venv,
         header
@@ -352,42 +270,42 @@ assert "scenario content" in " ".join(report.diagnostics), report.diagnostics
 """,
     )
 
-    # And a released version the plugin never qualified is equally unadmitted,
-    # even at content the plugin does qualify.
+    # And a released version never qualified is equally unadmitted, even at
+    # content the adapter does qualify.
     _run(
         venv,
         header
         + """
 from dataclasses import replace
-unqualified = replace(ADMITTED, version="99.0.0")
-report = verify_scenario(context(scenario=unqualified))
+report = verify_scenario(context(scenario=replace(ADMITTED, version="99.0.0")))
 assert report.status is VerificationStatus.BLOCKED
 """,
     )
 
-    # Uninstall returns the environment to blocked; reinstall restores the
-    # verdict. Neither step involves an editable checkout or a source path.
-    _pip(venv, "uninstall", "-y", "aptl-techvault-verifier")
+
+@pytest.mark.integration
+def test_an_unknown_scenario_blocks_rather_than_borrowing_an_adapter(
+    tmp_path: Path,
+) -> None:
+    """Shipping adapters must not hand an unrelated scenario a verdict.
+
+    This is what the retired "zero adapters" rule was protecting, and it still
+    has to hold with adapters in the wheel: a scenario with no adapter of its
+    own gets ``blocked``, never TechVault's answer key.
+    """
+
+    header = _admitted_context(tmp_path)
+    venv = _clean_install(tmp_path, _build_wheel(tmp_path / "dist"))
+
     _run(
         venv,
         header
         + """
-report = verify_scenario(context())
+from dataclasses import replace
+other = replace(ADMITTED, identity="some-other-scenario")
+report = verify_scenario(context(scenario=other))
 assert report.status is VerificationStatus.BLOCKED
-""",
-    )
-    _pip(venv, "install", "--no-deps", str(plugin_wheel))
-    _run(
-        venv,
-        header
-        + OPERATIONS_DOUBLE
-        + """
-report = verify_scenario(
-    context(
-        operations=Operations(),
-        containers=("aptl-kali", "aptl-wazuh-manager", "aptl-suricata"),
-    )
-)
-assert report.status is VerificationStatus.PASSED, report.diagnostics
+assert report.plugin_id == ""
+assert "no compatible scenario verifier" in " ".join(report.diagnostics)
 """,
     )

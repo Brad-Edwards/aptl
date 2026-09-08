@@ -112,8 +112,21 @@ build = [
     "editables>=0.5",
 ]
 
+# Per-scenario adapters. The framework under `src/aptl` holds no scenario
+# knowledge; everything specific to one scenario on this backend lives in its
+# own top-level package and is reached only through these entry points. A
+# second scenario adds a package and its entries here, never a framework edit.
+[project.entry-points."aptl.pack_backend_interactions"]
+"techvault.aptl" = "aptl_techvault.serving:provider"
+
+[project.entry-points."aptl.scenario_verifiers"]
+"techvault.aptl" = "aptl_techvault.verification:verifier"
+
+[project.entry-points."aptl.participant_mcp_smoke_plans"]
+"guided-purple.techvault-attacker-target" = "aptl_techvault.participant_smoke:PARTICIPANT_SMOKE_OPERATIONS"
+
 [tool.hatch.build.targets.wheel]
-packages = ["src/aptl"]
+packages = ["src/aptl", "src/aptl_techvault"]
 
 # Bundle the git-tracked lab-asset tree (docker-compose.yml, scenarios/,
 # config/, containers/, web/, scripts/, and the source that container images

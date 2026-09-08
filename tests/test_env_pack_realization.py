@@ -86,7 +86,10 @@ def test_techvault_pack_realizes_without_provisioner_diagnostics(tmp_path):
     evidence = realization.pack_interaction_evidence(sorted(realization.profiles))
     assert evidence["pack"]["pack_id"] == "techvault"
     assert evidence["provider"]["provider_id"] == "techvault-aptl-serving"
-    assert evidence["provider"]["distribution"] == ("aptl-techvault-pack-interaction")
+    # The adapter ships inside the one distribution, so host-observed
+    # provenance names it. What the seam still proves is that the provenance
+    # comes from installed metadata rather than the provider's own claim.
+    assert evidence["provider"]["distribution"] == "aptl-labs"
     assert evidence["provider"]["entry_point"] == "techvault.aptl"
     assert evidence["provider"]["mapping_digest"].startswith("sha256:")
 
@@ -129,15 +132,36 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(tmp_path):
             assert dependency in defined
 
 
-def test_techvault_deployment_waits_for_downstream_child_closure(tmp_path):
-    """APTL rejects the current incomplete downstream child closure (#285)."""
+def test_techvault_authority_declares_privilege_without_a_child_closure(tmp_path):
+    """The pack states an authority's privilege; it declares no child inventory.
+
+    This asserted the opposite until the pack could not boot at all. RAES calls
+    a realized child "an observed, realized child workload" and defaults the
+    field to empty, and TechVault's `shuffle-orborus` states its Docker-socket
+    privilege for transparency without declaring an expected inventory. There is
+    therefore no closure to complete and nothing to correlate at plan time --
+    demanding one asked for runtime observation before anything had run, and
+    made every `aptl lab start` raise
+    `aptl.provisioner.spawn-child-correlation-invalid` out of the provisioner.
+
+    A closure that *is* declared and incomplete still raises; that is covered in
+    tests/test_raes_runtime_orchestration.py.
+    """
 
     realization = _realize_pack(tmp_path)
 
-    with pytest.raises(
-        ValueError, match="aptl.provisioner.spawn-child-correlation-invalid"
-    ):
-        realization.deployment_spec(sorted(realization.profiles))
+    spec = realization.deployment_spec(sorted(realization.profiles))
+
+    orborus = [
+        admission
+        for admission in spec.docker_authority_admissions
+        if admission.node_address == "provision.node.shuffle-orborus"
+    ]
+    assert len(orborus) == 1, "the authority is still admitted"
+    assert orborus[0].spawn_requirements == ()
+    # The privilege controls the admission carries are untouched.
+    assert orborus[0].endpoint_target == "/var/run/docker.sock"
+    assert orborus[0].privilege_class == "host_root_equivalent"
 
 
 def test_generated_base_compose_is_written_under_realization_root_not_the_pack(

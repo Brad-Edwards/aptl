@@ -277,10 +277,64 @@ class ComposeRealizationMixin(
         remapped the way the checked-in stack's convenience ports are.
         """
 
-        conflicts = published_port_conflicts(realization)
+        # Only ask Docker what we already publish when there is an exact
+        # binding whose answer could change, so a realization that declares no
+        # host port costs no round-trip.
+        declares_exact_binding = any(
+            binding.host_port is not None
+            for node in realization.nodes
+            for binding in node.published_ports
+        )
+        owned = self._published_host_ports() if declares_exact_binding else frozenset()
+        conflicts = published_port_conflicts(realization, owned)
         if not conflicts:
             return None
         return LabResult(success=False, error="; ".join(conflicts[:5]))
+
+    def _published_host_ports(self) -> frozenset[tuple[str, int, str]]:
+        """Return the host bindings this project's own containers publish.
+
+        A port probe cannot say who holds a port, and the retry path re-applies
+        the plan with the range still up, so without this every declared binding
+        looks taken by a stranger on the second pass. Ours are not conflicts:
+        Compose reconciles those containers. Unreadable Docker state yields an
+        empty set, which only restores the stricter probe-only behavior.
+        """
+
+        try:
+            listed = self._run(
+                [
+                    "docker",
+                    "ps",
+                    "--filter",
+                    f"label=com.docker.compose.project={self._project_name}",
+                    "--format",
+                    "{{.ID}}",
+                ],
+                timeout=60,
+            )
+            identifiers = [
+                line.strip() for line in listed.stdout.splitlines() if line.strip()
+            ]
+            if listed.returncode != 0 or not identifiers:
+                return frozenset()
+            inspected = self._run(
+                [
+                    "docker",
+                    "inspect",
+                    "--format",
+                    "{{json .NetworkSettings.Ports}}",
+                    *identifiers,
+                ],
+                timeout=60,
+            )
+            if inspected.returncode != 0:
+                return frozenset()
+            return frozenset(_owned_bindings(inspected.stdout))
+        # broad-except: an unreadable daemon must not mask a real port conflict
+        # nor crash the start; falling back to the probe alone is the safe side.
+        except Exception:
+            return frozenset()
 
 
 def _append_image_free_artifact_ops(
@@ -326,3 +380,33 @@ def _append_image_free_artifact_ops(
                 PlaceFileOp(path=destination, content=content, mode=mode)
             )
     return None
+
+
+def _owned_bindings(payload: str) -> list[tuple[str, int, str]]:
+    """Parse ``docker inspect`` port maps into host binding triples."""
+
+    import json
+
+    bindings: list[tuple[str, int, str]] = []
+    for line in payload.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ports = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(ports, dict):
+            continue
+        for container_port, host_bindings in ports.items():
+            protocol = str(container_port).rpartition("/")[2] or "tcp"
+            for entry in host_bindings or ():
+                host_ip = str(entry.get("HostIp") or "")
+                raw_port = str(entry.get("HostPort") or "")
+                if not raw_port.isdigit():
+                    continue
+                # Docker reports an all-interfaces publish as an empty or
+                # 0.0.0.0 host IP; a loopback declaration is satisfied by it.
+                for address in {host_ip, "127.0.0.1"} if host_ip in ("", "0.0.0.0") else {host_ip}:
+                    bindings.append((address, int(raw_port), protocol))
+    return bindings

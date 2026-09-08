@@ -22,6 +22,7 @@ from aptl.backends.raes_runtime_orchestration import (
     spawn_image_requirements,
 )
 from aptl.core.deployment._compose_runtime_orchestration import (
+    docker_authority_admissions as deployment_docker_authority_admissions,
     deployment_spawn_image_requirements,
     effective_orchestration_model_errors,
 )
@@ -225,9 +226,6 @@ def test_empty_spawn_closure_is_rejected() -> None:
 @pytest.mark.parametrize(
     "mutation",
     [
-        lambda payload: payload["orchestration_authorities"][0].update(
-            realized_children=[]
-        ),
         lambda payload: payload["orchestration_authorities"][0]["realized_children"][
             0
         ].update(evidence_ref="run-id:worker-runtime"),
@@ -255,6 +253,73 @@ def test_spawn_child_correlation_must_be_complete_and_exact(
         )
 
 
+def test_an_authority_with_no_declared_children_emits_no_spawn_requirement() -> None:
+    """An undeclared observation contract is not a broken one.
+
+    RAES defines a realized child as "an observed, realized child workload
+    spawned by the authority", and the field defaults to empty. A pack that
+    states an authority's privilege without declaring an expected child
+    inventory has declared no observation contract to verify, so there is
+    nothing to correlate and no child image to pre-stage.
+
+    Demanding the correlation at plan time asked for runtime observation before
+    anything had run. It also made `aptl lab start` impossible against the
+    shipped TechVault pack, whose `shuffle-orborus` authority declares one spawn
+    template and no children, so every boot raised
+    `spawn-child-correlation-invalid` from inside the provisioner.
+    """
+
+    payload = _runtime().model_dump(mode="json")
+    payload["orchestration_authorities"][0]["realized_children"] = []
+    runtime = RuntimeConfiguration.model_validate(payload)
+
+    assert (
+        spawn_image_requirements(runtime, node_address="provision.node.orborus") == ()
+    )
+
+
+def test_an_authority_without_children_is_still_admitted_with_its_controls() -> None:
+    """No child contract removes the pre-pull, never the privilege controls.
+
+    The authority still holds the host Docker socket, so the admission and every
+    mount and access control on it must survive. Only the child-image
+    pre-staging and the post-start child count go away, because nothing declared
+    them.
+    """
+
+    payload = _runtime().model_dump(mode="json")
+    payload["orchestration_authorities"][0]["realized_children"] = []
+    node = replace(_spec().nodes[0], runtime=RuntimeConfiguration.model_validate(payload))
+
+    admissions = admit_docker_authorities((node,))
+
+    assert len(admissions) == 1
+    admission = admissions[0]
+    assert admission.spawn_requirements == ()
+    assert admission.endpoint_target == "/var/run/docker.sock"
+    assert admission.endpoint_read_write is True
+    assert admission.privilege_class == "host_root_equivalent"
+
+
+def test_a_declared_child_contract_still_requires_an_exact_image() -> None:
+    """Opting into a child contract keeps every guarantee it carried.
+
+    The relaxation above is only for authorities that declare no children. Where
+    one is declared, the image must still be digest-pinned, because that is what
+    lets the host pre-stage the exact child image the authority will run.
+    """
+
+    payload = _runtime(image_ref="ghcr.io/example/worker:latest").model_dump(
+        mode="json"
+    )
+    runtime = RuntimeConfiguration.model_validate(payload)
+
+    with pytest.raises(
+        ValueError, match="aptl.provisioner.spawn-image-identity-invalid"
+    ):
+        spawn_image_requirements(runtime, node_address="provision.node.orborus")
+
+
 def test_spawn_child_labels_are_unique_across_authorities() -> None:
     first = _spec().nodes[0]
     second = replace(
@@ -268,6 +333,35 @@ def test_spawn_child_labels_are_unique_across_authorities() -> None:
         ValueError, match="aptl.provisioner.spawn-child-correlation-invalid"
     ):
         admit_docker_authorities((first, second))
+
+
+def test_the_backend_accepts_an_admission_with_no_child_contract() -> None:
+    """The backend-side integrity check makes the same allowance.
+
+    `docker_authority_admissions` re-validates the carried decision before
+    lowering Compose. It required every admission to carry a child contract,
+    which rejected exactly the authorities that declare privilege without an
+    expected child inventory -- so the plan-time fix alone still failed the boot
+    with `runtime-authority-admission-invalid`. Contracts that *are* carried are
+    still checked in full.
+    """
+
+    payload = _runtime().model_dump(mode="json")
+    payload["orchestration_authorities"][0]["realized_children"] = []
+    node = replace(
+        _spec().nodes[0], runtime=RuntimeConfiguration.model_validate(payload)
+    )
+    spec = replace(
+        _spec(),
+        nodes=(node,),
+        docker_authority_admissions=admit_docker_authorities((node,)),
+    )
+
+    admissions = deployment_docker_authority_admissions(spec)
+
+    assert len(admissions) == 1
+    assert admissions[0].spawn_requirements == ()
+    assert deployment_spawn_image_requirements(spec) == ()
 
 
 def test_graph_admission_rejects_participant_profile_authority_holder() -> None:
@@ -668,6 +762,56 @@ def test_authority_holder_accepts_only_its_carried_declared_mount_footprint(
             "Destination": "/secret",
             "RW": False,
         }
+    )
+    assert not backend._runtime_authority_matches("aptl-orborus", admission)
+
+
+def test_authority_attestation_survives_a_holder_without_a_docker_cli(
+    tmp_path,
+) -> None:
+    """A socket holder is not required to ship the Docker CLI.
+
+    The in-container `docker info` probe corroborates that the holder's socket
+    reaches the admitted daemon. Real holders talk to the socket over the Docker
+    API and ship no CLI at all -- Shuffle's orborus is one, so every TechVault
+    boot failed attestation with exit 127, "executable file not found".
+
+    The boundary itself is established host-side and still is: the mount is
+    exactly the admitted socket, there is no endpoint override, and the holder is
+    unprivileged. An absent CLI leaves nothing to corroborate; a CLI that answers
+    for a *different* daemon is still a failure.
+    """
+
+    spec = _spec()
+    admission = spec.docker_authority_admissions[0]
+    backend = DockerComposeBackend(tmp_path)
+    backend._docker_daemon_id = "daemon-a"
+    backend.container_inspect = MagicMock(
+        return_value={
+            "Mounts": [
+                {
+                    "Type": "bind",
+                    "Source": "/var/run/docker.sock",
+                    "Destination": "/var/run/docker.sock",
+                    "RW": True,
+                }
+            ],
+            "Config": {"Env": []},
+            "HostConfig": {"Privileged": False},
+        }
+    )
+
+    backend.container_exec = MagicMock(
+        return_value=subprocess.CompletedProcess(
+            [], 127, stdout="", stderr='exec: "docker": executable file not found'
+        )
+    )
+    assert backend._runtime_authority_matches("aptl-orborus", admission)
+
+    backend.container_exec = MagicMock(
+        return_value=subprocess.CompletedProcess(
+            [], 0, stdout="daemon-b\n", stderr=""
+        )
     )
     assert not backend._runtime_authority_matches("aptl-orborus", admission)
 

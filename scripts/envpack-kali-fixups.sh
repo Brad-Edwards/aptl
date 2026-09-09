@@ -29,7 +29,7 @@
 #
 # Root fix tracked upstream (remove this script when it ships):
 #   provision APTL_CAPTURE_CAPABILITY (or make capture best-effort in the
-#   wrapper) -> OpenRAE/env-packs#<TBD> ; retire per Brad-Edwards/aptl#<TBD>
+#   wrapper) -> OpenRAE/env-packs#335 ; retire per Brad-Edwards/aptl#986
 # =============================================================================
 set -uo pipefail
 

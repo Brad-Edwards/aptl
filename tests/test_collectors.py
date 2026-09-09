@@ -265,6 +265,73 @@ class TestCollectWazuhAlerts:
         assert "RuntimeError" in logged
 
 
+class TestCollectorFailureLogging:
+    """Every collector failure path logs the exception class, never its text.
+
+    These are the remaining sites alongside the Wazuh indexer one above. Each
+    can carry a URL, a response body, a container name or a credential in the
+    exception message, and a caller-side redaction after the record is emitted
+    is too late (issue #879).
+    """
+
+    def test_run_cmd_failure_logs_the_exception_type(self, caplog):
+        # The argv is deliberately benign: credentials reach curl through a 0600
+        # header file, never the command line (ADR-029), and `_run_cmd` logs
+        # `cmd[:3]` anyway. What must not leak is the exception's own text.
+        from aptl.core.collectors import _run_cmd
+
+        with patch(
+            "aptl.core.collectors.subprocess.run",
+            side_effect=OSError("connect to https://admin:hunter2@host failed"),
+        ), caplog.at_level("WARNING"):
+            assert _run_cmd(["curl", "-s", "https://localhost:9200/_search"]) is None
+
+        logged = " ".join(record.getMessage() for record in caplog.records)
+        assert "hunter2" not in logged
+        assert "OSError" in logged
+
+    def test_suricata_eve_failure_logs_the_exception_type(self, caplog):
+        from aptl.core.collectors import collect_suricata_eve
+
+        backend = MagicMock()
+        backend.container_exec.side_effect = OSError(
+            "exec into aptl-suricata failed: token=hunter2"
+        )
+
+        with caplog.at_level("WARNING"):
+            result = collect_suricata_eve(
+                "2025-01-01T00:00:00+00:00", "2025-01-01T23:59:59+00:00", backend
+            )
+
+        assert result == []
+        logged = " ".join(record.getMessage() for record in caplog.records)
+        assert "hunter2" not in logged
+        assert "OSError" in logged
+
+    def test_container_log_failure_logs_the_exception_type(self, caplog):
+        from aptl.core.collectors import collect_container_logs
+
+        backend = MagicMock()
+        backend.container_logs_capture.side_effect = OSError(
+            "capture failed for aptl-victim: password=hunter2"
+        )
+
+        with caplog.at_level("WARNING"):
+            result = collect_container_logs(
+                ["aptl-victim"],
+                "2025-01-01T00:00:00+00:00",
+                "2025-01-01T23:59:59+00:00",
+                backend,
+            )
+
+        assert result == {}
+        logged = " ".join(record.getMessage() for record in caplog.records)
+        assert "hunter2" not in logged
+        assert "OSError" in logged
+        # The container name is operational context, not secret, and is kept.
+        assert "aptl-victim" in logged
+
+
 class TestCollectSuricataEve:
     """Tests for Suricata EVE collection."""
 

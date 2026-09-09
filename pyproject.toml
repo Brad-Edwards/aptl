@@ -171,7 +171,11 @@ markers = [
 addopts = "-m 'not fuzz'"
 
 [tool.coverage.run]
-source = ["aptl"]
+# Both top-level packages the wheel ships. `aptl_techvault` is a scenario
+# adapter reached only through entry points, but it is production code in this
+# distribution: leaving it out of the source set reported its every line as
+# uncovered while its tests were in fact exercising it.
+source = ["aptl", "aptl_techvault"]
 
 [tool.coverage.report]
 show_missing = true

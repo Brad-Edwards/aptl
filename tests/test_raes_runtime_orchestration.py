@@ -32,6 +32,7 @@ from aptl.core.deployment.realization import (
     DeploymentImageRealization,
     DeploymentNetworkRealization,
     DeploymentNodeRealization,
+    DeploymentPublishedPort,
     DeploymentRealizationSpec,
     DeploymentServicePort,
 )
@@ -362,6 +363,169 @@ def test_the_backend_accepts_an_admission_with_no_child_contract() -> None:
     assert len(admissions) == 1
     assert admissions[0].spawn_requirements == ()
     assert deployment_spawn_image_requirements(spec) == ()
+
+
+def _ports_backend(tmp_path, listed, inspected):
+    """A backend whose `docker ps` / `docker inspect` return canned output."""
+
+    backend = DockerComposeBackend(tmp_path)
+    calls: list[list[str]] = []
+
+    def _run(cmd, *, timeout=None):
+        calls.append(cmd)
+        return listed if cmd[1] == "ps" else inspected
+
+    backend._run = _run
+    return backend, calls
+
+
+def _completed(returncode=0, stdout=""):
+    return subprocess.CompletedProcess([], returncode, stdout=stdout, stderr="")
+
+
+def test_owned_host_ports_are_read_from_this_project_only(tmp_path) -> None:
+    """The query is scoped to the compose project and parses real inspect output.
+
+    Ports held by this project's own containers are not conflicts: the retry
+    path re-applies the plan with the range still up, and Compose reconciles
+    those containers. A port probe cannot tell them from a stranger's, so the
+    backend asks Docker which ones are its own.
+    """
+
+    inspect_output = (
+        '{"443/tcp":[{"HostIp":"127.0.0.1","HostPort":"8443"}],'
+        '"9200/tcp":[{"HostIp":"127.0.0.1","HostPort":"9200"}]}\n'
+        '{"53/udp":[{"HostIp":"127.0.0.1","HostPort":"5353"}]}\n'
+    )
+    backend, calls = _ports_backend(
+        tmp_path, _completed(stdout="abc123\ndef456\n"), _completed(stdout=inspect_output)
+    )
+
+    owned = backend._published_host_ports()
+
+    assert owned == frozenset(
+        {
+            ("127.0.0.1", 8443, "tcp"),
+            ("127.0.0.1", 9200, "tcp"),
+            ("127.0.0.1", 5353, "udp"),
+        }
+    )
+    # Scoped to this compose project, never every container on the host.
+    assert any(
+        f"label=com.docker.compose.project={backend._project_name}" in part
+        for part in calls[0]
+    )
+    assert calls[1][:2] == ["docker", "inspect"]
+    assert calls[1][-2:] == ["abc123", "def456"]
+
+
+def test_an_all_interfaces_publish_satisfies_a_loopback_declaration(tmp_path) -> None:
+    """Docker reports an all-interfaces bind with an empty or 0.0.0.0 host IP.
+
+    A scenario declaring `127.0.0.1` is satisfied by a container already
+    published on every interface, so that binding must be recognised as ours
+    rather than read as a foreign holder of the loopback port.
+    """
+
+    backend, _ = _ports_backend(
+        tmp_path,
+        _completed(stdout="abc123\n"),
+        _completed(stdout='{"80/tcp":[{"HostIp":"0.0.0.0","HostPort":"8080"}]}\n'),
+    )
+
+    assert ("127.0.0.1", 8080, "tcp") in backend._published_host_ports()
+
+
+@pytest.mark.parametrize(
+    ("listed", "inspected"),
+    [
+        (_completed(returncode=1), _completed()),
+        (_completed(stdout=""), _completed()),
+        (_completed(stdout="abc123\n"), _completed(returncode=1)),
+        (_completed(stdout="abc123\n"), _completed(stdout="not json\n")),
+        (_completed(stdout="abc123\n"), _completed(stdout='{"80/tcp":null}\n')),
+        (_completed(stdout="abc123\n"), _completed(stdout="\n\n")),
+        (_completed(stdout="abc123\n"), _completed(stdout='["not","a","map"]\n')),
+        (
+            _completed(stdout="abc123\n"),
+            _completed(stdout='{"80/tcp":[{"HostIp":"127.0.0.1","HostPort":"nope"}]}\n'),
+        ),
+    ],
+)
+def test_unreadable_docker_state_yields_no_owned_ports(tmp_path, listed, inspected):
+    """Unreadable state falls back to the probe alone, never to a false claim.
+
+    Claiming a port is ours on bad evidence would suppress a real conflict, so
+    every failure path returns nothing and the stricter probe-only behaviour
+    stands.
+    """
+
+    backend, _ = _ports_backend(tmp_path, listed, inspected)
+
+    assert backend._published_host_ports() == frozenset()
+
+
+def test_a_foreign_holder_of_a_declared_port_still_refuses_the_start(tmp_path) -> None:
+    """Ownership narrows the check; it does not disable it.
+
+    A declared binding held by something outside this project is still the
+    fail-closed conflict it always was, reported rather than published
+    elsewhere.
+    """
+
+    node = DeploymentNodeRealization(
+        address="provision.node.web",
+        name="web",
+        service_name="web",
+        container_name="aptl-web",
+        networks=(),
+        published_ports=(DeploymentPublishedPort(container_port=80, host_port=8099),),
+    )
+    spec = DeploymentRealizationSpec(
+        profiles=(), nodes=(node,), networks=(), images=()
+    )
+    backend = DockerComposeBackend(tmp_path)
+    # Nothing of ours publishes it, and the probe finds it taken.
+    backend._run = lambda cmd, *, timeout=None: _completed()
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(
+        "aptl.core.deployment._compose_port_realization.port_available",
+        lambda *_a, **_k: False,
+    )
+    try:
+        failure = backend._realize_published_ports(spec)
+    finally:
+        monkey.undo()
+
+    assert failure is not None
+    assert failure.success is False
+    assert "already in use" in failure.error
+
+
+def test_a_raising_docker_query_does_not_break_the_start(tmp_path) -> None:
+    """A daemon that errors must not crash realization."""
+
+    backend = DockerComposeBackend(tmp_path)
+
+    def _boom(cmd, *, timeout=None):
+        raise OSError("docker daemon unreachable")
+
+    backend._run = _boom
+
+    assert backend._published_host_ports() == frozenset()
+
+
+def test_ports_are_not_queried_when_nothing_declares_an_exact_binding(
+    tmp_path,
+) -> None:
+    """No declared host port means no reason to ask Docker anything."""
+
+    backend = DockerComposeBackend(tmp_path)
+    queried: list[list[str]] = []
+    backend._run = lambda cmd, *, timeout=None: queried.append(cmd) or _completed()
+
+    assert backend._realize_published_ports(_spec()) is None
+    assert queried == []
 
 
 def test_graph_admission_rejects_participant_profile_authority_holder() -> None:

@@ -387,7 +387,7 @@ def _append_image_free_artifact_ops(
     return None
 
 
-def _port_maps(payload: str) -> list[dict]:
+def _port_maps(payload: str) -> list[dict[str, object]]:
     """Return each parsable port map from a JSON-lines ``docker inspect`` payload.
 
     A line that is blank, unparsable, or not a map is skipped rather than
@@ -397,7 +397,7 @@ def _port_maps(payload: str) -> list[dict]:
 
     import json
 
-    maps: list[dict] = []
+    maps: list[dict[str, object]] = []
     for line in payload.splitlines():
         stripped = line.strip()
         if not stripped:
@@ -411,7 +411,7 @@ def _port_maps(payload: str) -> list[dict]:
     return maps
 
 
-def _binding_addresses(host_ip: str) -> tuple[str, ...]:
+def _binding_addresses(host_ip: str) -> list[str]:
     """Return the host addresses one published binding satisfies.
 
     Docker reports an all-interfaces publish with an empty or ``0.0.0.0`` host
@@ -419,8 +419,8 @@ def _binding_addresses(host_ip: str) -> tuple[str, ...]:
     """
 
     if host_ip in ("", "0.0.0.0"):
-        return (host_ip, "127.0.0.1")
-    return (host_ip,)
+        return [host_ip, "127.0.0.1"]
+    return [host_ip]
 
 
 def _entry_bindings(

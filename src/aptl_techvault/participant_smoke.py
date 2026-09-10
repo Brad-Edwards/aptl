@@ -45,6 +45,14 @@ def _decoded_text_payloads(result: Mapping[str, object]) -> list[object]:
     return payloads
 
 
+def _is_alert_envelope(value: Mapping[str, object]) -> bool:
+    """Whether this one mapping is a search envelope carrying a non-empty hit list."""
+
+    hits = value.get("hits")
+    inner = hits.get("hits") if isinstance(hits, Mapping) else None
+    return isinstance(inner, list) and bool(inner)
+
+
 def _has_alert_hit(value: object) -> bool:
     """Whether any nested search envelope in ``value`` carries a hit.
 
@@ -56,10 +64,9 @@ def _has_alert_hit(value: object) -> bool:
         return any(_has_alert_hit(item) for item in value)
     if not isinstance(value, Mapping):
         return False
-    hits = value.get("hits")
-    if isinstance(hits, Mapping) and hits.get("hits"):
-        return isinstance(hits["hits"], list)
-    return any(_has_alert_hit(item) for item in value.values())
+    return _is_alert_envelope(value) or any(
+        _has_alert_hit(item) for item in value.values()
+    )
 
 
 def _kali_user(result: Mapping[str, object]) -> bool:

@@ -152,36 +152,48 @@ def _wait_for_process(
     return None
 
 
-def _signal_group(process: subprocess.Popen[bytes], number: int) -> bool:
-    """Signal the child's group; ``False`` when there was nothing left to kill.
+def _signal_group(pid: int, number: int) -> None:
+    """Signal a whole process group, best effort.
 
-    Platforms disagree on how ``killpg`` reports a group with no member it can
-    signal. Linux raises ``ProcessLookupError`` (ESRCH); Darwin raises
-    ``PermissionError`` (EPERM) once the group holds only the exited child.
-    Both mean the same thing here, so both are tolerated -- but EPERM only
-    after ``poll()`` confirms the child really has exited, because an EPERM
-    against a live child is a genuine permission failure and must still
-    propagate rather than leave the group running behind a swallowed error.
+    Neither error this can raise is actionable, and neither is evidence about
+    what survived. ``ProcessLookupError`` (ESRCH) means the group had no
+    member left to signal. ``PermissionError`` (EPERM) means the platform
+    could not signal any member: Darwin answers EPERM where Linux answers
+    ESRCH once a group holds only unreaped zombies, because a zombie's
+    credentials are already cleared. Reading either errno as "the group is
+    gone" is what made teardown stop early. Escalation below runs on a fixed
+    schedule instead, so both are swallowed here.
     """
 
     try:
-        os.killpg(process.pid, number)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        if process.poll() is None:
-            raise
-        return False
-    return True
+        os.killpg(pid, number)
+    except (ProcessLookupError, PermissionError):
+        pass
 
 
 def _terminate_process_group(process: subprocess.Popen[bytes]) -> None:
-    """Terminate the entire child process group, escalating when necessary."""
-    if not _signal_group(process, signal.SIGTERM):
-        process.wait()
-        return
+    """Terminate the entire child process group, escalating unconditionally.
+
+    SIGTERM, then a bounded grace period for the direct child, then SIGKILL to
+    the whole group whether or not the direct child has already gone.
+
+    Escalating only when the *direct child* outlived the grace period was the
+    defect: a descendant that ignores or outlives SIGTERM stayed alive
+    whenever its parent died promptly, because nothing ever escalated to the
+    group again. The runner's contract is that a bounded run leaves nothing
+    behind, so the escalation cannot be conditional on the one process the
+    runner happens to hold a handle for.
+
+    The SIGKILL is sent before the child is reaped. While any member remains,
+    the group id stays allocated and cannot name a stranger's group; once the
+    group is empty the signal is a no-op that raises ESRCH or EPERM, both
+    swallowed above.
+    """
+
+    _signal_group(process.pid, signal.SIGTERM)
     try:
         process.wait(timeout=1)
     except subprocess.TimeoutExpired:
-        _signal_group(process, signal.SIGKILL)
-        process.wait()
+        pass
+    _signal_group(process.pid, signal.SIGKILL)
+    process.wait()

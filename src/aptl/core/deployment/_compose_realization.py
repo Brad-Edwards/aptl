@@ -301,40 +301,45 @@ class ComposeRealizationMixin(
         empty set, which only restores the stricter probe-only behavior.
         """
 
+        bindings: frozenset[tuple[str, int, str]] = frozenset()
         try:
-            listed = self._run(
-                [
-                    "docker",
-                    "ps",
-                    "--filter",
-                    f"label=com.docker.compose.project={self._project_name}",
-                    "--format",
-                    "{{.ID}}",
-                ],
-                timeout=60,
-            )
-            identifiers = [
-                line.strip() for line in listed.stdout.splitlines() if line.strip()
-            ]
-            if listed.returncode != 0 or not identifiers:
-                return frozenset()
-            inspected = self._run(
-                [
-                    "docker",
-                    "inspect",
-                    "--format",
-                    "{{json .NetworkSettings.Ports}}",
-                    *identifiers,
-                ],
-                timeout=60,
-            )
-            if inspected.returncode != 0:
-                return frozenset()
-            return frozenset(_owned_bindings(inspected.stdout))
+            identifiers = self._project_container_ids()
+            if identifiers:
+                inspected = self._run(
+                    [
+                        "docker",
+                        "inspect",
+                        "--format",
+                        "{{json .NetworkSettings.Ports}}",
+                        *identifiers,
+                    ],
+                    timeout=60,
+                )
+                if inspected.returncode == 0:
+                    bindings = frozenset(_owned_bindings(inspected.stdout))
         # broad-except: an unreadable daemon must not mask a real port conflict
         # nor crash the start; falling back to the probe alone is the safe side.
         except Exception:
-            return frozenset()
+            bindings = frozenset()
+        return bindings
+
+    def _project_container_ids(self) -> list[str]:
+        """Return the ids of containers labelled for this compose project."""
+
+        listed = self._run(
+            [
+                "docker",
+                "ps",
+                "--filter",
+                f"label=com.docker.compose.project={self._project_name}",
+                "--format",
+                "{{.ID}}",
+            ],
+            timeout=60,
+        )
+        if listed.returncode != 0:
+            return []
+        return [line.strip() for line in listed.stdout.splitlines() if line.strip()]
 
 
 def _append_image_free_artifact_ops(
@@ -382,31 +387,65 @@ def _append_image_free_artifact_ops(
     return None
 
 
-def _owned_bindings(payload: str) -> list[tuple[str, int, str]]:
-    """Parse ``docker inspect`` port maps into host binding triples."""
+def _port_maps(payload: str) -> list[dict]:
+    """Return each parsable port map from a JSON-lines ``docker inspect`` payload.
+
+    A line that is blank, unparsable, or not a map is skipped rather than
+    failing the caller: unreadable state must fall back to the probe alone, not
+    claim a port is ours on bad evidence.
+    """
 
     import json
 
-    bindings: list[tuple[str, int, str]] = []
+    maps: list[dict] = []
     for line in payload.splitlines():
-        line = line.strip()
-        if not line:
+        stripped = line.strip()
+        if not stripped:
             continue
         try:
-            ports = json.loads(line)
+            ports = json.loads(stripped)
         except ValueError:
             continue
-        if not isinstance(ports, dict):
+        if isinstance(ports, dict):
+            maps.append(ports)
+    return maps
+
+
+def _binding_addresses(host_ip: str) -> tuple[str, ...]:
+    """Return the host addresses one published binding satisfies.
+
+    Docker reports an all-interfaces publish with an empty or ``0.0.0.0`` host
+    IP, and a loopback declaration is satisfied by one.
+    """
+
+    if host_ip in ("", "0.0.0.0"):
+        return (host_ip, "127.0.0.1")
+    return (host_ip,)
+
+
+def _entry_bindings(
+    entries: object, protocol: str
+) -> list[tuple[str, int, str]]:
+    """Return the binding triples one container port's host entries publish."""
+
+    bindings: list[tuple[str, int, str]] = []
+    for entry in entries or ():
+        raw_port = str(entry.get("HostPort") or "")
+        if not raw_port.isdigit():
             continue
-        for container_port, host_bindings in ports.items():
-            protocol = str(container_port).rpartition("/")[2] or "tcp"
-            for entry in host_bindings or ():
-                host_ip = str(entry.get("HostIp") or "")
-                raw_port = str(entry.get("HostPort") or "")
-                if not raw_port.isdigit():
-                    continue
-                # Docker reports an all-interfaces publish as an empty or
-                # 0.0.0.0 host IP; a loopback declaration is satisfied by it.
-                for address in {host_ip, "127.0.0.1"} if host_ip in ("", "0.0.0.0") else {host_ip}:
-                    bindings.append((address, int(raw_port), protocol))
+        for address in _binding_addresses(str(entry.get("HostIp") or "")):
+            bindings.append((address, int(raw_port), protocol))
     return bindings
+
+
+def _owned_bindings(payload: str) -> list[tuple[str, int, str]]:
+    """Parse ``docker inspect`` port maps into host binding triples."""
+
+    return [
+        binding
+        for ports in _port_maps(payload)
+        for container_port, entries in ports.items()
+        for binding in _entry_bindings(
+            entries, str(container_port).rpartition("/")[2] or "tcp"
+        )
+    ]

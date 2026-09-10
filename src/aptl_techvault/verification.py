@@ -37,7 +37,7 @@ from aptl.validation.scenario_verification import (
     VerificationStatus,
 )
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:
     from aptl.validation.scenario_verification import VerificationContext
 
 __version__ = "0.2.0"
@@ -146,8 +146,9 @@ class TechVaultVerifier(object):
             checks=tuple(checks),
         )
 
+    @staticmethod
     def _prerequisites(
-        self, context: "VerificationContext"
+        context: "VerificationContext",
     ) -> list[PrerequisiteResult]:
         """Return whether the pieces this scenario's verdict depends on are present.
 
@@ -197,7 +198,8 @@ class TechVaultVerifier(object):
             )
         return results
 
-    def _checks(self, context: "VerificationContext") -> list[VerificationCheck]:
+    @staticmethod
+    def _checks(context: "VerificationContext") -> list[VerificationCheck]:
         """Return the semantic verdicts for this scenario.
 
         The check names the attacker node -- the one scenario constant -- and

@@ -11,11 +11,19 @@ the machinery into a stable ``blocked`` outcome. What a plugin owns: which node
 is the attacker, what the defensive stack is, and what evidence proves detection
 traversed it.
 
-**Core ships zero adapters.** Not a fallback, not an example, not a test-only
-one. ``aptl``'s own distribution registers nothing in the entry-point group, and
-a conformance test asserts it. Verification for a scenario arrives by installing
-a distribution, never by editing this file — if adding a second scenario required
-a change here, the seam would be decorative.
+**This framework holds no scenario knowledge.** Not a fallback, not an example,
+not a test-only branch. Every scenario-specific fact lives in its own top-level
+adapter package — ``aptl_techvault`` is the first — reached only through
+installed entry-point metadata, and a conformance test asserts that no entry
+point resolves into ``aptl.`` itself. Adding a second scenario adds a package;
+it never edits this file. If it did, the seam would be decorative.
+
+Those adapter packages ship in this distribution and release with it, because
+an adapter is specific to one scenario *and* one backend, and only the backend
+can write it: a scenario author cannot write an adapter for a backend they have
+never seen, and many backends are private. Owning them here is also what lets a
+single install give an operator every extension surface a scenario needs. The
+boundary that matters is the code boundary above, not a packaging boundary.
 
 Discovery is fail-closed on purpose. No match, several matches, a version
 mismatch, or a plugin that fails to load all produce ``blocked``: no complete
@@ -23,10 +31,10 @@ semantic verdict was possible. That is terminal and non-successful, and must
 never be reported as passed, skipped, or degraded — a range whose verification
 could not run has not been verified.
 
-Installing a plugin grants code execution with this process's authority. Entry
-points are a discovery mechanism, not a sandbox, so installation stays an
-explicit operator action: nothing here downloads, auto-installs, scans a range
-directory, or accepts a module path from scenario data or configuration.
+Loading an entry point executes installed Python with this process's authority.
+Entry points are a discovery mechanism, not a sandbox, so nothing here
+downloads, auto-installs, scans a range directory, or accepts a module path from
+scenario data or configuration.
 """
 
 from __future__ import annotations
@@ -40,14 +48,19 @@ from aptl.backends.identity import BackendIdentity
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-#: The single entry-point group a scenario verifier registers under. Core
-#: declares no entry in it; see ``pyproject.toml`` and the conformance test.
+#: The single entry-point group a scenario verifier registers under. Entries
+#: resolve into per-scenario adapter packages, never into ``aptl.`` itself; see
+#: ``pyproject.toml`` and the conformance test.
 ENTRY_POINT_GROUP = "aptl.scenario_verifiers"
 
 #: The extension contract version. A plugin declares the version it was built
 #: against and is refused when it does not match, rather than being run against a
 #: context whose meaning has changed underneath it.
-EXTENSION_API_VERSION = "1"
+#:
+#: ``2`` replaced the parallel per-dimension compatibility lists with atomic
+#: :class:`QualifiedTarget` pairs (#879), so a plugin built against ``1`` must be
+#: refused rather than reinterpreted.
+EXTENSION_API_VERSION = "2"
 
 #: Version of the normalized report emitted by core.  This is independent of
 #: the extension API: the former is persisted/projection data, while the latter
@@ -138,6 +151,25 @@ class ScenarioIdentity(object):
 
 
 @dataclass(frozen=True)
+class QualifiedTarget(object):
+    """One scenario-and-backend combination a plugin release has qualified.
+
+    Qualification is atomic, and that is the whole point of the type. Declaring
+    admitted versions and admitted content digests as separate lists silently
+    admits their cross product: a plugin that qualified release 0.1.0 at one
+    digest and release 0.2.0 at another has said nothing about 0.1.0 at the
+    second digest, yet parallel lists would run against it (#879).
+
+    A pair is a claim that *this* content on *this* backend was qualified
+    together. Naming several pairs is allowed; each one is its own claim and
+    needs its own evidence.
+    """
+
+    scenario: ScenarioIdentity
+    backend: BackendIdentity
+
+
+@dataclass(frozen=True)
 class VerificationContext(object):
     """Everything a plugin is given, and nothing more.
 
@@ -218,25 +250,54 @@ class VerificationReport(object):
                 categories.append(category)
         return tuple(categories)
 
-    def render(self) -> str:
-        """Render a bounded, human-readable summary."""
-        lines = [
+    def _headline(self) -> str:
+        """Return the one-line verdict, naming the release that produced it.
+
+        The distribution and version sit alongside the plugin id because an
+        operator reading a verdict needs to know which installed release
+        reached it, and the id alone does not say that.
+        """
+
+        origin = (
+            f"{self.distribution}=={self.distribution_version}"
+            if self.distribution
+            else "(none)"
+        )
+        return (
             f"scenario verification — scenario={self.scenario.identity} "
             f"backend={self.backend.target_name} "
-            f"plugin={self.plugin_id or '(none)'}: {self.status.value.upper()}"
-        ]
+            f"plugin={self.plugin_id or '(none)'} from {origin}: "
+            f"{self.status.value.upper()}"
+        )
+
+    def _rendered_prerequisites(self) -> list[str]:
+        """Return the prerequisite lines, each with its bounded diagnostic."""
+
+        lines: list[str] = []
         for prerequisite in self.prerequisites:
             marker = "ok" if prerequisite.satisfied else "UNMET"
             lines.append(f"  [{marker}] prerequisite {prerequisite.prerequisite_id}")
             if prerequisite.diagnostic:
                 lines.append(f"        - {prerequisite.diagnostic}")
+        return lines
+
+    def _rendered_checks(self) -> list[str]:
+        """Return the semantic-check lines, each with its diagnostics."""
+
+        lines: list[str] = []
         for check in self.checks:
             suffix = f" ({check.category})" if check.category else ""
             lines.append(f"  [{check.status.value}] {check.check_id}{suffix}")
-            for diagnostic in check.diagnostics:
-                lines.append(f"        - {diagnostic}")
-        for diagnostic in self.diagnostics:
-            lines.append(f"  - {diagnostic}")
+            lines.extend(f"        - {item}" for item in check.diagnostics)
+        return lines
+
+    def render(self) -> str:
+        """Render a bounded, human-readable summary."""
+
+        lines = [self._headline()]
+        lines.extend(self._rendered_prerequisites())
+        lines.extend(self._rendered_checks())
+        lines.extend(f"  - {diagnostic}" for diagnostic in self.diagnostics)
         categories = self.failure_categories()
         if categories:
             lines.append("  failing layers: " + ", ".join(categories))
@@ -255,20 +316,10 @@ class ScenarioVerifier(Protocol):
     plugin_id: str
     #: Extension contract version this plugin was built against.
     extension_api_version: str
-    #: Scenario identity this verifier is written for.
-    scenario_identity: str
-    #: Admitted source kinds, versions, and content digests this verifier accepts.
-    #: Each declaration is explicit; empty never means wildcard.
-    scenario_source_kinds: Sequence[str]
-    scenario_versions: Sequence[str]
-    scenario_content_digests: Sequence[str]
-    #: RAES target name this verifier supports.
-    backend_target_name: str
-    #: Exact backend revisions, profiles, providers, and transports supported.
-    backend_target_versions: Sequence[str]
-    backend_profiles: Sequence[str]
-    backend_providers: Sequence[str]
-    backend_transports: Sequence[str]
+    #: Every scenario-and-backend combination this release qualified, each one
+    #: exact and atomic. An empty declaration is not a wildcard: it qualifies
+    #: nothing, so every run against it is blocked.
+    qualified_targets: Sequence[QualifiedTarget]
 
     def run(self, context: VerificationContext) -> VerificationReport:
         """Evaluate the scenario's semantic expectations against a live range."""
@@ -282,6 +333,7 @@ __all__ = [
     "BackendIdentity",
     "PrerequisiteResult",
     "PrerequisiteStatus",
+    "QualifiedTarget",
     "ScenarioIdentity",
     "ScenarioVerifier",
     "VerificationCheck",

@@ -8,7 +8,7 @@
 #
 #   - suricata-local-rules materializes as a HEADER-ONLY file (three comment
 #     lines, zero rules) -> Suricata logs "0 signatures processed". The authored
-#     46-rule local corpus (nmap, SQLi, XSS, command-injection, kerberoasting,
+#     16-rule local corpus (nmap, SQLi, XSS, command-injection, kerberoasting,
 #     SMB brute force, lateral movement, LDAP enum, reverse-shell/C2, meterpreter)
 #     never reaches the engine.
 #   - suricata-config (suricata.yaml) declares only HOME_NET + EXTERNAL_NET in
@@ -28,7 +28,7 @@
 #
 # Root fixes tracked upstream (remove this script when they ship):
 #   env-pack ships full local.rules + complete suricata.yaml vars
-#     -> OpenRAE/env-packs#<TBD> ; retire per Brad-Edwards/aptl#<TBD>
+#     -> OpenRAE/env-packs#336 ; retire per Brad-Edwards/aptl#988
 # =============================================================================
 set -uo pipefail
 
@@ -51,7 +51,7 @@ _mount_src() {
         2>/dev/null
 }
 
-# --- local.rules: restore the authored 46-rule corpus -----------------------
+# --- local.rules: restore the authored local corpus -------------------------
 fix_local_rules() {
     local dest="/etc/suricata/rules/local.rules"
     local src

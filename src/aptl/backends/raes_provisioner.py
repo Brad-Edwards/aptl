@@ -120,6 +120,60 @@ class AptlProvisioner(object):
         )
         return result
 
+    @staticmethod
+    def _failed_apply(
+        snapshot: RuntimeSnapshot,
+        diagnostics: list[Diagnostic],
+        selected_profiles: list[str],
+        realization: AptlRealization,
+    ) -> ApplyResult:
+        """Return the one shape every pre-start apply failure reports."""
+
+        return ApplyResult(
+            success=False,
+            snapshot=snapshot,
+            diagnostics=diagnostics,
+            details={
+                "profiles": selected_profiles,
+                "realization": realization.details(),
+            },
+        )
+
+    def _lowered_spec(
+        self,
+        snapshot: RuntimeSnapshot,
+        diagnostics: list[Diagnostic],
+        selected_profiles: list[str],
+        realization: AptlRealization,
+    ) -> tuple[object | None, ApplyResult | None]:
+        """Return the lowered deployment spec, or the failure preventing one."""
+
+        validity_diagnostics = self._compose_validity_diagnostics(selected_profiles)
+        if validity_diagnostics:
+            diagnostics.extend(validity_diagnostics)
+            return None, self._failed_apply(
+                snapshot, diagnostics, selected_profiles, realization
+            )
+        try:
+            return realization.deployment_spec(selected_profiles), None
+        # Lowering reports an unrealizable graph by raising with a stable code
+        # in the message. RAES's backend-call boundary turns any ValueError or
+        # TypeError out of apply into the fixed text "Backend could not
+        # construct a valid apply result" and drops the message, so raising here
+        # loses the code, the address and the node. The contract is a failed
+        # ApplyResult carrying diagnostics; return one.
+        except (TypeError, ValueError) as exc:
+            diagnostics.append(
+                diagnostic(
+                    "aptl.provisioner.realization-not-lowerable",
+                    PROVISIONING_ADDRESS,
+                    str(exc),
+                )
+            )
+            return None, self._failed_apply(
+                snapshot, diagnostics, selected_profiles, realization
+            )
+
     def _apply_valid_plan(
         self,
         plan: ProvisioningPlan,
@@ -129,19 +183,11 @@ class AptlProvisioner(object):
     ) -> ApplyResult:
         """Apply a validated RAES plan to the deployment backend."""
         selected_profiles = select_backend_profiles(self.config, realization.profiles)
-        validity_diagnostics = self._compose_validity_diagnostics(selected_profiles)
-        if validity_diagnostics:
-            diagnostics.extend(validity_diagnostics)
-            return ApplyResult(
-                success=False,
-                snapshot=snapshot,
-                diagnostics=diagnostics,
-                details={
-                    "profiles": selected_profiles,
-                    "realization": realization.details(),
-                },
-            )
-        deployment_spec = realization.deployment_spec(selected_profiles)
+        deployment_spec, failure = self._lowered_spec(
+            snapshot, diagnostics, selected_profiles, realization
+        )
+        if failure is not None:
+            return failure
         start_result = self.deployment_backend.realize(
             deployment_spec,
             scenario_root=self.bundle.root,
@@ -155,14 +201,8 @@ class AptlProvisioner(object):
                     start_result.error or "APTL deployment backend failed.",
                 )
             )
-            return ApplyResult(
-                success=False,
-                snapshot=snapshot,
-                diagnostics=diagnostics,
-                details={
-                    "profiles": selected_profiles,
-                    "realization": realization.details(),
-                },
+            return self._failed_apply(
+                snapshot, diagnostics, selected_profiles, realization
             )
         # The snapshot must record what the backend realized, not what the plan
         # asked for: the SEM-218 gate reads the realized value out of it, so

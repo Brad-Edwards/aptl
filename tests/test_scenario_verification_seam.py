@@ -25,6 +25,7 @@ from aptl.validation.scenario_verification import (
     BackendIdentity,
     PrerequisiteResult,
     PrerequisiteStatus,
+    QualifiedTarget,
     ScenarioIdentity,
     VerificationCheck,
     VerificationContext,
@@ -46,6 +47,7 @@ BACKEND = BackendIdentity(
     provider="docker-compose",
     transport="docker-compose",
 )
+TARGET = QualifiedTarget(scenario=SCENARIO, backend=BACKEND)
 
 
 def _context(*, deadline_monotonic: float = float("inf")) -> VerificationContext:
@@ -66,23 +68,7 @@ class _Verifier(object):
         self.extension_api_version = overrides.get(
             "extension_api_version", EXTENSION_API_VERSION
         )
-        self.scenario_identity = overrides.get("scenario_identity", SCENARIO.identity)
-        self.scenario_source_kinds = overrides.get(
-            "scenario_source_kinds", (SCENARIO.source_kind,)
-        )
-        self.scenario_versions = overrides.get("scenario_versions", (SCENARIO.version,))
-        self.scenario_content_digests = overrides.get(
-            "scenario_content_digests", (SCENARIO.content_digest,)
-        )
-        self.backend_target_name = overrides.get("backend_target_name", "aptl")
-        self.backend_target_versions = overrides.get(
-            "backend_target_versions", (BACKEND.target_version,)
-        )
-        self.backend_profiles = overrides.get("backend_profiles", (BACKEND.profile,))
-        self.backend_providers = overrides.get("backend_providers", (BACKEND.provider,))
-        self.backend_transports = overrides.get(
-            "backend_transports", (BACKEND.transport,)
-        )
+        self.qualified_targets = overrides.get("qualified_targets", (TARGET,))
         self._status = status
         self._raises = overrides.get("raises", False)
         self._malformed = overrides.get("malformed", False)
@@ -164,22 +150,33 @@ def _install_entry_points(monkeypatch, *entry_points: _EntryPoint) -> None:
     monkeypatch.setattr(discovery, "_entry_points", lambda: list(entry_points))
 
 
-def test_core_registers_no_scenario_verifier():
-    """The whole rule of the seam: core ships the framework and zero adapters.
+def test_the_framework_holds_no_scenario_knowledge():
+    """The rule of the seam is a code boundary, not a distribution boundary.
 
-    Not a fallback, not an example, not a test-only adapter. If APTL's own
-    distribution ever registers one, every scenario silently gains a verifier it
-    did not install, and "blocked" stops meaning anything.
+    An adapter is specific to one scenario on one backend, and only the backend
+    can write it: a scenario author cannot write an adapter for a backend they
+    have never seen, and many backends are private. So adapters belong to the
+    backend and ship in the backend's release.
+
+    What must stay true is that the *framework* knows no scenario. Every
+    scenario-specific fact lives in its own top-level adapter package resolved
+    through installed entry-point metadata, so a second scenario adds a package
+    and never edits a framework module. An earlier form of this test asserted
+    that the distribution registered nothing at all, which measured packaging
+    rather than the boundary that matters.
     """
 
-    aptl_entry_points = [
-        entry_point
+    targets = {
+        entry_point.name: entry_point.value
         for entry_point in metadata.entry_points(group=ENTRY_POINT_GROUP)
-        if getattr(entry_point, "dist", None) is not None
-        and entry_point.dist.name in {"aptl", "aptl-labs"}
-    ]
+    }
 
-    assert aptl_entry_points == []
+    assert "techvault.aptl" in targets
+    for name, value in targets.items():
+        assert not value.startswith("aptl."), (
+            f"{name} resolves into the framework package; a scenario adapter "
+            "must live in its own top-level package"
+        )
 
 
 def test_no_installed_verifier_blocks(monkeypatch):
@@ -229,20 +226,25 @@ def test_unrelated_entry_points_are_filtered_before_loading(monkeypatch):
 @pytest.mark.parametrize(
     ("metadata_name", "metadata_value"),
     [
-        ("scenario_source_kinds", ()),
-        ("scenario_versions", ()),
-        ("scenario_content_digests", ()),
-        ("backend_target_versions", ()),
-        ("backend_profiles", ()),
-        ("backend_providers", ()),
-        ("backend_transports", ()),
+        ("qualified_targets", ()),
+        ("qualified_targets", [TARGET]),
+        ("qualified_targets", (TARGET, TARGET)),
+        ("qualified_targets", ("techvault.aptl",)),
+        (
+            "qualified_targets",
+            (replace(TARGET, scenario=replace(SCENARIO, content_digest="any")),),
+        ),
+        (
+            "qualified_targets",
+            (replace(TARGET, scenario=replace(SCENARIO, identity="not a safe id")),),
+        ),
         ("plugin_id", "not a bounded plugin id"),
     ],
 )
 def test_malformed_or_wildcard_metadata_blocks(
     monkeypatch, metadata_name, metadata_value
 ):
-    """An omitted compatibility dimension cannot silently claim future inputs."""
+    """An omitted or unqualified declaration cannot silently claim future inputs."""
 
     _install(monkeypatch, _Verifier(**{metadata_name: metadata_value}))
 
@@ -253,19 +255,18 @@ def test_malformed_or_wildcard_metadata_blocks(
 
 
 @pytest.mark.parametrize(
-    ("metadata_name", "metadata_value"),
+    "target",
     [
-        ("scenario_source_kinds", ("project-tree",)),
-        ("scenario_versions", ("0.0.9",)),
-        ("backend_target_versions", ("0.0.9",)),
-        ("backend_providers", ("other-provider",)),
-        ("backend_transports", ("ssh-compose",)),
+        replace(TARGET, scenario=replace(SCENARIO, source_kind="project-tree")),
+        replace(TARGET, scenario=replace(SCENARIO, version="0.0.9")),
+        replace(TARGET, backend=replace(BACKEND, target_version="0.0.9")),
+        replace(TARGET, backend=replace(BACKEND, provider="other-provider")),
+        replace(TARGET, backend=replace(BACKEND, transport="ssh-compose")),
+        replace(TARGET, backend=replace(BACKEND, profile="provisioning-only")),
     ],
 )
-def test_every_compatibility_dimension_is_matched_exactly(
-    monkeypatch, metadata_name, metadata_value
-):
-    _install(monkeypatch, _Verifier(**{metadata_name: metadata_value}))
+def test_every_compatibility_dimension_is_matched_exactly(monkeypatch, target):
+    _install(monkeypatch, _Verifier(qualified_targets=(target,)))
 
     report = discovery.verify_scenario(_context())
 
@@ -278,7 +279,14 @@ def test_pinned_content_digest_must_match_the_admitted_scenario(monkeypatch):
 
     _install(
         monkeypatch,
-        _Verifier(scenario_content_digests=("sha256:" + "b" * 64,)),
+        _Verifier(
+            qualified_targets=(
+                replace(
+                    TARGET,
+                    scenario=replace(SCENARIO, content_digest="sha256:" + "b" * 64),
+                ),
+            )
+        ),
     )
     report = discovery.verify_scenario(_context())
 
@@ -286,13 +294,106 @@ def test_pinned_content_digest_must_match_the_admitted_scenario(monkeypatch):
     assert "pinned to different scenario content" in report.diagnostics[0]
 
 
-def test_backend_profile_mismatch_blocks(monkeypatch):
-    """A verifier written for another profile cannot judge this range."""
+def test_an_unqualified_combination_of_qualified_declarations_blocks(monkeypatch):
+    """Qualification is atomic: a pair is admitted, never a dimension.
 
-    _install(monkeypatch, _Verifier(backend_profiles=("provisioning-only",)))
+    This is what parallel version and digest lists could not express. A plugin
+    that qualified release 0.1.0 at digest A and release 0.2.0 at digest B has
+    said nothing about 0.1.0 at digest B, and running against that combination
+    would be running against content no release ever qualified.
+    """
+
+    release_a = replace(TARGET, scenario=replace(SCENARIO, version="0.1.0"))
+    release_b = replace(
+        TARGET,
+        scenario=replace(
+            SCENARIO, version="0.2.0", content_digest="sha256:" + "b" * 64
+        ),
+    )
+    _install(monkeypatch, _Verifier(qualified_targets=(release_a, release_b)))
+
+    # The cross combination: release A's version with release B's content.
+    unqualified = replace(
+        _context(),
+        scenario=replace(
+            SCENARIO, version="0.1.0", content_digest="sha256:" + "b" * 64
+        ),
+    )
+    report = discovery.verify_scenario(unqualified)
+
+    assert report.status is VerificationStatus.BLOCKED
+    assert "pinned to different scenario content" in report.diagnostics[0]
+
+    # Both declared pairs themselves still run.
+    for qualified in (release_a, release_b):
+        admitted = replace(
+            _context(), scenario=qualified.scenario, backend=qualified.backend
+        )
+        assert discovery.verify_scenario(admitted).status is VerificationStatus.PASSED
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        QualifiedTarget(scenario=object(), backend=BACKEND),
+        QualifiedTarget(scenario=SCENARIO, backend=object()),
+        QualifiedTarget(scenario=SCENARIO, backend=["unhashable"]),
+    ],
+)
+def test_a_malformed_qualified_target_member_blocks(monkeypatch, target):
+    """A wrong member type must block, not raise through the gate.
+
+    ``QualifiedTarget`` is an ordinary dataclass, so a plugin can put anything
+    in it. Reading a wrong type raises AttributeError and hashing an unhashable
+    one raises TypeError; discovery catches neither, so without a type check the
+    promised terminal blocked report becomes an exception escaping
+    ``verify_scenario``.
+    """
+
+    _install(monkeypatch, _Verifier(qualified_targets=(target,)))
+
     report = discovery.verify_scenario(_context())
 
     assert report.status is VerificationStatus.BLOCKED
+    assert "metadata" in report.diagnostics[0]
+
+
+def test_an_unnamed_identity_dimension_still_blocks(monkeypatch):
+    """Fail closed when a mismatch has no name yet.
+
+    The refusal reason enumerates the identity fields by hand, so an identity
+    that gains a field would leave a pair that is unequal while no named
+    dimension disagrees. Discovery must still refuse: the alternative is
+    indexing an empty reason list, which raises through the gate rather than
+    blocking it.
+    """
+
+    _install(monkeypatch, _Verifier())
+    monkeypatch.setattr(discovery, "_mismatched_dimensions", lambda *_a: ())
+    monkeypatch.setattr(
+        discovery, "QualifiedTarget", lambda **_k: object()
+    )
+
+    report = discovery.verify_scenario(_context())
+
+    assert report.status is VerificationStatus.BLOCKED
+    assert "is not qualified for this range" in report.diagnostics[0]
+
+
+def test_a_second_qualified_backend_needs_no_core_change(monkeypatch):
+    """Extensibility: another qualified transport is a plugin declaration."""
+
+    ssh_backend = replace(BACKEND, provider="ssh-compose", transport="ssh-compose")
+    _install(
+        monkeypatch,
+        _Verifier(
+            qualified_targets=(TARGET, replace(TARGET, backend=ssh_backend)),
+        ),
+    )
+
+    report = discovery.verify_scenario(replace(_context(), backend=ssh_backend))
+
+    assert report.status is VerificationStatus.PASSED
 
 
 def test_a_plugin_that_raises_blocks_without_leaking_the_exception(monkeypatch):
@@ -483,37 +584,40 @@ def test_blocked_is_distinct_from_both_other_outcomes(status):
     assert VerificationStatus.BLOCKED is not status
 
 
-def test_the_techvault_verifier_is_a_separate_distribution():
-    """ "Core ships zero adapters" has to be checkable, not just asserted.
+def test_the_techvault_adapter_is_its_own_package_in_the_one_distribution():
+    """One release, and the adapter is reached only through its entry points.
 
-    The TechVault verifier lives in this repository for now, but it builds and
-    installs as its own distribution. If it were ever folded into ``aptl-labs``,
-    every scenario would silently gain a verifier nobody installed and the
-    blocked outcome would stop meaning anything — so the distribution boundary is
-    the thing worth testing, not the file layout.
+    All three entry points TechVault owns are declared by this distribution and
+    resolve into ``aptl_techvault``. That is the shape the seam needs: a single
+    install gives an operator every extension surface the scenario owns, while
+    no framework module is ever named as an extension target.
     """
 
     import tomllib
 
     root = Path(__file__).resolve().parents[1]
     core = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    plugin = tomllib.loads(
-        (root / "plugins/aptl-techvault-verifier/pyproject.toml").read_text(
-            encoding="utf-8"
-        )
-    )
+    entry_points = core["project"]["entry-points"]
 
     assert core["project"]["name"] == "aptl-labs"
-    assert "aptl.scenario_verifiers" not in core["project"].get("entry-points", {})
-    assert plugin["project"]["name"] == "aptl-techvault-verifier"
-    assert plugin["project"]["entry-points"][ENTRY_POINT_GROUP] == {
-        "techvault.aptl": "aptl_techvault_verifier:verifier"
+    assert entry_points[ENTRY_POINT_GROUP] == {
+        "techvault.aptl": "aptl_techvault.verification:verifier"
     }
-    assert plugin["project"]["entry-points"]["aptl.participant_mcp_smoke_plans"] == {
+    assert entry_points["aptl.pack_backend_interactions"] == {
+        "techvault.aptl": "aptl_techvault.serving:provider"
+    }
+    assert entry_points["aptl.participant_mcp_smoke_plans"] == {
         "guided-purple.techvault-attacker-target": (
-            "aptl_techvault_verifier.participant_smoke:PARTICIPANT_SMOKE_OPERATIONS"
+            "aptl_techvault.participant_smoke:PARTICIPANT_SMOKE_OPERATIONS"
         )
     }
+    # A sibling of the framework in the wheel, never inside it.
+    assert core["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"] == [
+        "src/aptl",
+        "src/aptl_techvault",
+    ]
+    assert (root / "src" / "aptl_techvault").is_dir()
+    assert not (root / "plugins").exists()
 
 
 def test_core_holds_no_techvault_answer_key_behind_the_seam():
@@ -555,13 +659,14 @@ def test_core_source_contains_no_known_verification_answer_keys():
     """The wheel bundles all of ``src``, so ownership must cover the whole tree."""
 
     root = Path(__file__).resolve().parent.parent / "src" / "aptl"
+    # Every marker below is a real string in `aptl_techvault` today. A marker
+    # that exists nowhere would make this assertion vacuous, which is what
+    # happened to the removed detection check's `aptl-live-gate-invalid`.
     markers = (
-        "aptl-live-gate-invalid",
-        "_RECENT_SSH_ALERT_QUERY",
+        "provision.node.wazuh-manager",
         "mcp.red.ssh-authentication-attack",
-        "_PLUGIN_CHECK_CATEGORY",
-        "_is_correlated_wazuh_alert",
-        "kali nmap + failed-ssh-auth",
+        "ATTACKER_NODE",
+        "TECHVAULT_PACK_SET_DIGEST",
     )
     offenders = {
         str(path.relative_to(root)): [marker for marker in markers if marker in text]

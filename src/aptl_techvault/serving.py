@@ -74,8 +74,9 @@ class TechVaultPackInteraction:
     backend_profiles = ("full-remote-control-plane",)
     backend_transports: tuple[str, ...] = ()
 
+    @staticmethod
     def resolve(
-        self, context: PackBackendInteractionContext
+        context: PackBackendInteractionContext,
     ) -> PackBackendInteractionResult:
         """Return a total mapping for the admitted TechVault node inventory."""
 

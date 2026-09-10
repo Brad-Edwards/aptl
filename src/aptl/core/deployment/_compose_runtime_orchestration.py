@@ -114,7 +114,11 @@ def docker_authority_admissions(
             admission.node_address in nodes
             and nodes[admission.node_address].service_name == admission.service_name
             and _admission_endpoint_is_supported(admission)
-            and admission.spawn_requirements
+            # No non-emptiness requirement: an authority may declare its
+            # privilege without declaring an expected child inventory, and a
+            # realized child is an observation, so there is nothing to carry
+            # before anything has run. Every contract that *is* carried is still
+            # checked in full below.
             and all(
                 _spawn_requirement_is_complete(
                     requirement,

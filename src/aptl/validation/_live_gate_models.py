@@ -159,3 +159,33 @@ class LiveGateState(object):
     snapshot: dict | None = None
     evidence: dict | None = None
     diagnostics_seen: int = 0
+    #: The validated report the installed verifier produced, kept so the gate's
+    #: own report and its run archive can name which executable answer key
+    #: reached the verdict. ``None`` while no plugin has answered (#879).
+    verification: VerificationReport | None = None
+
+
+def verification_provenance(
+    report: VerificationReport | None,
+) -> dict[str, str] | None:
+    """Return the host-observed identity behind a verdict, or None if unanswered.
+
+    These are the discovery-recorded fields of the one report shape, not a
+    second provenance schema: the distribution name and version come from
+    installed package metadata, so a plugin cannot author its own attribution.
+
+    A report with no observed distribution is what discovery returns when no
+    compatible verifier was found at all. There is no plugin to attribute that
+    to, so it reads as unanswered rather than as a record of empty strings --
+    which would look like an attribution whose fields went missing.
+    """
+
+    if report is None or not report.distribution:
+        return None
+    return {
+        "plugin_id": report.plugin_id,
+        "distribution": report.distribution,
+        "distribution_version": report.distribution_version,
+        "entry_point": report.entry_point,
+        "extension_api_version": report.extension_api_version,
+    }

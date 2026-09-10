@@ -69,7 +69,6 @@ jobs:
       - run: |
           pip install --require-hashes -r requirements/dev.txt
           pip install -e . --no-deps --no-build-isolation
-          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
       - run: |
           coverage run -m pytest tests/ -q -k "not integration"
           coverage xml -o coverage.xml
@@ -93,6 +92,28 @@ jobs:
         run: >-
           python -m pytest tests/test_scenario_verification_artifacts.py -q
           -m integration
+
+  pack-identity-compatibility:
+    name: Admitted pack identity and plugin qualification
+    runs-on: ubuntu-latest
+    # Issue #879: the verifier declared scenario content the admitted pack does
+    # not carry, and no gate noticed, because every other test built its context
+    # from the plugin's own declaration. These tests resolve the identity through
+    # env-packs' real validation path and fail on any drift. They are
+    # integration-marked (staging and validating a pack is not fast-suite work)
+    # but need no Docker, so they run here rather than nowhere.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: |
+          pip install --require-hashes -r requirements/dev.txt
+          pip install -e . --no-deps --no-build-isolation
+      - name: Bind every installed plugin's declaration to the admitted pack
+        run: >-
+          python -m pytest tests/test_env_pack_bundle.py
+          tests/test_plugin_pack_compatibility.py -q -m integration
 
   python-cross-platform:
     name: Python cross-platform smoke (${{ matrix.os }})
@@ -131,7 +152,6 @@ jobs:
       - run: |
           pip install --require-hashes -r requirements/dev.txt
           pip install -e . --no-deps --no-build-isolation
-          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
       - name: Python portable suite without lab integration
         run: python -m pytest ${{ matrix.pytest_args }}
       - name: CLI import and help smoke
@@ -161,7 +181,6 @@ jobs:
       - run: |
           pip install --require-hashes -r requirements/dev.txt
           pip install -e . --no-deps --no-build-isolation
-          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
       - name: Generate lab SSH keys
         # issue #581: the operational scenario's content: now declares the
         # SSH-reachable targets' authorized_keys (SEC #417), sourced from the
@@ -203,7 +222,6 @@ jobs:
       - run: |
           pip install --require-hashes -r requirements/dev.txt
           pip install -e . --no-deps --no-build-isolation
-          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
       - run: python -m pytest tests/test_lab_fresh_start.py -q -m integration
 
   clean-install-lab-boot:

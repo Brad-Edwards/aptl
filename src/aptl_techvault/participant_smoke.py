@@ -19,6 +19,8 @@ _RECENT_SSH_ALERT_QUERY = {
 
 
 def _text_content(result: Mapping[str, object]) -> list[str]:
+    """Return the text blocks of one MCP tool result, ignoring other shapes."""
+
     content = result.get("content")
     if not isinstance(content, Sequence) or isinstance(content, str | bytes):
         return []
@@ -32,6 +34,8 @@ def _text_content(result: Mapping[str, object]) -> list[str]:
 
 
 def _decoded_text_payloads(result: Mapping[str, object]) -> list[object]:
+    """Return each text block that parses as JSON, skipping those that do not."""
+
     payloads: list[object] = []
     for text in _text_content(result):
         try:
@@ -41,25 +45,41 @@ def _decoded_text_payloads(result: Mapping[str, object]) -> list[object]:
     return payloads
 
 
+def _is_alert_envelope(value: Mapping[str, object]) -> bool:
+    """Whether this one mapping is a search envelope carrying a non-empty hit list."""
+
+    hits = value.get("hits")
+    inner = hits.get("hits") if isinstance(hits, Mapping) else None
+    return isinstance(inner, list) and bool(inner)
+
+
 def _has_alert_hit(value: object) -> bool:
-    if isinstance(value, Mapping):
-        hits = value.get("hits")
-        if isinstance(hits, Mapping) and isinstance(hits.get("hits"), list):
-            if hits["hits"]:
-                return True
-        return any(_has_alert_hit(item) for item in value.values())
+    """Whether any nested search envelope in ``value`` carries a hit.
+
+    The indexer nests its result an unpredictable number of levels down inside
+    the MCP payload, so the search is recursive rather than path-based.
+    """
+
     if isinstance(value, list):
         return any(_has_alert_hit(item) for item in value)
-    return False
+    if not isinstance(value, Mapping):
+        return False
+    return _is_alert_envelope(value) or any(
+        _has_alert_hit(item) for item in value.values()
+    )
 
 
 def _kali_user(result: Mapping[str, object]) -> bool:
+    """Whether the shell answered as the scenario's unprivileged attacker user."""
+
     return result.get("isError") is not True and any(
         "uid=1000(kali)" in text for text in _text_content(result)
     )
 
 
 def _attack_completed(result: Mapping[str, object]) -> bool:
+    """Whether the attack command ran to completion and said so on stdout."""
+
     for payload in _decoded_text_payloads(result):
         if not isinstance(payload, Mapping) or payload.get("success") is not True:
             continue
@@ -71,6 +91,8 @@ def _attack_completed(result: Mapping[str, object]) -> bool:
 
 
 def _alert_hit(result: Mapping[str, object]) -> bool:
+    """Whether the SIEM answered the correlation query with at least one alert."""
+
     return result.get("isError") is not True and any(
         _has_alert_hit(payload) for payload in _decoded_text_payloads(result)
     )

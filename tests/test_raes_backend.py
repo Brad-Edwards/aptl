@@ -2373,6 +2373,59 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
     assert drive_calls[0]["evaluation_results"] == {}
 
 
+def test_apply_reports_a_realization_error_instead_of_raising(mocker, tmp_path):
+    """A lowering error must reach the operator, not be swallowed by RAES.
+
+    RAES's backend-call boundary catches `TypeError`/`ValueError` out of a
+    backend `apply` and replaces it with the fixed text "Backend could not
+    construct a valid apply result", discarding the message. So a `ValueError`
+    raised while lowering the realization -- which is how the provisioner
+    reports an unlowerable graph -- reached the operator as that sentence and
+    nothing else, with no code, no address and no node name. Diagnosing it
+    needed a debugger.
+
+    The contract is an `ApplyResult` carrying diagnostics, so the message has to
+    survive as one.
+    """
+    from aptl.backends.raes_provisioner import AptlProvisioner
+    from aptl.core.config import AptlConfig
+    from aptl.core.scenario_bundle import ScenarioBundle
+
+    plan = _plan_for_nodes("victim")
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}),
+        deployment_backend=MagicMock(),
+        bundle=ScenarioBundle(
+            identity="test",
+            root=tmp_path,
+            sdl_path=tmp_path / "scenario.sdl.yaml",
+        ),
+    )
+    realization = MagicMock()
+    realization.diagnostics = []
+    realization.profiles = ("soc",)
+    realization.details.return_value = {}
+    realization.deployment_spec.side_effect = ValueError(
+        "aptl.provisioner.spawn-child-correlation-invalid: "
+        "child correlation is incomplete on provision.node.shuffle-orborus."
+    )
+    mocker.patch.object(AptlProvisioner, "realize_plan", return_value=realization)
+    mocker.patch(
+        "aptl.backends.raes_provisioner.select_backend_profiles",
+        return_value=["soc"],
+    )
+
+    result = provisioner.apply(plan, None)
+
+    assert result.success is False
+    rendered = " ".join(diagnostic.message for diagnostic in result.diagnostics)
+    assert "shuffle-orborus" in rendered
+    assert "spawn-child-correlation-invalid" in rendered
+    # And the provisioner's own report is captured for the handoff to re-attach.
+    assert provisioner.last_failure_diagnostics
+
+
 def test_start_raes_scenario_fails_closed_on_evaluator_plan_error(mocker, tmp_path):
     """A planner error in the evaluation domain must fail closed."""
     from raes_contracts.diagnostics import Diagnostic, Severity

@@ -22,6 +22,7 @@ from aptl.backends.raes_runtime_orchestration import (
     spawn_image_requirements,
 )
 from aptl.core.deployment._compose_runtime_orchestration import (
+    docker_authority_admissions as deployment_docker_authority_admissions,
     deployment_spawn_image_requirements,
     effective_orchestration_model_errors,
 )
@@ -31,6 +32,7 @@ from aptl.core.deployment.realization import (
     DeploymentImageRealization,
     DeploymentNetworkRealization,
     DeploymentNodeRealization,
+    DeploymentPublishedPort,
     DeploymentRealizationSpec,
     DeploymentServicePort,
 )
@@ -225,9 +227,6 @@ def test_empty_spawn_closure_is_rejected() -> None:
 @pytest.mark.parametrize(
     "mutation",
     [
-        lambda payload: payload["orchestration_authorities"][0].update(
-            realized_children=[]
-        ),
         lambda payload: payload["orchestration_authorities"][0]["realized_children"][
             0
         ].update(evidence_ref="run-id:worker-runtime"),
@@ -255,6 +254,73 @@ def test_spawn_child_correlation_must_be_complete_and_exact(
         )
 
 
+def test_an_authority_with_no_declared_children_emits_no_spawn_requirement() -> None:
+    """An undeclared observation contract is not a broken one.
+
+    RAES defines a realized child as "an observed, realized child workload
+    spawned by the authority", and the field defaults to empty. A pack that
+    states an authority's privilege without declaring an expected child
+    inventory has declared no observation contract to verify, so there is
+    nothing to correlate and no child image to pre-stage.
+
+    Demanding the correlation at plan time asked for runtime observation before
+    anything had run. It also made `aptl lab start` impossible against the
+    shipped TechVault pack, whose `shuffle-orborus` authority declares one spawn
+    template and no children, so every boot raised
+    `spawn-child-correlation-invalid` from inside the provisioner.
+    """
+
+    payload = _runtime().model_dump(mode="json")
+    payload["orchestration_authorities"][0]["realized_children"] = []
+    runtime = RuntimeConfiguration.model_validate(payload)
+
+    assert (
+        spawn_image_requirements(runtime, node_address="provision.node.orborus") == ()
+    )
+
+
+def test_an_authority_without_children_is_still_admitted_with_its_controls() -> None:
+    """No child contract removes the pre-pull, never the privilege controls.
+
+    The authority still holds the host Docker socket, so the admission and every
+    mount and access control on it must survive. Only the child-image
+    pre-staging and the post-start child count go away, because nothing declared
+    them.
+    """
+
+    payload = _runtime().model_dump(mode="json")
+    payload["orchestration_authorities"][0]["realized_children"] = []
+    node = replace(_spec().nodes[0], runtime=RuntimeConfiguration.model_validate(payload))
+
+    admissions = admit_docker_authorities((node,))
+
+    assert len(admissions) == 1
+    admission = admissions[0]
+    assert admission.spawn_requirements == ()
+    assert admission.endpoint_target == "/var/run/docker.sock"
+    assert admission.endpoint_read_write is True
+    assert admission.privilege_class == "host_root_equivalent"
+
+
+def test_a_declared_child_contract_still_requires_an_exact_image() -> None:
+    """Opting into a child contract keeps every guarantee it carried.
+
+    The relaxation above is only for authorities that declare no children. Where
+    one is declared, the image must still be digest-pinned, because that is what
+    lets the host pre-stage the exact child image the authority will run.
+    """
+
+    payload = _runtime(image_ref="ghcr.io/example/worker:latest").model_dump(
+        mode="json"
+    )
+    runtime = RuntimeConfiguration.model_validate(payload)
+
+    with pytest.raises(
+        ValueError, match="aptl.provisioner.spawn-image-identity-invalid"
+    ):
+        spawn_image_requirements(runtime, node_address="provision.node.orborus")
+
+
 def test_spawn_child_labels_are_unique_across_authorities() -> None:
     first = _spec().nodes[0]
     second = replace(
@@ -268,6 +334,198 @@ def test_spawn_child_labels_are_unique_across_authorities() -> None:
         ValueError, match="aptl.provisioner.spawn-child-correlation-invalid"
     ):
         admit_docker_authorities((first, second))
+
+
+def test_the_backend_accepts_an_admission_with_no_child_contract() -> None:
+    """The backend-side integrity check makes the same allowance.
+
+    `docker_authority_admissions` re-validates the carried decision before
+    lowering Compose. It required every admission to carry a child contract,
+    which rejected exactly the authorities that declare privilege without an
+    expected child inventory -- so the plan-time fix alone still failed the boot
+    with `runtime-authority-admission-invalid`. Contracts that *are* carried are
+    still checked in full.
+    """
+
+    payload = _runtime().model_dump(mode="json")
+    payload["orchestration_authorities"][0]["realized_children"] = []
+    node = replace(
+        _spec().nodes[0], runtime=RuntimeConfiguration.model_validate(payload)
+    )
+    spec = replace(
+        _spec(),
+        nodes=(node,),
+        docker_authority_admissions=admit_docker_authorities((node,)),
+    )
+
+    admissions = deployment_docker_authority_admissions(spec)
+
+    assert len(admissions) == 1
+    assert admissions[0].spawn_requirements == ()
+    assert deployment_spawn_image_requirements(spec) == ()
+
+
+def _ports_backend(tmp_path, listed, inspected):
+    """A backend whose `docker ps` / `docker inspect` return canned output."""
+
+    backend = DockerComposeBackend(tmp_path)
+    calls: list[list[str]] = []
+
+    def _run(cmd, *, timeout=None):
+        calls.append(cmd)
+        return listed if cmd[1] == "ps" else inspected
+
+    backend._run = _run
+    return backend, calls
+
+
+def _completed(returncode=0, stdout=""):
+    return subprocess.CompletedProcess([], returncode, stdout=stdout, stderr="")
+
+
+def test_owned_host_ports_are_read_from_this_project_only(tmp_path) -> None:
+    """The query is scoped to the compose project and parses real inspect output.
+
+    Ports held by this project's own containers are not conflicts: the retry
+    path re-applies the plan with the range still up, and Compose reconciles
+    those containers. A port probe cannot tell them from a stranger's, so the
+    backend asks Docker which ones are its own.
+    """
+
+    inspect_output = (
+        '{"443/tcp":[{"HostIp":"127.0.0.1","HostPort":"8443"}],'
+        '"9200/tcp":[{"HostIp":"127.0.0.1","HostPort":"9200"}]}\n'
+        '{"53/udp":[{"HostIp":"127.0.0.1","HostPort":"5353"}]}\n'
+    )
+    backend, calls = _ports_backend(
+        tmp_path, _completed(stdout="abc123\ndef456\n"), _completed(stdout=inspect_output)
+    )
+
+    owned = backend._published_host_ports()
+
+    assert owned == frozenset(
+        {
+            ("127.0.0.1", 8443, "tcp"),
+            ("127.0.0.1", 9200, "tcp"),
+            ("127.0.0.1", 5353, "udp"),
+        }
+    )
+    # Scoped to this compose project, never every container on the host.
+    assert any(
+        f"label=com.docker.compose.project={backend._project_name}" in part
+        for part in calls[0]
+    )
+    assert calls[1][:2] == ["docker", "inspect"]
+    assert calls[1][-2:] == ["abc123", "def456"]
+
+
+def test_an_all_interfaces_publish_satisfies_a_loopback_declaration(tmp_path) -> None:
+    """Docker reports an all-interfaces bind with an empty or 0.0.0.0 host IP.
+
+    A scenario declaring `127.0.0.1` is satisfied by a container already
+    published on every interface, so that binding must be recognised as ours
+    rather than read as a foreign holder of the loopback port.
+    """
+
+    backend, _ = _ports_backend(
+        tmp_path,
+        _completed(stdout="abc123\n"),
+        _completed(stdout='{"80/tcp":[{"HostIp":"0.0.0.0","HostPort":"8080"}]}\n'),
+    )
+
+    assert ("127.0.0.1", 8080, "tcp") in backend._published_host_ports()
+
+
+@pytest.mark.parametrize(
+    ("listed", "inspected"),
+    [
+        (_completed(returncode=1), _completed()),
+        (_completed(stdout=""), _completed()),
+        (_completed(stdout="abc123\n"), _completed(returncode=1)),
+        (_completed(stdout="abc123\n"), _completed(stdout="not json\n")),
+        (_completed(stdout="abc123\n"), _completed(stdout='{"80/tcp":null}\n')),
+        (_completed(stdout="abc123\n"), _completed(stdout="\n\n")),
+        (_completed(stdout="abc123\n"), _completed(stdout='["not","a","map"]\n')),
+        (
+            _completed(stdout="abc123\n"),
+            _completed(stdout='{"80/tcp":[{"HostIp":"127.0.0.1","HostPort":"nope"}]}\n'),
+        ),
+    ],
+)
+def test_unreadable_docker_state_yields_no_owned_ports(tmp_path, listed, inspected):
+    """Unreadable state falls back to the probe alone, never to a false claim.
+
+    Claiming a port is ours on bad evidence would suppress a real conflict, so
+    every failure path returns nothing and the stricter probe-only behaviour
+    stands.
+    """
+
+    backend, _ = _ports_backend(tmp_path, listed, inspected)
+
+    assert backend._published_host_ports() == frozenset()
+
+
+def test_a_foreign_holder_of_a_declared_port_still_refuses_the_start(tmp_path) -> None:
+    """Ownership narrows the check; it does not disable it.
+
+    A declared binding held by something outside this project is still the
+    fail-closed conflict it always was, reported rather than published
+    elsewhere.
+    """
+
+    node = DeploymentNodeRealization(
+        address="provision.node.web",
+        name="web",
+        service_name="web",
+        container_name="aptl-web",
+        networks=(),
+        published_ports=(DeploymentPublishedPort(container_port=80, host_port=8099),),
+    )
+    spec = DeploymentRealizationSpec(
+        profiles=(), nodes=(node,), networks=(), images=()
+    )
+    backend = DockerComposeBackend(tmp_path)
+    # Nothing of ours publishes it, and the probe finds it taken.
+    backend._run = lambda cmd, *, timeout=None: _completed()
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(
+        "aptl.core.deployment._compose_port_realization.port_available",
+        lambda *_a, **_k: False,
+    )
+    try:
+        failure = backend._realize_published_ports(spec)
+    finally:
+        monkey.undo()
+
+    assert failure is not None
+    assert failure.success is False
+    assert "already in use" in failure.error
+
+
+def test_a_raising_docker_query_does_not_break_the_start(tmp_path) -> None:
+    """A daemon that errors must not crash realization."""
+
+    backend = DockerComposeBackend(tmp_path)
+
+    def _boom(cmd, *, timeout=None):
+        raise OSError("docker daemon unreachable")
+
+    backend._run = _boom
+
+    assert backend._published_host_ports() == frozenset()
+
+
+def test_ports_are_not_queried_when_nothing_declares_an_exact_binding(
+    tmp_path,
+) -> None:
+    """No declared host port means no reason to ask Docker anything."""
+
+    backend = DockerComposeBackend(tmp_path)
+    queried: list[list[str]] = []
+    backend._run = lambda cmd, *, timeout=None: queried.append(cmd) or _completed()
+
+    assert backend._realize_published_ports(_spec()) is None
+    assert queried == []
 
 
 def test_graph_admission_rejects_participant_profile_authority_holder() -> None:
@@ -668,6 +926,56 @@ def test_authority_holder_accepts_only_its_carried_declared_mount_footprint(
             "Destination": "/secret",
             "RW": False,
         }
+    )
+    assert not backend._runtime_authority_matches("aptl-orborus", admission)
+
+
+def test_authority_attestation_survives_a_holder_without_a_docker_cli(
+    tmp_path,
+) -> None:
+    """A socket holder is not required to ship the Docker CLI.
+
+    The in-container `docker info` probe corroborates that the holder's socket
+    reaches the admitted daemon. Real holders talk to the socket over the Docker
+    API and ship no CLI at all -- Shuffle's orborus is one, so every TechVault
+    boot failed attestation with exit 127, "executable file not found".
+
+    The boundary itself is established host-side and still is: the mount is
+    exactly the admitted socket, there is no endpoint override, and the holder is
+    unprivileged. An absent CLI leaves nothing to corroborate; a CLI that answers
+    for a *different* daemon is still a failure.
+    """
+
+    spec = _spec()
+    admission = spec.docker_authority_admissions[0]
+    backend = DockerComposeBackend(tmp_path)
+    backend._docker_daemon_id = "daemon-a"
+    backend.container_inspect = MagicMock(
+        return_value={
+            "Mounts": [
+                {
+                    "Type": "bind",
+                    "Source": "/var/run/docker.sock",
+                    "Destination": "/var/run/docker.sock",
+                    "RW": True,
+                }
+            ],
+            "Config": {"Env": []},
+            "HostConfig": {"Privileged": False},
+        }
+    )
+
+    backend.container_exec = MagicMock(
+        return_value=subprocess.CompletedProcess(
+            [], 127, stdout="", stderr='exec: "docker": executable file not found'
+        )
+    )
+    assert backend._runtime_authority_matches("aptl-orborus", admission)
+
+    backend.container_exec = MagicMock(
+        return_value=subprocess.CompletedProcess(
+            [], 0, stdout="daemon-b\n", stderr=""
+        )
     )
     assert not backend._runtime_authority_matches("aptl-orborus", admission)
 

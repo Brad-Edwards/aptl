@@ -1140,12 +1140,43 @@ def test_variation_fails_on_realization_error(monkeypatch):
     os.getenv("APTL_LIVE_GATE", "0") != "1",
     reason="Set APTL_LIVE_GATE=1 to run the destructive live deployment gate",
 )
-def test_live_gate_passes_on_techvault():
+def test_live_gate_passes_on_techvault(tmp_path):
+    """The positive live case, read back from the report and the run archive.
+
+    ``report.passed`` alone would not distinguish a verdict the qualified
+    verifier reached from one core somehow produced on its own, so the
+    installed-plugin identity is read back from both the validated report and
+    the redacted persisted summary (#879). The verifier must be installed for
+    this to pass; that is the point, not a precondition to work around.
+    """
     from aptl.core.config import load_config
 
     config = load_config(PROJECT_ROOT / "aptl.json")
-    report = validate_live_deployment(SCENARIO, project_dir=PROJECT_ROOT, config=config)
+    store = LocalRunStore(tmp_path)
+    report = validate_live_deployment(
+        SCENARIO,
+        project_dir=PROJECT_ROOT,
+        config=config,
+        options=LiveGateOptions(run_id="livegatequalification"),
+        run_store=store,
+    )
     assert report.passed, report.render()
+    assert report.plugin_id == "techvault"
+    assert report.distribution == "aptl-techvault-verifier"
+    assert report.distribution_version
+    assert report.entry_point == "techvault.aptl"
+
+    manifest = json.loads(
+        (tmp_path / "livegatequalification" / "live-gate" / "manifest.json").read_text()
+    )
+    assert manifest["validation"]["status"] == "passed"
+    assert manifest["validation"]["verification"] == {
+        "plugin_id": report.plugin_id,
+        "distribution": report.distribution,
+        "distribution_version": report.distribution_version,
+        "entry_point": report.entry_point,
+        "extension_api_version": report.extension_api_version,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -1400,6 +1431,198 @@ def test_semantic_verification_runs_only_through_the_plugin_seam():
     assert "_live_gate_semantic" not in source
     # No scenario answer key is named in the orchestrator itself.
     assert not re.search(r"aptl-kali|_KALI_CONTAINER", source)
+
+
+def _provenance_report(status=VerificationStatus.PASSED):
+    """Return a validated plugin report carrying host-observed provenance."""
+
+    from aptl.validation.scenario_verification import VerificationCheck
+
+    scenario, backend = tlg._verification_identities(
+        SCENARIO, BUNDLE, "full-remote-control-plane", "docker-compose"
+    )
+    return VerificationReport(
+        status=status,
+        scenario=scenario,
+        backend=backend,
+        run_id="rid",
+        attempt_id="rid",
+        plugin_id="techvault",
+        distribution="aptl-techvault-verifier",
+        distribution_version="0.2.0",
+        entry_point="techvault.aptl",
+        checks=(
+            VerificationCheck(
+                "detection-traversal", status, category="evidence_capture"
+            ),
+        ),
+    )
+
+
+def test_the_returned_report_attributes_the_verdict_to_the_plugin(monkeypatch):
+    """Which executable answer key produced this verdict must survive (#879).
+
+    ``_semantic_checks`` reduces the plugin's validated report to checks, so the
+    gate's own report used to be rebuilt with an empty ``plugin_id``. A run
+    archive that cannot name the distribution and entry point behind a verdict
+    cannot be audited: the same range and the same checks would look identical
+    whether a qualified release or a stale one answered.
+    """
+
+    from aptl.validation import scenario_verification_discovery as svd
+
+    monkeypatch.setattr(svd, "verify_scenario", lambda context: _provenance_report())
+    state = LiveGateState()
+    state.snapshot = {"containers": [_container("aptl-kali")]}
+    ctx = tlg._RunContext(
+        scenario_path=SCENARIO,
+        bundle=BUNDLE,
+        boot_scenario_path=None,
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(run_id="rid"),
+        run_store=None,
+        run_id="rid",
+    )
+
+    checks = tlg._semantic_checks(ctx, state)
+
+    assert [check.name for check in checks] == ["detection-traversal"]
+    report = tlg._report(
+        SCENARIO, "rid", ctx.options, list(checks), BUNDLE, ctx.config, state
+    )
+    assert report.plugin_id == "techvault"
+    assert report.distribution == "aptl-techvault-verifier"
+    assert report.distribution_version == "0.2.0"
+    assert report.entry_point == "techvault.aptl"
+    assert "aptl-techvault-verifier" in report.render()
+
+
+def test_a_blocked_seam_leaves_no_plugin_attribution(monkeypatch):
+    """With nothing qualified to run, there is no plugin to attribute to."""
+
+    from aptl.validation import scenario_verification_discovery as svd
+
+    scenario, backend = tlg._verification_identities(
+        SCENARIO, BUNDLE, "full-remote-control-plane", "docker-compose"
+    )
+    blocked = VerificationReport(
+        status=VerificationStatus.BLOCKED,
+        scenario=scenario,
+        backend=backend,
+        run_id="rid",
+        attempt_id="rid",
+        diagnostics=("no compatible scenario verifier is installed",),
+    )
+    monkeypatch.setattr(svd, "verify_scenario", lambda context: blocked)
+    state = LiveGateState()
+    state.snapshot = {"containers": []}
+    ctx = tlg._RunContext(
+        scenario_path=SCENARIO,
+        bundle=BUNDLE,
+        boot_scenario_path=None,
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(run_id="rid"),
+        run_store=None,
+        run_id="rid",
+    )
+
+    checks = tlg._semantic_checks(ctx, state)
+    report = tlg._report(
+        SCENARIO, "rid", ctx.options, list(checks), BUNDLE, ctx.config, state
+    )
+
+    assert report.status is VerificationStatus.BLOCKED
+    assert report.plugin_id == ""
+    assert report.distribution == ""
+
+
+def test_the_persisted_manifest_records_the_plugin_that_produced_the_verdict():
+    """The durable audit artifact carries the same host-observed identity."""
+
+    store = _RecordingStore()
+    state = _archive_state()
+    state.verification = _provenance_report()
+
+    check = lgc.check_run_archive_manifest(
+        SCENARIO,
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        run_store=store,
+        run_id="rid",
+        state=state,
+        prior_checks=(LiveGateCheck("x", CATEGORY_EVIDENCE_CAPTURE, True),),
+    )
+
+    assert check.passed
+    _, _, manifest = store.json_writes[0]
+    verification = manifest["validation"]["verification"]
+    assert verification == {
+        "plugin_id": "techvault",
+        "distribution": "aptl-techvault-verifier",
+        "distribution_version": "0.2.0",
+        "entry_point": "techvault.aptl",
+        "extension_api_version": "2",
+    }
+
+
+def test_the_manifest_states_plainly_when_no_plugin_answered(monkeypatch):
+    """An absent verdict is recorded as absent, not as empty attribution.
+
+    Driven through the real blocked seam rather than a state where semantic
+    verification never ran: discovery still returns a report when no verifier is
+    installed, so the manifest would otherwise record a plugin attribution whose
+    every field is the empty string -- which reads as an attribution that lost
+    its values rather than as a verdict nothing produced.
+    """
+
+    from aptl.validation import scenario_verification_discovery as svd
+
+    scenario, backend = tlg._verification_identities(
+        SCENARIO, BUNDLE, "full-remote-control-plane", "docker-compose"
+    )
+    monkeypatch.setattr(
+        svd,
+        "verify_scenario",
+        lambda context: VerificationReport(
+            status=VerificationStatus.BLOCKED,
+            scenario=scenario,
+            backend=backend,
+            run_id="rid",
+            attempt_id="rid",
+            diagnostics=("no compatible scenario verifier is installed",),
+        ),
+    )
+    state = _archive_state()
+    ctx = tlg._RunContext(
+        scenario_path=SCENARIO,
+        bundle=BUNDLE,
+        boot_scenario_path=None,
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(run_id="rid"),
+        run_store=None,
+        run_id="rid",
+    )
+    prior = tuple(tlg._semantic_checks(ctx, state))
+    assert state.verification is not None, "the seam did return a report"
+
+    store = _RecordingStore()
+    check = lgc.check_run_archive_manifest(
+        SCENARIO,
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        run_store=store,
+        run_id="rid",
+        state=state,
+        prior_checks=prior,
+    )
+
+    assert check.passed
+    _, _, manifest = store.json_writes[0]
+    assert manifest["validation"]["verification"] is None
+    assert manifest["validation"]["status"] == "blocked"
 
 
 def test_report_and_plugin_admission_share_canonical_bundle_identities():

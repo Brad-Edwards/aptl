@@ -139,7 +139,7 @@ def validate_live_deployment(
     run_id_check = checks.check_run_id_input(opts)
     results.append(run_id_check)
     if not run_id_check.passed:
-        return _report(scenario_path, run_id, opts, results, bundle, config)
+        return _report(scenario_path, run_id, opts, results, bundle, config, state)
 
     # 1. Static prerequisite — parse/compile/conformance must pass; a
     #    static failure blocks the live boot rather than degrading to a warning.
@@ -176,7 +176,7 @@ def validate_live_deployment(
         )
         _run_live_checks(checks, scenario, ctx, state, results)
 
-    return _report(scenario_path, run_id, opts, results, bundle, config)
+    return _report(scenario_path, run_id, opts, results, bundle, config, state)
 
 
 def _run_live_checks(
@@ -301,7 +301,13 @@ def _semantic_checks(
         ),
         observations={"containers": containers},
     )
-    return _map_verification_report(verify_scenario(context))
+    report = verify_scenario(context)
+    # Keep the validated report itself. Its checks drive the gate's taxonomy
+    # below, but only the report knows which distribution and entry point the
+    # host admitted, and that belongs in the returned result and the archive.
+    if isinstance(report, VerificationReport):
+        state.verification = report
+    return _map_verification_report(report)
 
 
 def _map_verification_report(report: object) -> list[LiveGateCheck]:
@@ -376,8 +382,16 @@ def _report(
     results: list[LiveGateCheck],
     bundle: ScenarioBundle,
     config: AptlConfig,
+    state: LiveGateState,
 ) -> VerificationReport:
-    """Pack accumulated checks into the shared versioned report shape."""
+    """Pack accumulated checks into the shared versioned report shape.
+
+    The plugin identity discovery observed is carried through rather than
+    dropped: without it the run archive records a verdict with no way to say
+    which installed answer key reached it (#879). These are the same fields of
+    the same report shape, not a second provenance record, and they stay empty
+    when no plugin answered.
+    """
 
     checks = tuple(results)
     scenario, backend = _verification_identities(
@@ -386,12 +400,19 @@ def _report(
         opts.profile,
         config.deployment.provider,
     )
+    verification = state.verification
     return VerificationReport(
         status=_aggregate_status(checks),
         scenario=scenario,
         backend=backend,
         run_id=run_id,
         attempt_id=run_id,
+        plugin_id=verification.plugin_id if verification else "",
+        distribution=verification.distribution if verification else "",
+        distribution_version=(
+            verification.distribution_version if verification else ""
+        ),
+        entry_point=verification.entry_point if verification else "",
         checks=_canonical_checks(checks),
     )
 

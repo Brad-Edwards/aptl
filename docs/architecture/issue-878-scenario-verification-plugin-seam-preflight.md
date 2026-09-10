@@ -81,6 +81,86 @@ The implementation now closes those gaps while preserving the original seam:
 `LiveGateReport` remains only as a compatibility constructor name for callers;
 it returns `VerificationReport` and is not a second persisted report schema.
 
+## Issue #879 Independent-Release Qualification (2026-09-07)
+
+Issue #879 does not reopen the plugin architecture. It closes the release and
+compatibility gaps left after the seam reconciliation. The repository currently
+has six concrete gaps that an implementation must reconcile:
+
+- The admitted TechVault 0.1.0 identity asserted by
+  `tests/test_env_pack_bundle.py` and the pack-interaction provider is
+  `sha256:c532775575d99438f4b4890d49a4fdb7354921f0405afdaa9f370ea4fe3f5a20`,
+  while `aptl-techvault-verifier` claims
+  `sha256:f1c807f70540ca68c640cde72e8b5606b928f4ec40cc00a44d7fd37d6bbfd55f`.
+  The installed-artifact test repeats the latter value in a hand-built context,
+  so it proves discovery against itself rather than against the pack identity
+  returned by env-packs validation.
+- `scenario_versions` and `scenario_content_digests` are independent lists.
+  Adding a second version and digest would admit their Cartesian product,
+  including version/digest pairs that were never qualified together.
+- The plugin metadata declares no dependency on the core package whose public
+  verifier types it imports, and the root release workflow publishes only
+  `aptl-labs`. A wheel built in CI is not yet an independently installable,
+  independently releasable product artifact.
+- Core supports Python 3.11 and 3.12, while the verifier metadata requires 3.12.
+  That either leaves a documented TechVault support gap on a supported host or
+  is accidental packaging drift; the released compatibility matrix must decide
+  it explicitly and test the supported intersection.
+- Source tests import the plugin by adding its source directory to `sys.path`,
+  and the wheel test supplies fake operations. Those are useful contract tests,
+  but neither proves semantic readback from the admitted released pack and a
+  live backend.
+- `verify_scenario()` attaches host-observed plugin provenance, but
+  `techvault_live_gate` reduces that report to checks and constructs a new
+  report. The public live-gate result and persisted manifest therefore lose the
+  plugin, distribution, version, and entry-point identity that explain which
+  executable answer key produced the verdict.
+
+Compatibility is an atomic qualification claim. Reuse the canonical immutable
+`ScenarioIdentity` produced from `ScenarioBundle`/`PackIdentity` and the existing
+`BackendIdentity`; declare a finite set of exact scenario/backend identity
+pairs. Do not retain parallel allow-lists, take a Cartesian product between
+scenario and backend dimensions, infer compatibility from package versions, or
+introduce a second pack/backend-identity DTO. A plugin release may name several
+exact pairs only when each pair has its own positive live qualification
+evidence. A changed digest is unqualified even when the pack version was reused,
+and a changed version is unqualified even when its content digest happens to
+match. Absence, malformed claims, and every unqualified combination remain
+terminal `blocked` outcomes.
+
+Extension API compatibility, Python package dependency compatibility, and pack
+qualification are different concerns. The plugin distribution must declare the
+released `aptl-labs` range that supplies its imported extension contract, while
+runtime discovery still enforces the exact extension API version. Its release
+must build wheel and source artifacts from the plugin root, run the installed
+artifact and live qualification gates, record provenance/SBOM using the
+repository's release conventions, and publish under the plugin's own package
+identity. It must not be folded into the core wheel, accidentally uploaded by a
+core-only `dist/*` glob, or made a mandatory dependency of `aptl-labs`.
+
+Closure evidence must derive TechVault identity through the real env-packs
+admission path, install released-shape core and plugin artifacts into a clean
+environment, and cover core-only, exact match, stale plugin, mismatched digest,
+mismatched version, duplicate match, uninstall, and reinstall behavior. The
+positive live case must invoke the public live gate and read back the validated
+`VerificationReport` plus the redacted persisted summary. Fake operations and
+an editable or `sys.path` import remain unit evidence only. Preserve the legacy
+semantic verdict: a plugin-correlated post-trigger Wazuh alert completes the
+verdict, while Suricata traffic remains supporting disclosure. Changing which
+hop is required is a separate semantic change, not packaging reconciliation.
+The checks-only live-gate projection must not discard validated provenance:
+carry the existing `VerificationReport` identity fields through the public
+result and fixed run-store manifest shape. Do not persist the raw plugin report
+or create a second provenance/report schema.
+
+Finally, preserve both generic #866 fixes in core. The polling framework keeps
+deadline-bounded trigger re-drive. Service-aware target discovery/probing also
+belongs on the existing `LiveGateOperations` capability surface, parameterized
+by the plugin-selected origin and service port. The plugin may choose SSH and
+its correlation identity, but must not reimplement probing/order policy or fall
+back to hosts that do not expose the service whose failed authentication is
+supposed to generate evidence.
+
 ## Ownership And Concept Boundaries
 
 Keep these concerns separate:
@@ -265,7 +345,7 @@ qualification schema.
 | Persistence | `RunStorageBackend`/`LocalRunStore` own run-ID and path validation, redacting JSON/JSONL writes, create-once canonical records, and content-addressed evidence. Core derives fixed run-scoped locations; a plugin never supplies a path. Use create-once for a deliberately secret-free authoritative report and redacting structured writes/content storage for captured observations. Exporter remains packaging-only. |
 | Configuration and environment | ADR-025 `AptlConfig` remains the strict durable non-secret shape. `load_dotenv()`, `env_vars_from_dict()`, `find_placeholder_env_values()`, generated-config owners, and dedicated web/workbench secret parsers retain environment authority. Do not add plugin module paths, import names, arbitrary option maps, commands, credentials, or URLs to `aptl.json`. |
 | Secrets and process exposure | ADR-029, `redact()`, TypeScript redaction parity, `curl_safe`, generated owner-only files, argv-list subprocess construction, and existing workbench/MCP process admission remain mandatory. Control-plane secrets do not enter plugin context, tool arguments, URLs, process argv, logs, reports, OTel attributes, or evidence. Target activity arguments may be scenario data but never carry operator credentials. |
-| Errors and observability | Use stable verification codes, `get_logger()`, shared redaction, bounded messages, and the existing CLI/core projection style. Log validated plugin/distribution ID, stage, status, duration, counts, and exception class only. Audit reused helpers such as `wait_for_service()` and legacy collectors whose debug/warning paths still interpolate exception text; a caller-side `redact()` after they log is too late. Never log entry-point targets, raw exceptions/tracebacks, full reports, backend stderr, MCP results, captured payloads, env/config, or host paths. Do not create a public plugin exception hierarchy; expected outcomes are report data. |
+| Errors and observability | Use stable verification codes, `get_logger()`, shared redaction, bounded messages, and the existing CLI/core projection style. Log validated plugin/distribution ID, stage, status, duration, counts, and exception class only. Audit reused helpers such as `wait_for_service()` and `collect_wazuh_alerts()`, whose current debug/warning paths can interpolate exception text; a caller-side `redact()` after they log is too late. Never log entry-point targets, raw exceptions/tracebacks, full reports, backend stderr, MCP results, captured payloads, env/config, or host paths. Do not create a public plugin exception hierarchy; expected outcomes are report data. |
 | API/auth | Issue #878 adds no HTTP, SSE, or WebSocket route. Any later API projection must use `verify_token`, `WebAuthSettings`, `BFFMiddleware` Host/CSRF/session gates, strict Pydantic response models, loopback defaults, request limits, and generic error envelopes. It must not expose raw plugin objects, evidence bytes, filesystem paths, or install/import controls. |
 | Packaging and supply chain | Discovery uses the standard library and should add no core dependency. `pyproject.toml`, `uv.lock`, hashed requirements, `hatch_build.py`, and `_asset_manifest.py` remain the core distribution authorities. `_asset_manifest.ASSET_ROOTS` includes `src`, so a core answer key is shipped both as importable code and as `_labdata/src`; inspecting only entry-point metadata is insufficient. The `aptl-labs` wheel registers and bundles zero semantic adapters. An extension distribution owns its dependencies, release, provenance, and integration tests. |
 | Workflow and quality gates | Python changes require focused pytest coverage, the fast suite and scenario static gate from `.ground-control.yaml`, the Ruff complexity gate, `pre-commit run --all-files`, and CI/Sonar checks. MCP-common changes still rebuild every dependent MCP. Compose, Dockerfile, or `config/` changes still require the clean-lab gate; the seam itself should not need those changes. |
@@ -301,11 +381,12 @@ qualification schema.
 
 The extensibility key is:
 
-`(extension API version, scenario identity + content digest, backend target identity + compatible version/profile)`.
+`(extension API version, atomic scenario source + identity + version + content digest, backend target identity + compatible version/profile)`.
 
 One exact installed runner binds to that key. A plugin may declare several
-explicitly supported scenario/backend revisions, but no wildcard silently
-claims unknown revisions. A second backend for one scenario or a second
+explicitly qualified scenario/backend identity pairs, but parallel lists must
+not create unqualified combinations and no wildcard silently claims unknown
+revisions. A second backend for one scenario or a second
 scenario for one backend adds another installed entry point and its own
 conformance/live tests; it does not edit the core selector, report schema,
 poller, persistence layout, exception handling, or CLI/API projections.
@@ -348,6 +429,10 @@ must not skip when the verifier is missing:
   semantic verification returns terminal, non-successful `blocked`;
 - then install the separately built verifier wheel and prove discovery records
   its host-observed distribution/version and runs the one compatible verifier;
+- derive the positive and negative compatibility contexts from admitted
+  `ScenarioBundle`/`PackIdentity` values, never a digest copied into the test;
+- prove the plugin artifact declares a compatible released core dependency and
+  can be installed, uninstalled, and reinstalled without an editable checkout;
 - cover no match, unrelated installed entries, duplicate compatible entries,
   malformed metadata/report members, inconsistent aggregate outcomes, loader
   and runner exceptions, unsatisfied prerequisites, and elapsed deadlines; and
@@ -373,6 +458,11 @@ live proof belongs to the separately installed plugin's compatibility evidence.
   treating `isinstance(..., Protocol)` as returned-shape validation, accepting an
   empty digest/version claim as a wildcard, or trusting plugin-authored
   provenance.
+- Using independent version and digest lists, a package-version range, or a
+  copied test constant as proof of an exact qualified pack identity.
+- Treating a locally built wheel as externally releasable while its dependency
+  metadata, release ownership, provenance, install/uninstall path, or live
+  released-pack qualification remains absent.
 - Confusing an installed semantic verifier with a deployment backend,
   participant implementation, evidence collector, RAES evaluator, workbench
   profile, qualification attestation, or scenario pack.
@@ -396,6 +486,9 @@ live proof belongs to the separately installed plugin's compatibility evidence.
   instead of projecting the single validated core report.
 - Calling a skipped installed-plugin test or an editable source-tree import
   proof of the released distribution boundary.
+- Moving #866 trigger re-drive or service-aware target selection into the
+  TechVault answer key, or generating failed-auth attempts against hosts that
+  did not pass the core-owned service probe.
 
 ## Non-Goals And Implementation Boundary
 

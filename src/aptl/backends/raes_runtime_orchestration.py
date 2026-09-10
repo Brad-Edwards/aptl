@@ -236,6 +236,15 @@ def spawn_image_requirements(
     for authority, _interface in docker_control_authorities(
         runtime, node_address=node_address
     ):
+        # A realized child is, per RAES, "an observed, realized child workload",
+        # and the field defaults to empty. An authority that declares only its
+        # privilege has declared no observation contract, so there is nothing to
+        # correlate and no child image to pre-stage. Requiring one here asked for
+        # runtime observation at plan time and refused every boot of a pack that
+        # states the privilege for transparency without an expected inventory.
+        # The admission, and every mount and access control on it, is unaffected.
+        if not authority.realized_children:
+            continue
         timeout = _bounded_execution_timeout(authority, node_address=node_address)
         children = _children_by_template_image(authority, node_address=node_address)
         for template in authority.spawn_templates:

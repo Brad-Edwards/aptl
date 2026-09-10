@@ -674,13 +674,6 @@ participant-profiles/guided-purple-v1/asset-lock.json	optional-participant	Provi
 participant-profiles/guided-purple-v1/narrative.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
 participant-profiles/guided-purple-v1/profile.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
 participant-profiles/guided-purple-v1/readiness.json	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
-plugins/aptl-techvault-pack-interaction/README.md	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
-plugins/aptl-techvault-pack-interaction/pyproject.toml	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
-plugins/aptl-techvault-pack-interaction/src/aptl_techvault_pack_interaction/__init__.py	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
-plugins/aptl-techvault-verifier/README.md	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
-plugins/aptl-techvault-verifier/pyproject.toml	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
-plugins/aptl-techvault-verifier/src/aptl_techvault_verifier/__init__.py	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
-plugins/aptl-techvault-verifier/src/aptl_techvault_verifier/participant_smoke.py	scenario-integration-plugin	Selected scenario integration package with trusted executable compatibility qualification
 pyproject.toml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 release-please-config.json	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 requirements/ci.txt	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
@@ -1134,6 +1127,11 @@ src/aptl/workbench/participant_source_binding.py	optional-participant	Provider/w
 src/aptl/workbench/process.py	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
 src/aptl/workbench/profiles.py	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
 src/aptl/workbench/runtime.py	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
+src/aptl_techvault/README.md	core-runtime	Retain in APTL core runtime; no migration
+src/aptl_techvault/__init__.py	core-runtime	Retain in APTL core runtime; no migration
+src/aptl_techvault/participant_smoke.py	core-runtime	Retain in APTL core runtime; no migration
+src/aptl_techvault/serving.py	core-runtime	Retain in APTL core runtime; no migration
+src/aptl_techvault/verification.py	core-runtime	Retain in APTL core runtime; no migration
 tests/__init__.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/_bundle_fixtures.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/archival_fixtures.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1302,6 +1300,7 @@ tests/test_participant_qualification.py	tests-follow-owner	Retain meaningful bou
 tests/test_participant_workbench.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_participant_workbench_adapter.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_pathsafe.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_plugin_pack_compatibility.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_pr_title_guard.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_precommit_config.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_proc_net_listeners.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

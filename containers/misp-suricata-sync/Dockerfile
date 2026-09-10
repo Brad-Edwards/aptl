@@ -4,7 +4,7 @@
 # rules file, and triggers Suricata rule reload via its unix-command
 # socket.
 
-FROM python:3.11-slim@sha256:db3ff2e1800a8581e2c48a27c3995339d47bdf046da21c7627accd3d51053a93
+FROM python:3.14-slim@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates git \

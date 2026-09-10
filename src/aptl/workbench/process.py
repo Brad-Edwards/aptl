@@ -152,14 +152,36 @@ def _wait_for_process(
     return None
 
 
+def _signal_group(process: subprocess.Popen[bytes], number: int) -> bool:
+    """Signal the child's group; ``False`` when there was nothing left to kill.
+
+    Platforms disagree on how ``killpg`` reports a group with no member it can
+    signal. Linux raises ``ProcessLookupError`` (ESRCH); Darwin raises
+    ``PermissionError`` (EPERM) once the group holds only the exited child.
+    Both mean the same thing here, so both are tolerated -- but EPERM only
+    after ``poll()`` confirms the child really has exited, because an EPERM
+    against a live child is a genuine permission failure and must still
+    propagate rather than leave the group running behind a swallowed error.
+    """
+
+    try:
+        os.killpg(process.pid, number)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        if process.poll() is None:
+            raise
+        return False
+    return True
+
+
 def _terminate_process_group(process: subprocess.Popen[bytes]) -> None:
     """Terminate the entire child process group, escalating when necessary."""
+    if not _signal_group(process, signal.SIGTERM):
+        process.wait()
+        return
     try:
-        os.killpg(process.pid, signal.SIGTERM)
         process.wait(timeout=1)
-    except (ProcessLookupError, subprocess.TimeoutExpired):
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+    except subprocess.TimeoutExpired:
+        _signal_group(process, signal.SIGKILL)
         process.wait()

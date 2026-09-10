@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
+from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -741,6 +743,59 @@ def test_bounded_runner_terminates_output_overflow_and_timeout(
             timeout_seconds=0.05,
             max_output_bytes=32,
         )
+
+
+def test_bounded_runner_tolerates_eperm_for_an_already_exited_child() -> None:
+    """Darwin reports an empty group as EPERM where Linux reports ESRCH.
+
+    The runner terminates the group after it has already decided the run
+    failed, and by then a child that overflowed its budget has usually
+    exited. Treating that platform-specific EPERM as a real error turned an
+    "output exceeded" verdict into an unhandled PermissionError on macOS.
+    """
+
+    from aptl.workbench.process import _terminate_process_group
+
+    process = subprocess.Popen(
+        (sys.executable, "-c", "pass"),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    process.wait()
+
+    with mock.patch(
+        "aptl.workbench.process.os.killpg",
+        side_effect=PermissionError(1, "Operation not permitted"),
+    ):
+        _terminate_process_group(process)
+
+    assert process.returncode == 0
+
+
+def test_bounded_runner_propagates_eperm_for_a_live_child() -> None:
+    """An EPERM against a child still running is a real permission failure."""
+
+    from aptl.workbench.process import _terminate_process_group
+
+    process = subprocess.Popen(
+        (sys.executable, "-c", "import time; time.sleep(30)"),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    try:
+        with (
+            mock.patch(
+                "aptl.workbench.process.os.killpg",
+                side_effect=PermissionError(1, "Operation not permitted"),
+            ),
+            pytest.raises(PermissionError),
+        ):
+            _terminate_process_group(process)
+    finally:
+        process.kill()
+        process.wait()
 
 
 def test_appliance_factory_wires_the_production_workbench_without_operator_routes(

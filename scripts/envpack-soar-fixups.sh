@@ -14,6 +14,8 @@
 #     /etc/nginx and /etc/thehive respectively.
 #   - Shuffle Orborus has no declared worker-image closure, so it accepts
 #     executions but asks Docker to create an invalid empty image reference.
+#   - Cortex has no analyzer catalog, so TheHive can create observables but
+#     cannot run an analyzer against them.
 # This recreates those containers with the configuration recovered from the
 # pre-ACES docker-compose.yml (which ran these services for months). It
 # preserves each realized image, network, labels, volumes, and host publication.
@@ -398,6 +400,106 @@ fix_shuffle_orborus() {
     return 1
 }
 
+# --- Cortex: activate APTL's deterministic offline analyzer ----------------
+fix_cortex_analyzers() {
+    _present aptl-cortex || return 0
+    local authored_config="$PROJECT_DIR/config/cortex/application.conf"
+    local analyzer_dir="$PROJECT_DIR/config/cortex/analyzers"
+    local realized_config=""
+    local config_count=0
+    local source destination writable
+    local -a mount_args=()
+
+    while read -r source destination; do
+        [ -n "$source" ] && [ -n "$destination" ] || continue
+        config_count=$((config_count + 1))
+        realized_config="$source"
+    done < <(docker inspect aptl-cortex -f \
+        '{{range .Mounts}}{{if eq .Destination "/etc/cortex/application.conf"}}{{println .Source .Destination}}{{end}}{{end}}' \
+        2>/dev/null)
+
+    if [ "$config_count" -ne 1 ]; then
+        log "ERROR: realized Cortex must have exactly one application.conf mount"
+        return 1
+    fi
+    case "$realized_config" in
+        "$PROJECT_DIR"/.aptl/realization/*) ;;
+        *)
+            log "ERROR: refusing to replace Cortex config outside the realization directory"
+            return 1
+            ;;
+    esac
+
+    if _has_mount_target aptl-cortex /opt/aptl/cortex-analyzers \
+        && cmp -s "$authored_config" "$realized_config"; then
+        return 0
+    fi
+
+    log "Cortex has no executable analyzer catalog; recreating with APTL analyzer"
+    local img net ip
+    img="$(_image aptl-cortex)"
+    net="$(_net aptl-cortex)"
+    ip="$(docker inspect aptl-cortex -f \
+        '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null)"
+    if ! [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        log "ERROR: realized Cortex has no IPv4 address to preserve"
+        return 1
+    fi
+    _capture_labels aptl-cortex
+    _capture_loopback_publication aptl-cortex 9001/tcp || return 1
+    local publish="$CAPTURED_PUBLISH_ARG" expected="$CAPTURED_PUBLICATION"
+
+    while read -r source destination writable; do
+        [ -n "$source" ] && [ -n "$destination" ] || continue
+        case "$destination" in
+            /etc/cortex/application.conf|/opt/aptl/cortex-analyzers) continue ;;
+        esac
+        if [ "$writable" = "true" ]; then
+            mount_args+=(-v "$source:$destination")
+        else
+            mount_args+=(-v "$source:$destination:ro")
+        fi
+    done < <(docker inspect aptl-cortex -f \
+        '{{range .Mounts}}{{println .Source .Destination .RW}}{{end}}' 2>/dev/null)
+
+    if [ ! -f "$authored_config" ] || [ ! -x "$analyzer_dir/APTLObservable/aptl_observable.py" ]; then
+        log "ERROR: authored Cortex analyzer assets are absent or not executable"
+        return 1
+    fi
+    if ! cp "$authored_config" "$realized_config" || ! chmod 0644 "$realized_config"; then
+        log "ERROR: could not activate the authored Cortex configuration"
+        return 1
+    fi
+
+    docker rm -f aptl-cortex >/dev/null 2>&1 || true
+    if ! docker run -d --name aptl-cortex --hostname cortex \
+        --restart unless-stopped "${LBL_ARGS[@]+"${LBL_ARGS[@]}"}" \
+        --publish "$publish" --network "$net" --ip "$ip" \
+        --network-alias aptl-cortex --network-alias cortex \
+        "${mount_args[@]}" \
+        -v "$realized_config":/etc/cortex/application.conf:ro \
+        -v "$analyzer_dir":/opt/aptl/cortex-analyzers:ro \
+        -e analyzer_url=/opt/aptl/cortex-analyzers \
+        -e job_directory=/opt/cortex/jobs \
+        --health-cmd 'curl -sf http://localhost:9001/api/status || exit 1' \
+        --health-interval 30s --health-timeout 10s --health-retries 15 \
+        --health-start-period 120s "$img" >/dev/null; then
+        log "ERROR: replacement Cortex container could not be started"
+        return 1
+    fi
+    _verify_publications aptl-cortex "$expected" || return 1
+    for _ in $(seq 1 120); do
+        if docker exec aptl-cortex curl -sf --max-time 8 \
+            http://localhost:9001/api/status >/dev/null 2>&1; then
+            log "Cortex is running with the APTL analyzer catalog"
+            return 0
+        fi
+        sleep 5
+    done
+    log "ERROR: replacement Cortex did not become ready"
+    return 1
+}
+
 # --- readiness waits so the seed steps find the services up -----------------
 wait_misp() {
     _present aptl-misp || return 0
@@ -444,6 +546,9 @@ if ! fix_thehive_tls; then
     exit 1
 fi
 if ! fix_shuffle_orborus; then
+    exit 1
+fi
+if ! fix_cortex_analyzers; then
     exit 1
 fi
 wait_misp

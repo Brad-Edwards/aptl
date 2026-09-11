@@ -1,6 +1,8 @@
-"""Static checks for TheHive <-> Cortex lab integration."""
+"""Static and executable checks for TheHive <-> Cortex lab integration."""
 
+import json
 from pathlib import Path
+import subprocess
 
 import yaml
 
@@ -12,6 +14,14 @@ THEHIVE_CORTEX_ENV_PATH = PROJECT_ROOT / "config" / "cortex" / "thehive-cortex.e
 CORTEX_INDEX_INIT_SCRIPT = PROJECT_ROOT / "scripts" / "cortex-index-init.sh"
 CORTEX_APIKEY_SCRIPT = PROJECT_ROOT / "scripts" / "cortex-apikey.sh"
 SEED_PRIME_SCRIPT = PROJECT_ROOT / "scripts" / "seed-prime.sh"
+SOAR_FIXUP_SCRIPT = PROJECT_ROOT / "scripts" / "envpack-soar-fixups.sh"
+CORTEX_ANALYZER_DIR = PROJECT_ROOT / "config" / "cortex" / "analyzers"
+CORTEX_ANALYZER_DESCRIPTOR = (
+    CORTEX_ANALYZER_DIR / "APTLObservable" / "APTL_Observable.json"
+)
+CORTEX_ANALYZER_SCRIPT = (
+    CORTEX_ANALYZER_DIR / "APTLObservable" / "aptl_observable.py"
+)
 
 
 def _compose():
@@ -36,6 +46,73 @@ def test_cortex_uses_supported_elasticsearch_uri_setting():
     assert 'auth.provider = ["local", "key"]' in text
     assert "search.host" not in text
     assert "host = [\"http://thehive-es:9200\"]" not in text
+
+
+def test_cortex_declares_the_bundled_analyzer_catalog():
+    text = CORTEX_CONF_PATH.read_text(encoding="utf-8")
+
+    assert 'analyzer.urls = ["/opt/aptl/cortex-analyzers"]' in text
+
+
+def test_cortex_bundles_an_executable_offline_observable_analyzer(tmp_path):
+    descriptor = json.loads(CORTEX_ANALYZER_DESCRIPTOR.read_text(encoding="utf-8"))
+
+    assert descriptor["name"] == "APTL_Observable"
+    assert descriptor["integration_type"] == "local"
+    assert descriptor["registration_required"] is False
+    assert descriptor["subscription_required"] is False
+    assert "ip" in descriptor["dataTypeList"]
+    assert descriptor["command"] == "APTLObservable/aptl_observable.py"
+    assert CORTEX_ANALYZER_SCRIPT.stat().st_mode & 0o111
+
+    job_dir = tmp_path / "job"
+    (job_dir / "input").mkdir(parents=True)
+    (job_dir / "output").mkdir()
+    (job_dir / "input" / "input.json").write_text(
+        json.dumps(
+            {
+                "dataType": "ip",
+                "data": "192.0.2.10",
+                "tlp": 2,
+                "pap": 2,
+                "message": "APTL analyzer contract test",
+                "parameters": {},
+                "config": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess.run([CORTEX_ANALYZER_SCRIPT, job_dir], check=True)
+    output = json.loads((job_dir / "output" / "output.json").read_text(encoding="utf-8"))
+
+    assert output["success"] is True
+    assert output["summary"]["taxonomies"] == [
+        {
+            "level": "info",
+            "namespace": "APTL",
+            "predicate": "Observable",
+            "value": "ip",
+        }
+    ]
+    assert output["full"] == {
+        "data": "192.0.2.10",
+        "dataType": "ip",
+        "message": "APTL analyzer contract test",
+    }
+    assert output["artifacts"] == []
+    assert output["operations"] == []
+
+
+def test_envpack_fixup_activates_and_verifies_cortex_analyzers():
+    text = SOAR_FIXUP_SCRIPT.read_text(encoding="utf-8")
+    key_script = CORTEX_APIKEY_SCRIPT.read_text(encoding="utf-8")
+
+    assert "fix_cortex_analyzers" in text
+    assert ':/opt/aptl/cortex-analyzers:ro' in text
+    assert ':/etc/cortex/application.conf:ro' in text
+    assert "APTL_Observable" in key_script
+    assert "/api/analyzer" in key_script
 
 
 def test_thehive_compose_enables_cortex_connector():

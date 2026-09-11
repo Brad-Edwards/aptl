@@ -88,6 +88,8 @@ changelog.d/824.fixed.md	repository-metadata	Inspect identity/content owner duri
 changelog.d/876.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 config/certs.yml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 config/cortex/application.conf	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/cortex/analyzers/APTLObservable/APTL_Observable.json	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/cortex/analyzers/APTLObservable/aptl_observable.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 config/cortex/thehive-cortex.env	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 config/otel/grafana-datasources.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 config/otel/otel-collector-config.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity

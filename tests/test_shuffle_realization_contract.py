@@ -247,6 +247,9 @@ fi
 if [ "$1" = inspect ] && [ "$2" = aptl-shuffle-orborus ]; then
     exit 1
 fi
+if [ "$1" = inspect ] && [ "$2" = aptl-cortex ]; then
+    exit 1
+fi
 if [ "$1" = exec ] && [ "$2" = aptl-shuffle-backend ]; then
     printf '{"name":"Shuffle"}\n'
 fi

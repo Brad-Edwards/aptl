@@ -44,6 +44,19 @@ _curl_key() {
     _cortex_curl -sf -H "Authorization: Bearer ${CORTEX_API_KEY}" "$@"
 }
 
+_verify_analyzer_catalog() {
+    local catalog
+    if ! catalog=$(_curl_key "${CORTEX_URL}/api/analyzer"); then
+        echo "ERROR: Cortex analyzer catalog could not be queried" >&2
+        return 1
+    fi
+    if ! printf '%s' "$catalog" \
+        | grep -Eq '"name"[[:space:]]*:[[:space:]]*"APTL_Observable"'; then
+        echo "ERROR: Cortex APTL_Observable analyzer is not available" >&2
+        return 1
+    fi
+}
+
 if ! command -v docker >/dev/null 2>&1; then
     echo "ERROR: docker is required to reach Cortex on the container network" >&2
     exit 1
@@ -72,6 +85,7 @@ fi
 
 # 3. Fast path: the fixture key already works.
 if _curl_key "${CORTEX_URL}/api/user/current" >/dev/null; then
+    _verify_analyzer_catalog || exit 1
     echo "$CORTEX_API_KEY"
     exit 0
 fi
@@ -115,5 +129,7 @@ if ! _curl_key "${CORTEX_URL}/api/user/current" >/dev/null; then
     echo "ERROR: Cortex fixture key was created but did not authenticate" >&2
     exit 1
 fi
+
+_verify_analyzer_catalog || exit 1
 
 echo "$CORTEX_API_KEY"

@@ -238,9 +238,11 @@ fi
 if [ "$1" = inspect ] && [ "$2" = aptl-shuffle-backend ]; then
     exit 0
 fi
+if [ "$1" = inspect ] && [ "$2" = aptl-shuffle-frontend ]; then
+    exit 1
+fi
 if [ "$1" = inspect ] && [ "$2" = aptl-thehive ]; then
-    if [ "$3" = -f ]; then printf 'aptl-net\n'; fi
-    exit 0
+    exit 1
 fi
 if [ "$1" = exec ] && [ "$2" = aptl-shuffle-backend ]; then
     printf '{"name":"Shuffle"}\n'
@@ -388,6 +390,32 @@ exit 0
     assert "did not preserve its realized publication" in result.stdout
     operations = docker_log.read_text(encoding="utf-8").splitlines()
     assert not any(line.startswith("exec aptl-shuffle-backend ") for line in operations)
+
+
+def test_soar_fixups_activate_the_generated_soc_tls_material() -> None:
+    """Frozen-pack SOC consumers must use the paths their images read."""
+
+    fixup = (PROJECT_ROOT / "scripts" / "envpack-soar-fixups.sh").read_text(
+        encoding="utf-8"
+    )
+    thehive_key = (PROJECT_ROOT / "scripts" / "thehive-apikey.sh").read_text(
+        encoding="utf-8"
+    )
+    shuffle_seed = (PROJECT_ROOT / "scripts" / "seed-shuffle.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "fix_shuffle_frontend_tls" in fixup
+    assert "/etc/nginx/fullchain.cert.pem:ro" in fixup
+    assert "/etc/nginx/privkey.pem:ro" in fixup
+    assert "fix_thehive_tls" in fixup
+    assert "/etc/thehive/keystore.p12:ro" in fixup
+    assert "/etc/thehive/application.conf:ro" in fixup
+    assert "verify_soc_tls" in fixup
+    assert '--cacert "$CERT_BASE/lab-ca.pem"' in fixup
+    assert 'THEHIVE_URL="${THEHIVE_URL:-https://localhost:9000}"' in thehive_key
+    assert '--cacert "$THEHIVE_CA_CERT"' in thehive_key
+    assert 'THEHIVE_INTERNAL_URL="https://thehive:9000"' in shuffle_seed
 
 
 def test_release_manual_has_executable_reverse_negative_harness() -> None:

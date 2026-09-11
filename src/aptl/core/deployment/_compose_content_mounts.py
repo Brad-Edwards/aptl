@@ -60,16 +60,51 @@ def image_node_content_override(
         source = _place_content(item, scenario_root, realization_root)
         if source is None:
             continue
-        target = "/" + item.dest_relpath.lstrip("/")
-        services.setdefault(service_name, {}).setdefault("volumes", []).append(
-            {
-                "type": "bind",
-                "source": str(source),
-                "target": target,
-                "read_only": True,
-            }
+        services.setdefault(service_name, {}).setdefault("volumes", []).extend(
+            _content_mounts(item, source)
         )
     return {"services": services} if services else {"services": {}}
+
+
+def _content_mounts(
+    item: DeploymentContentRealization,
+    source: Path,
+) -> list[dict[str, object]]:
+    """Return mounts that place content without hiding image-owned siblings.
+
+    A pack directory is a set of declared files to merge at its destination.
+    Binding the extracted root over an image-owned directory hides every file
+    the image already carries there. This is especially damaging for appliance
+    extension directories whose entrypoint updates built-in files before it
+    applies the mounted configuration. Mount each regular artifact member at
+    its relative destination instead. Empty pack directories retain the prior
+    whole-directory behavior because they have no members to merge.
+    """
+
+    target_root = PurePosixPath("/") / item.dest_relpath.lstrip("/")
+    if item.source_kind == "pack-directory" and source.is_dir():
+        entries = sorted(source.rglob("*"), key=lambda path: path.relative_to(source).as_posix())
+        if any(entry.is_symlink() for entry in entries):
+            raise ValueError("pack directory content contains a symlink")
+        files = [entry for entry in entries if entry.is_file()]
+        if files:
+            return [
+                {
+                    "type": "bind",
+                    "source": str(path),
+                    "target": str(target_root / path.relative_to(source).as_posix()),
+                    "read_only": True,
+                }
+                for path in files
+            ]
+    return [
+        {
+            "type": "bind",
+            "source": str(source),
+            "target": str(target_root),
+            "read_only": True,
+        }
+    ]
 
 
 def _place_content(

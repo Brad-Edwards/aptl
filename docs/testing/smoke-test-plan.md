@@ -100,6 +100,28 @@ credentials. A private archive or restrictive file mode does not replace
 redaction. Preserve useful identifiers such as the candidate hash, run id,
 container name, alert id, rule id, case id, execution id, and analyzer job id.
 
+## Browser trust prerequisite
+
+Each clean path generates two path-specific certificate authorities. Before
+opening a SOC UI, import these public roots into the test browser or its
+operating-system trust store:
+
+- `config/wazuh_indexer_ssl_certs/root-ca.pem` for Wazuh;
+- `config/soc_certs/lab-ca.pem` for MISP, Shuffle, and TheHive.
+
+The Wazuh dashboard certificate names `wazuh.dashboard`, not `localhost`.
+Configure a temporary browser or operating-system resolver entry mapping
+`wazuh.dashboard` to `127.0.0.1`, and use
+`https://wazuh.dashboard:443`. The other SOC UI certificates include
+`localhost` and their documented loopback ports can be used directly. Confirm
+that the browser reports a valid hostname and a chain to the corresponding
+path-specific root before recording a UI result.
+
+Do not click through a certificate warning, disable certificate validation, or
+use an insecure client flag to make a QA row pass. Remove the temporary trust
+entries and hostname mapping after that path's `QA-TEARDOWN`; path B must import
+its own newly generated roots rather than reuse path A's trust.
+
 ## Required actions
 
 Execute `QA-START` through `QA-TEARDOWN` in order for path A, complete the
@@ -140,7 +162,7 @@ rendered verdict and confirm that it names the same run id recorded by
 
 ### QA-WAZUH: Dashboard, agents, and events
 
-Open the Wazuh dashboard at `https://localhost:443` and log in using the
+Open the Wazuh dashboard at `https://wazuh.dashboard:443` and log in using the
 generated credential referenced by `aptl lab info`. In the UI, inspect agent
 status and recent indexed events.
 

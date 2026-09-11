@@ -743,15 +743,23 @@ def test_pack_file_content_for_an_image_node_is_bound_from_the_resolved_bytes(
     assert not (scenario_root / ".aptl").exists()
 
 
-def test_pack_directory_content_for_an_image_node_binds_the_extracted_tree(
+def test_pack_directory_content_for_an_image_node_merges_files_into_target(
     tmp_path, stub_pack
 ):
-    """A directory artifact is extracted and the tree itself is bound in."""
+    """A directory artifact must not hide image-owned target-directory files."""
 
     from aptl.core.deployment._compose_content_mounts import image_node_content_override
 
     digest = "sha256:" + "b" * 64
-    stub_pack["rules"] = _StubResolved(_tar_bytes({"local.rules": b"alert\n"}), digest)
+    stub_pack["rules"] = _StubResolved(
+        _tar_bytes(
+            {
+                "local.rules": b"alert\n",
+                "nested/reference.conf": b"reference\n",
+            }
+        ),
+        digest,
+    )
     spec = _content_spec(
         content=(
             _content_item(
@@ -765,9 +773,17 @@ def test_pack_directory_content_for_an_image_node_binds_the_extracted_tree(
 
     override = image_node_content_override(spec, tmp_path / "pack", tmp_path / "engine")
 
-    mount = override["services"]["tempo"]["volumes"][0]
-    assert mount["target"] == "/etc/suricata/rules"
-    assert (Path(mount["source"]) / "local.rules").read_bytes() == b"alert\n"
+    mounts = override["services"]["tempo"]["volumes"]
+    assert [mount["target"] for mount in mounts] == [
+        "/etc/suricata/rules/local.rules",
+        "/etc/suricata/rules/nested/reference.conf",
+    ]
+    assert [Path(mount["source"]).read_bytes() for mount in mounts] == [
+        b"alert\n",
+        b"reference\n",
+    ]
+    assert all(mount["read_only"] is True for mount in mounts)
+    assert not any(mount["target"] == "/etc/suricata/rules" for mount in mounts)
 
 
 def test_pack_directory_content_replaces_a_mount_source_made_read_only(
@@ -791,12 +807,12 @@ def test_pack_directory_content_replaces_a_mount_source_made_read_only(
     realization_root = tmp_path / "engine"
     first = image_node_content_override(spec, tmp_path / "pack", realization_root)
     old_source = Path(first["services"]["tempo"]["volumes"][0]["source"])
-    (old_source / "local.rules").chmod(0o000)
+    old_source.chmod(0o000)
 
     second = image_node_content_override(spec, tmp_path / "pack", realization_root)
 
     new_source = Path(second["services"]["tempo"]["volumes"][0]["source"])
-    assert (new_source / "local.rules").read_bytes() == b"alert\n"
+    assert new_source.read_bytes() == b"alert\n"
 
 
 def test_pack_file_content_replaces_a_mount_source_made_read_only(

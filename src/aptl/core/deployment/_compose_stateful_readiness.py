@@ -19,6 +19,9 @@ from aptl.core.deployment._wazuh_identity import (
     WazuhClusterIdentity,
     wazuh_cluster_identity,
 )
+from aptl.core.deployment._compose_stateful_constants import (
+    WAZUH_MANAGER_CONFIG_PROVENANCES,
+)
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import (
     DeploymentNodeRealization,
@@ -112,7 +115,36 @@ class ComposeStatefulReadinessMixin:
                 success=False,
                 error="Authenticated Wazuh readiness validation failed.",
             )
+        if failure is None:
+            manager = _rendered_manager_config_container(realization, identity)
+            if manager is not None and not self._rendered_manager_config_is_active(
+                manager
+            ):
+                failure = LabResult(
+                    success=False,
+                    error=(
+                        "Wazuh manager did not activate its rendered configuration."
+                    ),
+                )
         return failure
+
+    def _rendered_manager_config_is_active(self, container: str) -> bool:
+        """Prove the manager activated the exact rendered config it received."""
+
+        command = [
+            "/bin/sh",
+            "-c",
+            (
+                "test \"$(sha256sum /var/ossec/etc/ossec.conf | cut -d' ' -f1)\" "
+                "= \"$(sha256sum /wazuh-config-mount/etc/ossec.conf | "
+                "cut -d' ' -f1)\""
+            ),
+        ]
+        try:
+            result = self.container_exec(container, command, timeout=30)
+        except (BackendTimeoutError, OSError):
+            return False
+        return result.returncode == 0
 
     def _authenticated_readiness_results(
         self,
@@ -231,3 +263,26 @@ def _published_host_port(info: object, container_port: int) -> int | None:
         if 1 <= candidate <= 65535:
             port = candidate
     return port
+
+
+def _rendered_manager_config_container(
+    realization: DeploymentRealizationSpec,
+    identity: WazuhClusterIdentity,
+) -> str | None:
+    """Return the manager container when the graph declares rendered config."""
+
+    manager_consumers = {
+        consumer.target_address
+        for artifact in realization.generated_artifacts
+        if artifact.provenance in WAZUH_MANAGER_CONFIG_PROVENANCES
+        for consumer in artifact.consumers
+        if consumer.service_name == identity.manager_service
+    }
+    return next(
+        (
+            node.container_name
+            for node in realization.nodes
+            if node.address in manager_consumers and node.container_name
+        ),
+        None,
+    )

@@ -403,3 +403,16 @@ def test_release_manual_has_executable_reverse_negative_harness() -> None:
     assert '"reverse_run_command"' in reverse_section
     assert 'payload.get("success") is not False' in reverse_section
     assert '"outcome": "expected-unavailable"' in reverse_section
+
+
+def test_release_manual_requires_valid_browser_trust_for_soc_uis() -> None:
+    """The hands-on UI path must be executable without TLS bypasses."""
+
+    manual = (PROJECT_ROOT / "docs" / "testing" / "smoke-test-plan.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "config/wazuh_indexer_ssl_certs/root-ca.pem" in manual
+    assert "config/soc_certs/lab-ca.pem" in manual
+    assert "https://wazuh.dashboard:443" in manual
+    assert "certificate warning" in manual

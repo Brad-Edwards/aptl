@@ -111,11 +111,12 @@ operating-system trust store:
 
 The Wazuh dashboard certificate names `wazuh.dashboard`, not `localhost`.
 Configure a temporary browser or operating-system resolver entry mapping
-`wazuh.dashboard` to `127.0.0.1`, and use
-`https://wazuh.dashboard:443`. The other SOC UI certificates include
-`localhost` and their documented loopback ports can be used directly. Confirm
-that the browser reports a valid hostname and a chain to the corresponding
-path-specific root before recording a UI result.
+`wazuh.dashboard` to `127.0.0.1`, and use the dashboard host port reported by
+`aptl lab info` (`443` is only the default). The other SOC UI certificates
+include `localhost`; use each service's actual loopback publication from the
+current path's `qa-start-status.json` rather than assuming a default port.
+Confirm that the browser reports a valid hostname and a chain to the
+corresponding path-specific root before recording a UI result.
 
 Do not click through a certificate warning, disable certificate validation, or
 use an insecure client flag to make a QA row pass. Remove the temporary trust
@@ -135,6 +136,7 @@ Run:
 ```bash
 aptl lab start
 aptl lab status
+aptl lab status --json --output qa-start-status.json
 aptl runs list | tee qa-start-runs.txt
 ```
 
@@ -142,9 +144,10 @@ Expected: start exits zero and reports readiness; status accounts for every
 project-owned container and none is `created`, `exited`, `dead`, or otherwise
 non-running. No `aptl-mcp-endpoints` container exists. The runs listing
 contains the canonical run created by this exact start, backed by its root
-`manifest.json`. Record that full run id as the path's startup run id. Capture
-the final start result, complete status inventory, and runs listing. A start
-failure is a valid diagnostic, not a pass.
+`manifest.json`. The JSON snapshot records the actual loopback publications
+used by later UI rows. Record that full run id as the path's startup run id.
+Capture the final start result, complete status inventory, JSON snapshot, and
+runs listing. A start failure is a valid diagnostic, not a pass.
 
 ### QA-LIVE: RAES live validation
 
@@ -162,9 +165,10 @@ rendered verdict and confirm that it names the same run id recorded by
 
 ### QA-WAZUH: Dashboard, agents, and events
 
-Open the Wazuh dashboard at `https://wazuh.dashboard:443` and log in using the
-generated credential referenced by `aptl lab info`. In the UI, inspect agent
-status and recent indexed events.
+Open the Wazuh dashboard at
+`https://wazuh.dashboard:<reported-host-port>` and log in using the generated
+credential referenced by `aptl lab info`. In the UI, inspect agent status and
+recent indexed events.
 
 Expected: the dashboard is usable, the scenario's agents are enrolled and
 reporting, and recent events are visible in the indexer. Capture the agent view
@@ -218,10 +222,11 @@ alert id, observable type/value, analyzer name, job id, and terminal result.
 
 ### QA-MISP: Seeded threat intelligence and round trip
 
-Open MISP at `https://localhost:8443`, confirm the expected seeded TechVault
-content is present, then add a harmless release-QA indicator in a dedicated QA
-event or select a seeded indicator. Retrieve the same indicator through a
-second supported surface, preferably `mcp-threatintel` in `QA-MCP-TI`.
+Open MISP at `https://localhost:<reported-host-port>` (default `8443`), confirm
+the expected seeded TechVault content is present, then add a harmless release-QA
+indicator in a dedicated QA event or select a seeded indicator. Retrieve the
+same indicator through a second supported surface, preferably
+`mcp-threatintel` in `QA-MCP-TI`.
 
 Expected: MISP is usable and seeded, and the exact indicator can be pushed or
 pulled and found again. Capture event and attribute ids plus the redacted

@@ -414,5 +414,7 @@ def test_release_manual_requires_valid_browser_trust_for_soc_uis() -> None:
 
     assert "config/wazuh_indexer_ssl_certs/root-ca.pem" in manual
     assert "config/soc_certs/lab-ca.pem" in manual
-    assert "https://wazuh.dashboard:443" in manual
+    assert "https://wazuh.dashboard:<reported-host-port>" in manual
+    assert "443` is only the default" in manual
+    assert "aptl lab status --json --output qa-start-status.json" in manual
     assert "certificate warning" in manual

@@ -418,3 +418,5 @@ def test_release_manual_requires_valid_browser_trust_for_soc_uis() -> None:
     assert "443` is only the default" in manual
     assert "aptl lab status --json --output qa-start-status.json" in manual
     assert "certificate warning" in manual
+    assert "aptl container shell aptl-suricata" in manual
+    assert "does not claim passive visibility" in manual

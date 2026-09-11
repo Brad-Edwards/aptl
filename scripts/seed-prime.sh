@@ -101,7 +101,10 @@ fi
 # This restores the authored corpus + complete vars from config/suricata/ and
 # reloads the sensor (see scripts/envpack-suricata-fixups.sh).
 if [ -x "$SCRIPT_DIR/envpack-suricata-fixups.sh" ]; then
-    "$SCRIPT_DIR/envpack-suricata-fixups.sh" || echo "  WARNING: env-pack Suricata fixups reported issues"
+    if ! "$SCRIPT_DIR/envpack-suricata-fixups.sh"; then
+        echo "  ERROR: env-pack Suricata fixups failed; refusing to report a ready lab"
+        exit 1
+    fi
 fi
 
 # Apply the temporary env-pack Kali capture-wrapper fixup. The frozen env-pack

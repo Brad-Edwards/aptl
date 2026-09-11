@@ -191,7 +191,21 @@ id, rule id, description, and event time.
 
 ### QA-SURICATA: Network rule reaches the SIEM
 
-Use the same SQL-injection traffic, or repeat it while recording a new time.
+Docker bridge networks do not pass peer-to-peer unicast traffic to a third
+container as a passive tap. This row therefore sends the same live HTTP payload
+from the Suricata sensor's own network namespace; it validates the live capture,
+rule, and Wazuh-forwarding chain and does not claim passive visibility of the
+separate Kali flow from `QA-DETECT`.
+
+Open a sensor shell and record a new time around the request:
+
+```bash
+aptl container shell aptl-suricata
+date -u +%Y-%m-%dT%H:%M:%SZ
+curl -sf 'http://172.20.1.20:8080/login?username=ids_qa%27%20UNION%20SELECT%201,2,3--&password=x'
+date -u +%Y-%m-%dT%H:%M:%SZ
+```
+
 Inspect Suricata evidence and then locate the corresponding event in Wazuh.
 
 Expected: Suricata reports `APTL SQL Injection Attempt - UNION SELECT` with

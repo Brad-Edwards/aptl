@@ -15,6 +15,10 @@ _PROJECT_OWNERSHIP_LABELS = (
     "aptl.lifecycle.project",
 )
 _MAX_INVENTORY_ERROR_LENGTH = 512
+_PROJECT_INVENTORY_FORMAT = (
+    "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.State}}\t"
+    "{{.Labels}}\t{{.Ports}}"
+)
 
 
 def _parse_labels(labels_str: str) -> dict[str, str]:
@@ -69,48 +73,60 @@ def _bounded_inventory_error(stderr: str) -> str:
     return (safe or "container inventory command failed")[:_MAX_INVENTORY_ERROR_LENGTH]
 
 
+def _parse_inventory_rows(stdout: str) -> tuple[list[dict[str, Any]], str | None]:
+    """Parse a complete label query without exposing a partial result."""
+
+    rows: list[dict[str, Any]] = []
+    failure: str | None = None
+    for line in stdout.splitlines():
+        if not line.strip():
+            continue
+        row = _parse_lab_row(line)
+        if row is None or not row["id"]:
+            failure = "Failed to parse project container inventory"
+            break
+        rows.append(row)
+    return rows, failure
+
+
 class ComposeProjectInventoryMixin(object):
     """Project-owned inventory methods shared by local and SSH backends."""
+
+    def _query_project_inventory_label(
+        self, label: str
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """Query and parse the containers owned through one project label."""
+
+        try:
+            result = self._run(
+                [
+                    "docker",
+                    "ps",
+                    "-a",
+                    "--filter",
+                    f"label={label}={self._project_name}",
+                    "--format",
+                    _PROJECT_INVENTORY_FORMAT,
+                ],
+                timeout=_HOST_INVENTORY_TIMEOUT,
+            )
+        except (BackendTimeoutError, OSError):
+            return [], "Project container inventory could not be observed"
+        if result.returncode != 0:
+            return [], _bounded_inventory_error(result.stderr)
+        return _parse_inventory_rows(result.stdout)
 
     def _project_container_status(self) -> LabStatus:
         """Return checked, all-state inventory for the configured project."""
 
-        fmt = (
-            "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.State}}\t"
-            "{{.Labels}}\t{{.Ports}}"
-        )
         by_id: dict[str, dict[str, Any]] = {}
         failure: str | None = None
         for label in _PROJECT_OWNERSHIP_LABELS:
-            try:
-                result = self._run(
-                    [
-                        "docker",
-                        "ps",
-                        "-a",
-                        "--filter",
-                        f"label={label}={self._project_name}",
-                        "--format",
-                        fmt,
-                    ],
-                    timeout=_HOST_INVENTORY_TIMEOUT,
-                )
-            except (BackendTimeoutError, OSError):
-                failure = "Project container inventory could not be observed"
-            else:
-                if result.returncode != 0:
-                    failure = _bounded_inventory_error(result.stderr)
-                else:
-                    for line in result.stdout.splitlines():
-                        if not line.strip():
-                            continue
-                        row = _parse_lab_row(line)
-                        if row is None or not row["id"]:
-                            failure = "Failed to parse project container inventory"
-                            break
-                        by_id.setdefault(row["id"], row)
+            rows, failure = self._query_project_inventory_label(label)
             if failure is not None:
                 break
+            for row in rows:
+                by_id.setdefault(row["id"], row)
 
         if failure is not None:
             return LabStatus(running=False, error=failure)

@@ -31,7 +31,11 @@ from aptl.core.deployment._compose_realization import (
     _resolve_realization_networks,
 )
 from aptl.core.deployment._compose_queries import _select_shell
-from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
+from aptl.core.deployment.errors import (
+    BackendObservationError,
+    BackendSeedError,
+    BackendTimeoutError,
+)
 from aptl.core.lab import LabResult, LabStatus
 
 # SSHComposeBackend validates the *local* ssh identity path with
@@ -1434,13 +1438,16 @@ services:
         assert result.success is False
         assert "runtime artifacts remain" in result.error
 
-    def test_status_parses_json_array(self, tmp_path):
+    def test_status_parses_project_inventory(self, tmp_path):
         backend = self._make_backend(tmp_path)
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
-                stdout='[{"Name":"aptl-victim","State":"running"}]',
+                stdout=(
+                    "aptl-victim\tvictim:latest\tabc\tUp 1 minute\trunning\t"
+                    "com.docker.compose.project=test\t"
+                ),
                 stderr="",
             )
             status = backend.status()
@@ -1454,26 +1461,38 @@ services:
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
-                stdout='[{"Name":"aptl-victim","State":"running"}]',
+                stdout=(
+                    "aptl-victim\tvictim:latest\tabc\tUp 1 minute\trunning\t"
+                    "com.docker.compose.project=test\t"
+                ),
                 stderr="",
             )
             status = backend.status()
 
         assert status.running is True
-        cmd = mock_run.call_args[0][0]
-        assert cmd[:4] == ["docker", "compose", "-p", "test"]
-        assert cmd[-3:] == ["ps", "--format", "json"]
-        assert mock_run.call_args[1]["cwd"] == tmp_path / "aptl-workshop-main.h9Jare"
+        assert mock_run.call_count == 2
+        commands = [entry.args[0] for entry in mock_run.call_args_list]
+        assert any(
+            "label=com.docker.compose.project=test" in command for command in commands
+        )
+        assert any("label=aptl.lifecycle.project=test" in command for command in commands)
+        assert all(command[:3] == ["docker", "ps", "-a"] for command in commands)
+        assert all(
+            entry.kwargs["cwd"] == tmp_path / "aptl-workshop-main.h9Jare"
+            for entry in mock_run.call_args_list
+        )
 
-    def test_status_parses_ndjson(self, tmp_path):
+    def test_status_parses_multiple_project_rows(self, tmp_path):
         backend = self._make_backend(tmp_path)
-        ndjson = (
-            '{"Name":"aptl-victim","State":"running"}\n'
-            '{"Name":"aptl-kali","State":"running"}'
+        rows = (
+            "aptl-victim\tvictim:latest\taaa\tUp 1 minute\trunning\t"
+            "com.docker.compose.project=test\t\n"
+            "aptl-kali\tkali:latest\tbbb\tUp 1 minute\trunning\t"
+            "aptl.lifecycle.project=test\t"
         )
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout=ndjson, stderr="")
+            mock_run.return_value = MagicMock(returncode=0, stdout=rows, stderr="")
             status = backend.status()
 
         assert status.running is True
@@ -1512,6 +1531,64 @@ services:
 
         assert status.running is False
         assert "parse" in status.error.lower()
+
+    def test_status_unions_project_labels_and_includes_every_state(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        compose_rows = (
+            "aptl-compose\tcompose:latest\taaa\tUp 1 minute\trunning\t"
+            "com.docker.compose.project=test\t\n"
+        )
+        lifecycle_rows = (
+            compose_rows
+            + "direct-node\tdebian:stable\tbbb\tExited (23) 2 seconds ago\texited\t"
+            "aptl.lifecycle.project=test\t"
+        )
+
+        def _inventory(args, **_kwargs):
+            command = " ".join(args)
+            if "label=com.docker.compose.project=test" in command:
+                return MagicMock(returncode=0, stdout=compose_rows, stderr="")
+            if "label=aptl.lifecycle.project=test" in command:
+                return MagicMock(returncode=0, stdout=lifecycle_rows, stderr="")
+            raise AssertionError(f"unexpected inventory command: {command}")
+
+        with patch("subprocess.run", side_effect=_inventory) as mock_run:
+            status = backend.status()
+
+        assert status.running is True
+        assert [(row["name"], row["state"]) for row in status.containers] == [
+            ("aptl-compose", "running"),
+            ("direct-node", "exited"),
+        ]
+        assert mock_run.call_count == 2
+        for call_args in mock_run.call_args_list:
+            command = call_args.args[0]
+            assert command[:3] == ["docker", "ps", "-a"]
+            assert not any(arg.startswith("name=") for arg in command)
+
+    def test_status_fails_when_either_project_inventory_query_fails(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                MagicMock(returncode=0, stdout="", stderr=""),
+                MagicMock(returncode=1, stdout="", stderr="daemon unavailable"),
+            ]
+            status = backend.status()
+
+        assert status.running is False
+        assert status.containers == []
+        assert "daemon unavailable" in status.error
+
+    def test_status_fails_closed_when_project_inventory_times_out(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("docker", 90)):
+            status = backend.status()
+
+        assert status.running is False
+        assert status.containers == []
+        assert "could not be observed" in status.error
 
     def test_kill_runs_compose_kill_then_down(self, tmp_path):
         backend = self._make_backend(tmp_path)
@@ -1920,45 +1997,49 @@ class TestDockerComposeBackendContainerInteraction:
         backend = self._make_backend(tmp_path)
         line = (
             "aptl-victim\taptl/victim:latest\tabc\tUp 5m (healthy)\t"
-            "service=victim\t0.0.0.0:2022->22/tcp"
+            "running\tservice=victim\t0.0.0.0:2022->22/tcp"
         )
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout=line, stderr="")
             rows = backend.host_list_lab_containers()
-        cmd = mock_run.call_args[0][0]
-        assert "docker" in cmd
-        assert "ps" in cmd
-        assert "-a" in cmd
-        assert any("name=aptl-" in arg for arg in cmd)
-        # Scoping by compose project label keeps shared-daemon snapshots
-        # from leaking other tenants' aptl-* containers.
-        assert any("label=com.docker.compose.project=test" in arg for arg in cmd)
+        assert mock_run.call_count == 2
+        commands = [entry.args[0] for entry in mock_run.call_args_list]
+        assert all(command[:3] == ["docker", "ps", "-a"] for command in commands)
+        assert all(not any(arg.startswith("name=") for arg in cmd) for cmd in commands)
+        assert any(
+            "label=com.docker.compose.project=test" in command for command in commands
+        )
+        assert any("label=aptl.lifecycle.project=test" in command for command in commands)
         # Bounded execution: a stalled daemon must not hang snapshot capture.
-        assert mock_run.call_args[1]["timeout"] == 90
+        assert all(entry.kwargs["timeout"] == 90 for entry in mock_run.call_args_list)
         assert len(rows) == 1
         row = rows[0]
         assert row["name"] == "aptl-victim"
         assert row["image"] == "aptl/victim:latest"
         assert row["id"] == "abc"
         assert row["status"] == "Up 5m (healthy)"
+        assert row["state"] == "running"
+        assert row["health"] == "healthy"
         assert row["labels"] == {"service": "victim"}
         assert row["ports"] == ["0.0.0.0:2022->22/tcp"]
 
-    def test_host_list_lab_containers_skips_short_lines(self, tmp_path):
+    def test_host_list_lab_containers_rejects_short_lines(self, tmp_path):
         backend = self._make_backend(tmp_path)
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0, stdout="too\tfew", stderr=""
             )
-            assert backend.host_list_lab_containers() == []
+            with pytest.raises(BackendObservationError, match="parse"):
+                backend.host_list_lab_containers()
 
-    def test_host_list_lab_containers_returns_empty_on_error(self, tmp_path):
+    def test_host_list_lab_containers_raises_checked_error_on_failure(self, tmp_path):
         backend = self._make_backend(tmp_path)
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=1, stdout="", stderr="docker missing"
             )
-            assert backend.host_list_lab_containers() == []
+            with pytest.raises(BackendObservationError, match="docker missing"):
+                backend.host_list_lab_containers()
 
     def test_host_list_lab_networks_filters_by_prefix(self, tmp_path):
         backend = self._make_backend(tmp_path)
@@ -2391,7 +2472,10 @@ class TestLabBackwardCompat:
 
         mock_subprocess.return_value = MagicMock(
             returncode=0,
-            stdout='[{"Name":"aptl-victim","State":"running"}]',
+            stdout=(
+                "aptl-victim\tvictim:latest\tabc\tUp 1 minute\trunning\t"
+                "com.docker.compose.project=aptl\t"
+            ),
             stderr="",
         )
 

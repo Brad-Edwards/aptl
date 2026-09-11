@@ -192,7 +192,7 @@ Access at <http://localhost:5173> (dev) or <http://localhost:3000> (prod). The A
 
 **Reference:** [TechVault Scenario Overview](docs/reference/techvault-scenario-overview.md) · [TechVault Company Profile](docs/reference/techvault-company-profile.md) · [TechVault OSINT Readiness](docs/reference/techvault-osint-readiness.md) · [Container Template Guide](docs/containers/victim-template-guide.md)
 
-**Ops:** [Troubleshooting](docs/troubleshooting/) · [Smoke Test Plan](docs/testing/smoke-test-plan.md)
+**Ops:** [Troubleshooting](docs/troubleshooting/) · [Release Candidate Manual QA](docs/testing/smoke-test-plan.md)
 
 ## Ethics & Disclaimers
 

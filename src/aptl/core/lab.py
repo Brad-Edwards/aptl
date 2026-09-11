@@ -612,7 +612,22 @@ def lab_status(
     resolved_dir = project_dir or Path(".")
 
     if backend is None:
-        backend = _get_backend(resolved_dir)
+        config_path = find_config(resolved_dir)
+        if config_path is None:
+            backend = _get_backend(resolved_dir)
+        else:
+            try:
+                config = load_config(config_path)
+                backend = _get_backend(config_path.parent, config)
+            except (OSError, ValueError):
+                return LabStatus(
+                    running=False,
+                    error=(
+                        "[lifecycle-invalid-configuration] Lab status blocked: "
+                        "invalid configuration; refusing to guess the deployment "
+                        "project identity."
+                    ),
+                )
 
     return backend.status()
 
@@ -833,6 +848,9 @@ class _LabStartContext(object):
     # Use object to avoid circular imports; typed at use sites.
     raes_outcome: object = None
     snapshot: object = None
+    # The checked, post-mutation project inventory used by both the terminal
+    # startup decision and the persisted range snapshot.
+    terminal_status: LabStatus | None = None
     # REP-001 / GAP 4: one run store + run_id resolved once per lab-start run,
     # threaded through orchestration and reused by the run-record step so
     # workflow artifacts and the record share a single run directory.
@@ -2134,10 +2152,17 @@ def _docker_vm_hides_bridge_ips() -> bool:
     description="backend_is_initialized(ctx.backend)",
 )
 def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
-    """Capture a non-fatal inventory snapshot of the started range."""
-    log.info("Step 11: Capturing range snapshot...")
+    """Persist the exact checked terminal container inventory."""
+    log.info("Step 16: Capturing terminal range snapshot...")
+    container_rows = (
+        ctx.terminal_status.containers if ctx.terminal_status is not None else None
+    )
     try:
-        snapshot = capture_snapshot(config_dir=ctx.project_dir, backend=ctx.backend)
+        snapshot = capture_snapshot(
+            config_dir=ctx.project_dir,
+            backend=ctx.backend,
+            container_rows=container_rows,
+        )
     except Exception:
         # Snapshot is the run-archive inventory; its loss is observability
         # debt, not a hard failure (ADR-030). Keep exception detail in
@@ -2173,7 +2198,7 @@ def _step_write_run_record(ctx: _LabStartContext) -> LabResult | None:
     Non-fatal: a failure to write the record emits a WARNING diagnostic but
     does not abort the lab start. The lab is already running at this point.
     """
-    log.info("Step 11c: Writing run reproducibility record...")
+    log.info("Step 17: Writing terminal run reproducibility record...")
     if ctx.raes_outcome is None or ctx.snapshot is None:
         log.warning(
             "REP-001: Skipping run record — RAES outcome or range snapshot unavailable"
@@ -2679,6 +2704,123 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
     return None
 
 
+_MAX_CONTAINER_ATTESTATION_FAILURES = 5
+_MAX_CONTAINER_ATTESTATION_DETAIL = 512
+
+
+def _container_attestation_detail(
+    backend: "DeploymentBackend", container: Mapping[str, Any]
+) -> str:
+    """Return one bounded, redacted non-running-container description."""
+
+    name = str(container.get("name", container.get("Name", "unknown")))[:128]
+    state = str(container.get("state", container.get("State", "unknown")))[:64]
+    status = str(container.get("status", container.get("Status", "unknown")))[:160]
+    exit_code: object = "unknown"
+    state_error = ""
+    try:
+        inspected = backend.container_inspect(name)
+    except Exception:
+        inspected = {}
+    inspected_state = inspected.get("State") if isinstance(inspected, Mapping) else None
+    if isinstance(inspected_state, Mapping):
+        state = str(inspected_state.get("Status", state))[:64]
+        exit_code = inspected_state.get("ExitCode", exit_code)
+        state_error = str(inspected_state.get("Error", ""))[:256]
+    detail = f"{name!r} state={state!r} status={status!r} exit_code={exit_code!r}"
+    if state_error:
+        detail += f" error={state_error!r}"
+    return str(redact(detail))[:_MAX_CONTAINER_ATTESTATION_DETAIL]
+
+
+@_runtime_require(
+    lambda ctx: backend_is_initialized(ctx.backend),
+    description="backend_is_initialized(ctx.backend)",
+)
+def _step_attest_project_containers(ctx: _LabStartContext) -> LabResult | None:
+    """Fail startup unless terminal project inventory is fully running."""
+
+    assert ctx.backend is not None
+    try:
+        current = ctx.backend.status()
+    except Exception:
+        _emit_diagnostic(
+            ctx,
+            step="attest_project_containers",
+            impact=DiagnosticImpact.READINESS,
+            severity=DiagnosticSeverity.ERROR,
+            message="Terminal project-container state could not be observed",
+            operator_action=(
+                "Inspect the deployment backend, then run `aptl lab stop` or "
+                "`aptl lab start --clean` before retrying"
+            ),
+        )
+        return LabResult(
+            success=False,
+            error="Terminal project-container state could not be observed",
+            outcome=StartupOutcome.FAILED,
+        )
+    if current.error:
+        safe_error = str(redact(current.error))[:_MAX_CONTAINER_ATTESTATION_DETAIL]
+        _emit_diagnostic(
+            ctx,
+            step="attest_project_containers",
+            impact=DiagnosticImpact.READINESS,
+            severity=DiagnosticSeverity.ERROR,
+            message="Terminal project-container state could not be observed",
+            operator_action=(
+                "Inspect the deployment backend, then run `aptl lab stop` or "
+                "`aptl lab start --clean` before retrying"
+            ),
+        )
+        return LabResult(
+            success=False,
+            error=f"Terminal project-container observation failed: {safe_error}",
+            outcome=StartupOutcome.FAILED,
+        )
+
+    non_running = [
+        container
+        for container in current.containers
+        if str(container.get("state", container.get("State", ""))).casefold()
+        != "running"
+    ]
+    if not current.containers:
+        non_running_summary = "no project containers were observed"
+    elif non_running:
+        details = [
+            _container_attestation_detail(ctx.backend, container)
+            for container in non_running[:_MAX_CONTAINER_ATTESTATION_FAILURES]
+        ]
+        remaining = len(non_running) - len(details)
+        if remaining:
+            details.append(f"{remaining} additional non-running container(s)")
+        non_running_summary = "; ".join(details)
+    else:
+        ctx.terminal_status = current
+        return None
+
+    _emit_diagnostic(
+        ctx,
+        step="attest_project_containers",
+        impact=DiagnosticImpact.READINESS,
+        severity=DiagnosticSeverity.ERROR,
+        message=(
+            f"Terminal inventory contains {len(non_running)} non-running "
+            "project container(s)"
+        ),
+        operator_action=(
+            "Inspect the named container state, then run `aptl lab stop` or "
+            "`aptl lab start --clean` before retrying"
+        ),
+    )
+    return LabResult(
+        success=False,
+        error=f"Lab start left project containers non-running: {non_running_summary}",
+        outcome=StartupOutcome.FAILED,
+    )
+
+
 # Ordered list of steps the orchestrator dispatches. Keep numbered
 # comments in sync with the step bodies above so log lines and source
 # stay aligned.
@@ -2698,12 +2840,13 @@ _LAB_START_STEPS = (
     _step_start_containers,
     _step_wait_for_services,
     _step_test_ssh,
-    _step_capture_snapshot,
-    _step_write_run_record,
     _step_pin_terminal_host_keys,
     _step_build_mcps,
     _step_seed_soc,
     _step_sync_mcp_config,
+    _step_attest_project_containers,
+    _step_capture_snapshot,
+    _step_write_run_record,
 )
 
 _LAB_START_PROGRESS_MESSAGES = {
@@ -2725,12 +2868,13 @@ _LAB_START_PROGRESS_MESSAGES = {
     ),
     "_step_wait_for_services": "Waiting for Wazuh services to become ready.",
     "_step_test_ssh": "Testing SSH reachability.",
-    "_step_capture_snapshot": "Capturing a range snapshot.",
-    "_step_write_run_record": "Writing the run reproducibility record.",
     "_step_pin_terminal_host_keys": "Pinning terminal SSH host keys.",
     "_step_build_mcps": "Building local MCP server artifacts.",
     "_step_seed_soc": "Seeding SOC tools.",
     "_step_sync_mcp_config": "Refreshing MCP client configuration.",
+    "_step_attest_project_containers": "Verifying terminal container state.",
+    "_step_capture_snapshot": "Capturing the terminal range snapshot.",
+    "_step_write_run_record": "Writing the terminal run reproducibility record.",
 }
 
 

@@ -33,6 +33,53 @@ _net()      { docker inspect "$1" -f '{{range $n,$c := .NetworkSettings.Networks
 _image()    { docker inspect "$1" -f '{{.Config.Image}}' 2>/dev/null; }
 _has_env()  { docker inspect "$1" -f '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -q "^$2="; }
 
+# The RAES/Compose realization owns the MISP publication.  fix_misp replaces
+# that realized container after compose up, so it must carry the exact binding
+# across the replacement instead of reconstructing a second source of truth.
+MISP_PUBLISH_ARGS=()
+MISP_EXPECTED_PUBLICATION=""
+_misp_publications() {
+    docker inspect "$1" --format \
+        '{{with (index .HostConfig.PortBindings "443/tcp")}}{{range .}}{{println .HostIp .HostPort}}{{end}}{{end}}' \
+        2>/dev/null
+}
+
+_capture_misp_publication() {
+    MISP_PUBLISH_ARGS=()
+    MISP_EXPECTED_PUBLICATION=""
+    local host_ip host_port count=0
+    while read -r host_ip host_port; do
+        [ -n "$host_ip" ] && [ -n "$host_port" ] || continue
+        count=$((count + 1))
+        if [ "$host_ip" != "127.0.0.1" ] \
+            || ! [[ "$host_port" =~ ^[0-9]+$ ]] \
+            || [ "$host_port" -lt 1 ] \
+            || [ "$host_port" -gt 65535 ]; then
+            log "ERROR: realized MISP publication is not a valid loopback TCP binding"
+            return 1
+        fi
+        MISP_EXPECTED_PUBLICATION="$host_ip $host_port"
+        MISP_PUBLISH_ARGS+=(--publish "$host_ip:$host_port:443/tcp")
+    done < <(_misp_publications aptl-misp)
+    if [ "$count" -ne 1 ]; then
+        log "ERROR: realized MISP container must have exactly one 443/tcp publication"
+        return 1
+    fi
+}
+
+_verify_misp_publication() {
+    local host_ip host_port count=0 actual=""
+    while read -r host_ip host_port; do
+        [ -n "$host_ip" ] && [ -n "$host_port" ] || continue
+        count=$((count + 1))
+        actual="$host_ip $host_port"
+    done < <(_misp_publications aptl-misp)
+    if [ "$count" -ne 1 ] || [ "$actual" != "$MISP_EXPECTED_PUBLICATION" ]; then
+        log "ERROR: replacement MISP container did not preserve its realized publication"
+        return 1
+    fi
+}
+
 # Capture a container's labels into LBL_ARGS as `--label k=v` pairs BEFORE it is
 # removed, so the recreated container keeps its compose-project membership.
 # Without this the replacement is invisible to `docker compose down` and its live
@@ -75,12 +122,14 @@ fix_misp() {
     local img net
     img="$(_image aptl-misp)"; net="$(_net aptl-misp)"
     _capture_labels aptl-misp
+    _capture_misp_publication || return 1
     docker rm -f aptl-misp >/dev/null 2>&1 || true
     # Fresh schema so the admin key (ADMIN_KEY) is applied at init.
     docker exec aptl-misp-db mysql -uroot -pmisp_root_password \
         -e 'DROP DATABASE IF EXISTS misp; CREATE DATABASE misp;' >/dev/null 2>&1 || true
     docker volume rm aptl_misp_config aptl_misp_data >/dev/null 2>&1 || true
-    docker run -d --name aptl-misp --restart unless-stopped "${LBL_ARGS[@]}" \
+    if ! docker run -d --name aptl-misp --restart unless-stopped "${LBL_ARGS[@]}" \
+        "${MISP_PUBLISH_ARGS[@]}" \
         --network "$net" --network-alias aptl-misp --network-alias misp \
         -e MYSQL_HOST=misp-db -e MYSQL_DATABASE=misp -e MYSQL_USER=misp -e MYSQL_PASSWORD=misp_db_password \
         -e ADMIN_EMAIL=admin@admin.test -e ADMIN_PASSWORD=admin -e ADMIN_KEY="$MISP_API_KEY" \
@@ -88,7 +137,11 @@ fix_misp() {
         -v aptl_misp_config:/var/www/MISP/app/Config -v aptl_misp_data:/var/www/MISP/app/files \
         -v "$CERT_BASE/misp/server.pem":/etc/nginx/certs/cert.pem:ro \
         -v "$CERT_BASE/misp/server.key":/etc/nginx/certs/key.pem:ro \
-        "$img" >/dev/null
+        "$img" >/dev/null; then
+        log "ERROR: replacement MISP container could not be started"
+        return 1
+    fi
+    _verify_misp_publication
 }
 
 # --- readiness waits so the seed steps find the services up -----------------
@@ -125,46 +178,13 @@ wait_shuffle() {
     return 1
 }
 
-# --- MCP participant endpoints ----------------------------------------------
-# The participant MCP servers connect to https://localhost:{8443 MISP, 9000
-# TheHive, 3443 Shuffle} and verify strictly (verify_ssl + ca_cert_path
-# lab-ca.pem). The env-pack publishes only wazuh 9200/55000 + dashboard 443, so
-# those three MCP smoke checks (threatintel/cases/soar) have nothing to reach.
-# The pre-#875 compose published all three on 127.0.0.1. Republish them with a
-# small TLS-terminating socat proxy that serves a lab-CA localhost certificate
-# (so verification passes) and forwards to each backend: MISP already serves a
-# localhost-SAN lab cert (TCP passthrough); TheHive serves plain HTTP (terminate
-# TLS, forward plaintext); Shuffle serves its own cert (terminate + re-originate,
-# ignoring the backend cert). This restores documented plumbing without changing
-# the access model or recreating the heavy TheHive/Shuffle-frontend containers.
-fix_mcp_endpoints() {
-    _present aptl-thehive || return 0
-    local net cert key
-    net="$(_net aptl-thehive)"
-    cert="$CERT_BASE/misp/server.pem"   # lab-CA-signed, SAN includes localhost
-    key="$CERT_BASE/misp/server.key"
-    if [ ! -f "$cert" ] || [ ! -f "$key" ]; then
-        log "localhost cert missing; skipping MCP endpoint proxy"; return 0
-    fi
-    log "publishing MCP HTTPS endpoints (MISP:8443, TheHive:9000, Shuffle:3443) via TLS proxy"
-    docker rm -f aptl-mcp-endpoints >/dev/null 2>&1 || true
-    local socat_script
-    socat_script='socat TCP-LISTEN:8443,fork,reuseaddr TCP:misp:443 & socat OPENSSL-LISTEN:9000,fork,reuseaddr,cert=/certs/localhost.pem,key=/certs/localhost.key,verify=0 TCP:thehive:9000 & socat OPENSSL-LISTEN:3443,fork,reuseaddr,cert=/certs/localhost.pem,key=/certs/localhost.key,verify=0 OPENSSL-CONNECT:shuffle-frontend:443,verify=0 & wait'
-    docker run -d --name aptl-mcp-endpoints --restart unless-stopped \
-        --label com.docker.compose.project=aptl \
-        --label com.docker.compose.service=mcp-endpoints \
-        --network "$net" \
-        -p 127.0.0.1:8443:8443 -p 127.0.0.1:9000:9000 -p 127.0.0.1:3443:3443 \
-        -v "$cert":/certs/localhost.pem:ro -v "$key":/certs/localhost.key:ro \
-        --entrypoint /bin/sh alpine/socat -c "$socat_script" >/dev/null
-}
-
 log "applying temporary env-pack SOAR fixups (see header for tracking issues)"
 fix_misp_redis
-fix_misp
+if ! fix_misp; then
+    exit 1
+fi
 wait_misp
 if ! wait_shuffle; then
     exit 1
 fi
-fix_mcp_endpoints
 log "done"

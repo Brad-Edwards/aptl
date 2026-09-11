@@ -56,25 +56,37 @@ README badge do not update until a promotion lands.
 1. On merges to `main`, release-please keeps a **release PR** open
    (`chore(main): release X.Y.Z`) with the computed version bump in
    `pyproject.toml` and the generated `CHANGELOG.md` section.
-2. **Merge that release PR.** It's opened by `GITHUB_TOKEN`. Workflow runs
+2. Treat the release PR head as the immutable release candidate. Build its
+   wheel and sdist, then have a person complete the
+   [Release Candidate Manual QA](testing/smoke-test-plan.md) against both the
+   exact candidate wheel and a clean checkout of the same commit. Attach or
+   link the completed, redacted record from the release PR. Every row is
+   release-blocking; a changed commit or artifact invalidates the record.
+3. **Merge that release PR only after the manual QA record passes.** It's
+   opened by `GITHUB_TOKEN`. Workflow runs
    triggered that way are restricted: depending on the repository's Actions
    settings they may not start at all, or may sit awaiting approval. Either way
    do not expect the required checks to go green on their own—merge it as an
    admin, or wire a PAT if you want checks genuinely enforced on the release PR.
-3. Merging tags `vX.Y.Z` and cuts the GitHub Release; the `publish` job then
+4. Merging tags `vX.Y.Z` and cuts the GitHub Release; the `publish` job then
    builds the sdist + wheel, generates an SBOM, and publishes to PyPI via OIDC.
-4. A `main`→`dev` **back-merge PR** is then opened automatically (main now has
+   Because the current workflow rebuilds at publish time, a later
+   `pip install aptl-labs==X.Y.Z` check is corroboration, not the pre-cut
+   release gate or proof that the bytes are identical. If byte-for-byte
+   promotion becomes required, publish the tested artifacts instead of
+   rebuilding them.
+5. A `main`→`dev` **back-merge PR** is then opened automatically (main now has
    the version bump + `CHANGELOG.md`), titled `chore: back-merge <tag> into dev`.
    **Admin-merge it** (one click) to keep `dev` current—like the release PR it
    is bot-opened, so its required checks should not be relied on to run.
 
 ## Baseline
 
-The released baseline is `3.0.10` (the last git tag `v3.0.10`), recorded in
-`.release-please-manifest.json` and `pyproject.toml`. release-please computes the
-next version from that baseline plus the Conventional Commits merged since, so a
-`feat!:` change cuts `4.0.0`, and no version or `CHANGELOG.md` is ever
-hand-edited. There is no manual bootstrap step.
+The release baseline is recorded in `.release-please-manifest.json` and
+`pyproject.toml`; do not duplicate a version number in this guide.
+release-please computes the next version from that baseline plus the
+Conventional Commits merged since. No version, manifest, or `CHANGELOG.md` is
+hand-edited.
 
 ## PyPI trusted publisher (one-time)
 

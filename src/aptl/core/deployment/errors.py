@@ -20,6 +20,15 @@ class BackendTimeoutError(Exception):
     """
 
 
+class BackendObservationError(RuntimeError):
+    """Checked backend inventory could not be observed or parsed.
+
+    The message is safe for an operator-facing boundary: callers construct it
+    from bounded, redacted backend diagnostics rather than raw command output.
+    Raising distinguishes observation failure from a valid empty inventory.
+    """
+
+
 class BackendSeedError(Exception):
     """A named-volume seed or legacy-path retire operation failed.
 

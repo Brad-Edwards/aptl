@@ -15,6 +15,7 @@ the remote daemon and behave identically to local Docker Compose.
 import hashlib
 import sys
 import time
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -161,7 +162,7 @@ def container_networks(
 
 
 def _row_to_snapshot(
-    backend: "DeploymentBackend", row: dict[str, Any]
+    backend: "DeploymentBackend", row: Mapping[str, Any]
 ) -> ContainerSnapshot:
     """Build a ContainerSnapshot from a backend container row."""
     name = row.get("name", "")
@@ -202,13 +203,12 @@ def container_restart_policy(backend: "DeploymentBackend", name: str) -> str:
 def _get_container_snapshots(
     backend: "DeploymentBackend",
 ) -> list[ContainerSnapshot]:
-    """Snapshot all aptl- containers with network IPs and port mappings.
+    """Snapshot all project-owned containers with network IPs and ports.
 
     Goes through ``backend.host_list_lab_containers`` (and per-container
     ``backend.container_inspect``) so SSH-remote labs enumerate the
-    remote daemon. The backend filters by the ``aptl-`` name prefix to
-    catch any containers the user named that way even if they're outside
-    the current compose project — defensive coverage.
+    remote daemon. The backend uses the configured project ownership labels,
+    includes all states, and never treats a name prefix as authority.
     """
     rows = backend.host_list_lab_containers()
     return [_row_to_snapshot(backend, row) for row in rows]
@@ -217,7 +217,7 @@ def _get_container_snapshots(
 def list_container_snapshots(
     backend: "DeploymentBackend",
 ) -> list[ContainerSnapshot]:
-    """Public wrapper: snapshot all ``aptl-`` containers with network IPs.
+    """Public wrapper: snapshot project-owned containers with network IPs.
 
     Consumers that need the per-container network/port inventory without
     building a full :class:`RangeSnapshot` (e.g. the terminal relay's
@@ -384,6 +384,8 @@ def detection_content_digest(project_dir: Path) -> str:
 def capture_snapshot(
     config_dir: Path | None,
     backend: "DeploymentBackend",
+    *,
+    container_rows: Sequence[Mapping[str, Any]] | None = None,
 ) -> RangeSnapshot:
     """Capture a complete snapshot of the current lab state.
 
@@ -399,6 +401,10 @@ def capture_snapshot(
                  deliberately no default; a misconfigured caller must
                  fail loudly rather than silently snapshot the local
                  daemon for an SSH-remote lab.
+        container_rows: Optional checked project inventory captured by the
+                        caller. Supplying it binds the persisted container
+                        evidence to that exact observation instead of querying
+                        the backend a second time.
 
     Returns:
         A RangeSnapshot with all collected data.
@@ -412,7 +418,11 @@ def capture_snapshot(
 
     log.info("Capturing range snapshot")
 
-    containers = _get_container_snapshots(backend)
+    containers = (
+        _get_container_snapshots(backend)
+        if container_rows is None
+        else [_row_to_snapshot(backend, row) for row in container_rows]
+    )
     snapshot = RangeSnapshot(
         timestamp=datetime.now(timezone.utc).isoformat(),
         software=_get_software_versions(backend),

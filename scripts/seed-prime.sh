@@ -82,8 +82,8 @@ echo "[0/6] Waiting for SOC tools to be healthy..."
 
 # Apply the remaining temporary env-pack SOAR fixups before waiting on health.
 # The released pack now owns Shuffle's complete backend runtime contract; this
-# helper only repairs the independently tracked MISP/Redis contract and publishes
-# the MCP endpoints. It still waits for MISP and Shuffle readiness so the seed
+# helper only repairs the independently tracked MISP/Redis contract. It still
+# waits for MISP and Shuffle readiness so the seed
 # steps below do not race their APIs. Failed Shuffle readiness stops before any
 # seed content is written; it never triggers a post-realization replacement.
 export MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"

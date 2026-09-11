@@ -3,7 +3,6 @@
 Query, realization, and cleanup helpers live in focused sibling modules.
 """
 
-import json
 import os
 import subprocess
 from collections.abc import Sequence
@@ -350,39 +349,12 @@ class DockerComposeBackend(
         )
 
     def status(self) -> LabStatus:
-        """Query current lab status via docker compose ps.
+        """Query all container states for the configured deployment project.
 
         Returns:
             LabStatus with container information.
         """
-        cmd = self._build_command("ps", profiles=[])
-        cmd.extend(["--format", "json"])
-
-        result = self._run(cmd)
-
-        if result.returncode != 0:
-            log.warning("Could not get lab status: %s", result.stderr)
-            return LabStatus(running=False, error=result.stderr)
-
-        try:
-            # docker compose ps --format json outputs one JSON object per
-            # line (NDJSON), not a JSON array.  Try array first, fall back
-            # to NDJSON.
-            stripped = result.stdout.strip()
-            if not stripped:
-                containers: list[dict[str, Any]] = []
-            elif stripped.startswith("["):
-                containers = json.loads(stripped)
-            else:
-                containers = [
-                    json.loads(line) for line in stripped.splitlines() if line.strip()
-                ]
-        except json.JSONDecodeError:
-            log.warning("Could not parse compose ps output")
-            return LabStatus(running=False, error="Failed to parse container status")
-
-        running = len(containers) > 0
-        return LabStatus(running=running, containers=containers)
+        return self._project_container_status()
 
     def kill(self, profiles: list[str]) -> tuple[bool, str]:
         """Emergency-stop all lab containers.

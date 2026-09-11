@@ -649,12 +649,15 @@ class TestLabStatus:
     """Tests for lab status checking."""
 
     def test_status_parses_compose_ps_output(self, mock_subprocess):
-        """lab_status should parse docker compose ps output."""
+        """lab_status should parse project-scoped Docker inventory output."""
         from aptl.core.lab import lab_status
 
         mock_subprocess.return_value = MagicMock(
             returncode=0,
-            stdout='[{"Name":"aptl-victim","State":"running","Health":"healthy"}]',
+            stdout=(
+                "aptl-victim\tvictim:latest\tabc\tUp 1 minute (healthy)\t"
+                "running\tcom.docker.compose.project=aptl\t"
+            ),
             stderr="",
         )
 
@@ -662,7 +665,7 @@ class TestLabStatus:
 
         assert status.running is True
         assert len(status.containers) == 1
-        assert status.containers[0]["Name"] == "aptl-victim"
+        assert status.containers[0]["name"] == "aptl-victim"
 
     def test_status_returns_not_running_when_no_containers(self, mock_subprocess):
         """If no containers are returned, status should indicate not running."""
@@ -675,15 +678,17 @@ class TestLabStatus:
         assert status.running is False
         assert len(status.containers) == 0
 
-    def test_status_parses_ndjson_output(self, mock_subprocess):
-        """lab_status should handle NDJSON (one JSON object per line)."""
+    def test_status_parses_multiple_inventory_rows(self, mock_subprocess):
+        """lab_status should handle one TSV record per project container."""
         from aptl.core.lab import lab_status
 
-        ndjson = (
-            '{"Name":"aptl-victim","State":"running","Health":"healthy"}\n'
-            '{"Name":"aptl-kali","State":"running","Health":"healthy"}'
+        rows = (
+            "aptl-victim\tvictim:latest\taaa\tUp 1 minute\trunning\t"
+            "com.docker.compose.project=aptl\t\n"
+            "aptl-kali\tkali:latest\tbbb\tUp 1 minute\trunning\t"
+            "aptl.lifecycle.project=aptl\t"
         )
-        mock_subprocess.return_value = MagicMock(returncode=0, stdout=ndjson, stderr="")
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout=rows, stderr="")
 
         status = lab_status()
 
@@ -726,6 +731,37 @@ class TestLabStatus:
 
         assert status.running is False
         assert "docker not found" in status.error
+
+    def test_status_loads_present_project_configuration(self, tmp_path, mocker):
+        import json
+
+        from aptl.core.lab import LabStatus, lab_status
+
+        (tmp_path / "aptl.json").write_text(
+            json.dumps({"deployment": {"project_name": "custom-project"}}),
+            encoding="utf-8",
+        )
+        backend = MagicMock()
+        backend.status.return_value = LabStatus(running=False)
+        get_backend = mocker.patch("aptl.core.lab._get_backend", return_value=backend)
+
+        status = lab_status(project_dir=tmp_path)
+
+        assert status.running is False
+        config = get_backend.call_args.args[1]
+        assert config.deployment.project_name == "custom-project"
+
+    def test_status_refuses_invalid_present_configuration(self, tmp_path, mocker):
+        from aptl.core.lab import lab_status
+
+        (tmp_path / "aptl.json").write_text("{not-json", encoding="utf-8")
+        get_backend = mocker.patch("aptl.core.lab._get_backend")
+
+        status = lab_status(project_dir=tmp_path)
+
+        assert status.running is False
+        assert "invalid configuration" in status.error
+        get_backend.assert_not_called()
 
 
 class TestCheckBindMounts:
@@ -1505,6 +1541,21 @@ class TestOrchestrateLabStart:
             "DockerComposeBackend.observe_project_runtime",
             return_value=ProjectRuntimePresence(),
         )
+        from aptl.core.lab_types import LabStatus
+
+        mocks["terminal_status"] = mocker.patch(
+            "aptl.core.deployment.docker_compose.DockerComposeBackend.status",
+            return_value=LabStatus(
+                running=True,
+                containers=[
+                    {
+                        "name": "aptl-victim",
+                        "state": "running",
+                        "status": "Up 1 minute",
+                    }
+                ],
+            ),
+        )
         # The seed step also runs the legacy source-ownership repair, which
         # now probes hostenv (docker info). Stub it so the orchestration
         # tests stay hermetic (#678).
@@ -1594,6 +1645,35 @@ class TestOrchestrateLabStart:
         mocks["certs"].assert_called_once()
         mocks["start"].assert_called_once()
         mocks["capture_snapshot"].assert_called_once()
+        assert (
+            mocks["capture_snapshot"].call_args.kwargs["container_rows"]
+            is mocks["terminal_status"].return_value.containers
+        )
+
+    def test_terminal_attestation_failure_prevents_success_evidence(
+        self, mocker, tmp_path
+    ):
+        from aptl.core.lab import orchestrate_lab_start
+        from aptl.core.lab_types import LabStatus, StartupOutcome
+
+        mocks = self._patch_all_steps(mocker, tmp_path)
+        mocks["terminal_status"].return_value = LabStatus(
+            running=False,
+            containers=[
+                {
+                    "name": "aptl-broken",
+                    "state": "created",
+                    "status": "Created",
+                }
+            ],
+        )
+        mocks["terminal_status"].return_value.containers[0]["id"] = "broken-id"
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.outcome is StartupOutcome.FAILED
+        mocks["capture_snapshot"].assert_not_called()
+        assert not list((tmp_path / ".aptl" / "runs").glob("*/manifest.json"))
 
     def test_orchestrate_emits_progress_when_requested(self, mocker, tmp_path):
         """A supplied progress callback should receive user-facing startup phases."""
@@ -2809,6 +2889,127 @@ class TestStartupClassificationWiring:
         # intact so the diagnostic stays attributable.
         assert diag.step == "future_step_that_forgot"
 
+    # -- terminal project-container attestation -----------------------
+
+    def test_terminal_attestation_fails_with_bounded_container_state(self, tmp_path):
+        from aptl.core.lab import _step_attest_project_containers
+        from aptl.core.lab_types import LabStatus, StartupOutcome
+
+        ctx = self._ctx(tmp_path)
+        ctx.backend.status.return_value = LabStatus(
+            running=True,
+            containers=[
+                {
+                    "name": "aptl-victim",
+                    "state": "running",
+                    "status": "Up 1 minute",
+                },
+                {
+                    "name": "aptl-broken",
+                    "state": "created",
+                    "status": "Created",
+                },
+            ],
+        )
+        ctx.backend.container_inspect.return_value = {
+            "State": {
+                "Status": "created",
+                "ExitCode": 128,
+                "Error": "API_TOKEN=do-not-leak port is already allocated",
+            }
+        }
+
+        result = _step_attest_project_containers(ctx)
+
+        assert result is not None
+        assert result.outcome is StartupOutcome.FAILED
+        assert "aptl-broken" in result.error
+        assert "created" in result.error
+        assert "128" in result.error
+        assert "port is already allocated" in result.error
+        assert "do-not-leak" not in result.error
+        assert "[REDACTED]" in result.error
+
+    def test_terminal_attestation_accepts_only_running_project_containers(
+        self, tmp_path
+    ):
+        from aptl.core.lab import _step_attest_project_containers
+        from aptl.core.lab_types import LabStatus
+
+        ctx = self._ctx(tmp_path)
+        ctx.backend.status.return_value = LabStatus(
+            running=True,
+            containers=[
+                {"name": "aptl-victim", "state": "running", "status": "Up 1m"},
+                {"name": "direct-node", "state": "running", "status": "Up 1m"},
+            ],
+        )
+
+        assert _step_attest_project_containers(ctx) is None
+        assert ctx.terminal_status is ctx.backend.status.return_value
+
+    def test_terminal_evidence_steps_follow_every_container_mutation(self):
+        from aptl.core.lab import _LAB_START_STEPS
+
+        names = [step.__name__ for step in _LAB_START_STEPS]
+
+        assert names.index("_step_seed_soc") < names.index(
+            "_step_attest_project_containers"
+        )
+        assert names.index("_step_sync_mcp_config") < names.index(
+            "_step_attest_project_containers"
+        )
+        assert names.index("_step_attest_project_containers") < names.index(
+            "_step_capture_snapshot"
+        )
+        assert names.index("_step_capture_snapshot") < names.index(
+            "_step_write_run_record"
+        )
+
+    def test_terminal_attestation_fails_closed_on_observation_error(self, tmp_path):
+        from aptl.core.lab import _step_attest_project_containers
+        from aptl.core.lab_types import LabStatus, StartupOutcome
+
+        ctx = self._ctx(tmp_path)
+        ctx.backend.status.return_value = LabStatus(
+            running=False,
+            error="API_KEY=do-not-leak daemon unavailable",
+        )
+
+        result = _step_attest_project_containers(ctx)
+
+        assert result is not None
+        assert result.outcome is StartupOutcome.FAILED
+        assert "daemon unavailable" in result.error
+        assert "do-not-leak" not in result.error
+
+    def test_terminal_attestation_fails_closed_when_observation_raises(self, tmp_path):
+        from aptl.core.lab import _step_attest_project_containers
+        from aptl.core.lab_types import StartupOutcome
+
+        ctx = self._ctx(tmp_path)
+        ctx.backend.status.side_effect = RuntimeError("API_KEY=do-not-leak")
+
+        result = _step_attest_project_containers(ctx)
+
+        assert result is not None
+        assert result.outcome is StartupOutcome.FAILED
+        assert "could not be observed" in result.error
+        assert "do-not-leak" not in result.error
+
+    def test_terminal_attestation_rejects_empty_project_inventory(self, tmp_path):
+        from aptl.core.lab import _step_attest_project_containers
+        from aptl.core.lab_types import LabStatus, StartupOutcome
+
+        ctx = self._ctx(tmp_path)
+        ctx.backend.status.return_value = LabStatus(running=False, containers=[])
+
+        result = _step_attest_project_containers(ctx)
+
+        assert result is not None
+        assert result.outcome is StartupOutcome.FAILED
+        assert "no project containers were observed" in result.error
+
     # -- pull_images (cosmetic) ----------------------------------------
 
     def test_pull_images_clean_emits_no_diagnostic(self, tmp_path):
@@ -3375,6 +3576,36 @@ class TestStartupClassificationWiring:
         assert result is None
 
         assert ctx.diagnostics == []
+
+    def test_capture_snapshot_reuses_terminal_attestation_inventory(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _step_capture_snapshot
+        from aptl.core.lab_types import LabStatus
+        from aptl.core.snapshot import RangeSnapshot
+
+        rows = [
+            {
+                "name": "aptl-victim",
+                "id": "abc",
+                "state": "running",
+                "status": "Up 1 minute",
+            }
+        ]
+        ctx = self._ctx(tmp_path)
+        ctx.backend = MagicMock()
+        ctx.terminal_status = LabStatus(running=True, containers=rows)
+        capture = mocker.patch(
+            "aptl.core.lab.capture_snapshot", return_value=RangeSnapshot()
+        )
+
+        assert _step_capture_snapshot(ctx) is None
+
+        capture.assert_called_once_with(
+            config_dir=tmp_path,
+            backend=ctx.backend,
+            container_rows=rows,
+        )
 
     def test_capture_snapshot_failure_emits_telemetry_warning(self, tmp_path, mocker):
         """Snapshot is the run-archive inventory — its loss is observability
@@ -4840,15 +5071,14 @@ class TestTerminalHostKeyPinningStep:
     """The lab-start step that pins terminal SSH host keys (ADR-040,
     issue #418) — registered after snapshot capture and non-fatal."""
 
-    def test_step_registered_after_capture_before_mcps(self):
+    def test_step_registered_before_mcps(self):
         from aptl.core.lab import _LAB_START_STEPS
 
         names = [s.__name__ for s in _LAB_START_STEPS]
         assert "_step_pin_terminal_host_keys" in names
         i_pin = names.index("_step_pin_terminal_host_keys")
-        i_cap = names.index("_step_capture_snapshot")
         i_mcp = names.index("_step_build_mcps")
-        assert i_cap < i_pin < i_mcp
+        assert i_pin < i_mcp
 
     @patch("aptl.core.lab.pin_terminal_host_keys")
     @patch("aptl.core.lab.list_container_snapshots")

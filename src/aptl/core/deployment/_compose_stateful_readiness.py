@@ -88,45 +88,33 @@ class ComposeStatefulReadinessMixin:
         """Authenticate to realized Wazuh APIs after container health settles."""
 
         identity = wazuh_cluster_identity(realization)
-        services = {
-            consumer.service_name
-            for artifact in realization.generated_artifacts
-            for consumer in artifact.consumers
-            if consumer.service_name in identity.services
-        }
+        services = _stateful_services(realization, identity)
         results: dict[str, bool] = {}
-        env: EnvVars | None = None
+        self._stateful_authenticated_readiness = results
         if services:
             env, _placeholder_input = _load_stateful_env(self._project_dir)
-        failure: LabResult | None = None
-        if services and env is None:
-            failure = LabResult(
-                success=False,
-                error="Authenticated Wazuh readiness credentials are unavailable.",
-            )
-        elif services and env is not None:
+            if env is None:
+                return LabResult(
+                    success=False,
+                    error="Authenticated Wazuh readiness credentials are unavailable.",
+                )
             nodes = {node.service_name: node for node in realization.nodes}
             results = self._authenticated_readiness_results(
                 services, nodes, env, identity
             )
-        self._stateful_authenticated_readiness = results
-        if failure is None and results and not all(results.values()):
-            failure = LabResult(
-                success=False,
-                error="Authenticated Wazuh readiness validation failed.",
-            )
-        if failure is None:
-            manager = _rendered_manager_config_container(realization, identity)
-            if manager is not None and not self._rendered_manager_config_is_active(
-                manager
-            ):
-                failure = LabResult(
+            self._stateful_authenticated_readiness = results
+            if not all(results.values()):
+                return LabResult(
                     success=False,
-                    error=(
-                        "Wazuh manager did not activate its rendered configuration."
-                    ),
+                    error="Authenticated Wazuh readiness validation failed.",
                 )
-        return failure
+        manager = _rendered_manager_config_container(realization, identity)
+        if manager is None or self._rendered_manager_config_is_active(manager):
+            return None
+        return LabResult(
+            success=False,
+            error="Wazuh manager did not activate its rendered configuration.",
+        )
 
     def _rendered_manager_config_is_active(self, container: str) -> bool:
         """Prove the manager activated the exact rendered config it received."""
@@ -136,7 +124,7 @@ class ComposeStatefulReadinessMixin:
             "-c",
             (
                 "test \"$(sha256sum /var/ossec/etc/ossec.conf | cut -d' ' -f1)\" "
-                "= \"$(sha256sum /wazuh-config-mount/etc/ossec.conf | "
+                '= "$(sha256sum /wazuh-config-mount/etc/ossec.conf | '
                 "cut -d' ' -f1)\""
             ),
         ]
@@ -238,6 +226,20 @@ def _load_stateful_env(project_dir: Path) -> tuple[EnvVars | None, bool]:
     except (OSError, ValueError):
         env = None
     return env, placeholder_input
+
+
+def _stateful_services(
+    realization: DeploymentRealizationSpec,
+    identity: WazuhClusterIdentity,
+) -> set[str]:
+    """Return graph-owned Wazuh services requiring authenticated probes."""
+
+    return {
+        consumer.service_name
+        for artifact in realization.generated_artifacts
+        for consumer in artifact.consumers
+        if consumer.service_name in identity.services
+    }
 
 
 def _published_host_port(info: object, container_port: int) -> int | None:

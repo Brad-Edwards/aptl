@@ -143,10 +143,7 @@ def _render_get_mapping_script(index: str) -> str:
 
     # Body then a final line with the HTTP status, so the caller can distinguish
     # 404 (absent) from 200 without the status entering host argv.
-    return (
-        "set -eu\n"
-        f"curl -s -w '\\n%{{http_code}}' '{_ES_BASE}/{index}/_mapping'\n"
-    )
+    return f"set -eu\ncurl -s -w '\\n%{{http_code}}' '{_ES_BASE}/{index}/_mapping'\n"
 
 
 def _render_put_index_script(index: str, mapping_json: str) -> str:
@@ -283,7 +280,7 @@ def _load_cortex_native_mapping() -> dict[str, Any]:
         properties = mappings.get("properties") if isinstance(mappings, dict) else None
         if not isinstance(properties, dict) or not properties:
             raise ValueError("mapping has no properties")
-    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, TypeError, ValueError) as exc:
         raise _MaterializationFailure("native-product-schema-unavailable") from exc
     return payload
 
@@ -300,7 +297,10 @@ def _create_index(
 
     mapping_body = _desired_native_mapping(content_name, address, fields, digest)
     result = _exec_script(
-        run_script, _render_put_index_script(index, json.dumps(mapping_body, separators=(",", ":")))
+        run_script,
+        _render_put_index_script(
+            index, json.dumps(mapping_body, separators=(",", ":"))
+        ),
     )
     if result.returncode != 0 or result.http_code not in (200, 201):
         raise _MaterializationFailure("native-create-failed")
@@ -369,7 +369,9 @@ def _read_and_verify_schema(
     result = _exec_script(run_script, _render_get_mapping_script(index))
     properties = _parse_readback_properties(result, index)
     _verify_native_product_contract(content_name, properties)
-    ok, projection, reason = sis.verify_readback(properties, fields, declared_digest=digest)
+    ok, projection, reason = sis.verify_readback(
+        properties, fields, declared_digest=digest
+    )
     if not ok:
         raise _MaterializationFailure(reason or "native-readback-mismatch")
     return projection or {}

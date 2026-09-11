@@ -6,6 +6,7 @@ from unittest.mock import ANY, MagicMock
 
 import pytest
 
+from raes import SDLInstantiationError
 from raes_contracts.planning import (
     ChangeAction,
     EvaluationPlan,
@@ -1748,7 +1749,9 @@ def test_start_raes_scenario_passes_runtime_parameters_to_raes_planner(
         tmp_path,
         config,
         backend,
-        parameters=parameters,
+        admitted=raes.admit_raes_scenario(
+            tmp_path, config, backend, parameters=parameters
+        ),
     )
 
     assert result.lab_result.success is True
@@ -1865,12 +1868,22 @@ def test_start_raes_scenario_projects_instantiation_failure_without_values(
     backend = MagicMock()
     before_retry = MagicMock()
 
+    config = AptlConfig(lab={"name": "test"})
+    with pytest.raises(SDLInstantiationError):
+        raes.admit_raes_scenario(
+            tmp_path,
+            config,
+            backend,
+            scenario_path=scenario_path,
+            parameters={"deployment_tier": supplied_value},
+        )
+    # The handoff projects that same failure through its fixed message when it
+    # admits internally, so the rejected binding is never disclosed.
     result = raes.start_raes_scenario(
         tmp_path,
-        AptlConfig(lab={"name": "test"}),
+        config,
         backend,
         scenario_path=scenario_path,
-        parameters={"deployment_tier": supplied_value},
         before_backend_retry=before_retry,
     )
 
@@ -1919,7 +1932,18 @@ def test_start_raes_scenario_retries_soc_apply_without_replanning(mocker, tmp_pa
             ),
         ),
         backend,
-        parameters={"victim_os": "linux"},
+        admitted=raes.admit_raes_scenario(
+            tmp_path,
+            AptlConfig(
+                lab={"name": "test"},
+                containers={"soc": True},
+                scenario=ScenarioSourceConfig(
+                    source="project-tree", identity="techvault-operational"
+                ),
+            ),
+            backend,
+            parameters={"victim_os": "linux"},
+        ),
         before_backend_retry=before_retry,
     )
 
@@ -1927,6 +1951,80 @@ def test_start_raes_scenario_retries_soc_apply_without_replanning(mocker, tmp_pa
     assert calls == {"plan": 1, "apply": 2}
     assert backend.realize.call_count == 2
     before_retry.assert_called_once_with()
+
+
+def _raes_started_outcome():
+    """Build the successful apply outcome the handoff returns."""
+    from aptl.backends.raes_start_model import AcesStartOutcome
+
+    return AcesStartOutcome(
+        lab_result=LabResult(success=True, message="ok"),
+        final_snapshot=RuntimeSnapshot(),
+        realization_details={},
+        selected_profiles=[],
+        scenario_path=None,
+    )
+
+
+def test_start_raes_scenario_applies_a_supplied_admission_without_replanning(
+    mocker, tmp_path
+):
+    """A caller-supplied admission is applied as-is, not planned again.
+
+    Lab start admits the scenario before it mutates anything and hands that
+    admission here. Re-planning would stage the env-pack a second time and let
+    the pre-start decisions already taken describe a different admission
+    (issue #951).
+    """
+    from types import SimpleNamespace
+
+    from aptl.backends import raes
+
+    _write_compose(tmp_path, {"aptl-soc": ["soc"]})
+    admit = mocker.patch("aptl.backends.raes.admit_raes_scenario")
+    apply_plan = mocker.patch(
+        "aptl.backends.raes._apply_with_backend_retry",
+        return_value=_raes_started_outcome(),
+    )
+    bundle = project_tree_bundle(tmp_path, tmp_path / "scenarios" / "x.sdl.yaml")
+    admitted = SimpleNamespace(
+        bundle=bundle, target=object(), execution_plan=object(), realization=None
+    )
+
+    result = raes.start_raes_scenario(
+        tmp_path,
+        AptlConfig(lab={"name": "test"}),
+        MagicMock(),
+        admitted=admitted,
+    )
+
+    assert result.lab_result.success is True
+    admit.assert_not_called()
+    assert apply_plan.call_args.args[0] is admitted.target
+    assert apply_plan.call_args.args[1] is admitted.execution_plan
+    assert apply_plan.call_args.args[2] == bundle.sdl_path
+
+
+def test_lab_start_handoff_forwards_the_admission_to_the_backend(mocker, tmp_path):
+    """`core.lab`'s lazy wrapper must forward the admission it is given.
+
+    The orchestration tests stub this wrapper, so a parameter dropped between it
+    and the backend handoff is invisible to them and only surfaces on a real
+    `aptl lab start`.
+    """
+    from aptl.core import lab
+
+    handoff = mocker.patch(
+        "aptl.backends.raes.start_raes_scenario",
+        return_value=_raes_started_outcome(),
+    )
+    admitted = object()
+
+    lab.start_raes_scenario(
+        tmp_path, AptlConfig(lab={"name": "test"}), MagicMock(), admitted=admitted
+    )
+
+    assert handoff.call_args.kwargs["admitted"] is admitted
 
 
 def test_start_raes_scenario_does_not_retry_non_soc_apply(mocker, tmp_path):
@@ -2273,6 +2371,59 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
     assert result.lab_result.success is True, result.lab_result.error
     assert drive_calls
     assert drive_calls[0]["evaluation_results"] == {}
+
+
+def test_apply_reports_a_realization_error_instead_of_raising(mocker, tmp_path):
+    """A lowering error must reach the operator, not be swallowed by RAES.
+
+    RAES's backend-call boundary catches `TypeError`/`ValueError` out of a
+    backend `apply` and replaces it with the fixed text "Backend could not
+    construct a valid apply result", discarding the message. So a `ValueError`
+    raised while lowering the realization -- which is how the provisioner
+    reports an unlowerable graph -- reached the operator as that sentence and
+    nothing else, with no code, no address and no node name. Diagnosing it
+    needed a debugger.
+
+    The contract is an `ApplyResult` carrying diagnostics, so the message has to
+    survive as one.
+    """
+    from aptl.backends.raes_provisioner import AptlProvisioner
+    from aptl.core.config import AptlConfig
+    from aptl.core.scenario_bundle import ScenarioBundle
+
+    plan = _plan_for_nodes("victim")
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}),
+        deployment_backend=MagicMock(),
+        bundle=ScenarioBundle(
+            identity="test",
+            root=tmp_path,
+            sdl_path=tmp_path / "scenario.sdl.yaml",
+        ),
+    )
+    realization = MagicMock()
+    realization.diagnostics = []
+    realization.profiles = ("soc",)
+    realization.details.return_value = {}
+    realization.deployment_spec.side_effect = ValueError(
+        "aptl.provisioner.spawn-child-correlation-invalid: "
+        "child correlation is incomplete on provision.node.shuffle-orborus."
+    )
+    mocker.patch.object(AptlProvisioner, "realize_plan", return_value=realization)
+    mocker.patch(
+        "aptl.backends.raes_provisioner.select_backend_profiles",
+        return_value=["soc"],
+    )
+
+    result = provisioner.apply(plan, None)
+
+    assert result.success is False
+    rendered = " ".join(diagnostic.message for diagnostic in result.diagnostics)
+    assert "shuffle-orborus" in rendered
+    assert "spawn-child-correlation-invalid" in rendered
+    # And the provisioner's own report is captured for the handoff to re-attach.
+    assert provisioner.last_failure_diagnostics
 
 
 def test_start_raes_scenario_fails_closed_on_evaluator_plan_error(mocker, tmp_path):

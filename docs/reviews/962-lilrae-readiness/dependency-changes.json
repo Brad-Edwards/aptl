@@ -1,0 +1,210 @@
+{
+  "added": [
+    {
+      "target": "Brad-Edwards/aptl#435",
+      "blocker": "Brad-Edwards/aptl#952"
+    },
+    {
+      "target": "Brad-Edwards/aptl#435",
+      "blocker": "Brad-Edwards/aptl#964"
+    },
+    {
+      "target": "Brad-Edwards/aptl#455",
+      "blocker": "OpenRAE/lilrae#6"
+    },
+    {
+      "target": "Brad-Edwards/aptl#456",
+      "blocker": "Brad-Edwards/aptl#967"
+    },
+    {
+      "target": "Brad-Edwards/aptl#491",
+      "blocker": "Brad-Edwards/aptl#856"
+    },
+    {
+      "target": "Brad-Edwards/aptl#491",
+      "blocker": "Brad-Edwards/aptl#963"
+    },
+    {
+      "target": "Brad-Edwards/aptl#491",
+      "blocker": "OpenRAE/lilrae#6"
+    },
+    {
+      "target": "Brad-Edwards/aptl#685",
+      "blocker": "Brad-Edwards/aptl#870"
+    },
+    {
+      "target": "Brad-Edwards/aptl#867",
+      "blocker": "Brad-Edwards/aptl#870"
+    },
+    {
+      "target": "Brad-Edwards/aptl#868",
+      "blocker": "Brad-Edwards/aptl#870"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#878"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#879"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#880"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#909"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#915"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#917"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#918"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#939"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#952"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#955"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#956"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#957"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#965"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#966"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#967"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#968"
+    },
+    {
+      "target": "Brad-Edwards/aptl#870",
+      "blocker": "Brad-Edwards/aptl#969"
+    },
+    {
+      "target": "Brad-Edwards/aptl#887",
+      "blocker": "Brad-Edwards/aptl#880"
+    },
+    {
+      "target": "Brad-Edwards/aptl#915",
+      "blocker": "Brad-Edwards/aptl#910"
+    },
+    {
+      "target": "Brad-Edwards/aptl#915",
+      "blocker": "Brad-Edwards/aptl#912"
+    },
+    {
+      "target": "Brad-Edwards/aptl#952",
+      "blocker": "Brad-Edwards/aptl#964"
+    },
+    {
+      "target": "Brad-Edwards/aptl#970",
+      "blocker": "Brad-Edwards/aptl#934"
+    },
+    {
+      "target": "Brad-Edwards/aptl#970",
+      "blocker": "Brad-Edwards/aptl#964"
+    },
+    {
+      "target": "OpenRAE/lilrae#10",
+      "blocker": "Brad-Edwards/aptl#969"
+    },
+    {
+      "target": "OpenRAE/lilrae#10",
+      "blocker": "OpenRAE/lilrae#4"
+    },
+    {
+      "target": "OpenRAE/lilrae#3",
+      "blocker": "Brad-Edwards/aptl#934"
+    },
+    {
+      "target": "OpenRAE/lilrae#3",
+      "blocker": "Brad-Edwards/aptl#970"
+    },
+    {
+      "target": "OpenRAE/lilrae#3",
+      "blocker": "OpenRAE/lilrae#6"
+    },
+    {
+      "target": "OpenRAE/lilrae#4",
+      "blocker": "OpenRAE/lilrae#6"
+    },
+    {
+      "target": "OpenRAE/lilrae#9",
+      "blocker": "Brad-Edwards/aptl#956"
+    },
+    {
+      "target": "OpenRAE/lilrae#9",
+      "blocker": "Brad-Edwards/aptl#963"
+    },
+    {
+      "target": "OpenRAE/lilrae#9",
+      "blocker": "Brad-Edwards/aptl#964"
+    },
+    {
+      "target": "OpenRAE/lilrae#9",
+      "blocker": "Brad-Edwards/aptl#965"
+    },
+    {
+      "target": "OpenRAE/lilrae#9",
+      "blocker": "Brad-Edwards/aptl#966"
+    },
+    {
+      "target": "OpenRAE/lilrae#9",
+      "blocker": "Brad-Edwards/aptl#968"
+    }
+  ],
+  "removed": [
+    {
+      "target": "OpenRAE/lilrae#6",
+      "blocker": "OpenRAE/lilrae#4"
+    }
+  ],
+  "verified_targets": [
+    "Brad-Edwards/aptl#435",
+    "Brad-Edwards/aptl#455",
+    "Brad-Edwards/aptl#456",
+    "Brad-Edwards/aptl#491",
+    "Brad-Edwards/aptl#685",
+    "Brad-Edwards/aptl#867",
+    "Brad-Edwards/aptl#868",
+    "Brad-Edwards/aptl#870",
+    "Brad-Edwards/aptl#887",
+    "Brad-Edwards/aptl#915",
+    "Brad-Edwards/aptl#952",
+    "Brad-Edwards/aptl#970",
+    "OpenRAE/lilrae#10",
+    "OpenRAE/lilrae#3",
+    "OpenRAE/lilrae#4",
+    "OpenRAE/lilrae#6",
+    "OpenRAE/lilrae#9"
+  ],
+  "cycle_check": "passed within inspected graph; GitHub accepted each edge"
+}

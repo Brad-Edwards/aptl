@@ -31,6 +31,7 @@ from raes.scenario import Scenario
 from aptl.backends.raes_profiles import select_backend_profiles
 from aptl.backends.raes import resolve_scenario_bundle
 from aptl.backends.raes_realization import interpret_provisioning_plan
+from aptl.core.deployment import get_backend
 from aptl.utils.redaction import redact
 from aptl.validation._live_gate_probes import (
     _boot_lab,
@@ -45,6 +46,9 @@ from aptl.validation._live_gate_variation import (
     _distinct_profile_nodes,
     _single_node_plan,
     _variation_diagnostics,
+)
+from aptl.validation._live_gate_models import (
+    verification_provenance as _verification_provenance,
 )
 from aptl.validation._live_gate_readiness import (
     _node_readiness_diagnostics,
@@ -187,6 +191,7 @@ def check_raes_driven_boot(
     state.realization_details = realization.details()
     state.diagnostics_seen = len(realization.diagnostics)
     state.selected_profiles = select_backend_profiles(config, realization.profiles)
+    state.deployment_spec = realization.deployment_spec(state.selected_profiles)
 
     boot_diagnostics = _boot_lab(
         project_dir,
@@ -196,6 +201,34 @@ def check_raes_driven_boot(
         scenario_path=scenario_path,
     )
     return _check("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, boot_diagnostics)
+
+
+def check_runtime_orchestration_containment(
+    *,
+    project_dir: Path,
+    config: "AptlConfig",
+    state: "LiveGateState",
+) -> LiveGateCheck:
+    """Re-attest authority holders and spawned children after semantic work."""
+
+    spec = state.deployment_spec
+    if spec is None:
+        return _check(
+            "runtime_orchestration_containment",
+            CATEGORY_BACKEND_INSTANTIATION,
+            ["runtime orchestration realization is unavailable"],
+        )
+    try:
+        result = get_backend(config, project_dir).verify_runtime_orchestration(spec)
+    except Exception as exc:
+        diagnostics = [redact(f"runtime orchestration observation raised: {exc}")]
+    else:
+        diagnostics = [] if result.success else [redact(result.error or "failed")]
+    return _check(
+        "runtime_orchestration_containment",
+        CATEGORY_BACKEND_INSTANTIATION,
+        diagnostics,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -260,6 +293,11 @@ def check_run_archive_manifest(
     progression is emitted by ``AptlEvaluator`` from observed runtime state.
     """
     realization = state.realization_details or {}
+    validation_status = "failed"
+    if any(check.status.value == "blocked" for check in prior_checks):
+        validation_status = "blocked"
+    elif all(check.passed for check in prior_checks):
+        validation_status = "passed"
     manifest = {
         "schema": "aptl.live-gate.manifest/v1",
         "scenario": {
@@ -274,10 +312,12 @@ def check_run_archive_manifest(
         },
         "validation": {
             "checks": [_check_to_dict(check) for check in prior_checks],
-            # Key is "ok", not "passed": the run-archive redaction boundary masks
-            # any key containing "pass" (the password heuristic), which would
-            # render every check outcome as [REDACTED].
-            "ok": all(check.passed for check in prior_checks),
+            "status": validation_status,
+            # Which installed answer key reached the semantic verdict, observed
+            # by discovery from installed package metadata. ``None`` when no
+            # plugin answered, so an unattributed verdict is explicit rather
+            # than an absent key (#879).
+            "verification": _verification_provenance(state.verification),
         },
         "snapshot": state.snapshot,
         "evidence": state.evidence,

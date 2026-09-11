@@ -1,15 +1,20 @@
 """Semantic verification for TechVault on the APTL backend.
 
-This package holds the answer keys: which node is the attacker, what the
-defensive stack is, and what counts as proof that a detection traversed it. That
-knowledge is about one scenario on one backend, so it lives here rather than in
-APTL core, which must serve any scenario.
+This module holds the answer key: which node is the attacker and which nodes
+make up the defensive stack the scenario declares. That knowledge is about one
+scenario on one backend, so it lives here rather than in the framework under
+``aptl.``, which must serve any scenario.
 
-What is deliberately *not* here: bounded polling windows, re-driving a trigger
-while its window is open, and preferring probe targets that actually expose the
-service being exercised. Those were fixed under #866 as scenario-agnostic
-behaviour and remain framework. Copying them into this package would fork them,
-and the copy would rot.
+What is deliberately *not* here: polling windows, deadlines, collector
+credentials, and backend access. Those are scenario-agnostic framework
+responsibilities reached through the operations surface.
+
+Nor does this generate attack traffic. It reports whether the declared
+defensive stack is realized and whether the attacker reaches its shared-network
+peers. Proving the detection pipeline end to end would mean generating an event
+and reading it back out of the SIEM, which leaves that event's alerts and
+sensor records behind in the range -- and the live gate destroys and reboots the
+lab at its start, not its end, so the residue outlives the run.
 
 The verifier declares what it is written for and is refused when the running
 range is not that — it never inspects the process to decide for itself whether it
@@ -20,19 +25,56 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from aptl.backends.identity import BackendIdentity
 from aptl.validation.scenario_verification import (
     EXTENSION_API_VERSION,
     PrerequisiteResult,
     PrerequisiteStatus,
+    QualifiedTarget,
+    ScenarioIdentity,
     VerificationCheck,
     VerificationReport,
     VerificationStatus,
 )
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:
     from aptl.validation.scenario_verification import VerificationContext
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
+
+#: Exact content identity of the TechVault 0.1.0 pack this release qualified,
+#: as ``raes-env-packs`` admits it through ``env_pack_bundle()``. A pack release
+#: that changes these bytes is a pack this verifier has not been qualified
+#: against, and it takes a verifier release -- not a wider declaration -- to
+#: admit one. An empty claim is not a wildcard for future scenario content.
+TECHVAULT_PACK_SET_DIGEST = (
+    "sha256:c532775575d99438f4b4890d49a4fdb7354921f0405afdaa9f370ea4fe3f5a20"
+)
+
+#: The pack release these bytes belong to. Version and digest are declared as
+#: one atomic pair below, never as parallel lists: a release qualifies content,
+#: not a version number that content might later change under.
+TECHVAULT_PACK_VERSION = "0.1.0"
+
+_QUALIFIED_SCENARIO = ScenarioIdentity(
+    identity="techvault",
+    content_digest=TECHVAULT_PACK_SET_DIGEST,
+    source_kind="env-pack",
+    version=TECHVAULT_PACK_VERSION,
+)
+
+
+def _qualified_backend(provider: str) -> BackendIdentity:
+    """Return the APTL backend identity this release qualified for ``provider``."""
+
+    return BackendIdentity(
+        target_name="aptl",
+        target_version="0.1.0",
+        profile="full-remote-control-plane",
+        provider=provider,
+        transport=provider,
+    )
+
 
 #: The attacker node. TechVault's whole premise is that traffic originates here.
 ATTACKER_NODE = "aptl-kali"
@@ -42,7 +84,6 @@ SIEM_NODE = "aptl-wazuh-manager"
 
 #: The network sensor whose EVE output feeds the SIEM.
 SENSOR_NODE = "aptl-suricata"
-
 
 class TechVaultVerifier(object):
     """Verifies that TechVault's defensive stack observed the attack.
@@ -55,14 +96,20 @@ class TechVaultVerifier(object):
 
     plugin_id = "techvault"
     extension_api_version = EXTENSION_API_VERSION
-    scenario_identity = "techvault"
-    #: Empty: this verifier tracks the scenario as it evolves in-tree rather than
-    #: pinning a digest that every scenario edit would invalidate. A verifier
-    #: shipped independently of the scenario should pin, and the seam records
-    #: which choice was made.
-    scenario_content_digests: tuple[str, ...] = ()
-    backend_target_name = "aptl"
-    backend_profiles: tuple[str, ...] = ("full-remote-control-plane",)
+    #: What this release admits, pair by pair. Both entries name the same
+    #: qualified pack content on the same APTL target and profile; they differ
+    #: only in the Compose transport, which ADR-013 makes a daemon location
+    #: rather than a difference in what the range realizes. Anything not listed
+    #: -- another pack digest, another profile, another target version -- is
+    #: unqualified and stays terminal ``blocked``.
+    qualified_targets = (
+        QualifiedTarget(
+            scenario=_QUALIFIED_SCENARIO, backend=_qualified_backend("docker-compose")
+        ),
+        QualifiedTarget(
+            scenario=_QUALIFIED_SCENARIO, backend=_qualified_backend("ssh-compose")
+        ),
+    )
 
     def run(self, context: "VerificationContext") -> VerificationReport:
         """Evaluate TechVault's semantic expectations against the live range."""
@@ -99,8 +146,9 @@ class TechVaultVerifier(object):
             checks=tuple(checks),
         )
 
+    @staticmethod
     def _prerequisites(
-        self, context: "VerificationContext"
+        context: "VerificationContext",
     ) -> list[PrerequisiteResult]:
         """Return whether the pieces this scenario's verdict depends on are present.
 
@@ -127,29 +175,46 @@ class TechVaultVerifier(object):
                         if present
                         else PrerequisiteStatus.UNSATISFIED
                     ),
-                    diagnostic="" if present else f"{node} is not in the realized range",
+                    diagnostic=""
+                    if present
+                    else f"{node} is not in the realized range",
+                )
+            )
+        if context.operations is None:
+            results.append(
+                PrerequisiteResult(
+                    prerequisite_id="operations-surface",
+                    status=PrerequisiteStatus.UNSATISFIED,
+                    diagnostic="the core verification capability surface is unavailable",
+                )
+            )
+        elif not context.operations.shared_network_targets(ATTACKER_NODE):
+            results.append(
+                PrerequisiteResult(
+                    prerequisite_id="shared-network-target",
+                    status=PrerequisiteStatus.UNSATISFIED,
+                    diagnostic="the attacker has no admitted shared-network target",
                 )
             )
         return results
 
-    def _checks(self, context: "VerificationContext") -> list[VerificationCheck]:
+    @staticmethod
+    def _checks(context: "VerificationContext") -> list[VerificationCheck]:
         """Return the semantic verdicts for this scenario.
 
-        Both checks name the attacker node -- the one scenario constant -- and
-        ask the operations surface a scenario-neutral question. The framework
-        owns how a host is reached, how the window is polled, and how evidence is
-        captured; this owns which node attacks and what proves the SOC saw it.
+        The check names the attacker node -- the one scenario constant -- and
+        asks the operations surface a scenario-neutral question. The framework
+        owns how a host is reached; this owns which node is the attacker.
+
+        Deliberately no attack is generated. A check that drove nmap and failed
+        SSH authentication to prove the detection pipeline works left its own
+        alerts and sensor records in the range, and the gate's destructive
+        cleanup runs before the boot rather than after, so a validated range was
+        no longer in a clean pre-attack state when scenario work began.
         """
 
         operations = context.operations
-        if operations is None:
-            return [
-                VerificationCheck(
-                    check_id="detection-traversal",
-                    status=VerificationStatus.FAILED,
-                    diagnostic="no operations surface was provided to the verifier",
-                )
-            ]
+        assert operations is not None
 
         checks: list[VerificationCheck] = []
 
@@ -167,29 +232,10 @@ class TechVaultVerifier(object):
                     if reachability.reached
                     else "; ".join(reachability.diagnostics)
                 ),
+                category="kali_reachability",
             )
         )
 
-        detection = operations.detection_evidence(
-            ATTACKER_NODE, context.deadline_seconds
-        )
-        checks.append(
-            VerificationCheck(
-                check_id="detection-traversal",
-                status=(
-                    VerificationStatus.PASSED
-                    if detection.observed
-                    else VerificationStatus.FAILED
-                ),
-                diagnostic=(
-                    "attack traffic from the attacker node produced defensive-stack "
-                    "evidence within the window"
-                    if detection.observed
-                    else "; ".join(detection.diagnostics)
-                    or "no defensive-stack evidence within the window"
-                ),
-            )
-        )
         return checks
 
 
@@ -197,4 +243,12 @@ class TechVaultVerifier(object):
 #: free: constructing it does nothing but bind constants.
 verifier = TechVaultVerifier()
 
-__all__ = ["ATTACKER_NODE", "SENSOR_NODE", "SIEM_NODE", "TechVaultVerifier", "verifier"]
+__all__ = [
+    "ATTACKER_NODE",
+    "SENSOR_NODE",
+    "SIEM_NODE",
+    "TECHVAULT_PACK_SET_DIGEST",
+    "TECHVAULT_PACK_VERSION",
+    "TechVaultVerifier",
+    "verifier",
+]

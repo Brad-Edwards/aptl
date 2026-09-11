@@ -173,8 +173,27 @@ def _manager_status_ready(payload: object) -> bool:
     return isinstance(affected, list) and bool(affected)
 
 
+#: ssh(1) reserves this for its own failure -- no connection, no host key
+#: agreement, or no accepted credential. Every other status came back from the
+#: remote side, which means the session authenticated.
+_SSH_TRANSPORT_FAILURE = 255
+
+
 def test_ssh_connection(host: str, port: int, user: str, key_path: Path) -> bool:
     """Test SSH connectivity to a lab container.
+
+    Reachability means the transport came up and the key authenticated, not
+    that the probe obtained a shell. A capture-wrapped target refuses one on
+    purpose: kali's sshd runs the capture wrapper as its ``ForceCommand``, and a
+    session carrying no control-plane-issued capture capability is denied with
+    exit 70, because an authenticated participant must never receive an
+    unrecorded shell. Requiring exit 0 therefore reported every such target as
+    unreachable, degrading a lab whose SSH was working.
+
+    A remote exit status of any kind only exists because ssh connected and
+    authenticated first, so only ssh's own ``255`` means the transport or the
+    key failed. Whether a *wrapped* session works is a different question,
+    answered by participant qualification rather than by a reachability probe.
 
     Args:
         host: SSH host (usually localhost).
@@ -183,7 +202,7 @@ def test_ssh_connection(host: str, port: int, user: str, key_path: Path) -> bool
         key_path: Path to the SSH private key.
 
     Returns:
-        True if SSH connection succeeds, False otherwise.
+        True if the target authenticated the key, False otherwise.
     """
     try:
         result = subprocess.run(
@@ -209,7 +228,7 @@ def test_ssh_connection(host: str, port: int, user: str, key_path: Path) -> bool
             errors="replace",
             timeout=10,
         )
-        return result.returncode == 0
+        return result.returncode != _SSH_TRANSPORT_FAILURE
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
         log.debug("SSH connection test failed: %s", exc)
         return False

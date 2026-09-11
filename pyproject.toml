@@ -32,7 +32,7 @@ dependencies = [
     "opentelemetry-semantic-conventions>=0.54b0",
     "cryptography>=50.0.0",
     "raes==3.3.0",
-    "raes-env-packs==3.9.0",
+    "raes-env-packs==4.0.2",
     "mcp>=1.27.0,<2.0.0",
     "rfc8785>=0.1.4,<0.2.0",
     # Imported directly by aptl.core.experiment.resolver; previously satisfied
@@ -112,8 +112,21 @@ build = [
     "editables>=0.5",
 ]
 
+# Per-scenario adapters. The framework under `src/aptl` holds no scenario
+# knowledge; everything specific to one scenario on this backend lives in its
+# own top-level package and is reached only through these entry points. A
+# second scenario adds a package and its entries here, never a framework edit.
+[project.entry-points."aptl.pack_backend_interactions"]
+"techvault.aptl" = "aptl_techvault.serving:provider"
+
+[project.entry-points."aptl.scenario_verifiers"]
+"techvault.aptl" = "aptl_techvault.verification:verifier"
+
+[project.entry-points."aptl.participant_mcp_smoke_plans"]
+"guided-purple.techvault-attacker-target" = "aptl_techvault.participant_smoke:PARTICIPANT_SMOKE_OPERATIONS"
+
 [tool.hatch.build.targets.wheel]
-packages = ["src/aptl"]
+packages = ["src/aptl", "src/aptl_techvault"]
 
 # Bundle the git-tracked lab-asset tree (docker-compose.yml, scenarios/,
 # config/, containers/, web/, scripts/, and the source that container images
@@ -158,7 +171,11 @@ markers = [
 addopts = "-m 'not fuzz'"
 
 [tool.coverage.run]
-source = ["aptl"]
+# Both top-level packages the wheel ships. `aptl_techvault` is a scenario
+# adapter reached only through entry points, but it is production code in this
+# distribution: leaving it out of the source set reported its every line as
+# uncovered while its tests were in fact exercising it.
+source = ["aptl", "aptl_techvault"]
 
 [tool.coverage.report]
 show_missing = true

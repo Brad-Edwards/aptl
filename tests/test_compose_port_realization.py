@@ -102,6 +102,48 @@ def test_conflict_when_declared_host_port_is_taken():
         sock.close()
 
 
+def test_no_conflict_when_this_project_already_publishes_the_port():
+    """Our own running container is not a foreign holder of the port.
+
+    The RAES handoff retries a retryable backend-start failure by waiting and
+    re-applying the same plan *without* tearing the range down, because the
+    usual cause is a SOC dependency still initializing. On that second pass the
+    declared host ports are held by this project's own containers, which Compose
+    is about to reconcile. Counting them as conflicts made the retry fail every
+    time, so `aptl lab start` reported failure over a lab that had actually come
+    up.
+    """
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("127.0.0.1", 0))
+    sock.listen(1)
+    taken = sock.getsockname()[1]
+    try:
+        spec = _spec(
+            [
+                _node(
+                    "web",
+                    "web",
+                    [DeploymentPublishedPort(container_port=80, host_port=taken)],
+                )
+            ]
+        )
+
+        assert (
+            published_port_conflicts(
+                spec, owned_host_ports={("127.0.0.1", taken, "tcp")}
+            )
+            == []
+        )
+        # A port held by anything else is still a conflict.
+        assert published_port_conflicts(
+            spec, owned_host_ports={("127.0.0.1", taken + 1, "tcp")}
+        )
+    finally:
+        sock.close()
+
+
 def test_conflict_when_node_has_no_resolvable_service():
     spec = _spec(
         [_node("web", None, [DeploymentPublishedPort(container_port=80, host_port=8080)])]

@@ -11,9 +11,32 @@ from raes_contracts.runtime_state import RuntimeSnapshot
 from aptl.core.lab_types import LabResult
 
 if TYPE_CHECKING:
+    from raes_processor.models import ExecutionPlan
+    from raes_runtime.registry import RuntimeTarget
+
+    from aptl.backends.raes_realization_model import AptlRealization
     from aptl.core.runstore import RunStorageBackend
+    from aptl.core.scenario_bundle import ScenarioBundle
 
 DEFAULT_RAES_SCENARIO = Path("scenarios") / "techvault-operational.sdl.yaml"
+
+
+@dataclass(frozen=True)
+class AdmittedScenarioStart:
+    """One admitted scenario execution, shared by pre-mutation steps and apply.
+
+    Resolving the bundle, parsing it, building the runtime target, planning, and
+    interpreting the provisioning plan are one admission. Lab start caches this
+    before it mutates anything and hands the *same* object back to apply, so a
+    pre-start decision and the deployment it precedes cannot disagree — and a
+    staged env-pack is acquired and validated once per run rather than once per
+    question asked about it (issue #951).
+    """
+
+    bundle: ScenarioBundle
+    target: RuntimeTarget
+    execution_plan: ExecutionPlan
+    realization: AptlRealization | None
 
 
 @dataclass(frozen=True)

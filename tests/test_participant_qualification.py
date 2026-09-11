@@ -623,3 +623,53 @@ def test_mcp_artifact_bytes_must_match_asset_lock(tmp_path: Path) -> None:
             project,
             project / "participant-profiles" / "guided-purple-v1" / "profile.json",
         )
+
+
+def test_process_absence_keeps_polling_through_an_inconclusive_eperm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """EPERM is inconclusive, not proof the process is still present.
+
+    Darwin answers EPERM for an unreaped zombie where Linux answers 0. The
+    probe used to abandon the wait on it and report the process as present,
+    which failed BC-09 for a process group that had in fact been torn down.
+    """
+
+    from aptl.validation import participant_qualification_boundary_environment as env
+
+    answers = iter(
+        [
+            PermissionError(1, "Operation not permitted"),
+            PermissionError(1, "Operation not permitted"),
+            ProcessLookupError(3, "No such process"),
+        ]
+    )
+
+    def _probe(pid: int, signal_number: int) -> None:
+        del pid, signal_number
+        raise next(answers)
+
+    monkeypatch.setattr(env.os, "kill", _probe)
+
+    assert env.wait_until_process_absent(4321) is True
+
+
+def test_process_absence_fails_closed_when_the_pid_stays_unsignalable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pid that never resolves reads as present, never as absent.
+
+    This backs a containment boundary, so an unproven teardown must not be
+    reported as a proven one.
+    """
+
+    from aptl.validation import participant_qualification_boundary_environment as env
+
+    def _probe(pid: int, signal_number: int) -> None:
+        del pid, signal_number
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(env.os, "kill", _probe)
+    monkeypatch.setattr(env, "_PROCESS_ABSENT_TIMEOUT_SECONDS", 0.2)
+
+    assert env.wait_until_process_absent(4321) is False

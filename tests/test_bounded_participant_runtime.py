@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from raes_contracts.runtime_state import OperationState
 
-from aptl.backends.raes import _plan_scenario
+from aptl.backends.raes import admit_raes_scenario
 from aptl.backends.raes_participant_apparatus import (
     build_participant_apparatus,
     project_participant_turn,
@@ -248,13 +248,13 @@ def _runtime(
     LocalRunStore,
 ]:
     backend = _StatefulBackend()
-    target, plan = _plan_scenario(
+    admitted = admit_raes_scenario(
         PROJECT_ROOT,
         AptlConfig(lab={"name": "test"}),
         backend,
-        SCENARIO,
-        None,
+        scenario_path=SCENARIO,
     )
+    target, plan = admitted.target, admitted.execution_plan
     store = LocalRunStore(tmp_path / "runs")
     store.create_run("readiness-run")
     target.participant_runtime.plan_authority.bind_runtime_context(
@@ -2277,9 +2277,17 @@ def test_full_qualification_covers_all_actions_and_boundary_challenges(
         backend=_StatefulBackend(),
     )
 
-    assert report.passed is True
+    # Name the failing checks: `passed is False` on its own says nothing about
+    # which of the eleven-plus checks broke, and the report's repr is truncated
+    # in CI output, so a failure here was previously undiagnosable from the log.
+    failed = [
+        (check.check_id, check.summary, check.details)
+        for check in report.checks
+        if not check.passed
+    ]
+    assert report.passed is True, f"failing checks: {failed}"
     assert set(report.covered_action_contracts) == EXPECTED_ACTION_ADDRESSES
-    assert all(check.passed for check in report.checks)
+    assert not failed
     assert {
         check.check_id for check in report.checks if check.check_id.startswith("BC-")
     } == {f"BC-{index:02d}" for index in range(1, 11)}

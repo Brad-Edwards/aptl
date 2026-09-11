@@ -6,7 +6,7 @@ type: FUNCTIONAL
 priority: MUST
 wave: 1
 created_at: 2026-03-24T02:44:23.438740Z
-updated_at: 2026-06-25T01:41:02.775104Z
+updated_at: 2026-09-04T00:00:00.000000Z
 ---
 
 # DSL-008: APTL Realization of ACES Infrastructure Topology
@@ -32,3 +32,7 @@ After ADR-035 and SCN-010, ACES SDL owns scenario authoring and topology declara
 - IMPLEMENTS → CODE_FILE `src/aptl/backends/raes.py`
 - IMPLEMENTS → CODE_FILE `src/aptl/backends/raes_realization_model.py`
 - IMPLEMENTS → CODE_FILE `src/aptl/backends/raes_diagnostics.py`
+- IMPLEMENTS → CODE_FILE `src/aptl/backends/_raes_scenario_queries.py` (Admit one scenario execution; project the pre-start facts lab start reads)
+- IMPLEMENTS → CODE_FILE `src/aptl/backends/raes_runtime_observation.py` (Trusted observation of declared runtime concerns on the realized range)
+- IMPLEMENTS → CODE_FILE `src/aptl/backends/_runtime_concern_excess.py` (Excess/scope detection and the runtime baselines subtracted before rejection)
+- TESTS → TEST `tests/test_raes_runtime_observation.py` (Realization-observation gate tests, including the runtime-baseline carve-outs)

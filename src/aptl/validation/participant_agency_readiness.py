@@ -11,7 +11,7 @@ from uuid import uuid4
 from raes_contracts.participant_episode import ParticipantEpisodeTerminalReason
 from raes_contracts.runtime_state import OperationState
 
-from aptl.backends.raes import _plan_scenario
+from aptl.backends.raes import admit_raes_scenario
 from aptl.backends.raes_participant_apparatus import build_participant_apparatus
 from aptl.backends.raes_participant_driver import (
     AptlParticipantControlPlane,
@@ -183,13 +183,13 @@ def _prepare_readiness_context(
 
     deployment = request.backend or get_backend(request.config, request.project_dir)
     scenario_path = request.project_dir / SCENARIO_RELATIVE_PATH
-    target, execution_plan = _plan_scenario(
+    admitted = admit_raes_scenario(
         request.project_dir,
         request.config,
         deployment,
-        scenario_path,
-        None,
+        scenario_path=scenario_path,
     )
+    target, execution_plan = admitted.target, admitted.execution_plan
     if any(diagnostic.is_error for diagnostic in execution_plan.diagnostics):
         raise _ReadinessFailure("bounded participant scenario planning failed")
     bundle = project_tree_bundle(request.project_dir, scenario_path)

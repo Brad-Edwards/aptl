@@ -785,6 +785,108 @@ def test_undeclared_network_listener_is_rejected():
     assert _GATE_REJECT in codes
 
 
+def test_docker_embedded_dns_resolver_is_baseline_not_excess():
+    """Docker's own resolver sockets must not count as undeclared exposure.
+
+    Docker attaches an embedded DNS resolver to every container on a
+    user-defined network, on 127.0.0.11 with daemon-chosen ports. Counting those
+    as excess rejected every node that declares a service listener and failed
+    the whole lab start at the SEM-218 gate (issue #951): the observed sockets
+    for `aptl-shuffle-backend` were tcp 127.0.0.11:44277, tcp :::5001, and udp
+    127.0.0.11:39146 against a single declared tcp 5001.
+    """
+    runtime = _listener_runtime()  # declares only tcp 8080
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        listeners=_listeners(
+            sockets=[
+                ("tcp", "127.0.0.11", 44277),
+                ("udp", "127.0.0.11", 39146),
+                ("tcp", "::", 8080),
+            ]
+        ),
+    )
+    codes, _provenance, observations = _gate(runtime, backend, "service-listeners")
+    assert codes == []
+    assert _LISTENERS_PATH in observations[_ADDRESS].concerns
+
+
+def test_extra_socket_on_the_resolver_address_defeats_attribution():
+    """A workload cannot hide a listener behind the resolver's address.
+
+    Linux lets a container bind an unused port on 127.0.0.11, and the socket
+    table cannot distinguish that from Docker's own resolver socket. A second
+    socket of the same protocol makes neither attributable, so both stay subject
+    to excess detection and the gate rejects.
+    """
+    runtime = _listener_runtime()  # declares only tcp 8080
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        listeners=_listeners(
+            sockets=[
+                ("tcp", "127.0.0.11", 44277),
+                ("tcp", "127.0.0.11", 31337),
+                ("udp", "127.0.0.11", 39146),
+                ("tcp", "::", 8080),
+            ]
+        ),
+    )
+    codes, _provenance, observations = _gate(runtime, backend, "service-listeners")
+    assert _LISTENERS_PATH not in observations[_ADDRESS].concerns
+    assert _GATE_REJECT in codes
+
+
+def test_resolver_attribution_is_per_protocol():
+    """One tcp plus one udp is the resolver's shape and stays attributable."""
+    runtime = _listener_runtime()  # declares only tcp 8080
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        listeners=_listeners(
+            sockets=[
+                ("tcp", "127.0.0.11", 44277),
+                ("udp", "127.0.0.11", 39146),
+                ("udp", "127.0.0.11", 39147),
+                ("tcp", "::", 8080),
+            ]
+        ),
+    )
+    # The duplicated udp pair is unattributable and undeclared, so the gate
+    # rejects even though the tcp resolver socket alone would have been baseline.
+    codes, _provenance, observations = _gate(runtime, backend, "service-listeners")
+    assert _LISTENERS_PATH not in observations[_ADDRESS].concerns
+    assert _GATE_REJECT in codes
+
+
+def test_undeclared_listener_on_ordinary_loopback_is_still_rejected():
+    """The carve-out is the resolver address alone, not loopback in general.
+
+    A workload port on 127.0.0.1 is a real undeclared listener; exempting all of
+    loopback would hide it.
+    """
+    runtime = _listener_runtime()  # declares only tcp 8080
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        listeners=_listeners(
+            sockets=[("tcp", "0.0.0.0", 8080), ("tcp", "127.0.0.1", 9000)]
+        ),
+    )
+    codes, _provenance, observations = _gate(runtime, backend, "service-listeners")
+    assert _LISTENERS_PATH not in observations[_ADDRESS].concerns
+    assert _GATE_REJECT in codes
+
+
+def test_declared_listener_on_the_resolver_address_is_still_corroborated():
+    """Exemption applies to excess detection only, never to presence matching."""
+    runtime = _listener_runtime()  # declares tcp 0.0.0.0:8080
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        listeners=_listeners(sockets=[("tcp", "127.0.0.11", 8080)]),
+    )
+    codes, _provenance, observations = _gate(runtime, backend, "service-listeners")
+    assert _LISTENERS_PATH not in observations[_ADDRESS].concerns
+    assert _GATE_REJECT in codes
+
+
 def test_wildcard_declared_listener_realized_on_loopback_is_rejected():
     # A listener declared on all interfaces but realized only on loopback is
     # under-exposed and must not corroborate the authored wildcard.

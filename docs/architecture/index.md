@@ -156,6 +156,10 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [Issue #934 APTL-To-LilRAE Rename Boundary](issue-934-rename-boundary-preflight.md)
+- [Issue #592 Scenario-Pack Terminology](issue-592-scenario-pack-terminology-preflight.md)
+- [Issue #951 Fresh Env-Pack Start](issue-951-fresh-env-pack-start-preflight.md)
+- [Issue #913 Shuffle Post-Realization Mutation](issue-913-shuffle-post-realization-mutation-preflight.md)
 - [Issue #905 Lab Lifecycle Robustness](issue-905-lab-lifecycle-robustness-preflight.md)
 - [Issue #874 Scenario-Bundle Realization Roots](issue-874-scenario-bundle-realization-roots-preflight.md)
 - [Issue #878 Scenario Verification Plugin Seam](issue-878-scenario-verification-plugin-seam-preflight.md)
@@ -179,6 +183,7 @@ The victim and kali containers publish no host ports; use
 - [EXP-010 Capture Admission And Evidence Acquisition](exp-010-capture-admission-evidence-preflight.md)
 - [Issue #557 Participant Implementation Binding](issue-557-participant-implementation-binding-preflight.md)
 - [Issue #589 Scenario-Pack Capture Workflow Ownership](issue-589-scenario-pack-capture-ownership-preflight.md)
+- [Issue #591 Scenario-Pack Capture Asset Ownership](issue-591-scenario-pack-capture-asset-ownership-preflight.md)
 - [Issue #821 In-Appliance Participant Workbench](issue-821-participant-workbench-preflight.md)
 - [Issue #823 Versioned Disposable Lab Appliance](issue-823-versioned-disposable-appliance-preflight.md)
 - [Issue #824 Kiosk Launcher, Reset, And Recovery](issue-824-kiosk-launcher-reset-recovery-preflight.md)

@@ -26,6 +26,10 @@ from aptl.core.deployment._compose_port_realization import write_port_override
 from aptl.core.deployment._compose_stateful_realization import (
     effective_stateful_model_errors,
 )
+from aptl.core.deployment._compose_runtime_orchestration import (
+    effective_orchestration_model_errors,
+    realization_has_docker_authority,
+)
 from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
@@ -175,7 +179,7 @@ class ComposeRealizationModelMixin:
         )
         error = (
             self._effective_compose_model_error(command, realization, realization_root)
-            if stateful
+            if stateful or realization_has_docker_authority(realization)
             else self._compose_syntax_error(command)
         )
         return LabResult(success=False, error=error) if error is not None else None
@@ -214,4 +218,5 @@ class ComposeRealizationModelMixin:
             self.project_name,
             realization,
         )
+        errors.extend(effective_orchestration_model_errors(payload, realization))
         return "; ".join(errors[:5]) if errors else None

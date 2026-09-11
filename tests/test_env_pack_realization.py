@@ -12,6 +12,7 @@ boot.
 from __future__ import annotations
 
 import importlib.resources as ir
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -58,6 +59,21 @@ def _realize_pack(tmp_path):
     )
 
 
+def _without_downstream_orborus_authority(realization):
+    """Isolate non-authority tests until env-packs #285 completes the closure."""
+
+    nodes = tuple(
+        replace(
+            node,
+            runtime=node.runtime.model_copy(update={"orchestration_authorities": []}),
+        )
+        if node.name == "shuffle-orborus" and node.runtime is not None
+        else node
+        for node in realization.nodes
+    )
+    return replace(realization, nodes=nodes)
+
+
 def test_techvault_pack_realizes_without_provisioner_diagnostics(tmp_path):
     """Interpreting the pack yields nodes, networks, profiles and no errors."""
 
@@ -70,9 +86,10 @@ def test_techvault_pack_realizes_without_provisioner_diagnostics(tmp_path):
     evidence = realization.pack_interaction_evidence(sorted(realization.profiles))
     assert evidence["pack"]["pack_id"] == "techvault"
     assert evidence["provider"]["provider_id"] == "techvault-aptl-serving"
-    assert evidence["provider"]["distribution"] == (
-        "aptl-techvault-pack-interaction"
-    )
+    # The adapter ships inside the one distribution, so host-observed
+    # provenance names it. What the seam still proves is that the provenance
+    # comes from installed metadata rather than the provider's own claim.
+    assert evidence["provider"]["distribution"] == "aptl-labs"
     assert evidence["provider"]["entry_point"] == "techvault.aptl"
     assert evidence["provider"]["mapping_digest"].startswith("sha256:")
 
@@ -83,7 +100,13 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(tmp_path):
     from aptl.core.deployment._compose_node_generation import render_realization_compose
 
     realization = _realize_pack(tmp_path)
-    spec = realization.deployment_spec(sorted(realization.profiles))
+    # This #875 rendering test is intentionally independent of env-packs #285,
+    # which must replace Shuffle's mutable child image and author the realized
+    # child correlation before APTL can admit its Docker authority. Strip only
+    # that downstream declaration so the generic Compose surface remains covered.
+    spec = _without_downstream_orborus_authority(realization).deployment_spec(
+        sorted(realization.profiles)
+    )
     document = render_realization_compose(spec)
 
     services = document["services"]
@@ -109,7 +132,41 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(tmp_path):
             assert dependency in defined
 
 
-def test_generated_base_compose_is_written_under_realization_root_not_the_pack(tmp_path):
+def test_techvault_authority_declares_privilege_without_a_child_closure(tmp_path):
+    """The pack states an authority's privilege; it declares no child inventory.
+
+    This asserted the opposite until the pack could not boot at all. RAES calls
+    a realized child "an observed, realized child workload" and defaults the
+    field to empty, and TechVault's `shuffle-orborus` states its Docker-socket
+    privilege for transparency without declaring an expected inventory. There is
+    therefore no closure to complete and nothing to correlate at plan time --
+    demanding one asked for runtime observation before anything had run, and
+    made every `aptl lab start` raise
+    `aptl.provisioner.spawn-child-correlation-invalid` out of the provisioner.
+
+    A closure that *is* declared and incomplete still raises; that is covered in
+    tests/test_raes_runtime_orchestration.py.
+    """
+
+    realization = _realize_pack(tmp_path)
+
+    spec = realization.deployment_spec(sorted(realization.profiles))
+
+    orborus = [
+        admission
+        for admission in spec.docker_authority_admissions
+        if admission.node_address == "provision.node.shuffle-orborus"
+    ]
+    assert len(orborus) == 1, "the authority is still admitted"
+    assert orborus[0].spawn_requirements == ()
+    # The privilege controls the admission carries are untouched.
+    assert orborus[0].endpoint_target == "/var/run/docker.sock"
+    assert orborus[0].privilege_class == "host_root_equivalent"
+
+
+def test_generated_base_compose_is_written_under_realization_root_not_the_pack(
+    tmp_path,
+):
     """Generated output must never land inside the pristine staged pack.
 
     Writing it under the pack root pollutes the pack's digest-validated inventory
@@ -207,8 +264,10 @@ def test_network_namespace_share_renders_network_mode_and_suppresses_networks():
         profiles=(),
         nodes=(
             DeploymentNodeRealization(
-                address="provision.node.kali-capture", name="kali-capture",
-                service_name="kali-capture", container_name="aptl-kali-capture",
+                address="provision.node.kali-capture",
+                name="kali-capture",
+                service_name="kali-capture",
+                container_name="aptl-kali-capture",
                 networks=("redteam-net",),
                 network_attachments=(
                     DeploymentNetworkAttachment(network="redteam-net"),
@@ -218,9 +277,12 @@ def test_network_namespace_share_renders_network_mode_and_suppresses_networks():
         ),
         images=(
             DeploymentImageRealization(
-                address="provision.node.kali-capture", service_name="kali-capture",
-                source_name="aptl-kali-capture", source_version="local",
-                image_ref="kali-capture:local", mode="build",
+                address="provision.node.kali-capture",
+                service_name="kali-capture",
+                source_name="aptl-kali-capture",
+                source_version="local",
+                image_ref="kali-capture:local",
+                mode="build",
                 policy_rule="contained-component-build",
             ),
         ),
@@ -278,22 +340,31 @@ def test_image_free_consumers_are_excluded_from_the_compose_stateful_override():
         profiles=(),
         nodes=(
             DeploymentNodeRealization(
-                address="provision.node.imagenode", name="imagenode",
-                service_name="imagenode", container_name="aptl-imagenode",
+                address="provision.node.imagenode",
+                name="imagenode",
+                service_name="imagenode",
+                container_name="aptl-imagenode",
                 networks=(),
             ),
             DeploymentNodeRealization(
-                address="provision.node.freenode", name="freenode",
-                service_name="freenode", container_name="aptl-freenode",
-                networks=(), runtime=RuntimeConfiguration(),
+                address="provision.node.freenode",
+                name="freenode",
+                service_name="freenode",
+                container_name="aptl-freenode",
+                networks=(),
+                runtime=RuntimeConfiguration(),
             ),
         ),
         networks=(),
         images=(
             DeploymentImageRealization(
-                address="provision.node.imagenode", service_name="imagenode",
-                source_name="x", source_version="1", image_ref="x:1",
-                mode="pull", policy_rule="allowed-source",
+                address="provision.node.imagenode",
+                service_name="imagenode",
+                source_name="x",
+                source_version="1",
+                image_ref="x:1",
+                mode="pull",
+                policy_rule="allowed-source",
             ),
         ),
         generated_artifacts=(artifact,),
@@ -304,7 +375,9 @@ def test_image_free_consumers_are_excluded_from_the_compose_stateful_override():
     assert "freenode" not in services  # image-free node does not
 
 
-def test_image_node_content_is_delivered_as_a_bind_mount_under_realization_root(tmp_path):
+def test_image_node_content_is_delivered_as_a_bind_mount_under_realization_root(
+    tmp_path,
+):
     """Config content for an image node is bound in, resolved under the engine root.
 
     Image-free nodes get content via the generic materializer; an image node is a
@@ -329,24 +402,33 @@ def test_image_node_content_is_delivered_as_a_bind_mount_under_realization_root(
         profiles=(),
         nodes=(
             DeploymentNodeRealization(
-                address="provision.node.tempo", name="tempo",
-                service_name="tempo", container_name="aptl-tempo", networks=(),
+                address="provision.node.tempo",
+                name="tempo",
+                service_name="tempo",
+                container_name="aptl-tempo",
+                networks=(),
             ),
         ),
         networks=(),
         images=(
             DeploymentImageRealization(
-                address="provision.node.tempo", service_name="tempo",
-                source_name="grafana/tempo", source_version="1", image_ref="grafana/tempo:1",
-                mode="pull", policy_rule="allowed-source",
+                address="provision.node.tempo",
+                service_name="tempo",
+                source_name="grafana/tempo",
+                source_version="1",
+                image_ref="grafana/tempo:1",
+                mode="pull",
+                policy_rule="allowed-source",
             ),
         ),
         content=(
             DeploymentContentRealization(
                 address="provision.content.tempo-config",
                 target_address="provision.node.tempo",
-                content_name="tempo-config", volume_suffix="tempo_config",
-                dest_relpath="etc/tempo/tempo.yaml", source_kind="inline-text",
+                content_name="tempo-config",
+                volume_suffix="tempo_config",
+                dest_relpath="etc/tempo/tempo.yaml",
+                source_kind="inline-text",
                 inline_text="storage:\n  trace:\n    backend: local\n",
             ),
         ),
@@ -365,7 +447,9 @@ def test_image_node_content_is_delivered_as_a_bind_mount_under_realization_root(
     assert Path(source).is_absolute()
     assert str(realization_root.resolve()) in source
     assert str(scenario_root) not in source
-    assert (realization_root / ".aptl/realization/content/tempo-config/tempo.yaml").read_text()
+    assert (
+        realization_root / ".aptl/realization/content/tempo-config/tempo.yaml"
+    ).read_text()
 
 
 def test_dynamic_ip_pool_is_confined_away_from_pinned_static_addresses():
@@ -389,16 +473,23 @@ def test_dynamic_ip_pool_is_confined_away_from_pinned_static_addresses():
         profiles=(),
         nodes=(
             DeploymentNodeRealization(
-                address="provision.node.pinned", name="pinned",
-                service_name="pinned", container_name="aptl-pinned", networks=(),
+                address="provision.node.pinned",
+                name="pinned",
+                service_name="pinned",
+                container_name="aptl-pinned",
+                networks=(),
                 network_attachments=(
-                    DeploymentNetworkAttachment(network="security-net", ipv4_address="172.20.0.10"),
+                    DeploymentNetworkAttachment(
+                        network="security-net", ipv4_address="172.20.0.10"
+                    ),
                 ),
             ),
         ),
         networks=(
             DeploymentNetworkRealization(
-                name="security-net", cidr="172.20.0.0/24", gateway="172.20.0.1",
+                name="security-net",
+                cidr="172.20.0.0/24",
+                gateway="172.20.0.1",
             ),
         ),
     )
@@ -423,12 +514,16 @@ def test_network_without_pinned_addresses_emits_no_ip_range():
         nodes=(),
         networks=(
             DeploymentNetworkRealization(
-                name="security-net", cidr="172.20.0.0/24", gateway="172.20.0.1",
+                name="security-net",
+                cidr="172.20.0.0/24",
+                gateway="172.20.0.1",
             ),
         ),
     )
 
-    config = render_realization_compose(spec)["networks"]["aptl-security"]["ipam"]["config"][0]
+    config = render_realization_compose(spec)["networks"]["aptl-security"]["ipam"][
+        "config"
+    ][0]
     assert "ip_range" not in config
 
 
@@ -579,15 +674,22 @@ def _content_spec(*, service="tempo", content=()):
         profiles=(),
         nodes=(
             DeploymentNodeRealization(
-                address=address, name=service, service_name=service,
-                container_name=f"aptl-{service}", networks=(),
+                address=address,
+                name=service,
+                service_name=service,
+                container_name=f"aptl-{service}",
+                networks=(),
             ),
         ),
         networks=(),
         images=(
             DeploymentImageRealization(
-                address=address, service_name=service, source_name="img",
-                source_version="1", image_ref="img:1", mode="pull",
+                address=address,
+                service_name=service,
+                source_name="img",
+                source_version="1",
+                image_ref="img:1",
+                mode="pull",
                 policy_rule="allowed-source",
             ),
         ),
@@ -700,9 +802,7 @@ def test_project_sourced_content_binds_the_checked_in_path_itself(tmp_path):
     (scenario_root / "config/app.yaml").write_text("k: v\n")
     spec = _content_spec(
         content=(
-            _content_item(
-                "project-file", source_relpath="config/app.yaml"
-            ),
+            _content_item("project-file", source_relpath="config/app.yaml"),
             _content_item(
                 "project-directory",
                 address="provision.content.tree",
@@ -771,8 +871,10 @@ def test_content_targeting_an_image_free_node_is_left_to_the_materializer(tmp_pa
         profiles=(),
         nodes=(
             DeploymentNodeRealization(
-                address="provision.node.workstation", name="workstation",
-                service_name="workstation", container_name="aptl-workstation",
+                address="provision.node.workstation",
+                name="workstation",
+                service_name="workstation",
+                container_name="aptl-workstation",
                 networks=(),
             ),
         ),
@@ -805,9 +907,13 @@ def test_content_for_an_image_with_no_realized_service_produces_no_mount(tmp_pat
         networks=(),
         images=(
             DeploymentImageRealization(
-                address="provision.node.tempo", service_name="tempo",
-                source_name="img", source_version="1", image_ref="img:1",
-                mode="pull", policy_rule="allowed-source",
+                address="provision.node.tempo",
+                service_name="tempo",
+                source_name="img",
+                source_version="1",
+                image_ref="img:1",
+                mode="pull",
+                policy_rule="allowed-source",
             ),
         ),
         content=(_content_item("inline-text", inline_text="k: v\n"),),

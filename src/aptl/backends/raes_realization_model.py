@@ -23,6 +23,7 @@ from aptl.core.deployment.realization import (
     DeploymentServiceSearchIndexSchemaRealization,
 )
 from aptl.backends.pack_interaction import ResolvedPackBackendInteraction
+from aptl.backends.raes_runtime_orchestration import admit_docker_authorities
 from aptl.core.scenario_bundle import PackIdentity
 
 
@@ -200,13 +201,14 @@ class AptlRealization(object):
     def deployment_spec(self, profiles: list[str]) -> DeploymentRealizationSpec:
         """Return typed backend realization input for this RAES realization."""
 
+        nodes = tuple(
+            _deployment_node_realization(node)
+            for node in self.nodes
+            if node.backend_services or node.container_name or node.os
+        )
         return DeploymentRealizationSpec(
             profiles=tuple(profiles),
-            nodes=tuple(
-                _deployment_node_realization(node)
-                for node in self.nodes
-                if node.backend_services or node.container_name or node.os
-            ),
+            nodes=nodes,
             networks=tuple(
                 DeploymentNetworkRealization(
                     name=network.name,
@@ -216,6 +218,7 @@ class AptlRealization(object):
                 )
                 for network in self.networks
             ),
+            docker_authority_admissions=admit_docker_authorities(nodes),
             acls=self.acls,
             images=tuple(node.image for node in self.nodes if node.image is not None),
             content=tuple(

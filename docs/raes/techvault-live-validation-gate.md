@@ -129,6 +129,30 @@ The gate boots the full lab, so the runner needs:
 - An isolated, project-scoped Docker daemon. The destructive cleanup removes the
   `aptl` compose project's volumes, so do not run it against a shared daemon.
 
+## Where the semantic verdict comes from
+
+The gate's framework holds no scenario knowledge: which node is the attacker and
+which nodes make up the defensive stack is knowledge about one scenario on one
+backend. That lives in a per-scenario adapter package, discovered through the
+`aptl.scenario_verifiers` entry-point group. For TechVault it is `aptl_techvault`,
+which ships inside `aptl-labs`, so there is nothing extra to install.
+
+A scenario with no adapter of its own reports terminal `blocked` and the gate
+reaches no verdict. That is deliberate, and it is not a pass, a skip, or a
+detection failure: a range whose verification could not run has not been
+verified. The same outcome covers an adapter whose declared qualification does
+not match the range. Admission requires an exact match on the extension API, the
+admitted pack's identity, version and content digest, and the backend's target,
+version, profile and transport. Empty declarations are not wildcards.
+`src/aptl_techvault/README.md` states which combinations this release admits and
+what a pack change requires of it.
+
+The gate does not generate attack traffic. It establishes that the declared range
+is realized, that its nodes are healthy, and that the attacker node reaches its
+shared-network peers. Proving an event traverses the sensor and the SIEM would
+mean generating that event and reading it back, which leaves its alerts and
+sensor records in the range after the run.
+
 ## Running the gate
 
 The gate is destructive and minutes long. It targets maintainers and a

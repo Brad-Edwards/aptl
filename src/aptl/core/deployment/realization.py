@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+from aptl.runtime_authority import DeploymentDockerAuthorityAdmission
+
 if TYPE_CHECKING:
     from raes.runtime_configuration import RuntimeConfiguration
 
@@ -433,11 +435,14 @@ class DeploymentRealizationSpec(object):
     profiles: tuple[str, ...]
     nodes: tuple[DeploymentNodeRealization, ...]
     networks: tuple[DeploymentNetworkRealization, ...]
+    docker_authority_admissions: tuple[DeploymentDockerAuthorityAdmission, ...] = ()
     acls: tuple[DeploymentAclRealization, ...] = ()
     images: tuple[DeploymentImageRealization, ...] = ()
     content: tuple[DeploymentContentRealization, ...] = ()
     accounts: tuple[DeploymentAccountRealization, ...] = ()
-    service_index_schemas: tuple[DeploymentServiceSearchIndexSchemaRealization, ...] = ()
+    service_index_schemas: tuple[
+        DeploymentServiceSearchIndexSchemaRealization, ...
+    ] = ()
     generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
     persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()
     # ADR-048 image-free materialization is no longer a whole-spec flag: routing

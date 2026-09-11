@@ -1,5 +1,9 @@
-"""Structural contract for the scenario-pack ownership decision."""
+"""Structural contracts for scenario-pack ownership and terminology."""
 
+import json
+import re
+from collections import Counter
+from importlib import resources
 from pathlib import Path
 
 
@@ -7,10 +11,19 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 _OWNERSHIP_NOTE = (
     _REPO_ROOT / "docs/architecture/issue-589-scenario-pack-capture-ownership-preflight.md"
 )
+_ASSET_OWNERSHIP_NOTE = (
+    _REPO_ROOT
+    / "docs/architecture/issue-591-scenario-pack-capture-asset-ownership-preflight.md"
+)
 _README = _REPO_ROOT / "README.md"
 _SDL_BOUNDARY = _REPO_ROOT / "docs/sdl/index.md"
+_TERMINOLOGY_NOTE = (
+    _REPO_ROOT / "docs/architecture/issue-592-scenario-pack-terminology-preflight.md"
+)
+_IDENTITY_ADR = _REPO_ROOT / "docs/adrs/adr-054-lilrae-core-and-experience-ownership.md"
 
 _ENV_PACKS_REPO = "https://github.com/OpenRAE/env-packs"
+_PACK_TERM = re.compile(r"\b(?:scenario|environment|env)[ -]packs?\b", re.IGNORECASE)
 
 
 def _decision_rows(note: str) -> dict[str, str]:
@@ -26,6 +39,68 @@ def _decision_rows(note: str) -> dict[str, str]:
         for line in rows
         if len(cells := line.split("|")) >= 4
     }
+
+
+def _terminology_rows(note: str) -> dict[str, str]:
+    decision = (
+        note.split("## Terminology decision\n", maxsplit=1)[1]
+        .split("## ", maxsplit=1)[0]
+        .strip()
+    )
+    table = next(
+        block.splitlines()
+        for block in decision.split("\n\n")
+        if block.startswith("| Meaning | Canonical wording | Boundary |")
+    )
+    rows = [line for line in table if line.startswith("|")][2:]
+    return {
+        cells[1].strip(): f"{cells[2]} {cells[3]}"
+        for line in rows
+        if len(cells := line.split("|")) >= 4
+    }
+
+
+def _asset_ownership_rows(note: str) -> dict[str, str]:
+    decision = note.split(
+        "## Ownership Decision And Source Inventory\n", maxsplit=1
+    )[1].split("## ", maxsplit=1)[0]
+    table = next(
+        block.splitlines()
+        for block in decision.split("\n\n")
+        if block.startswith("| Historical APTL source | What it was |")
+    )
+    rows = [line for line in table if line.startswith("|")][2:]
+    return {
+        cells[1].strip(): f"{cells[2]} {cells[3]}"
+        for line in rows
+        if len(cells := line.split("|")) >= 4
+    }
+
+
+def _current_pack_docs() -> set[str]:
+    candidates = [_README, *_REPO_ROOT.joinpath("docs").rglob("*.md")]
+    candidates.extend(_REPO_ROOT.joinpath("plugins").rglob("README.md"))
+    discovered: set[str] = set()
+    for path in candidates:
+        relative = path.relative_to(_REPO_ROOT).as_posix()
+        if relative.startswith(("docs/requirements/", "docs/reviews/")):
+            continue
+        if _PACK_TERM.search(path.read_text(encoding="utf-8")):
+            discovered.add(relative)
+    return discovered
+
+
+def _uninventoried_paths(paths: set[str], inventory: str) -> list[str]:
+    basename_counts = Counter(Path(path).name for path in paths)
+    return sorted(
+        path
+        for path in paths
+        if f"`{path}`" not in inventory
+        and not (
+            basename_counts[Path(path).name] == 1
+            and f"`{Path(path).name}`" in inventory
+        )
+    )
 
 
 def test_scenario_pack_ownership_remains_four_way_and_current() -> None:
@@ -47,6 +122,64 @@ def test_scenario_pack_ownership_remains_four_way_and_current() -> None:
     assert "Brad-Edwards/aces" not in note
     # The RAESystem org was renamed to OpenRAE; the stale name must not return.
     assert "RAESystem" not in note
+
+
+def test_capture_asset_placement_is_current_and_adapter_explicit() -> None:
+    note = _ASSET_OWNERSHIP_NOTE.read_text(encoding="utf-8")
+    rows = _asset_ownership_rows(note)
+
+    methodology = next(
+        value
+        for source, value in rows.items()
+        if "asset-inventory-methodology.md" in source
+    )
+    pack_source, pack_adapter = next(
+        (source, value)
+        for source, value in rows.items()
+        if "aptl-capture-client" in source
+    )
+    runtime_source, runtime = next(
+        (source, value)
+        for source, value in rows.items()
+        if "kali-capture/**" in source
+    )
+
+    assert "RAES-owned" in methodology
+    assert "OpenRAE/env-packs/packs/techvault/assets/content" in pack_source
+    assert "explicit APTL backend adapters" in pack_adapter
+    assert "Capture consumer contract" in pack_adapter
+    assert "mcp/aptl-mcp-common/src/captures.ts" in runtime_source
+    assert "APTL-owned runtime apparatus" in runtime
+    assert "https://github.com/OpenRAE/env-packs/tree/main/packs/techvault" in note
+    assert "there is no additional APTL asset to move" in " ".join(note.split())
+
+
+def test_pinned_techvault_pack_carries_capture_adapters_and_contract() -> None:
+    pack_root = Path(
+        str(resources.files("raes_env_packs") / "resources" / "packs" / "techvault")
+    )
+    manifest = json.loads(
+        (pack_root / "associated-artifacts.json").read_text(encoding="utf-8")
+    )
+    artifacts = manifest["artifacts"]
+    expected_adapters = {
+        "techvault-kali-capture-client": (
+            "raes-environment-pack:/assets/content/kali-capture-client"
+        ),
+        "techvault-kali-wrap-shell": (
+            "raes-environment-pack:/assets/content/kali-wrap-shell.sh"
+        ),
+    }
+
+    for artifact_id, expected_uri in expected_adapters.items():
+        artifact = artifacts[artifact_id]
+        assert artifact["uri"] == expected_uri
+        assert artifact["source"].startswith("aptl@")
+        assert (pack_root / expected_uri.removeprefix("raes-environment-pack:/")).is_file()
+
+    readme = (pack_root / "README.md").read_text(encoding="utf-8")
+    assert "## Capture consumer contract" in readme
+    assert "APTL_CAPTURE_CAPABILITY" in readme
 
 
 def test_user_docs_cross_reference_env_pack_companion_repo() -> None:
@@ -74,3 +207,75 @@ def test_user_docs_cross_reference_env_pack_companion_repo() -> None:
     # The stale org name must not appear in either user-facing surface.
     assert "RAESystem" not in readme
     assert "RAESystem" not in boundary
+
+
+def test_scenario_pack_terminology_inventory_covers_current_docs() -> None:
+    note = _TERMINOLOGY_NOTE.read_text(encoding="utf-8")
+    inventory = note.split("## Repository documentation inventory\n", maxsplit=1)[
+        1
+    ].split("## ", maxsplit=1)[0]
+
+    missing = _uninventoried_paths(_current_pack_docs(), inventory)
+
+    assert not missing, f"scenario-pack documentation is not inventoried: {missing}"
+
+
+def test_inventory_matching_does_not_alias_duplicate_readmes() -> None:
+    paths = {
+        "README.md",
+        "plugins/example-a/README.md",
+        "plugins/example-b/README.md",
+    }
+
+    assert _uninventoried_paths(paths, "`README.md`") == [
+        "plugins/example-a/README.md",
+        "plugins/example-b/README.md",
+    ]
+
+
+def test_current_scenario_pack_owners_use_raes_native_terms() -> None:
+    terminology = _TERMINOLOGY_NOTE.read_text(encoding="utf-8")
+    ownership = _OWNERSHIP_NOTE.read_text(encoding="utf-8")
+    identity_adr = _IDENTITY_ADR.read_text(encoding="utf-8")
+    rows = _terminology_rows(terminology)
+
+    assert "RAES scenario" in rows["Portable authored meaning"]
+    assert "OpenRAE/env-packs" in rows["Reusable packaged scenario material"]
+    assert "APTL startup catalog" in rows["APTL operator selection index"]
+    assert not re.search(
+        r"\b(?P<name>RAES)\s+is\s+the\s+renamed\s+(?P=name)\s+project\b",
+        ownership,
+    )
+
+    proposed_decision = identity_adr.split("## Proposed decision\n", maxsplit=1)[
+        1
+    ].split("## ", maxsplit=1)[0]
+    assert re.search(
+        r"OpenRAE/env-packs.*owns the environment-pack format",
+        proposed_decision,
+        flags=re.DOTALL,
+    )
+    assert re.search(
+        r"scenario authors own authored scenario content", proposed_decision
+    )
+    assert re.search(
+        r"LilRAE owns.*startup catalog", proposed_decision, flags=re.DOTALL
+    )
+
+
+def test_aptl_catalog_language_stays_product_owned() -> None:
+    readme = _README.read_text(encoding="utf-8")
+    boundary = _SDL_BOUNDARY.read_text(encoding="utf-8")
+    scenario_section = readme.split("## Scenarios\n", maxsplit=1)[1].split(
+        "## ", maxsplit=1
+    )[0]
+    unqualified_catalog_sentences = [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.!?])\s+", scenario_section)
+        if re.search(r"\bcatalog\b", sentence, re.IGNORECASE)
+        and "aptl" not in sentence.lower()
+    ]
+
+    assert not unqualified_catalog_sentences
+    assert "APTL-owned" in boundary
+    assert "Compose topology" in boundary

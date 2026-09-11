@@ -84,7 +84,7 @@ def test_realization_receives_the_bundle_not_just_the_project(monkeypatch):
 
 
 def test_the_public_start_path_resolves_a_bundle(monkeypatch, tmp_path):
-    """`_plan_scenario` must resolve a bundle and thread it into the target.
+    """`admit_raes_scenario` must resolve a bundle and thread it into the target.
 
     Behavioral, not a source grep: it executes the planning step and asserts the
     bundle actually handed to ``create_aptl_runtime_target`` is rooted where the
@@ -113,7 +113,7 @@ def test_the_public_start_path_resolves_a_bundle(monkeypatch, tmp_path):
     config = AptlConfig()
     mock = MagicMock()
     with pytest.raises(RuntimeError):
-        raes._plan_scenario(project_dir, config, mock, scenario_path, None)
+        raes.admit_raes_scenario(project_dir, config, mock, scenario_path=scenario_path)
 
     assert seen["bundle"] is not None
     assert seen["bundle"].root == project_tree_bundle(project_dir, scenario_path).root

@@ -19,6 +19,10 @@ import pytest
 from aptl.core.config import AptlConfig
 from aptl.core.lab_types import LabResult, StartupOutcome
 from aptl.core.runstore import LocalRunStore
+from aptl.validation.scenario_verification import (
+    VerificationReport,
+    VerificationStatus,
+)
 from aptl.validation import _live_gate_checks as lgc
 from aptl.validation import techvault_live_gate as tlg
 from aptl.validation import _live_gate_probes as lgp
@@ -43,9 +47,8 @@ from tests.helpers import techvault_scenario_bundle
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 # The default TechVault scenario now ships as the bundled env-pack (#875); stage
 # it once for the module and drive the live gate from its validated SDL.
-SCENARIO = techvault_scenario_bundle(
-    Path(tempfile.mkdtemp(prefix="aptl-live-gate-"))
-).sdl_path
+BUNDLE = techvault_scenario_bundle(Path(tempfile.mkdtemp(prefix="aptl-live-gate-")))
+SCENARIO = BUNDLE.sdl_path
 
 
 # --------------------------------------------------------------------------- #
@@ -71,9 +74,14 @@ class _Realization:
         self.nodes = tuple(nodes)
         self.profiles = frozenset(profiles)
         self.diagnostics = tuple(diagnostics)
+        self.spec = object()
 
     def details(self):
         return self._details
+
+    def deployment_spec(self, profiles):
+        assert profiles == sorted(self.profiles)
+        return self.spec
 
 
 class _Manager:
@@ -194,14 +202,33 @@ def test_live_gate_report_passed_failures_categories_and_render():
         "kali_reachability", CATEGORY_KALI_REACHABILITY, False, ("unreachable",)
     )
     report = LiveGateReport("scn", "provisioning-only", "rid", (ok, bad))
+    assert isinstance(report, VerificationReport)
+    assert all(type(check).__name__ == "VerificationCheck" for check in report.checks)
     assert report.passed is False
-    assert report.failures() == (bad,)
+    assert tuple(check.check_id for check in report.failures()) == (
+        "kali_reachability",
+    )
     assert report.failure_categories() == (CATEGORY_KALI_REACHABILITY,)
     text = report.render()
     assert "FAIL" in text
     assert "unreachable" in text
     assert "failing layers" in text
     assert LiveGateReport("s", "p", "r", (ok,)).passed is True
+
+
+def test_live_gate_preserves_blocked_as_a_distinct_terminal_status():
+    blocked = LiveGateCheck(
+        "scenario_verification",
+        CATEGORY_EVIDENCE_CAPTURE,
+        VerificationStatus.BLOCKED,
+        ("no compatible verifier",),
+    )
+    report = LiveGateReport("scn", "profile", "rid", (blocked,))
+
+    assert blocked.status is VerificationStatus.BLOCKED
+    assert report.status is VerificationStatus.BLOCKED
+    assert report.passed is False
+    assert "BLOCKED" in report.render()
 
 
 # --------------------------------------------------------------------------- #
@@ -239,9 +266,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
         # composition, not discovery (the seam has its own tests).
         return [
             LiveGateCheck("kali_reachability", CATEGORY_KALI_REACHABILITY, True),
-            LiveGateCheck(
-                "telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, True
-            ),
+            LiveGateCheck("telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, True),
         ]
 
     def archive(
@@ -254,10 +279,18 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
             "scenario_variation", CATEGORY_BACKEND_INTERPRETATION, True
         )
 
+    def orchestration(*, project_dir, config, state):
+        return LiveGateCheck(
+            "runtime_orchestration_containment",
+            CATEGORY_BACKEND_INSTANTIATION,
+            True,
+        )
+
     monkeypatch.setattr(lgc, "check_static_prerequisite", static)
     monkeypatch.setattr(lgc, "check_boot_inputs_match_public_path", inputs)
     monkeypatch.setattr(lgc, "check_raes_driven_boot", boot)
     monkeypatch.setattr(lgc, "check_defensive_stack_readiness", readiness)
+    monkeypatch.setattr(lgc, "check_runtime_orchestration_containment", orchestration)
     monkeypatch.setattr(tlg, "_semantic_checks", semantic)
     monkeypatch.setattr(lgc, "check_run_archive_manifest", archive)
     monkeypatch.setattr(lgc, "check_scenario_variation", variation)
@@ -273,6 +306,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
         "defensive_stack_readiness",
         "kali_reachability",
         "telemetry_evidence_path",
+        "runtime_orchestration_containment",
         "run_archive_manifest",
         "scenario_variation",
     }
@@ -388,7 +422,49 @@ def test_check_raes_driven_boot_happy_populates_state(monkeypatch):
     assert check.category == CATEGORY_BACKEND_INSTANTIATION
     assert state.realization_details["nodes"]
     assert state.selected_profiles == ["dmz", "soc"]
+    assert state.deployment_spec is not None
     assert state.snapshot["containers"]
+
+
+def test_runtime_orchestration_containment_uses_post_work_backend_attestation(
+    monkeypatch,
+):
+    spec = object()
+    backend = types.SimpleNamespace(
+        verify_runtime_orchestration=lambda observed: (
+            LabResult(success=True) if observed is spec else LabResult(success=False)
+        )
+    )
+    monkeypatch.setattr(lgc, "get_backend", lambda *_args: backend)
+    state = LiveGateState(deployment_spec=spec)
+
+    check = lgc.check_runtime_orchestration_containment(
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        state=state,
+    )
+
+    assert check.passed
+
+
+def test_runtime_orchestration_containment_fails_closed(monkeypatch):
+    backend = types.SimpleNamespace(
+        verify_runtime_orchestration=lambda _spec: LabResult(
+            success=False,
+            error="Docker authority propagated to spawned child node/template.",
+        )
+    )
+    monkeypatch.setattr(lgc, "get_backend", lambda *_args: backend)
+    state = LiveGateState(deployment_spec=object())
+
+    check = lgc.check_runtime_orchestration_containment(
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        state=state,
+    )
+
+    assert not check.passed
+    assert "spawned child" in check.diagnostics[0]
 
 
 def test_check_raes_driven_boot_fails_on_interpretation_error(monkeypatch):
@@ -884,8 +960,8 @@ def test_run_archive_roundtrips_to_local_store(tmp_path):
     # Regression guard: the validation outcome key must survive the run-archive
     # redaction boundary (a `passed` key would be masked as [REDACTED]).
     reloaded = json.loads(written)
-    assert reloaded["validation"]["ok"] is True
-    assert reloaded["validation"]["checks"][0]["ok"] is True
+    assert reloaded["validation"]["status"] == "passed"
+    assert reloaded["validation"]["checks"][0]["status"] == "passed"
 
 
 def test_run_archive_records_failing_final_check_as_not_ok():
@@ -914,9 +990,9 @@ def test_run_archive_records_failing_final_check_as_not_ok():
     )
     assert check.passed  # the manifest write itself succeeded
     _, _, manifest = store.json_writes[0]
-    assert manifest["validation"]["ok"] is False
-    recorded = {c["name"]: c["ok"] for c in manifest["validation"]["checks"]}
-    assert recorded["scenario_variation"] is False
+    assert manifest["validation"]["status"] == "failed"
+    recorded = {c["name"]: c["status"] for c in manifest["validation"]["checks"]}
+    assert recorded["scenario_variation"] == "failed"
 
 
 def test_run_archive_fails_without_realization():
@@ -1064,12 +1140,43 @@ def test_variation_fails_on_realization_error(monkeypatch):
     os.getenv("APTL_LIVE_GATE", "0") != "1",
     reason="Set APTL_LIVE_GATE=1 to run the destructive live deployment gate",
 )
-def test_live_gate_passes_on_techvault():
+def test_live_gate_passes_on_techvault(tmp_path):
+    """The positive live case, read back from the report and the run archive.
+
+    ``report.passed`` alone would not distinguish a verdict the qualified
+    verifier reached from one core somehow produced on its own, so the
+    installed-plugin identity is read back from both the validated report and
+    the redacted persisted summary (#879). The verifier must be installed for
+    this to pass; that is the point, not a precondition to work around.
+    """
     from aptl.core.config import load_config
 
     config = load_config(PROJECT_ROOT / "aptl.json")
-    report = validate_live_deployment(SCENARIO, project_dir=PROJECT_ROOT, config=config)
+    store = LocalRunStore(tmp_path)
+    report = validate_live_deployment(
+        SCENARIO,
+        project_dir=PROJECT_ROOT,
+        config=config,
+        options=LiveGateOptions(run_id="livegatequalification"),
+        run_store=store,
+    )
     assert report.passed, report.render()
+    assert report.plugin_id == "techvault"
+    assert report.distribution == "aptl-techvault-verifier"
+    assert report.distribution_version
+    assert report.entry_point == "techvault.aptl"
+
+    manifest = json.loads(
+        (tmp_path / "livegatequalification" / "live-gate" / "manifest.json").read_text()
+    )
+    assert manifest["validation"]["status"] == "passed"
+    assert manifest["validation"]["verification"] == {
+        "plugin_id": report.plugin_id,
+        "distribution": report.distribution,
+        "distribution_version": report.distribution_version,
+        "entry_point": report.entry_point,
+        "extension_api_version": report.extension_api_version,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -1185,23 +1292,28 @@ def test_trigger_is_redriven_on_every_poll(monkeypatch):
         # Correlates only once the trigger has been re-driven, mimicking a path
         # that becomes ready partway through the window.
         if attempts["n"] >= 2:
-            return [{"rule": {"id": "5710"}, "data": {"dstuser": probes._WAZUH_TRIGGER_IDENTITY}}]
+            return [{"rule": {"id": "5710"}, "data": {"dstuser": "test-marker"}}]
         return [{"rule": {"id": "1002"}, "data": {"srcip": "10.0.0.1"}}]
 
     monkeypatch.setattr(probes, "collect_wazuh_alerts", _alerts)
 
     _eve, alerts = probes._collect_until_evidence(
-        object(),
-        "2026-01-01T00:00:00+00:00",
-        60,
-        indexer_url="https://localhost:9200",
-        indexer_auth=("u", "p"),
-        sleep_fn=lambda _s: None,
-        regenerate=lambda: attempts.__setitem__("n", attempts["n"] + 1),
+        probes.EvidencePollRequest(
+            backend=object(),
+            start_iso="2026-01-01T00:00:00+00:00",
+            deadline_monotonic=60.0,
+            poll_interval_seconds=10.0,
+            indexer_url="https://localhost:9200",
+            indexer_auth=("u", "p"),
+            alert_matches=lambda alert: "test-marker" in str(alert),
+            sleep_fn=lambda _s: None,
+            monotonic_fn=lambda: 0.0,
+            regenerate=lambda: attempts.__setitem__("n", attempts["n"] + 1),
+        )
     )
 
     assert attempts["n"] >= 2, "trigger was not re-driven while waiting"
-    assert any(probes._is_correlated_wazuh_alert(a) for a in alerts)
+    assert any("test-marker" in str(alert) for alert in alerts)
 
 
 def test_without_redrive_a_lost_trigger_is_never_recovered(monkeypatch):
@@ -1216,46 +1328,45 @@ def test_without_redrive_a_lost_trigger_is_never_recovered(monkeypatch):
     )
 
     _eve, alerts = probes._collect_until_evidence(
-        object(),
-        "2026-01-01T00:00:00+00:00",
-        30,
-        indexer_url="https://localhost:9200",
-        indexer_auth=("u", "p"),
-        sleep_fn=lambda _s: None,
+        probes.EvidencePollRequest(
+            backend=object(),
+            start_iso="2026-01-01T00:00:00+00:00",
+            deadline_monotonic=30.0,
+            poll_interval_seconds=10.0,
+            indexer_url="https://localhost:9200",
+            indexer_auth=("u", "p"),
+            alert_matches=lambda alert: "test-marker" in str(alert),
+            sleep_fn=lambda _s: None,
+            monotonic_fn=lambda: 0.0,
+        )
     )
 
-    assert not any(probes._is_correlated_wazuh_alert(a) for a in alerts)
+    assert not any("test-marker" in str(alert) for alert in alerts)
 
 
-def test_ssh_listening_targets_are_probed_first(monkeypatch):
-    """Failed-auth proof needs a host that answers on 22.
-
-    Taking an arbitrary slice of reachable containers can probe only hosts with
-    no SSH listener, which produces no auth event and no alert however many times
-    it is retried — indistinguishable from a broken detection path.
-    """
+def test_poll_does_not_redrive_after_sleep_reaches_the_deadline(monkeypatch):
     from aptl.validation import _live_gate_probes as probes
 
-    targets = [("no-ssh-a", "10.0.0.1"), ("no-ssh-b", "10.0.0.2"), ("has-ssh", "10.0.0.9")]
-    monkeypatch.setattr(
-        probes, "_ssh_reachable_from_kali", lambda _b, ip: ip == "10.0.0.9"
+    now = iter((0.0, 0.0, 10.0))
+    attempts = []
+
+    _eve, alerts = probes._collect_until_evidence(
+        probes.EvidencePollRequest(
+            backend=object(),
+            start_iso="2026-01-01T00:00:00+00:00",
+            deadline_monotonic=10.0,
+            poll_interval_seconds=10.0,
+            indexer_url="https://localhost:9200",
+            indexer_auth=("u", "p"),
+            alert_matches=lambda _alert: False,
+            sleep_fn=lambda _seconds: None,
+            monotonic_fn=lambda: next(now),
+            regenerate=lambda: attempts.append("triggered"),
+        )
     )
 
-    ordered = probes._prioritise_ssh_targets(object(), targets)
-
-    assert ordered[0] == ("has-ssh", "10.0.0.9")
-    # Nothing is dropped: a host that did not answer the probe is still a target.
-    assert sorted(ordered) == sorted(targets)
-
-
-def test_target_order_is_stable_when_nothing_listens(monkeypatch):
-    """With no listener anywhere the original order is preserved, not shuffled."""
-    from aptl.validation import _live_gate_probes as probes
-
-    targets = [("a", "10.0.0.1"), ("b", "10.0.0.2")]
-    monkeypatch.setattr(probes, "_ssh_reachable_from_kali", lambda _b, _ip: False)
-
-    assert probes._prioritise_ssh_targets(object(), targets) == targets
+    assert attempts == []
+    assert alerts == []
 
 
 def test_structural_half_of_the_gate_holds_no_scenario_answer_key():
@@ -1320,3 +1431,214 @@ def test_semantic_verification_runs_only_through_the_plugin_seam():
     assert "_live_gate_semantic" not in source
     # No scenario answer key is named in the orchestrator itself.
     assert not re.search(r"aptl-kali|_KALI_CONTAINER", source)
+
+
+def _provenance_report(status=VerificationStatus.PASSED):
+    """Return a validated plugin report carrying host-observed provenance."""
+
+    from aptl.validation.scenario_verification import VerificationCheck
+
+    scenario, backend = tlg._verification_identities(
+        SCENARIO, BUNDLE, "full-remote-control-plane", "docker-compose"
+    )
+    return VerificationReport(
+        status=status,
+        scenario=scenario,
+        backend=backend,
+        run_id="rid",
+        attempt_id="rid",
+        plugin_id="techvault",
+        distribution="aptl-techvault-verifier",
+        distribution_version="0.2.0",
+        entry_point="techvault.aptl",
+        checks=(
+            VerificationCheck(
+                "detection-traversal", status, category="evidence_capture"
+            ),
+        ),
+    )
+
+
+def test_the_returned_report_attributes_the_verdict_to_the_plugin(monkeypatch):
+    """Which executable answer key produced this verdict must survive (#879).
+
+    ``_semantic_checks`` reduces the plugin's validated report to checks, so the
+    gate's own report used to be rebuilt with an empty ``plugin_id``. A run
+    archive that cannot name the distribution and entry point behind a verdict
+    cannot be audited: the same range and the same checks would look identical
+    whether a qualified release or a stale one answered.
+    """
+
+    from aptl.validation import scenario_verification_discovery as svd
+
+    monkeypatch.setattr(svd, "verify_scenario", lambda context: _provenance_report())
+    state = LiveGateState()
+    state.snapshot = {"containers": [_container("aptl-kali")]}
+    ctx = tlg._RunContext(
+        scenario_path=SCENARIO,
+        bundle=BUNDLE,
+        boot_scenario_path=None,
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(run_id="rid"),
+        run_store=None,
+        run_id="rid",
+    )
+
+    checks = tlg._semantic_checks(ctx, state)
+
+    assert [check.name for check in checks] == ["detection-traversal"]
+    report = tlg._report(
+        SCENARIO, "rid", ctx.options, list(checks), BUNDLE, ctx.config, state
+    )
+    assert report.plugin_id == "techvault"
+    assert report.distribution == "aptl-techvault-verifier"
+    assert report.distribution_version == "0.2.0"
+    assert report.entry_point == "techvault.aptl"
+    assert "aptl-techvault-verifier" in report.render()
+
+
+def test_a_blocked_seam_leaves_no_plugin_attribution(monkeypatch):
+    """With nothing qualified to run, there is no plugin to attribute to."""
+
+    from aptl.validation import scenario_verification_discovery as svd
+
+    scenario, backend = tlg._verification_identities(
+        SCENARIO, BUNDLE, "full-remote-control-plane", "docker-compose"
+    )
+    blocked = VerificationReport(
+        status=VerificationStatus.BLOCKED,
+        scenario=scenario,
+        backend=backend,
+        run_id="rid",
+        attempt_id="rid",
+        diagnostics=("no compatible scenario verifier is installed",),
+    )
+    monkeypatch.setattr(svd, "verify_scenario", lambda context: blocked)
+    state = LiveGateState()
+    state.snapshot = {"containers": []}
+    ctx = tlg._RunContext(
+        scenario_path=SCENARIO,
+        bundle=BUNDLE,
+        boot_scenario_path=None,
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(run_id="rid"),
+        run_store=None,
+        run_id="rid",
+    )
+
+    checks = tlg._semantic_checks(ctx, state)
+    report = tlg._report(
+        SCENARIO, "rid", ctx.options, list(checks), BUNDLE, ctx.config, state
+    )
+
+    assert report.status is VerificationStatus.BLOCKED
+    assert report.plugin_id == ""
+    assert report.distribution == ""
+
+
+def test_the_persisted_manifest_records_the_plugin_that_produced_the_verdict():
+    """The durable audit artifact carries the same host-observed identity."""
+
+    store = _RecordingStore()
+    state = _archive_state()
+    state.verification = _provenance_report()
+
+    check = lgc.check_run_archive_manifest(
+        SCENARIO,
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        run_store=store,
+        run_id="rid",
+        state=state,
+        prior_checks=(LiveGateCheck("x", CATEGORY_EVIDENCE_CAPTURE, True),),
+    )
+
+    assert check.passed
+    _, _, manifest = store.json_writes[0]
+    verification = manifest["validation"]["verification"]
+    assert verification == {
+        "plugin_id": "techvault",
+        "distribution": "aptl-techvault-verifier",
+        "distribution_version": "0.2.0",
+        "entry_point": "techvault.aptl",
+        "extension_api_version": "2",
+    }
+
+
+def test_the_manifest_states_plainly_when_no_plugin_answered(monkeypatch):
+    """An absent verdict is recorded as absent, not as empty attribution.
+
+    Driven through the real blocked seam rather than a state where semantic
+    verification never ran: discovery still returns a report when no verifier is
+    installed, so the manifest would otherwise record a plugin attribution whose
+    every field is the empty string -- which reads as an attribution that lost
+    its values rather than as a verdict nothing produced.
+    """
+
+    from aptl.validation import scenario_verification_discovery as svd
+
+    scenario, backend = tlg._verification_identities(
+        SCENARIO, BUNDLE, "full-remote-control-plane", "docker-compose"
+    )
+    monkeypatch.setattr(
+        svd,
+        "verify_scenario",
+        lambda context: VerificationReport(
+            status=VerificationStatus.BLOCKED,
+            scenario=scenario,
+            backend=backend,
+            run_id="rid",
+            attempt_id="rid",
+            diagnostics=("no compatible scenario verifier is installed",),
+        ),
+    )
+    state = _archive_state()
+    ctx = tlg._RunContext(
+        scenario_path=SCENARIO,
+        bundle=BUNDLE,
+        boot_scenario_path=None,
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(run_id="rid"),
+        run_store=None,
+        run_id="rid",
+    )
+    prior = tuple(tlg._semantic_checks(ctx, state))
+    assert state.verification is not None, "the seam did return a report"
+
+    store = _RecordingStore()
+    check = lgc.check_run_archive_manifest(
+        SCENARIO,
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        run_store=store,
+        run_id="rid",
+        state=state,
+        prior_checks=prior,
+    )
+
+    assert check.passed
+    _, _, manifest = store.json_writes[0]
+    assert manifest["validation"]["verification"] is None
+    assert manifest["validation"]["status"] == "blocked"
+
+
+def test_report_and_plugin_admission_share_canonical_bundle_identities():
+    scenario, backend = tlg._verification_identities(
+        SCENARIO,
+        BUNDLE,
+        "full-remote-control-plane",
+        "docker-compose",
+    )
+
+    assert scenario.identity == BUNDLE.identity
+    assert scenario.source_kind == BUNDLE.source_kind.value
+    assert scenario.version == BUNDLE.pack_identity.pack_version
+    assert scenario.content_digest == BUNDLE.pack_identity.set_digest
+    assert backend.target_name == "aptl"
+    assert backend.target_version == "0.1.0"
+    assert backend.profile == "full-remote-control-plane"
+    assert backend.provider == "docker-compose"
+    assert backend.transport == "docker-compose"

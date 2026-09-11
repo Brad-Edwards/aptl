@@ -637,8 +637,9 @@ class TestFullLoop:
         """Wazuh level-10 alert auto-triggers Shuffle via webhook.
 
         This proves the automatic path: attack -> Wazuh alert ->
-        integration script -> Shuffle webhook -> workflow execution.
-        No manual API trigger — the webhook must fire on its own.
+        integration script -> Shuffle webhook -> terminal workflow -> one
+        correlated TheHive case. No manual API trigger is used, and rereading
+        the same proof path must not create a second case (#949).
         """
         _require_thehive_key()
 
@@ -703,6 +704,114 @@ class TestFullLoop:
             f"Execution source is '{new_exec['execution_source']}', "
             "expected 'webhook'"
         )
+
+        exec_id = new_exec.get("execution_id") or new_exec.get("id")
+        assert exec_id, "Webhook execution has no identity"
+        status_data: dict = {}
+        # This proof uses a ceiling stricter than TechVault's authored 600s
+        # lifecycle policy. If it expires, actively abort and observe a terminal
+        # result; leaving the accepted execution in EXECUTING is not cleanup.
+        execution_timeout_seconds = 180
+        deadline = time.monotonic() + execution_timeout_seconds
+        while time.monotonic() < deadline:
+            time.sleep(5)
+            status_data = curl_json(
+                f"{SHUFFLE_URL}/api/v1/streams/results",
+                auth_header=f"Bearer {SHUFFLE_API_KEY}",
+                method="POST",
+                body={"execution_id": exec_id},
+            )
+            if status_data.get("status") in {"FINISHED", "ABORTED", "FAILURE"}:
+                break
+        if status_data.get("status") not in {"FINISHED", "ABORTED", "FAILURE"}:
+            curl_json(
+                (
+                    f"{SHUFFLE_URL}/api/v1/workflows/{wf_id}/executions/"
+                    f"{exec_id}/abort"
+                ),
+                auth_header=f"Bearer {SHUFFLE_API_KEY}",
+            )
+            abort_deadline = time.monotonic() + 30
+            while time.monotonic() < abort_deadline:
+                status_data = curl_json(
+                    f"{SHUFFLE_URL}/api/v1/streams/results",
+                    auth_header=f"Bearer {SHUFFLE_API_KEY}",
+                    method="POST",
+                    body={"execution_id": exec_id},
+                )
+                if status_data.get("status") in {"ABORTED", "FAILURE"}:
+                    break
+                time.sleep(2)
+        assert status_data.get("status") in {"FINISHED", "ABORTED", "FAILURE"}, (
+            "Webhook workflow did not reach a terminal state after bounded abort; "
+            f"got {status_data.get('status')!r}"
+        )
+        assert status_data.get("status") == "FINISHED", (
+            "Webhook workflow must terminate successfully; "
+            f"got {status_data.get('status')!r}"
+        )
+        action_results = status_data.get("results")
+        assert isinstance(action_results, list), (
+            "Webhook workflow results have unexpected shape: "
+            f"{type(action_results).__name__}"
+        )
+        assert len(action_results) == 2, (
+            f"Expected two workflow action results, got {len(action_results)}"
+        )
+        action_statuses = [
+            result.get("status") if isinstance(result, dict) else "invalid"
+            for result in action_results
+        ]
+        assert action_statuses == ["SUCCESS", "SUCCESS"], (
+            f"Workflow action statuses were {action_statuses}"
+        )
+
+        def _correlated_cases() -> list[dict]:
+            response = curl_json(
+                f"{THEHIVE_URL}/api/v1/query",
+                auth_header=f"Bearer {THEHIVE_API_KEY}",
+                method="POST",
+                body={
+                    "query": [
+                        {"_name": "listCase"},
+                        {"_name": "sort", "_fields": [{"_createdAt": "desc"}]},
+                        {"_name": "page", "from": 0, "to": 100},
+                    ]
+                },
+            )
+            cases = response if isinstance(response, list) else response.get("data", [])
+            return [
+                case
+                for case in cases
+                if isinstance(case, dict)
+                and marker in json.dumps(case, sort_keys=True)
+            ]
+
+        marker = f"webhook_test_{ts}"
+        deadline = time.monotonic() + 60
+        correlated: list[dict] = []
+        while time.monotonic() < deadline:
+            correlated = _correlated_cases()
+            if correlated:
+                break
+            time.sleep(5)
+        assert len(correlated) == 1, (
+            f"Expected exactly one TheHive case for {marker}, got {len(correlated)}"
+        )
+        case_ids = {case.get("_id") for case in correlated}
+
+        # Retry the observation half of the proof. It addresses the same
+        # execution and must remain terminal without spawning another case.
+        retry_status = curl_json(
+            f"{SHUFFLE_URL}/api/v1/streams/results",
+            auth_header=f"Bearer {SHUFFLE_API_KEY}",
+            method="POST",
+            body={"execution_id": exec_id},
+        )
+        time.sleep(5)
+        retry_cases = _correlated_cases()
+        assert retry_status.get("status") == "FINISHED"
+        assert {case.get("_id") for case in retry_cases} == case_ids
 
 
 # -------------------------------------------------------------------

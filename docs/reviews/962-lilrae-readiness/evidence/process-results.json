@@ -1,0 +1,7 @@
+{
+  "stdin_timeout_seconds": 0.2,
+  "elapsed_seconds": 2.021,
+  "stdin_nonreader_returned_success": true,
+  "descendant_alive_after_success": true,
+  "synthetic_descendant_cleanup": "SIGKILL sent"
+}

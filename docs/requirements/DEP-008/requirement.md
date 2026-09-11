@@ -6,7 +6,7 @@ type: FUNCTIONAL
 priority: SHOULD
 wave: 2
 created_at: 2026-07-06T08:00:25.969813Z
-updated_at: 2026-07-06T18:33:10.977695Z
+updated_at: 2026-09-04T00:00:00.000000Z
 ---
 
 # DEP-008: Self-Contained Distribution of Lab Assets from Installed Package
@@ -29,3 +29,6 @@ PyPI publication (#651, #656) installs the `aptl` CLI but not the lab assets, so
 - TESTS → TEST `tests/test_assets.py` (Asset resolution + materialization + secret-exclusion tests)
 - TESTS → TEST `tests/test_hatch_build_hook.py` (Build-hook selection + wheel-content regression tests)
 - TESTS → TEST `tests/test_lab_init_cli.py` (aptl lab init CLI end-to-end tests)
+- TESTS → TEST `tests/test_lab_fresh_start.py` (Lab-start pre-flight from a freshly materialized project, no generated state)
+- TESTS → TEST `scripts/ci/assert_project_teardown.py` (Project-scoped teardown proof for the clean-install boot gate)
+- IMPLEMENTS → CONFIG `.github/workflows/checks.yml` (clean-install-lab-boot and fresh-start-preflight CI gates: build the wheel, install it clean, init, boot, tear down)

@@ -77,12 +77,36 @@ def render_start_result(result: LabResult) -> None:
 
 def _resolved_port(
     resolved_ports: list[ResolvedPort], service: str, default: int
-) -> int:
-    """Return the actual published host port for *service* (default if unknown)."""
+) -> int | None:
+    """Return the published host port for *service*, or None if it publishes none.
+
+    A scenario need not publish every service to the host: TechVault leaves
+    Grafana reachable only inside the range. Printing the compile-time default
+    for one of those sends an operator to a URL that answers nothing, so the
+    caller omits the endpoint instead.
+
+    An *empty* list is the different case where the live query failed rather
+    than reporting nothing published, and the compile-time default remains the
+    best available guess.
+    """
+    wanted = _service_key(service)
     for entry in resolved_ports or ():
-        if getattr(entry, "service", None) == service:
+        if _service_key(getattr(entry, "service", "")) == wanted:
             return getattr(entry, "resolved_port", default)
-    return default
+    return None if resolved_ports else default
+
+
+def _service_key(service: str) -> str:
+    """Normalize a service name for comparison across its two spellings.
+
+    The compile-time port specs name Wazuh services with dots
+    (``wazuh.dashboard``) while Docker reports the Compose service with hyphens
+    (``wazuh-dashboard``). Comparing them literally never matched, so the live
+    lookup fell through to the compile-time default for every Wazuh service --
+    the remapped-port confusion #737 exists to prevent.
+    """
+
+    return str(service or "").replace(".", "-").casefold()
 
 
 def _cli_backend(project_dir: Path) -> DeploymentBackend | None:
@@ -281,7 +305,14 @@ def emit_lab_access_summary(
     the printed URLs reflect the real published ports — important on hosts where
     a default port was in use and the service was remapped to a free one.
     """
-    resolved_ports = resolved_ports or []
+    # Live Docker state is ground truth once the range is up. The list a
+    # `lab start` hands over comes from resolving the checked-in Compose
+    # stack's convenience ports, so it can carry a default for a service the
+    # realized scenario never published -- TechVault does exactly that with
+    # Grafana. Prefer what is actually bound; fall back to the caller's list
+    # only when the query returns nothing, which means it failed rather than
+    # that the range published nothing.
+    resolved_ports = live_resolved_ports(project_dir) or resolved_ports or []
     if active_services is None:
         active_services = live_services(project_dir)
     env_path = project_dir / ".env"
@@ -298,13 +329,15 @@ def emit_lab_access_summary(
     )
     typer.echo("")
     typer.echo("Access:")
-    typer.echo(f"  Wazuh Dashboard: https://localhost:{dashboard_port}")
-    typer.echo("    username: admin")
-    typer.echo("    password: see INDEXER_PASSWORD in .env")
-    typer.echo(f"  Grafana: http://localhost:{grafana_port}")
-    typer.echo("    username: admin")
-    typer.echo("    password: see GRAFANA_ADMIN_PASSWORD in .env")
-    if _REVERSE_SVC in active_services:
+    if dashboard_port is not None:
+        typer.echo(f"  Wazuh Dashboard: https://localhost:{dashboard_port}")
+        typer.echo("    username: admin")
+        typer.echo("    password: see INDEXER_PASSWORD in .env")
+    if grafana_port is not None:
+        typer.echo(f"  Grafana: http://localhost:{grafana_port}")
+        typer.echo("    username: admin")
+        typer.echo("    password: see GRAFANA_ADMIN_PASSWORD in .env")
+    if _REVERSE_SVC in active_services and reverse_port is not None:
         typer.echo("  Reverse engineering SSH:")
         typer.echo(
             f"    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p {reverse_port}"

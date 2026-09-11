@@ -23,11 +23,16 @@ from pathlib import Path
 
 import yaml
 from aptl.core.deployment._compose_realization_networks import _compose_network_key
+from aptl.core.deployment._compose_runtime_orchestration import (
+    docker_authority_admissions_by_address,
+    docker_socket_volume,
+)
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
     DeploymentNodeRealization,
     DeploymentRealizationSpec,
 )
+from aptl.runtime_authority import DeploymentDockerAuthorityAdmission
 
 GENERATED_COMPOSE_RELPATH = Path(".aptl") / "realization" / "compose-base.yml"
 
@@ -47,6 +52,7 @@ def render_realization_compose(spec: DeploymentRealizationSpec) -> dict[str, obj
     """
 
     image_by_address = {image.address: image for image in spec.images}
+    admissions = docker_authority_admissions_by_address(spec)
     emitted_services: dict[str, str] = {
         node.service_name: node.address
         for node in spec.nodes
@@ -59,7 +65,10 @@ def render_realization_compose(spec: DeploymentRealizationSpec) -> dict[str, obj
         if not node.service_name or node.address not in image_by_address:
             continue
         services[node.service_name] = _render_service(
-            node, image_by_address[node.address], service_names
+            node,
+            image_by_address[node.address],
+            service_names,
+            docker_authority_admission=admissions.get(node.address),
         )
 
     document: dict[str, object] = {"services": services}
@@ -73,6 +82,8 @@ def _render_service(
     node: DeploymentNodeRealization,
     image: DeploymentImageRealization,
     service_names: set[str],
+    *,
+    docker_authority_admission: DeploymentDockerAuthorityAdmission | None,
 ) -> dict[str, object]:
     """Render one image node into a Compose service definition."""
 
@@ -104,6 +115,14 @@ def _render_service(
     if depends:
         service["depends_on"] = depends
     service.update(_operational_config(node.runtime))
+    socket_volume = docker_socket_volume(docker_authority_admission)
+    if socket_volume is not None:
+        volumes = service.setdefault("volumes", [])
+        if not isinstance(volumes, list):
+            raise ValueError(
+                f"Generated service volumes are not a list for {node.address}."
+            )
+        volumes.append(socket_volume)
     service.setdefault("ulimits", _DEFAULT_IMAGE_NODE_ULIMITS)
     return service
 
@@ -257,7 +276,9 @@ def _network_namespace_container(node: DeploymentNodeRealization) -> str | None:
 
     runtime = node.runtime
     container = getattr(runtime, "container", None) if runtime is not None else None
-    namespaces = getattr(container, "namespaces", None) if container is not None else None
+    namespaces = (
+        getattr(container, "namespaces", None) if container is not None else None
+    )
     network = getattr(namespaces, "network", None) if namespaces is not None else None
     ref = getattr(network, "target_node_ref", None) if network is not None else None
     if not ref:
@@ -300,9 +321,7 @@ def _pinned_addresses_by_network(
     return pinned
 
 
-def _dynamic_ip_range(
-    cidr: str, gateway: str | None, pinned: set[str]
-) -> str | None:
+def _dynamic_ip_range(cidr: str, gateway: str | None, pinned: set[str]) -> str | None:
     """Return an IPAM ``ip_range`` confining dynamic allocation off the pins.
 
     Docker assigns dynamic addresses from the bottom of the subnet and does not
@@ -324,7 +343,7 @@ def _dynamic_ip_range(
     upper = list(subnet.subnets(prefixlen_diff=1))[1]
     intruders = sorted(
         str(address)
-        for address in (*pinned, *( (gateway,) if gateway else ()))
+        for address in (*pinned, *((gateway,) if gateway else ()))
         if ipaddress.ip_address(address) in upper
     )
     if intruders:

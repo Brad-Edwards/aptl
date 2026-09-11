@@ -11,8 +11,9 @@
 #
 # It is idempotent and safe to re-run. `aptl lab start` internally runs the
 # realization (with the certs.py root-owned-cert-dir self-heal) and then
-# scripts/seed-prime.sh, which applies the temporary env-pack fixups
-# (SOAR + Suricata + Kali capture-wrapper). Kali readiness may report
+# scripts/seed-prime.sh, which seeds SOAR content and applies the remaining
+# MISP/Redis, endpoint-publication, Suricata, and Kali capture-wrapper fixups.
+# The released env-pack owns Shuffle's runtime contract. Kali readiness may report
 # "degraded" DURING lab start because the kali wrapper is relaxed by seed-prime
 # which runs just after the readiness probe; kali is fully reachable once this
 # script finishes. That degraded line is cosmetic -- verification below is the
@@ -89,12 +90,12 @@ echo "--- ensure SOC certs ---"
 python -c "from pathlib import Path; from aptl.core.soc_ca import ensure_soc_certs; r=ensure_soc_certs(Path('$PROJECT_DIR')); print('soc_certs:', 'generated' if r.generated else 'present', r.certs_dir)"
 
 # 3. Build the lab. This realizes the stack (certs self-heal included) and runs
-#    seed-prime.sh (SOAR + Suricata + Kali fixups).
+#    seed-prime.sh (SOAR seeding plus the remaining fixups).
 echo "--- aptl lab start ---"
 aptl lab start || echo "WARN: aptl lab start returned non-zero (kali readiness 'degraded' is expected pre-seed; verifying below)"
 
-# 4. Ensure the fixups actually applied (seed-prime runs inside lab start, but
-#    re-run idempotently in case lab start aborted before reaching it).
+# 4. Ensure seeding and the remaining fixups completed (seed-prime runs inside
+#    lab start, but re-run idempotently if lab start aborted before reaching it).
 echo "--- re-assert env-pack fixups (idempotent) ---"
 bash scripts/seed-prime.sh || echo "WARN: seed-prime reported issues"
 

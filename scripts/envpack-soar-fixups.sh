@@ -109,7 +109,8 @@ fix_misp_redis() {
     img="$(_image aptl-misp-redis)"; net="$(_net aptl-misp-redis)"
     _capture_labels aptl-misp-redis
     docker rm -f aptl-misp-redis >/dev/null 2>&1 || true
-    docker run -d --name aptl-misp-redis --restart unless-stopped "${LBL_ARGS[@]}" \
+    docker run -d --name aptl-misp-redis --restart unless-stopped \
+        "${LBL_ARGS[@]+"${LBL_ARGS[@]}"}" \
         --network "$net" --network-alias aptl-misp-redis --network-alias misp-redis \
         "$img" redis-server --requirepass redispassword >/dev/null
 }
@@ -128,7 +129,8 @@ fix_misp() {
     docker exec aptl-misp-db mysql -uroot -pmisp_root_password \
         -e 'DROP DATABASE IF EXISTS misp; CREATE DATABASE misp;' >/dev/null 2>&1 || true
     docker volume rm aptl_misp_config aptl_misp_data >/dev/null 2>&1 || true
-    if ! docker run -d --name aptl-misp --restart unless-stopped "${LBL_ARGS[@]}" \
+    if ! docker run -d --name aptl-misp --restart unless-stopped \
+        "${LBL_ARGS[@]+"${LBL_ARGS[@]}"}" \
         "${MISP_PUBLISH_ARGS[@]}" \
         --network "$net" --network-alias aptl-misp --network-alias misp \
         -e MYSQL_HOST=misp-db -e MYSQL_DATABASE=misp -e MYSQL_USER=misp -e MYSQL_PASSWORD=misp_db_password \

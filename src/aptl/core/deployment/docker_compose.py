@@ -16,6 +16,9 @@ from aptl.core.deployment._compose_build_dedupe import (
 from aptl.core.deployment._compose_image_fetch import ComposeImageFetchMixin
 from aptl.core.deployment._compose_lifecycle import kill_compose_lab
 from aptl.core.deployment._compose_project_cleanup import ComposeProjectCleanupMixin
+from aptl.core.deployment._compose_project_inventory import (
+    ComposeProjectInventoryMixin,
+)
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
 from aptl.core.deployment._compose_realization import ComposeRealizationMixin
 from aptl.core.deployment._compose_runtime_inventory import (
@@ -46,6 +49,7 @@ _DOCKER_TIMEOUT = 30
 class DockerComposeBackend(
     DockerEndpointBindingMixin,
     ComposeRuntimeInventoryMixin,
+    ComposeProjectInventoryMixin,
     ComposeQueryMixin,
     ComposeRealizationMixin,
     ComposeSeedAttributionMixin,
@@ -59,7 +63,7 @@ class DockerComposeBackend(
     Manages lab lifecycle via ``docker compose`` subprocess calls.
     All commands run against the docker-compose.yml in project_dir.
     Host/container query + inspect helpers are provided by
-    ``ComposeQueryMixin``.
+    ``ComposeProjectInventoryMixin`` and ``ComposeQueryMixin``.
     """
 
     def __init__(

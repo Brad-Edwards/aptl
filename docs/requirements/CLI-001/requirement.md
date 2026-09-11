@@ -23,7 +23,7 @@ Lab lifecycle is the most fundamental operation.
 
 - IMPLEMENTS → ADR `docs/adrs/adr-007-python-cli-control-plane.md` (ADR-007: Python CLI Control Plane)
 - IMPLEMENTS → GITHUB_ISSUE `1000` (Release-blocking lab startup and status correctness)
-- IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/_compose_queries.py` (Checked all-state project container inventory)
+- IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/_compose_project_inventory.py` (Checked all-state project container inventory)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/errors.py` (Typed project-inventory observation failure)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/_compose_content_mounts.py` (Repeatable generated bind-mount content realization)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/lab.py` (Configured status selection and terminal startup attestation)

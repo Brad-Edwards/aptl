@@ -7,7 +7,6 @@ into ``DockerComposeBackend``, which supplies ``_run``, ``_run_streaming``, and
 """
 
 import json
-import re
 import subprocess
 from typing import Any
 
@@ -16,10 +15,7 @@ from aptl.core.deployment._proc_net_listeners import (
     ContainerListeners,
     parse_proc_net_listeners,
 )
-from aptl.core.deployment.errors import BackendObservationError, BackendTimeoutError
-from aptl.core.lab_types import LabStatus
 from aptl.utils.logging import get_logger
-from aptl.utils.redaction import redact
 
 log = get_logger("deployment.docker_compose")
 
@@ -51,66 +47,6 @@ _LISTENER_OBSERVER_IMAGE = (
     "alpine:3.22@sha256:"
     "14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce"
 )
-_PROJECT_OWNERSHIP_LABELS = (
-    "com.docker.compose.project",
-    "aptl.lifecycle.project",
-)
-_MAX_INVENTORY_ERROR_LENGTH = 512
-
-
-def _parse_labels(labels_str: str) -> dict[str, str]:
-    """Parse a comma-separated `k=v,k=v` labels string from `docker ps`."""
-    if not labels_str:
-        return {}
-    out: dict[str, str] = {}
-    for pair in labels_str.split(","):
-        if "=" in pair:
-            k, v = pair.split("=", 1)
-            out[k.strip()] = v.strip()
-    return out
-
-
-def _parse_ports(ports_str: str) -> list[str]:
-    """Parse a comma-separated ports string from `docker ps`."""
-    if not ports_str:
-        return []
-    return [p.strip() for p in ports_str.split(",") if p.strip()]
-
-
-def _parse_lab_row(line: str) -> dict[str, Any] | None:
-    """Parse a single TSV row from `docker ps --format ...` into a dict.
-
-    Returns ``None`` for short / malformed lines so callers can filter
-    them out cleanly.
-    """
-    parts = line.split("\t", 6)
-    if len(parts) < 6:
-        return None
-    health_match = re.search(
-        r"\((healthy|unhealthy|health: starting)\)", parts[3], re.IGNORECASE
-    )
-    health = health_match.group(1).casefold() if health_match else ""
-    if health == "health: starting":
-        health = "starting"
-    return {
-        "name": parts[0],
-        "image": parts[1],
-        "id": parts[2],
-        "status": parts[3],
-        "state": parts[4],
-        "health": health,
-        "labels": _parse_labels(parts[5]),
-        "ports": _parse_ports(parts[6] if len(parts) > 6 else ""),
-    }
-
-
-def _bounded_inventory_error(stderr: str) -> str:
-    """Return a redacted, bounded backend error for the public status envelope."""
-
-    safe = str(redact(stderr)).strip()
-    return (safe or "container inventory command failed")[
-        :_MAX_INVENTORY_ERROR_LENGTH
-    ]
 
 
 def _select_shell(probe_returncode: int) -> tuple[str, bool]:
@@ -213,78 +149,6 @@ class ComposeQueryMixin(object):
         if compose_out.returncode == 0:
             result["compose"] = compose_out.stdout.strip()
         return result
-
-    def _project_container_status(self) -> LabStatus:
-        """Return checked, all-state inventory for the configured project.
-
-        Compose-managed containers carry ``com.docker.compose.project``;
-        directly realized containers also carry ``aptl.lifecycle.project``.
-        Query both authorities through the backend runner and union them by
-        immutable container id so local and SSH deployments share one status
-        boundary without relying on a name prefix.
-        """
-
-        fmt = (
-            "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.State}}\t"
-            "{{.Labels}}\t{{.Ports}}"
-        )
-        by_id: dict[str, dict[str, Any]] = {}
-        for label in _PROJECT_OWNERSHIP_LABELS:
-            try:
-                result = self._run(
-                    [
-                        "docker",
-                        "ps",
-                        "-a",
-                        "--filter",
-                        f"label={label}={self._project_name}",
-                        "--format",
-                        fmt,
-                    ],
-                    timeout=_HOST_INVENTORY_TIMEOUT,
-                )
-            except (BackendTimeoutError, OSError):
-                return LabStatus(
-                    running=False,
-                    error="Project container inventory could not be observed",
-                )
-            if result.returncode != 0:
-                return LabStatus(
-                    running=False,
-                    error=_bounded_inventory_error(result.stderr),
-                )
-            for line in result.stdout.splitlines():
-                if not line.strip():
-                    continue
-                row = _parse_lab_row(line)
-                if row is None or not row["id"]:
-                    return LabStatus(
-                        running=False,
-                        error="Failed to parse project container inventory",
-                    )
-                by_id.setdefault(row["id"], row)
-
-        containers = sorted(by_id.values(), key=lambda row: (row["name"], row["id"]))
-        return LabStatus(
-            running=any(
-                str(container.get("state", "")).casefold() == "running"
-                for container in containers
-            ),
-            containers=containers,
-        )
-
-    def host_list_lab_containers(self) -> list[dict[str, Any]]:
-        """Return all-state project inventory for snapshot/readback callers.
-
-        Raises :class:`BackendObservationError` when the shared checked query
-        cannot prove the inventory, so snapshot and boundary consumers never
-        collapse a failed observation into an apparently valid empty project.
-        """
-
-        status = self._project_container_status()
-        if status.error:
-            raise BackendObservationError(status.error)
-        return status.containers
 
     def host_list_lab_networks(self, name_prefix: str) -> list[str]:
         # Scope to the current compose project's networks. Combined with

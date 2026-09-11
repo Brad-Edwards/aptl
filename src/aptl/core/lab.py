@@ -2706,6 +2706,13 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
 
 _MAX_CONTAINER_ATTESTATION_FAILURES = 5
 _MAX_CONTAINER_ATTESTATION_DETAIL = 512
+_TERMINAL_CONTAINER_OBSERVATION_FAILED = (
+    "Terminal project-container state could not be observed"
+)
+_TERMINAL_CONTAINER_RECOVERY_ACTION = (
+    "Inspect the deployment backend, then run `aptl lab stop` or "
+    "`aptl lab start --clean` before retrying"
+)
 
 
 def _container_attestation_detail(
@@ -2733,6 +2740,46 @@ def _container_attestation_detail(
     return str(redact(detail))[:_MAX_CONTAINER_ATTESTATION_DETAIL]
 
 
+def _observe_terminal_project_status(
+    ctx: _LabStartContext,
+) -> tuple[LabStatus | None, LabResult | None]:
+    """Return checked terminal status or one emitted observation failure."""
+
+    assert ctx.backend is not None
+    try:
+        current = ctx.backend.status()
+    except Exception:
+        current = None
+        safe_error = ""
+    else:
+        safe_error = (
+            str(redact(current.error))[:_MAX_CONTAINER_ATTESTATION_DETAIL]
+            if current.error
+            else ""
+        )
+    if current is not None and not safe_error:
+        return current, None
+
+    _emit_diagnostic(
+        ctx,
+        step="attest_project_containers",
+        impact=DiagnosticImpact.READINESS,
+        severity=DiagnosticSeverity.ERROR,
+        message=_TERMINAL_CONTAINER_OBSERVATION_FAILED,
+        operator_action=_TERMINAL_CONTAINER_RECOVERY_ACTION,
+    )
+    error = (
+        f"Terminal project-container observation failed: {safe_error}"
+        if safe_error
+        else _TERMINAL_CONTAINER_OBSERVATION_FAILED
+    )
+    return None, LabResult(
+        success=False,
+        error=error,
+        outcome=StartupOutcome.FAILED,
+    )
+
+
 @_runtime_require(
     lambda ctx: backend_is_initialized(ctx.backend),
     description="backend_is_initialized(ctx.backend)",
@@ -2740,44 +2787,10 @@ def _container_attestation_detail(
 def _step_attest_project_containers(ctx: _LabStartContext) -> LabResult | None:
     """Fail startup unless terminal project inventory is fully running."""
 
-    assert ctx.backend is not None
-    try:
-        current = ctx.backend.status()
-    except Exception:
-        _emit_diagnostic(
-            ctx,
-            step="attest_project_containers",
-            impact=DiagnosticImpact.READINESS,
-            severity=DiagnosticSeverity.ERROR,
-            message="Terminal project-container state could not be observed",
-            operator_action=(
-                "Inspect the deployment backend, then run `aptl lab stop` or "
-                "`aptl lab start --clean` before retrying"
-            ),
-        )
-        return LabResult(
-            success=False,
-            error="Terminal project-container state could not be observed",
-            outcome=StartupOutcome.FAILED,
-        )
-    if current.error:
-        safe_error = str(redact(current.error))[:_MAX_CONTAINER_ATTESTATION_DETAIL]
-        _emit_diagnostic(
-            ctx,
-            step="attest_project_containers",
-            impact=DiagnosticImpact.READINESS,
-            severity=DiagnosticSeverity.ERROR,
-            message="Terminal project-container state could not be observed",
-            operator_action=(
-                "Inspect the deployment backend, then run `aptl lab stop` or "
-                "`aptl lab start --clean` before retrying"
-            ),
-        )
-        return LabResult(
-            success=False,
-            error=f"Terminal project-container observation failed: {safe_error}",
-            outcome=StartupOutcome.FAILED,
-        )
+    current, observation_failure = _observe_terminal_project_status(ctx)
+    if current is None:
+        assert observation_failure is not None
+        return observation_failure
 
     non_running = [
         container
@@ -2785,8 +2798,10 @@ def _step_attest_project_containers(ctx: _LabStartContext) -> LabResult | None:
         if str(container.get("state", container.get("State", ""))).casefold()
         != "running"
     ]
+    failure_summary: str | None
     if not current.containers:
         non_running_summary = "no project containers were observed"
+        failure_summary = non_running_summary
     elif non_running:
         details = [
             _container_attestation_detail(ctx.backend, container)
@@ -2796,29 +2811,33 @@ def _step_attest_project_containers(ctx: _LabStartContext) -> LabResult | None:
         if remaining:
             details.append(f"{remaining} additional non-running container(s)")
         non_running_summary = "; ".join(details)
+        failure_summary = non_running_summary
     else:
         ctx.terminal_status = current
-        return None
+        failure_summary = None
 
-    _emit_diagnostic(
-        ctx,
-        step="attest_project_containers",
-        impact=DiagnosticImpact.READINESS,
-        severity=DiagnosticSeverity.ERROR,
-        message=(
-            f"Terminal inventory contains {len(non_running)} non-running "
-            "project container(s)"
-        ),
-        operator_action=(
-            "Inspect the named container state, then run `aptl lab stop` or "
-            "`aptl lab start --clean` before retrying"
-        ),
-    )
-    return LabResult(
-        success=False,
-        error=f"Lab start left project containers non-running: {non_running_summary}",
-        outcome=StartupOutcome.FAILED,
-    )
+    result: LabResult | None = None
+    if failure_summary is not None:
+        _emit_diagnostic(
+            ctx,
+            step="attest_project_containers",
+            impact=DiagnosticImpact.READINESS,
+            severity=DiagnosticSeverity.ERROR,
+            message=(
+                f"Terminal inventory contains {len(non_running)} non-running "
+                "project container(s)"
+            ),
+            operator_action=(
+                "Inspect the named container state, then run `aptl lab stop` or "
+                "`aptl lab start --clean` before retrying"
+            ),
+        )
+        result = LabResult(
+            success=False,
+            error=f"Lab start left project containers non-running: {failure_summary}",
+            outcome=StartupOutcome.FAILED,
+        )
+    return result
 
 
 # Ordered list of steps the orchestrator dispatches. Keep numbered

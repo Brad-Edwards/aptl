@@ -3747,6 +3747,20 @@ class TestStartupClassificationWiring:
         store.write_json(run_id, "manifest.json", {"run_id": run_id})
         assert run_id in store.list_runs()
 
+    def test_resolve_run_target_uses_configured_run_storage(self, tmp_path):
+        """Startup records must be discoverable through ``aptl runs``."""
+        from aptl.cli._common import resolve_run_store
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import _LabStartContext, _resolve_run_target
+
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.config = AptlConfig(run_storage={"local_path": "evidence/runs"})
+
+        store, _run_id = _resolve_run_target(ctx)
+
+        assert store.base_dir == (tmp_path / "evidence" / "runs").resolve()
+        assert store.base_dir == resolve_run_store(tmp_path, ctx.config).base_dir
+
     # -- seed_soc (capability) -----------------------------------------
 
     def test_seed_soc_nonzero_exit_emits_capability_warning(self, tmp_path, mocker):

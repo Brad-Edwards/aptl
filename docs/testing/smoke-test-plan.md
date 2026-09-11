@@ -346,13 +346,15 @@ and the two inspected claims.
 Run:
 
 ```bash
-aptl lab stop -v
+aptl lab stop -v -y
 python scripts/ci/assert_project_teardown.py .
 ```
 
 Expected: both commands exit zero and the checked project owns no remaining
 containers, networks, or volumes. Capture the project-scoped proof. Do not use
 `docker system prune`, broad deletion, or an `aptl-*` name search as evidence.
+The `-y` flag confirms only this documented project-scoped volume removal; it
+does not widen the cleanup scope.
 
 ## Path A results: Candidate distribution
 

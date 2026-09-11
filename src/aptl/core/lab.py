@@ -2227,9 +2227,10 @@ def _resolve_run_target(ctx: _LabStartContext) -> tuple[object, str]:
 
     Prefers the active scenario's trace-scoped run dir (``resolve_active_run_dir``)
     so MCP-side and lab-side artifacts share one directory; otherwise mints a
-    filesystem-safe ``run_<UTC timestamp>`` id under the default run store base
-    dir. The minted id is shaped to pass ``runstore._validate_id``. Resolved
-    once and cached on ctx so orchestration and the run record agree.
+    filesystem-safe ``run_<UTC timestamp>`` id under the configured run store
+    base dir. The minted id is shaped to pass ``runstore._validate_id``.
+    Resolved once and cached on ctx so orchestration, the run record, and the
+    public ``aptl runs`` commands all address the same archive.
     """
     from datetime import datetime, timezone
 
@@ -2239,8 +2240,13 @@ def _resolve_run_target(ctx: _LabStartContext) -> tuple[object, str]:
     active_run_dir = resolve_active_run_dir(state_dir)
     if active_run_dir is not None:
         return LocalRunStore(active_run_dir.parent), active_run_dir.name
+    configured_path = Path(
+        getattr(getattr(ctx.config, "run_storage", None), "local_path", "./runs")
+    )
+    if not configured_path.is_absolute():
+        configured_path = ctx.project_dir / configured_path
     run_id = datetime.now(timezone.utc).strftime("run_%Y%m%dT%H%M%SZ")
-    return LocalRunStore(state_dir / "runs"), run_id
+    return LocalRunStore(configured_path), run_id
 
 
 def _resolve_raes_snapshot(outcome: object) -> object:

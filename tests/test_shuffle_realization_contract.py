@@ -244,6 +244,9 @@ fi
 if [ "$1" = inspect ] && [ "$2" = aptl-thehive ]; then
     exit 1
 fi
+if [ "$1" = inspect ] && [ "$2" = aptl-shuffle-orborus ]; then
+    exit 1
+fi
 if [ "$1" = exec ] && [ "$2" = aptl-shuffle-backend ]; then
     printf '{"name":"Shuffle"}\n'
 fi
@@ -411,6 +414,9 @@ def test_soar_fixups_activate_the_generated_soc_tls_material() -> None:
     assert "fix_thehive_tls" in fixup
     assert "/etc/thehive/keystore.p12:ro" in fixup
     assert "/etc/thehive/application.conf:ro" in fixup
+    assert "fix_shuffle_orborus" in fixup
+    assert "ghcr.io/shuffle/shuffle-worker@sha256:" in fixup
+    assert "SHUFFLE_ORBORUS_EXECUTION_TIMEOUT=600" in fixup
     assert "verify_soc_tls" in fixup
     assert '--cacert "$CERT_BASE/lab-ca.pem"' in fixup
     assert 'THEHIVE_URL="${THEHIVE_URL:-https://localhost:9000}"' in thehive_key

@@ -12,6 +12,8 @@
 #   - Shuffle and TheHive receive the generated SOC certificate bundle under
 #     neutral /opt/aptl paths, but their pinned images only activate TLS from
 #     /etc/nginx and /etc/thehive respectively.
+#   - Shuffle Orborus has no declared worker-image closure, so it accepts
+#     executions but asks Docker to create an invalid empty image reference.
 # This recreates those containers with the configuration recovered from the
 # pre-ACES docker-compose.yml (which ran these services for months). It
 # preserves each realized image, network, labels, volumes, and host publication.
@@ -21,6 +23,7 @@
 #
 # Root fixes tracked upstream (remove this script when they ship):
 #   MISP  -> OpenRAE/env-packs#280 ; retire per Brad-Edwards/aptl#912
+#   Orborus -> OpenRAE/env-packs#285 ; retire per Brad-Edwards/aptl#949
 # =============================================================================
 set -uo pipefail
 
@@ -29,6 +32,7 @@ PROJECT_DIR="${APTL_PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 CERT_BASE="$PROJECT_DIR/config/soc_certs"
 # Same canonical key MISP's server (ADMIN_KEY) and the seed client share.
 MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
+SHUFFLE_WORKER_IMAGE="${SHUFFLE_WORKER_IMAGE:-ghcr.io/shuffle/shuffle-worker@sha256:fd0d420a5e0cd41f3979335e51912e8dd423e7ce540d1dfa24efdc98fb6071bd}"
 
 command -v docker >/dev/null 2>&1 || exit 0
 
@@ -36,6 +40,10 @@ _present()  { docker inspect "$1" >/dev/null 2>&1; }
 _net()      { docker inspect "$1" -f '{{range $n,$c := .NetworkSettings.Networks}}{{$n}}{{end}}' 2>/dev/null; }
 _image()    { docker inspect "$1" -f '{{.Config.Image}}' 2>/dev/null; }
 _has_env()  { docker inspect "$1" -f '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -q "^$2="; }
+_env_equals() {
+    docker inspect "$1" -f '{{range .Config.Env}}{{println .}}{{end}}' \
+        2>/dev/null | grep -Fxq "$2=$3"
+}
 _has_mount_target() {
     docker inspect "$1" -f '{{range .Mounts}}{{println .Destination}}{{end}}' \
         2>/dev/null | grep -Fxq "$2"
@@ -324,6 +332,72 @@ fix_thehive_tls() {
     log "TheHive serves the generated SOC certificate"
 }
 
+# --- Shuffle Orborus: restore the digest-pinned worker contract -------------
+fix_shuffle_orborus() {
+    _present aptl-shuffle-orborus || return 0
+    if _env_equals aptl-shuffle-orborus SHUFFLE_WORKER_IMAGE "$SHUFFLE_WORKER_IMAGE" \
+        && _env_equals aptl-shuffle-orborus SHUFFLE_ORBORUS_EXECUTION_TIMEOUT 600 \
+        && _env_equals aptl-shuffle-orborus ORBORUS_CONTAINER_NAME aptl-shuffle-orborus; then
+        return 0
+    fi
+
+    log "Shuffle Orborus has no executable worker-image contract; recreating"
+    local img net ip source destination writable mount_count=0
+    local -a mount_args=()
+    img="$(_image aptl-shuffle-orborus)"
+    net="$(_net aptl-shuffle-orborus)"
+    ip="$(docker inspect aptl-shuffle-orborus -f \
+        '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null)"
+    if ! [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        log "ERROR: realized Shuffle Orborus has no IPv4 address to preserve"
+        return 1
+    fi
+    _capture_labels aptl-shuffle-orborus
+    while read -r source destination writable; do
+        [ -n "$source" ] && [ -n "$destination" ] || continue
+        mount_count=$((mount_count + 1))
+        if [ "$writable" = "true" ]; then
+            mount_args+=(-v "$source:$destination")
+        else
+            mount_args+=(-v "$source:$destination:ro")
+        fi
+    done < <(docker inspect aptl-shuffle-orborus -f \
+        '{{range .Mounts}}{{if eq .Type "bind"}}{{println .Source .Destination .RW}}{{end}}{{end}}' \
+        2>/dev/null)
+    if [ "$mount_count" -lt 1 ]; then
+        log "ERROR: realized Shuffle Orborus has no Docker socket bind to preserve"
+        return 1
+    fi
+
+    docker rm -f aptl-shuffle-orborus >/dev/null 2>&1 || true
+    if ! docker run -d --name aptl-shuffle-orborus --hostname shuffle-orborus \
+        --restart unless-stopped "${LBL_ARGS[@]+"${LBL_ARGS[@]}"}" \
+        --network "$net" --ip "$ip" \
+        --network-alias aptl-shuffle-orborus --network-alias shuffle-orborus \
+        "${mount_args[@]}" \
+        -e SHUFFLE_APP_SDK_TIMEOUT=300 -e ENVIRONMENT_NAME=Shuffle -e ORG_ID=Shuffle \
+        -e BASE_URL=http://shuffle-backend:5001 -e DOCKER_API_VERSION=1.44 \
+        -e SHUFFLE_WORKER_IMAGE="$SHUFFLE_WORKER_IMAGE" \
+        -e SHUFFLE_ORBORUS_EXECUTION_TIMEOUT=600 \
+        -e SHUFFLE_STATS_DISABLED=true -e SHUFFLE_LOGS_DISABLED=true \
+        -e SHUFFLE_SKIP_PIPELINES=true \
+        -e ORBORUS_CONTAINER_NAME=aptl-shuffle-orborus -e CLEANUP=false \
+        "$img" >/dev/null; then
+        log "ERROR: replacement Shuffle Orborus could not be started"
+        return 1
+    fi
+    for _ in $(seq 1 60); do
+        if [ "$(docker inspect aptl-shuffle-orborus -f '{{.State.Running}}' 2>/dev/null)" = "true" ] \
+            && _env_equals aptl-shuffle-orborus SHUFFLE_WORKER_IMAGE "$SHUFFLE_WORKER_IMAGE"; then
+            log "Shuffle Orborus is running with a digest-pinned worker image"
+            return 0
+        fi
+        sleep 2
+    done
+    log "ERROR: replacement Shuffle Orborus did not become ready"
+    return 1
+}
+
 # --- readiness waits so the seed steps find the services up -----------------
 wait_misp() {
     _present aptl-misp || return 0
@@ -367,6 +441,9 @@ if ! fix_shuffle_frontend_tls; then
     exit 1
 fi
 if ! fix_thehive_tls; then
+    exit 1
+fi
+if ! fix_shuffle_orborus; then
     exit 1
 fi
 wait_misp

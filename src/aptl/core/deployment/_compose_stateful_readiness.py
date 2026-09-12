@@ -89,32 +89,43 @@ class ComposeStatefulReadinessMixin:
 
         identity = wazuh_cluster_identity(realization)
         services = _stateful_services(realization, identity)
+        readiness_error = self._authenticated_services_error(
+            realization, services, identity
+        )
+        if readiness_error is not None:
+            return LabResult(success=False, error=readiness_error)
+        manager = _rendered_manager_config_container(realization, identity)
+        if manager is not None and not self._rendered_manager_config_is_active(manager):
+            return LabResult(
+                success=False,
+                error="Wazuh manager did not activate its rendered configuration.",
+            )
+        return None
+
+    def _authenticated_services_error(
+        self,
+        realization: DeploymentRealizationSpec,
+        services: set[str],
+        identity: WazuhClusterIdentity,
+    ) -> str | None:
+        """Observe configured services and return their bounded failure reason."""
+
         results: dict[str, bool] = {}
         self._stateful_authenticated_readiness = results
+        error: str | None = None
         if services:
             env, _placeholder_input = _load_stateful_env(self._project_dir)
             if env is None:
-                return LabResult(
-                    success=False,
-                    error="Authenticated Wazuh readiness credentials are unavailable.",
+                error = "Authenticated Wazuh readiness credentials are unavailable."
+            else:
+                nodes = {node.service_name: node for node in realization.nodes}
+                results = self._authenticated_readiness_results(
+                    services, nodes, env, identity
                 )
-            nodes = {node.service_name: node for node in realization.nodes}
-            results = self._authenticated_readiness_results(
-                services, nodes, env, identity
-            )
-            self._stateful_authenticated_readiness = results
-            if not all(results.values()):
-                return LabResult(
-                    success=False,
-                    error="Authenticated Wazuh readiness validation failed.",
-                )
-        manager = _rendered_manager_config_container(realization, identity)
-        if manager is None or self._rendered_manager_config_is_active(manager):
-            return None
-        return LabResult(
-            success=False,
-            error="Wazuh manager did not activate its rendered configuration.",
-        )
+                self._stateful_authenticated_readiness = results
+                if not all(results.values()):
+                    error = "Authenticated Wazuh readiness validation failed."
+        return error
 
     def _rendered_manager_config_is_active(self, container: str) -> bool:
         """Prove the manager activated the exact rendered config it received."""

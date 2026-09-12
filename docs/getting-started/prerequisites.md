@@ -90,7 +90,11 @@ mDNS; an editor's automatic port-forwarding may hold others), publishes that
 service on a free port instead and prints the real ports under "Host port
 remaps" in the start summary. Use the reported ports (for example, the Wazuh Dashboard
 URL, or `dig @localhost -p <reported-port> techvault.local SOA`). Pin a specific
-port with the matching `APTL_HP_*` / `APTL_DNS_HOST_PORT` variable to override.
+port with the matching `APTL_HP_*` / `APTL_DNS_HOST_PORT` variable to override;
+those set the port only, never the bind address. Most published ports bind
+`127.0.0.1` and are reachable from this machine alone; the deliberate victim
+targets publish on every interface. See
+[Host bind addresses](../architecture/networking.md#host-bind-addresses).
 
 ## Python environment
 

@@ -791,8 +791,16 @@ services:
     image: debian:12-slim
     container_name: aptl-dns
     ports:
-      - "${APTL_DNS_HOST_PORT:-5353}:53/tcp"
-      - "${APTL_DNS_HOST_PORT:-5353}:53/udp"
+      # SEC / ADR-034 Host Exposure Amendment (issue #1004): the DNS host
+      # publication is an operator convenience (`dig @localhost -p 5353 ...`),
+      # not scenario attack surface, so it binds 127.0.0.1 and is not reachable
+      # from other hosts on the operator's LAN. A host firewall is not enough on
+      # its own — Docker installs its own packet-filtering rules for published
+      # ports. In-range red-team resolution is unaffected: kali reaches this
+      # node over aptl-dmz/aptl-internal (172.20.1.22 / 172.20.2.27), never the
+      # host publish.
+      - "127.0.0.1:${APTL_DNS_HOST_PORT:-5353}:53/tcp"
+      - "127.0.0.1:${APTL_DNS_HOST_PORT:-5353}:53/udp"
     networks:
       aptl-dmz:
         ipv4_address: 172.20.1.22
@@ -1122,7 +1130,14 @@ services:
       aptl-security:
         ipv4_address: 172.20.0.27
     ports:
-      - "${APTL_HP_REVERSE_22:-2027}:22"    # SSH access
+      # SEC / ADR-034 Host Exposure Amendment (issue #1004): analyst SSH is an
+      # operator surface on the security net, not scenario attack surface, and
+      # this container holds host-equivalent authority (cgroup: host, SYS_ADMIN,
+      # /sys/fs/cgroup rw, seccomp:unconfined). Bind 127.0.0.1 so it is not
+      # reachable from other hosts on the operator's LAN, matching the
+      # kali-ssh-proxy bridge. Kali's in-scenario pivot uses aptl-security
+      # (172.20.0.27), never the host publish.
+      - "127.0.0.1:${APTL_HP_REVERSE_22:-2027}:22"    # SSH access
     environment:
       - SIEM_IP=172.20.0.10  # wazuh.manager
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub

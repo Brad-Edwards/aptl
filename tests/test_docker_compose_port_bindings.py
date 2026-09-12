@@ -3,12 +3,13 @@
 SOC / control-plane management surfaces are operator tooling, not deliberately
 vulnerable victim targets. Per ADR-034 (Host Exposure Amendment) they must be
 published to ``127.0.0.1`` so they are not reachable from other machines on the
-operator's LAN. Deliberate attack-surface services (the enterprise victim
-targets) must stay published on all interfaces so the in-range red team can
-reach them.
+operator's LAN. The same rule covers host-side lab service surfaces that are
+published purely for operator convenience (issue #1004). Deliberate
+attack-surface services (the enterprise victim targets) must stay published on
+all interfaces so the in-range red team can reach them.
 
 This test parses ``docker-compose.yml`` and pins both halves of that boundary,
-so a future edit cannot silently re-expose a SOC management port nor
+so a future edit cannot silently re-expose a loopback-only port nor
 accidentally loopback-bind a victim target.
 """
 
@@ -51,6 +52,12 @@ MANAGEMENT_SURFACES = [
     ("aptl-otel-collector", 4318),
     ("aptl-tempo", 3200),
     ("kali-ssh-proxy", 2023),
+    # The reverse-engineering workstation is an analyst surface on the security
+    # net and runs with host-equivalent authority (cgroup: host, SYS_ADMIN,
+    # /sys/fs/cgroup rw, seccomp:unconfined), so its SSH publish must not be
+    # LAN-reachable (issue #1004). Kali's in-scenario pivot uses the security
+    # network address, not this publish.
+    ("reverse", 2027),
     # mailserver holds fixture credentials (a known lab password), so its
     # SMTP/IMAP host publishes must NOT be reachable on 0.0.0.0 where an
     # exposed host becomes an open, known-cred relay (issue #668). The in-range
@@ -62,11 +69,25 @@ MANAGEMENT_SURFACES = [
     ("mailserver", 993),
 ]
 
+# Host-side lab service surfaces published for operator convenience rather than
+# as scenario attack surface. They MUST bind loopback too (issue #1004): the
+# in-range red team reaches these services over the Docker networks, so a LAN
+# publish buys no realism and only widens the host's exposure. Each entry is
+# (service_name, host_port, frozenset of protocols that must be published).
+HOST_SERVICE_SURFACES = [
+    # `dig @localhost -p 5353 techvault.local SOA` is the operator path; Docker
+    # publishes both transports, so both must be pinned.
+    ("dns", 5353, frozenset({"tcp", "udp"})),
+]
+
+LOOPBACK_SURFACES = MANAGEMENT_SURFACES + [
+    (service, host_port) for service, host_port, _protos in HOST_SERVICE_SURFACES
+]
+
 # Deliberate victim / attack-surface targets that MUST remain reachable on all
 # interfaces (NOT loopback-bound). Encodes the other half of the policy.
 TARGET_SURFACES = [
     ("webapp-proxy", 8080),
-    ("dns", 5353),
 ]
 
 
@@ -113,7 +134,7 @@ def _published_for(compose: dict, service: str, host_port: int):
     return matches
 
 
-@pytest.mark.parametrize("service,host_port", MANAGEMENT_SURFACES)
+@pytest.mark.parametrize("service,host_port", LOOPBACK_SURFACES)
 def test_management_surface_is_loopback_bound(compose, service, host_port):
     matches = _published_for(compose, service, host_port)
     assert matches, f"{service} no longer publishes host port {host_port}"
@@ -121,6 +142,33 @@ def test_management_surface_is_loopback_bound(compose, service, host_port):
         assert host_ip == "127.0.0.1", (
             f"{service} host port {host_port} must bind 127.0.0.1 (ADR-034 "
             f"Host Exposure Amendment), got {entry!r}"
+        )
+
+
+@pytest.mark.parametrize("service,host_port,protocols", HOST_SERVICE_SURFACES)
+def test_host_service_surface_binds_loopback_on_every_protocol(
+    compose, service, host_port, protocols
+):
+    """Every published transport of a host-side service binds loopback.
+
+    The loopback check above walks whatever entries exist; this pins *which*
+    transports must exist, so dropping one protocol (or adding a third on
+    0.0.0.0) fails instead of silently passing.
+    """
+    published = {}
+    for entry in compose["services"][service].get("ports", []):
+        host_ip, parsed_port, proto = _parse_port(entry)
+        if parsed_port == host_port:
+            published[proto] = (host_ip, entry)
+    assert set(published) == set(protocols), (
+        f"{service} host port {host_port} must publish exactly "
+        f"{sorted(protocols)}, got {sorted(published)}"
+    )
+    for proto, (host_ip, entry) in published.items():
+        assert host_ip == "127.0.0.1", (
+            f"{service} host port {host_port}/{proto} must bind 127.0.0.1 "
+            f"(issue #1004: host-side service surface, not attack surface), "
+            f"got {entry!r}"
         )
 
 

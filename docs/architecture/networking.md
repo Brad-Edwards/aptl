@@ -90,6 +90,7 @@ Several containers connect to multiple networks:
 | 514/udp, 1514, 1515 | aptl-wazuh-manager | Syslog + agent enrollment |
 | 2027 | aptl-reverse:22 | Reverse Engineering SSH |
 | 3443, 3001 | aptl-shuffle-frontend | Shuffle SOAR UI |
+| 5353/tcp, 5353/udp | aptl-dns:53 | TechVault DNS |
 | 8080 | aptl-webapp:8080 | TechVault web app |
 | 8443 | aptl-misp:443 | MISP UI |
 | 9000 | aptl-thehive:9000 | TheHive UI |
@@ -99,6 +100,39 @@ Several containers connect to multiple networks:
 
 The victim and kali containers publish no host ports; use
 `aptl container shell aptl-victim` / `aptl container shell aptl-kali`.
+
+### Host bind addresses
+
+Per ADR-034 (Host Exposure Amendment), a host publication binds `127.0.0.1`
+unless the service is deliberate attack surface. Two kinds of surface bind
+loopback:
+
+- **SOC / control-plane management**: Wazuh, MISP, TheHive, Cortex, Shuffle,
+  the OTel collector, Tempo, the web control plane, and the two SSH surfaces
+  (the Kali bridge on 2023 and the reverse-engineering workstation on 2027).
+  The RE workstation runs with host-equivalent authority (`cgroup: host`,
+  `SYS_ADMIN`, `/sys/fs/cgroup` read-write, `seccomp:unconfined`), so
+  LAN-reachable SSH into it would be a host takeover path; kali's in-scenario
+  pivot reaches it at `172.20.0.27` on the security network instead.
+- **Host-side lab services**: published only so the operator can drive the lab
+  locally. `dns` is the current member. `dig @localhost -p 5353 techvault.local
+  SOA` is the operator path, and the in-range red team resolves against
+  `172.20.1.22` / `172.20.2.27` over the Docker networks, so a LAN publish would
+  add exposure without adding realism.
+
+Deliberate victim targets (`webapp-proxy` on 8080) publish on all interfaces so
+the in-range red team can reach them. A host firewall is not a substitute for
+the bind address: Docker manages its own packet-filtering rules for published
+ports, so the mapping in `docker-compose.yml` is the control.
+
+There is no environment-variable opt-in for a non-loopback bind. ADR-034 keeps
+the bind address a single deployment-boundary seam rather than a per-service
+knob, so exposing one of these services on the LAN means making a deliberate,
+reviewable edit to its mapping in `docker-compose.yml`. Do that only on a
+network you control: these services ship with known lab credentials and
+intentionally weak configuration, and reaching them from another machine is
+enough to take over the lab host's SOC stack. `APTL_HP_*` and
+`APTL_DNS_HOST_PORT` change the port only, never the bind address.
 
 ## Internal Communication
 

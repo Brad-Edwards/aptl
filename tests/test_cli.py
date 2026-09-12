@@ -917,6 +917,30 @@ class TestLabStartCommand:
         assert "vm.max_map_count" in result.stdout
         assert "failed" in result.stdout.lower()
 
+    def test_start_terminal_attestation_failure_exits_nonzero(self, runner, mocker):
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import StartupOutcome
+
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(
+                success=False,
+                error=(
+                    "Lab start left project containers non-running: "
+                    "'aptl-broken' state='created' status='Created' exit_code=128"
+                ),
+                outcome=StartupOutcome.FAILED,
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "start"])
+
+        assert result.exit_code == 1
+        assert "aptl-broken" in result.stdout
+        assert "created" in result.stdout
+        assert "128" in result.stdout
+
 
 class TestLabStopCommand:
     """Tests for the aptl lab stop CLI command."""
@@ -1066,6 +1090,55 @@ class TestLabStatusCommand:
 
         assert "not running" in result.stdout.lower()
         assert "docker daemon not running" in result.output
+
+    def test_status_renders_stopped_inventory_when_nothing_is_running(
+        self, runner, mocker
+    ):
+        from aptl.cli.main import app
+        from aptl.core.lab import LabStatus
+
+        mocker.patch(
+            "aptl.cli.lab.lab_status",
+            return_value=LabStatus(
+                running=False,
+                containers=[
+                    {
+                        "name": "aptl-failed",
+                        "state": "exited",
+                        "status": "Exited (128)",
+                    }
+                ],
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "status"])
+
+        assert result.exit_code == 0
+        assert "not running" in result.stdout.lower()
+        assert "aptl-failed" in result.stdout
+        assert "exited" in result.stdout
+
+    def test_status_json_reports_inventory_observation_failure(
+        self, runner, mocker, tmp_path
+    ):
+        from aptl.cli.main import app
+        from aptl.core.config import AptlConfig
+        from aptl.core.deployment.errors import BackendObservationError
+
+        mocker.patch(
+            "aptl.cli._common.resolve_config_for_cli",
+            return_value=(AptlConfig(), tmp_path),
+        )
+        mocker.patch("aptl.core.deployment.get_backend", return_value=MagicMock())
+        mocker.patch(
+            "aptl.core.snapshot.capture_snapshot",
+            side_effect=BackendObservationError("project inventory unavailable"),
+        )
+
+        result = runner.invoke(app, ["lab", "status", "--json"])
+
+        assert result.exit_code == 1
+        assert "project inventory unavailable" in result.output
 
 
 def _continuity_result(events):

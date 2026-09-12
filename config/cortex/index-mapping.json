@@ -1,0 +1,140 @@
+{
+  "mappings": {
+    "date_detection": false,
+    "numeric_detection": false,
+    "properties": {
+      "attachment": {
+        "type": "nested",
+        "properties": {
+          "contentType": {"type": "keyword"},
+          "hashes": {"type": "keyword"},
+          "id": {"type": "keyword"},
+          "name": {"type": "keyword"},
+          "size": {"type": "long"}
+        }
+      },
+      "author": {"type": "text", "fielddata": true},
+      "avatar": {"type": "binary"},
+      "base": {"type": "boolean"},
+      "baseConfig": {"type": "keyword"},
+      "binary": {"type": "binary"},
+      "cacheTag": {"type": "keyword"},
+      "command": {"type": "text", "fielddata": true},
+      "config": {"type": "binary"},
+      "configuration": {"type": "binary"},
+      "createdAt": {
+        "type": "date",
+        "format": "epoch_millis||basic_date_time_no_millis"
+      },
+      "createdBy": {"type": "keyword"},
+      "data": {"type": "binary"},
+      "dataType": {"type": "keyword"},
+      "dataTypeList": {"type": "keyword"},
+      "dblist": {"type": "keyword"},
+      "description": {"type": "text", "fielddata": true},
+      "details": {
+        "type": "nested",
+        "properties": {
+          "_id": {"type": "keyword"},
+          "dataTypeList": {"type": "keyword"},
+          "description": {"type": "text", "fielddata": true},
+          "endDate": {
+            "type": "date",
+            "format": "epoch_millis||basic_date_time_no_millis"
+          },
+          "errorMessage": {"type": "text", "fielddata": true},
+          "input": {"type": "binary"},
+          "jobCache": {"type": "long"},
+          "jobTimeout": {"type": "long"},
+          "label": {"type": "keyword"},
+          "message": {"type": "text", "fielddata": true},
+          "name": {"type": "keyword"},
+          "organization": {"type": "keyword"},
+          "pap": {"type": "long"},
+          "parameters": {"type": "binary"},
+          "rate": {"type": "long"},
+          "rateUnit": {"type": "keyword"},
+          "roles": {"type": "keyword"},
+          "startDate": {
+            "type": "date",
+            "format": "epoch_millis||basic_date_time_no_millis"
+          },
+          "status": {"type": "keyword"},
+          "tlp": {"type": "long"},
+          "updatedAt": {
+            "type": "date",
+            "format": "epoch_millis||basic_date_time_no_millis"
+          },
+          "updatedBy": {"type": "keyword"}
+        }
+      },
+      "dockerImage": {"type": "text", "fielddata": true},
+      "endDate": {
+        "type": "date",
+        "format": "epoch_millis||basic_date_time_no_millis"
+      },
+      "errorMessage": {"type": "text", "fielddata": true},
+      "fromCache": {"type": "boolean"},
+      "full": {"type": "binary"},
+      "input": {"type": "binary"},
+      "jobCache": {"type": "long"},
+      "jobTimeout": {"type": "long"},
+      "key": {"type": "keyword"},
+      "label": {"type": "keyword"},
+      "license": {"type": "text", "fielddata": true},
+      "login": {"type": "keyword"},
+      "message": {"type": "text", "fielddata": true},
+      "name": {"type": "keyword"},
+      "objectId": {"type": "keyword"},
+      "objectType": {"type": "keyword"},
+      "operation": {"type": "keyword"},
+      "operations": {"type": "binary"},
+      "organization": {"type": "keyword"},
+      "otherDetails": {"type": "text", "fielddata": true},
+      "pap": {"type": "long"},
+      "parameters": {"type": "binary"},
+      "password": {"type": "keyword"},
+      "preferences": {"type": "binary"},
+      "rate": {"type": "long"},
+      "rateUnit": {"type": "keyword"},
+      "relations": {
+        "type": "join",
+        "eager_global_ordinals": true,
+        "relations": {
+          "audit": "dummy-audit",
+          "data": "dummy-data",
+          "dblist": "dummy-dblist",
+          "job": ["dummy-job", "report"],
+          "organization": ["worker", "workerConfig", "dummy-organization"],
+          "report": "artifact",
+          "sequence": "dummy-sequence",
+          "user": "dummy-user"
+        }
+      },
+      "requestId": {"type": "keyword"},
+      "roles": {"type": "keyword"},
+      "rootId": {"type": "keyword"},
+      "sequenceCounter": {"type": "long"},
+      "startDate": {
+        "type": "date",
+        "format": "epoch_millis||basic_date_time_no_millis"
+      },
+      "status": {"type": "keyword"},
+      "summary": {"type": "binary"},
+      "tags": {"type": "keyword"},
+      "tlp": {"type": "long"},
+      "type": {"type": "keyword"},
+      "updatedAt": {
+        "type": "date",
+        "format": "epoch_millis||basic_date_time_no_millis"
+      },
+      "updatedBy": {"type": "keyword"},
+      "url": {"type": "text", "fielddata": true},
+      "value": {"type": "keyword"},
+      "version": {"type": "keyword"},
+      "workerDefinitionId": {"type": "keyword"},
+      "workerId": {"type": "keyword"},
+      "workerName": {"type": "keyword"}
+    }
+  }
+}

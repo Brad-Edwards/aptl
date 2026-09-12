@@ -1,0 +1,26 @@
+{
+  "name": "APTL_Observable",
+  "version": "1.0",
+  "author": "APTL Contributors",
+  "url": "https://github.com/Brad-Edwards/aptl",
+  "license": "MIT",
+  "description": "Deterministic offline validation of an observable in the APTL case workflow.",
+  "dataTypeList": [
+    "ip",
+    "domain",
+    "fqdn",
+    "url",
+    "hash",
+    "filename",
+    "mail"
+  ],
+  "baseConfig": "APTLObservable",
+  "command": "APTLObservable/aptl_observable.py",
+  "config": {},
+  "configurationItems": [],
+  "registration_required": false,
+  "subscription_required": false,
+  "free_subscription": true,
+  "serviceHomepage": "https://github.com/Brad-Edwards/aptl",
+  "integration_type": "local"
+}

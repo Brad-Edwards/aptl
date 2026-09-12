@@ -13,7 +13,21 @@ updates:
     commit-message:
       prefix: "ci"
 
-  - package-ecosystem: "pip"
+  # Python dependencies are updated through the `uv` ecosystem, not `pip`.
+  # `uv.lock` is the source of truth: the `uv-export` pre-commit hooks regenerate
+  # every `requirements/*.txt` from it, so a bump that edits only the exported
+  # files is reverted by the hook and fails the required "Pre-commit hooks" job.
+  # The `pip` ecosystem did exactly that, because it reads the flat exports and
+  # never touches the lock — every Python bump it opened was born failing.
+  #
+  # Reading the lock also means Dependabot sees the constraint graph the exports
+  # flatten away, so it stops proposing bumps that cannot resolve (z3-solver
+  # below is the worked example).
+  #
+  # Note the remaining manual step: Dependabot updates `uv.lock` but does not
+  # re-run the exports, so run `pre-commit run --all-files` on the branch and
+  # commit the regenerated `requirements/*.txt` before merging.
+  - package-ecosystem: "uv"
     directory: "/"
     target-branch: "dev"
     schedule:
@@ -21,6 +35,12 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "build"
+    ignore:
+      # `raes` hard-pins `z3-solver==4.16.0.0` (still true in raes 3.5.0), and
+      # z3 reaches this project only through raes — there is no version of raes
+      # that accepts a newer z3, so any bump is unresolvable (PR #945). Drop
+      # this entry once raes relaxes the pin.
+      - dependency-name: "z3-solver"
 
   # Container base images are pinned by digest (issue #847), which is what makes
   # a build reproducible — but a digest never moves, so an unattended pin is a

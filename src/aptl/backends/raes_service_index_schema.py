@@ -47,6 +47,10 @@ _PORTABLE_TO_NATIVE_TYPE: dict[str, str] = {
 _NATIVE_TYPE_TO_PORTABLE: dict[str, str] = {
     native: portable for portable, native in _PORTABLE_TO_NATIVE_TYPE.items()
 }
+# Elasticsearch join fields are exact-valued tokens with additional parent /
+# child constraints. They therefore satisfy an ``exact-token`` readback claim;
+# the product adapter remains responsible for proving the relationship graph.
+_NATIVE_TYPE_TO_PORTABLE["join"] = "exact-token"
 
 # Custom index metadata keys (Elasticsearch ``mappings._meta``) that bind the
 # native index to the exact portable content address and declared field-schema

@@ -88,6 +88,9 @@ changelog.d/824.fixed.md	repository-metadata	Inspect identity/content owner duri
 changelog.d/876.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 config/certs.yml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 config/cortex/application.conf	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/cortex/analyzers/APTLObservable/APTL_Observable.json	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/cortex/analyzers/APTLObservable/aptl_observable.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/cortex/index-mapping.json	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 config/cortex/thehive-cortex.env	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 config/otel/grafana-datasources.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 config/otel/otel-collector-config.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
@@ -257,6 +260,7 @@ docs/architecture/grc-boundary-surface-vocabulary-preflight.md	docs-follow-owner
 docs/architecture/index.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-550-soc-selected-profile-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-557-participant-implementation-binding-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-1000-manual-release-qa-preflight.md	docs-follow-owner	Post-baseline architecture guidance; retain with its owning issue
 docs/architecture/issue-589-scenario-pack-capture-ownership-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-591-scenario-pack-capture-asset-ownership-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-592-scenario-pack-terminology-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
@@ -918,6 +922,7 @@ src/aptl/core/deployment/_compose_node_generation.py	core-candidate	Migrate only
 src/aptl/core/deployment/_compose_port_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_post_start.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_project_cleanup.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_project_inventory.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_queries.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_realization_networks.py	core-candidate	Migrate only after public-import, history and scenario-independence verification

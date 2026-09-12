@@ -14,14 +14,12 @@ set -euo pipefail
 # as the one baked into the seeded Shuffle workflow -- keep working.
 # =============================================================================
 
-# The env-pack exposes TheHive only on the container network, where its Play
-# server listens on plain HTTP :9000 (TLS termination, if any, is an edge
-# concern of the env-pack, not this in-network seed path). Reach it from inside
-# the container -- the same container-network transport the Cortex and Wazuh
-# seed paths use, rather than a host localhost binding the env-pack no longer
-# publishes. Override THEHIVE_URL for local debugging.
+# Reach TheHive from inside its container, using the same generated SOC root as
+# external clients. The temporary env-pack compatibility fix activates Play TLS
+# on :9000 before this provisioner runs. Override THEHIVE_URL for local debugging.
 THEHIVE_CONTAINER="${THEHIVE_CONTAINER:-aptl-thehive}"
-THEHIVE_URL="${THEHIVE_URL:-http://localhost:9000}"
+THEHIVE_URL="${THEHIVE_URL:-https://localhost:9000}"
+THEHIVE_CA_CERT="${THEHIVE_CA_CERT:-/etc/lab-ca/lab-ca.pem}"
 ADMIN_USER="${THEHIVE_ADMIN_USER:-admin@thehive.local}"
 ADMIN_PASS="${THEHIVE_ADMIN_PASS:-secret}"
 ORG_NAME="APTL"
@@ -40,7 +38,7 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 _thehive_curl() {
-    docker exec "$THEHIVE_CONTAINER" curl "$@" 2>/dev/null
+    docker exec "$THEHIVE_CONTAINER" curl --cacert "$THEHIVE_CA_CERT" "$@" 2>/dev/null
 }
 
 _curl() {

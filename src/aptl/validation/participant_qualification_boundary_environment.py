@@ -194,8 +194,34 @@ def wait_until_process_absent(pid: int) -> bool:
             return True
         except PermissionError:
             pass
+        if _process_is_zombie(pid):
+            return True
         time.sleep(0.02)
     return False
+
+
+def _process_is_zombie(pid: int) -> bool:
+    """Return whether ``pid`` is a terminated, unreaped process-table entry.
+
+    Darwin can retain an orphaned zombie long enough to outlive the bounded
+    qualification wait. Such an entry cannot execute and therefore satisfies
+    the containment check even though ``kill(pid, 0)`` has not reached ESRCH.
+    ``ps`` is available on every supported host and this one-pid query is
+    bounded; observation failures remain the fail-closed ``False`` answer.
+    """
+
+    try:
+        result = subprocess.run(
+            ["ps", "-o", "stat=", "-p", str(pid)],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=1,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    states = result.stdout.decode("ascii", errors="ignore").split()
+    return result.returncode == 0 and any(state.startswith("Z") for state in states)
 
 
 def _behavior_name(behavior_address: str) -> str:

@@ -37,6 +37,7 @@ PROJECT_DIR="${APTL_PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 SURICATA_CTR="${SURICATA_CONTAINER:-aptl-suricata}"
 AUTHORED_RULES="$PROJECT_DIR/config/suricata/rules/local.rules"
 AUTHORED_YAML="$PROJECT_DIR/config/suricata/suricata.yaml"
+CONFIG_CHANGED=0
 
 command -v docker >/dev/null 2>&1 || exit 0
 
@@ -102,10 +103,31 @@ fix_suricata_config() {
     fi
     log "restoring full authored suricata.yaml (complete vars + rule-files) into $src"
     cat "$AUTHORED_YAML" > "$src"
+    CONFIG_CHANGED=1
 }
 
 # --- reload Suricata so the restored corpus + vars take effect --------------
 reload_suricata() {
+    # Configuration changes such as pcap checksum handling are not applied by
+    # a rule-only reload. Restart the sensor and prove its full corpus is live.
+    if [ "$CONFIG_CHANGED" -eq 1 ]; then
+        log "restarting $SURICATA_CTR to activate the restored configuration"
+        if ! docker restart "$SURICATA_CTR" >/dev/null 2>&1; then
+            log "failed to restart $SURICATA_CTR"
+            return 1
+        fi
+        local attempt stats
+        for attempt in $(seq 1 60); do
+            stats="$(docker exec "$SURICATA_CTR" suricatasc -c ruleset-stats 2>/dev/null || true)"
+            if echo "$stats" | grep -Eq '"rules_loaded"[[:space:]]*:[[:space:]]*[1-9][0-9]*'; then
+                log "sensor restarted with a non-empty rule corpus"
+                return 0
+            fi
+            sleep 2
+        done
+        log "$SURICATA_CTR did not report a loaded rule corpus after restart"
+        return 1
+    fi
     # Prefer a live rule reload over the command socket (keeps flow state);
     # fall back to a container restart if the socket path is unavailable.
     if docker exec "$SURICATA_CTR" sh -c \
@@ -126,5 +148,5 @@ fi
 log "applying temporary env-pack Suricata content fixups (see header for tracking issues)"
 fix_local_rules
 fix_suricata_config
-reload_suricata
+reload_suricata || exit 1
 log "done"

@@ -61,14 +61,37 @@ def test_fresh_create_materializes_and_proves_by_readback() -> None:
     assert result.field_schema_digest == _DIGEST
     # Created index carries the ownership marker binding it to the content address.
     assert es.state["_meta"][sis.OWNER_META_KEY] == _ADDRESS
+    relations = es.state["properties"]["relations"]
+    assert relations["type"] == "join"
+    assert relations["relations"]["organization"] == [
+        "worker",
+        "workerConfig",
+        "dummy-organization",
+    ]
+    assert relations["relations"]["job"] == ["dummy-job", "report"]
 
 
 def test_owned_existing_index_is_idempotent_no_recreate() -> None:
-    owned = sis.desired_native_mapping(_FIELDS, owner_address=_ADDRESS, field_schema_digest=_DIGEST)["mappings"]
+    first = _FakeES(initial=None)
+    assert m.materialize_search_index_schema(first, _realization()).ok is True
+    owned = first.state
     es = _FakeES(initial=owned)
     result = m.materialize_search_index_schema(es, _realization())
     assert result.ok is True
     assert es.puts == 0  # never recreates an owned index
+
+
+def test_owned_keyword_relations_mapping_fails_the_cortex_product_contract() -> None:
+    owned = sis.desired_native_mapping(
+        _FIELDS, owner_address=_ADDRESS, field_schema_digest=_DIGEST
+    )["mappings"]
+    es = _FakeES(initial=owned)
+
+    result = m.materialize_search_index_schema(es, _realization())
+
+    assert result.ok is False
+    assert result.reason == "native-product-contract-mismatch"
+    assert es.puts == 0
 
 
 def test_unowned_same_name_index_is_a_collision_even_when_empty() -> None:

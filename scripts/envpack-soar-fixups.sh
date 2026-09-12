@@ -2,21 +2,30 @@
 # =============================================================================
 # TEMPORARY env-pack SOAR fixups
 # =============================================================================
-# The frozen TechVault env-pack realizes MISP and misp-redis WITHOUT the runtime
-# environment they need, so they boot broken:
+# The frozen TechVault env-pack realizes parts of the SOC stack without the
+# image-specific runtime contract they need, so they boot broken:
 #
 #   - misp-redis runs with no password, but MISP connects with
 #     auth=redispassword -> Redis unreachable -> API-key auth fails.
 #   - MISP has no MYSQL_*/ADMIN_*/BASE_URL env and its lab cert is mounted at
 #     the wrong path -> no DB, no admin key, self-signed cert.
-# This recreates those two containers with the configuration recovered from
-# the pre-ACES docker-compose.yml (which ran these services for months). It is
-# idempotent: a container already carrying the fix is left untouched, so this is
-# safe to run on every boot. It buys us out of the env-pack release cycle; it
-# does not change the scenario.
+#   - Shuffle and TheHive receive the generated SOC certificate bundle under
+#     neutral /opt/aptl paths, but their pinned images only activate TLS from
+#     /etc/nginx and /etc/thehive respectively.
+#   - Shuffle Orborus has no declared worker-image closure, so it accepts
+#     executions but asks Docker to create an invalid empty image reference.
+#   - Cortex has no analyzer catalog, so TheHive can create observables but
+#     cannot run an analyzer against them.
+# This recreates those containers with the configuration recovered from the
+# pre-ACES docker-compose.yml (which ran these services for months). It
+# preserves each realized image, network, labels, volumes, and host publication.
+# A container already carrying the fix is left untouched, so this is safe to run
+# on every boot. It buys us out of the env-pack release cycle; it does not change
+# the scenario.
 #
 # Root fixes tracked upstream (remove this script when they ship):
 #   MISP  -> OpenRAE/env-packs#280 ; retire per Brad-Edwards/aptl#912
+#   Orborus -> OpenRAE/env-packs#285 ; retire per Brad-Edwards/aptl#949
 # =============================================================================
 set -uo pipefail
 
@@ -25,6 +34,7 @@ PROJECT_DIR="${APTL_PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 CERT_BASE="$PROJECT_DIR/config/soc_certs"
 # Same canonical key MISP's server (ADMIN_KEY) and the seed client share.
 MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
+SHUFFLE_WORKER_IMAGE="${SHUFFLE_WORKER_IMAGE:-ghcr.io/shuffle/shuffle-worker@sha256:fd0d420a5e0cd41f3979335e51912e8dd423e7ce540d1dfa24efdc98fb6071bd}"
 
 command -v docker >/dev/null 2>&1 || exit 0
 
@@ -32,6 +42,107 @@ _present()  { docker inspect "$1" >/dev/null 2>&1; }
 _net()      { docker inspect "$1" -f '{{range $n,$c := .NetworkSettings.Networks}}{{$n}}{{end}}' 2>/dev/null; }
 _image()    { docker inspect "$1" -f '{{.Config.Image}}' 2>/dev/null; }
 _has_env()  { docker inspect "$1" -f '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -q "^$2="; }
+_env_equals() {
+    docker inspect "$1" -f '{{range .Config.Env}}{{println .}}{{end}}' \
+        2>/dev/null | grep -Fxq "$2=$3"
+}
+_has_mount_target() {
+    docker inspect "$1" -f '{{range .Mounts}}{{println .Destination}}{{end}}' \
+        2>/dev/null | grep -Fxq "$2"
+}
+
+_publications() {
+    local container="$1" container_port="$2"
+    docker inspect "$container" --format \
+        "{{with (index .HostConfig.PortBindings \"$container_port\")}}{{range .}}{{println .HostIp .HostPort}}{{end}}{{end}}" \
+        2>/dev/null
+}
+
+CAPTURED_PUBLISH_ARG=""
+CAPTURED_PUBLICATION=""
+_capture_loopback_publication() {
+    local container="$1" container_port="$2"
+    local host_ip host_port count=0
+    CAPTURED_PUBLISH_ARG=""
+    CAPTURED_PUBLICATION=""
+    while read -r host_ip host_port; do
+        [ -n "$host_ip" ] && [ -n "$host_port" ] || continue
+        count=$((count + 1))
+        if [ "$host_ip" != "127.0.0.1" ] \
+            || ! [[ "$host_port" =~ ^[0-9]+$ ]] \
+            || [ "$host_port" -lt 1 ] \
+            || [ "$host_port" -gt 65535 ]; then
+            log "ERROR: realized $container $container_port publication is not loopback TCP"
+            return 1
+        fi
+        CAPTURED_PUBLISH_ARG="$host_ip:$host_port:${container_port%/tcp}/tcp"
+        CAPTURED_PUBLICATION="$container_port|$host_ip|$host_port"
+    done < <(_publications "$container" "$container_port")
+    if [ "$count" -ne 1 ]; then
+        log "ERROR: realized $container must publish $container_port exactly once"
+        return 1
+    fi
+}
+
+_verify_publications() {
+    local container="$1" expected container_port host_ip host_port actual
+    shift
+    for expected in "$@"; do
+        IFS='|' read -r container_port host_ip host_port <<< "$expected"
+        actual="$(_publications "$container" "$container_port")"
+        if [ "$actual" != "$host_ip $host_port" ]; then
+            log "ERROR: replacement $container did not preserve $container_port publication"
+            return 1
+        fi
+    done
+}
+
+# The RAES/Compose realization owns the MISP publication.  fix_misp replaces
+# that realized container after compose up, so it must carry the exact binding
+# across the replacement instead of reconstructing a second source of truth.
+MISP_PUBLISH_ARGS=()
+MISP_EXPECTED_PUBLICATION=""
+_misp_publications() {
+    docker inspect "$1" --format \
+        '{{with (index .HostConfig.PortBindings "443/tcp")}}{{range .}}{{println .HostIp .HostPort}}{{end}}{{end}}' \
+        2>/dev/null
+}
+
+_capture_misp_publication() {
+    MISP_PUBLISH_ARGS=()
+    MISP_EXPECTED_PUBLICATION=""
+    local host_ip host_port count=0
+    while read -r host_ip host_port; do
+        [ -n "$host_ip" ] && [ -n "$host_port" ] || continue
+        count=$((count + 1))
+        if [ "$host_ip" != "127.0.0.1" ] \
+            || ! [[ "$host_port" =~ ^[0-9]+$ ]] \
+            || [ "$host_port" -lt 1 ] \
+            || [ "$host_port" -gt 65535 ]; then
+            log "ERROR: realized MISP publication is not a valid loopback TCP binding"
+            return 1
+        fi
+        MISP_EXPECTED_PUBLICATION="$host_ip $host_port"
+        MISP_PUBLISH_ARGS+=(--publish "$host_ip:$host_port:443/tcp")
+    done < <(_misp_publications aptl-misp)
+    if [ "$count" -ne 1 ]; then
+        log "ERROR: realized MISP container must have exactly one 443/tcp publication"
+        return 1
+    fi
+}
+
+_verify_misp_publication() {
+    local host_ip host_port count=0 actual=""
+    while read -r host_ip host_port; do
+        [ -n "$host_ip" ] && [ -n "$host_port" ] || continue
+        count=$((count + 1))
+        actual="$host_ip $host_port"
+    done < <(_misp_publications aptl-misp)
+    if [ "$count" -ne 1 ] || [ "$actual" != "$MISP_EXPECTED_PUBLICATION" ]; then
+        log "ERROR: replacement MISP container did not preserve its realized publication"
+        return 1
+    fi
+}
 
 # Capture a container's labels into LBL_ARGS as `--label k=v` pairs BEFORE it is
 # removed, so the recreated container keeps its compose-project membership.
@@ -50,6 +161,20 @@ _capture_labels() {
 
 log() { echo "[envpack-soar-fixups] $*"; }
 
+verify_soc_tls() {
+    local port="$1" path="$2"
+    for _ in $(seq 1 120); do
+        if curl --silent --show-error --fail \
+            --cacert "$CERT_BASE/lab-ca.pem" \
+            --connect-timeout 5 --max-time 10 \
+            "https://localhost:$port$path" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 5
+    done
+    return 1
+}
+
 # --- misp-redis: restore the password MISP expects --------------------------
 fix_misp_redis() {
     _present aptl-misp-redis || return 0
@@ -62,7 +187,8 @@ fix_misp_redis() {
     img="$(_image aptl-misp-redis)"; net="$(_net aptl-misp-redis)"
     _capture_labels aptl-misp-redis
     docker rm -f aptl-misp-redis >/dev/null 2>&1 || true
-    docker run -d --name aptl-misp-redis --restart unless-stopped "${LBL_ARGS[@]}" \
+    docker run -d --name aptl-misp-redis --restart unless-stopped \
+        "${LBL_ARGS[@]+"${LBL_ARGS[@]}"}" \
         --network "$net" --network-alias aptl-misp-redis --network-alias misp-redis \
         "$img" redis-server --requirepass redispassword >/dev/null
 }
@@ -75,12 +201,15 @@ fix_misp() {
     local img net
     img="$(_image aptl-misp)"; net="$(_net aptl-misp)"
     _capture_labels aptl-misp
+    _capture_misp_publication || return 1
     docker rm -f aptl-misp >/dev/null 2>&1 || true
     # Fresh schema so the admin key (ADMIN_KEY) is applied at init.
     docker exec aptl-misp-db mysql -uroot -pmisp_root_password \
         -e 'DROP DATABASE IF EXISTS misp; CREATE DATABASE misp;' >/dev/null 2>&1 || true
     docker volume rm aptl_misp_config aptl_misp_data >/dev/null 2>&1 || true
-    docker run -d --name aptl-misp --restart unless-stopped "${LBL_ARGS[@]}" \
+    if ! docker run -d --name aptl-misp --restart unless-stopped \
+        "${LBL_ARGS[@]+"${LBL_ARGS[@]}"}" \
+        "${MISP_PUBLISH_ARGS[@]}" \
         --network "$net" --network-alias aptl-misp --network-alias misp \
         -e MYSQL_HOST=misp-db -e MYSQL_DATABASE=misp -e MYSQL_USER=misp -e MYSQL_PASSWORD=misp_db_password \
         -e ADMIN_EMAIL=admin@admin.test -e ADMIN_PASSWORD=admin -e ADMIN_KEY="$MISP_API_KEY" \
@@ -88,7 +217,287 @@ fix_misp() {
         -v aptl_misp_config:/var/www/MISP/app/Config -v aptl_misp_data:/var/www/MISP/app/files \
         -v "$CERT_BASE/misp/server.pem":/etc/nginx/certs/cert.pem:ro \
         -v "$CERT_BASE/misp/server.key":/etc/nginx/certs/key.pem:ro \
-        "$img" >/dev/null
+        "$img" >/dev/null; then
+        log "ERROR: replacement MISP container could not be started"
+        return 1
+    fi
+    _verify_misp_publication
+}
+
+# --- Shuffle frontend: activate the generated certificate ------------------
+fix_shuffle_frontend_tls() {
+    _present aptl-shuffle-frontend || return 0
+    _capture_loopback_publication aptl-shuffle-frontend 80/tcp || return 1
+    local http_publish="$CAPTURED_PUBLISH_ARG" http_expected="$CAPTURED_PUBLICATION"
+    _capture_loopback_publication aptl-shuffle-frontend 443/tcp || return 1
+    local https_publish="$CAPTURED_PUBLISH_ARG" https_expected="$CAPTURED_PUBLICATION"
+    local https_port="${https_expected##*|}"
+
+    if _has_mount_target aptl-shuffle-frontend /etc/nginx/fullchain.cert.pem; then
+        verify_soc_tls "$https_port" / || {
+            log "ERROR: Shuffle frontend has authored TLS mounts but verification failed"
+            return 1
+        }
+        return 0
+    fi
+
+    log "Shuffle frontend is not using the generated SOC certificate; recreating"
+    local img net
+    img="$(_image aptl-shuffle-frontend)"; net="$(_net aptl-shuffle-frontend)"
+    _capture_labels aptl-shuffle-frontend
+    docker rm -f aptl-shuffle-frontend >/dev/null 2>&1 || true
+    if ! docker run -d --name aptl-shuffle-frontend --hostname shuffle-frontend \
+        --restart unless-stopped "${LBL_ARGS[@]+"${LBL_ARGS[@]}"}" \
+        --publish "$http_publish" --publish "$https_publish" \
+        --network "$net" --network-alias aptl-shuffle-frontend --network-alias shuffle-frontend \
+        -e BACKEND_HOSTNAME=shuffle-backend \
+        -v "$CERT_BASE/shuffle-frontend/server.pem":/etc/nginx/fullchain.cert.pem:ro \
+        -v "$CERT_BASE/shuffle-frontend/server.key":/etc/nginx/privkey.pem:ro \
+        -v "$CERT_BASE/lab-ca.pem":/etc/lab-ca/lab-ca.pem:ro \
+        --health-cmd 'curl -ksf https://localhost/ || exit 1' \
+        --health-interval 30s --health-timeout 10s --health-retries 10 \
+        --health-start-period 60s "$img" >/dev/null; then
+        log "ERROR: replacement Shuffle frontend could not be started"
+        return 1
+    fi
+    _verify_publications aptl-shuffle-frontend "$http_expected" "$https_expected" || return 1
+    verify_soc_tls "$https_port" / || {
+        log "ERROR: replacement Shuffle frontend failed SOC TLS verification"
+        return 1
+    }
+    log "Shuffle frontend serves the generated SOC certificate"
+}
+
+# --- TheHive: activate the generated keystore and Play configuration --------
+fix_thehive_tls() {
+    _present aptl-thehive || return 0
+    _capture_loopback_publication aptl-thehive 9000/tcp || return 1
+    local publish="$CAPTURED_PUBLISH_ARG" expected="$CAPTURED_PUBLICATION"
+    local host_port="${expected##*|}"
+
+    if _has_mount_target aptl-thehive /etc/thehive/application.conf; then
+        verify_soc_tls "$host_port" /api/status || {
+            log "ERROR: TheHive has authored TLS mounts but verification failed"
+            return 1
+        }
+        return 0
+    fi
+
+    log "TheHive is not using the generated SOC keystore; recreating"
+    local img net source destination writable volume_count=0
+    local -a volume_args=()
+    img="$(_image aptl-thehive)"; net="$(_net aptl-thehive)"
+    _capture_labels aptl-thehive
+    while read -r source destination writable; do
+        [ -n "$source" ] && [ -n "$destination" ] || continue
+        volume_count=$((volume_count + 1))
+        if [ "$writable" = "true" ]; then
+            volume_args+=(-v "$source:$destination")
+        else
+            volume_args+=(-v "$source:$destination:ro")
+        fi
+    done < <(docker inspect aptl-thehive -f \
+        '{{range .Mounts}}{{if eq .Type "volume"}}{{println .Name .Destination .RW}}{{end}}{{end}}' \
+        2>/dev/null)
+    if [ "$volume_count" -lt 1 ]; then
+        log "ERROR: realized TheHive has no state volume to preserve"
+        return 1
+    fi
+
+    docker rm -f aptl-thehive >/dev/null 2>&1 || true
+    if ! docker run -d --name aptl-thehive --hostname thehive \
+        --restart unless-stopped "${LBL_ARGS[@]+"${LBL_ARGS[@]}"}" \
+        --publish "$publish" \
+        --network "$net" --network-alias aptl-thehive --network-alias thehive \
+        -e 'JVM_OPTS=-Xms512m -Xmx512m' \
+        --env-file "$CERT_BASE/thehive/keystore.p12.password" \
+        --env-file "$PROJECT_DIR/config/cortex/thehive-cortex.env" \
+        "${volume_args[@]}" \
+        -v "$CERT_BASE/thehive/keystore.p12":/etc/thehive/keystore.p12:ro \
+        -v "$PROJECT_DIR/config/thehive/application.conf":/etc/thehive/application.conf:ro \
+        -v "$CERT_BASE/lab-ca.pem":/etc/lab-ca/lab-ca.pem:ro \
+        --health-cmd 'curl -ksf https://localhost:9000/api/status || exit 1' \
+        --health-interval 30s --health-timeout 10s --health-retries 15 \
+        --health-start-period 300s "$img" \
+        --secret aptl-thehive-lab-secret-key-2024-purple \
+        --cql-hostnames thehive-cassandra --index-backend lucene \
+        --es-hostnames thehive-es --cortex-proto http \
+        --cortex-hostnames cortex --cortex-port 9001 >/dev/null; then
+        log "ERROR: replacement TheHive container could not be started"
+        return 1
+    fi
+    _verify_publications aptl-thehive "$expected" || return 1
+    verify_soc_tls "$host_port" /api/status || {
+        log "ERROR: replacement TheHive failed SOC TLS verification"
+        return 1
+    }
+    log "TheHive serves the generated SOC certificate"
+}
+
+# --- Shuffle Orborus: restore the digest-pinned worker contract -------------
+fix_shuffle_orborus() {
+    _present aptl-shuffle-orborus || return 0
+    if _env_equals aptl-shuffle-orborus SHUFFLE_WORKER_IMAGE "$SHUFFLE_WORKER_IMAGE" \
+        && _env_equals aptl-shuffle-orborus SHUFFLE_ORBORUS_EXECUTION_TIMEOUT 600 \
+        && _env_equals aptl-shuffle-orborus ORBORUS_CONTAINER_NAME aptl-shuffle-orborus; then
+        return 0
+    fi
+
+    log "Shuffle Orborus has no executable worker-image contract; recreating"
+    local img net ip source destination writable mount_count=0
+    local -a mount_args=()
+    img="$(_image aptl-shuffle-orborus)"
+    net="$(_net aptl-shuffle-orborus)"
+    ip="$(docker inspect aptl-shuffle-orborus -f \
+        '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null)"
+    if ! [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        log "ERROR: realized Shuffle Orborus has no IPv4 address to preserve"
+        return 1
+    fi
+    _capture_labels aptl-shuffle-orborus
+    while read -r source destination writable; do
+        [ -n "$source" ] && [ -n "$destination" ] || continue
+        mount_count=$((mount_count + 1))
+        if [ "$writable" = "true" ]; then
+            mount_args+=(-v "$source:$destination")
+        else
+            mount_args+=(-v "$source:$destination:ro")
+        fi
+    done < <(docker inspect aptl-shuffle-orborus -f \
+        '{{range .Mounts}}{{if eq .Type "bind"}}{{println .Source .Destination .RW}}{{end}}{{end}}' \
+        2>/dev/null)
+    if [ "$mount_count" -lt 1 ]; then
+        log "ERROR: realized Shuffle Orborus has no Docker socket bind to preserve"
+        return 1
+    fi
+
+    docker rm -f aptl-shuffle-orborus >/dev/null 2>&1 || true
+    if ! docker run -d --name aptl-shuffle-orborus --hostname shuffle-orborus \
+        --restart unless-stopped "${LBL_ARGS[@]+"${LBL_ARGS[@]}"}" \
+        --network "$net" --ip "$ip" \
+        --network-alias aptl-shuffle-orborus --network-alias shuffle-orborus \
+        "${mount_args[@]}" \
+        -e SHUFFLE_APP_SDK_TIMEOUT=300 -e ENVIRONMENT_NAME=Shuffle -e ORG_ID=Shuffle \
+        -e BASE_URL=http://shuffle-backend:5001 -e DOCKER_API_VERSION=1.44 \
+        -e SHUFFLE_WORKER_IMAGE="$SHUFFLE_WORKER_IMAGE" \
+        -e SHUFFLE_ORBORUS_EXECUTION_TIMEOUT=600 \
+        -e SHUFFLE_STATS_DISABLED=true -e SHUFFLE_LOGS_DISABLED=true \
+        -e SHUFFLE_SKIP_PIPELINES=true \
+        -e ORBORUS_CONTAINER_NAME=aptl-shuffle-orborus -e CLEANUP=false \
+        "$img" >/dev/null; then
+        log "ERROR: replacement Shuffle Orborus could not be started"
+        return 1
+    fi
+    for _ in $(seq 1 60); do
+        if [ "$(docker inspect aptl-shuffle-orborus -f '{{.State.Running}}' 2>/dev/null)" = "true" ] \
+            && _env_equals aptl-shuffle-orborus SHUFFLE_WORKER_IMAGE "$SHUFFLE_WORKER_IMAGE"; then
+            log "Shuffle Orborus is running with a digest-pinned worker image"
+            return 0
+        fi
+        sleep 2
+    done
+    log "ERROR: replacement Shuffle Orborus did not become ready"
+    return 1
+}
+
+# --- Cortex: activate APTL's deterministic offline analyzer ----------------
+fix_cortex_analyzers() {
+    _present aptl-cortex || return 0
+    local authored_config="$PROJECT_DIR/config/cortex/application.conf"
+    local analyzer_dir="$PROJECT_DIR/config/cortex/analyzers"
+    local realized_config=""
+    local config_count=0
+    local source destination writable
+    local -a mount_args=()
+
+    while read -r source destination; do
+        [ -n "$source" ] && [ -n "$destination" ] || continue
+        config_count=$((config_count + 1))
+        realized_config="$source"
+    done < <(docker inspect aptl-cortex -f \
+        '{{range .Mounts}}{{if eq .Destination "/etc/cortex/application.conf"}}{{println .Source .Destination}}{{end}}{{end}}' \
+        2>/dev/null)
+
+    if [ "$config_count" -ne 1 ]; then
+        log "ERROR: realized Cortex must have exactly one application.conf mount"
+        return 1
+    fi
+    case "$realized_config" in
+        "$PROJECT_DIR"/.aptl/realization/*) ;;
+        *)
+            log "ERROR: refusing to replace Cortex config outside the realization directory"
+            return 1
+            ;;
+    esac
+
+    if _has_mount_target aptl-cortex /opt/aptl/cortex-analyzers \
+        && cmp -s "$authored_config" "$realized_config"; then
+        return 0
+    fi
+
+    log "Cortex has no executable analyzer catalog; recreating with APTL analyzer"
+    local img net ip
+    img="$(_image aptl-cortex)"
+    net="$(_net aptl-cortex)"
+    ip="$(docker inspect aptl-cortex -f \
+        '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null)"
+    if ! [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        log "ERROR: realized Cortex has no IPv4 address to preserve"
+        return 1
+    fi
+    _capture_labels aptl-cortex
+    _capture_loopback_publication aptl-cortex 9001/tcp || return 1
+    local publish="$CAPTURED_PUBLISH_ARG" expected="$CAPTURED_PUBLICATION"
+
+    while read -r source destination writable; do
+        [ -n "$source" ] && [ -n "$destination" ] || continue
+        case "$destination" in
+            /etc/cortex/application.conf|/opt/aptl/cortex-analyzers) continue ;;
+        esac
+        if [ "$writable" = "true" ]; then
+            mount_args+=(-v "$source:$destination")
+        else
+            mount_args+=(-v "$source:$destination:ro")
+        fi
+    done < <(docker inspect aptl-cortex -f \
+        '{{range .Mounts}}{{println .Source .Destination .RW}}{{end}}' 2>/dev/null)
+
+    if [ ! -f "$authored_config" ] || [ ! -x "$analyzer_dir/APTLObservable/aptl_observable.py" ]; then
+        log "ERROR: authored Cortex analyzer assets are absent or not executable"
+        return 1
+    fi
+    if ! cp "$authored_config" "$realized_config" || ! chmod 0644 "$realized_config"; then
+        log "ERROR: could not activate the authored Cortex configuration"
+        return 1
+    fi
+
+    docker rm -f aptl-cortex >/dev/null 2>&1 || true
+    if ! docker run -d --name aptl-cortex --hostname cortex \
+        --restart unless-stopped "${LBL_ARGS[@]+"${LBL_ARGS[@]}"}" \
+        --publish "$publish" --network "$net" --ip "$ip" \
+        --network-alias aptl-cortex --network-alias cortex \
+        "${mount_args[@]}" \
+        -v "$realized_config":/etc/cortex/application.conf:ro \
+        -v "$analyzer_dir":/opt/aptl/cortex-analyzers:ro \
+        -e analyzer_url=/opt/aptl/cortex-analyzers \
+        -e job_directory=/opt/cortex/jobs \
+        --health-cmd 'curl -sf http://localhost:9001/api/status || exit 1' \
+        --health-interval 30s --health-timeout 10s --health-retries 15 \
+        --health-start-period 120s "$img" >/dev/null; then
+        log "ERROR: replacement Cortex container could not be started"
+        return 1
+    fi
+    _verify_publications aptl-cortex "$expected" || return 1
+    for _ in $(seq 1 120); do
+        if docker exec aptl-cortex curl -sf --max-time 8 \
+            http://localhost:9001/api/status >/dev/null 2>&1; then
+            log "Cortex is running with the APTL analyzer catalog"
+            return 0
+        fi
+        sleep 5
+    done
+    log "ERROR: replacement Cortex did not become ready"
+    return 1
 }
 
 # --- readiness waits so the seed steps find the services up -----------------
@@ -125,46 +534,25 @@ wait_shuffle() {
     return 1
 }
 
-# --- MCP participant endpoints ----------------------------------------------
-# The participant MCP servers connect to https://localhost:{8443 MISP, 9000
-# TheHive, 3443 Shuffle} and verify strictly (verify_ssl + ca_cert_path
-# lab-ca.pem). The env-pack publishes only wazuh 9200/55000 + dashboard 443, so
-# those three MCP smoke checks (threatintel/cases/soar) have nothing to reach.
-# The pre-#875 compose published all three on 127.0.0.1. Republish them with a
-# small TLS-terminating socat proxy that serves a lab-CA localhost certificate
-# (so verification passes) and forwards to each backend: MISP already serves a
-# localhost-SAN lab cert (TCP passthrough); TheHive serves plain HTTP (terminate
-# TLS, forward plaintext); Shuffle serves its own cert (terminate + re-originate,
-# ignoring the backend cert). This restores documented plumbing without changing
-# the access model or recreating the heavy TheHive/Shuffle-frontend containers.
-fix_mcp_endpoints() {
-    _present aptl-thehive || return 0
-    local net cert key
-    net="$(_net aptl-thehive)"
-    cert="$CERT_BASE/misp/server.pem"   # lab-CA-signed, SAN includes localhost
-    key="$CERT_BASE/misp/server.key"
-    if [ ! -f "$cert" ] || [ ! -f "$key" ]; then
-        log "localhost cert missing; skipping MCP endpoint proxy"; return 0
-    fi
-    log "publishing MCP HTTPS endpoints (MISP:8443, TheHive:9000, Shuffle:3443) via TLS proxy"
-    docker rm -f aptl-mcp-endpoints >/dev/null 2>&1 || true
-    local socat_script
-    socat_script='socat TCP-LISTEN:8443,fork,reuseaddr TCP:misp:443 & socat OPENSSL-LISTEN:9000,fork,reuseaddr,cert=/certs/localhost.pem,key=/certs/localhost.key,verify=0 TCP:thehive:9000 & socat OPENSSL-LISTEN:3443,fork,reuseaddr,cert=/certs/localhost.pem,key=/certs/localhost.key,verify=0 OPENSSL-CONNECT:shuffle-frontend:443,verify=0 & wait'
-    docker run -d --name aptl-mcp-endpoints --restart unless-stopped \
-        --label com.docker.compose.project=aptl \
-        --label com.docker.compose.service=mcp-endpoints \
-        --network "$net" \
-        -p 127.0.0.1:8443:8443 -p 127.0.0.1:9000:9000 -p 127.0.0.1:3443:3443 \
-        -v "$cert":/certs/localhost.pem:ro -v "$key":/certs/localhost.key:ro \
-        --entrypoint /bin/sh alpine/socat -c "$socat_script" >/dev/null
-}
-
 log "applying temporary env-pack SOAR fixups (see header for tracking issues)"
 fix_misp_redis
-fix_misp
+if ! fix_misp; then
+    exit 1
+fi
+if ! fix_shuffle_frontend_tls; then
+    exit 1
+fi
+if ! fix_thehive_tls; then
+    exit 1
+fi
+if ! fix_shuffle_orborus; then
+    exit 1
+fi
+if ! fix_cortex_analyzers; then
+    exit 1
+fi
 wait_misp
 if ! wait_shuffle; then
     exit 1
 fi
-fix_mcp_endpoints
 log "done"

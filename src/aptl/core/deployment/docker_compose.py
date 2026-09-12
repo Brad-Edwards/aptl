@@ -3,7 +3,6 @@
 Query, realization, and cleanup helpers live in focused sibling modules.
 """
 
-import json
 import os
 import subprocess
 from collections.abc import Sequence
@@ -17,6 +16,9 @@ from aptl.core.deployment._compose_build_dedupe import (
 from aptl.core.deployment._compose_image_fetch import ComposeImageFetchMixin
 from aptl.core.deployment._compose_lifecycle import kill_compose_lab
 from aptl.core.deployment._compose_project_cleanup import ComposeProjectCleanupMixin
+from aptl.core.deployment._compose_project_inventory import (
+    ComposeProjectInventoryMixin,
+)
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
 from aptl.core.deployment._compose_realization import ComposeRealizationMixin
 from aptl.core.deployment._compose_runtime_inventory import (
@@ -47,6 +49,7 @@ _DOCKER_TIMEOUT = 30
 class DockerComposeBackend(
     DockerEndpointBindingMixin,
     ComposeRuntimeInventoryMixin,
+    ComposeProjectInventoryMixin,
     ComposeQueryMixin,
     ComposeRealizationMixin,
     ComposeSeedAttributionMixin,
@@ -60,7 +63,7 @@ class DockerComposeBackend(
     Manages lab lifecycle via ``docker compose`` subprocess calls.
     All commands run against the docker-compose.yml in project_dir.
     Host/container query + inspect helpers are provided by
-    ``ComposeQueryMixin``.
+    ``ComposeProjectInventoryMixin`` and ``ComposeQueryMixin``.
     """
 
     def __init__(
@@ -350,39 +353,12 @@ class DockerComposeBackend(
         )
 
     def status(self) -> LabStatus:
-        """Query current lab status via docker compose ps.
+        """Query all container states for the configured deployment project.
 
         Returns:
             LabStatus with container information.
         """
-        cmd = self._build_command("ps", profiles=[])
-        cmd.extend(["--format", "json"])
-
-        result = self._run(cmd)
-
-        if result.returncode != 0:
-            log.warning("Could not get lab status: %s", result.stderr)
-            return LabStatus(running=False, error=result.stderr)
-
-        try:
-            # docker compose ps --format json outputs one JSON object per
-            # line (NDJSON), not a JSON array.  Try array first, fall back
-            # to NDJSON.
-            stripped = result.stdout.strip()
-            if not stripped:
-                containers: list[dict[str, Any]] = []
-            elif stripped.startswith("["):
-                containers = json.loads(stripped)
-            else:
-                containers = [
-                    json.loads(line) for line in stripped.splitlines() if line.strip()
-                ]
-        except json.JSONDecodeError:
-            log.warning("Could not parse compose ps output")
-            return LabStatus(running=False, error="Failed to parse container status")
-
-        running = len(containers) > 0
-        return LabStatus(running=running, containers=containers)
+        return self._project_container_status()
 
     def kill(self, profiles: list[str]) -> tuple[bool, str]:
         """Emergency-stop all lab containers.

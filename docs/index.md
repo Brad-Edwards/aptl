@@ -77,7 +77,7 @@ run from source instead, use a virtualenv editable install
 - [Emergency Rollout Runbook](workshop/emergency-rollout.md): Hosted-fleet fallback, student claim-page pattern, and teardown checklist
 
 ### Testing
-- [Smoke Test Plan](testing/smoke-test-plan.md): Historical full-stack plan for the pre-SDL scenario engine
+- [Release Candidate Manual QA](testing/smoke-test-plan.md): release-blocking human verification for both install paths
 
 ### Reference
 - [Guided Purple Participant Profile](reference/participant-profile.md): Versioned bounded workshop surface, readiness contract, and qualification ceilings

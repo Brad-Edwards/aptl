@@ -219,3 +219,241 @@ exit 0
         or (line.startswith("run ") and "--name aptl-shuffle-backend" in line)
         for line in operations
     )
+
+
+def test_soar_fixups_do_not_create_obsolete_mcp_endpoint_proxy(
+    tmp_path: Path,
+) -> None:
+    """SDL-published ports make the old host TLS proxy undeclared duplication."""
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    docker_log = tmp_path / "docker.log"
+    docker = fake_bin / "docker"
+    docker.write_text(
+        """#!/bin/sh
+printf '%s\n' "$*" >> "$APTL_TEST_DOCKER_LOG"
+if [ "$1" = inspect ] && [ "$2" = aptl-misp ]; then
+    exit 1
+fi
+if [ "$1" = inspect ] && [ "$2" = aptl-shuffle-backend ]; then
+    exit 0
+fi
+if [ "$1" = inspect ] && [ "$2" = aptl-shuffle-frontend ]; then
+    exit 1
+fi
+if [ "$1" = inspect ] && [ "$2" = aptl-thehive ]; then
+    exit 1
+fi
+if [ "$1" = inspect ] && [ "$2" = aptl-shuffle-orborus ]; then
+    exit 1
+fi
+if [ "$1" = inspect ] && [ "$2" = aptl-cortex ]; then
+    exit 1
+fi
+if [ "$1" = exec ] && [ "$2" = aptl-shuffle-backend ]; then
+    printf '{"name":"Shuffle"}\n'
+fi
+exit 0
+""",
+        encoding="utf-8",
+    )
+    docker.chmod(0o755)
+    cert_dir = tmp_path / "config" / "soc_certs" / "misp"
+    cert_dir.mkdir(parents=True)
+    (cert_dir / "server.pem").write_text("certificate", encoding="utf-8")
+    (cert_dir / "server.key").write_text("key", encoding="utf-8")
+    env = {
+        **os.environ,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "APTL_PROJECT_DIR": str(tmp_path),
+        "APTL_TEST_DOCKER_LOG": str(docker_log),
+    }
+
+    result = subprocess.run(
+        [PROJECT_ROOT / "scripts" / "envpack-soar-fixups.sh"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    operations = docker_log.read_text(encoding="utf-8").splitlines()
+    assert not any("aptl-mcp-endpoints" in line for line in operations)
+
+
+def test_soar_fixups_preserve_and_verify_realized_misp_publication(
+    tmp_path: Path,
+) -> None:
+    """Post-realization MISP replacement keeps the canonical loopback binding."""
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    docker_log = tmp_path / "docker.log"
+    docker = fake_bin / "docker"
+    docker.write_text(
+        """#!/bin/sh
+printf '%s\n' "$*" >> "$APTL_TEST_DOCKER_LOG"
+if [ "$1" = inspect ] && [ "$2" = aptl-misp ]; then
+    case "$*" in
+        *PortBindings*) printf '127.0.0.1 8443\n' ;;
+        *Config.Image*) printf 'misp-image\n' ;;
+        *NetworkSettings.Networks*) printf 'aptl-net\n' ;;
+        *Config.Labels*) printf 'com.docker.compose.project=aptl\n' ;;
+    esac
+    exit 0
+fi
+if [ "$1" = inspect ] && [ "$2" = aptl-shuffle-backend ]; then
+    exit 0
+fi
+if [ "$1" = inspect ]; then
+    exit 1
+fi
+if [ "$1" = exec ] && [ "$2" = aptl-misp ]; then
+    printf '200\n'
+fi
+if [ "$1" = exec ] && [ "$2" = aptl-shuffle-backend ]; then
+    printf '{"name":"Shuffle"}\n'
+fi
+exit 0
+""",
+        encoding="utf-8",
+    )
+    docker.chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "APTL_PROJECT_DIR": str(PROJECT_ROOT),
+        "APTL_TEST_DOCKER_LOG": str(docker_log),
+    }
+
+    result = subprocess.run(
+        [PROJECT_ROOT / "scripts" / "envpack-soar-fixups.sh"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    operations = docker_log.read_text(encoding="utf-8").splitlines()
+    replacement = next(
+        line for line in operations if line.startswith("run -d --name aptl-misp ")
+    )
+    assert "--publish 127.0.0.1:8443:443/tcp" in replacement
+    assert sum("PortBindings" in line for line in operations) == 2
+
+
+def test_soar_fixups_fail_when_misp_replacement_loses_publication(
+    tmp_path: Path,
+) -> None:
+    """A running replacement is not accepted when port readback changes."""
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    docker_log = tmp_path / "docker.log"
+    replacement_marker = tmp_path / "misp-replaced"
+    docker = fake_bin / "docker"
+    docker.write_text(
+        """#!/bin/sh
+printf '%s\n' "$*" >> "$APTL_TEST_DOCKER_LOG"
+if [ "$1" = inspect ] && [ "$2" = aptl-misp ]; then
+    case "$*" in
+        *PortBindings*)
+            if [ -f "$APTL_TEST_REPLACEMENT_MARKER" ]; then exit 0; fi
+            printf '127.0.0.1 8443\n'
+            ;;
+        *Config.Image*) printf 'misp-image\n' ;;
+        *NetworkSettings.Networks*) printf 'aptl-net\n' ;;
+        *Config.Labels*) printf 'com.docker.compose.project=aptl\n' ;;
+    esac
+    exit 0
+fi
+if [ "$1" = run ] && echo "$*" | grep -q -- '--name aptl-misp'; then
+    : > "$APTL_TEST_REPLACEMENT_MARKER"
+fi
+if [ "$1" = inspect ]; then exit 1; fi
+exit 0
+""",
+        encoding="utf-8",
+    )
+    docker.chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "APTL_PROJECT_DIR": str(PROJECT_ROOT),
+        "APTL_TEST_DOCKER_LOG": str(docker_log),
+        "APTL_TEST_REPLACEMENT_MARKER": str(replacement_marker),
+    }
+
+    result = subprocess.run(
+        [PROJECT_ROOT / "scripts" / "envpack-soar-fixups.sh"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 1
+    assert "did not preserve its realized publication" in result.stdout
+    operations = docker_log.read_text(encoding="utf-8").splitlines()
+    assert not any(line.startswith("exec aptl-shuffle-backend ") for line in operations)
+
+
+def test_soar_fixups_activate_the_generated_soc_tls_material() -> None:
+    """Frozen-pack SOC consumers must use the paths their images read."""
+
+    fixup = (PROJECT_ROOT / "scripts" / "envpack-soar-fixups.sh").read_text(
+        encoding="utf-8"
+    )
+    thehive_key = (PROJECT_ROOT / "scripts" / "thehive-apikey.sh").read_text(
+        encoding="utf-8"
+    )
+    shuffle_seed = (PROJECT_ROOT / "scripts" / "seed-shuffle.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "fix_shuffle_frontend_tls" in fixup
+    assert "/etc/nginx/fullchain.cert.pem:ro" in fixup
+    assert "/etc/nginx/privkey.pem:ro" in fixup
+    assert "fix_thehive_tls" in fixup
+    assert "/etc/thehive/keystore.p12:ro" in fixup
+    assert "/etc/thehive/application.conf:ro" in fixup
+    assert "fix_shuffle_orborus" in fixup
+    assert "ghcr.io/shuffle/shuffle-worker@sha256:" in fixup
+    assert "SHUFFLE_ORBORUS_EXECUTION_TIMEOUT=600" in fixup
+    assert "verify_soc_tls" in fixup
+    assert '--cacert "$CERT_BASE/lab-ca.pem"' in fixup
+    assert 'THEHIVE_URL="${THEHIVE_URL:-https://localhost:9000}"' in thehive_key
+    assert '--cacert "$THEHIVE_CA_CERT"' in thehive_key
+    assert 'THEHIVE_INTERNAL_URL="https://thehive:9000"' in shuffle_seed
+
+
+def test_release_manual_has_executable_reverse_negative_harness() -> None:
+    manual = (PROJECT_ROOT / "docs" / "testing" / "smoke-test-plan.md").read_text(
+        encoding="utf-8"
+    )
+
+    reverse_section = manual.split("### QA-MCP-REVERSE:", 1)[1].split(
+        "### QA-ARCHIVE:", 1
+    )[0]
+    assert "aptl.validation.mcp_protocol" in reverse_section
+    assert '"mcp/mcp-reverse/build/index.js"' in reverse_section
+    assert '"reverse_run_command"' in reverse_section
+    assert 'payload.get("success") is not False' in reverse_section
+    assert '"outcome": "expected-unavailable"' in reverse_section
+
+
+def test_release_manual_requires_valid_browser_trust_for_soc_uis() -> None:
+    """The hands-on UI path must be executable without TLS bypasses."""
+
+    manual = (PROJECT_ROOT / "docs" / "testing" / "smoke-test-plan.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "config/wazuh_indexer_ssl_certs/root-ca.pem" in manual
+    assert "config/soc_certs/lab-ca.pem" in manual
+    assert "https://wazuh.dashboard:<reported-host-port>" in manual
+    assert "443` is only the default" in manual
+    assert "aptl lab status --json --output qa-start-status.json" in manual
+    assert "certificate warning" in manual
+    assert "aptl container shell aptl-suricata" in manual
+    assert "does not claim passive visibility" in manual

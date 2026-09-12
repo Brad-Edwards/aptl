@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import io
 import re
+import shutil
 import tarfile
 from pathlib import Path, PurePosixPath
 
@@ -59,16 +60,51 @@ def image_node_content_override(
         source = _place_content(item, scenario_root, realization_root)
         if source is None:
             continue
-        target = "/" + item.dest_relpath.lstrip("/")
-        services.setdefault(service_name, {}).setdefault("volumes", []).append(
-            {
-                "type": "bind",
-                "source": str(source),
-                "target": target,
-                "read_only": True,
-            }
+        services.setdefault(service_name, {}).setdefault("volumes", []).extend(
+            _content_mounts(item, source)
         )
     return {"services": services} if services else {"services": {}}
+
+
+def _content_mounts(
+    item: DeploymentContentRealization,
+    source: Path,
+) -> list[dict[str, object]]:
+    """Return mounts that place content without hiding image-owned siblings.
+
+    A pack directory is a set of declared files to merge at its destination.
+    Binding the extracted root over an image-owned directory hides every file
+    the image already carries there. This is especially damaging for appliance
+    extension directories whose entrypoint updates built-in files before it
+    applies the mounted configuration. Mount each regular artifact member at
+    its relative destination instead. Empty pack directories retain the prior
+    whole-directory behavior because they have no members to merge.
+    """
+
+    target_root = PurePosixPath("/") / item.dest_relpath.lstrip("/")
+    if item.source_kind == "pack-directory" and source.is_dir():
+        entries = sorted(source.rglob("*"), key=lambda path: path.relative_to(source).as_posix())
+        if any(entry.is_symlink() for entry in entries):
+            raise ValueError("pack directory content contains a symlink")
+        files = [entry for entry in entries if entry.is_file()]
+        if files:
+            return [
+                {
+                    "type": "bind",
+                    "source": str(path),
+                    "target": str(target_root / path.relative_to(source).as_posix()),
+                    "read_only": True,
+                }
+                for path in files
+            ]
+    return [
+        {
+            "type": "bind",
+            "source": str(source),
+            "target": str(target_root),
+            "read_only": True,
+        }
+    ]
 
 
 def _place_content(
@@ -83,15 +119,16 @@ def _place_content(
     """
 
     slug = item.address.rsplit(".", 1)[-1]
-    root = realization_root / CONTENT_MOUNT_ROOT_RELPATH / slug
     basename = PurePosixPath(item.dest_relpath).name or slug
 
     placed: Path | None = None
     if item.source_kind == "inline-text" and item.inline_text is not None:
-        root.mkdir(parents=True, exist_ok=True)
+        root = _content_output_root(realization_root, slug)
         placed = root / basename
+        _remove_previous_output(placed)
         placed.write_text(item.inline_text, encoding="utf-8")
     elif item.source_kind in ("pack-file", "pack-directory") and item.artifact_id:
+        root = _content_output_root(realization_root, slug)
         placed = _place_pack_content(item, scenario_root, root, basename)
     elif (
         item.source_kind in ("project-file", "project-directory")
@@ -99,6 +136,32 @@ def _place_content(
     ):
         placed = _project_content_source(item, scenario_root)
     return placed
+
+
+def _content_output_root(realization_root: Path, slug: str) -> Path:
+    """Create one output root without following project-state symlinks."""
+
+    realization_root.mkdir(parents=True, exist_ok=True)
+    current = realization_root
+    for part in (*CONTENT_MOUNT_ROOT_RELPATH.parts, slug):
+        current = current / part
+        if current.is_symlink():
+            raise ValueError("content realization output path contains a symlink")
+        current.mkdir(exist_ok=True)
+        if not current.is_dir():
+            raise ValueError("content realization output path is not a directory")
+    return current
+
+
+def _remove_previous_output(path: Path) -> None:
+    """Remove generated output that a prior container may have made read-only."""
+
+    if path.is_symlink():
+        raise ValueError("content realization output path contains a symlink")
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
 
 
 def _project_content_source(
@@ -135,13 +198,14 @@ def _place_pack_content(
                 f"pack content digest mismatch for {item.artifact_id}: "
                 f"{digest} != {item.artifact_digest}"
             )
-    root.mkdir(parents=True, exist_ok=True)
     if item.source_kind == "pack-directory":
         tree = root / "tree"
-        tree.mkdir(exist_ok=True)
+        _remove_previous_output(tree)
+        tree.mkdir()
         with tarfile.open(fileobj=io.BytesIO(resolved.data), mode="r:*") as archive:
             archive.extractall(tree, filter="data")
         return tree
     destination = root / basename
+    _remove_previous_output(destination)
     destination.write_bytes(resolved.data)
     return destination

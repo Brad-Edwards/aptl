@@ -475,6 +475,7 @@ services:
     entrypoint: ["/bin/sh", "/usr/local/bin/cortex-index-init.sh"]
     volumes:
       - ./scripts/cortex-index-init.sh:/usr/local/bin/cortex-index-init.sh:ro
+      - ./config/cortex/index-mapping.json:/usr/local/share/aptl/cortex-index-mapping.json:ro
     depends_on:
       thehive-es:
         condition: service_healthy

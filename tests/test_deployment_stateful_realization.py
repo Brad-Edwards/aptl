@@ -855,6 +855,57 @@ def test_authenticated_readiness_polls_until_credentials_are_accepted(
     }
 
 
+def test_authenticated_readiness_rejects_an_unapplied_manager_config(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A live API cannot mask an init failure that left the stock config active."""
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    (tmp_path / ".env").write_text(
+        "INDEXER_USERNAME=indexer-user\n"
+        "INDEXER_PASSWORD=indexer-password\n"
+        "API_USERNAME=api-user\n"
+        "API_PASSWORD=api-password\n"
+    )
+    monkeypatch.setattr(
+        backend,
+        "container_inspect",
+        lambda name: {
+            "NetworkSettings": {"Ports": {"55000/tcp": [{"HostPort": "55001"}]}}
+        },
+    )
+    monkeypatch.setattr(
+        "aptl.core.deployment._compose_stateful_readiness.check_manager_api_ready",
+        lambda url, username, password: True,
+    )
+    commands: list[tuple[str, list[str]]] = []
+
+    def _exec(name, command, *, timeout=None):
+        commands.append((name, command))
+        return MagicMock(returncode=1, stdout="", stderr="")
+
+    monkeypatch.setattr(backend, "container_exec", _exec)
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _rendered_config_spec()
+    )
+
+    assert result is not None
+    assert result.success is False
+    assert result.error == "Wazuh manager did not activate its rendered configuration."
+    assert backend.authenticated_readiness == {"wazuh.manager": True}
+    assert commands == [
+        (
+            "aptl-wazuh-manager",
+            [
+                "/bin/sh",
+                "-c",
+                "test \"$(sha256sum /var/ossec/etc/ossec.conf | cut -d' ' -f1)\" = \"$(sha256sum /wazuh-config-mount/etc/ossec.conf | cut -d' ' -f1)\"",
+            ],
+        )
+    ]
+
+
 # -- ssh_key_bundle dispatch and image-free delivery (issue #875) -------------
 
 

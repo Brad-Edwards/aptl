@@ -55,19 +55,13 @@ class TestLabStatusIntegration:
     """Lab status endpoint with real core logic, mocked subprocess."""
 
     @patch("aptl.core.deployment.docker_compose.subprocess.run")
-    def test_parses_json_array(self, mock_run, integration_client):
-        """Status endpoint correctly parses JSON array from docker compose ps."""
+    def test_parses_project_inventory(self, mock_run, integration_client):
+        """Status endpoint projects the backend's all-state project inventory."""
         mock_run.return_value = MagicMock(
             returncode=0,
-            stdout=json.dumps(
-                [
-                    {
-                        "Name": "aptl-victim",
-                        "State": "running",
-                        "Health": "healthy",
-                        "Image": "victim:latest",
-                    }
-                ]
+            stdout=(
+                "aptl-victim\tvictim:latest\tabc\tUp 1 minute (healthy)\t"
+                "running\tcom.docker.compose.project=integration-test\t"
             ),
             stderr="",
         )
@@ -82,14 +76,16 @@ class TestLabStatusIntegration:
         assert data["containers"][0]["state"] == "running"
 
     @patch("aptl.core.deployment.docker_compose.subprocess.run")
-    def test_parses_ndjson(self, mock_run, integration_client):
-        """Status endpoint handles NDJSON (one JSON object per line)."""
-        ndjson = (
-            '{"Name":"aptl-victim","State":"running","Health":"healthy"}\n'
-            '{"Name":"aptl-kali","State":"running","Health":""}\n'
+    def test_parses_multiple_project_rows(self, mock_run, integration_client):
+        """Status endpoint handles one record per project container."""
+        rows = (
+            "aptl-victim\tvictim:latest\taaa\tUp 1 minute (healthy)\trunning\t"
+            "com.docker.compose.project=integration-test\t\n"
+            "aptl-kali\tkali:latest\tbbb\tUp 1 minute\trunning\t"
+            "aptl.lifecycle.project=integration-test\t\n"
         )
         mock_run.return_value = MagicMock(
-            returncode=0, stdout=ndjson, stderr=""
+            returncode=0, stdout=rows, stderr=""
         )
 
         resp = integration_client.get("/api/lab/status")

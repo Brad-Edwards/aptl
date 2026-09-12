@@ -54,12 +54,17 @@ class HostInventoryBackend(Protocol):
         ...
 
     def host_list_lab_containers(self) -> list[dict[str, Any]]:
-        """Enumerate ``aptl-*`` containers visible to the daemon.
+        """Enumerate all containers owned by this deployment project.
 
-        Each row carries ``name``, ``image``, ``id``, ``status``,
-        ``labels`` (dict), and ``ports`` (list of port-mapping strings).
-        Catches containers outside the current compose project that
-        nevertheless follow the lab's naming convention.
+        Each row carries ``name``, ``image``, ``id``, ``status``, ``state``,
+        ``health``, ``labels`` (dict), and ``ports`` (list of port-mapping
+        strings).
+        Includes every observed state and both Compose-managed and directly
+        realized containers. Ownership is label-based, never name-prefix-based.
+
+        Raises:
+            BackendObservationError: If project inventory cannot be observed
+                or parsed. A valid empty project returns an empty list.
         """
         ...
 

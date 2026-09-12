@@ -27,6 +27,7 @@ from aptl.core.scenario_catalog import (
     resolve_scenario_selection,
 )
 from aptl.utils.logging import get_logger
+from aptl.utils.redaction import redact
 
 log = get_logger("cli.lab")
 
@@ -293,6 +294,7 @@ def _emit_snapshot_json(project_dir: Path, output_file: Optional[Path]) -> None:
     """
     from aptl.cli._common import resolve_config_for_cli
     from aptl.core.deployment import get_backend
+    from aptl.core.deployment.errors import BackendObservationError
     from aptl.core.snapshot import capture_snapshot
 
     # `capture_snapshot` requires an explicit backend (no silent default).
@@ -302,7 +304,11 @@ def _emit_snapshot_json(project_dir: Path, output_file: Optional[Path]) -> None:
     config, project_root = resolve_config_for_cli(project_dir)
     backend = get_backend(config, project_root)
 
-    snapshot = capture_snapshot(config_dir=project_root, backend=backend)
+    try:
+        snapshot = capture_snapshot(config_dir=project_root, backend=backend)
+    except BackendObservationError as exc:
+        typer.echo(f"Error: {redact(str(exc))}", err=True)
+        raise typer.Exit(code=1) from exc
     data = json.dumps(snapshot.to_dict(), indent=2)
 
     if output_file:
@@ -320,13 +326,12 @@ def _emit_status_text(current: LabStatus) -> None:
         typer.echo("Lab is not running.")
         if current.error:
             typer.echo(f"Error: {current.error}")
-        return
-
-    typer.echo("Lab is running.")
+    else:
+        typer.echo("Lab is running.")
     for container in current.containers:
-        name = container.get("Name", "unknown")
-        state = container.get("State", "unknown")
-        health = container.get("Health", "")
+        name = container.get("Name", container.get("name", "unknown"))
+        state = container.get("State", container.get("state", "unknown"))
+        health = container.get("Health", container.get("health", ""))
         line = f"  {name}: {state}"
         if health:
             line += f" ({health})"

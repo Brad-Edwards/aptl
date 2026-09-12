@@ -7,6 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import subprocess
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -673,3 +674,22 @@ def test_process_absence_fails_closed_when_the_pid_stays_unsignalable(
     monkeypatch.setattr(env, "_PROCESS_ABSENT_TIMEOUT_SECONDS", 0.2)
 
     assert env.wait_until_process_absent(4321) is False
+
+
+def test_process_absence_accepts_a_terminated_unreaped_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A zombie cannot execute even when Darwin retains its PID briefly."""
+
+    from aptl.validation import participant_qualification_boundary_environment as env
+
+    monkeypatch.setattr(env.os, "kill", lambda _pid, _signal: None)
+    monkeypatch.setattr(
+        env.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["ps"], returncode=0, stdout=b"Z+\n", stderr=b""
+        ),
+    )
+
+    assert env.wait_until_process_absent(4321) is True

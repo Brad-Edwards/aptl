@@ -27,6 +27,8 @@ ORG_USER="${CORTEX_ORG_USER:-aptl-svc@cortex.local}"
 ORG_USER_NAME="${CORTEX_ORG_USER_NAME:-APTL Cortex Service Account}"
 ORG_USER_PASS="${CORTEX_ORG_USER_PASS:-AptlCortexService2026!}"
 CORTEX_API_KEY="${CORTEX_API_KEY:-aptlcortexlabapikey2026purple}"
+ANALYZER_DEFINITION_ID="APTL_Observable_1_0"
+ANALYZER_NAME="APTL_Observable"
 export ORG_NAME ORG_DESCRIPTION ORG_USER ORG_USER_NAME ORG_USER_PASS CORTEX_API_KEY
 
 # Reach the Cortex API from inside its container. This mirrors the SOC seed's
@@ -42,6 +44,42 @@ _curl_json() {
 
 _curl_key() {
     _cortex_curl -sf -H "Authorization: Bearer ${CORTEX_API_KEY}" "$@"
+}
+
+_analyzer_is_enabled() {
+    local catalog
+    if ! catalog=$(_curl_key "${CORTEX_URL}/api/analyzer"); then
+        echo "ERROR: Cortex analyzer catalog could not be queried" >&2
+        return 1
+    fi
+    if ! printf '%s' "$catalog" \
+        | grep -Eq '"name"[[:space:]]*:[[:space:]]*"'"${ANALYZER_NAME}"'"'; then
+        return 1
+    fi
+}
+
+_ensure_analyzer_enabled() {
+    local definitions payload
+    if _analyzer_is_enabled; then
+        return 0
+    fi
+    if ! definitions=$(_curl_key "${CORTEX_URL}/api/analyzerdefinition") \
+        || ! printf '%s' "$definitions" \
+            | grep -Eq '"id"[[:space:]]*:[[:space:]]*"'"${ANALYZER_DEFINITION_ID}"'"'; then
+        echo "ERROR: Cortex ${ANALYZER_NAME} definition is not available" >&2
+        return 1
+    fi
+    payload='{"name":"APTL_Observable","configuration":{"check_tlp":true,"max_tlp":2,"check_pap":true,"max_pap":2},"jobCache":5,"jobTimeout":5}'
+    if ! _curl_key -H "Content-Type: application/json" -X POST \
+        "${CORTEX_URL}/api/organization/analyzer/${ANALYZER_DEFINITION_ID}" \
+        -d "$payload" >/dev/null; then
+        echo "ERROR: Cortex ${ANALYZER_NAME} could not be enabled" >&2
+        return 1
+    fi
+    if ! _analyzer_is_enabled; then
+        echo "ERROR: Cortex ${ANALYZER_NAME} was enabled but is not queryable" >&2
+        return 1
+    fi
 }
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -72,6 +110,7 @@ fi
 
 # 3. Fast path: the fixture key already works.
 if _curl_key "${CORTEX_URL}/api/user/current" >/dev/null; then
+    _ensure_analyzer_enabled || exit 1
     echo "$CORTEX_API_KEY"
     exit 0
 fi
@@ -115,5 +154,7 @@ if ! _curl_key "${CORTEX_URL}/api/user/current" >/dev/null; then
     echo "ERROR: Cortex fixture key was created but did not authenticate" >&2
     exit 1
 fi
+
+_ensure_analyzer_enabled || exit 1
 
 echo "$CORTEX_API_KEY"

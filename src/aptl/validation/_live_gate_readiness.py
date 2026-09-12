@@ -5,7 +5,7 @@ under the file-size budget. These helpers compare the realized RAES node
 surface against the booted range's container snapshot in **both** directions:
 every realized node in a started profile must map to a live container, any
 container carrying a healthcheck must actually report healthy, and every running
-container must be accounted for by a declared node.
+or stopped project container must be accounted for by a declared node.
 ``_live_gate_checks.check_defensive_stack_readiness`` imports
 ``_node_readiness_diagnostics`` and ``_undeclared_container_diagnostics``
 from here.
@@ -52,14 +52,13 @@ def _node_readiness_diagnostics(
 def _undeclared_container_diagnostics(
     containers: Sequence[Mapping[str, Any]], matched_names: set[str]
 ) -> list[str]:
-    """Return a hard failure for every running container the graph never declared.
+    """Return a hard failure for every observed container the graph never declared.
 
     The other half of ADR-048 parity. Comparing declared-to-realized catches a
     node that failed to start; only comparing realized-to-declared catches the
-    opposite and more dangerous case — something running in the range that the
-    admitted graph does not account for. A scenario that cannot name what is
-    running has not described the range, and an operator reading it would be
-    misled about what an attacker can reach.
+    opposite case: project residue that the admitted graph does not account for.
+    A scenario that cannot name what was realized has not described the range,
+    and an operator reading it would be misled about the observed deployment.
 
     This was previously a ``log.warning``, which meant an undeclared container
     could never fail a run. It is now a failure, deliberately with no allowance
@@ -70,8 +69,9 @@ def _undeclared_container_diagnostics(
     """
 
     return [
-        f"container {container.get('name', '?')!r} is running but no declared node "
-        "accounts for it"
+        f"container {container.get('name', '?')!r} has observed status "
+        f"{str(container.get('status', 'unknown'))!r} but no declared node accounts "
+        "for it"
         for container in containers
         if container.get("name", "") not in matched_names
     ]

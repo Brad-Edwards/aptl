@@ -468,6 +468,45 @@ class TestHashConfigFiles:
 class TestCaptureSnapshot:
     """Tests for the capture_snapshot function."""
 
+    @patch("aptl.core.snapshot._get_network_snapshots", return_value=[])
+    @patch(
+        "aptl.core.snapshot._get_wazuh_rules_snapshot",
+        return_value=WazuhRulesSnapshot(),
+    )
+    @patch("aptl.core.snapshot._get_container_snapshots")
+    @patch(
+        "aptl.core.snapshot._get_software_versions",
+        return_value=SoftwareVersions(),
+    )
+    def test_capture_snapshot_uses_supplied_checked_container_rows(
+        self, _mock_sw, mock_containers, _mock_wazuh, _mock_networks, tmp_path
+    ):
+        backend = MagicMock()
+        backend.container_inspect.return_value = {}
+        rows = [
+            {
+                "name": "aptl-terminal",
+                "image": "example:latest",
+                "id": "abc",
+                "status": "Up 1 minute",
+                "state": "running",
+                "labels": {"aptl.lifecycle.project": "aptl"},
+                "ports": [],
+            }
+        ]
+
+        snapshot = capture_snapshot(
+            config_dir=tmp_path,
+            backend=backend,
+            container_rows=rows,
+        )
+
+        mock_containers.assert_not_called()
+        assert [container.name for container in snapshot.containers] == [
+            "aptl-terminal"
+        ]
+        assert snapshot.containers[0].status == "Up 1 minute"
+
     @patch("aptl.core.snapshot._get_network_snapshots")
     @patch("aptl.core.snapshot._get_wazuh_rules_snapshot")
     @patch("aptl.core.snapshot._get_container_snapshots")

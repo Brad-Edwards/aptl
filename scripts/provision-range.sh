@@ -12,7 +12,7 @@
 # It is idempotent and safe to re-run. `aptl lab start` internally runs the
 # realization (with the certs.py root-owned-cert-dir self-heal) and then
 # scripts/seed-prime.sh, which seeds SOAR content and applies the remaining
-# MISP/Redis, endpoint-publication, Suricata, and Kali capture-wrapper fixups.
+# MISP/Redis, Suricata, and Kali capture-wrapper fixups.
 # The released env-pack owns Shuffle's runtime contract. Kali readiness may report
 # "degraded" DURING lab start because the kali wrapper is relaxed by seed-prime
 # which runs just after the readiness probe; kali is fully reachable once this

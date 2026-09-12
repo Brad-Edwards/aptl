@@ -743,11 +743,53 @@ def test_pack_file_content_for_an_image_node_is_bound_from_the_resolved_bytes(
     assert not (scenario_root / ".aptl").exists()
 
 
-def test_pack_directory_content_for_an_image_node_binds_the_extracted_tree(
+def test_pack_directory_content_for_an_image_node_merges_files_into_target(
     tmp_path, stub_pack
 ):
-    """A directory artifact is extracted and the tree itself is bound in."""
+    """A directory artifact must not hide image-owned target-directory files."""
 
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+
+    digest = "sha256:" + "b" * 64
+    stub_pack["rules"] = _StubResolved(
+        _tar_bytes(
+            {
+                "local.rules": b"alert\n",
+                "nested/reference.conf": b"reference\n",
+            }
+        ),
+        digest,
+    )
+    spec = _content_spec(
+        content=(
+            _content_item(
+                "pack-directory",
+                dest_relpath="etc/suricata/rules",
+                artifact_id="rules",
+                artifact_digest=digest,
+            ),
+        )
+    )
+
+    override = image_node_content_override(spec, tmp_path / "pack", tmp_path / "engine")
+
+    mounts = override["services"]["tempo"]["volumes"]
+    assert [mount["target"] for mount in mounts] == [
+        "/etc/suricata/rules/local.rules",
+        "/etc/suricata/rules/nested/reference.conf",
+    ]
+    assert [Path(mount["source"]).read_bytes() for mount in mounts] == [
+        b"alert\n",
+        b"reference\n",
+    ]
+    assert all(mount["read_only"] is True for mount in mounts)
+    assert not any(mount["target"] == "/etc/suricata/rules" for mount in mounts)
+
+
+def test_pack_directory_content_replaces_a_mount_source_made_read_only(
+    tmp_path, stub_pack
+):
+    """A prior container's metadata changes cannot block the next realization."""
     from aptl.core.deployment._compose_content_mounts import image_node_content_override
 
     digest = "sha256:" + "b" * 64
@@ -762,12 +804,71 @@ def test_pack_directory_content_for_an_image_node_binds_the_extracted_tree(
             ),
         )
     )
+    realization_root = tmp_path / "engine"
+    first = image_node_content_override(spec, tmp_path / "pack", realization_root)
+    old_source = Path(first["services"]["tempo"]["volumes"][0]["source"])
+    old_source.chmod(0o000)
 
-    override = image_node_content_override(spec, tmp_path / "pack", tmp_path / "engine")
+    second = image_node_content_override(spec, tmp_path / "pack", realization_root)
 
-    mount = override["services"]["tempo"]["volumes"][0]
-    assert mount["target"] == "/etc/suricata/rules"
-    assert (Path(mount["source"]) / "local.rules").read_bytes() == b"alert\n"
+    new_source = Path(second["services"]["tempo"]["volumes"][0]["source"])
+    assert new_source.read_bytes() == b"alert\n"
+
+
+def test_pack_file_content_replaces_a_mount_source_made_read_only(
+    tmp_path, stub_pack
+):
+    """A prior container cannot leave a pack-file bind source unwritable."""
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+
+    digest = "sha256:" + "a" * 64
+    stub_pack["tempo-config"] = _StubResolved(b"storage: local\n", digest)
+    spec = _content_spec(
+        content=(
+            _content_item(
+                "pack-file", artifact_id="tempo-config", artifact_digest=digest
+            ),
+        )
+    )
+    realization_root = tmp_path / "engine"
+    first = image_node_content_override(spec, tmp_path / "pack", realization_root)
+    old_source = Path(first["services"]["tempo"]["volumes"][0]["source"])
+    old_source.chmod(0o400)
+
+    second = image_node_content_override(spec, tmp_path / "pack", realization_root)
+
+    new_source = Path(second["services"]["tempo"]["volumes"][0]["source"])
+    assert new_source.read_bytes() == b"storage: local\n"
+
+
+def test_pack_content_refuses_a_symlinked_realization_output_root(
+    tmp_path, stub_pack
+):
+    """Regeneration must not follow project-state symlinks outside its root."""
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+
+    digest = "sha256:" + "a" * 64
+    stub_pack["tempo-config"] = _StubResolved(b"replacement\n", digest)
+    spec = _content_spec(
+        content=(
+            _content_item(
+                "pack-file", artifact_id="tempo-config", artifact_digest=digest
+            ),
+        )
+    )
+    realization_root = tmp_path / "engine"
+    output_parent = realization_root / ".aptl/realization/content"
+    output_parent.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside_file = outside / "config.yaml"
+    outside_file.write_text("unchanged\n", encoding="utf-8")
+    (output_parent / "cfg").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symlink"):
+        image_node_content_override(spec, tmp_path / "pack", realization_root)
+
+    assert outside_file.read_text(encoding="utf-8") == "unchanged\n"
 
 
 def test_pack_content_whose_resolved_digest_differs_from_the_pin_fails_closed(

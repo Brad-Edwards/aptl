@@ -733,6 +733,25 @@ def test_readiness_fails_on_a_container_no_declared_node_accounts_for():
     assert any("no declared node accounts for it" in d for d in check.diagnostics)
 
 
+@pytest.mark.parametrize(
+    "status",
+    ["Up 1 minute (healthy)", "Created", "Exited (128) 2 seconds ago"],
+)
+def test_undeclared_container_diagnostic_reports_observed_state(status):
+    state = _readiness_state(
+        [_node("webapp", ["dmz"])],
+        [_container("aptl-webapp"), _container("aptl-unexpected", status=status)],
+    )
+
+    check = lgc.check_defensive_stack_readiness(state=state)
+
+    assert not check.passed
+    assert any(
+        "aptl-unexpected" in diagnostic and repr(status) in diagnostic
+        for diagnostic in check.diagnostics
+    )
+
+
 def test_readiness_fails_an_exited_run_to_completion_container():
     """A restart:"no" container that exited is a readiness failure, no exemption.
 

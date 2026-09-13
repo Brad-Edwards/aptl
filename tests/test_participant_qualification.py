@@ -693,3 +693,92 @@ def test_process_absence_accepts_a_terminated_unreaped_process(
     )
 
     assert env.wait_until_process_absent(4321) is True
+
+
+def test_timeout_challenge_names_which_containment_fact_failed() -> None:
+    """BC-09's two facts are reported separately, not collapsed into one bool.
+
+    A recorded pid that is still alive and a fixture that never recorded a pid
+    are different failures with different fixes, and a single boolean cannot
+    tell them apart.
+    """
+
+    from aptl.validation import participant_qualification_boundaries as boundaries
+
+    class _Provider:
+        def __init__(self, child_pid: int | None) -> None:
+            self.child_pid = child_pid
+
+    assert boundaries._timeout_challenge_facts(_Provider(None)) == {
+        "descendant_pid_recorded": False,
+        "descendant_process_absent": False,
+    }
+
+
+def test_timeout_challenge_fact_reports_a_surviving_descendant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A recorded pid that outlives the wait fails on the teardown fact alone."""
+
+    from aptl.validation import participant_qualification_boundaries as boundaries
+
+    class _Provider:
+        child_pid = 4321
+
+    monkeypatch.setattr(boundaries, "wait_until_process_absent", lambda _pid: False)
+
+    assert boundaries._timeout_challenge_facts(_Provider()) == {
+        "descendant_pid_recorded": True,
+        "descendant_process_absent": False,
+    }
+
+
+def test_timeout_fixture_budget_outlasts_its_own_child_setup() -> None:
+    """The bounded run must time out after the fixture has a live descendant.
+
+    The runner's clock starts at ``Popen``, so the budget has to cover child
+    interpreter startup plus the grandchild spawn plus the pid write. At the
+    old 0.1s it did not under load (measurements are recorded beside the
+    constant), which read as a containment failure although teardown was fine.
+    The budget must also stay well under the 30s the child sleeps, so the run
+    still times out on every pass.
+    """
+
+    from aptl.validation import participant_qualification_challenge_support as support
+
+    assert support._TIMEOUT_CHALLENGE_BUDGET_SECONDS >= 1.0
+    assert support._TIMEOUT_CHALLENGE_BUDGET_SECONDS <= 15.0
+
+
+@pytest.mark.parametrize(
+    ("contents", "expected"),
+    [("4321", 4321), ("4321\n", 4321), ("", None), ("not-a-pid", None)],
+)
+def test_recorded_child_pid_never_raises_on_a_partial_write(
+    tmp_path: Path, contents: str, expected: int | None
+) -> None:
+    """A truncated pid file reads as "no pid", never as an exception.
+
+    ``write_text`` truncates on open, so a SIGKILL between the open and the
+    write leaves an empty file. Parsing that raised ValueError from a
+    ``finally`` on the timeout path, and the caller's ``except ValueError``
+    then recorded the fixture's own crash as a correctly rejected provider
+    operation. The pid is now renamed into place, and the parse is total.
+    """
+
+    from aptl.validation import participant_qualification_challenge_support as support
+
+    pid_path = tmp_path / "child.pid"
+    pid_path.write_text(contents, encoding="utf-8")
+
+    assert support._recorded_child_pid(pid_path) == expected
+
+
+def test_recorded_child_pid_reports_nothing_when_the_file_is_absent(
+    tmp_path: Path,
+) -> None:
+    """A fixture killed before it spawned anything records no pid."""
+
+    from aptl.validation import participant_qualification_challenge_support as support
+
+    assert support._recorded_child_pid(tmp_path / "missing.pid") is None

@@ -33,7 +33,7 @@ dependencies = [
     "cryptography>=50.0.0",
     "raes==3.3.0",
     "raes-env-packs==4.0.2",
-    "mcp>=1.27.0,<2.0.0",
+    "mcp>=1.27.0,<3.0.0",
     "rfc8785>=0.1.4,<0.2.0",
     # Imported directly by aptl.core.experiment.resolver; previously satisfied
     # only transitively through the upstream SDL distribution.

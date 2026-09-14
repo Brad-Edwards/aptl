@@ -59,7 +59,6 @@ from aptl.core.lifecycle_guard import (
 )
 from aptl.core.lifecycle_policy import LifecycleBusyError
 from aptl.core.services import (
-    ServiceResult,
     WazuhApiProbe,
     probe_indexer_api,
     probe_manager_api,
@@ -2018,6 +2017,7 @@ def _wait_for_wazuh_api(ctx: _LabStartContext, spec: _WazuhApiWait) -> LabResult
     last_probe: list[WazuhApiProbe | None] = [None]
 
     def api_ready() -> bool:
+        """Probe once, remember the observation, and report readiness."""
         probe = spec.probe(url=spec.url, username=spec.username, password=spec.password)
         last_probe[0] = probe
         if not probe.ready:

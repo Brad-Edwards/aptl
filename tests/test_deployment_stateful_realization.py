@@ -957,7 +957,9 @@ def test_persistent_manager_tls_failure_fails_closed_with_its_phase(
         _indexer_and_manager_spec()
     )
 
-    assert result is not None and result.success is False
+    assert result is not None
+
+    assert result.success is False
     assert result.error == (
         "Authenticated Wazuh readiness validation failed after 10s: "
         "wazuh.manager at https://localhost:55001 transport phase failed: "
@@ -997,7 +999,9 @@ def test_readiness_retry_sleep_is_clamped_to_the_remaining_budget(
         _indexer_and_manager_spec()
     )
 
-    assert result is not None and result.success is False
+    assert result is not None
+
+    assert result.success is False
     assert len(probes) == 3
     assert slept == [5, 2.0]
 
@@ -1022,7 +1026,9 @@ def test_persistent_credential_rejection_names_both_services_without_secrets(
         _indexer_and_manager_spec()
     )
 
-    assert result is not None and result.success is False
+    assert result is not None
+
+    assert result.success is False
     assert result.error == (
         "Authenticated Wazuh readiness validation failed after 0s: "
         "wazuh.indexer at https://localhost:19200 authentication phase failed: "

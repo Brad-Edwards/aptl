@@ -104,7 +104,8 @@ class TestCurlRequest:
         _, missing = self._run(monkeypatch, side_effect=OSError("curl not found"))
         assert (timed_out.exit_code, timed_out.category) == (None, "request_timeout")
         assert (missing.exit_code, missing.category) == (None, "curl_unavailable")
-        assert timed_out.http_status is None and missing.http_status is None
+        assert timed_out.http_status is None
+        assert missing.http_status is None
 
     def test_non_json_body_keeps_status_without_payload(self, monkeypatch):
         _, outcome = self._run(monkeypatch, stdout="<html>ok</html>\n200")
@@ -143,9 +144,8 @@ class TestCurlRequest:
         assert all(not os.path.exists(path) for path in captured["files"])
         assert "bearer-token-value" not in repr(outcome)
         assert "secret-ish" not in repr(outcome)
-        assert ["-X", "POST"] == captured["cmd"][
-            captured["cmd"].index("-X") : captured["cmd"].index("-X") + 2
-        ]
+        method_at = captured["cmd"].index("-X")
+        assert captured["cmd"][method_at : method_at + 2] == ["-X", "POST"]
         assert "-k" in captured["cmd"]
 
     def test_temp_files_are_unlinked_on_timeout(self, monkeypatch):

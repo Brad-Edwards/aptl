@@ -3099,7 +3099,9 @@ class TestStartupClassificationWiring:
 
         result = _step_wait_for_services(ctx)
 
-        assert result is not None and result.success is False
+        assert result is not None
+
+        assert result.success is False
         assert result.error == (
             "Wazuh Indexer did not become ready within 600s: wazuh.indexer at "
             "https://localhost:9200 transport phase failed: tls_handshake "
@@ -3133,7 +3135,9 @@ class TestStartupClassificationWiring:
 
         result = _step_wait_for_services(ctx)
 
-        assert result is not None and result.success is False
+        assert result is not None
+
+        assert result.success is False
         assert (
             "authentication phase failed: credentials_rejected "
             f"(HTTP {http_status})" in result.error
@@ -3237,7 +3241,9 @@ class TestStartupClassificationWiring:
 
         result = _step_wait_for_services(ctx)
 
-        assert result is not None and result.success is False
+        assert result is not None
+
+        assert result.success is False
         assert result.error == (
             "Wazuh Manager API did not become ready within 120s: wazuh.manager at "
             "https://localhost:55000 transport phase failed: tls_handshake "
@@ -3272,7 +3278,9 @@ class TestStartupClassificationWiring:
 
         result = _step_wait_for_services(ctx)
 
-        assert result is not None and result.success is False
+        assert result is not None
+
+        assert result.success is False
         assert (
             "authentication phase failed: credentials_rejected (HTTP 401)"
             in result.error

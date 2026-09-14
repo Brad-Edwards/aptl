@@ -183,6 +183,12 @@ def probe_manager_api(url: str, username: str, password: str) -> WazuhApiProbe:
     if token is None:
         return _api_failure("authentication", auth)
 
+    return _manager_status_probe(base, token)
+
+
+def _manager_status_probe(base: str, token: str) -> WazuhApiProbe:
+    """Run the manager-status phase with an authenticated session token."""
+
     status = curl_request(
         f"{base}/manager/status",
         auth_header=f"Bearer {token}",
@@ -191,9 +197,9 @@ def probe_manager_api(url: str, username: str, password: str) -> WazuhApiProbe:
     )
     if status.http_status != 200:
         return _api_failure("manager_status", status)
-    if not _manager_status_ready(status.payload):
-        return WazuhApiProbe("manager_status", "not_ready", http_status=200)
-    return WazuhApiProbe("ready", "ready", http_status=200)
+    if _manager_status_ready(status.payload):
+        return WazuhApiProbe("ready", "ready", http_status=200)
+    return WazuhApiProbe("manager_status", "not_ready", http_status=200)
 
 
 def _api_failure(phase: str, outcome: CurlOutcome) -> WazuhApiProbe:

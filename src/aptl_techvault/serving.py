@@ -35,13 +35,9 @@ _GROUP_BY_COMPONENT = {
     "provision.node.thehive-cassandra": "soc",
     "provision.node.thehive-es": "soc",
     "provision.node.cortex": "soc",
-    # env-packs 6.0.0 migrated the Wazuh sidecars to full SOC nodes, split the
-    # standalone Suricata sensor out, and added the Cortex initializer.
+    # env-packs 6.0.0 added the Cortex initializer node (the wazuh SIEM nodes and
+    # the standalone Suricata sensor are grouped above).
     "provision.node.cortex-initializer": "soc",
-    "provision.node.wazuh-manager": "soc",
-    "provision.node.wazuh-indexer": "soc",
-    "provision.node.wazuh-dashboard": "soc",
-    "provision.node.suricata": "soc",
     "provision.node.shuffle-backend": "soc",
     "provision.node.shuffle-frontend": "soc",
     "provision.node.shuffle-opensearch": "soc",

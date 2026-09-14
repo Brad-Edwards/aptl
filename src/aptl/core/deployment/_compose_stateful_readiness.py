@@ -1,17 +1,21 @@
 """Authenticated readiness for realized stateful services (issue #875).
 
 Split out of ``_compose_stateful_realization.py`` (module-length budget): a
-container reporting healthy only proves its port listens, so a realization is
-not finished until the graph-owned Wazuh APIs actually accept the configured
-credentials. This module owns that observation -- the credential load, the
-published-port lookup, and the poll loop that waits out the initialization
-window without ever letting a genuinely bad credential pass.
+settled container proves little about its API. A generated Wazuh service may
+define no healthcheck at all, in which case it settles as soon as it is
+running, before its API listens. A realization is therefore not finished until
+the graph-owned Wazuh APIs actually accept the configured credentials. This
+module owns that observation -- the credential load, the published-port
+lookup, and the poll loop that waits out the initialization window without
+ever letting a genuinely bad credential or a persistent transport failure
+pass. Warm-up attempts stay quiet; the last classified observation of each
+unready service becomes the terminal reason at the deadline (issue #1002).
 """
 
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,15 +38,28 @@ from aptl.core.env import (
     load_dotenv,
 )
 from aptl.core.lab_types import LabResult
-from aptl.core.services import check_indexer_ready, check_manager_api_ready
+from aptl.core.services import probe_indexer_api, probe_manager_api
+from aptl.utils.logging import get_logger
+
+log = get_logger("stateful-readiness")
 
 # Budget for authenticated Wazuh readiness after container health settles. The
 # indexer's security index and the manager API keep initializing past the point
-# the healthcheck first reports healthy, so this polls rather than probing once.
-# 300s is a generous margin over the observed few-minutes gap on a loaded host;
-# a genuinely bad credential still fails closed after the budget (issue #875).
+# the container settles (a generated manager without a healthcheck settles
+# before its API listens), so this polls rather than probing once. 300s is a
+# generous margin over the observed few-minutes gap on a loaded host; a
+# genuinely bad credential still fails closed after the budget (issue #875).
 _AUTHENTICATED_READINESS_TIMEOUT = 300
 _AUTHENTICATED_READINESS_INTERVAL = 5
+
+
+@dataclass(frozen=True)
+class _ServiceObservation:
+    """Secret-free result of one authenticated readiness attempt."""
+
+    ready: bool
+    detail: str
+    container_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -110,8 +127,7 @@ class ComposeStatefulReadinessMixin:
     ) -> str | None:
         """Observe configured services and return their bounded failure reason."""
 
-        results: dict[str, bool] = {}
-        self._stateful_authenticated_readiness = results
+        self._stateful_authenticated_readiness = {}
         error: str | None = None
         if services:
             env, _placeholder_input = _load_stateful_env(self._project_dir)
@@ -119,12 +135,15 @@ class ComposeStatefulReadinessMixin:
                 error = "Authenticated Wazuh readiness credentials are unavailable."
             else:
                 nodes = {node.service_name: node for node in realization.nodes}
-                results = self._authenticated_readiness_results(
-                    services, nodes, env, identity
+                budget = ReadinessPolling()
+                observations = self._authenticated_readiness_results(
+                    services, nodes, env, identity, budget
                 )
-                self._stateful_authenticated_readiness = results
-                if not all(results.values()):
-                    error = "Authenticated Wazuh readiness validation failed."
+                self._stateful_authenticated_readiness = {
+                    service: observation.ready
+                    for service, observation in observations.items()
+                }
+                error = _readiness_failure(observations, budget.timeout)
         return error
 
     def _rendered_manager_config_is_active(self, container: str) -> bool:
@@ -152,17 +171,20 @@ class ComposeStatefulReadinessMixin:
         env: EnvVars,
         identity: WazuhClusterIdentity,
         polling: ReadinessPolling | None = None,
-    ) -> dict[str, bool]:
+    ) -> dict[str, _ServiceObservation]:
         """Poll authenticated readiness for each Wazuh service until ready.
 
-        A container reports healthy once its port listens, but accepting
-        credentials lags that: the indexer's security index (loaded by
-        securityadmin from internal_users.yml) and the manager API finish
-        initializing seconds-to-minutes after the healthcheck first passes. A
-        single probe right after health-settle races that window and sees a
-        transient 401. Poll on a generous budget so a genuinely misconfigured
-        credential still fails closed, just after the budget rather than before
-        it (issue #875).
+        A settled container does not mean its API accepts credentials: the
+        indexer's security index (loaded by securityadmin from
+        internal_users.yml) and the manager API finish initializing
+        seconds-to-minutes later, and a generated service without a healthcheck
+        settles before its API even listens. A single probe right after
+        health-settle races that window. Poll on a generous budget so a
+        genuinely misconfigured credential or a persistent transport failure
+        still fails closed, just after the budget rather than before it (issues
+        #875, #1002). Each service is probed until it is ready and then no
+        longer, so the result carries each ready service's proof and the last
+        classified state of every service still unready at the deadline.
         """
 
         checks = [
@@ -178,16 +200,27 @@ class ComposeStatefulReadinessMixin:
         budget = polling if polling is not None else ReadinessPolling()
         clock = budget.clock
         deadline = clock() + budget.timeout
+        results: dict[str, _ServiceObservation] = {}
         while True:
-            results = {
-                service: self._authenticated_service_ready(
-                    service, port, nodes.get(service), env, identity
-                )
-                for service, port in checks
-            }
-            if all(results.values()) or clock() >= deadline:
+            # A service proven ready stays proven: re-probing it while another
+            # service warms up could let a transient answer overwrite the proof.
+            results.update(
+                {
+                    service: self._authenticated_service_ready(
+                        service, port, nodes.get(service), env, identity
+                    )
+                    for service, port in checks
+                    if not (service in results and results[service].ready)
+                }
+            )
+            if all(r.ready for r in results.values()):
                 return results
-            budget.pause(budget.interval)
+            now = clock()
+            if now >= deadline:
+                return results
+            # Never sleep past the deadline: the last probe runs at the
+            # deadline, not an interval after it.
+            budget.pause(min(budget.interval, deadline - now))
 
     def _authenticated_service_ready(
         self,
@@ -196,32 +229,60 @@ class ComposeStatefulReadinessMixin:
         node: DeploymentNodeRealization | None,
         env: EnvVars,
         identity: WazuhClusterIdentity,
-    ) -> bool:
+    ) -> _ServiceObservation:
         """Probe one graph-owned Wazuh API with the configured credentials."""
 
+        container = node.container_name if node is not None else None
         info: object = None
-        if node is not None and node.container_name:
+        if container:
             try:
-                info = self.container_inspect(node.container_name)
+                info = self.container_inspect(container)
             except (BackendTimeoutError, OSError):
                 info = None
         port = _published_host_port(info, container_port)
-        ready = False
-        if port is not None:
-            url = f"https://localhost:{port}"
-            if service == identity.indexer_service:
-                ready = check_indexer_ready(
-                    url,
-                    env.indexer_username,
-                    env.indexer_password,
-                )
-            else:
-                ready = check_manager_api_ready(
-                    url,
-                    env.api_username,
-                    env.api_password,
-                )
-        return ready
+        if port is None:
+            return _ServiceObservation(
+                False,
+                f"{service} has no published host port for {container_port}/tcp",
+                container,
+            )
+        url = f"https://localhost:{port}"
+        if service == identity.indexer_service:
+            probe = probe_indexer_api(url, env.indexer_username, env.indexer_password)
+        else:
+            probe = probe_manager_api(url, env.api_username, env.api_password)
+        ready = probe.ready
+        detail = probe.describe()
+        if not ready:
+            # Expected while the API warms up; only the deadline makes it terminal.
+            log.debug("%s not ready yet: %s", service, detail)
+        return _ServiceObservation(ready, f"{service} at {url} {detail}", container)
+
+
+def _readiness_failure(
+    observations: Mapping[str, _ServiceObservation],
+    timeout: int,
+) -> str | None:
+    """Render the terminal reason for services still unready at the deadline."""
+
+    failed = [
+        observation
+        for _service, observation in sorted(observations.items())
+        if not observation.ready
+    ]
+    if not failed:
+        return None
+    reasons = "; ".join(observation.detail for observation in failed)
+    logs = " and ".join(
+        f"`aptl container logs {observation.container_name}`"
+        for observation in failed
+        if observation.container_name
+    )
+    action = f" Inspect {logs}." if logs else ""
+    return (
+        f"Authenticated Wazuh readiness validation failed after {timeout}s: "
+        f"{reasons}.{action}"
+    )
 
 
 def _load_stateful_env(project_dir: Path) -> tuple[EnvVars | None, bool]:

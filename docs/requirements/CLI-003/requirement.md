@@ -23,3 +23,7 @@ The orchestration order is critical with hard dependencies between steps.
 
 - IMPLEMENTS → ADR `docs/adrs/adr-007-python-cli-control-plane.md` (ADR-007: Python CLI Control Plane)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/lab.py` (Lab lifecycle orchestration)
+- IMPLEMENTS → CODE_FILE `src/aptl/core/services.py` (Indexer and phased manager API readiness probes)
+- IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/_compose_stateful_readiness.py` (Fail-closed authenticated Wazuh readiness after compose up)
+- TESTS → TEST `tests/test_services.py`
+- TESTS → TEST `tests/test_deployment_stateful_realization.py`

@@ -682,9 +682,12 @@ def test_invalid_generated_compose_model_blocks_up(tmp_path: Path, monkeypatch) 
     assert "sensitive" not in result.error
 
 
-def test_stateful_wazuh_readiness_is_authenticated_and_observed(
-    tmp_path: Path, monkeypatch
-) -> None:
+_READINESS = "aptl.core.deployment._compose_stateful_readiness"
+
+
+def _readiness_backend(tmp_path: Path, monkeypatch) -> DockerComposeBackend:
+    """Return a backend with credentials and published Wazuh ports."""
+
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     (tmp_path / ".env").write_text(
         "INDEXER_USERNAME=indexer-user\n"
@@ -704,26 +707,19 @@ def test_stateful_wazuh_readiness_is_authenticated_and_observed(
             }
         },
     )
-    checked: list[tuple[str, str, str]] = []
-    monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_readiness.check_indexer_ready",
-        lambda url, username, password: (
-            checked.append((url, username, password)) or True
-        ),
-    )
-    monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_readiness.check_manager_api_ready",
-        lambda url, username, password: (
-            checked.append((url, username, password)) or True
-        ),
-    )
+    return backend
+
+
+def _indexer_and_manager_spec() -> DeploymentRealizationSpec:
+    """Return a realization whose certificate bundle both Wazuh APIs consume."""
+
     spec = _spec()
     manager_consumer = _consumer(
         node="wazuh-manager",
         service="wazuh.manager",
         destination="/etc/ssl/wazuh",
     )
-    spec = DeploymentRealizationSpec(
+    return DeploymentRealizationSpec(
         profiles=spec.profiles,
         nodes=(
             *spec.nodes,
@@ -749,7 +745,66 @@ def test_stateful_wazuh_readiness_is_authenticated_and_observed(
         ),
     )
 
-    result = backend._verify_stateful_authenticated_readiness(spec)
+
+def _polling(monkeypatch, *, timeout: int, clock: list[float]) -> list[float]:
+    """Drive the readiness deadline from an explicit clock; return the sleeps."""
+
+    from aptl.core.deployment._compose_stateful_readiness import ReadinessPolling
+
+    slept: list[float] = []
+    ticks = iter(clock)
+    monkeypatch.setattr(
+        f"{_READINESS}.ReadinessPolling",
+        lambda: ReadinessPolling(
+            timeout=timeout,
+            interval=5,
+            time_source=ticks.__next__,
+            sleep=slept.append,
+        ),
+    )
+    return slept
+
+
+def _manager_probe(phase: str, category: str, **codes):
+    from aptl.core.services import WazuhApiProbe
+
+    return WazuhApiProbe(phase, category, **codes)
+
+
+def _indexer_probe(status):
+    """Map an indexer HTTP status (``None`` = TLS warm-up) to its probe result."""
+
+    if status is None:
+        return _manager_probe("transport", "tls_handshake", curl_exit=35)
+    if 200 <= status < 300:
+        return _manager_probe("ready", "ready", http_status=status)
+    category = "credentials_rejected" if status in (401, 403) else "http_error"
+    return _manager_probe("authentication", category, http_status=status)
+
+
+_MANAGER_READY = ("ready", "ready")
+_MANAGER_TLS_WARMUP = ("transport", "tls_handshake")
+
+
+def test_stateful_wazuh_readiness_is_authenticated_and_observed(
+    tmp_path: Path, monkeypatch
+) -> None:
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    checked: list[tuple[str, str, str]] = []
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: checked.append((url, username, password))
+        or _indexer_probe(200),
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: checked.append((url, username, password))
+        or _manager_probe(*_MANAGER_READY),
+    )
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
+    )
 
     assert result is None
     assert checked == [
@@ -768,91 +823,287 @@ def test_authenticated_readiness_polls_until_credentials_are_accepted(
     """A transient 401 right after health-settle is retried, not fatal.
 
     The indexer's security index (loaded from internal_users.yml) and the
-    manager API keep initializing after the healthcheck first passes, so the
-    probe must poll rather than fail on the first 401 (issue #875).
+    manager API keep initializing after the container settles, so the probe
+    must poll rather than fail on the first 401 (issue #875).
     """
 
-    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
-    (tmp_path / ".env").write_text(
-        "INDEXER_USERNAME=indexer-user\n"
-        "INDEXER_PASSWORD=indexer-password\n"
-        "API_USERNAME=api-user\n"
-        "API_PASSWORD=api-password\n"
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    statuses = iter([401, 401, 200])
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: _indexer_probe(next(statuses)),
     )
     monkeypatch.setattr(
-        backend,
-        "container_inspect",
-        lambda name: {
-            "NetworkSettings": {
-                "Ports": {
-                    "9200/tcp": [{"HostPort": "19200"}],
-                    "55000/tcp": [{"HostPort": "55001"}],
-                }
-            }
-        },
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: _manager_probe(*_MANAGER_READY),
     )
-    # The indexer rejects credentials on the first two probes, then accepts.
-    indexer_attempts = {"n": 0}
+    slept = _polling(monkeypatch, timeout=300, clock=[0.0, 5.0, 10.0])
 
-    def _indexer_ready(url, username, password):
-        indexer_attempts["n"] += 1
-        return indexer_attempts["n"] >= 3
-
-    monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_readiness.check_indexer_ready",
-        _indexer_ready,
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
     )
-    monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_readiness.check_manager_api_ready",
-        lambda url, username, password: True,
-    )
-    slept: list[float] = []
-    monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_readiness.time.sleep",
-        slept.append,
-    )
-
-    spec = _spec()
-    manager_consumer = _consumer(
-        node="wazuh-manager",
-        service="wazuh.manager",
-        destination="/etc/ssl/wazuh",
-    )
-    spec = DeploymentRealizationSpec(
-        profiles=spec.profiles,
-        nodes=(
-            *spec.nodes,
-            DeploymentNodeRealization(
-                address="provision.node.wazuh-manager",
-                name="wazuh-manager",
-                service_name="wazuh.manager",
-                container_name="aptl-wazuh-manager",
-                networks=(),
-            ),
-        ),
-        networks=(),
-        generated_artifacts=(
-            DeploymentGeneratedArtifactRealization(
-                **{
-                    **spec.generated_artifacts[0].__dict__,
-                    "consumers": (
-                        *spec.generated_artifacts[0].consumers,
-                        manager_consumer,
-                    ),
-                }
-            ),
-        ),
-    )
-
-    result = backend._verify_stateful_authenticated_readiness(spec)
 
     assert result is None
-    assert indexer_attempts["n"] == 3
-    assert len(slept) == 2  # two retries before the third probe succeeded
+    assert slept == [5, 5]  # two retries before the third probe succeeded
     assert backend.authenticated_readiness == {
         "wazuh.indexer": True,
         "wazuh.manager": True,
     }
+
+
+def test_manager_tls_warm_up_is_retried_quietly_then_ready(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
+    """The clean-boot shape from issue #1002.
+
+    The generated manager service has no healthcheck, so this loop starts while
+    the API is not yet listening and Docker's port proxy reports exit 35. That
+    warm-up is retried inside the budget and logs nothing at warning level.
+    """
+
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: _indexer_probe(200),
+    )
+    probes = iter(
+        [
+            _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35),
+            _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35),
+            _manager_probe("authentication", "credentials_rejected", http_status=401),
+            _manager_probe(*_MANAGER_READY),
+        ]
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: next(probes),
+    )
+    slept = _polling(monkeypatch, timeout=300, clock=[0.0, 5.0, 10.0, 15.0])
+
+    with caplog.at_level("DEBUG", logger="aptl"):
+        result = backend._verify_stateful_authenticated_readiness(
+            _indexer_and_manager_spec()
+        )
+
+    assert result is None
+    assert slept == [5, 5, 5]
+    assert [r for r in caplog.records if r.levelno >= 30] == []
+    assert backend.authenticated_readiness["wazuh.manager"] is True
+
+
+def test_a_proven_service_is_not_reprobed_while_another_warms_up(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Readiness latches per service (issue #1002 review).
+
+    Once the indexer authenticates, it is not probed again while the manager
+    warms up, so a later transient indexer answer cannot overwrite the proof
+    and fail the realization at the manager's deadline.
+    """
+
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    indexer_statuses = iter([200, 401, 401])
+    indexer_probes: list[str] = []
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: indexer_probes.append(url)
+        or _indexer_probe(next(indexer_statuses)),
+    )
+    probes = iter(
+        [
+            _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35),
+            _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35),
+            _manager_probe(*_MANAGER_READY),
+        ]
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: next(probes),
+    )
+    slept = _polling(monkeypatch, timeout=300, clock=[0.0, 5.0, 10.0])
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
+    )
+
+    assert result is None
+    assert indexer_probes == ["https://localhost:19200"]
+    assert slept == [5, 5]
+    assert backend.authenticated_readiness == {
+        "wazuh.indexer": True,
+        "wazuh.manager": True,
+    }
+
+
+def test_persistent_manager_tls_failure_fails_closed_with_its_phase(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Recovery is not assumed: exit 35 through the deadline fails startup."""
+
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: _indexer_probe(200),
+    )
+    probes: list[str] = []
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: probes.append(url)
+        or _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35),
+    )
+    slept = _polling(monkeypatch, timeout=10, clock=[0.0, 5.0, 10.0])
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
+    )
+
+    assert result is not None
+
+    assert result.success is False
+    assert result.error == (
+        "Authenticated Wazuh readiness validation failed after 10s: "
+        "wazuh.manager at https://localhost:55001 transport phase failed: "
+        "tls_handshake (curl exit 35). Inspect `aptl container logs "
+        "aptl-wazuh-manager`."
+    )
+    # Bounded: the deadline read after the second round ends the loop.
+    assert len(probes) == 2
+    assert slept == [5]
+    assert backend.authenticated_readiness == {
+        "wazuh.indexer": True,
+        "wazuh.manager": False,
+    }
+
+
+def test_readiness_retry_sleep_is_clamped_to_the_remaining_budget(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """No probe may start after the deadline (issue #1002 review)."""
+
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: _indexer_probe(200),
+    )
+    probes: list[str] = []
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: probes.append(url)
+        or _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35),
+    )
+    # 8s budget, 5s interval: after the second round only 2s remain, so the
+    # loop sleeps 2s and makes its last probe at the deadline.
+    slept = _polling(monkeypatch, timeout=8, clock=[0.0, 1.0, 6.0, 8.0])
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
+    )
+
+    assert result is not None
+
+    assert result.success is False
+    assert len(probes) == 3
+    assert slept == [5, 2.0]
+
+
+def test_persistent_credential_rejection_names_both_services_without_secrets(
+    tmp_path: Path, monkeypatch
+) -> None:
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: _indexer_probe(401),
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: _manager_probe(
+            "authentication", "credentials_rejected", http_status=401
+        ),
+    )
+    _polling(monkeypatch, timeout=0, clock=[0.0, 0.0])
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
+    )
+
+    assert result is not None
+
+    assert result.success is False
+    assert result.error == (
+        "Authenticated Wazuh readiness validation failed after 0s: "
+        "wazuh.indexer at https://localhost:19200 authentication phase failed: "
+        "credentials_rejected (HTTP 401); "
+        "wazuh.manager at https://localhost:55001 authentication phase failed: "
+        "credentials_rejected (HTTP 401). Inspect `aptl container logs "
+        "aptl-wazuh-indexer` and `aptl container logs aptl-wazuh-manager`."
+    )
+    for secret in ("indexer-password", "api-password", "indexer-user", "api-user"):
+        assert secret not in result.error
+
+
+@pytest.mark.parametrize(
+    ("status", "detail"),
+    [
+        (None, "transport phase failed: tls_handshake (curl exit 35)"),
+        (500, "authentication phase failed: http_error (HTTP 500)"),
+    ],
+)
+def test_indexer_failures_are_classified_from_its_status_probe(
+    tmp_path: Path, monkeypatch, status, detail
+) -> None:
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: _indexer_probe(status),
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: _manager_probe(*_MANAGER_READY),
+    )
+    _polling(monkeypatch, timeout=0, clock=[0.0, 0.0])
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
+    )
+
+    assert result is not None
+    assert result.error.startswith(
+        "Authenticated Wazuh readiness validation failed after 0s: "
+        f"wazuh.indexer at https://localhost:19200 {detail}. "
+    )
+
+
+def test_unpublished_api_port_is_reported_without_probing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    monkeypatch.setattr(backend, "container_inspect", lambda name: {})
+    probed: list[str] = []
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: probed.append(url)
+        or _indexer_probe(200),
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: probed.append(url)
+        or _manager_probe(*_MANAGER_READY),
+    )
+    _polling(monkeypatch, timeout=0, clock=[0.0, 0.0])
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
+    )
+
+    assert probed == []
+    assert result is not None
+    assert result.error == (
+        "Authenticated Wazuh readiness validation failed after 0s: "
+        "wazuh.indexer has no published host port for 9200/tcp; "
+        "wazuh.manager has no published host port for 55000/tcp. "
+        "Inspect `aptl container logs aptl-wazuh-indexer` and "
+        "`aptl container logs aptl-wazuh-manager`."
+    )
 
 
 def test_authenticated_readiness_rejects_an_unapplied_manager_config(
@@ -875,8 +1126,8 @@ def test_authenticated_readiness_rejects_an_unapplied_manager_config(
         },
     )
     monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_readiness.check_manager_api_ready",
-        lambda url, username, password: True,
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: _manager_probe(*_MANAGER_READY),
     )
     commands: list[tuple[str, list[str]]] = []
 
@@ -904,6 +1155,50 @@ def test_authenticated_readiness_rejects_an_unapplied_manager_config(
             ],
         )
     ]
+
+
+def test_authenticated_readiness_accepts_an_applied_manager_config(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The success branch of the rendered-config gate: a matching config passes.
+
+    Pairs with the unapplied-config test so a gate that always refuses cannot
+    hide behind the failure case.
+    """
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    (tmp_path / ".env").write_text(
+        "INDEXER_USERNAME=indexer-user\n"
+        "INDEXER_PASSWORD=indexer-password\n"
+        "API_USERNAME=api-user\n"
+        "API_PASSWORD=api-password\n"
+    )
+    monkeypatch.setattr(
+        backend,
+        "container_inspect",
+        lambda name: {
+            "NetworkSettings": {"Ports": {"55000/tcp": [{"HostPort": "55001"}]}}
+        },
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: _manager_probe(*_MANAGER_READY),
+    )
+    executed: list[str] = []
+
+    def _exec(name, command, *, timeout=None):
+        executed.append(name)
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(backend, "container_exec", _exec)
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _rendered_config_spec()
+    )
+
+    assert result is None
+    assert executed == ["aptl-wazuh-manager"]
+    assert backend.authenticated_readiness == {"wazuh.manager": True}
 
 
 # -- ssh_key_bundle dispatch and image-free delivery (issue #875) -------------

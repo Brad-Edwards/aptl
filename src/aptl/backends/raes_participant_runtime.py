@@ -113,10 +113,16 @@ class AptlParticipantRuntime(BaseParticipantRuntime):
         selection = cast(ParticipantDecisionSurfaceSelectionV2Model, selection)
         self._pending_selections[request.solicitation_id] = selection
         self._pending_selection_episodes[request.solicitation_id] = budget_key
+        # raes 4.x runtime accounting (`_accounting_violation`) rejects a reported
+        # ``changed_addresses`` entry that no authorized snapshot transition accounts
+        # for. Soliciting a selection returns the snapshot unchanged — the accepted
+        # selection is held in-memory as a pending selection and is only recorded on
+        # the snapshot's participant behavior history when the projected action is
+        # later admitted — so this operation reports no snapshot-carrier change.
         return ApplyResult(
             success=True,
             snapshot=snapshot,
-            changed_addresses=[request.participant_address],
+            changed_addresses=[],
         )
 
     def _selection_context_failure(
@@ -403,21 +409,18 @@ class AptlParticipantRuntime(BaseParticipantRuntime):
                 action_result=request.action_result,
                 post_state_digest=request.post_state_digest,
             )
-        shared_records = {
-            **snapshot.shared_state_records,
-            **execution.shared_state_records,
-        }
-        shared_history = {
-            address: [dict(record) for record in records]
-            for address, records in snapshot.shared_state_history.items()
-        }
-        for address, record in execution.shared_state_records.items():
-            shared_history.setdefault(address, []).append(dict(record))
-        working = snapshot.with_entries(
-            {**snapshot.entries, **execution.snapshot_entries},
-            shared_state_records=shared_records,
-            shared_state_history=shared_history,
-        )
+        # raes 4.x confines a participant action apply to participant-owned carrier
+        # transitions keyed within the submitted authority. It forbids creating
+        # resource ``entries`` records (action-contract, observation boundary,
+        # action-instance) via `_nonplan_entry_refusal`, and it cannot carry the
+        # legacy shared-state records either: those are keyed by target refs
+        # (URLs / ``container:`` / ``tcp:`` refs), not compiled snapshot
+        # addresses, so they are not admissible ``changed_addresses``. The
+        # authoritative behavior-history cut is appended by the RAES base runtime
+        # and carries the action-contract/observation-boundary/action-instance
+        # facts plus the terminal observations; the target refs the action
+        # touched remain provable off-snapshot on the static action spec. This
+        # apply therefore commits no snapshot-carrier transition of its own.
         observation_details = execution.behavior_events[-1].get("details", {})
         observations = [
             value
@@ -444,9 +447,9 @@ class AptlParticipantRuntime(BaseParticipantRuntime):
         return ParticipantNativeActionExecution(
             apply_result=ApplyResult(
                 success=execution.success,
-                snapshot=working,
+                snapshot=snapshot,
                 diagnostics=execution.diagnostics,
-                changed_addresses=list(execution.snapshot_entries),
+                changed_addresses=[],
             ),
             action_result=result,
             post_state_digest=request.post_state_digest,

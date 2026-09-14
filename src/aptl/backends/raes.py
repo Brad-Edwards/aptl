@@ -50,6 +50,7 @@ from aptl.backends.raes_start_model import (
     AdmittedScenarioStart,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.deployment._flag_variables import flag_variable_bindings
 from aptl.core.scenario_bundle import (
     EnvPackError,
     ScenarioBundle,
@@ -249,13 +250,21 @@ def admit_raes_scenario(
         artifact_availability=availability,
     )
     manager = RuntimeManager(target)
+    # env-packs 6.0.0 declares required, defaultless flag-value variables the
+    # backend must bind before instantiation (issue #1004 bump). Supply the
+    # deterministic lab-fixture flag values, letting any caller-provided binding
+    # (e.g. an experiment condition binding) take precedence.
+    effective_parameters = {
+        **flag_variable_bindings(scenario),
+        **(dict(parameters) if parameters is not None else {}),
+    }
     execution_plan = (
         manager.plan(
             scenario,
-            parameters=dict(parameters),
+            parameters=effective_parameters,
             artifact_availability=availability,
         )
-        if parameters is not None
+        if effective_parameters
         else manager.plan(scenario, artifact_availability=availability)
     )
     provisioner = target.provisioner

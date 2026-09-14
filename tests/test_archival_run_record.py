@@ -18,7 +18,7 @@ from raes_contracts.contracts import (
     ExperimentReferenceModel,
     ExperimentRunModel,
     ExperimentResultSummaryModel,
-    validate_experiment_run_against_task,
+    validate_experiment_run_structure_against_task,
 )
 from raes_contracts.contracts.experiment_manifest_references import (
     ExperimentRunEvidenceArtifactReferenceModel,
@@ -39,7 +39,10 @@ class TestCompletedComposition:
         assert run.run_status == "completed"
         assert run.outcome_status == "succeeded"
         # The composer already ran this, but prove the seal-gate invariant holds.
-        validate_experiment_run_against_task(reference_task(), run)
+        # The seal gate validates task/run agreement structurally (content-backed
+        # evidence satisfaction is a separate authoritative gate that needs byte
+        # readers), so assert against the same structural validator.
+        validate_experiment_run_structure_against_task(reference_task(), run)
 
     def test_task_ref_is_derived_from_the_task(self) -> None:
         run = build_experiment_run_model(completed_context())

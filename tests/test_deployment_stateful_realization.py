@@ -38,6 +38,13 @@ from aptl.core.deployment.realization import (
     DeploymentStatefulConsumer,
 )
 from aptl.core.deployment.ssh_compose import SSHComposeBackend
+from aptl.core.deployment._compose_stateful_model import (
+    artifact_source_path,
+    stateful_override_payload as _stateful_override_payload_model,
+)
+from aptl.backends.raes_realization_model import NodeRealization
+from aptl.backends.raes_stateful_realization import realize_stateful_resources
+from raes_contracts.planning import PlannedResource, RuntimeDomain
 
 
 def _consumer(
@@ -1535,3 +1542,241 @@ def test_a_spec_with_no_content_seeds_nothing(tmp_path: Path, monkeypatch) -> No
     empty = DeploymentRealizationSpec(profiles=(), nodes=(), networks=())
 
     assert backend._realize_content(empty, tmp_path) is None
+
+
+# --------------------------------------------------------------------------- #
+# Generated-artifact ENVIRONMENT delivery (raes 4.x / env-packs 6.0.0): a named
+# output is injected as an environment variable on the consumer's service rather
+# than bind-mounted. The lowering parses the environment-consumer projection and
+# the Compose model injects the retained output value.
+# --------------------------------------------------------------------------- #
+
+
+def _env_artifact_resource(environment_consumers, *, consumers=()):
+    """A generated-artifact planned resource with the given consumer shapes."""
+
+    address = "provision.generated-artifact.svc-credentials"
+    spec = {
+        "generator": "ssh_key_bundle",
+        "lifecycle": "reuse_valid",
+        "provenance": "techvault:svc-credentials/v1",
+        "outputs": [
+            {"name": "api-key", "path": "api-key", "sensitivity": "secret"}
+        ],
+        "consumers": list(consumers),
+        "environment_consumers": list(environment_consumers),
+    }
+    return PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="generated-artifact",
+        payload={"name": "svc-credentials", "spec": spec},
+    )
+
+
+def _consumer_node(name="consumer", service="consumer-svc"):
+    return NodeRealization(
+        address=f"provision.node.{name}",
+        name=name,
+        aliases=(),
+        profiles=(),
+        backend_services=(service,),
+        container_name=f"aptl-{name}",
+        services=(),
+        networks=(),
+        static_addresses=(),
+    )
+
+
+def _environment_projection(**overrides):
+    projection = {
+        "node": "consumer",
+        "target_address": "provision.node.consumer",
+        "delivery_mode": "environment",
+        "output": "api-key",
+        "environment_variable": "SERVICE_KEY",
+    }
+    projection.update(overrides)
+    return projection
+
+
+def _errors(diagnostics):
+    return [
+        d.code
+        for d in diagnostics
+        if getattr(d.severity, "value", d.severity) == "error"
+    ]
+
+
+def test_environment_consumer_lowers_to_a_typed_environment_delivery() -> None:
+    """An environment consumer projection lowers with the env fields, no mount."""
+
+    diagnostics: list = []
+    resource = _env_artifact_resource([_environment_projection()])
+
+    artifacts, volumes = realize_stateful_resources(
+        [resource], [_consumer_node()], diagnostics
+    )
+
+    assert _errors(diagnostics) == []
+    assert len(artifacts) == 1
+    artifact = artifacts[0]
+    assert artifact.consumers == ()
+    assert len(artifact.environment_consumers) == 1
+    consumer = artifact.environment_consumers[0]
+    assert consumer.delivery_mode == "environment"
+    assert consumer.output == "api-key"
+    assert consumer.environment_variable == "SERVICE_KEY"
+    assert consumer.service_name == "consumer-svc"
+    assert consumer.target_address == "provision.node.consumer"
+    # An environment consumer claims no mount destination or selection.
+    assert consumer.mount_destination == ""
+    assert consumer.selected_outputs == ()
+
+
+def test_env_file_delivery_is_rejected_as_unrealized() -> None:
+    """APTL realizes mount and environment; env_file is fail-closed at lowering."""
+
+    diagnostics: list = []
+    resource = _env_artifact_resource(
+        [_environment_projection(delivery_mode="env_file")]
+    )
+
+    artifacts, _volumes = realize_stateful_resources(
+        [resource], [_consumer_node()], diagnostics
+    )
+
+    assert artifacts == []
+    assert "aptl.provisioner.stateful-resource-invalid" in _errors(diagnostics)
+
+
+def test_environment_consumer_selecting_an_undeclared_output_fails_closed() -> None:
+    """An environment consumer can only name a declared, selectable output."""
+
+    diagnostics: list = []
+    resource = _env_artifact_resource(
+        [_environment_projection(output="does-not-exist")]
+    )
+
+    artifacts, _volumes = realize_stateful_resources(
+        [resource], [_consumer_node()], diagnostics
+    )
+
+    assert artifacts == []
+    assert "aptl.provisioner.stateful-output-not-selectable" in _errors(diagnostics)
+
+
+def test_environment_delivery_injects_the_output_value_into_the_service(
+    tmp_path: Path,
+) -> None:
+    """The retained output value is injected verbatim as the declared env var."""
+
+    consumer = DeploymentStatefulConsumer(
+        target_address="provision.node.consumer",
+        node_name="consumer",
+        service_name="consumer-svc",
+        delivery_mode="environment",
+        output="api-key",
+        environment_variable="SERVICE_KEY",
+    )
+    artifact = DeploymentGeneratedArtifactRealization(
+        address="provision.generated-artifact.svc-credentials",
+        name="svc-credentials",
+        generator="ssh_key_bundle",
+        lifecycle="reuse_valid",
+        provenance="techvault:svc-credentials/v1",
+        outputs=(
+            DeploymentGeneratedArtifactOutput(
+                name="api-key", path="api-key", sensitivity="secret"
+            ),
+        ),
+        consumers=(),
+        environment_consumers=(consumer,),
+    )
+    node = DeploymentNodeRealization(
+        address="provision.node.consumer",
+        name="consumer",
+        service_name="consumer-svc",
+        container_name="aptl-consumer",
+        networks=(),
+    )
+    image = DeploymentImageRealization(
+        address="provision.node.consumer",
+        service_name="consumer-svc",
+        source_name="example/consumer",
+        source_version="sha256:" + "0" * 64,
+        image_ref="example/consumer@sha256:" + "0" * 64,
+        mode="pull",
+        policy_rule="authored-exact-artifact",
+    )
+    spec = DeploymentRealizationSpec(
+        profiles=(),
+        nodes=(node,),
+        networks=(),
+        images=(image,),
+        generated_artifacts=(artifact,),
+    )
+    # Materialize the retained output the same way a mount consumer would read it.
+    source = artifact_source_path(tmp_path, artifact)
+    source.mkdir(parents=True, exist_ok=True)
+    (source / "api-key").write_text("RETAINED-SECRET-VALUE", encoding="utf-8")
+
+    payload = _stateful_override_payload_model(tmp_path, "aptl-test", spec)
+
+    service = payload["services"]["consumer-svc"]
+    assert service["environment"]["SERVICE_KEY"] == "RETAINED-SECRET-VALUE"
+    # Environment delivery adds no bind mount for this consumer.
+    assert "volumes" not in service or service["volumes"] == []
+
+
+def test_environment_delivery_skips_a_non_compose_consumer(tmp_path: Path) -> None:
+    """An environment consumer on an image-free node is not a Compose service.
+
+    It carries no Compose service to receive the variable (the generic
+    materializer delivers it instead), so the override injects nothing for it --
+    mirroring how mount consumers on image-free nodes are excluded (#875).
+    """
+
+    consumer = DeploymentStatefulConsumer(
+        target_address="provision.node.freenode",
+        node_name="freenode",
+        service_name="freenode",
+        delivery_mode="environment",
+        output="api-key",
+        environment_variable="SERVICE_KEY",
+    )
+    artifact = DeploymentGeneratedArtifactRealization(
+        address="provision.generated-artifact.svc-credentials",
+        name="svc-credentials",
+        generator="ssh_key_bundle",
+        lifecycle="reuse_valid",
+        provenance="techvault:svc-credentials/v1",
+        outputs=(
+            DeploymentGeneratedArtifactOutput(
+                name="api-key", path="api-key", sensitivity="secret"
+            ),
+        ),
+        consumers=(),
+        environment_consumers=(consumer,),
+    )
+    node = DeploymentNodeRealization(
+        address="provision.node.freenode",
+        name="freenode",
+        service_name="freenode",
+        container_name="aptl-freenode",
+        networks=(),
+    )
+    spec = DeploymentRealizationSpec(
+        profiles=(),
+        nodes=(node,),
+        networks=(),
+        # No image realization: freenode is not a Compose service.
+        generated_artifacts=(artifact,),
+    )
+    source = artifact_source_path(tmp_path, artifact)
+    source.mkdir(parents=True, exist_ok=True)
+    (source / "api-key").write_text("RETAINED-SECRET-VALUE", encoding="utf-8")
+
+    payload = _stateful_override_payload_model(tmp_path, "aptl-test", spec)
+
+    assert "freenode" not in payload["services"]

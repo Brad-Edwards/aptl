@@ -25,6 +25,7 @@ def _binding(**overrides) -> CaptureBinding:
         "contract_version": "experiment-capture-spec/v1", "effective_config_digest": "sha256:" + "cd" * 32,
         "channel_ref_id": "chan", "channel_ref_version": "1.0.0", "channel_kind": "evaluation-history",
         "capture_kind": "trace", "capture_scope": "network", "expected_media_types": ("application/json",),
+        "output_contract": "participant-behavior-history-event-stream-v1",
         "required_artifact_roles": ("observation",), "sensitivity": "internal", "redaction_required": False,
         "integrity_requirements": ("sha256-digest",), "retention_policy": "retain", "loss_disclosure_required": True,
         "visibility_class": CaptureVisibility.EVALUATOR_ONLY,
@@ -42,14 +43,22 @@ def _outcome() -> CollectorOutcome:
     return CollectorOutcome(status=CollectorStatus.OK, started_at="2026-07-20T00:00:00Z", finished_at="2026-07-20T00:00:05Z", event_count=3)
 
 
-def _record(*, sensitivity="internal", redaction_state="none", loss_disclosure=None, **overrides):
+def _record(
+    *, sensitivity="internal", redaction_state="none", loss_disclosure=None, redaction_policy=None, **overrides
+):
     kwargs = dict(
         binding=_binding(), run_id="run-1", planned_trial_id="trial-1", content=_content(), outcome=_outcome(),
         captured_at="2026-07-20T00:00:05Z",
     )
     kwargs.update(overrides)
+    # RAES requires a redaction_policy exactly when the record is redacted/withheld.
+    if redaction_state != "none" and redaction_policy is None:
+        redaction_policy = "aptl.redaction.test/v1"
     disclosure = RecordDisclosure(
-        sensitivity=sensitivity, redaction_state=redaction_state, loss_disclosure=loss_disclosure
+        sensitivity=sensitivity,
+        redaction_state=redaction_state,
+        loss_disclosure=loss_disclosure,
+        redaction_policy=redaction_policy,
     )
     return build_evidence_record(disclosure=disclosure, **kwargs)
 

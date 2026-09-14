@@ -167,6 +167,7 @@ def persist_success_outcome(
             sensitivity=binding.sensitivity,
             redaction_state=redaction_state,
             loss_disclosure=loss_disclosure,
+            redaction_policy=_REDACTION_POLICIES.get(redaction_state),
         ),
     )
     # Persist the record into the explicit, create-once run-scoped evidence
@@ -194,6 +195,16 @@ def persist_success_outcome(
 _REDACTION_DISCLOSURES = {
     "withheld": "content withheld from participant projection (evaluator-only/apparatus-only visibility)",
     "redacted": "structured payload redacted at the persistence boundary (ADR-029)",
+}
+
+#: Governed redaction/withholding policy id per non-``none`` redaction state.
+#: RAES requires the evidence record to name a policy exactly when
+#: ``redaction_state != "none"``; each id honestly identifies the policy the
+#: coordinator applied (visibility-driven withholding, or the ADR-029 structured
+#: JSON redaction boundary).
+_REDACTION_POLICIES = {
+    "withheld": "aptl.redaction.visibility-withhold/v1",
+    "redacted": "aptl.redaction.structured-json/v1",
 }
 
 #: Disclosure text per limit/loss status the coordinator enforces. ``{dropped}``

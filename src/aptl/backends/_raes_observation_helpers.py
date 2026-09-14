@@ -44,6 +44,11 @@ class ObservedResource(object):
     realized: bool
     concerns: dict[tuple[str, ...], object] = field(default_factory=dict)
     evidence: dict[str, object] = field(default_factory=dict)
+    # Guest-observed OS identity (raes 4.x): carried alongside the os-family
+    # concern value so the snapshot builder can disclose the bound, guest-observed
+    # operating-system observation the corroboration gate requires. ``None`` when
+    # the node is not a container or the guest OS could not be read.
+    operating_system: object | None = None
 
 
 def consumer_mount_evidence(
@@ -373,12 +378,116 @@ def _observed_bind_source_type(
 
 
 def observed_os_family(info: Mapping[str, Any]) -> str | None:
-    """Return the container platform in the RAES OS-family vocabulary."""
+    """Return the container platform in the RAES OS-family vocabulary.
+
+    Daemon-observed (``docker inspect`` ``Platform``). Retained as a coarse
+    guard, but the guest-observed OS identity read from inside the container
+    (:func:`observed_operating_system_identity`) is the corroboration RAES 4.x
+    requires for an authored ``os:`` requirement.
+    """
 
     platform = info.get("Platform")
     if isinstance(platform, str) and platform.strip():
         return platform.strip().lower()
     return None
+
+
+# ``/etc/os-release`` ``ID`` -> governed ``os-distributions`` vocabulary term.
+# Only the distributions APTL actually realizes onto a base substrate are mapped;
+# an ``ID`` outside this set yields no identity, so a node backed by an OS APTL
+# does not provision reads back as an omission and the SEM-218 gate rejects it
+# rather than accepting an unrecognized guest.
+_OS_RELEASE_ID_TO_DISTRIBUTION: dict[str, str] = {
+    "debian": "debian",
+    "ubuntu": "ubuntu",
+    "rocky": "rocky-linux",
+    "rhel": "red-hat-enterprise-linux",
+}
+_OS_DISTRIBUTION_TO_FAMILY: dict[str, str] = {
+    "debian": "linux",
+    "ubuntu": "linux",
+    "rocky-linux": "linux",
+    "red-hat-enterprise-linux": "linux",
+}
+_OS_RELEASE_READ_TIMEOUT = 15
+
+
+def parse_os_release(text: str) -> dict[str, str]:
+    """Parse ``/etc/os-release`` ``KEY=VALUE`` lines into a mapping.
+
+    Quotes are stripped and blank / comment / malformed lines are ignored, so a
+    partial file yields whatever well-formed keys it carries rather than raising.
+    """
+
+    fields: dict[str, str] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, raw = stripped.partition("=")
+        key = key.strip()
+        value = raw.strip().strip('"').strip("'").strip()
+        if key and value:
+            fields[key] = value
+    return fields
+
+
+def operating_system_identity_from_os_release(text: str):
+    """Map ``/etc/os-release`` content to a typed guest OS identity, or ``None``.
+
+    ``ID`` selects the governed distribution (and, with it, the family);
+    ``VERSION_ID`` supplies the release, normalized to its major component so a
+    rolling patch level (e.g. Rocky ``9.3``) still matches a declared release
+    line (``9``). Anything APTL does not provision, or a file missing either
+    field, yields ``None`` so the observation fails closed.
+    """
+
+    from raes_contracts.realization_observation import ObservedOperatingSystemIdentity
+
+    fields = parse_os_release(text)
+    os_id = fields.get("ID", "").strip().lower()
+    distribution = _OS_RELEASE_ID_TO_DISTRIBUTION.get(os_id)
+    family = _OS_DISTRIBUTION_TO_FAMILY.get(distribution or "")
+    version = fields.get("VERSION_ID", "").strip().split(".")[0].strip()
+    if not distribution or not family or not version:
+        return None
+    try:
+        return ObservedOperatingSystemIdentity(
+            family=family, distribution=distribution, version=version
+        )
+    except (ValueError, TypeError):
+        return None
+
+
+def observed_operating_system_identity(
+    backend: "DeploymentBackend", container_name: str
+):
+    """Read the guest OS identity from inside a realized container, or ``None``.
+
+    Reads ``/etc/os-release`` through the backend's ``container_exec`` guest-exec
+    path -- the same trusted in-guest execution APTL uses to read back installed
+    packages / directories / service units -- so the family is proven from the
+    running guest's own filesystem, not the daemon's ``Platform`` field. Any exec
+    failure, non-zero exit, or unrecognized content yields ``None`` (fail closed).
+    """
+
+    exec_fn = getattr(backend, "container_exec", None)
+    if exec_fn is None:
+        return None
+    try:
+        outcome = exec_fn(
+            container_name, ["cat", "/etc/os-release"], timeout=_OS_RELEASE_READ_TIMEOUT
+        )
+    except (BackendSeedError, BackendTimeoutError, OSError, ValueError) as exc:
+        log.warning(
+            "could not read guest os-release for %s (%s)",
+            container_name,
+            type(exc).__name__,
+        )
+        return None
+    if getattr(outcome, "returncode", 1) != 0:
+        return None
+    return operating_system_identity_from_os_release(getattr(outcome, "stdout", "") or "")
 
 
 _DOMAIN_INFO_TIMEOUT = 30

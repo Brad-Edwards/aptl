@@ -1,0 +1,238 @@
+{
+  "schema_version": "external-concept-bindings/v1",
+  "binding_set_id": "bounded-participant-agency-techvault-defensive-behavior-classifications",
+  "binding_set_version": "1.0.0",
+  "bindings": {
+    "triage-authentication-event": {
+      "binding_id": "triage-authentication-event",
+      "subject": {
+        "subject_kind": "behavior_specifications",
+        "owning_contract_id": "sdl-authoring-input-v1",
+        "lifecycle_phase": "normalized-authoring",
+        "canonical_ref": "behavior_specifications.triage-authentication-event",
+        "artifact_digest": "sha256:89ca528ba1a399e3c95bf76ec678fef650c271fc0d9ba52ad2527c9c2dc0a703"
+      },
+      "scheme": {
+        "scheme_id": "raes-participant-defensive-behavior-activities",
+        "authority": "RAES Concept Authority - participant-defensive-behavior-activities controlled vocabulary (adapted from NIST Cybersecurity Framework 2.0 Detect/Respond/Recover categories)",
+        "revision": "controlled-vocabularies/v1",
+        "source_locator": "urn:raes:contracts:corpus:concept-authority:controlled-vocabularies-v1.json",
+        "source_digest": "sha256:4e4fbaab59f1018114d3d34b2dbdf2fbc58ebfd26180526c7eddad48319ebab6",
+        "concept_id": "adverse-event-analysis"
+      },
+      "assertion": {
+        "relationship_kind": "instance-of",
+        "motivation": "Adverse event analysis: the blue analyst behavior triages a synthetic authentication event, analyzing alert and context evidence to characterize the event (RAES adaptation of NIST CSF 2.0 DE.AE).",
+        "motivation_basis_refs": [
+          {
+            "ref_kind": "authoring-input",
+            "ref_id": "scenarios/bounded-participant-agency-techvault.sdl.yaml",
+            "ref_digest": "sha256:250dfa84fc110305171ef48d64151e1664cefe1ddb23739edfe4d3213f8be32e",
+            "ref_path": "/behavior_specifications/triage-authentication-event/defensive_behavior_refs/0"
+          }
+        ],
+        "semantic_effect": "annotates",
+        "semantic_effect_basis_refs": [
+          {
+            "ref_kind": "profile",
+            "ref_id": "external-concept-bindings/v1"
+          }
+        ]
+      },
+      "perspective": {
+        "asserting_party_kind": "author",
+        "asserting_party_ref": "authors.aptl",
+        "perspective": "scenario-author-defensive-behavior-classification",
+        "authority_basis_refs": [
+          {
+            "ref_kind": "authoring-input",
+            "ref_id": "scenarios/bounded-participant-agency-techvault.sdl.yaml",
+            "ref_digest": "sha256:250dfa84fc110305171ef48d64151e1664cefe1ddb23739edfe4d3213f8be32e",
+            "ref_path": "/behavior_specifications/triage-authentication-event/defensive_behavior_refs/0"
+          }
+        ]
+      },
+      "provenance": {
+        "asserted_at": "2026-09-14T00:00:00Z",
+        "source_refs": [
+          {
+            "ref_kind": "authoring-input",
+            "ref_id": "scenarios/bounded-participant-agency-techvault.sdl.yaml",
+            "ref_digest": "sha256:250dfa84fc110305171ef48d64151e1664cefe1ddb23739edfe4d3213f8be32e",
+            "ref_path": "/behavior_specifications/triage-authentication-event/defensive_behavior_refs/0"
+          }
+        ]
+      },
+      "supporting_evidence_refs": [],
+      "confidence": {
+        "posture": "high",
+        "basis": "The scenario author declared this defensive-behavior classification as intentional scenario content."
+      },
+      "approximation": {
+        "posture": "exact",
+        "loss_details": []
+      },
+      "limitations": [
+        "The classification annotates the behavior specification; it neither grants a capability nor proves the behavior is realized."
+      ],
+      "review": {
+        "status": "unreviewed",
+        "review_refs": []
+      }
+    },
+    "investigate-actor-activity": {
+      "binding_id": "investigate-actor-activity",
+      "subject": {
+        "subject_kind": "behavior_specifications",
+        "owning_contract_id": "sdl-authoring-input-v1",
+        "lifecycle_phase": "normalized-authoring",
+        "canonical_ref": "behavior_specifications.investigate-actor-activity",
+        "artifact_digest": "sha256:89ca528ba1a399e3c95bf76ec678fef650c271fc0d9ba52ad2527c9c2dc0a703"
+      },
+      "scheme": {
+        "scheme_id": "raes-participant-defensive-behavior-activities",
+        "authority": "RAES Concept Authority - participant-defensive-behavior-activities controlled vocabulary (adapted from NIST Cybersecurity Framework 2.0 Detect/Respond/Recover categories)",
+        "revision": "controlled-vocabularies/v1",
+        "source_locator": "urn:raes:contracts:corpus:concept-authority:controlled-vocabularies-v1.json",
+        "source_digest": "sha256:4e4fbaab59f1018114d3d34b2dbdf2fbc58ebfd26180526c7eddad48319ebab6",
+        "concept_id": "adverse-event-analysis"
+      },
+      "assertion": {
+        "relationship_kind": "instance-of",
+        "motivation": "Adverse event analysis: the blue analyst behavior investigates synthetic actor activity, correlating declared event and context evidence to characterize the incident (RAES adaptation of NIST CSF 2.0 DE.AE).",
+        "motivation_basis_refs": [
+          {
+            "ref_kind": "authoring-input",
+            "ref_id": "scenarios/bounded-participant-agency-techvault.sdl.yaml",
+            "ref_digest": "sha256:250dfa84fc110305171ef48d64151e1664cefe1ddb23739edfe4d3213f8be32e",
+            "ref_path": "/behavior_specifications/investigate-actor-activity/defensive_behavior_refs/0"
+          }
+        ],
+        "semantic_effect": "annotates",
+        "semantic_effect_basis_refs": [
+          {
+            "ref_kind": "profile",
+            "ref_id": "external-concept-bindings/v1"
+          }
+        ]
+      },
+      "perspective": {
+        "asserting_party_kind": "author",
+        "asserting_party_ref": "authors.aptl",
+        "perspective": "scenario-author-defensive-behavior-classification",
+        "authority_basis_refs": [
+          {
+            "ref_kind": "authoring-input",
+            "ref_id": "scenarios/bounded-participant-agency-techvault.sdl.yaml",
+            "ref_digest": "sha256:250dfa84fc110305171ef48d64151e1664cefe1ddb23739edfe4d3213f8be32e",
+            "ref_path": "/behavior_specifications/investigate-actor-activity/defensive_behavior_refs/0"
+          }
+        ]
+      },
+      "provenance": {
+        "asserted_at": "2026-09-14T00:00:00Z",
+        "source_refs": [
+          {
+            "ref_kind": "authoring-input",
+            "ref_id": "scenarios/bounded-participant-agency-techvault.sdl.yaml",
+            "ref_digest": "sha256:250dfa84fc110305171ef48d64151e1664cefe1ddb23739edfe4d3213f8be32e",
+            "ref_path": "/behavior_specifications/investigate-actor-activity/defensive_behavior_refs/0"
+          }
+        ]
+      },
+      "supporting_evidence_refs": [],
+      "confidence": {
+        "posture": "high",
+        "basis": "The scenario author declared this defensive-behavior classification as intentional scenario content."
+      },
+      "approximation": {
+        "posture": "exact",
+        "loss_details": []
+      },
+      "limitations": [
+        "The classification annotates the behavior specification; it neither grants a capability nor proves the behavior is realized."
+      ],
+      "review": {
+        "status": "unreviewed",
+        "review_refs": []
+      }
+    },
+    "apply-bounded-response": {
+      "binding_id": "apply-bounded-response",
+      "subject": {
+        "subject_kind": "behavior_specifications",
+        "owning_contract_id": "sdl-authoring-input-v1",
+        "lifecycle_phase": "normalized-authoring",
+        "canonical_ref": "behavior_specifications.apply-bounded-response",
+        "artifact_digest": "sha256:89ca528ba1a399e3c95bf76ec678fef650c271fc0d9ba52ad2527c9c2dc0a703"
+      },
+      "scheme": {
+        "scheme_id": "raes-participant-defensive-behavior-activities",
+        "authority": "RAES Concept Authority - participant-defensive-behavior-activities controlled vocabulary (adapted from NIST Cybersecurity Framework 2.0 Detect/Respond/Recover categories)",
+        "revision": "controlled-vocabularies/v1",
+        "source_locator": "urn:raes:contracts:corpus:concept-authority:controlled-vocabularies-v1.json",
+        "source_digest": "sha256:4e4fbaab59f1018114d3d34b2dbdf2fbc58ebfd26180526c7eddad48319ebab6",
+        "concept_id": "incident-management"
+      },
+      "assertion": {
+        "relationship_kind": "instance-of",
+        "motivation": "Incident management: the blue analyst behavior selects and applies one permitted bounded response to a detected synthetic incident and verifies the effect (RAES adaptation of NIST CSF 2.0 RS.MA).",
+        "motivation_basis_refs": [
+          {
+            "ref_kind": "authoring-input",
+            "ref_id": "scenarios/bounded-participant-agency-techvault.sdl.yaml",
+            "ref_digest": "sha256:250dfa84fc110305171ef48d64151e1664cefe1ddb23739edfe4d3213f8be32e",
+            "ref_path": "/behavior_specifications/apply-bounded-response/defensive_behavior_refs/0"
+          }
+        ],
+        "semantic_effect": "annotates",
+        "semantic_effect_basis_refs": [
+          {
+            "ref_kind": "profile",
+            "ref_id": "external-concept-bindings/v1"
+          }
+        ]
+      },
+      "perspective": {
+        "asserting_party_kind": "author",
+        "asserting_party_ref": "authors.aptl",
+        "perspective": "scenario-author-defensive-behavior-classification",
+        "authority_basis_refs": [
+          {
+            "ref_kind": "authoring-input",
+            "ref_id": "scenarios/bounded-participant-agency-techvault.sdl.yaml",
+            "ref_digest": "sha256:250dfa84fc110305171ef48d64151e1664cefe1ddb23739edfe4d3213f8be32e",
+            "ref_path": "/behavior_specifications/apply-bounded-response/defensive_behavior_refs/0"
+          }
+        ]
+      },
+      "provenance": {
+        "asserted_at": "2026-09-14T00:00:00Z",
+        "source_refs": [
+          {
+            "ref_kind": "authoring-input",
+            "ref_id": "scenarios/bounded-participant-agency-techvault.sdl.yaml",
+            "ref_digest": "sha256:250dfa84fc110305171ef48d64151e1664cefe1ddb23739edfe4d3213f8be32e",
+            "ref_path": "/behavior_specifications/apply-bounded-response/defensive_behavior_refs/0"
+          }
+        ]
+      },
+      "supporting_evidence_refs": [],
+      "confidence": {
+        "posture": "high",
+        "basis": "The scenario author declared this defensive-behavior classification as intentional scenario content."
+      },
+      "approximation": {
+        "posture": "exact",
+        "loss_details": []
+      },
+      "limitations": [
+        "The classification annotates the behavior specification; it neither grants a capability nor proves the behavior is realized."
+      ],
+      "review": {
+        "status": "unreviewed",
+        "review_refs": []
+      }
+    }
+  }
+}

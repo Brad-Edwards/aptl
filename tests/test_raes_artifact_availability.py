@@ -57,7 +57,7 @@ def _scenario(tmp_path: Path, digest: str = _DIGEST):
             type: switch
             description: Fixture network.
           target:
-            type: vm
+            type: compute
             os: linux
             source:
               name: example/app

@@ -1,0 +1,85 @@
+{
+  "schema_version": "external-concept-bindings/v1",
+  "binding_set_id": "techvault-enterprise-web-weakness-classifications",
+  "binding_set_version": "1.0.0",
+  "bindings": {
+    "webapp-sqli-login": {
+      "binding_id": "webapp-sqli-login",
+      "subject": {
+        "subject_kind": "service",
+        "owning_contract_id": "sdl-authoring-input-v1",
+        "lifecycle_phase": "normalized-authoring",
+        "canonical_ref": "nodes.webapp.services.http",
+        "artifact_digest": "sha256:30ad22066f59586fea1a3ae340022c17f0eebf7e62fd78b775443f5c9ce29289"
+      },
+      "scheme": {
+        "scheme_id": "mitre-cwe",
+        "authority": "MITRE Common Weakness Enumeration",
+        "revision": "4.20",
+        "source_locator": "https://cwe.mitre.org/data/xml/cwec_v4.20.xml.zip",
+        "source_digest": "sha256:3976f599e5e5200219a3108bb896d06e2a88fbb293369e1883cb423a5e9d7d50",
+        "concept_id": "CWE-89"
+      },
+      "assertion": {
+        "relationship_kind": "instance-of",
+        "motivation": "SQL injection in login: the TechVault customer-portal login form accepts intentionally vulnerable SQL input. The webapp HTTP service hosts the portal; the historical declaration was an unreferenced scenario-author weakness classification with no route-level subject in this slice.",
+        "motivation_basis_refs": [
+          {
+            "ref_kind": "authoring-input",
+            "ref_id": "scenarios/techvault-enterprise-web.sdl.yaml",
+            "ref_digest": "sha256:2e51c73e15a00e408ba1e9e68e36f3305ebdbdfe1c351016419721fbe4caf221",
+            "ref_path": "/vulnerabilities/webapp-sqli-login"
+          }
+        ],
+        "semantic_effect": "annotates",
+        "semantic_effect_basis_refs": [
+          {
+            "ref_kind": "profile",
+            "ref_id": "external-concept-bindings/v1"
+          }
+        ]
+      },
+      "perspective": {
+        "asserting_party_kind": "author",
+        "asserting_party_ref": "authors.aptl",
+        "perspective": "scenario-author-weakness-classification",
+        "authority_basis_refs": [
+          {
+            "ref_kind": "authoring-input",
+            "ref_id": "scenarios/techvault-enterprise-web.sdl.yaml",
+            "ref_digest": "sha256:2e51c73e15a00e408ba1e9e68e36f3305ebdbdfe1c351016419721fbe4caf221",
+            "ref_path": "/vulnerabilities/webapp-sqli-login"
+          }
+        ]
+      },
+      "provenance": {
+        "asserted_at": "2026-09-14T00:00:00Z",
+        "source_refs": [
+          {
+            "ref_kind": "authoring-input",
+            "ref_id": "scenarios/techvault-enterprise-web.sdl.yaml",
+            "ref_digest": "sha256:2e51c73e15a00e408ba1e9e68e36f3305ebdbdfe1c351016419721fbe4caf221",
+            "ref_path": "/vulnerabilities/webapp-sqli-login"
+          }
+        ]
+      },
+      "confidence": {
+        "posture": "high",
+        "basis": "The scenario author declared this weakness as intentional scenario content."
+      },
+      "approximation": {
+        "posture": "lossy",
+        "loss_details": [
+          "The original declaration was unreferenced (no vulnerability_refs); the subject is the webapp HTTP portal service rather than a specific route, which does not exist in this scenario slice."
+        ]
+      },
+      "limitations": [
+        "The classification annotates the portal service; it neither grants a capability nor proves the weakness is realized.",
+        "The historical top-level vulnerabilities.webapp-sqli-login declaration is retained only in the source scenario artifact."
+      ],
+      "review": {
+        "status": "unreviewed"
+      }
+    }
+  }
+}

@@ -63,6 +63,12 @@ class RecordDisclosure:
     sensitivity: str
     redaction_state: str
     loss_disclosure: str | None = None
+    #: The governed policy under which the coordinator redacted or withheld the
+    #: bytes. RAES requires this to be present exactly when
+    #: ``redaction_state != "none"`` (and absent when the record is lossless), so
+    #: the coordinator supplies the applied policy id here and ``None`` for an
+    #: unredacted, participant-visible record.
+    redaction_policy: str | None = None
 
 
 def _bare_hex(prefixed_digest: str) -> str:
@@ -134,6 +140,7 @@ def build_evidence_record(
             ref_kind="capture-spec", ref_id=binding.capture_spec_id
         ),
         capture_requirement_ref=binding.requirement_id,
+        output_contract=binding.output_contract,
         run_ref=ExperimentReferenceModel(ref_kind="run", ref_id=run_id),
         source_refs=[
             ExperimentReferenceModel(
@@ -150,4 +157,5 @@ def build_evidence_record(
         ),
         sensitivity=disclosure.sensitivity,
         redaction_state=disclosure.redaction_state,
+        redaction_policy=disclosure.redaction_policy,
     )

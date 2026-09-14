@@ -35,6 +35,7 @@ def _binding(*, visibility=CaptureVisibility.PARTICIPANT_VISIBLE, **overrides) -
         "contract_version": "experiment-capture-spec/v1", "effective_config_digest": "sha256:" + "cd" * 32,
         "channel_ref_id": "chan", "channel_ref_version": "1.0.0", "channel_kind": "participant-observation",
         "capture_kind": "observation", "capture_scope": "participant", "expected_media_types": ("application/json",),
+        "output_contract": "participant-behavior-history-event-stream-v1",
         "required_artifact_roles": ("observation",), "sensitivity": "internal", "redaction_required": True,
         "integrity_requirements": ("sha256-digest",), "retention_policy": "retain", "loss_disclosure_required": True,
         "visibility_class": visibility,

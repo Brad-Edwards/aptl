@@ -23,7 +23,7 @@ _WORKFLOW_SCENARIO = dedent(
     name: orchestrator-test
     nodes:
       vm:
-        type: vm
+        type: compute
         os: linux
         resources: {ram: 1 gib, cpu: 1}
         conditions: {health: ops}

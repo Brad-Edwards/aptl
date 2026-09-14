@@ -37,6 +37,7 @@ def _binding(*, requirement_id="req-a", registration_id="aptl.collector.a", max_
         "channel_kind": "evaluation-history",
         "capture_kind": "trace",
         "capture_scope": "network",
+        "output_contract": "participant-behavior-history-event-stream-v1",
         "expected_media_types": ("application/json",),
         "required_artifact_roles": ("observation",),
         "sensitivity": "internal",

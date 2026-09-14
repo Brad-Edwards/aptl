@@ -84,19 +84,27 @@ def _generated_artifact(
     provenance = _text(spec.get("provenance"))
     outputs = _outputs(resource, spec.get("outputs"), diagnostics)
     consumers = _consumers(resource, spec.get("consumers"), nodes, diagnostics)
+    env_consumers = _environment_consumers(
+        resource, spec.get("environment_consumers"), nodes, diagnostics
+    )
+    # A generated artifact is delivered by mount consumers, environment
+    # consumers, or both; at least one delivery must resolve. An artifact with
+    # neither is incomplete (nothing would receive its outputs).
     incomplete = (
         generator is None
         or lifecycle is None
         or provenance is None
         or not outputs
-        or not consumers
+        or not (consumers or env_consumers)
     )
     if incomplete:
         _append_invalid(resource, diagnostics)
     # Selection is checked only for a complete declaration: an incomplete one is
     # already rejected, and re-reporting it as a selection failure would
     # double-count the same resource.
-    if incomplete or not _selection_valid(resource, outputs, consumers, diagnostics):
+    if incomplete or not _selection_valid(
+        resource, outputs, consumers, env_consumers, diagnostics
+    ):
         return None
     return DeploymentGeneratedArtifactRealization(
         address=resource.address,
@@ -106,6 +114,7 @@ def _generated_artifact(
         provenance=provenance,
         outputs=tuple(outputs),
         consumers=tuple(consumers),
+        environment_consumers=tuple(env_consumers),
         ordering_dependencies=resource.ordering_dependencies,
         refresh_dependencies=resource.refresh_dependencies,
     )
@@ -115,29 +124,37 @@ def _selection_valid(
     resource: PlannedResource,
     outputs: list[DeploymentGeneratedArtifactOutput],
     consumers: list[DeploymentStatefulConsumer],
+    env_consumers: list[DeploymentStatefulConsumer],
     diagnostics: list[Diagnostic],
 ) -> bool:
     """Reject a consumer that selects an undeclared or producer-private output.
 
-    A ``producer_private`` output must never be mounted into any consumer, and a
-    consumer can only select an output the artifact declares. Either violation
-    fails closed before any key material is generated.
+    A ``producer_private`` output must never reach any consumer, and a consumer
+    can only select an output the artifact declares. This holds for both a mount
+    consumer's ``selected_outputs`` and an environment consumer's single named
+    ``output``. Either violation fails closed before any key material is
+    generated.
     """
 
     by_name = {output.name: output for output in outputs}
-    for consumer in consumers:
-        for name in consumer.selected_outputs:
-            output = by_name.get(name)
-            if output is None or output.disposition == "producer_private":
-                diagnostics.append(
-                    diagnostic(
-                        "aptl.provisioner.stateful-output-not-selectable",
-                        resource.address,
-                        "Consumer selects an undeclared or producer-private "
-                        "generated-artifact output.",
-                    )
+    selections = [
+        (consumer, name)
+        for consumer in consumers
+        for name in consumer.selected_outputs
+    ]
+    selections.extend((consumer, consumer.output) for consumer in env_consumers)
+    for _consumer_ref, name in selections:
+        output = by_name.get(name)
+        if output is None or output.disposition == "producer_private":
+            diagnostics.append(
+                diagnostic(
+                    "aptl.provisioner.stateful-output-not-selectable",
+                    resource.address,
+                    "Consumer selects an undeclared or producer-private "
+                    "generated-artifact output.",
                 )
-                return False
+            )
+            return False
     return True
 
 
@@ -294,6 +311,90 @@ def _consumer(
                 access_mode=cast(StatefulConsumerAccessMode, access_mode),
                 selected_outputs=selected,
             )
+    return None
+
+
+def _environment_consumers(
+    resource: PlannedResource,
+    raw_consumers: object,
+    nodes: dict[str, NodeRealization],
+    diagnostics: list[Diagnostic],
+) -> list[DeploymentStatefulConsumer]:
+    """Parse every environment consumer, rejecting an incomplete collection.
+
+    An artifact with no ``environment_consumers`` key (or an empty list) simply
+    has no environment delivery; that is not itself an error.
+    """
+
+    if raw_consumers is None:
+        return []
+    if not isinstance(raw_consumers, list):
+        _append_invalid(resource, diagnostics)
+        return []
+    consumers: list[DeploymentStatefulConsumer] = []
+    for raw in raw_consumers:
+        consumer = _environment_consumer(resource, raw, nodes, diagnostics)
+        if consumer is None:
+            return []
+        consumers.append(consumer)
+    return consumers
+
+
+def _environment_consumer(
+    resource: PlannedResource,
+    raw: object,
+    nodes: dict[str, NodeRealization],
+    diagnostics: list[Diagnostic],
+) -> DeploymentStatefulConsumer | None:
+    """Resolve one environment consumer to one admitted backend service.
+
+    APTL realizes ``environment`` delivery (a named output injected as an env
+    var); ``env_file`` delivery is not realized and is rejected here so the
+    manifest never claims a delivery mode the backend cannot honestly perform.
+    """
+
+    if not isinstance(raw, Mapping):
+        _append_invalid(resource, diagnostics)
+        return None
+    target_address = _text(raw.get("target_address"))
+    node_name = _text(raw.get("node"))
+    delivery_mode = _text(raw.get("delivery_mode"))
+    output = _text(raw.get("output"))
+    environment_variable = _text(raw.get("environment_variable"))
+    node = nodes.get(target_address or "")
+    service_name = _only(node.backend_services) if node is not None else None
+    if node is None:
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.stateful-consumer-unresolved",
+                resource.address,
+                "Stateful resource consumer does not resolve to an admitted node.",
+            )
+        )
+    elif service_name is None:
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.stateful-consumer-service-unresolved",
+                resource.address,
+                "Stateful resource consumer does not resolve to one backend service.",
+            )
+        )
+    elif (
+        delivery_mode != "environment"
+        or node_name is None
+        or output is None
+        or environment_variable is None
+    ):
+        _append_invalid(resource, diagnostics)
+    else:
+        return DeploymentStatefulConsumer(
+            target_address=node.address,
+            node_name=node_name,
+            service_name=service_name,
+            delivery_mode="environment",
+            output=output,
+            environment_variable=environment_variable,
+        )
     return None
 
 

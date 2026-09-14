@@ -60,6 +60,12 @@ _LIFECYCLE_ARTIFACT_ID = "lifecycle-attempt-record"
 _LIFECYCLE_CAPTURE_SPEC = "aptl.lifecycle"
 _LIFECYCLE_SUBDIR = "lifecycle"
 _LIFECYCLE_MAX_BYTES = 64 * 1024
+#: The RAES output contract the lifecycle attestation stream conforms to. The
+#: attestation payload is an ``aptl.lifecycle-attestation/v1`` document, so the
+#: evidence record honestly names that as the contract its bytes satisfy (this
+#: record is an APTL-internal lifecycle log, not tied to an authored capture
+#: requirement, so it is never matched by ``validate_experiment_run_evidence``).
+_LIFECYCLE_OUTPUT_CONTRACT = "aptl.lifecycle-attestation/v1"
 #: Run-relative subdirectory of the create-once evidence-record ledger (matches
 #: the evidence coordinator's ``_LEDGER_SUBDIR``).
 _EVIDENCE_LEDGER_SUBDIR = "evidence/records"
@@ -221,6 +227,7 @@ def write_lifecycle_evidence(
             ref_kind="capture-spec", ref_id=_LIFECYCLE_CAPTURE_SPEC, ref_version="1.0.0"
         ),
         capture_requirement_ref="aptl.lifecycle.attempt-record",
+        output_contract=_LIFECYCLE_OUTPUT_CONTRACT,
         run_ref=ExperimentReferenceModel(ref_kind="run", ref_id=attempt_id),
         source_refs=[ExperimentReferenceModel(ref_kind="backend", ref_id="aptl")],
         evidence_kind="log",

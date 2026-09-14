@@ -1,0 +1,2843 @@
+[
+  {
+    "scheme_id": "mitre-cwe",
+    "authority": "MITRE Common Weakness Enumeration",
+    "revision": "4.20",
+    "source_locator": "https://cwe.mitre.org/data/xml/cwec_v4.20.xml.zip",
+    "source_digest": "sha256:3976f599e5e5200219a3108bb896d06e2a88fbb293369e1883cb423a5e9d7d50",
+    "concepts": [
+      {
+        "concept_id": "CWE-5"
+      },
+      {
+        "concept_id": "CWE-6"
+      },
+      {
+        "concept_id": "CWE-7"
+      },
+      {
+        "concept_id": "CWE-8"
+      },
+      {
+        "concept_id": "CWE-9"
+      },
+      {
+        "concept_id": "CWE-11"
+      },
+      {
+        "concept_id": "CWE-12"
+      },
+      {
+        "concept_id": "CWE-13"
+      },
+      {
+        "concept_id": "CWE-14"
+      },
+      {
+        "concept_id": "CWE-15"
+      },
+      {
+        "concept_id": "CWE-20"
+      },
+      {
+        "concept_id": "CWE-22"
+      },
+      {
+        "concept_id": "CWE-23"
+      },
+      {
+        "concept_id": "CWE-24"
+      },
+      {
+        "concept_id": "CWE-25"
+      },
+      {
+        "concept_id": "CWE-26"
+      },
+      {
+        "concept_id": "CWE-27"
+      },
+      {
+        "concept_id": "CWE-28"
+      },
+      {
+        "concept_id": "CWE-29"
+      },
+      {
+        "concept_id": "CWE-30"
+      },
+      {
+        "concept_id": "CWE-31"
+      },
+      {
+        "concept_id": "CWE-32"
+      },
+      {
+        "concept_id": "CWE-33"
+      },
+      {
+        "concept_id": "CWE-34"
+      },
+      {
+        "concept_id": "CWE-35"
+      },
+      {
+        "concept_id": "CWE-36"
+      },
+      {
+        "concept_id": "CWE-37"
+      },
+      {
+        "concept_id": "CWE-38"
+      },
+      {
+        "concept_id": "CWE-39"
+      },
+      {
+        "concept_id": "CWE-40"
+      },
+      {
+        "concept_id": "CWE-41"
+      },
+      {
+        "concept_id": "CWE-42"
+      },
+      {
+        "concept_id": "CWE-43"
+      },
+      {
+        "concept_id": "CWE-44"
+      },
+      {
+        "concept_id": "CWE-45"
+      },
+      {
+        "concept_id": "CWE-46"
+      },
+      {
+        "concept_id": "CWE-47"
+      },
+      {
+        "concept_id": "CWE-48"
+      },
+      {
+        "concept_id": "CWE-49"
+      },
+      {
+        "concept_id": "CWE-50"
+      },
+      {
+        "concept_id": "CWE-51"
+      },
+      {
+        "concept_id": "CWE-52"
+      },
+      {
+        "concept_id": "CWE-53"
+      },
+      {
+        "concept_id": "CWE-54"
+      },
+      {
+        "concept_id": "CWE-55"
+      },
+      {
+        "concept_id": "CWE-56"
+      },
+      {
+        "concept_id": "CWE-57"
+      },
+      {
+        "concept_id": "CWE-58"
+      },
+      {
+        "concept_id": "CWE-59"
+      },
+      {
+        "concept_id": "CWE-61"
+      },
+      {
+        "concept_id": "CWE-62"
+      },
+      {
+        "concept_id": "CWE-64"
+      },
+      {
+        "concept_id": "CWE-65"
+      },
+      {
+        "concept_id": "CWE-66"
+      },
+      {
+        "concept_id": "CWE-67"
+      },
+      {
+        "concept_id": "CWE-69"
+      },
+      {
+        "concept_id": "CWE-72"
+      },
+      {
+        "concept_id": "CWE-73"
+      },
+      {
+        "concept_id": "CWE-74"
+      },
+      {
+        "concept_id": "CWE-75"
+      },
+      {
+        "concept_id": "CWE-76"
+      },
+      {
+        "concept_id": "CWE-77"
+      },
+      {
+        "concept_id": "CWE-78"
+      },
+      {
+        "concept_id": "CWE-79"
+      },
+      {
+        "concept_id": "CWE-80"
+      },
+      {
+        "concept_id": "CWE-81"
+      },
+      {
+        "concept_id": "CWE-82"
+      },
+      {
+        "concept_id": "CWE-83"
+      },
+      {
+        "concept_id": "CWE-84"
+      },
+      {
+        "concept_id": "CWE-85"
+      },
+      {
+        "concept_id": "CWE-86"
+      },
+      {
+        "concept_id": "CWE-87"
+      },
+      {
+        "concept_id": "CWE-88"
+      },
+      {
+        "concept_id": "CWE-89"
+      },
+      {
+        "concept_id": "CWE-90"
+      },
+      {
+        "concept_id": "CWE-91"
+      },
+      {
+        "concept_id": "CWE-93"
+      },
+      {
+        "concept_id": "CWE-94"
+      },
+      {
+        "concept_id": "CWE-95"
+      },
+      {
+        "concept_id": "CWE-96"
+      },
+      {
+        "concept_id": "CWE-97"
+      },
+      {
+        "concept_id": "CWE-98"
+      },
+      {
+        "concept_id": "CWE-99"
+      },
+      {
+        "concept_id": "CWE-102"
+      },
+      {
+        "concept_id": "CWE-103"
+      },
+      {
+        "concept_id": "CWE-104"
+      },
+      {
+        "concept_id": "CWE-105"
+      },
+      {
+        "concept_id": "CWE-106"
+      },
+      {
+        "concept_id": "CWE-107"
+      },
+      {
+        "concept_id": "CWE-108"
+      },
+      {
+        "concept_id": "CWE-109"
+      },
+      {
+        "concept_id": "CWE-110"
+      },
+      {
+        "concept_id": "CWE-111"
+      },
+      {
+        "concept_id": "CWE-112"
+      },
+      {
+        "concept_id": "CWE-113"
+      },
+      {
+        "concept_id": "CWE-114"
+      },
+      {
+        "concept_id": "CWE-115"
+      },
+      {
+        "concept_id": "CWE-116"
+      },
+      {
+        "concept_id": "CWE-117"
+      },
+      {
+        "concept_id": "CWE-118"
+      },
+      {
+        "concept_id": "CWE-119"
+      },
+      {
+        "concept_id": "CWE-120"
+      },
+      {
+        "concept_id": "CWE-121"
+      },
+      {
+        "concept_id": "CWE-122"
+      },
+      {
+        "concept_id": "CWE-123"
+      },
+      {
+        "concept_id": "CWE-124"
+      },
+      {
+        "concept_id": "CWE-125"
+      },
+      {
+        "concept_id": "CWE-126"
+      },
+      {
+        "concept_id": "CWE-127"
+      },
+      {
+        "concept_id": "CWE-128"
+      },
+      {
+        "concept_id": "CWE-129"
+      },
+      {
+        "concept_id": "CWE-130"
+      },
+      {
+        "concept_id": "CWE-131"
+      },
+      {
+        "concept_id": "CWE-134"
+      },
+      {
+        "concept_id": "CWE-135"
+      },
+      {
+        "concept_id": "CWE-138"
+      },
+      {
+        "concept_id": "CWE-140"
+      },
+      {
+        "concept_id": "CWE-141"
+      },
+      {
+        "concept_id": "CWE-142"
+      },
+      {
+        "concept_id": "CWE-143"
+      },
+      {
+        "concept_id": "CWE-144"
+      },
+      {
+        "concept_id": "CWE-145"
+      },
+      {
+        "concept_id": "CWE-146"
+      },
+      {
+        "concept_id": "CWE-147"
+      },
+      {
+        "concept_id": "CWE-148"
+      },
+      {
+        "concept_id": "CWE-149"
+      },
+      {
+        "concept_id": "CWE-150"
+      },
+      {
+        "concept_id": "CWE-151"
+      },
+      {
+        "concept_id": "CWE-152"
+      },
+      {
+        "concept_id": "CWE-153"
+      },
+      {
+        "concept_id": "CWE-154"
+      },
+      {
+        "concept_id": "CWE-155"
+      },
+      {
+        "concept_id": "CWE-156"
+      },
+      {
+        "concept_id": "CWE-157"
+      },
+      {
+        "concept_id": "CWE-158"
+      },
+      {
+        "concept_id": "CWE-159"
+      },
+      {
+        "concept_id": "CWE-160"
+      },
+      {
+        "concept_id": "CWE-161"
+      },
+      {
+        "concept_id": "CWE-162"
+      },
+      {
+        "concept_id": "CWE-163"
+      },
+      {
+        "concept_id": "CWE-164"
+      },
+      {
+        "concept_id": "CWE-165"
+      },
+      {
+        "concept_id": "CWE-166"
+      },
+      {
+        "concept_id": "CWE-167"
+      },
+      {
+        "concept_id": "CWE-168"
+      },
+      {
+        "concept_id": "CWE-170"
+      },
+      {
+        "concept_id": "CWE-172"
+      },
+      {
+        "concept_id": "CWE-173"
+      },
+      {
+        "concept_id": "CWE-174"
+      },
+      {
+        "concept_id": "CWE-175"
+      },
+      {
+        "concept_id": "CWE-176"
+      },
+      {
+        "concept_id": "CWE-177"
+      },
+      {
+        "concept_id": "CWE-178"
+      },
+      {
+        "concept_id": "CWE-179"
+      },
+      {
+        "concept_id": "CWE-180"
+      },
+      {
+        "concept_id": "CWE-181"
+      },
+      {
+        "concept_id": "CWE-182"
+      },
+      {
+        "concept_id": "CWE-183"
+      },
+      {
+        "concept_id": "CWE-184"
+      },
+      {
+        "concept_id": "CWE-185"
+      },
+      {
+        "concept_id": "CWE-186"
+      },
+      {
+        "concept_id": "CWE-187"
+      },
+      {
+        "concept_id": "CWE-188"
+      },
+      {
+        "concept_id": "CWE-190"
+      },
+      {
+        "concept_id": "CWE-191"
+      },
+      {
+        "concept_id": "CWE-192"
+      },
+      {
+        "concept_id": "CWE-193"
+      },
+      {
+        "concept_id": "CWE-194"
+      },
+      {
+        "concept_id": "CWE-195"
+      },
+      {
+        "concept_id": "CWE-196"
+      },
+      {
+        "concept_id": "CWE-197"
+      },
+      {
+        "concept_id": "CWE-198"
+      },
+      {
+        "concept_id": "CWE-200"
+      },
+      {
+        "concept_id": "CWE-201"
+      },
+      {
+        "concept_id": "CWE-202"
+      },
+      {
+        "concept_id": "CWE-203"
+      },
+      {
+        "concept_id": "CWE-204"
+      },
+      {
+        "concept_id": "CWE-205"
+      },
+      {
+        "concept_id": "CWE-206"
+      },
+      {
+        "concept_id": "CWE-207"
+      },
+      {
+        "concept_id": "CWE-208"
+      },
+      {
+        "concept_id": "CWE-209"
+      },
+      {
+        "concept_id": "CWE-210"
+      },
+      {
+        "concept_id": "CWE-211"
+      },
+      {
+        "concept_id": "CWE-212"
+      },
+      {
+        "concept_id": "CWE-213"
+      },
+      {
+        "concept_id": "CWE-214"
+      },
+      {
+        "concept_id": "CWE-215"
+      },
+      {
+        "concept_id": "CWE-219"
+      },
+      {
+        "concept_id": "CWE-220"
+      },
+      {
+        "concept_id": "CWE-221"
+      },
+      {
+        "concept_id": "CWE-222"
+      },
+      {
+        "concept_id": "CWE-223"
+      },
+      {
+        "concept_id": "CWE-224"
+      },
+      {
+        "concept_id": "CWE-226"
+      },
+      {
+        "concept_id": "CWE-228"
+      },
+      {
+        "concept_id": "CWE-229"
+      },
+      {
+        "concept_id": "CWE-230"
+      },
+      {
+        "concept_id": "CWE-231"
+      },
+      {
+        "concept_id": "CWE-232"
+      },
+      {
+        "concept_id": "CWE-233"
+      },
+      {
+        "concept_id": "CWE-234"
+      },
+      {
+        "concept_id": "CWE-235"
+      },
+      {
+        "concept_id": "CWE-236"
+      },
+      {
+        "concept_id": "CWE-237"
+      },
+      {
+        "concept_id": "CWE-238"
+      },
+      {
+        "concept_id": "CWE-239"
+      },
+      {
+        "concept_id": "CWE-240"
+      },
+      {
+        "concept_id": "CWE-241"
+      },
+      {
+        "concept_id": "CWE-242"
+      },
+      {
+        "concept_id": "CWE-243"
+      },
+      {
+        "concept_id": "CWE-244"
+      },
+      {
+        "concept_id": "CWE-245"
+      },
+      {
+        "concept_id": "CWE-246"
+      },
+      {
+        "concept_id": "CWE-248"
+      },
+      {
+        "concept_id": "CWE-250"
+      },
+      {
+        "concept_id": "CWE-252"
+      },
+      {
+        "concept_id": "CWE-253"
+      },
+      {
+        "concept_id": "CWE-256"
+      },
+      {
+        "concept_id": "CWE-257"
+      },
+      {
+        "concept_id": "CWE-258"
+      },
+      {
+        "concept_id": "CWE-259"
+      },
+      {
+        "concept_id": "CWE-260"
+      },
+      {
+        "concept_id": "CWE-261"
+      },
+      {
+        "concept_id": "CWE-262"
+      },
+      {
+        "concept_id": "CWE-263"
+      },
+      {
+        "concept_id": "CWE-266"
+      },
+      {
+        "concept_id": "CWE-267"
+      },
+      {
+        "concept_id": "CWE-268"
+      },
+      {
+        "concept_id": "CWE-269"
+      },
+      {
+        "concept_id": "CWE-270"
+      },
+      {
+        "concept_id": "CWE-271"
+      },
+      {
+        "concept_id": "CWE-272"
+      },
+      {
+        "concept_id": "CWE-273"
+      },
+      {
+        "concept_id": "CWE-274"
+      },
+      {
+        "concept_id": "CWE-276"
+      },
+      {
+        "concept_id": "CWE-277"
+      },
+      {
+        "concept_id": "CWE-278"
+      },
+      {
+        "concept_id": "CWE-279"
+      },
+      {
+        "concept_id": "CWE-280"
+      },
+      {
+        "concept_id": "CWE-281"
+      },
+      {
+        "concept_id": "CWE-282"
+      },
+      {
+        "concept_id": "CWE-283"
+      },
+      {
+        "concept_id": "CWE-284"
+      },
+      {
+        "concept_id": "CWE-285"
+      },
+      {
+        "concept_id": "CWE-286"
+      },
+      {
+        "concept_id": "CWE-287"
+      },
+      {
+        "concept_id": "CWE-288"
+      },
+      {
+        "concept_id": "CWE-289"
+      },
+      {
+        "concept_id": "CWE-290"
+      },
+      {
+        "concept_id": "CWE-291"
+      },
+      {
+        "concept_id": "CWE-293"
+      },
+      {
+        "concept_id": "CWE-294"
+      },
+      {
+        "concept_id": "CWE-295"
+      },
+      {
+        "concept_id": "CWE-296"
+      },
+      {
+        "concept_id": "CWE-297"
+      },
+      {
+        "concept_id": "CWE-298"
+      },
+      {
+        "concept_id": "CWE-299"
+      },
+      {
+        "concept_id": "CWE-300"
+      },
+      {
+        "concept_id": "CWE-301"
+      },
+      {
+        "concept_id": "CWE-302"
+      },
+      {
+        "concept_id": "CWE-303"
+      },
+      {
+        "concept_id": "CWE-304"
+      },
+      {
+        "concept_id": "CWE-305"
+      },
+      {
+        "concept_id": "CWE-306"
+      },
+      {
+        "concept_id": "CWE-307"
+      },
+      {
+        "concept_id": "CWE-308"
+      },
+      {
+        "concept_id": "CWE-309"
+      },
+      {
+        "concept_id": "CWE-311"
+      },
+      {
+        "concept_id": "CWE-312"
+      },
+      {
+        "concept_id": "CWE-313"
+      },
+      {
+        "concept_id": "CWE-314"
+      },
+      {
+        "concept_id": "CWE-315"
+      },
+      {
+        "concept_id": "CWE-316"
+      },
+      {
+        "concept_id": "CWE-317"
+      },
+      {
+        "concept_id": "CWE-318"
+      },
+      {
+        "concept_id": "CWE-319"
+      },
+      {
+        "concept_id": "CWE-321"
+      },
+      {
+        "concept_id": "CWE-322"
+      },
+      {
+        "concept_id": "CWE-323"
+      },
+      {
+        "concept_id": "CWE-324"
+      },
+      {
+        "concept_id": "CWE-325"
+      },
+      {
+        "concept_id": "CWE-326"
+      },
+      {
+        "concept_id": "CWE-327"
+      },
+      {
+        "concept_id": "CWE-328"
+      },
+      {
+        "concept_id": "CWE-329"
+      },
+      {
+        "concept_id": "CWE-330"
+      },
+      {
+        "concept_id": "CWE-331"
+      },
+      {
+        "concept_id": "CWE-332"
+      },
+      {
+        "concept_id": "CWE-333"
+      },
+      {
+        "concept_id": "CWE-334"
+      },
+      {
+        "concept_id": "CWE-335"
+      },
+      {
+        "concept_id": "CWE-336"
+      },
+      {
+        "concept_id": "CWE-337"
+      },
+      {
+        "concept_id": "CWE-338"
+      },
+      {
+        "concept_id": "CWE-339"
+      },
+      {
+        "concept_id": "CWE-340"
+      },
+      {
+        "concept_id": "CWE-341"
+      },
+      {
+        "concept_id": "CWE-342"
+      },
+      {
+        "concept_id": "CWE-343"
+      },
+      {
+        "concept_id": "CWE-344"
+      },
+      {
+        "concept_id": "CWE-345"
+      },
+      {
+        "concept_id": "CWE-346"
+      },
+      {
+        "concept_id": "CWE-347"
+      },
+      {
+        "concept_id": "CWE-348"
+      },
+      {
+        "concept_id": "CWE-349"
+      },
+      {
+        "concept_id": "CWE-350"
+      },
+      {
+        "concept_id": "CWE-351"
+      },
+      {
+        "concept_id": "CWE-352"
+      },
+      {
+        "concept_id": "CWE-353"
+      },
+      {
+        "concept_id": "CWE-354"
+      },
+      {
+        "concept_id": "CWE-356"
+      },
+      {
+        "concept_id": "CWE-357"
+      },
+      {
+        "concept_id": "CWE-358"
+      },
+      {
+        "concept_id": "CWE-359"
+      },
+      {
+        "concept_id": "CWE-360"
+      },
+      {
+        "concept_id": "CWE-362"
+      },
+      {
+        "concept_id": "CWE-363"
+      },
+      {
+        "concept_id": "CWE-364"
+      },
+      {
+        "concept_id": "CWE-366"
+      },
+      {
+        "concept_id": "CWE-367"
+      },
+      {
+        "concept_id": "CWE-368"
+      },
+      {
+        "concept_id": "CWE-369"
+      },
+      {
+        "concept_id": "CWE-370"
+      },
+      {
+        "concept_id": "CWE-372"
+      },
+      {
+        "concept_id": "CWE-374"
+      },
+      {
+        "concept_id": "CWE-375"
+      },
+      {
+        "concept_id": "CWE-377"
+      },
+      {
+        "concept_id": "CWE-378"
+      },
+      {
+        "concept_id": "CWE-379"
+      },
+      {
+        "concept_id": "CWE-382"
+      },
+      {
+        "concept_id": "CWE-383"
+      },
+      {
+        "concept_id": "CWE-384"
+      },
+      {
+        "concept_id": "CWE-385"
+      },
+      {
+        "concept_id": "CWE-386"
+      },
+      {
+        "concept_id": "CWE-390"
+      },
+      {
+        "concept_id": "CWE-391"
+      },
+      {
+        "concept_id": "CWE-392"
+      },
+      {
+        "concept_id": "CWE-393"
+      },
+      {
+        "concept_id": "CWE-394"
+      },
+      {
+        "concept_id": "CWE-395"
+      },
+      {
+        "concept_id": "CWE-396"
+      },
+      {
+        "concept_id": "CWE-397"
+      },
+      {
+        "concept_id": "CWE-400"
+      },
+      {
+        "concept_id": "CWE-401"
+      },
+      {
+        "concept_id": "CWE-402"
+      },
+      {
+        "concept_id": "CWE-403"
+      },
+      {
+        "concept_id": "CWE-404"
+      },
+      {
+        "concept_id": "CWE-405"
+      },
+      {
+        "concept_id": "CWE-406"
+      },
+      {
+        "concept_id": "CWE-407"
+      },
+      {
+        "concept_id": "CWE-408"
+      },
+      {
+        "concept_id": "CWE-409"
+      },
+      {
+        "concept_id": "CWE-410"
+      },
+      {
+        "concept_id": "CWE-412"
+      },
+      {
+        "concept_id": "CWE-413"
+      },
+      {
+        "concept_id": "CWE-414"
+      },
+      {
+        "concept_id": "CWE-415"
+      },
+      {
+        "concept_id": "CWE-416"
+      },
+      {
+        "concept_id": "CWE-419"
+      },
+      {
+        "concept_id": "CWE-420"
+      },
+      {
+        "concept_id": "CWE-421"
+      },
+      {
+        "concept_id": "CWE-422"
+      },
+      {
+        "concept_id": "CWE-424"
+      },
+      {
+        "concept_id": "CWE-425"
+      },
+      {
+        "concept_id": "CWE-426"
+      },
+      {
+        "concept_id": "CWE-427"
+      },
+      {
+        "concept_id": "CWE-428"
+      },
+      {
+        "concept_id": "CWE-430"
+      },
+      {
+        "concept_id": "CWE-431"
+      },
+      {
+        "concept_id": "CWE-432"
+      },
+      {
+        "concept_id": "CWE-433"
+      },
+      {
+        "concept_id": "CWE-434"
+      },
+      {
+        "concept_id": "CWE-435"
+      },
+      {
+        "concept_id": "CWE-436"
+      },
+      {
+        "concept_id": "CWE-437"
+      },
+      {
+        "concept_id": "CWE-439"
+      },
+      {
+        "concept_id": "CWE-440"
+      },
+      {
+        "concept_id": "CWE-441"
+      },
+      {
+        "concept_id": "CWE-444"
+      },
+      {
+        "concept_id": "CWE-446"
+      },
+      {
+        "concept_id": "CWE-447"
+      },
+      {
+        "concept_id": "CWE-448"
+      },
+      {
+        "concept_id": "CWE-449"
+      },
+      {
+        "concept_id": "CWE-450"
+      },
+      {
+        "concept_id": "CWE-451"
+      },
+      {
+        "concept_id": "CWE-453"
+      },
+      {
+        "concept_id": "CWE-454"
+      },
+      {
+        "concept_id": "CWE-455"
+      },
+      {
+        "concept_id": "CWE-456"
+      },
+      {
+        "concept_id": "CWE-457"
+      },
+      {
+        "concept_id": "CWE-459"
+      },
+      {
+        "concept_id": "CWE-460"
+      },
+      {
+        "concept_id": "CWE-462"
+      },
+      {
+        "concept_id": "CWE-463"
+      },
+      {
+        "concept_id": "CWE-464"
+      },
+      {
+        "concept_id": "CWE-466"
+      },
+      {
+        "concept_id": "CWE-467"
+      },
+      {
+        "concept_id": "CWE-468"
+      },
+      {
+        "concept_id": "CWE-469"
+      },
+      {
+        "concept_id": "CWE-470"
+      },
+      {
+        "concept_id": "CWE-471"
+      },
+      {
+        "concept_id": "CWE-472"
+      },
+      {
+        "concept_id": "CWE-473"
+      },
+      {
+        "concept_id": "CWE-474"
+      },
+      {
+        "concept_id": "CWE-475"
+      },
+      {
+        "concept_id": "CWE-476"
+      },
+      {
+        "concept_id": "CWE-477"
+      },
+      {
+        "concept_id": "CWE-478"
+      },
+      {
+        "concept_id": "CWE-479"
+      },
+      {
+        "concept_id": "CWE-480"
+      },
+      {
+        "concept_id": "CWE-481"
+      },
+      {
+        "concept_id": "CWE-482"
+      },
+      {
+        "concept_id": "CWE-483"
+      },
+      {
+        "concept_id": "CWE-484"
+      },
+      {
+        "concept_id": "CWE-486"
+      },
+      {
+        "concept_id": "CWE-487"
+      },
+      {
+        "concept_id": "CWE-488"
+      },
+      {
+        "concept_id": "CWE-489"
+      },
+      {
+        "concept_id": "CWE-491"
+      },
+      {
+        "concept_id": "CWE-492"
+      },
+      {
+        "concept_id": "CWE-493"
+      },
+      {
+        "concept_id": "CWE-494"
+      },
+      {
+        "concept_id": "CWE-495"
+      },
+      {
+        "concept_id": "CWE-496"
+      },
+      {
+        "concept_id": "CWE-497"
+      },
+      {
+        "concept_id": "CWE-498"
+      },
+      {
+        "concept_id": "CWE-499"
+      },
+      {
+        "concept_id": "CWE-500"
+      },
+      {
+        "concept_id": "CWE-501"
+      },
+      {
+        "concept_id": "CWE-502"
+      },
+      {
+        "concept_id": "CWE-506"
+      },
+      {
+        "concept_id": "CWE-507"
+      },
+      {
+        "concept_id": "CWE-508"
+      },
+      {
+        "concept_id": "CWE-509"
+      },
+      {
+        "concept_id": "CWE-510"
+      },
+      {
+        "concept_id": "CWE-511"
+      },
+      {
+        "concept_id": "CWE-512"
+      },
+      {
+        "concept_id": "CWE-514"
+      },
+      {
+        "concept_id": "CWE-515"
+      },
+      {
+        "concept_id": "CWE-520"
+      },
+      {
+        "concept_id": "CWE-521"
+      },
+      {
+        "concept_id": "CWE-522"
+      },
+      {
+        "concept_id": "CWE-523"
+      },
+      {
+        "concept_id": "CWE-524"
+      },
+      {
+        "concept_id": "CWE-525"
+      },
+      {
+        "concept_id": "CWE-526"
+      },
+      {
+        "concept_id": "CWE-527"
+      },
+      {
+        "concept_id": "CWE-528"
+      },
+      {
+        "concept_id": "CWE-529"
+      },
+      {
+        "concept_id": "CWE-530"
+      },
+      {
+        "concept_id": "CWE-531"
+      },
+      {
+        "concept_id": "CWE-532"
+      },
+      {
+        "concept_id": "CWE-535"
+      },
+      {
+        "concept_id": "CWE-536"
+      },
+      {
+        "concept_id": "CWE-537"
+      },
+      {
+        "concept_id": "CWE-538"
+      },
+      {
+        "concept_id": "CWE-539"
+      },
+      {
+        "concept_id": "CWE-540"
+      },
+      {
+        "concept_id": "CWE-541"
+      },
+      {
+        "concept_id": "CWE-543"
+      },
+      {
+        "concept_id": "CWE-544"
+      },
+      {
+        "concept_id": "CWE-546"
+      },
+      {
+        "concept_id": "CWE-547"
+      },
+      {
+        "concept_id": "CWE-548"
+      },
+      {
+        "concept_id": "CWE-549"
+      },
+      {
+        "concept_id": "CWE-550"
+      },
+      {
+        "concept_id": "CWE-551"
+      },
+      {
+        "concept_id": "CWE-552"
+      },
+      {
+        "concept_id": "CWE-553"
+      },
+      {
+        "concept_id": "CWE-554"
+      },
+      {
+        "concept_id": "CWE-555"
+      },
+      {
+        "concept_id": "CWE-556"
+      },
+      {
+        "concept_id": "CWE-558"
+      },
+      {
+        "concept_id": "CWE-560"
+      },
+      {
+        "concept_id": "CWE-561"
+      },
+      {
+        "concept_id": "CWE-562"
+      },
+      {
+        "concept_id": "CWE-563"
+      },
+      {
+        "concept_id": "CWE-564"
+      },
+      {
+        "concept_id": "CWE-565"
+      },
+      {
+        "concept_id": "CWE-566"
+      },
+      {
+        "concept_id": "CWE-567"
+      },
+      {
+        "concept_id": "CWE-568"
+      },
+      {
+        "concept_id": "CWE-570"
+      },
+      {
+        "concept_id": "CWE-571"
+      },
+      {
+        "concept_id": "CWE-572"
+      },
+      {
+        "concept_id": "CWE-573"
+      },
+      {
+        "concept_id": "CWE-574"
+      },
+      {
+        "concept_id": "CWE-575"
+      },
+      {
+        "concept_id": "CWE-576"
+      },
+      {
+        "concept_id": "CWE-577"
+      },
+      {
+        "concept_id": "CWE-578"
+      },
+      {
+        "concept_id": "CWE-579"
+      },
+      {
+        "concept_id": "CWE-580"
+      },
+      {
+        "concept_id": "CWE-581"
+      },
+      {
+        "concept_id": "CWE-582"
+      },
+      {
+        "concept_id": "CWE-583"
+      },
+      {
+        "concept_id": "CWE-584"
+      },
+      {
+        "concept_id": "CWE-585"
+      },
+      {
+        "concept_id": "CWE-586"
+      },
+      {
+        "concept_id": "CWE-587"
+      },
+      {
+        "concept_id": "CWE-588"
+      },
+      {
+        "concept_id": "CWE-589"
+      },
+      {
+        "concept_id": "CWE-590"
+      },
+      {
+        "concept_id": "CWE-591"
+      },
+      {
+        "concept_id": "CWE-593"
+      },
+      {
+        "concept_id": "CWE-594"
+      },
+      {
+        "concept_id": "CWE-595"
+      },
+      {
+        "concept_id": "CWE-597"
+      },
+      {
+        "concept_id": "CWE-598"
+      },
+      {
+        "concept_id": "CWE-599"
+      },
+      {
+        "concept_id": "CWE-600"
+      },
+      {
+        "concept_id": "CWE-601"
+      },
+      {
+        "concept_id": "CWE-602"
+      },
+      {
+        "concept_id": "CWE-603"
+      },
+      {
+        "concept_id": "CWE-605"
+      },
+      {
+        "concept_id": "CWE-606"
+      },
+      {
+        "concept_id": "CWE-607"
+      },
+      {
+        "concept_id": "CWE-608"
+      },
+      {
+        "concept_id": "CWE-609"
+      },
+      {
+        "concept_id": "CWE-610"
+      },
+      {
+        "concept_id": "CWE-611"
+      },
+      {
+        "concept_id": "CWE-612"
+      },
+      {
+        "concept_id": "CWE-613"
+      },
+      {
+        "concept_id": "CWE-614"
+      },
+      {
+        "concept_id": "CWE-615"
+      },
+      {
+        "concept_id": "CWE-616"
+      },
+      {
+        "concept_id": "CWE-617"
+      },
+      {
+        "concept_id": "CWE-618"
+      },
+      {
+        "concept_id": "CWE-619"
+      },
+      {
+        "concept_id": "CWE-620"
+      },
+      {
+        "concept_id": "CWE-621"
+      },
+      {
+        "concept_id": "CWE-622"
+      },
+      {
+        "concept_id": "CWE-623"
+      },
+      {
+        "concept_id": "CWE-624"
+      },
+      {
+        "concept_id": "CWE-625"
+      },
+      {
+        "concept_id": "CWE-626"
+      },
+      {
+        "concept_id": "CWE-627"
+      },
+      {
+        "concept_id": "CWE-628"
+      },
+      {
+        "concept_id": "CWE-636"
+      },
+      {
+        "concept_id": "CWE-637"
+      },
+      {
+        "concept_id": "CWE-638"
+      },
+      {
+        "concept_id": "CWE-639"
+      },
+      {
+        "concept_id": "CWE-640"
+      },
+      {
+        "concept_id": "CWE-641"
+      },
+      {
+        "concept_id": "CWE-642"
+      },
+      {
+        "concept_id": "CWE-643"
+      },
+      {
+        "concept_id": "CWE-644"
+      },
+      {
+        "concept_id": "CWE-645"
+      },
+      {
+        "concept_id": "CWE-646"
+      },
+      {
+        "concept_id": "CWE-647"
+      },
+      {
+        "concept_id": "CWE-648"
+      },
+      {
+        "concept_id": "CWE-649"
+      },
+      {
+        "concept_id": "CWE-650"
+      },
+      {
+        "concept_id": "CWE-651"
+      },
+      {
+        "concept_id": "CWE-652"
+      },
+      {
+        "concept_id": "CWE-653"
+      },
+      {
+        "concept_id": "CWE-654"
+      },
+      {
+        "concept_id": "CWE-655"
+      },
+      {
+        "concept_id": "CWE-656"
+      },
+      {
+        "concept_id": "CWE-657"
+      },
+      {
+        "concept_id": "CWE-662"
+      },
+      {
+        "concept_id": "CWE-663"
+      },
+      {
+        "concept_id": "CWE-664"
+      },
+      {
+        "concept_id": "CWE-665"
+      },
+      {
+        "concept_id": "CWE-666"
+      },
+      {
+        "concept_id": "CWE-667"
+      },
+      {
+        "concept_id": "CWE-668"
+      },
+      {
+        "concept_id": "CWE-669"
+      },
+      {
+        "concept_id": "CWE-670"
+      },
+      {
+        "concept_id": "CWE-671"
+      },
+      {
+        "concept_id": "CWE-672"
+      },
+      {
+        "concept_id": "CWE-673"
+      },
+      {
+        "concept_id": "CWE-674"
+      },
+      {
+        "concept_id": "CWE-675"
+      },
+      {
+        "concept_id": "CWE-676"
+      },
+      {
+        "concept_id": "CWE-680"
+      },
+      {
+        "concept_id": "CWE-681"
+      },
+      {
+        "concept_id": "CWE-682"
+      },
+      {
+        "concept_id": "CWE-683"
+      },
+      {
+        "concept_id": "CWE-684"
+      },
+      {
+        "concept_id": "CWE-685"
+      },
+      {
+        "concept_id": "CWE-686"
+      },
+      {
+        "concept_id": "CWE-687"
+      },
+      {
+        "concept_id": "CWE-688"
+      },
+      {
+        "concept_id": "CWE-689"
+      },
+      {
+        "concept_id": "CWE-690"
+      },
+      {
+        "concept_id": "CWE-691"
+      },
+      {
+        "concept_id": "CWE-692"
+      },
+      {
+        "concept_id": "CWE-693"
+      },
+      {
+        "concept_id": "CWE-694"
+      },
+      {
+        "concept_id": "CWE-695"
+      },
+      {
+        "concept_id": "CWE-696"
+      },
+      {
+        "concept_id": "CWE-697"
+      },
+      {
+        "concept_id": "CWE-698"
+      },
+      {
+        "concept_id": "CWE-703"
+      },
+      {
+        "concept_id": "CWE-704"
+      },
+      {
+        "concept_id": "CWE-705"
+      },
+      {
+        "concept_id": "CWE-706"
+      },
+      {
+        "concept_id": "CWE-707"
+      },
+      {
+        "concept_id": "CWE-708"
+      },
+      {
+        "concept_id": "CWE-710"
+      },
+      {
+        "concept_id": "CWE-732"
+      },
+      {
+        "concept_id": "CWE-733"
+      },
+      {
+        "concept_id": "CWE-749"
+      },
+      {
+        "concept_id": "CWE-754"
+      },
+      {
+        "concept_id": "CWE-755"
+      },
+      {
+        "concept_id": "CWE-756"
+      },
+      {
+        "concept_id": "CWE-757"
+      },
+      {
+        "concept_id": "CWE-758"
+      },
+      {
+        "concept_id": "CWE-759"
+      },
+      {
+        "concept_id": "CWE-760"
+      },
+      {
+        "concept_id": "CWE-761"
+      },
+      {
+        "concept_id": "CWE-762"
+      },
+      {
+        "concept_id": "CWE-763"
+      },
+      {
+        "concept_id": "CWE-764"
+      },
+      {
+        "concept_id": "CWE-765"
+      },
+      {
+        "concept_id": "CWE-766"
+      },
+      {
+        "concept_id": "CWE-767"
+      },
+      {
+        "concept_id": "CWE-768"
+      },
+      {
+        "concept_id": "CWE-770"
+      },
+      {
+        "concept_id": "CWE-771"
+      },
+      {
+        "concept_id": "CWE-772"
+      },
+      {
+        "concept_id": "CWE-773"
+      },
+      {
+        "concept_id": "CWE-774"
+      },
+      {
+        "concept_id": "CWE-775"
+      },
+      {
+        "concept_id": "CWE-776"
+      },
+      {
+        "concept_id": "CWE-777"
+      },
+      {
+        "concept_id": "CWE-778"
+      },
+      {
+        "concept_id": "CWE-779"
+      },
+      {
+        "concept_id": "CWE-780"
+      },
+      {
+        "concept_id": "CWE-781"
+      },
+      {
+        "concept_id": "CWE-782"
+      },
+      {
+        "concept_id": "CWE-783"
+      },
+      {
+        "concept_id": "CWE-784"
+      },
+      {
+        "concept_id": "CWE-785"
+      },
+      {
+        "concept_id": "CWE-786"
+      },
+      {
+        "concept_id": "CWE-787"
+      },
+      {
+        "concept_id": "CWE-788"
+      },
+      {
+        "concept_id": "CWE-789"
+      },
+      {
+        "concept_id": "CWE-790"
+      },
+      {
+        "concept_id": "CWE-791"
+      },
+      {
+        "concept_id": "CWE-792"
+      },
+      {
+        "concept_id": "CWE-793"
+      },
+      {
+        "concept_id": "CWE-794"
+      },
+      {
+        "concept_id": "CWE-795"
+      },
+      {
+        "concept_id": "CWE-796"
+      },
+      {
+        "concept_id": "CWE-797"
+      },
+      {
+        "concept_id": "CWE-798"
+      },
+      {
+        "concept_id": "CWE-799"
+      },
+      {
+        "concept_id": "CWE-804"
+      },
+      {
+        "concept_id": "CWE-805"
+      },
+      {
+        "concept_id": "CWE-806"
+      },
+      {
+        "concept_id": "CWE-807"
+      },
+      {
+        "concept_id": "CWE-820"
+      },
+      {
+        "concept_id": "CWE-821"
+      },
+      {
+        "concept_id": "CWE-822"
+      },
+      {
+        "concept_id": "CWE-823"
+      },
+      {
+        "concept_id": "CWE-824"
+      },
+      {
+        "concept_id": "CWE-825"
+      },
+      {
+        "concept_id": "CWE-826"
+      },
+      {
+        "concept_id": "CWE-827"
+      },
+      {
+        "concept_id": "CWE-828"
+      },
+      {
+        "concept_id": "CWE-829"
+      },
+      {
+        "concept_id": "CWE-830"
+      },
+      {
+        "concept_id": "CWE-831"
+      },
+      {
+        "concept_id": "CWE-832"
+      },
+      {
+        "concept_id": "CWE-833"
+      },
+      {
+        "concept_id": "CWE-834"
+      },
+      {
+        "concept_id": "CWE-835"
+      },
+      {
+        "concept_id": "CWE-836"
+      },
+      {
+        "concept_id": "CWE-837"
+      },
+      {
+        "concept_id": "CWE-838"
+      },
+      {
+        "concept_id": "CWE-839"
+      },
+      {
+        "concept_id": "CWE-841"
+      },
+      {
+        "concept_id": "CWE-842"
+      },
+      {
+        "concept_id": "CWE-843"
+      },
+      {
+        "concept_id": "CWE-862"
+      },
+      {
+        "concept_id": "CWE-863"
+      },
+      {
+        "concept_id": "CWE-908"
+      },
+      {
+        "concept_id": "CWE-909"
+      },
+      {
+        "concept_id": "CWE-910"
+      },
+      {
+        "concept_id": "CWE-911"
+      },
+      {
+        "concept_id": "CWE-912"
+      },
+      {
+        "concept_id": "CWE-913"
+      },
+      {
+        "concept_id": "CWE-914"
+      },
+      {
+        "concept_id": "CWE-915"
+      },
+      {
+        "concept_id": "CWE-916"
+      },
+      {
+        "concept_id": "CWE-917"
+      },
+      {
+        "concept_id": "CWE-918"
+      },
+      {
+        "concept_id": "CWE-920"
+      },
+      {
+        "concept_id": "CWE-921"
+      },
+      {
+        "concept_id": "CWE-922"
+      },
+      {
+        "concept_id": "CWE-923"
+      },
+      {
+        "concept_id": "CWE-924"
+      },
+      {
+        "concept_id": "CWE-925"
+      },
+      {
+        "concept_id": "CWE-926"
+      },
+      {
+        "concept_id": "CWE-927"
+      },
+      {
+        "concept_id": "CWE-939"
+      },
+      {
+        "concept_id": "CWE-940"
+      },
+      {
+        "concept_id": "CWE-941"
+      },
+      {
+        "concept_id": "CWE-942"
+      },
+      {
+        "concept_id": "CWE-943"
+      },
+      {
+        "concept_id": "CWE-1004"
+      },
+      {
+        "concept_id": "CWE-1007"
+      },
+      {
+        "concept_id": "CWE-1021"
+      },
+      {
+        "concept_id": "CWE-1022"
+      },
+      {
+        "concept_id": "CWE-1023"
+      },
+      {
+        "concept_id": "CWE-1024"
+      },
+      {
+        "concept_id": "CWE-1025"
+      },
+      {
+        "concept_id": "CWE-1037"
+      },
+      {
+        "concept_id": "CWE-1038"
+      },
+      {
+        "concept_id": "CWE-1039"
+      },
+      {
+        "concept_id": "CWE-1041"
+      },
+      {
+        "concept_id": "CWE-1042"
+      },
+      {
+        "concept_id": "CWE-1043"
+      },
+      {
+        "concept_id": "CWE-1044"
+      },
+      {
+        "concept_id": "CWE-1045"
+      },
+      {
+        "concept_id": "CWE-1046"
+      },
+      {
+        "concept_id": "CWE-1047"
+      },
+      {
+        "concept_id": "CWE-1048"
+      },
+      {
+        "concept_id": "CWE-1049"
+      },
+      {
+        "concept_id": "CWE-1050"
+      },
+      {
+        "concept_id": "CWE-1051"
+      },
+      {
+        "concept_id": "CWE-1052"
+      },
+      {
+        "concept_id": "CWE-1053"
+      },
+      {
+        "concept_id": "CWE-1054"
+      },
+      {
+        "concept_id": "CWE-1055"
+      },
+      {
+        "concept_id": "CWE-1056"
+      },
+      {
+        "concept_id": "CWE-1057"
+      },
+      {
+        "concept_id": "CWE-1058"
+      },
+      {
+        "concept_id": "CWE-1059"
+      },
+      {
+        "concept_id": "CWE-1060"
+      },
+      {
+        "concept_id": "CWE-1061"
+      },
+      {
+        "concept_id": "CWE-1062"
+      },
+      {
+        "concept_id": "CWE-1063"
+      },
+      {
+        "concept_id": "CWE-1064"
+      },
+      {
+        "concept_id": "CWE-1065"
+      },
+      {
+        "concept_id": "CWE-1066"
+      },
+      {
+        "concept_id": "CWE-1067"
+      },
+      {
+        "concept_id": "CWE-1068"
+      },
+      {
+        "concept_id": "CWE-1069"
+      },
+      {
+        "concept_id": "CWE-1070"
+      },
+      {
+        "concept_id": "CWE-1071"
+      },
+      {
+        "concept_id": "CWE-1072"
+      },
+      {
+        "concept_id": "CWE-1073"
+      },
+      {
+        "concept_id": "CWE-1074"
+      },
+      {
+        "concept_id": "CWE-1075"
+      },
+      {
+        "concept_id": "CWE-1076"
+      },
+      {
+        "concept_id": "CWE-1077"
+      },
+      {
+        "concept_id": "CWE-1078"
+      },
+      {
+        "concept_id": "CWE-1079"
+      },
+      {
+        "concept_id": "CWE-1080"
+      },
+      {
+        "concept_id": "CWE-1082"
+      },
+      {
+        "concept_id": "CWE-1083"
+      },
+      {
+        "concept_id": "CWE-1084"
+      },
+      {
+        "concept_id": "CWE-1085"
+      },
+      {
+        "concept_id": "CWE-1086"
+      },
+      {
+        "concept_id": "CWE-1087"
+      },
+      {
+        "concept_id": "CWE-1088"
+      },
+      {
+        "concept_id": "CWE-1089"
+      },
+      {
+        "concept_id": "CWE-1090"
+      },
+      {
+        "concept_id": "CWE-1091"
+      },
+      {
+        "concept_id": "CWE-1092"
+      },
+      {
+        "concept_id": "CWE-1093"
+      },
+      {
+        "concept_id": "CWE-1094"
+      },
+      {
+        "concept_id": "CWE-1095"
+      },
+      {
+        "concept_id": "CWE-1096"
+      },
+      {
+        "concept_id": "CWE-1097"
+      },
+      {
+        "concept_id": "CWE-1098"
+      },
+      {
+        "concept_id": "CWE-1099"
+      },
+      {
+        "concept_id": "CWE-1100"
+      },
+      {
+        "concept_id": "CWE-1101"
+      },
+      {
+        "concept_id": "CWE-1102"
+      },
+      {
+        "concept_id": "CWE-1103"
+      },
+      {
+        "concept_id": "CWE-1104"
+      },
+      {
+        "concept_id": "CWE-1105"
+      },
+      {
+        "concept_id": "CWE-1106"
+      },
+      {
+        "concept_id": "CWE-1107"
+      },
+      {
+        "concept_id": "CWE-1108"
+      },
+      {
+        "concept_id": "CWE-1109"
+      },
+      {
+        "concept_id": "CWE-1110"
+      },
+      {
+        "concept_id": "CWE-1111"
+      },
+      {
+        "concept_id": "CWE-1112"
+      },
+      {
+        "concept_id": "CWE-1113"
+      },
+      {
+        "concept_id": "CWE-1114"
+      },
+      {
+        "concept_id": "CWE-1115"
+      },
+      {
+        "concept_id": "CWE-1116"
+      },
+      {
+        "concept_id": "CWE-1117"
+      },
+      {
+        "concept_id": "CWE-1118"
+      },
+      {
+        "concept_id": "CWE-1119"
+      },
+      {
+        "concept_id": "CWE-1120"
+      },
+      {
+        "concept_id": "CWE-1121"
+      },
+      {
+        "concept_id": "CWE-1122"
+      },
+      {
+        "concept_id": "CWE-1123"
+      },
+      {
+        "concept_id": "CWE-1124"
+      },
+      {
+        "concept_id": "CWE-1125"
+      },
+      {
+        "concept_id": "CWE-1126"
+      },
+      {
+        "concept_id": "CWE-1127"
+      },
+      {
+        "concept_id": "CWE-1164"
+      },
+      {
+        "concept_id": "CWE-1173"
+      },
+      {
+        "concept_id": "CWE-1174"
+      },
+      {
+        "concept_id": "CWE-1176"
+      },
+      {
+        "concept_id": "CWE-1177"
+      },
+      {
+        "concept_id": "CWE-1188"
+      },
+      {
+        "concept_id": "CWE-1189"
+      },
+      {
+        "concept_id": "CWE-1190"
+      },
+      {
+        "concept_id": "CWE-1191"
+      },
+      {
+        "concept_id": "CWE-1192"
+      },
+      {
+        "concept_id": "CWE-1193"
+      },
+      {
+        "concept_id": "CWE-1204"
+      },
+      {
+        "concept_id": "CWE-1209"
+      },
+      {
+        "concept_id": "CWE-1220"
+      },
+      {
+        "concept_id": "CWE-1221"
+      },
+      {
+        "concept_id": "CWE-1222"
+      },
+      {
+        "concept_id": "CWE-1223"
+      },
+      {
+        "concept_id": "CWE-1224"
+      },
+      {
+        "concept_id": "CWE-1229"
+      },
+      {
+        "concept_id": "CWE-1230"
+      },
+      {
+        "concept_id": "CWE-1231"
+      },
+      {
+        "concept_id": "CWE-1232"
+      },
+      {
+        "concept_id": "CWE-1233"
+      },
+      {
+        "concept_id": "CWE-1234"
+      },
+      {
+        "concept_id": "CWE-1235"
+      },
+      {
+        "concept_id": "CWE-1236"
+      },
+      {
+        "concept_id": "CWE-1239"
+      },
+      {
+        "concept_id": "CWE-1240"
+      },
+      {
+        "concept_id": "CWE-1241"
+      },
+      {
+        "concept_id": "CWE-1242"
+      },
+      {
+        "concept_id": "CWE-1243"
+      },
+      {
+        "concept_id": "CWE-1244"
+      },
+      {
+        "concept_id": "CWE-1245"
+      },
+      {
+        "concept_id": "CWE-1246"
+      },
+      {
+        "concept_id": "CWE-1247"
+      },
+      {
+        "concept_id": "CWE-1248"
+      },
+      {
+        "concept_id": "CWE-1249"
+      },
+      {
+        "concept_id": "CWE-1250"
+      },
+      {
+        "concept_id": "CWE-1251"
+      },
+      {
+        "concept_id": "CWE-1252"
+      },
+      {
+        "concept_id": "CWE-1253"
+      },
+      {
+        "concept_id": "CWE-1254"
+      },
+      {
+        "concept_id": "CWE-1255"
+      },
+      {
+        "concept_id": "CWE-1256"
+      },
+      {
+        "concept_id": "CWE-1257"
+      },
+      {
+        "concept_id": "CWE-1258"
+      },
+      {
+        "concept_id": "CWE-1259"
+      },
+      {
+        "concept_id": "CWE-1260"
+      },
+      {
+        "concept_id": "CWE-1261"
+      },
+      {
+        "concept_id": "CWE-1262"
+      },
+      {
+        "concept_id": "CWE-1263"
+      },
+      {
+        "concept_id": "CWE-1264"
+      },
+      {
+        "concept_id": "CWE-1265"
+      },
+      {
+        "concept_id": "CWE-1266"
+      },
+      {
+        "concept_id": "CWE-1267"
+      },
+      {
+        "concept_id": "CWE-1268"
+      },
+      {
+        "concept_id": "CWE-1269"
+      },
+      {
+        "concept_id": "CWE-1270"
+      },
+      {
+        "concept_id": "CWE-1271"
+      },
+      {
+        "concept_id": "CWE-1272"
+      },
+      {
+        "concept_id": "CWE-1273"
+      },
+      {
+        "concept_id": "CWE-1274"
+      },
+      {
+        "concept_id": "CWE-1275"
+      },
+      {
+        "concept_id": "CWE-1276"
+      },
+      {
+        "concept_id": "CWE-1277"
+      },
+      {
+        "concept_id": "CWE-1278"
+      },
+      {
+        "concept_id": "CWE-1279"
+      },
+      {
+        "concept_id": "CWE-1280"
+      },
+      {
+        "concept_id": "CWE-1281"
+      },
+      {
+        "concept_id": "CWE-1282"
+      },
+      {
+        "concept_id": "CWE-1283"
+      },
+      {
+        "concept_id": "CWE-1284"
+      },
+      {
+        "concept_id": "CWE-1285"
+      },
+      {
+        "concept_id": "CWE-1286"
+      },
+      {
+        "concept_id": "CWE-1287"
+      },
+      {
+        "concept_id": "CWE-1288"
+      },
+      {
+        "concept_id": "CWE-1289"
+      },
+      {
+        "concept_id": "CWE-1290"
+      },
+      {
+        "concept_id": "CWE-1291"
+      },
+      {
+        "concept_id": "CWE-1292"
+      },
+      {
+        "concept_id": "CWE-1293"
+      },
+      {
+        "concept_id": "CWE-1294"
+      },
+      {
+        "concept_id": "CWE-1295"
+      },
+      {
+        "concept_id": "CWE-1296"
+      },
+      {
+        "concept_id": "CWE-1297"
+      },
+      {
+        "concept_id": "CWE-1298"
+      },
+      {
+        "concept_id": "CWE-1299"
+      },
+      {
+        "concept_id": "CWE-1300"
+      },
+      {
+        "concept_id": "CWE-1301"
+      },
+      {
+        "concept_id": "CWE-1302"
+      },
+      {
+        "concept_id": "CWE-1303"
+      },
+      {
+        "concept_id": "CWE-1304"
+      },
+      {
+        "concept_id": "CWE-1310"
+      },
+      {
+        "concept_id": "CWE-1311"
+      },
+      {
+        "concept_id": "CWE-1312"
+      },
+      {
+        "concept_id": "CWE-1313"
+      },
+      {
+        "concept_id": "CWE-1314"
+      },
+      {
+        "concept_id": "CWE-1315"
+      },
+      {
+        "concept_id": "CWE-1316"
+      },
+      {
+        "concept_id": "CWE-1317"
+      },
+      {
+        "concept_id": "CWE-1318"
+      },
+      {
+        "concept_id": "CWE-1319"
+      },
+      {
+        "concept_id": "CWE-1320"
+      },
+      {
+        "concept_id": "CWE-1321"
+      },
+      {
+        "concept_id": "CWE-1322"
+      },
+      {
+        "concept_id": "CWE-1323"
+      },
+      {
+        "concept_id": "CWE-1325"
+      },
+      {
+        "concept_id": "CWE-1326"
+      },
+      {
+        "concept_id": "CWE-1327"
+      },
+      {
+        "concept_id": "CWE-1328"
+      },
+      {
+        "concept_id": "CWE-1329"
+      },
+      {
+        "concept_id": "CWE-1330"
+      },
+      {
+        "concept_id": "CWE-1331"
+      },
+      {
+        "concept_id": "CWE-1332"
+      },
+      {
+        "concept_id": "CWE-1333"
+      },
+      {
+        "concept_id": "CWE-1334"
+      },
+      {
+        "concept_id": "CWE-1335"
+      },
+      {
+        "concept_id": "CWE-1336"
+      },
+      {
+        "concept_id": "CWE-1338"
+      },
+      {
+        "concept_id": "CWE-1339"
+      },
+      {
+        "concept_id": "CWE-1341"
+      },
+      {
+        "concept_id": "CWE-1342"
+      },
+      {
+        "concept_id": "CWE-1351"
+      },
+      {
+        "concept_id": "CWE-1357"
+      },
+      {
+        "concept_id": "CWE-1384"
+      },
+      {
+        "concept_id": "CWE-1385"
+      },
+      {
+        "concept_id": "CWE-1386"
+      },
+      {
+        "concept_id": "CWE-1389"
+      },
+      {
+        "concept_id": "CWE-1390"
+      },
+      {
+        "concept_id": "CWE-1391"
+      },
+      {
+        "concept_id": "CWE-1392"
+      },
+      {
+        "concept_id": "CWE-1393"
+      },
+      {
+        "concept_id": "CWE-1394"
+      },
+      {
+        "concept_id": "CWE-1395"
+      },
+      {
+        "concept_id": "CWE-1419"
+      },
+      {
+        "concept_id": "CWE-1420"
+      },
+      {
+        "concept_id": "CWE-1421"
+      },
+      {
+        "concept_id": "CWE-1422"
+      },
+      {
+        "concept_id": "CWE-1423"
+      },
+      {
+        "concept_id": "CWE-1426"
+      },
+      {
+        "concept_id": "CWE-1427"
+      },
+      {
+        "concept_id": "CWE-1428"
+      },
+      {
+        "concept_id": "CWE-1429"
+      },
+      {
+        "concept_id": "CWE-1431"
+      },
+      {
+        "concept_id": "CWE-1434"
+      }
+    ]
+  }
+]

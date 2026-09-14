@@ -37,6 +37,14 @@ samba-tool group add "Executives" --description="Executive Team" 2>/dev/null || 
 samba-tool group add "VPN-Users" --description="VPN Access Group" 2>/dev/null || true
 samba-tool group add "Remote-Desktop" --description="Remote Desktop Users" 2>/dev/null || true
 
+# Built-in Administrator: created by `samba-tool domain provision`, so it is
+# never `user create`d here. The scenario declares it (an env-packs in-world
+# fact) in "Domain Admins", so realize that membership explicitly and
+# idempotently — Administrator is a default member, but the account-parity gate
+# verifies declared groups against provisioner facts, so the membership must be
+# provisioner-authoritative, not assumed.
+samba-tool group addmembers "Domain Admins" Administrator 2>/dev/null || true
+
 # --- Executive Team ---
 
 # Sarah Mitchell - CEO (strong password)

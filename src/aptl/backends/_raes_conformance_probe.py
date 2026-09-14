@@ -50,15 +50,21 @@ def _has_raes_conformance_probe_identity(
     resource: PlannedResource,
     payload: Mapping[str, Any],
 ) -> bool:
-    """Return whether resource identity matches RAES' generic VM probe."""
+    """Return whether resource identity matches RAES' generic compute probe.
+
+    Under raes 4.x the probe's node keeps the name ``vm`` (so the address stays
+    ``provision.node.vm``) but its kind is ``compute`` (the ``node_type`` payload
+    key was renamed to ``node_kind``), and the OS-less probe scenario yields an
+    empty ``os_family``.
+    """
 
     return (
         resource.address,
         str(payload.get("name", "")),
         str(payload.get("node_name", "")),
-        str(payload.get("node_type", "")),
+        str(payload.get("node_kind", "")),
         str(payload.get("os_family", "")),
-    ) == ("provision.node.vm", "vm", "vm", "vm", "linux")
+    ) == ("provision.node.vm", "vm", "vm", "compute", "")
 
 
 def _has_empty_raes_probe_node_spec(

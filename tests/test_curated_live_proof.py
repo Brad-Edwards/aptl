@@ -343,8 +343,17 @@ def test_participant_action_proof_uses_control_plane_and_records_behavior(
     assert behavior[0]["actor_provenance"].startswith(
         "participant-implementation:aptl-curated-live-proof@1.0.0"
     )
-    assert any(
-        address.startswith(f"{PARTICIPANT_ACTION_ADDRESS}.")
-        for address in proof["participant_snapshot_entries"]
+    # raes 4.x commits the participant action as a behavior-history transition,
+    # not as on-snapshot resource entries. The action is proven through the
+    # committed observation-emitted cut, which carries the action-contract,
+    # observation-boundary, and per-instance identity off-snapshot.
+    assert not proof["participant_snapshot_entries"]
+    observation = behavior[-1]
+    assert observation["action_contract_address"].startswith(
+        "participant.action-contract."
     )
+    assert observation["observation_boundary_address"].startswith(
+        "participant.observation-boundary."
+    )
+    assert observation["action_instance_id"].startswith(f"{PARTICIPANT_ACTION_ADDRESS}.")
     assert proof["post_action_range_snapshot"]["containers"][0]["name"] == "aptl-kali"

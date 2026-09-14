@@ -34,12 +34,12 @@ nodes:
     type: switch
     description: network switch, never a container
   ssh-target:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: ssh, port: 22, protocol: tcp}
   quiet-host:
-    type: vm
+    type: compute
     os: linux
     services: []
 """

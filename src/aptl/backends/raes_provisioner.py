@@ -217,16 +217,30 @@ class AptlProvisioner(object):
         realized_snapshot = self._with_artifact_satisfactions(
             plan, snapshot_after_apply(plan, snapshot, observations), realization
         )
+        # Corroboration disclosures ride the durable transient channel: the
+        # runtime clears ``snapshot.realization_observations`` during SEM-218
+        # sanitization, then re-merges ``operational_realization_observations``
+        # for both the non-approximation gate and the persisted snapshot
+        # (raes_runtime.backend_apply_results). Move the disclosures off the
+        # returned snapshot onto that channel so the gate sees APTL's
+        # guest-observed os-family and daemon-observed forwarding-agent
+        # corroboration exactly once (carrying both would duplicate a concern and
+        # fail the snapshot's unique-observation invariant).
+        operational_observations = realized_snapshot.realization_observations
+        returned_snapshot = realized_snapshot.with_entries(
+            dict(realized_snapshot.entries), realization_observations=()
+        )
         return ApplyResult(
             success=True,
-            snapshot=realized_snapshot,
+            snapshot=returned_snapshot,
             diagnostics=diagnostics,
-            changed_addresses=realized_changed_addresses(plan, realized_snapshot),
+            changed_addresses=realized_changed_addresses(plan, returned_snapshot),
             details={
                 "profiles": selected_profiles,
                 "realization": realization.details(),
                 "observation_evidence": observation_evidence(observations),
             },
+            operational_realization_observations=operational_observations,
         )
 
     def _availability_substrate_digests(self) -> dict[str, str]:

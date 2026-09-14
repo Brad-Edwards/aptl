@@ -13,6 +13,12 @@ if TYPE_CHECKING:
 
 ImageRealizationMode = Literal["pull", "build"]
 StatefulConsumerAccessMode = Literal["read_only", "read_write"]
+# How a generated-artifact output reaches a consumer node. ``mount`` binds the
+# selected output(s) as read-only files; ``environment`` injects one named
+# output's value as an environment variable on the consumer's service. APTL
+# realizes exactly these two modes (RAES ``GeneratedArtifactDeliveryMode``);
+# ``env_file`` is not realized and is rejected at lowering.
+GeneratedArtifactDeliveryMode = Literal["mount", "environment"]
 GeneratedArtifactKind = Literal[
     "certificate_bundle", "rendered_config", "ssh_key_bundle"
 ]
@@ -326,30 +332,47 @@ class DeploymentAccountRealization(object):
 
 @dataclass(frozen=True)
 class DeploymentStatefulConsumer(object):
-    """One resolved node mount for a generated artifact or persistent volume.
+    """One resolved node consumer for a generated artifact or persistent volume.
 
-    ``selected_outputs`` names the generated-artifact outputs this consumer
-    receives; empty for persistent volumes and for generated artifacts that
-    expose every consumer-selectable output. A ``producer_private`` output is
-    never selectable and never mounted, regardless of this list.
+    A consumer receives its material by one ``delivery_mode``:
+
+    * ``mount`` (the default) binds the selected generated-artifact output(s), or
+      the persistent volume, into ``mount_destination`` under ``access_mode``.
+      ``selected_outputs`` names the generated-artifact outputs this consumer
+      receives; empty for persistent volumes and for generated artifacts that
+      expose every consumer-selectable output. A ``producer_private`` output is
+      never selectable and never mounted, regardless of this list.
+    * ``environment`` injects the single named ``output`` value as
+      ``environment_variable`` on the consumer's service. ``mount_destination``
+      and ``selected_outputs`` are unused for an environment consumer; ``output``
+      and ``environment_variable`` are unused for a mount consumer.
     """
 
     target_address: str
     node_name: str
     service_name: str
-    mount_destination: str
-    access_mode: StatefulConsumerAccessMode
+    mount_destination: str = ""
+    access_mode: StatefulConsumerAccessMode = "read_only"
     selected_outputs: tuple[str, ...] = ()
+    delivery_mode: GeneratedArtifactDeliveryMode = "mount"
+    output: str = ""
+    environment_variable: str = ""
 
     def details(self) -> dict[str, object]:
-        return {
+        base: dict[str, object] = {
             "target_address": self.target_address,
             "node_name": self.node_name,
             "service_name": self.service_name,
-            "mount_destination": self.mount_destination,
-            "access_mode": self.access_mode,
-            "selected_outputs": list(self.selected_outputs),
+            "delivery_mode": self.delivery_mode,
         }
+        if self.delivery_mode == "environment":
+            base["output"] = self.output
+            base["environment_variable"] = self.environment_variable
+        else:
+            base["mount_destination"] = self.mount_destination
+            base["access_mode"] = self.access_mode
+            base["selected_outputs"] = list(self.selected_outputs)
+        return base
 
 
 @dataclass(frozen=True)
@@ -387,6 +410,11 @@ class DeploymentGeneratedArtifactRealization(object):
     provenance: str
     outputs: tuple[DeploymentGeneratedArtifactOutput, ...]
     consumers: tuple[DeploymentStatefulConsumer, ...]
+    # Consumers that receive a named output as an environment variable rather
+    # than a mount. Kept in a separate collection so every mount-oriented path
+    # (bind emission, mount-conflict detection, cert exposure) iterates only the
+    # ``consumers`` it already understood; environment injection reads this one.
+    environment_consumers: tuple[DeploymentStatefulConsumer, ...] = ()
     ordering_dependencies: tuple[str, ...] = ()
     refresh_dependencies: tuple[str, ...] = ()
 
@@ -399,6 +427,9 @@ class DeploymentGeneratedArtifactRealization(object):
             "provenance": self.provenance,
             "outputs": [output.details() for output in self.outputs],
             "consumers": [consumer.details() for consumer in self.consumers],
+            "environment_consumers": [
+                consumer.details() for consumer in self.environment_consumers
+            ],
             "ordering_dependencies": list(self.ordering_dependencies),
             "refresh_dependencies": list(self.refresh_dependencies),
         }

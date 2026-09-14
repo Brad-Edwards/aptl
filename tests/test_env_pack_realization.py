@@ -50,7 +50,14 @@ def _realize_pack(tmp_path):
         project_dir=PROJECT_ROOT, config=config, backend=MagicMock(), bundle=bundle
     )
     scenario = parse_sdl_file(bundle.sdl_path)
-    plan = RuntimeManager(target).plan(scenario)
+    # The env-pack (6.0.0) declares required CTF flag variables (flag_ad_user,
+    # flag_ad_root, ...) with no defaults; bind them deterministically exactly as
+    # the production lab-start path does, or instantiation fails before planning.
+    from aptl.core.deployment._flag_variables import flag_variable_bindings
+
+    plan = RuntimeManager(target).plan(
+        scenario, parameters=flag_variable_bindings(scenario)
+    )
     return interpret_provisioning_plan(
         plan=plan.provisioning,
         config=config,

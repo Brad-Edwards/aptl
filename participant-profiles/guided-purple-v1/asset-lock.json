@@ -25,7 +25,7 @@
       "asset_id": "raes-scenario",
       "kind": "project-file",
       "source": "scenarios/techvault-attacker-target.sdl.yaml",
-      "sha256": "a85b11d98aab9b5b4cd209bade57b5869556882dab5b5f3f41e5f44292372a78"
+      "sha256": "b6c25fe634208f620e516749f68450288c3ad4cac48dd76c49f386f7afd06e07"
     },
     {
       "asset_id": "scenario-catalog",

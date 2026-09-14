@@ -20,47 +20,47 @@ nodes:
     description: SOC and security tooling network.
 
   kali:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: ssh, port: 22, protocol: tcp}
   kali-capture:
-    type: vm
+    type: compute
     os: linux
     services: []
 
   victim:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: ssh, port: 22, protocol: tcp}
 
   wazuh-manager:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: wazuh-api, port: 55000, protocol: tcp}
       - {name: agent-events, port: 1514, protocol: tcp}
       - {name: syslog, port: 514, protocol: udp}
   wazuh-indexer:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: indexer-api, port: 9200, protocol: tcp}
 
   aptl-otel-collector:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: otlp-grpc, port: 4317, protocol: tcp}
       - {name: otlp-http, port: 4318, protocol: tcp}
   aptl-tempo:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: tempo-http, port: 3200, protocol: tcp}
   aptl-grafana-otel:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: grafana, port: 3000, protocol: tcp}

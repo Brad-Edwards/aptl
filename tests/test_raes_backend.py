@@ -93,7 +93,7 @@ def _node_resource(node_name: str) -> PlannedResource:
     payload = {
         "name": node_name,
         "node_name": node_name,
-        "node_type": "vm",
+        "node_kind": "compute",
         "os_family": "linux",
         "spec": {"node": {"name": node_name}, "infrastructure": {}},
     }
@@ -155,6 +155,15 @@ def _node_with_static_address(
     return node
 
 
+_DEBIAN_OS_RELEASE = (
+    'PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"\n'
+    'NAME="Debian GNU/Linux"\n'
+    'VERSION_ID="12"\n'
+    'VERSION="12 (bookworm)"\n'
+    "ID=debian\n"
+)
+
+
 class _RealizedBackend(MagicMock):
     """A deployment backend that models a lab it actually brought up.
 
@@ -180,10 +189,17 @@ class _RealizedBackend(MagicMock):
         health: str | None = None,
         running: bool = True,
         content_types: dict[str, str] | None = None,
+        os_release: str | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self._containers = set(containers)
+        # Guest ``/etc/os-release`` the container_exec readback reads back
+        # (raes 4.x guest-observed os-family). Defaults to Debian 12 for a linux
+        # platform so a realized linux node corroborates its authored ``os:``; a
+        # non-linux platform reads back nothing, so the gate still catches an OS
+        # realized on the wrong family.
+        self._os_release = os_release
         # Report networks under the project-scoped name Compose actually creates
         # (`<project>_aptl-<stem>`), the same way a live daemon would — a bare
         # declared name here would let a bug in the observer's name matching pass
@@ -199,6 +215,19 @@ class _RealizedBackend(MagicMock):
 
     def container_exists(self, name: str) -> bool:
         return name in self._containers
+
+    def container_exec(self, name, cmd, *, timeout=None):
+        import subprocess
+
+        if name in self._containers and cmd[:1] == ["cat"] and cmd[-1] == "/etc/os-release":
+            if self._os_release is not None:
+                text = self._os_release
+            elif self._platform == "linux":
+                text = _DEBIAN_OS_RELEASE
+            else:
+                return subprocess.CompletedProcess(args=cmd, returncode=1, stdout="")
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout=text)
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="")
 
     def container_inspect(self, name: str) -> dict:
         if name not in self._containers:
@@ -263,7 +292,7 @@ def _execution_plan_with_realization_requirements():
             name: disclosure-test
             nodes:
               vm:
-                type: vm
+                type: compute
                 os: linux
                 resources: {ram: 1 gib, cpu: 1}
             """
@@ -282,7 +311,7 @@ def _execution_plan_with_derived_realization_requirements():
     The author writes ``os: ${node_os}``, so the processor — not the author —
     supplies the concrete value. RAES classifies that concern
     ``CONSTRAINED`` / ``PROCESSOR_DERIVED`` (substitution downgrades exactness),
-    while the literal ``type: vm`` stays ``EXACT`` / ``AUTHOR_DECLARED``. One
+    while the literal ``type: compute`` stays ``EXACT`` / ``AUTHOR_DECLARED``. One
     scenario therefore exercises both halves of the SEM-218 contract.
 
     raes 0.19.1 could not express this: the compiler dropped the classifier's
@@ -309,7 +338,7 @@ def _execution_plan_with_derived_realization_requirements():
                 default: linux
             nodes:
               vm:
-                type: vm
+                type: compute
                 os: ${node_os}
                 resources: {ram: 1 gib, cpu: 1}
             """
@@ -338,7 +367,7 @@ def _execution_plan_with_content_realization_requirement():
             name: disclosure-content
             nodes:
               fileshare:
-                type: vm
+                type: compute
                 os: linux
                 resources: {ram: 1 gib, cpu: 1}
             content:
@@ -612,8 +641,17 @@ def test_manifest_provisioner_declares_only_realized_capabilities():
     manifest = create_aptl_manifest()
     provisioner = manifest.provisioner
 
-    assert provisioner.supported_node_types == frozenset({"switch", "vm"})
+    assert provisioner.supported_node_types == frozenset({"switch", "compute"})
     assert provisioner.supported_os_families == frozenset({"linux"})
+    # raes 4.x coupled operating-system rows: the Debian 12 and Rocky Linux 9
+    # base substrates APTL actually realizes (raes_materializer.base_image_for_os).
+    assert {
+        (row.family, row.distribution, tuple(sorted(row.versions)))
+        for row in provisioner.operating_systems
+    } == {
+        ("linux", "debian", ("12",)),
+        ("linux", "rocky-linux", ("9",)),
+    }
     assert provisioner.supported_content_types == frozenset(
         {"dataset", "directory", "file"}
     )
@@ -638,11 +676,46 @@ def test_manifest_realization_support_matches_exercised_concerns():
         {
             "declared-capability-match",
             "service-search-index-schema-materialization",
+            # raes 4.x concern-specific exact runtime-inventory kinds APTL both
+            # materializes and reads back from inside the guest (see manifest).
+            "runtime-packages",
+            "runtime-filesystem-inventory",
+            "runtime-service-manager-units",
         }
     )
     assert support.disclosure_kinds == frozenset(
         {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
     )
+    # raes 4.x per-concern observation floors. forwarding-agents is
+    # daemon-observed (docker inspect); the runtime-inventory concerns are
+    # guest-observed at CONFIGURATION scope (in-guest dpkg / test -d / systemctl
+    # read-after-write). No 'operating-system' capability is declared: APTL only
+    # daemon-observes os_family via docker inspect Platform, not guest-observed.
+    from raes_contracts.vocabulary import (
+        ObservationStrength,
+        RealizationVerificationScope,
+    )
+
+    assert set(support.observation_capabilities) == {
+        "forwarding-agents",
+        "operating-system",
+        "runtime-packages",
+        "runtime-filesystem-inventory",
+        "runtime-service-manager-units",
+    }
+    for concern in (
+        "runtime-packages",
+        "runtime-filesystem-inventory",
+        "runtime-service-manager-units",
+    ):
+        capability = support.observation_capabilities[concern]
+        assert capability.verification_scope is RealizationVerificationScope.CONFIGURATION
+        assert capability.observation_strength is ObservationStrength.GUEST_OBSERVED
+    # Guest-observed os-family corroboration at PRESENCE scope (in-guest
+    # /etc/os-release read), backing the authored ``os:`` requirement.
+    os_capability = support.observation_capabilities["operating-system"]
+    assert os_capability.verification_scope is RealizationVerificationScope.PRESENCE
+    assert os_capability.observation_strength is ObservationStrength.GUEST_OBSERVED
 
 
 def test_derived_realization_fixture_exercises_manifest_constrained_claim():
@@ -982,9 +1055,20 @@ def test_legacy_participant_smoke_action_requires_explicit_admission(tmp_path):
         "observation_emitted",
     ]
     assert behavior[0]["actor_provenance"].startswith("participant-implementation:")
-    assert any(
-        entry.resource_type == "participant-action-instance"
+    # raes 4.x commits the smoke action as a behavior-history transition; the
+    # action-contract and per-instance identity are carried off-snapshot on the
+    # committed events, not as ``participant-action-instance`` resource entries.
+    assert not [
+        entry
         for entry in snapshot.entries.values()
+        if entry.resource_type == "participant-action-instance"
+    ]
+    assert behavior[0]["action_contract_address"] == (
+        "participant.action-contract.aptl-admit-probe"
+    )
+    assert behavior[-1]["action_instance_id"] == "aptl-admit-probe-action"
+    assert behavior[-1]["observation_boundary_address"] == (
+        "participant.observation-boundary.aptl-admit-probe"
     )
     assert (
         list(
@@ -1091,23 +1175,17 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
         "boundary_db=blocked" in observation
         for observation in behavior[-1]["action_result"]["observations"]
     )
-    entries = action.snapshot.entries
-    assert (
-        entries[participant_address].payload["participant_address"]
-        == participant_address
-    )
-    assert entries[action_contract_address].payload["action_name"] == (
-        "probe-customer-portal-login"
-    )
-    assert entries[observation_boundary_address].payload["boundary_name"] == (
-        "paper-agent-view"
-    )
-    assert "Kali victim SSH" not in str(entries[action_contract_address].payload)
-    assert "kali-victim-ssh" not in str(entries[observation_boundary_address].payload)
-    shared_state_records = getattr(action.snapshot, "shared_state_records", {})
-    assert {record["state_scope"] for record in shared_state_records.values()} == {
-        participant_address
-    }
+    # raes 4.x commits the action as a behavior-history transition rather than
+    # as ``participant-*`` resource entries; the compiled action-contract and
+    # observation-boundary addresses (which encode the paper action_name and
+    # boundary_name) are carried off-snapshot on the committed events, and the
+    # default kali-victim smoke spec must not leak into them.
+    assert action.snapshot.entries == control_plane.snapshot.entries
+    assert all(event["participant_address"] == participant_address for event in behavior)
+    assert action_contract_address.endswith(".probe-customer-portal-login")
+    assert observation_boundary_address.endswith(".paper-agent-view")
+    assert "Kali victim SSH" not in str(behavior)
+    assert "kali-victim-ssh" not in str(behavior)
     assert participant_action_specs[participant_address].target_refs == (
         "container:aptl-kali",
         "container:aptl-webapp",
@@ -2089,7 +2167,7 @@ def _workflow_and_evaluation_execution_plan():
             name: wf
             nodes:
               vm:
-                type: vm
+                type: compute
                 os: linux
                 resources: {ram: 1 gib, cpu: 1}
                 conditions: {health: ops}
@@ -4272,8 +4350,16 @@ def test_apply_provisioning_discloses_author_declared_provenance(tmp_path):
     result = _apply_disclosure_scenario(tmp_path, backend)
 
     assert result.success is True, [d.message for d in result.diagnostics]
-    provenances = {entry.provenance for entry in result.snapshot.realization_provenance}
-    assert provenances == {ExplicitnessProvenance.AUTHOR_DECLARED}
+    by_kind = {
+        entry.requirement_kind: entry.provenance
+        for entry in result.snapshot.realization_provenance
+    }
+    # The literally-authored concerns are disclosed as author-declared. (The
+    # governed compute-substrate concern raes 4.x adds is a backend selection,
+    # so the full provenance set legitimately also carries BACKEND_REALIZED; the
+    # author-declared claim is about the concerns the author actually wrote.)
+    assert by_kind["os-family"] == ExplicitnessProvenance.AUTHOR_DECLARED
+    assert by_kind["node-type"] == ExplicitnessProvenance.AUTHOR_DECLARED
 
 
 def test_apply_provisioning_discloses_processor_derived_provenance(tmp_path):
@@ -4313,17 +4399,19 @@ def test_apply_provisioning_discloses_processor_derived_provenance(tmp_path):
     assert by_explicitness["os-family"] is ExplicitnessClass.CONSTRAINED
 
 
-def test_apply_provisioning_accepts_constrained_concern_realized_in_bounds(tmp_path):
-    """A CONSTRAINED concern the backend realized differently is allowed, not rejected.
+def test_apply_provisioning_rejects_os_family_it_cannot_guest_corroborate(tmp_path):
+    """A realized OS family APTL cannot guest-observe fails closed (raes 4.x).
 
-    ``os: ${node_os}`` is CONSTRAINED (substitution downgrades exactness), so a
-    backend that realizes a different OS family is making an allowed choice
-    rather than a silent approximation — but it must *say so*: the concern is
-    disclosed as ``backend-realized``, not passed off as the author's. Contrast
-    with the EXACT case, which is rejected outright.
+    raes 4.x requires PRESENCE-scope, guest-observed corroboration of an authored
+    ``os:`` requirement. APTL corroborates it by reading ``/etc/os-release`` from
+    inside the realized container and mapping it to the governed OS-family
+    vocabulary (it provisions only the Debian/Rocky linux substrates). A container
+    whose guest OS APTL cannot read — here a non-linux platform with no readable
+    os-release — yields no operating-system disclosure, so the non-approximation
+    gate rejects the apply rather than accepting an unverifiable family. This is
+    the honest linux-only posture: even a CONSTRAINED concern must be corroborated,
+    and APTL never claims an OS it did not observe.
     """
-    from raes.explicitness import ExplicitnessProvenance
-
     backend = _RealizedBackend(containers=("vm",), platform="windows")
 
     result = _apply_disclosure_scenario(
@@ -4332,12 +4420,10 @@ def test_apply_provisioning_accepts_constrained_concern_realized_in_bounds(tmp_p
         execution_plan=_execution_plan_with_derived_realization_requirements(),
     )
 
-    assert result.success is True, [d.message for d in result.diagnostics]
-    by_kind = {
-        entry.requirement_kind: entry.provenance
-        for entry in result.snapshot.realization_provenance
-    }
-    assert by_kind["os-family"] == ExplicitnessProvenance.BACKEND_REALIZED
+    assert result.success is False
+    assert any(
+        "os-family" in diagnostic.message for diagnostic in result.diagnostics
+    ), [diagnostic.message for diagnostic in result.diagnostics]
 
 
 def test_shared_build_context_does_not_shadow_the_service_it_names(tmp_path):

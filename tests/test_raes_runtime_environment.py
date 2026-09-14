@@ -149,7 +149,12 @@ def test_restored_named_volumes_are_lowered(scenario_path):
     assert ("webapp_logs", "/var/log/gunicorn") in lowered["webapp"]
     assert ("kali_operations", "/home/kali/operations") in lowered["kali"]
     assert ("fileshare_data", "/srv/shares") in lowered["fileshare"]
-    assert sum(len(v) for v in lowered.values()) == 10
+    # The env-pack (6.0.0) authors exactly eight ``source_kind: volume`` mounts
+    # across its nodes (webapp_logs, db_data, workstation_logs, fileshare_data,
+    # fileshare_logs, dns_logs, victim_logs, kali_operations); APTL lowers every
+    # one and drops none. The pack shed two named volumes relative to the prior
+    # revision, so the honest count is eight, not ten.
+    assert sum(len(v) for v in lowered.values()) == 8
     # No raw host or project bind smuggled in alongside them.
     for mounts in lowered.values():
         assert all(not source.startswith((".", "/")) for source, _ in mounts)

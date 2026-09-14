@@ -39,6 +39,7 @@ from aptl.backends._raes_observation_helpers import (
     network_realized as _network_realized,
     observed_content_type as _observed_content_type,
     observed_domain_topology as _observed_domain_topology,
+    observed_operating_system_identity as _observed_operating_system_identity,
     observed_os_family as _observed_os_family,
     realized_network_names as _realized_network_names,
     settled_inspect as _settled_inspect,
@@ -66,11 +67,11 @@ if TYPE_CHECKING:
 # different project exposes its own ``project_name``.
 _DEFAULT_PROJECT_NAME = "aptl"
 
-# RAES node vocabulary for the two things APTL can realize. A VM node becomes a
-# container; a switch node compiles to a network resource and becomes a Docker
+# RAES node vocabulary for the two things APTL can realize. A compute node becomes
+# a container; a switch node compiles to a network resource and becomes a Docker
 # network. These are what APTL *realized*, reported only once the corresponding
 # object is observed to exist — never read back off the plan.
-_REALIZED_NODE_TYPE = "vm"
+_REALIZED_NODE_TYPE = "compute"
 _REALIZED_SWITCH_TYPE = "switch"
 
 _NODE_TYPE_PATH = CONCERN_PAYLOAD_PATH["node-type"]
@@ -246,9 +247,20 @@ def _observe_node(
     concerns: dict[tuple[str, ...], object] = {
         _NODE_TYPE_PATH: _REALIZED_NODE_TYPE,
     }
-    os_family = _observed_os_family(info)
-    if os_family is not None:
-        concerns[_OS_FAMILY_PATH] = os_family
+    # Guest-observed OS identity, read from inside the container's own
+    # ``/etc/os-release`` (raes 4.x requires PRESENCE-scope, guest-observed
+    # corroboration for an authored ``os:``). The os-family concern value is
+    # taken from that guest read; the daemon ``Platform`` field is only a coarse
+    # fallback for a guest whose os-release could not be read. A node whose guest
+    # OS cannot be read at all reports no os-family, so the gate rejects the
+    # authored requirement rather than accepting an unverified family.
+    operating_system = _observed_operating_system_identity(backend, container_name)
+    if operating_system is not None:
+        concerns[_OS_FAMILY_PATH] = operating_system.family
+    else:
+        os_family = _observed_os_family(info)
+        if os_family is not None:
+            concerns[_OS_FAMILY_PATH] = os_family
     if declared_domain_topology is not None:
         topology = _observed_domain_topology(
             backend, container_name, declared_domain_topology
@@ -258,7 +270,9 @@ def _observe_node(
     concerns.update(
         observe_runtime_concerns(backend, container_name, info, declared_runtime)
     )
-    return ObservedResource(realized=True, concerns=concerns)
+    return ObservedResource(
+        realized=True, concerns=concerns, operating_system=operating_system
+    )
 
 
 def _observe_network(

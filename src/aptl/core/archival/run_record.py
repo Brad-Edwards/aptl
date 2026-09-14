@@ -18,8 +18,8 @@ from raes_contracts.contracts import (
     ExperimentReferenceModel,
     ExperimentRunModel,
     ExperimentTaskReferenceModel,
-    validate_experiment_run_against_task,
     validate_experiment_run_archival_datetimes,
+    validate_experiment_run_structure_against_task,
     validate_experiment_run_time_model,
 )
 
@@ -129,11 +129,25 @@ def _run_cross_artifact_validators(
     """Run every applicable public RAES cross-artifact validator (the seal gate).
 
     These check facts a single model's ``extra="forbid"`` validation cannot see:
-    task/scenario/apparatus/metric/evidence agreement, archival datetimes, and —
-    for a governed scenario — the realized time model. Local validation may add
+    task/scenario/apparatus/metric agreement, archival datetimes, and — for a
+    governed scenario — the realized time model. Local validation may add
     archive-bounds/containment checks on top, but never restates these.
+
+    Task/run agreement is validated STRUCTURALLY here via
+    ``validate_experiment_run_structure_against_task`` — the direct successor of
+    the byte-free ``validate_experiment_run_against_task`` call this gate made
+    before raes 4.x split the two. raes 4.x made ``validate_experiment_run_against_task``
+    demand content-backed evidence inputs (immutable byte readers for every
+    claimed artifact) whenever the task claims required evidence; that is the
+    separate *authoritative* evidence-satisfaction gate, not the seal composer's
+    job. The seal already enforces evidence integrity at two other layers that do
+    not need the semantic content check restated here: the ``ExperimentRunModel``
+    validators reject any result/disclosure evidence ref that does not resolve to
+    an emitted artifact or traced record, and the seal inventory
+    (:mod:`aptl.core.archival.seal`) rejects any sealed artifact whose bytes
+    diverge from its claimed checksum/size.
     """
-    validate_experiment_run_against_task(context.task, run)
+    validate_experiment_run_structure_against_task(context.task, run)
     validate_experiment_run_archival_datetimes(run)
     if context.time_model_declaration is not None:
         validate_experiment_run_time_model(run, context.time_model_declaration)

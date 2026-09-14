@@ -1076,16 +1076,21 @@ def test_provider_invocation_is_a_raes_operation_and_admission_commits_history(
     assert control_record["official_capture_started"] is False
     assert "BPA-HIDDEN-CANARY" not in control_records
     assert {container for container, _ in backend.calls} == {"aptl-webapp"}
-    action_entries = [
+    # raes 4.x confines a participant action apply to participant-owned carrier
+    # transitions; the evaluator evidence for the admitted instance is durably
+    # published off-snapshot rather than carried as a resource entry, so the
+    # committed snapshot holds no ``participant-action-instance`` resource entry.
+    assert not [
         entry
         for entry in control.snapshot.entries.values()
         if entry.resource_type == "participant-action-instance"
     ]
-    assert len(action_entries) == 1
+    evaluator_record = json.loads(evaluator_records)
     assert (
-        action_entries[0].payload["action_contract_address"]
+        evaluator_record["action_contract_address"]
         == outcome.selected_action_contract_address
     )
+    assert evaluator_record["action_instance_id"] == action_instance
 
     next_turn = project_participant_turn(
         runtime_model=model,
@@ -1566,10 +1571,14 @@ def test_evidence_archival_failure_cannot_discard_an_accepted_transition(
     )
     assert len(control.snapshot.participant_behavior_history[participant]) == 3
     assert len(runtime.behavior_history()[participant]) == 3
-    assert any(
-        entry.resource_type == "participant-action-instance"
+    # The accepted RAES transition is the committed behavior-history cut above;
+    # raes 4.x no longer carries the instance as a resource entry, so a failed
+    # evidence archival cannot leave one behind either.
+    assert not [
+        entry
         for entry in control.snapshot.entries.values()
-    )
+        if entry.resource_type == "participant-action-instance"
+    ]
     transaction_dir = (
         store.get_run_path("readiness-run")
         / "evaluator/participant-action-transactions"

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -14,7 +13,7 @@ from raes_contracts.participant_binding import (
     ParticipantNativeActionExecution,
 )
 from raes_contracts.planning import RuntimeDomain
-from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot, SnapshotEntry
+from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot
 
 from aptl.backends.raes_participant_fixture import (
     VerifiedParticipantOperation,
@@ -227,27 +226,23 @@ def _build_realization_execution(
 
     record = _action_evidence_record(context, observation)
     action_result = _action_result(context, observation)
-    entry_address = (
-        "participant.action-instance."
-        f"{hashlib.sha256(context.request.action_instance_id.encode()).hexdigest()}"
-    )
-    entry = SnapshotEntry(
-        address=entry_address,
-        domain=RuntimeDomain.PARTICIPANT,
-        resource_type="participant-action-instance",
-        payload=record,
-    )
-    working = context.snapshot.with_entries(
-        {**context.snapshot.entries, entry_address: entry}
-    )
     diagnostics = _native_diagnostics(context, observation)
+    # raes 4.x confines a participant action apply to participant-owned carrier
+    # transitions keyed within the submitted authority (the participant address
+    # and its target nodes). Creating a resource ``entries`` record is a
+    # resource-domain transition and is refused as "a resource outside the
+    # submitted authority". The RAES base runtime appends the authoritative
+    # ``participant_behavior_history`` cut for this action; the evaluator-only
+    # evidence record is durably published to the run store out of band. The
+    # native apply therefore performs no snapshot-carrier transition of its own
+    # and truthfully reports no changed addresses.
     return ParticipantRealizationExecution(
         native=ParticipantNativeActionExecution(
             apply_result=ApplyResult(
                 success=True,
-                snapshot=working,
+                snapshot=context.snapshot,
                 diagnostics=diagnostics,
-                changed_addresses=[entry_address],
+                changed_addresses=[],
             ),
             action_result=action_result,
             post_state_digest=observation.post_state_digest,

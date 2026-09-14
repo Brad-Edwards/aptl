@@ -251,6 +251,16 @@ class CaptureBinding:
     loss_disclosure_required: bool
     visibility_class: CaptureVisibility
     limits: CaptureLimits
+    #: The RAES output contract the requirement's evidence stream conforms to,
+    #: threaded verbatim from ``ExperimentCaptureRequirementModel.output_contract``
+    #: at admission. It is the honest identity the emitted evidence record must
+    #: carry so ``validate_experiment_run_evidence`` can prove the record matches
+    #: the admitted requirement (raes ``evidence_satisfaction``: a record whose
+    #: ``output_contract`` differs from the requirement's is rejected). Defaulted
+    #: only for synthetic bindings built directly in tests that never emit an
+    #: evidence record; every production binding is created by :func:`_bind`,
+    #: which always populates it from the requirement.
+    output_contract: str = ""
     accepted_limitation: str | None = None
     comparability_disclosure_ref: str | None = None
 
@@ -279,6 +289,7 @@ class CaptureBinding:
             "channel_kind": self.channel_kind,
             "capture_kind": self.capture_kind,
             "capture_scope": self.capture_scope,
+            "output_contract": self.output_contract,
             "expected_media_types": sorted(self.expected_media_types),
             "required_artifact_roles": sorted(self.required_artifact_roles),
             "sensitivity": self.sensitivity,
@@ -442,6 +453,7 @@ def _bind(
         channel_kind=registration.channel_kind,
         capture_kind=requirement.capture_kind,
         capture_scope=requirement.capture_scope,
+        output_contract=requirement.output_contract,
         expected_media_types=tuple(requirement.expected_media_types),
         required_artifact_roles=tuple(requirement.required_artifact_roles),
         sensitivity=requirement.sensitivity,

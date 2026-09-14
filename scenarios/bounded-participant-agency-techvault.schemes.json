@@ -1,0 +1,17 @@
+[
+  {
+    "scheme_id": "raes-participant-defensive-behavior-activities",
+    "authority": "RAES Concept Authority - participant-defensive-behavior-activities controlled vocabulary (adapted from NIST Cybersecurity Framework 2.0 Detect/Respond/Recover categories)",
+    "revision": "controlled-vocabularies/v1",
+    "source_locator": "urn:raes:contracts:corpus:concept-authority:controlled-vocabularies-v1.json",
+    "source_digest": "sha256:4e4fbaab59f1018114d3d34b2dbdf2fbc58ebfd26180526c7eddad48319ebab6",
+    "concepts": [
+      {
+        "concept_id": "adverse-event-analysis"
+      },
+      {
+        "concept_id": "incident-management"
+      }
+    ]
+  }
+]

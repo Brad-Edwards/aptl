@@ -39,6 +39,10 @@ from aptl.core.deployment.errors import BackendTimeoutError
 
 _PROJECT = "aptl"
 
+# Minimal Debian 12 /etc/os-release the modelled linux guest reads back for the
+# raes 4.x guest-observed os-family corroboration.
+_TEST_DEBIAN_OS_RELEASE = 'ID=debian\nVERSION_ID="12"\n'
+
 
 class _Backend:
     """A deployment backend whose observed inventory the test controls."""
@@ -94,6 +98,15 @@ class _Backend:
     def container_exec(self, name, cmd, *, timeout=None):
         if self._exec_raises:
             raise BackendTimeoutError("docker exec timed out")
+        # Guest os-release read (raes 4.x guest-observed os-family): served from
+        # the modelled platform without needing an ``exec_results`` script, so a
+        # test that models only a running node still corroborates its os-family.
+        if list(cmd[:1]) == ["cat"] and cmd[-1] == "/etc/os-release":
+            if self._platform == "linux":
+                return SimpleNamespace(
+                    returncode=0, stdout=_TEST_DEBIAN_OS_RELEASE, stderr=""
+                )
+            return SimpleNamespace(returncode=1, stdout="", stderr="")
         assert self._exec_results is not None, "container_exec must not be called"
         entry = self._exec_results[name]
         if isinstance(entry, list):
@@ -145,7 +158,7 @@ class _Backend:
 
 def _node_plan(name="vm"):
     address = f"provision.node.{name}"
-    payload = {"name": name, "node_type": "vm", "os_family": "linux"}
+    payload = {"name": name, "node_kind": "compute", "os_family": "linux"}
     resource = PlannedResource(
         address=address,
         domain=RuntimeDomain.PROVISIONING,
@@ -210,7 +223,7 @@ def test_running_healthy_node_is_realized_with_concerns(tmp_path):
         _Backend(containers=("aptl-vm",)), realization, plan, scenario_root=tmp_path
     )
     assert obs[address].realized is True
-    assert obs[address].concerns == {("node_type",): "vm", ("os_family",): "linux"}
+    assert obs[address].concerns == {("node_kind",): "compute", ("os_family",): "linux"}
 
 
 _DECLARED_TOPOLOGY = {
@@ -236,7 +249,7 @@ def _domain_node_plan():
     address = "provision.node.ad"
     payload = {
         "name": "ad",
-        "node_type": "vm",
+        "node_kind": "compute",
         "os_family": "linux",
         "domain_topology": dict(_DECLARED_TOPOLOGY),
     }
@@ -341,7 +354,7 @@ def test_starting_node_settles_before_judgment(monkeypatch, tmp_path):
     )
     obs = observe_realization(backend, realization, plan, scenario_root=tmp_path)
     assert obs[address].realized is True
-    assert obs[address].concerns[("node_type",)] == "vm"
+    assert obs[address].concerns[("node_kind",)] == "compute"
 
 
 def test_settle_deadline_returns_transitional_info_instead_of_hanging(monkeypatch):
@@ -403,7 +416,7 @@ def test_node_without_declared_topology_is_never_probed(tmp_path):
     backend = _Backend(containers=("aptl-vm",))
     obs = observe_realization(backend, realization, plan, scenario_root=tmp_path)
     assert obs[address].realized is True
-    assert obs[address].concerns == {("node_type",): "vm", ("os_family",): "linux"}
+    assert obs[address].concerns == {("node_kind",): "compute", ("os_family",): "linux"}
 
 
 def test_non_running_node_is_not_realized(tmp_path):
@@ -489,7 +502,7 @@ def test_switch_network_realized_under_project_prefixed_name(tmp_path):
         address=address,
         domain=RuntimeDomain.PROVISIONING,
         resource_type="network",
-        payload={"name": "redteam-net", "node_type": "switch"},
+        payload={"name": "redteam-net", "node_kind": "switch"},
     )
     op = ProvisionOp(
         action=ChangeAction.CREATE,
@@ -516,7 +529,7 @@ def test_switch_network_realized_under_project_prefixed_name(tmp_path):
     backend = _Backend(networks=("redteam-net",))
     obs = observe_realization(backend, realization, plan, scenario_root=tmp_path)
     assert obs[address].realized is True
-    assert obs[address].concerns == {("node_type",): "switch"}
+    assert obs[address].concerns == {("node_kind",): "switch"}
 
 
 def test_network_list_timeout_fails_closed(tmp_path):

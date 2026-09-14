@@ -154,50 +154,128 @@ def snapshot_after_apply(
             refresh_dependencies=resource.refresh_dependencies,
             status="ready",
         )
-    observations_disclosure = _realization_observation_disclosures(observations)
+    observations_disclosure = _realization_observation_disclosures(observations, plan)
     updated = snapshot.with_entries(entries)
-    if observations_disclosure:
-        updated = dataclasses.replace(
-            updated,
-            realization_observations=(
-                *updated.realization_observations,
-                *observations_disclosure,
-            ),
-        )
+    # Declare the envelope APTL realized under so RAES's compute-substrate
+    # selection gate can bind the plan's realization envelope to the returned
+    # snapshot (raes 4.x: _evaluate_compute_substrate_selection requires
+    # ``returned_snapshot.realization_envelope`` to equal the plan's envelope
+    # identity). Honest: APTL always realizes governed by this one envelope.
+    #
+    # The corroboration disclosures are stamped here so a direct caller of this
+    # function reads them off the snapshot, but the backend apply path
+    # (:class:`AptlProvisioner`) moves them onto the ApplyResult's
+    # ``operational_realization_observations`` channel and clears them from its
+    # returned snapshot: the runtime clears ``snapshot.realization_observations``
+    # during SEM-218 sanitization and re-merges only the operational channel, so
+    # carrying them on both would duplicate a concern and fail the snapshot's
+    # unique-observation invariant.
+    from aptl.backends.raes_manifest import _REALIZATION_ENVELOPE
+
+    updated = dataclasses.replace(
+        updated,
+        realization_observations=(
+            *updated.realization_observations,
+            *observations_disclosure,
+        ),
+        realization_envelope=_REALIZATION_ENVELOPE.identity,
+    )
     return updated
 
 
 def _realization_observation_disclosures(
     observations: Mapping[str, ObservedResource],
+    plan: ProvisioningPlan,
 ) -> tuple[RealizationObservationDisclosure, ...]:
-    """Disclose how APTL corroborated each realized ``configuration``-scope concern.
+    """Disclose how APTL corroborated each realized concern needing a scope.
 
-    raes 3.3.0's runtime gate accepts an EXACT concern with a non-null
+    raes 4.1.0's runtime gate accepts an EXACT concern with a non-null
     verification scope only when the returned snapshot carries a matching
     observation disclosure whose scope + strength the backend manifest also
-    declares. Today that is forwarding-agents: for every node whose forwarding
-    agents the observer corroborated (present in its observed concerns), disclose
-    that APTL read them back at ``configuration`` scope, ``daemon-observed``
-    strength — the same corroboration the manifest advertises, so the claim is
-    backed by real readback rather than a bare capability assertion.
+    declares:
+
+    * forwarding-agents: for every node whose forwarding agents the observer
+      corroborated, disclose ``configuration`` scope / ``daemon-observed``
+      strength (host-side ``docker inspect``).
+    * operating-system: for every node whose guest OS identity was read back
+      from inside the container (``/etc/os-release``), disclose a bound,
+      ``guest-observed`` operating-system observation carrying that identity —
+      the PRESENCE-scope, guest-observed corroboration RAES requires for an
+      authored ``os:`` requirement.
+
+    Each disclosure is backed by real readback, not a bare capability assertion.
     """
 
     disclosures: list[RealizationObservationDisclosure] = []
+    envelope = None
     for address, observed in observations.items():
-        if _FORWARDING_AGENTS_PATH not in observed.concerns:
-            continue
         node_name = address.removeprefix("provision.node.")
-        disclosures.append(
-            RealizationObservationDisclosure(
-                address=address,
-                field_path=f"nodes.{node_name}.runtime.forwarding_agents",
-                domain="runtime-realization",
-                requirement_kind="forwarding-agents",
-                verification_scope=RealizationVerificationScope.CONFIGURATION,
-                observation_strength=ObservationStrength.DAEMON_OBSERVED,
+        if _FORWARDING_AGENTS_PATH in observed.concerns:
+            disclosures.append(
+                RealizationObservationDisclosure(
+                    address=address,
+                    field_path=f"nodes.{node_name}.runtime.forwarding_agents",
+                    domain="runtime-realization",
+                    requirement_kind="forwarding-agents",
+                    verification_scope=RealizationVerificationScope.CONFIGURATION,
+                    observation_strength=ObservationStrength.DAEMON_OBSERVED,
+                )
             )
-        )
+        if observed.operating_system is not None:
+            if envelope is None:
+                from aptl.backends.raes_manifest import _REALIZATION_ENVELOPE
+
+                envelope = _REALIZATION_ENVELOPE
+            disclosure = _operating_system_disclosure(
+                address, node_name, observed.operating_system, envelope, plan
+            )
+            if disclosure is not None:
+                disclosures.append(disclosure)
     return tuple(disclosures)
+
+
+def _operating_system_disclosure(
+    address: str,
+    node_name: str,
+    identity: object,
+    envelope: object,
+    plan: ProvisioningPlan,
+) -> RealizationObservationDisclosure | None:
+    """Build the bound guest-observed operating-system disclosure for one node.
+
+    Emitted only when the guest-read identity is one the realization envelope's
+    coupled ``operating_systems`` rows declare, mirroring RAES's own
+    ``_native_operating_system_observation_valid`` coupling so the disclosure
+    never claims an OS the envelope does not support. The binding is tied to
+    APTL's real envelope digests and this apply's operation, and
+    ``binding_verified`` reflects that a real in-guest ``/etc/os-release`` read
+    produced the identity — not a plan echo.
+    """
+
+    supported = any(
+        row.family == identity.family
+        and row.distribution == identity.distribution
+        and identity.version in row.versions
+        for row in envelope.configuration.operating_systems
+    )
+    if not supported:
+        return None
+    operation_id = plan.operation_id or f"aptl-realized:{address}"
+    return RealizationObservationDisclosure(
+        address=address,
+        field_path=f"nodes.{node_name}.operating-system",
+        domain="runtime-realization",
+        requirement_kind="operating-system",
+        verification_scope=RealizationVerificationScope.PRESENCE,
+        observation_strength=ObservationStrength.GUEST_OBSERVED,
+        operating_system=identity,
+        operation_id=operation_id,
+        envelope_digest=envelope.digest,
+        configuration_digest=envelope.configuration.configuration_digest,
+        observer_version="aptl-guest-os-release/1",
+        sequence=0,
+        binding_verified=True,
+    )
 
 
 def realized_changed_addresses(

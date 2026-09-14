@@ -39,6 +39,23 @@ _PLACEHOLDER_DIGEST = "sha256:" + "0" * 64
 _CONCERNS = (
     ("topology", "realized", "daemon-observed", "docker-compose-networking"),
     ("architecture", "realized", "daemon-observed", "container-architecture-readback"),
+    # compute-substrate (raes 4.1.0 governed concern): APTL realizes every node as
+    # an OCI/operating-system container and reads that substrate back off the
+    # daemon, so it is disclosed realized at daemon-observed strength through the
+    # governed ``operating-system-container`` mechanism, matching the RAES
+    # reference OCI-container envelope.
+    ("compute-substrate", "realized", "daemon-observed", "operating-system-container"),
+    # operating-system (raes 4.1.0 governed concern): RAES couples a realized,
+    # guest-observed operating-system concern to declared ``operating_systems``
+    # capability rows (raes_contracts.realization_observation
+    # ._native_operating_system_observation_valid). APTL now performs a genuine
+    # guest-level OS read — it reads ``/etc/os-release`` from *inside* the realized
+    # container via the container_exec path
+    # (_raes_observation_helpers.observed_operating_system_identity) and maps it to
+    # the governed OS-family/distribution vocabulary — so the concern is honestly
+    # disclosed realized at guest-observed strength, and the coupled
+    # ``operating_systems`` rows are mirrored into the configuration payload below.
+    ("operating-system", "realized", "guest-observed", "guest-os-release-readback"),
     ("image", "realized", "daemon-observed", "oci-image-inspect-readback"),
     ("resource-allocation", "realized", "daemon-observed", "compose-resource-limits-readback"),
     ("network", "realized", "daemon-observed", "docker-network-readback"),
@@ -61,6 +78,21 @@ def _configuration_payload(provisioner: ProvisionerCapabilities) -> dict[str, ob
         "network_policy": "docker-compose-managed",
         "supported_node_types": sorted(provisioner.supported_node_types),
         "supported_os_families": sorted(provisioner.supported_os_families),
+        # Coupled OS rows mirror the provisioner's ``operating_systems`` so a
+        # guest-observed operating-system observation can bind against them
+        # (raes carrier: a non-empty ``operating_systems`` requires the
+        # operating-system concern realized+guest-observed, satisfied above).
+        "operating_systems": [
+            {
+                "family": row.family,
+                "distribution": row.distribution,
+                "versions": sorted(row.versions),
+            }
+            for row in sorted(
+                provisioner.operating_systems,
+                key=lambda entry: (entry.family, entry.distribution),
+            )
+        ],
         "supported_content_types": sorted(provisioner.supported_content_types),
         "supported_account_features": sorted(provisioner.supported_account_features),
         "supported_domain_profiles": sorted(provisioner.supported_domain_profiles),

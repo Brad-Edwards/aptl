@@ -155,13 +155,22 @@ def check_account_provisioner_parity(
     return GateCheck("account_provisioner_parity", *_outcome(diagnostics))
 
 
+# Built-in AD principals exist at clean start via ``samba-tool domain
+# provision`` itself — they are never (and cannot be) created with
+# ``samba-tool user create``. A scenario that declares one (env-packs 6.0.0
+# declares the built-in ``Administrator`` as an in-world fact) is honest as long
+# as the provisioner still realizes every *declared attribute* (group/mail/spn/
+# disabled) it carries, which the checks below continue to enforce.
+_BUILTIN_AD_USERS = frozenset({"Administrator", "Guest", "krbtgt"})
+
+
 def _account_parity_diagnostics(
     name: str, account: Account, facts: _ProvisionerFacts
 ) -> list[str]:
     """Check one SDL account's attributes against the provisioner's facts."""
     username = account.username
     label = f"SDL account {name!r} (username={username!r})"
-    if username not in facts.users:
+    if username not in facts.users and username not in _BUILTIN_AD_USERS:
         return [_missing_user_diagnostic(label)]
     return [
         *_group_parity_diagnostics(label, account, username, facts),

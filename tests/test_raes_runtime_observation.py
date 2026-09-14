@@ -127,7 +127,7 @@ def _node_realization(runtime: RuntimeConfiguration) -> NodeRealization:
 def _plan(runtime: RuntimeConfiguration) -> ProvisioningPlan:
     payload = {
         "name": "vm",
-        "node_type": "vm",
+        "node_kind": "compute",
         "os_family": "linux",
         "spec": {"node": {"runtime": runtime.model_dump(mode="json", by_alias=True)}},
     }
@@ -1170,4 +1170,4 @@ def test_node_without_runtime_declares_no_runtime_concerns():
     backend = _Backend({_CONTAINER: _inspect()})
     _plan_, observations = _observe(runtime, backend)
     concerns = observations[_ADDRESS].concerns
-    assert concerns == {("node_type",): "vm", ("os_family",): "linux"}
+    assert concerns == {("node_kind",): "compute", ("os_family",): "linux"}

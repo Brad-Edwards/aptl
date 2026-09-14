@@ -34,6 +34,7 @@ from aptl.backends.raes_profiles import (
 )
 from aptl.backends.raes import create_aptl_runtime_target
 from aptl.backends.raes_realization import interpret_provisioning_plan
+from aptl.core.deployment._flag_variables import flag_variable_bindings
 from aptl.core.config import AptlConfig, load_config
 from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.validation import _account_parity
@@ -167,7 +168,7 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
             backend=_NoStartBackend(),
             bundle=bundle,
         )
-    ).plan(scenario)
+    ).plan(scenario, parameters=flag_variable_bindings(scenario))
     realization = interpret_provisioning_plan(
         plan=execution_plan.provisioning,
         config=config,
@@ -238,7 +239,7 @@ def test_paper_scenario_lowers_same_wazuh_stateful_contract():
             backend=_NoStartBackend(),
             bundle=bundle,
         )
-    ).plan(scenario)
+    ).plan(scenario, parameters=flag_variable_bindings(scenario))
     realization = interpret_provisioning_plan(
         plan=execution_plan.provisioning,
         config=config,
@@ -684,7 +685,7 @@ def test_check_provisioning_realization_fails_on_profile_mismatch(tmp_path):
               internal-net:
                 type: switch
               kali:
-                type: vm
+                type: compute
                 services:
                   - {name: ssh, port: 22, protocol: tcp}
             infrastructure:
@@ -775,7 +776,7 @@ def test_provisioning_realization_fails_on_unrealizable_content(tmp_path):
             name: bad-content
             nodes:
               fileshare:
-                type: vm
+                type: compute
                 services:
                   - {name: smb, port: 445, protocol: tcp}
             content:

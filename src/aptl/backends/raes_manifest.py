@@ -27,6 +27,7 @@ from __future__ import annotations
 from raes_backend_protocols.capabilities import (
     BackendManifest,
     EvaluatorCapabilities,
+    OperatingSystemCompatibility,
     OrchestratorCapabilities,
     ParticipantFeatureSupport,
     ParticipantRuntimeCapabilities,
@@ -52,6 +53,7 @@ from aptl.backends.raes_artifact_mechanisms import aptl_artifact_mechanisms
 from aptl.backends.identity import APTL_RAES_TARGET_NAME, APTL_RAES_TARGET_VERSION
 from aptl.backends.raes_realization_envelope import build_aptl_realization_envelope
 from raes_contracts.vocabulary import (
+    GeneratedArtifactDeliveryMode,
     ObservationStrength,
     ParticipantFeatureSupportLevel,
     WorkflowFeature,
@@ -220,8 +222,32 @@ _PARTICIPANT_RUNTIME = ParticipantRuntimeCapabilities(
 # terms (validated against contracts/concept-authority/controlled-vocabularies-v1).
 _PROVISIONER = ProvisionerCapabilities(
     name="aptl-docker-compose-provisioner",
-    supported_node_types=frozenset({"switch", "vm"}),
+    supported_node_types=frozenset({"switch", "compute"}),
     supported_os_families=frozenset({"linux"}),
+    # Coupled operating-system compatibility rows (raes 4.x). RAES now requires
+    # a provisioner to declare the concrete OS family/distribution/release rows
+    # it can realize before it will admit a node that authors ``os:`` — an empty
+    # set yields ``provisioner.unsupported-operating-system``. APTL realizes
+    # image-free nodes onto exactly two governed base substrates: Debian 12
+    # (``debian:12-slim`` / ``aptl/generic-systemd-base-debian``) and Rocky
+    # Linux 9 (``rockylinux:9``), selected by package family in
+    # ``aptl.backends.raes_materializer.base_image_for_os`` /
+    # ``aptl.core.deployment._compose_base_substrate``. Both are the images APTL
+    # pulls or builds and runs, so declaring these rows is honest provisioning
+    # capability, not a guest-OS observation claim (that concern stays
+    # unsupported in the realization envelope — see raes_realization_envelope).
+    operating_systems=(
+        OperatingSystemCompatibility(
+            family="linux",
+            distribution="debian",
+            versions=frozenset({"12"}),
+        ),
+        OperatingSystemCompatibility(
+            family="linux",
+            distribution="rocky-linux",
+            versions=frozenset({"9"}),
+        ),
+    ),
     supported_content_types=frozenset({"dataset", "directory", "file"}),
     # Manifest honesty (#577, ADR-046 addendum): advertise only the account
     # features the backend materializes AND verifies by read-after-write — the
@@ -259,6 +285,19 @@ _PROVISIONER = ProvisionerCapabilities(
     # back present with producer-private material kept off consumers).
     supported_generated_artifact_kinds=frozenset(
         {"certificate_bundle", "rendered_config", "ssh_key_bundle"}
+    ),
+    # Generated-artifact delivery modes APTL genuinely realizes (raes 4.x makes
+    # this an explicit capability rather than implicit mount-only). MOUNT binds a
+    # consumer's selected outputs read-only; ENVIRONMENT injects a named output's
+    # value as an environment variable onto the consumer's Compose service
+    # (aptl.core.deployment._compose_stateful_model._append_artifact_environment,
+    # read back into the effective Compose model). ``env_file`` is not realized
+    # and is rejected at lowering, so it is not declared.
+    supported_generated_artifact_delivery_modes=frozenset(
+        {
+            GeneratedArtifactDeliveryMode.MOUNT,
+            GeneratedArtifactDeliveryMode.ENVIRONMENT,
+        }
     ),
     supports_persistent_volumes=True,
 )
@@ -315,12 +354,32 @@ _REALIZATION_SUPPORT = (
             {
                 "declared-capability-match",
                 "service-search-index-schema-materialization",
+                # Concern-specific exact runtime-inventory kinds (raes 4.x). RAES
+                # requires a runtime.* exact requirement to be named on BOTH the
+                # generic ``declared-capability-match`` kind and the concern's own
+                # kind (raes_processor.semantics.realization_support
+                # ._exact_support_diagnostic requires_concern_specific_support).
+                # APTL genuinely realizes each of these from the node's declared
+                # runtime and reads it back from inside the guest:
+                #   * runtime-packages — apt/dnf install then dpkg-query/rpm -q
+                #     read-after-write (raes_materializer._package_ops,
+                #     raes_docker_materializer.observe_installed_packages).
+                #   * runtime-filesystem-inventory — mkdir then ``test -d``
+                #     (raes_materializer._filesystem_ops,
+                #     raes_docker_materializer.observe_directory).
+                #   * runtime-service-manager-units — systemctl enable/start then
+                #     ``systemctl is-enabled``/``is-active``
+                #     (raes_materializer._service_unit_ops,
+                #     raes_docker_materializer.observe_service_unit_*).
+                "runtime-packages",
+                "runtime-filesystem-inventory",
+                "runtime-service-manager-units",
             }
         ),
         disclosure_kinds=frozenset(
             {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
         ),
-        # Per-concern observation capability (raes 3.3.0). Only concerns raes
+        # Per-concern observation capability (raes 4.1.0). Only concerns raes
         # compiles with a non-null verification_scope need one; today that is
         # forwarding-agents, whose scope is `configuration` when the agent
         # declares any sources/transforms/ship_targets/reload_channels/settings.
@@ -333,6 +392,48 @@ _REALIZATION_SUPPORT = (
             "forwarding-agents": RealizationObservationCapability(
                 verification_scope=RealizationVerificationScope.CONFIGURATION,
                 observation_strength=ObservationStrength.DAEMON_OBSERVED,
+            ),
+            # Guest-observed OS-family corroboration (raes 4.x). RAES's
+            # operational-verification floor for an authored ``os:`` requirement
+            # is PRESENCE scope at GUEST_OBSERVED strength
+            # (realization_operational_verification._OPERATING_SYSTEM_KINDS). APTL
+            # meets it with a real read of ``/etc/os-release`` from *inside* the
+            # realized guest through the container_exec path
+            # (raes_docker_materializer.observe_operating_system_identity), mapped
+            # to the governed OS-family vocabulary and disclosed as a bound
+            # guest-observed operating-system observation
+            # (raes_diagnostics._realization_observation_disclosures); the
+            # realization envelope's operating-system concern is correspondingly
+            # realized/guest-observed with coupled ``operating_systems`` rows. Not
+            # a docker-inspect Platform (daemon) claim.
+            "operating-system": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.PRESENCE,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
+            ),
+            # Guest-observed corroboration for the runtime-inventory concerns
+            # (raes 4.x). RAES's operational-verification floor for these
+            # guest-configuration concerns is CONFIGURATION scope at
+            # GUEST_OBSERVED strength (raes_processor.semantics
+            # .realization_operational_verification: they are _GUEST_CONFIGURATION
+            # _KINDS). APTL meets that floor with a real read-after-write read of
+            # the realized state from *inside* the guest container through the
+            # backend's container_exec path -- never a plan echo or a daemon
+            # projection: dpkg-query/rpm -q for packages, ``test -d`` for
+            # filesystem directories, and ``systemctl is-enabled``/``is-active``
+            # for service-manager units (raes_docker_materializer observers,
+            # verified by raes_materializer_engine._verify_*). Only a concern APTL
+            # actually reads back this way is declared here.
+            "runtime-packages": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.CONFIGURATION,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
+            ),
+            "runtime-filesystem-inventory": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.CONFIGURATION,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
+            ),
+            "runtime-service-manager-units": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.CONFIGURATION,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
             ),
         },
         artifact_mechanisms=list(aptl_artifact_mechanisms()),

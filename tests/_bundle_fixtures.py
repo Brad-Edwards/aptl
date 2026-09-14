@@ -46,10 +46,12 @@ def build_evidence_record(
     blob_bytes: bytes,
     sensitivity: str = "restricted",
     redaction_state: str = "none",
+    redaction_policy: str | None = None,
     loss_disclosure: str | None = None,
     requirement_id: str = "req-1",
     capture_spec_id: str = "spec-1",
     evidence_kind: str = "log",
+    output_contract: str = "participant-behavior-history-event-stream-v1",
     captured_at: str = "2026-03-24T02:42:29Z",
     content_uri: str | None = None,
 ) -> ExperimentEvidenceRecordModel:
@@ -65,6 +67,13 @@ def build_evidence_record(
     blob_relpath = (
         content_uri if content_uri is not None else f"evidence/blobs/{content_hex}"
     )
+    # RAES requires a redaction_policy (and a loss_disclosure) exactly when the
+    # record is redacted/withheld, and forbids a policy when it is lossless.
+    if redaction_state != "none":
+        if redaction_policy is None:
+            redaction_policy = "aptl.redaction.test/v1"
+        if loss_disclosure is None:
+            loss_disclosure = f"content {redaction_state} for fixture"
     return ExperimentEvidenceRecordModel(
         schema_version="experiment-evidence-record/v1",
         evidence_record_id=record_id,
@@ -73,6 +82,7 @@ def build_evidence_record(
             ref_kind="capture-spec", ref_id=capture_spec_id
         ),
         capture_requirement_ref=requirement_id,
+        output_contract=output_contract,
         run_ref=ExperimentReferenceModel(ref_kind="run", ref_id=run_id),
         source_refs=[
             ExperimentReferenceModel(
@@ -92,6 +102,7 @@ def build_evidence_record(
         ),
         sensitivity=sensitivity,
         redaction_state=redaction_state,
+        redaction_policy=redaction_policy,
     )
 
 

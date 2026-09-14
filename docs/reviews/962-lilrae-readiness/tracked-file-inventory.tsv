@@ -87,9 +87,9 @@ changelog.d/824.added.md	repository-metadata	Inspect identity/content owner duri
 changelog.d/824.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/876.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 config/certs.yml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
-config/cortex/application.conf	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 config/cortex/analyzers/APTLObservable/APTL_Observable.json	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 config/cortex/analyzers/APTLObservable/aptl_observable.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+config/cortex/application.conf	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 config/cortex/index-mapping.json	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 config/cortex/thehive-cortex.env	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 config/otel/grafana-datasources.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
@@ -258,9 +258,10 @@ docs/architecture/exp-009-aces-archival-sealing-preflight.md	docs-follow-owner	S
 docs/architecture/exp-010-capture-admission-evidence-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/grc-boundary-surface-vocabulary-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/index.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-1000-manual-release-qa-preflight.md	docs-follow-owner	Post-baseline architecture guidance; retain with its owning issue
+docs/architecture/issue-1004-dns-loopback-publication-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-550-soc-selected-profile-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-557-participant-implementation-binding-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
-docs/architecture/issue-1000-manual-release-qa-preflight.md	docs-follow-owner	Post-baseline architecture guidance; retain with its owning issue
 docs/architecture/issue-589-scenario-pack-capture-ownership-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-591-scenario-pack-capture-asset-ownership-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-592-scenario-pack-terminology-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
@@ -693,11 +694,15 @@ scenarios/archive/prime-enterprise.yaml	split-pack-delivery	Inventory exact cont
 scenarios/archive/prime-scenario.md	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scenarios/archive/recon-nmap-scan.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scenarios/archive/webapp-compromise.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/bounded-participant-agency-techvault.bindings.json	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/bounded-participant-agency-techvault.schemes.json	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scenarios/bounded-participant-agency-techvault.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scenarios/catalog.json	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scenarios/paper-agent-loop.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scenarios/techvault-attacker-target.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scenarios/techvault-defensive-min.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/techvault-enterprise-web.bindings.json	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+scenarios/techvault-enterprise-web.schemes.json	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scenarios/techvault-enterprise-web.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scenarios/techvault-observability-core.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/aptl-env.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity

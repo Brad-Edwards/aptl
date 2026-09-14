@@ -44,6 +44,7 @@ def stateful_override_payload(
 
     services = wazuh_service_definitions()
     _append_artifact_mounts(services, scenario_root, realization)
+    _append_artifact_environment(services, scenario_root, realization)
     volumes = _append_volume_mounts(services, project_name, realization)
     payload: dict[str, object] = {"services": services}
     if volumes:
@@ -68,6 +69,7 @@ def effective_stateful_model_errors(
     expected_services = expected["services"]
     assert isinstance(expected_services, Mapping)
     errors = _effective_service_errors(expected_services, observed_services)
+    errors.extend(_effective_environment_errors(expected_services, observed_services))
     errors.extend(
         _certificate_exposure_errors(
             observed_services,
@@ -171,6 +173,43 @@ def _append_artifact_mounts(
                         "read_only": True,
                     }
                 )
+
+
+def _append_artifact_environment(
+    services: dict[str, dict[str, object]],
+    scenario_root: Path,
+    realization: DeploymentRealizationSpec,
+) -> None:
+    """Inject each generated-artifact environment consumer's output value.
+
+    An environment consumer receives one named output as an environment variable
+    on its Compose service, rather than a file mount. The value is the exact
+    materialized output byte-content -- the same bytes a mount consumer would
+    bind -- read from the artifact's staging root. A consumer on a non-Compose
+    (image-free/imageless) node is skipped: it has no Compose service to carry
+    the variable and is delivered by the generic materializer instead, exactly as
+    mount consumers are (issue #875).
+    """
+
+    image_free = _non_compose_consumer_addresses(realization)
+    for artifact in realization.generated_artifacts:
+        env_consumers = getattr(artifact, "environment_consumers", ())
+        if not env_consumers:
+            continue
+        source = artifact_source_path(scenario_root, artifact)
+        by_name = {output.name: output for output in artifact.outputs}
+        for consumer in env_consumers:
+            if consumer.target_address in image_free:
+                continue
+            output = by_name.get(consumer.output)
+            if output is None:
+                # The lowering already rejects an environment consumer naming an
+                # undeclared output; guard defensively rather than KeyError.
+                continue
+            value = (source / output.path).read_text(encoding="utf-8")
+            _environment(services, consumer.service_name)[
+                consumer.environment_variable
+            ] = value
 
 
 def _uses_per_output_mounts(
@@ -279,6 +318,19 @@ def _mounts(
     return volumes
 
 
+def _environment(
+    services: dict[str, dict[str, object]],
+    service_name: str,
+) -> dict[str, object]:
+    """Return the mutable ``environment`` map for one generated service."""
+
+    service = services.setdefault(service_name, {})
+    environment = service.setdefault("environment", {})
+    if not isinstance(environment, dict):
+        raise ValueError("Generated service environment is not a mapping.")
+    return environment
+
+
 def _effective_service_errors(
     expected_services: Mapping[object, object],
     observed_services: Mapping[object, object],
@@ -307,6 +359,54 @@ def _effective_service_errors(
                 f"Effective stateful service {service_name} is missing a declared mount."
             )
     return errors
+
+
+def _effective_environment_errors(
+    expected_services: Mapping[object, object],
+    observed_services: Mapping[object, object],
+) -> list[str]:
+    """Return mismatches for injected generated-artifact environment variables.
+
+    Every environment variable the stateful override injects must appear, with
+    its exact value, in the rendered effective model -- a missing or altered
+    injection means a consumer would not receive the retained output value it
+    was promised. Only the injected variables are checked; the base compose owns
+    the rest of each service's environment.
+    """
+
+    errors: list[str] = []
+    for service_name, expected_service in expected_services.items():
+        expected_env = _environment_map(expected_service)
+        if not expected_env:
+            continue
+        observed_env = _environment_map(observed_services.get(service_name))
+        if any(
+            observed_env.get(name) != value for name, value in expected_env.items()
+        ):
+            errors.append(
+                f"Effective stateful service {service_name} is missing an injected "
+                "environment variable."
+            )
+    return errors
+
+
+def _environment_map(service: object) -> dict[str, str]:
+    """Return a service's ``environment`` as a name->value map.
+
+    Compose accepts both a mapping and a ``KEY=VALUE`` list; normalize either to
+    a mapping so expected and observed shapes compare directly. A bare ``KEY``
+    (no ``=``) carries no value and is represented as an empty string.
+    """
+
+    if not isinstance(service, Mapping):
+        return {}
+    environment = service.get("environment")
+    if isinstance(environment, Mapping):
+        return {str(name): str(value) for name, value in environment.items()}
+    if isinstance(environment, list):
+        pairs = (str(entry).split("=", 1) for entry in environment)
+        return {pair[0]: pair[1] if len(pair) == 2 else "" for pair in pairs}
+    return {}
 
 
 def _mount_contract(service: Mapping[str, object]) -> set[tuple[object, ...]]:

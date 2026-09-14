@@ -23,6 +23,7 @@ from raes.scenario import Scenario
 from aptl.backends.raes import create_aptl_runtime_target, resolve_scenario_bundle
 from aptl.backends.raes_profiles import public_start_profiles, select_backend_profiles
 from aptl.backends.raes_realization import interpret_provisioning_plan
+from aptl.core.deployment._flag_variables import flag_variable_bindings
 from aptl.utils.redaction import redact
 from aptl.validation._gate_no_start_backend import _NoStartBackend
 from aptl.validation._gate_raes_cli import (
@@ -163,7 +164,9 @@ def check_provisioning_realization(
             backend=_NoStartBackend(),
             bundle=bundle,
         )
-        execution_plan = RuntimeManager(target).plan(scenario)
+        execution_plan = RuntimeManager(target).plan(
+            scenario, parameters=flag_variable_bindings(scenario)
+        )
         realization = interpret_provisioning_plan(
             plan=execution_plan.provisioning,
             config=config,

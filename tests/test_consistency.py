@@ -117,7 +117,6 @@ class TestComposeConsistency:
         image-free nodes (tracked alongside #809) and is not asserted here.
         """
         from raes import parse_sdl_file
-        from raes.runtime_mounts import RuntimeMountSourceKind
 
         services = compose_config["services"]
         suricata_volumes = services["suricata"]["volumes"]
@@ -136,15 +135,25 @@ class TestComposeConsistency:
         assert "suricata_misp_rules" in top_level
         assert "suricata_config_seed" in top_level
 
+        # The env-pack (6.0.0) models the sync node's shared named volumes as
+        # ``persistent_volumes`` consumers rather than ``runtime.mounts`` volume
+        # entries (raes 4.x stateful-resource model): the mount relationship is
+        # unchanged, it is just declared on the volume resource's consumer list.
+        # misp-suricata-sync remains a read-write consumer of both volumes at the
+        # same destinations, so the shared-volume contract still holds.
         scenario = parse_sdl_file(techvault_sdl)
-        sync_node = scenario.nodes["misp-suricata-sync"]
-        volume_mounts = {
-            mount.source: mount.target
-            for mount in sync_node.runtime.mounts
-            if mount.source_kind == RuntimeMountSourceKind.VOLUME
+        sync_destinations = {
+            name: {
+                consumer.mount_destination
+                for consumer in volume.consumers
+                if consumer.node == "misp-suricata-sync"
+            }
+            for name, volume in scenario.persistent_volumes.items()
         }
-        assert volume_mounts.get("suricata_misp_rules") == "/var/lib/suricata/rules/misp"
-        assert volume_mounts.get("suricata_command_socket") == "/var/run/suricata"
+        assert sync_destinations.get("suricata_misp_rules") == {
+            "/var/lib/suricata/rules/misp"
+        }
+        assert sync_destinations.get("suricata_command_socket") == {"/var/run/suricata"}
 
     def test_suricata_config_seeded_not_bind_mounted(self, compose_config):
         """ADR-043: suricata.yaml / local.rules are seeded via a named volume

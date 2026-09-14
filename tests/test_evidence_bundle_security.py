@@ -109,10 +109,13 @@ class TestResourceExhaustion:
     def test_oversized_blob_is_excluded_not_fatal(self, tmp_path: Path) -> None:
         run_dir = tmp_path / "run-1"
         fixtures.build_ready_to_seal_run(run_dir, run_id="run-1")
-        # Enlarge the blob well past a tight member bound; schema/envelope stay small.
+        # Enlarge the blob well past a member bound chosen to sit above the other
+        # mandatory members (the published RAES evidence-record schema is ~68 KiB
+        # under the installed contracts, so the bound must clear it while still
+        # excluding the blob).
         blob = next((run_dir / "evidence" / "blobs").iterdir())
-        blob.write_bytes(os.urandom(50_000))
-        limits = dataclasses.replace(DEFAULT_LIMITS, max_member_bytes=20_000)
+        blob.write_bytes(os.urandom(500_000))
+        limits = dataclasses.replace(DEFAULT_LIMITS, max_member_bytes=100_000)
 
         out = tmp_path / "exports" / "b.tar"
         result = build_evidence_bundle(

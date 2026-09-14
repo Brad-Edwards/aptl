@@ -101,8 +101,6 @@ class ParticipantActionExecution:
     success: bool
     behavior_events: list[dict[str, object]]
     diagnostics: list[Diagnostic]
-    snapshot_entries: dict[str, SnapshotEntry]
-    shared_state_records: dict[str, dict[str, object]]
 
 
 DEFAULT_PARTICIPANT_ACTIONS = {
@@ -223,16 +221,14 @@ def drive_participant_action(
                 ),
             )
         )
+    # raes 4.x commits the legacy smoke action as a behavior-history transition
+    # only (see ``AptlParticipantRuntime._model_legacy_action``); it no longer
+    # carries resource ``entries`` or target-ref-keyed shared-state records on
+    # the snapshot. The behavior events above are the committed evidence.
     return ParticipantActionExecution(
         success=observation.success,
         behavior_events=[attempted, observed],
         diagnostics=diagnostics,
-        snapshot_entries=_action_snapshot_entries(
-            participant_address, spec, action_instance_id, observation.success
-        ),
-        shared_state_records=_shared_state_records(
-            participant_address, spec, action_instance_id, observation.success
-        ),
     )
 
 
@@ -437,41 +433,6 @@ def _action_snapshot_entries(
             status="ready" if success else "failed",
         ),
     }
-
-
-def _shared_state_records(
-    participant_address: str,
-    spec: ParticipantActionSpec,
-    action_instance_id: str,
-    success: bool,
-) -> dict[str, dict[str, object]]:
-    """Build shared-state records touched by the participant action."""
-
-    records: dict[str, dict[str, object]] = {}
-    for ref in spec.target_refs:
-        state_kind = "network-service" if ref.startswith("tcp:") else "container"
-        digest = hashlib.sha256(
-            f"{ref}:{action_instance_id}:{success}".encode("utf-8")
-        ).hexdigest()
-        records[ref] = {
-            "state_address": ref,
-            "state_scope": participant_address,
-            "state_kind": state_kind,
-            "ordering_basis": "participant-action-observation",
-            "conflict_policy": "single-writer-observation",
-            "provenance": spec.actor_provenance,
-            "digest": f"sha256:{digest}",
-            "accesses": [
-                {
-                    "state_address": ref,
-                    "access_kind": "read",
-                    "read_digest": f"sha256:{digest}",
-                    "operation_ref": f"container_exec:{spec.source_container}",
-                }
-            ],
-            "evidence_refs": [action_instance_id],
-        }
-    return records
 
 
 def _address_leaf(address: str) -> str:

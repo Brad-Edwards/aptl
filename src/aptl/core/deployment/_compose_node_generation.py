@@ -162,12 +162,20 @@ def _environment_config(runtime: object) -> dict[str, str]:
     exactly as the graph-owned Wazuh services already did. Every other
     classification — including the planted range credentials classified
     ``secret_fixture`` — carries its authored value as content (issue #875).
+
+    A variable that draws its value from a generated artifact
+    (``value_from``) carries no literal here: the generated-artifact stateful
+    override injects the retained output value as an env var, so emitting it here
+    (with its empty placeholder) would only be shadowed by that override. It is
+    skipped so the override is the single source of the injected value.
     """
 
     environment: dict[str, str] = {}
     for variable in getattr(runtime, "environment", ()):
         name = getattr(variable, "name", "")
         if not name:
+            continue
+        if getattr(variable, "value_from", None) is not None:
             continue
         raw = getattr(variable, "value_classification", "")
         classification = str(getattr(raw, "value", raw) or "")

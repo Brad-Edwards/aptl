@@ -96,6 +96,42 @@ startup, it must be advisory, non-reversible, versioned service metadata under
 ignored state (for example `.aptl/`) and never a replacement for the live auth
 probe.
 
+### Amendment: Wazuh Readiness Is Startup-Fatal
+
+Issue #1002 reclassifies Wazuh indexer and manager API readiness from a
+telemetry-impacting warning to a fatal startup failure. A scenario that selects
+the `wazuh` profile uses Wazuh to meet its goals: without the SIEM, detection
+and evidence collection do not work, so a lab that starts without it is not
+usable for that scenario. This supersedes the non-fatal classification of the
+Wazuh readiness wait in the original decision and the `degraded_usable`
+outcome of the persisted-credential amendment above. The #623 credential
+diagnosis and its `aptl lab stop -v` recovery guidance remain, but they now
+arrive in the fatal error.
+
+The policy is the same on every path that starts Wazuh:
+
+- For a Wazuh service that consumes a scenario-declared generated artifact,
+  the deployment backend's post-start authenticated readiness gate is the
+  single authority. It fails the realization closed and records boolean
+  `authenticated_readiness` evidence. Lab startup does not authenticate that
+  service again.
+- For a Wazuh service the backend did not prove, such as one in a scenario that
+  declares no Wazuh generated artifacts, the lab `wait_for_services` step polls
+  it under the same fail-closed policy. Both paths probe the controller's
+  published loopback ports, which is sound because `aptl lab start` refuses
+  the SSH-remote backend before any container starts.
+- Each path polls within one bounded budget and does not probe again after the
+  deadline. The failure reason is the last observation made inside the budget:
+  the service, the probe phase (`transport`, `authentication`,
+  `manager_status`), a normalized category such as `tls_handshake` or
+  `credentials_rejected`, and the numeric curl exit or HTTP status. The reason
+  never includes credentials, tokens, response bodies, or curl stderr.
+- Expected warm-up attempts log at debug level only. A persistent state at the
+  deadline is the only terminal signal.
+
+Other late startup checks keep their original classification, including SSH
+reachability, MCP build, SOC seeding, and snapshot capture.
+
 ## Guardrails
 
 - Keep lab-start orchestration in `core.lab` as a flat sequence of `_step_*`

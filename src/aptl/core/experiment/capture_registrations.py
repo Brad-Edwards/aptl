@@ -279,7 +279,8 @@ _SURICATA_WAZUH_SQLI = _techvault_registration(
             source_refs=frozenset(
                 {
                     "nodes.suricata.runtime.network_detection_engines.suricata-engine.output_streams.eve-json",
-                    "nodes.wazuh-manager.runtime.security_monitoring_managers.wazuh-manager.content_sets.suricata-rules",
+                    "nodes.wazuh-manager.runtime.security_monitoring_managers."
+                    "wazuh-manager.content_sets.suricata-rules",
                 }
             ),
             scope=_SQLI_SCOPE,

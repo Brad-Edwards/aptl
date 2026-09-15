@@ -5,7 +5,6 @@ from __future__ import annotations
 from raes_processor.models import ExecutionPlan
 from raes_runtime.registry import RuntimeTarget
 
-from aptl.backends.raes_profiles import select_backend_profiles
 from aptl.backends.raes_provisioner import AptlProvisioner
 
 

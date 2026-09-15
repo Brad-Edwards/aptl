@@ -7,7 +7,6 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from aptl.backends._raes_observation_helpers import (
-    consumer_mount_evidence,
     container_realized,
     mount_present,
     settled_inspect,

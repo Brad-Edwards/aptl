@@ -57,37 +57,21 @@ def build_observation_index(
     """Build all address maps once before observing the planned resources."""
 
     project_name = getattr(backend, "project_name", _DEFAULT_PROJECT_NAME)
+    node_containers, node_runtimes = _node_indexes(realization)
+    placement_content, placement_datasets = _placement_payload_indexes(realization)
     return RealizationObservationIndex(
         realization_root=_realization_root(backend, scenario_root),
-        image_free=frozenset(
-            node.address for node in realization.nodes if node.image is None
-        ),
-        node_containers={
-            node.address: node.container_name
-            for node in realization.nodes
-            if node.container_name
-        },
-        node_runtimes={
-            node.address: node.runtime
-            for node in realization.nodes
-            if node.runtime is not None
-        },
+        image_free=_image_free_addresses(realization),
+        node_containers=node_containers,
+        node_runtimes=node_runtimes,
         network_names={item.address: item.name for item in realization.networks},
         placement_targets={
             item.address: item.target_address for item in realization.placements
         },
         artifacts={item.address: item for item in realization.generated_artifacts},
         volumes={item.address: item for item in realization.persistent_volumes},
-        placement_content={
-            item.address: item.content
-            for item in realization.placements
-            if item.content is not None
-        },
-        placement_datasets={
-            item.address: item.dataset
-            for item in realization.placements
-            if item.dataset is not None
-        },
+        placement_content=placement_content,
+        placement_datasets=placement_datasets,
         placement_service_index_schemas=frozenset(
             item.address
             for item in realization.placements
@@ -95,18 +79,75 @@ def build_observation_index(
         ),
         project_name=project_name,
         realized_networks=realized_network_names(backend, project_name),
-        operating_system_addresses=frozenset(
-            authority.address
-            for authority in plan.realization_authority
-            if authority.requirement_kind == "os-family"
-            and authority.verification_scope is not None
-        ),
-        open_process_limit_addresses=frozenset(
-            authority.address
-            for authority in plan.realization_authority
-            if authority.requirement_kind == "process-resource-limits"
-            and authority.mode is RealizationAuthorityMode.OPEN
-        ),
+        operating_system_addresses=_operating_system_addresses(plan),
+        open_process_limit_addresses=_open_process_limit_addresses(plan),
+    )
+
+
+def _node_indexes(
+    realization: AptlRealization,
+) -> tuple[dict[str, str], dict[str, RuntimeConfiguration]]:
+    """Index concrete container names and typed runtime declarations by node."""
+
+    containers = {
+        node.address: node.container_name
+        for node in realization.nodes
+        if node.container_name
+    }
+    runtimes = {
+        node.address: node.runtime
+        for node in realization.nodes
+        if node.runtime is not None
+    }
+    return containers, runtimes
+
+
+def _image_free_addresses(realization: AptlRealization) -> frozenset[str]:
+    """Return nodes realized without an authored image."""
+
+    return frozenset(node.address for node in realization.nodes if node.image is None)
+
+
+def _placement_payload_indexes(
+    realization: AptlRealization,
+) -> tuple[
+    dict[str, DeploymentContentRealization],
+    dict[str, ParticipantDatasetRealization],
+]:
+    """Index content and participant-dataset placement payloads."""
+
+    content = {
+        item.address: item.content
+        for item in realization.placements
+        if item.content is not None
+    }
+    datasets = {
+        item.address: item.dataset
+        for item in realization.placements
+        if item.dataset is not None
+    }
+    return content, datasets
+
+
+def _operating_system_addresses(plan: ProvisioningPlan) -> frozenset[str]:
+    """Return authorities requiring concrete guest OS readback."""
+
+    return frozenset(
+        authority.address
+        for authority in plan.realization_authority
+        if authority.requirement_kind == "os-family"
+        and authority.verification_scope is not None
+    )
+
+
+def _open_process_limit_addresses(plan: ProvisioningPlan) -> frozenset[str]:
+    """Return open process-limit authorities APTL selects and observes."""
+
+    return frozenset(
+        authority.address
+        for authority in plan.realization_authority
+        if authority.requirement_kind == "process-resource-limits"
+        and authority.mode is RealizationAuthorityMode.OPEN
     )
 
 

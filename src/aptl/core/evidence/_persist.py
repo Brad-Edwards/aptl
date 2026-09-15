@@ -175,12 +175,15 @@ def _prepare_redactable_bytes(
 
     if media_type == "application/json":
         if handler is not None:
-            return _redact_json_bytes(raw, handler)
-        json.loads(raw)
-        return raw, False
-    if media_type == "text/plain":
-        return _prepare_text_bytes(raw, handler)
-    return _prepare_json_lines(raw, handler)
+            prepared = _redact_json_bytes(raw, handler)
+        else:
+            json.loads(raw)
+            prepared = raw, False
+    elif media_type == "text/plain":
+        prepared = _prepare_text_bytes(raw, handler)
+    else:
+        prepared = _prepare_json_lines(raw, handler)
+    return prepared
 
 
 def _prepare_text_bytes(

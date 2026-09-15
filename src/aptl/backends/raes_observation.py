@@ -47,7 +47,7 @@ from aptl.backends._raes_guest_os_observation import (
     guest_operating_system as _guest_operating_system,
 )
 from aptl.backends._raes_operational_observation import (
-    operational_realization_observations,
+    operational_realization_observations as _operational_realization_observations,
 )
 from aptl.backends._raes_observation_index import (
     RealizationObservationIndex,
@@ -66,9 +66,12 @@ from aptl.backends.raes_runtime_attestation import (
 )
 from aptl.backends.raes_runtime_observation import observe_runtime_concerns
 from aptl.core.deployment._compose_service_health import runtime_expects_completion
+from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.utils.logging import get_logger
 
 log = get_logger("realization-observe")
+
+operational_realization_observations = _operational_realization_observations
 
 if TYPE_CHECKING:
     from raes.runtime_configuration import RuntimeConfiguration

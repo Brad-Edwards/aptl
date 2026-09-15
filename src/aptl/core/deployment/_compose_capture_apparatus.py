@@ -171,7 +171,7 @@ class ComposeCaptureApparatusMixin:
                 script,
                 timeout=30,
             )
-        except (BackendTimeoutError, OSError, TypeError, UnicodeError, ValueError):
+        except (BackendTimeoutError, OSError, TypeError, ValueError):
             return False
         return result.returncode == 0
 

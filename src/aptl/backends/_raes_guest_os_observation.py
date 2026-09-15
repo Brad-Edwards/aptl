@@ -39,23 +39,25 @@ def _running_os_release(
 ) -> str | bytes | None:
     """Read os-release from a running guest, then its retained filesystem."""
 
+    payload = None
     try:
         result = backend.container_exec(container_name, ["cat", _OS_RELEASE_PATH])
     except (BackendTimeoutError, OSError):
         result = None
     if result is not None and getattr(result, "returncode", 1) == 0:
-        return getattr(result, "stdout", b"")
-    reader = getattr(backend, "container_file_read", None)
-    if not callable(reader):
-        return None
-    try:
-        return reader(
-            container_name,
-            _OS_RELEASE_PATH,
-            max_bytes=_MAX_OS_RELEASE_BYTES,
-        )
-    except (BackendTimeoutError, OSError):
-        return None
+        payload = getattr(result, "stdout", b"")
+    else:
+        reader = getattr(backend, "container_file_read", None)
+        if callable(reader):
+            try:
+                payload = reader(
+                    container_name,
+                    _OS_RELEASE_PATH,
+                    max_bytes=_MAX_OS_RELEASE_BYTES,
+                )
+            except (BackendTimeoutError, OSError):
+                pass
+    return payload
 
 
 __all__ = ("guest_operating_system",)

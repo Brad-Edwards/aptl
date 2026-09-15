@@ -204,7 +204,7 @@ def _stop_all(
                 clock,
                 "collector raised during stop",
             )
-        except (KeyboardInterrupt, SystemExit, GeneratorExit) as exc:
+        except (KeyboardInterrupt, SystemExit, GeneratorExit) as exc:  # NOSONAR
             # Finish reverse-order cleanup even if one stop is interrupted.
             # Do not convert an operator interrupt into apparent success.
             if interrupted is None:

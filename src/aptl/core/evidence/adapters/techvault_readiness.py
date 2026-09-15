@@ -134,19 +134,19 @@ def _valid_content_identity(digests: object, identities: object) -> bool:
 def _valid_rule_selection(sources: object, sids: object) -> bool:
     """Validate exact rule-source and local-SID selections."""
 
-    valid_sources = (
-        isinstance(sources, Sequence)
-        and not isinstance(sources, str | bytes)
-        and set(sources) == {"suricata-builtin", "techvault-local"}
-    )
-    valid_sids = (
-        isinstance(sids, Sequence)
-        and not isinstance(sids, str | bytes)
+    if (
+        not isinstance(sources, Sequence)
+        or isinstance(sources, str | bytes)
+        or not isinstance(sids, Sequence)
+        or isinstance(sids, str | bytes)
+    ):
+        return False
+    return (
+        set(sources) == {"suricata-builtin", "techvault-local"}
         and len(sids) == len(TECHVAULT_LOCAL_SIDS)
         and {int(value) for value in sids if isinstance(value, int | str)}
         == TECHVAULT_LOCAL_SIDS
     )
-    return valid_sources and valid_sids
 
 
 def _sha256(value: object) -> bool:

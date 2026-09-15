@@ -31,7 +31,7 @@ from aptl.core.deployment._compose_stateful_model import (
     artifact_environment_file_path,
     artifact_source_path as _artifact_source_path,
     effective_stateful_model_errors as _effective_stateful_model_errors,
-    stateful_override_payload,
+    stateful_override_payload as _stateful_override_payload,
 )
 from aptl.core.deployment._compose_stateful_override import write_stateful_override
 from aptl.core.deployment._cortex_service_credentials import (
@@ -58,6 +58,7 @@ from aptl.core.lab_types import LabResult
 
 artifact_source_path = _artifact_source_path
 effective_stateful_model_errors = _effective_stateful_model_errors
+stateful_override_payload = _stateful_override_payload
 
 
 class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):

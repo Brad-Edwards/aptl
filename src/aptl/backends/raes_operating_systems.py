@@ -83,20 +83,29 @@ def _parse_os_release_fields(text: str) -> dict[str, str] | None:
     for line in text.splitlines():
         if not line or line.startswith("#"):
             continue
-        key, separator, value = line.partition("=")
-        if not separator or _KEY_RE.fullmatch(key) is None or key in fields:
+        parsed = _parse_os_release_assignment(line, fields)
+        if parsed is None:
             valid = False
             break
-        if value.startswith(('"', "'")):
-            if len(value) < 2 or value[-1] != value[0]:
-                valid = False
-                break
-            value = value[1:-1]
-        if any(ord(char) < 0x20 or ord(char) > 0x7E for char in value):
-            valid = False
-            break
+        key, value = parsed
         fields[key] = value
     return fields if valid else None
+
+
+def _parse_os_release_assignment(
+    line: str, existing: Mapping[str, str]
+) -> tuple[str, str] | None:
+    """Parse one unique printable os-release assignment."""
+
+    key, separator, value = line.partition("=")
+    if not separator or _KEY_RE.fullmatch(key) is None or key in existing:
+        return None
+    if value.startswith(('"', "'")):
+        if len(value) < 2 or value[-1] != value[0]:
+            return None
+        value = value[1:-1]
+    printable = all(0x20 <= ord(char) <= 0x7E for char in value)
+    return (key, value) if printable else None
 
 
 def _supported_os_identity(

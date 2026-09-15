@@ -10,13 +10,16 @@ from aptl.core.deployment._realization_primitives import (
     DeploymentImageRealization,
     DeploymentNetworkAttachment,
     DeploymentNetworkRealization,
-    ImageRealizationMode,
+    ImageRealizationMode as _ImageRealizationMode,
     LOOPBACK_HOST_IP,
-    valid_environment_variable_name,
+    valid_environment_variable_name as _valid_environment_variable_name,
 )
 
 if TYPE_CHECKING:
     from raes.runtime_configuration import RuntimeConfiguration
+
+ImageRealizationMode = _ImageRealizationMode
+valid_environment_variable_name = _valid_environment_variable_name
 
 
 StatefulConsumerAccessMode = Literal["read_only", "read_write"]

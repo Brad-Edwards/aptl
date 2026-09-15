@@ -100,6 +100,7 @@ if TYPE_CHECKING:
     from aptl.backends.raes_start_model import AcesRunTarget, AdmittedScenarioStart
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.experiment.capture_plan import CapturePlan
+    from aptl.core.experiment.capture_registry import CaptureBinding
 
 log = get_logger("lab")
 
@@ -2296,10 +2297,7 @@ def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
 def _step_activate_capture_apparatus(ctx: _LabStartContext) -> LabResult | None:
     """Open the admitted full-run transcript window before any SSH probe."""
 
-    from aptl.backends.raes_evidence_acquisition import (
-        TRANSCRIPT_REGISTRATION,
-        persist_active_transcript_authority,
-    )
+    from aptl.backends.raes_evidence_acquisition import TRANSCRIPT_REGISTRATION
 
     admitted = ctx.admitted_start
     plan = getattr(admitted, "capture_plan", None)
@@ -2312,33 +2310,46 @@ def _step_activate_capture_apparatus(ctx: _LabStartContext) -> LabResult | None:
     if not transcript:
         return None
     activate = getattr(ctx.backend, "activate_capture_apparatus", None)
+    authority = (
+        _activate_required_transcript(ctx, plan, transcript[0], activate)
+        if len(transcript) == 1 and callable(activate)
+        else None
+    )
     failure = None
-    authority = None
-    if (
-        len(transcript) != 1
-        or not callable(activate)
-        or ctx.run_store is None
-        or ctx.run_id is None
-    ):
+    if authority is None:
         failure = LabResult(success=False, error=_TRANSCRIPT_UNAVAILABLE)
     else:
-        try:
-            persist_active_transcript_authority(
-                project_dir=ctx.project_dir,
-                plan=plan,
-                binding=transcript[0],
-                run_store=ctx.run_store,
-                run_id=ctx.run_id,
-            )
-            authority = activate(plan_id=plan.plan_id, run_id=ctx.run_id)
-        except Exception:
-            log.error("Required transcript apparatus activation failed")
-            failure = LabResult(success=False, error=_TRANSCRIPT_UNAVAILABLE)
-    if failure is None and not isinstance(authority, dict):
-        failure = LabResult(success=False, error=_TRANSCRIPT_UNAVAILABLE)
-    if failure is None:
         ctx.transcript_capture_authority = authority
     return failure
+
+
+def _activate_required_transcript(
+    ctx: _LabStartContext,
+    plan: CapturePlan,
+    binding: CaptureBinding,
+    activate: Callable[..., object],
+) -> dict[str, object] | None:
+    """Persist and activate one complete admitted transcript authority."""
+
+    from aptl.backends.raes_evidence_acquisition import (
+        persist_active_transcript_authority,
+    )
+
+    if ctx.run_store is None or ctx.run_id is None:
+        return None
+    try:
+        persist_active_transcript_authority(
+            project_dir=ctx.project_dir,
+            plan=plan,
+            binding=binding,
+            run_store=ctx.run_store,
+            run_id=ctx.run_id,
+        )
+        authority = activate(plan_id=plan.plan_id, run_id=ctx.run_id)
+    except Exception:
+        log.error("Required transcript apparatus activation failed")
+        return None
+    return authority if isinstance(authority, dict) else None
 
 
 def _step_write_run_record(ctx: _LabStartContext) -> LabResult | None:

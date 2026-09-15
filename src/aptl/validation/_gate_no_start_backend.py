@@ -76,6 +76,15 @@ class _NoStartBackend(object):
         return _simulated_digest(image_ref)
 
     @staticmethod
+    def substrate_image_identity(image_ref: str) -> tuple[str, str] | None:
+        """Return a deterministic local substrate identity for static planning."""
+
+        return (
+            _simulated_digest(image_ref),
+            "application/vnd.oci.image.config.v1+json",
+        )
+
+    @staticmethod
     def container_image_digest(container_name: str) -> str | None:
         """Return the digest the stub simulated for this container's image."""
 

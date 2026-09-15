@@ -1540,6 +1540,7 @@ docs/architecture/issue-992-backend-observability-ownership-preflight.md	archite
 mcp/aptl-mcp-common/src/telemetry-export.ts	core-candidate	Migrate only after public-import, history and scenario-independence verification
 mcp/aptl-mcp-common/tests/telemetry-export.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 src/aptl/backends/raes_evidence.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_native_proposition_truth.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_evidence_acquisition.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_observability_scope.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_operating_systems.py	core-candidate	Migrate only after public-import, history and scenario-independence verification

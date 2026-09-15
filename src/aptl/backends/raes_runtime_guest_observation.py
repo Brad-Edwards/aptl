@@ -78,22 +78,34 @@ def _user_matches(
     fields = row.strip().split(":") if row is not None else []
     if len(fields) != 7 or fields[0] != username:
         return False
+    primary = _exec_stdout(backend, container_name, ["id", "-gn", username])
+    groups = _exec_stdout(backend, container_name, ["id", "-Gn", username])
+    return _passwd_fields_match(fields, user) and _group_records_match(
+        primary, groups, user
+    )
+
+
+def _passwd_fields_match(fields: list[str], user: object) -> bool:
+    """Compare the supported passwd fields for one declared user."""
+
     uid = getattr(user, "uid", None)
-    field_values_match = (
+    return bool(
         (uid is None or fields[2] == str(uid))
         and (not user.gecos or fields[4] == user.gecos)
         and (not user.home or fields[5] == user.home)
         and (not user.shell or fields[6] == user.shell)
     )
-    primary = _exec_stdout(backend, container_name, ["id", "-gn", username])
-    groups = _exec_stdout(backend, container_name, ["id", "-Gn", username])
-    expected_groups = {user.primary_group, *user.supplemental_groups}
+
+
+def _group_records_match(primary: str | None, groups: str | None, user: object) -> bool:
+    """Compare a user's primary and supplemental guest group records."""
+
+    expected = {user.primary_group, *user.supplemental_groups}
     return bool(
-        field_values_match
-        and primary is not None
+        primary is not None
         and primary.strip() == user.primary_group
         and groups is not None
-        and set(groups.split()) == expected_groups
+        and set(groups.split()) == expected
     )
 
 
@@ -187,24 +199,39 @@ def _parse_process_limits(
     except UnicodeDecodeError:
         return {}
     observed: dict[str, tuple[int | str, int | str]] = {}
-    valid = True
     for line in text.splitlines():
-        for label, resource in _PROCESS_LIMIT_LABELS.items():
-            if not line.startswith(label):
-                continue
-            columns = line[len(label) :].split()
-            if len(columns) != 3:
-                valid = False
-                break
-            soft = _limit_value(columns[0])
-            hard = _limit_value(columns[1])
-            if soft is None or hard is None:
-                valid = False
-                break
-            observed[resource] = (soft, hard)
+        valid, row = _process_limit_row(line)
         if not valid:
-            break
-    return observed if valid else {}
+            return {}
+        if row is not None:
+            resource, soft, hard = row
+            observed[resource] = (soft, hard)
+    return observed
+
+
+def _process_limit_row(
+    line: str,
+) -> tuple[bool, tuple[str, int | str, int | str] | None]:
+    """Parse one selected procfs limit row and distinguish irrelevant rows."""
+
+    selected = next(
+        (
+            (label, resource)
+            for label, resource in _PROCESS_LIMIT_LABELS.items()
+            if line.startswith(label)
+        ),
+        None,
+    )
+    if selected is None:
+        return True, None
+    label, resource = selected
+    columns = line[len(label) :].split()
+    if len(columns) != 3:
+        return False, None
+    soft = _limit_value(columns[0])
+    hard = _limit_value(columns[1])
+    valid = soft is not None and hard is not None
+    return valid, (resource, soft, hard) if valid else None
 
 
 def _limit_value(value: str) -> int | str | None:

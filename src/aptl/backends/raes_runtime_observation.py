@@ -377,6 +377,15 @@ def _observe_local_control_interfaces(
 def _local_control_interface_matches(interface: object, mounts: list[object]) -> bool:
     """Corroborate the canonical Docker socket in daemon mount metadata."""
 
+    expected = _supported_local_control_interface(interface)
+    return expected is not None and any(
+        _local_control_mount_matches(mount, *expected) for mount in mounts
+    )
+
+
+def _supported_local_control_interface(interface: object) -> tuple[str, str] | None:
+    """Return the admitted Docker socket source and access mode."""
+
     kind = str(getattr(interface.kind, "value", interface.kind))
     access = str(getattr(interface.access, "value", interface.access))
     source = interface.bind_source or interface.path
@@ -387,13 +396,18 @@ def _local_control_interface_matches(interface: object, mounts: list[object]) ->
         and source == "/var/run/docker.sock"
         and not interface.protocol
     )
-    return supported and any(
+    return (source, access) if supported else None
+
+
+def _local_control_mount_matches(mount: object, source: str, access: str) -> bool:
+    """Compare one daemon-observed bind mount to the admitted interface."""
+
+    return bool(
         isinstance(mount, Mapping)
         and mount.get("Type") == "bind"
         and mount.get("Source") == source
-        and mount.get("Destination") == interface.path
+        and mount.get("Destination") == "/var/run/docker.sock"
         and bool(mount.get("RW")) == (access == "read_write")
-        for mount in mounts
     )
 
 
@@ -426,19 +440,19 @@ def _realized_environment_record(
     """Project one declared variable through its realized value boundary."""
 
     name = getattr(variable, "name", "")
-    if not name:
-        return None
-    record = variable.model_dump(mode="json", by_alias=True)
-    classification = record.get("value_classification")
-    declared_value = record.get("value")
-    if classification not in _PROTECTED and not declared_value:
-        realized_value = realized.get(name)
-        if realized_value:
-            record["value"] = realized_value
-        return record
-    if name not in realized:
-        return None
-    record["value"] = "" if classification in _PROTECTED else realized[name]
+    record = None
+    if name:
+        candidate = variable.model_dump(mode="json", by_alias=True)
+        classification = candidate.get("value_classification")
+        declared_value = candidate.get("value")
+        if classification not in _PROTECTED and not declared_value:
+            realized_value = realized.get(name)
+            if realized_value:
+                candidate["value"] = realized_value
+            record = candidate
+        elif name in realized:
+            candidate["value"] = "" if classification in _PROTECTED else realized[name]
+            record = candidate
     return record
 
 

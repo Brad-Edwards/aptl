@@ -19,13 +19,16 @@ APTL evaluates exactly the observed-state shapes it actually observes.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
 from typing import Any
 
 from raes_contracts.contracts import ExperimentEvidenceRecordModel
 from raes_contracts.planning import EvaluationPlan
 from raes_contracts.runtime_state import RuntimeSnapshot
 
+from aptl.backends._raes_native_proposition_truth import (
+    NATIVE_EVIDENCE_CAPABILITIES,
+    native_evidence_result,
+)
 from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, APTL_RAES_TARGET_VERSION
 from aptl.backends.raes_service_index_schema import INTERFACE_PROFILE
 from aptl.core.experiment.trial_plan import compute_source_set_digest
@@ -47,43 +50,6 @@ _BACKEND_MANIFEST_REF = f"{APTL_RAES_TARGET_NAME}@{APTL_RAES_TARGET_VERSION}"
 # APTL's readback occurs in scenario time (matching the evaluator's declared
 # supported_time_domains); the backend manifest is the clock authority.
 _TIME_DOMAIN = "scenario_time"
-
-
-@dataclass(frozen=True)
-class _NativeEvidenceCapability:
-    """Exact authored proposition shape one trusted native record can decide."""
-
-    predicate_property: str
-    semantic_ref: str
-    evidence_channel: str
-    evidence_kind: str
-    record_channel_ref: str
-
-
-_NATIVE_EVIDENCE_CAPABILITIES = {
-    "cortex-enrichment-readback": _NativeEvidenceCapability(
-        predicate_property="cortex-enrichment-ready",
-        semantic_ref="urn:raes:observable:cortex-enrichment-ready",
-        evidence_channel="api_response",
-        evidence_kind="observation",
-        record_channel_ref="participant-observation",
-    ),
-    "suricata-local-rule-readiness": _NativeEvidenceCapability(
-        predicate_property="network-detection-rule-source-ready",
-        semantic_ref="urn:raes:observable:network-detection-rule-source-ready",
-        evidence_channel="log",
-        evidence_kind="log",
-        record_channel_ref="backend-log",
-    ),
-    "suricata-login-sqli-alert": _NativeEvidenceCapability(
-        predicate_property="network-detection-alert-sid-1000010-observed",
-        semantic_ref="urn:raes:observable:network-detection-alert-observed",
-        evidence_channel="log",
-        evidence_kind="log",
-        record_channel_ref="backend-log",
-    ),
-}
-_NATIVE_EVIDENCE_IMPLEMENTATION_ID = "aptl.techvault-native-evidence-readback"
 
 
 def _invert(outcome: str) -> str:
@@ -184,129 +150,6 @@ def _split_plan_operations(
         elif op.resource_type == "assertion" and isinstance(op.payload, Mapping):
             assertions[op.address] = op.payload
     return propositions, assertions
-
-
-def _record_has_measurement_channel(
-    record: ExperimentEvidenceRecordModel,
-    channel_ref: str,
-) -> bool:
-    """Return whether ``record`` names the exact admitted measurement channel."""
-
-    return any(
-        source.ref_kind == "measurement-channel" and source.ref_id == channel_ref
-        for source in record.source_refs
-    )
-
-
-def _native_evidence_record(
-    ppayload: Mapping[str, Any],
-    evidence_records: tuple[ExperimentEvidenceRecordModel, ...],
-) -> ExperimentEvidenceRecordModel | None:
-    """Return the single native record that exactly matches ``ppayload``.
-
-    The capture source already validated the evidence semantics before it
-    emitted an OK outcome. This join prevents that proof from being reused for
-    a different requirement, predicate, semantic reference, or channel.
-    """
-
-    context = _native_evidence_context(ppayload)
-    if context is None:
-        return None
-    requirement_ref, capability, predicate = context
-    if not _native_predicate_matches(ppayload, capability, predicate):
-        return None
-    candidates = tuple(
-        record
-        for record in evidence_records
-        if record.capture_requirement_ref == requirement_ref
-        and record.output_contract == "experiment-evidence-record-v1"
-        and record.evidence_kind == capability.evidence_kind
-        and record.redaction_state != "redacted"
-        and _record_has_measurement_channel(record, capability.record_channel_ref)
-        and record.raw_content.content_checksum.algorithm == "sha256"
-    )
-    return candidates[0] if len(candidates) == 1 else None
-
-
-def _native_evidence_context(
-    ppayload: Mapping[str, Any],
-) -> tuple[str, _NativeEvidenceCapability, Mapping[str, object]] | None:
-    """Resolve one exact evidence requirement, capability, and predicate."""
-
-    result = None
-    requirement_refs = _string_tuple(ppayload.get("evidence_requirement_refs"))
-    if len(requirement_refs) == 1:
-        requirement_ref = requirement_refs[0]
-        capability = _NATIVE_EVIDENCE_CAPABILITIES.get(requirement_ref)
-        spec = ppayload.get("spec")
-        predicate = spec.get("predicate") if isinstance(spec, Mapping) else None
-        if capability is not None and isinstance(predicate, Mapping):
-            result = requirement_ref, capability, predicate
-    return result
-
-
-def _native_predicate_matches(
-    ppayload: Mapping[str, Any],
-    capability: _NativeEvidenceCapability,
-    predicate: Mapping[str, object],
-) -> bool:
-    """Validate every authored axis bound to one native evidence capability."""
-
-    return not (
-        ppayload.get("predicate_kind") != "boolean"
-        or ppayload.get("quantifier") != "all"
-        or _string_tuple(ppayload.get("evidence_channels"))
-        != (capability.evidence_channel,)
-        or _string_tuple(ppayload.get("unresolved_evidence_channel_refs"))
-        or predicate.get("kind") != "boolean"
-        or predicate.get("property") != capability.predicate_property
-        or predicate.get("semantic_ref") != capability.semantic_ref
-        or predicate.get("operator") != "equals"
-        or predicate.get("expected") is not True
-    )
-
-
-def _native_evidence_result(
-    assertion_address: str,
-    proposition_address: str,
-    polarity: str,
-    ppayload: Mapping[str, Any],
-    evidence_records: tuple[ExperimentEvidenceRecordModel, ...],
-) -> dict[str, Any] | None:
-    """Project one exact TechVault evidence record into decided truth."""
-
-    record = _native_evidence_record(ppayload, evidence_records)
-    if record is None:
-        return None
-    outcome = _TRUE
-    assertion_outcome = outcome if polarity == _POSITIVE else _invert(outcome)
-    digest = f"sha256:{record.raw_content.content_checksum.value}"
-    requirement_ref = record.capture_requirement_ref
-    return {
-        "schema_version": _TRUTH_RESULT_SCHEMA,
-        "result_id": f"aptl:{assertion_address}:{record.evidence_record_id}",
-        "proposition_address": proposition_address,
-        "assertion_address": assertion_address,
-        "assertion_polarity": polarity,
-        "proposition_outcome": outcome,
-        "assertion_outcome": assertion_outcome,
-        "evaluation_basis": _OBSERVED_STATE,
-        "probe_binding": {
-            "binding_id": f"aptl:{assertion_address}:{record.evidence_record_id}",
-            "implementation_id": _NATIVE_EVIDENCE_IMPLEMENTATION_ID,
-            "implementation_version": APTL_RAES_TARGET_VERSION,
-            "artifact_digest": digest,
-            "backend_manifest_ref": _BACKEND_MANIFEST_REF,
-            "proposition_address": proposition_address,
-            "capability_refs": [f"capture-requirement:{requirement_ref}"],
-        },
-        "evidence_refs": [record.evidence_record_id],
-        "temporal_context": {
-            "boundary_ref": record.capture_window_ref,
-            "time_domain": _TIME_DOMAIN,
-            "clock_authority": _BACKEND_MANIFEST_REF,
-        },
-    }
 
 
 def _declared_node_presence_result(
@@ -425,7 +268,7 @@ def _observed_assertion_result(
 ) -> dict[str, Any] | None:
     """Project native evidence or corroborated service-content truth."""
 
-    native_result = _native_evidence_result(
+    native_result = native_evidence_result(
         assertion_address,
         proposition_address,
         polarity,
@@ -515,7 +358,7 @@ def native_evidence_truth_is_complete(
         requirement_ref
         for payload in propositions.values()
         for requirement_ref in _string_tuple(payload.get("evidence_requirement_refs"))
-        if requirement_ref in _NATIVE_EVIDENCE_CAPABILITIES
+        if requirement_ref in NATIVE_EVIDENCE_CAPABILITIES
     )
     if not planned_requirements or len(planned_requirements) != len(
         set(planned_requirements)
@@ -523,7 +366,7 @@ def native_evidence_truth_is_complete(
         return False
     records_by_requirement: dict[str, list[ExperimentEvidenceRecordModel]] = {}
     for record in evidence_records:
-        if record.capture_requirement_ref in _NATIVE_EVIDENCE_CAPABILITIES:
+        if record.capture_requirement_ref in NATIVE_EVIDENCE_CAPABILITIES:
             records_by_requirement.setdefault(
                 record.capture_requirement_ref,
                 [],

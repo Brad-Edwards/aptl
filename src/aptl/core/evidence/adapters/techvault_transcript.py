@@ -143,7 +143,18 @@ def _valid_transcript_session(
         and _inside_window(session.started_at, start_iso, end_iso)
         and _inside_window(session.finished_at, start_iso, end_iso)
     )
-    valid_frames = (
+    return (
+        valid_metadata
+        and _valid_transcript_frames(session)
+        and _transcript_frames_are_utf8(session.frames)
+        and _transcript_chain(session.frames) == session.final_chain_digest
+    )
+
+
+def _valid_transcript_frames(session: TranscriptSession) -> bool:
+    """Validate frame order, direction, and session-relative timestamps."""
+
+    return (
         all(frame.sequence == index for index, frame in enumerate(session.frames, 1))
         and all(frame.direction in {"input", "output"} for frame in session.frames)
         and all(
@@ -151,18 +162,18 @@ def _valid_transcript_session(
             for frame in session.frames
         )
     )
-    decodable = True
+
+
+def _transcript_frames_are_utf8(frames: Sequence[TranscriptFrame]) -> bool:
+    """Return whether every captured frame is strict UTF-8."""
+
+    valid = True
     try:
-        for frame in session.frames:
+        for frame in frames:
             frame.data.decode("utf-8")
     except UnicodeDecodeError:
-        decodable = False
-    return (
-        valid_metadata
-        and valid_frames
-        and decodable
-        and _transcript_chain(session.frames) == session.final_chain_digest
-    )
+        valid = False
+    return valid
 
 
 def _transcript_chain(frames: Sequence[TranscriptFrame]) -> str:

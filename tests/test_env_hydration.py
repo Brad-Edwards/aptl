@@ -125,10 +125,12 @@ class TestHydrateDotenv:
     def test_noops_when_existing_env_is_hydrated(self, tmp_path):
         from aptl.core.env import hydrate_dotenv
 
+        template_values = _write_wazuh_templates(tmp_path)
         env_path = tmp_path / ".env"
+        # The hash-pinned fixtures must already hold their required values for a
+        # true no-op: INDEXER_* mirrors the Filebeat template, DASHBOARD_* the
+        # kibanaserver demo user. Genuine secrets keep whatever is already set.
         existing_values = {
-            _secret_key("INDEXER", "PASSWORD"): _runtime_value("indexer"),
-            _secret_key("DASHBOARD", "PASSWORD"): _runtime_value("dashboard"),
             _secret_key("API", "PASSWORD"): _runtime_value("api"),
             _secret_key("WAZUH", "CLUSTER", "KEY"): _runtime_value("cluster"),
             _secret_key("APTL", "API", "TOKEN"): _runtime_value("token"),
@@ -137,8 +139,10 @@ class TestHydrateDotenv:
         }
         env_path.write_text(
             _env_line("INDEXER_USERNAME", "admin")
-            + "".join(_env_line(key, value) for key, value in existing_values.items())
+            + _env_line(_secret_key("INDEXER", "PASSWORD"), template_values["indexer"])
             + _env_line("DASHBOARD_USERNAME", "kibanaserver")
+            + _env_line(_secret_key("DASHBOARD", "PASSWORD"), "kibanaserver")
+            + "".join(_env_line(key, value) for key, value in existing_values.items())
             + _env_line("API_USERNAME", "wazuh-wui")
             + _env_line("GRAFANA_ADMIN_USER", "admin")
         )
@@ -147,4 +151,64 @@ class TestHydrateDotenv:
         result = hydrate_dotenv(env_path)
 
         assert result.changed is False
+        assert result.overridden_keys == ()
         assert env_path.read_text() == before
+
+    def test_reconciles_divergent_indexer_password_fixture(self, tmp_path):
+        from aptl.core.env import hydrate_dotenv, load_dotenv
+
+        template_values = _write_wazuh_templates(tmp_path)
+        divergent = _runtime_value("my-own-indexer-pw")
+        env_path = tmp_path / ".env"
+        env_path.write_text(
+            _env_line("INDEXER_USERNAME", "admin")
+            + _env_line(_secret_key("INDEXER", "PASSWORD"), divergent)
+        )
+
+        result = hydrate_dotenv(env_path)
+        env = load_dotenv(env_path)
+
+        # A user-supplied value that cannot match the indexer's baked hash is
+        # reconciled to the fixture, not preserved.
+        assert _secret_key("INDEXER", "PASSWORD") in result.overridden_keys
+        assert _secret_key("INDEXER", "PASSWORD") in result.updated_keys
+        assert result.changed is True
+        assert env[_secret_key("INDEXER", "PASSWORD")] == template_values["indexer"]
+        assert env[_secret_key("INDEXER", "PASSWORD")] != divergent
+
+    def test_reconciles_divergent_dashboard_password_fixture(self, tmp_path):
+        from aptl.core.env import hydrate_dotenv, load_dotenv
+
+        _write_wazuh_templates(tmp_path)
+        divergent = _runtime_value("my-own-dashboard-pw")
+        env_path = tmp_path / ".env"
+        env_path.write_text(
+            _env_line("DASHBOARD_USERNAME", "kibanaserver")
+            + _env_line(_secret_key("DASHBOARD", "PASSWORD"), divergent)
+        )
+
+        result = hydrate_dotenv(env_path)
+        env = load_dotenv(env_path)
+
+        assert _secret_key("DASHBOARD", "PASSWORD") in result.overridden_keys
+        assert env[_secret_key("DASHBOARD", "PASSWORD")] == "kibanaserver"
+        assert env[_secret_key("DASHBOARD", "PASSWORD")] != divergent
+
+    def test_preserves_divergent_genuine_secret(self, tmp_path):
+        from aptl.core.env import hydrate_dotenv, load_dotenv
+
+        _write_wazuh_templates(tmp_path)
+        chosen_api = _runtime_value("api")
+        env_path = tmp_path / ".env"
+        env_path.write_text(
+            _env_line("API_USERNAME", "wazuh-wui")
+            + _env_line(_secret_key("API", "PASSWORD"), chosen_api)
+        )
+
+        result = hydrate_dotenv(env_path)
+        env = load_dotenv(env_path)
+
+        # API_PASSWORD is a real user-selectable secret (the manager creates the
+        # API user from it), so a chosen value is kept, never reconciled.
+        assert _secret_key("API", "PASSWORD") not in result.overridden_keys
+        assert env[_secret_key("API", "PASSWORD")] == chosen_api

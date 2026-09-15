@@ -128,6 +128,32 @@ class TestWaitForService:
         assert result.ready is True
         assert check_fn.call_count == 3
 
+    def test_retry_sleep_is_clamped_to_the_remaining_budget(self):
+        """No probe may start after the deadline (issue #1002 review).
+
+        With 1s of budget left and a 10s interval, the loop sleeps only that
+        second, makes its last probe at the deadline, and then times out,
+        instead of sleeping past the deadline and probing again.
+        """
+        from aptl.core.services import wait_for_service
+
+        check_fn = MagicMock(return_value=False)
+        sleeps: list[float] = []
+
+        # start(0); now after probe 1 (1.0); after probe 2 (11.0); after 3 (12.0)
+        result = wait_for_service(
+            check_fn=check_fn,
+            timeout=12,
+            interval=10,
+            service_name="test-service",
+            time_source=iter([0.0, 1.0, 11.0, 12.0]).__next__,
+            sleep=sleeps.append,
+        )
+
+        assert result.ready is False
+        assert check_fn.call_count == 3
+        assert sleeps == [10, 1.0]
+
     def test_timeout_zero_fails_immediately(self):
         """Should fail/return immediately with timeout=0 (C7)."""
         from aptl.core.services import wait_for_service
@@ -189,221 +215,267 @@ class TestWaitForService:
         assert result.ready is True
 
 
-class TestCheckIndexerReady:
-    """Tests for the Wazuh Indexer readiness check.
+def _outcome(status=None, payload=None, exit_code=0, failure=None):
+    from aptl.utils.curl_safe import CurlOutcome
 
-    ``check_indexer_ready`` now delegates entirely to
-    ``check_indexer_status`` (issue #623) — the readiness question is
-    just "did we get a 2xx". These tests mock the delegate boundary;
-    the argv-safety guarantee itself is covered by
-    ``TestCheckIndexerStatus`` and ``tests/test_curl_safe.py``.
+    return CurlOutcome(exit_code, status, payload, failure)
+
+
+_TOKEN = {"error": 0, "data": {"token": "bounded-token"}}
+_RUNNING = {"error": 0, "data": {"affected_items": [{"wazuh-manager": "running"}]}}
+_ROOT_401 = {"title": "Unauthorized", "detail": "No authorization token provided"}
+
+
+def _probe(mocker, *outcomes):
+    from aptl.core.services import probe_manager_api
+
+    request = mocker.patch("aptl.core.services.curl_request", side_effect=outcomes)
+    result = probe_manager_api(
+        url="https://localhost:55000/",
+        username="api-user",
+        password="api-password",
+    )
+    return result, request
+
+
+class TestProbeManagerApi:
+    """Phase-classified Wazuh manager API probe (issue #1002).
+
+    Each attempt proves transport with a credential-free request before any
+    credential is sent, then authenticates, then checks manager status. The
+    probe reports the phase that stopped it and a normalized category so the
+    polling owner can tell warm-up from a terminal condition.
     """
 
-    def test_returns_true_for_status_200(self, mocker):
-        """Should return True for a 2xx status."""
-        from aptl.core.services import check_indexer_ready
-
-        mocker.patch("aptl.core.services.check_indexer_status", return_value=200)
-
-        assert (
-            check_indexer_ready(
-                url="https://localhost:9200",
-                username="admin",
-                password="secret",
-            )
-            is True
+    def test_ready_after_all_three_phases(self, mocker):
+        result, request = _probe(
+            mocker,
+            _outcome(401, _ROOT_401),
+            _outcome(200, _TOKEN),
+            _outcome(200, _RUNNING),
         )
 
-    def test_returns_false_for_status_401(self, mocker):
-        """A 401 means the indexer is listening but rejected the
-        credentials -- that is NOT ready, but it is also not "no
-        response", which is the whole point of the #623 fix."""
-        from aptl.core.services import check_indexer_ready
+        assert result.ready is True
+        assert (result.phase, result.category) == ("ready", "ready")
+        urls = [c.args[0] for c in request.call_args_list]
+        assert urls == [
+            "https://localhost:55000/",
+            "https://localhost:55000/security/user/authenticate",
+            "https://localhost:55000/manager/status",
+        ]
 
-        mocker.patch("aptl.core.services.check_indexer_status", return_value=401)
+    def test_transport_phase_sends_no_credentials(self, mocker):
+        result, request = _probe(mocker, _outcome(exit_code=35))
 
-        assert (
-            check_indexer_ready(
-                url="https://localhost:9200",
-                username="admin",
-                password="secret",
-            )
-            is False
+        assert request.call_count == 1
+        kwargs = request.call_args.kwargs
+        assert kwargs.get("auth_header") is None
+        assert kwargs["insecure"] is True
+        assert result.ready is False
+        assert (result.phase, result.category) == ("transport", "tls_handshake")
+        assert result.curl_exit == 35
+        assert result.http_status is None
+
+    def test_authentication_uses_basic_header_file_not_url(self, mocker):
+        _, request = _probe(mocker, _outcome(401, _ROOT_401), _outcome(401))
+
+        auth_call = request.call_args_list[1]
+        assert auth_call.kwargs["auth_header"].startswith("Basic ")
+        assert auth_call.kwargs["method"] == "POST"
+        assert "api-user" not in auth_call.args[0]
+        assert "api-password" not in auth_call.args[0]
+
+    def test_manager_status_uses_bearer_token(self, mocker):
+        _, request = _probe(
+            mocker,
+            _outcome(401, _ROOT_401),
+            _outcome(200, _TOKEN),
+            _outcome(200, _RUNNING),
         )
 
-    def test_returns_false_when_status_is_none(self, mocker):
-        """No HTTP response at all (transport failure, timeout, or
-        connection refused) is still "not ready"."""
-        from aptl.core.services import check_indexer_ready
+        assert request.call_args_list[2].kwargs["auth_header"] == "Bearer bounded-token"
 
-        mocker.patch("aptl.core.services.check_indexer_status", return_value=None)
+    @pytest.mark.parametrize("status", [401, 403])
+    def test_rejected_credentials_are_an_authentication_failure(self, mocker, status):
+        result, _ = _probe(mocker, _outcome(401, _ROOT_401), _outcome(status))
 
-        assert (
-            check_indexer_ready(
-                url="https://localhost:9200",
-                username="admin",
-                password="secret",
-            )
-            is False
+        assert (result.phase, result.category) == (
+            "authentication",
+            "credentials_rejected",
+        )
+        assert result.http_status == status
+
+    def test_transport_failure_after_listener_answered_keeps_its_phase(self, mocker):
+        result, _ = _probe(mocker, _outcome(401, _ROOT_401), _outcome(exit_code=56))
+
+        assert (result.phase, result.category) == ("authentication", "connection_reset")
+        assert result.curl_exit == 56
+
+    @pytest.mark.parametrize(
+        "payload",
+        [None, {"error": 1}, {"error": 0, "data": {"token": ""}}, ["not", "a", "map"]],
+    )
+    def test_missing_token_is_an_invalid_response(self, mocker, payload):
+        result, request = _probe(mocker, _outcome(401, _ROOT_401), _outcome(200, payload))
+
+        assert (result.phase, result.category) == ("authentication", "invalid_response")
+        assert request.call_count == 2
+
+    def test_other_http_status_is_classified_as_http_error(self, mocker):
+        result, _ = _probe(mocker, _outcome(401, _ROOT_401), _outcome(500))
+
+        assert (result.phase, result.category) == ("authentication", "http_error")
+        assert result.http_status == 500
+
+    @pytest.mark.parametrize(
+        "payload", [{"error": 1, "data": {"affected_items": []}}, {"error": 0}, None]
+    )
+    def test_unready_manager_status_fails_the_status_phase(self, mocker, payload):
+        result, _ = _probe(
+            mocker,
+            _outcome(401, _ROOT_401),
+            _outcome(200, _TOKEN),
+            _outcome(200, payload),
+        )
+
+        assert (result.phase, result.category) == ("manager_status", "not_ready")
+
+    def test_describe_is_bounded_and_secret_free(self, mocker):
+        result, _ = _probe(
+            mocker,
+            _outcome(401, _ROOT_401),
+            _outcome(200, _TOKEN),
+            _outcome(exit_code=28),
+        )
+
+        text = result.describe()
+        assert text == "manager_status phase failed: timeout (curl exit 28)"
+        assert "bounded-token" not in text + repr(result)
+        assert "api-password" not in text + repr(result)
+
+    def test_describe_names_the_http_status(self, mocker):
+        result, _ = _probe(mocker, _outcome(401, _ROOT_401), _outcome(401))
+
+        assert result.describe() == (
+            "authentication phase failed: credentials_rejected (HTTP 401)"
         )
 
 
-class TestCheckIndexerStatus:
-    """Tests for the indexer classification probe (issue #623).
+class TestProbeIndexerApi:
+    """Phase-classified Wazuh indexer probe (issue #1002).
 
-    Distinguishes "not listening yet" (``None``) from "listening but
-    rejecting the configured credentials" (401/403) so callers can tell
-    a stale-credential state apart from a still-starting container.
+    Same contract as the manager probe: a credential-free transport request
+    first, then authentication. A listener still starting is classified from
+    curl's exit, never collapsed into a status-only "no response".
     """
 
-    def test_returns_the_status_code_from_curl_status(self, mocker):
-        from aptl.core.services import check_indexer_status
+    def _probe(self, mocker, *outcomes):
+        from aptl.core.services import probe_indexer_api
 
-        mock_curl_status = mocker.patch(
-            "aptl.core.services.curl_status", return_value=401
+        request = mocker.patch(
+            "aptl.core.services.curl_request", side_effect=outcomes
         )
-
-        result = check_indexer_status(
-            url="https://localhost:9200",
+        result = probe_indexer_api(
+            url="https://localhost:9200/",
             username="admin",
-            password="secret",
+            password="indexer-secret",
+        )
+        return result, request
+
+    def test_ready_after_transport_and_authentication(self, mocker):
+        result, request = self._probe(mocker, _outcome(401), _outcome(200))
+
+        assert result.ready is True
+        assert [c.args[0] for c in request.call_args_list] == [
+            "https://localhost:9200/",
+            "https://localhost:9200/",
+        ]
+        assert request.call_args_list[0].kwargs.get("auth_header") is None
+        assert request.call_args_list[1].kwargs["auth_header"].startswith("Basic ")
+
+    def test_tls_warm_up_keeps_curl_exit_and_sends_no_credentials(self, mocker):
+        result, request = self._probe(mocker, _outcome(exit_code=35))
+
+        assert request.call_count == 1
+        assert request.call_args.kwargs.get("auth_header") is None
+        assert result.describe() == "transport phase failed: tls_handshake (curl exit 35)"
+
+    @pytest.mark.parametrize("status", [401, 403])
+    def test_rejected_credentials(self, mocker, status):
+        """The #623 retained-volume mismatch is a classified authentication failure."""
+        result, _ = self._probe(mocker, _outcome(401), _outcome(status))
+
+        assert result.describe() == (
+            f"authentication phase failed: credentials_rejected (HTTP {status})"
         )
 
-        assert result == 401
-        mock_curl_status.assert_called_once_with(
-            "https://localhost:9200",
-            auth=("admin", "secret"),
-            insecure=True,
-            timeout=10,
-        )
+    def test_other_status_is_an_http_error(self, mocker):
+        result, _ = self._probe(mocker, _outcome(401), _outcome(503))
 
-    def test_returns_none_when_curl_status_returns_none(self, mocker):
-        from aptl.core.services import check_indexer_status
-
-        mocker.patch("aptl.core.services.curl_status", return_value=None)
-
-        assert (
-            check_indexer_status(
-                url="https://localhost:9200",
-                username="admin",
-                password="secret",
-            )
-            is None
-        )
+        assert (result.phase, result.category) == ("authentication", "http_error")
 
     def test_password_never_reaches_subprocess_argv(self, mocker):
-        """End-to-end guardrail at the real subprocess boundary (not the
-        ``curl_status`` delegate) -- this is the actual ADR-029 fix for
-        #623: the indexer readiness probe no longer puts the password on
-        the curl command line."""
-        from aptl.core.services import check_indexer_status
+        """End-to-end at the real subprocess boundary (ADR-029, #623)."""
+        from aptl.core.services import probe_indexer_api
         from aptl.utils import curl_safe
 
-        captured: dict = {}
+        argv: list[list[str]] = []
 
         def fake_run(cmd, *args, **kwargs):
-            captured["cmd"] = list(cmd)
-            return MagicMock(returncode=0, stdout="401", stderr="")
+            argv.append(list(cmd))
+            return MagicMock(returncode=0, stdout="{}\n200", stderr="")
 
         mocker.patch.object(curl_safe.subprocess, "run", side_effect=fake_run)
 
-        result = check_indexer_status(
+        result = probe_indexer_api(
             url="https://localhost:9200",
             username="admin",
             password="super-secret-password",
         )
 
-        assert result == 401
-        joined = " ".join(str(a) for a in captured["cmd"])
+        assert result.ready is True
+        joined = " ".join(" ".join(cmd) for cmd in argv)
         assert "admin" not in joined
         assert "super-secret-password" not in joined
 
 
-class TestCheckManagerApiReady:
-    """Tests for the Wazuh Manager API readiness check."""
+class TestManagerApiWarmUpIsQuiet:
+    """Regression for issue #1002 at the real subprocess boundary.
 
-    def test_returns_true_on_successful_check(self, mocker):
-        """Authenticated readiness requires a successful manager-status body."""
-        from aptl.core.services import check_manager_api_ready
+    During a clean boot the realized manager has no healthcheck, so the
+    authenticated probe runs while the API is still starting. Docker's
+    published-port proxy accepts the connection and closes it when nothing
+    listens in the container, which curl reports as exit 35. That is an
+    expected warm-up state: the probe must answer "not ready" without logging
+    a WARNING per attempt.
+    """
 
-        request = mocker.patch(
-            "aptl.core.services.curl_json",
-            side_effect=[
-                {"error": 0, "data": {"token": "bounded-token"}},
-                {
-                    "error": 0,
-                    "data": {"affected_items": [{"wazuh-manager": "running"}]},
-                },
-            ],
-        )
-
-        assert (
-            check_manager_api_ready(
-                url="https://localhost:55000",
-                username="api-user",
-                password="api-password",
-            )
-            is True
-        )
-        assert request.call_count == 2
-
-    def test_returns_false_when_authentication_fails(self, mocker):
-        from aptl.core.services import check_manager_api_ready
-
-        mocker.patch(
-            "aptl.core.services.curl_json",
-            return_value=None,
-        )
-
-        assert (
-            check_manager_api_ready(
-                url="https://localhost:55000",
-                username="api-user",
-                password="api-password",
-            )
-            is False
-        )
-
-    def test_returns_false_when_manager_status_is_not_semantically_successful(
-        self, mocker
+    def test_no_https_response_is_not_ready_and_logs_no_warning(
+        self, mocker, caplog
     ):
-        from aptl.core.services import check_manager_api_ready
+        from aptl.core.services import probe_manager_api
+        from aptl.utils import curl_safe
 
-        mocker.patch(
-            "aptl.core.services.curl_json",
-            side_effect=[
-                {"error": 0, "data": {"token": "bounded-token"}},
-                {"error": 1, "data": {"affected_items": []}},
-            ],
+        mocker.patch.object(
+            curl_safe.subprocess,
+            "run",
+            return_value=MagicMock(returncode=35, stdout="", stderr=""),
         )
 
-        assert (
-            check_manager_api_ready(
+        with caplog.at_level("DEBUG", logger="aptl"):
+            probe = probe_manager_api(
                 url="https://localhost:55000",
                 username="api-user",
                 password="api-password",
             )
-            is False
+
+        assert probe.ready is False
+        assert (probe.phase, probe.category, probe.curl_exit) == (
+            "transport",
+            "tls_handshake",
+            35,
         )
-
-    def test_credentials_use_permissioned_header_path_not_url(self, mocker):
-        from aptl.core.services import check_manager_api_ready
-
-        request = mocker.patch(
-            "aptl.core.services.curl_json",
-            return_value=None,
-        )
-
-        check_manager_api_ready(
-            url="https://localhost:55000",
-            username="api-user",
-            password="api-password",
-        )
-
-        kwargs = request.call_args.kwargs
-        assert kwargs["auth_header"].startswith("Basic ")
-        assert "api-user" not in request.call_args.args[0]
-        assert "api-password" not in request.call_args.args[0]
+        assert [r for r in caplog.records if r.levelno >= 30] == []
 
 
 class TestSSHConnection:

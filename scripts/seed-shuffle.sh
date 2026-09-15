@@ -49,8 +49,9 @@ SHUFFLE_API_KEY="${SHUFFLE_API_KEY:-31a211c4-ea5c-4a49-b022-5e2434e758a7}"
 # defaults to verifying, which fails against the lab CA — see below).
 # Reached at runtime by Shuffle worker actions on the aptl-security network.
 # Use service DNS names, not the pre-#875 static IPs the env-pack no longer
-# pins (TheHive serves plain HTTP on 9000; MISP serves HTTPS on 443).
-THEHIVE_INTERNAL_URL="http://thehive:9000"
+# pins. Both services use HTTPS; the generic HTTP action's explicit `verify`
+# setting remains false because its worker does not receive the private lab CA.
+THEHIVE_INTERNAL_URL="https://thehive:9000"
 MISP_INTERNAL_URL="https://misp"
 MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
 WORKFLOW_NAME="APTL Alert to Case"

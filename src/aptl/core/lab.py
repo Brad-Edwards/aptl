@@ -59,10 +59,9 @@ from aptl.core.lifecycle_guard import (
 )
 from aptl.core.lifecycle_policy import LifecycleBusyError
 from aptl.core.services import (
-    ServiceResult,
-    check_indexer_ready,
-    check_indexer_status,
-    check_manager_api_ready,
+    WazuhApiProbe,
+    probe_indexer_api,
+    probe_manager_api,
     test_ssh_connection,
     wait_for_service,
 )
@@ -118,6 +117,7 @@ _STALE_NETWORK_RECOVERY_HINT = (
     "Run `aptl lab stop` and retry, or `aptl lab stop -v` if you need a clean lab."
 )
 _WAZUH_MANAGER_SERVICE = "wazuh.manager"
+_WAZUH_INDEXER_SERVICE = "wazuh.indexer"
 
 
 def _looks_like_stale_realization_network_error(error: str) -> bool:
@@ -612,7 +612,22 @@ def lab_status(
     resolved_dir = project_dir or Path(".")
 
     if backend is None:
-        backend = _get_backend(resolved_dir)
+        config_path = find_config(resolved_dir)
+        if config_path is None:
+            backend = _get_backend(resolved_dir)
+        else:
+            try:
+                config = load_config(config_path)
+                backend = _get_backend(config_path.parent, config)
+            except (OSError, ValueError):
+                return LabStatus(
+                    running=False,
+                    error=(
+                        "[lifecycle-invalid-configuration] Lab status blocked: "
+                        "invalid configuration; refusing to guess the deployment "
+                        "project identity."
+                    ),
+                )
 
     return backend.status()
 
@@ -833,6 +848,9 @@ class _LabStartContext(object):
     # Use object to avoid circular imports; typed at use sites.
     raes_outcome: object = None
     snapshot: object = None
+    # The checked, post-mutation project inventory used by both the terminal
+    # startup decision and the persisted range snapshot.
+    terminal_status: LabStatus | None = None
     # REP-001 / GAP 4: one run store + run_id resolved once per lab-start run,
     # threaded through orchestration and reused by the run-record step so
     # workflow artifacts and the record share a single run directory.
@@ -1846,56 +1864,6 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     )
 
 
-def _emit_indexer_readiness_diagnostic(
-    ctx: _LabStartContext,
-    indexer_url: str,
-    indexer_result: ServiceResult,
-) -> None:
-    """Classify and report an indexer readiness failure."""
-
-    assert ctx.env is not None
-    final_status = check_indexer_status(
-        url=indexer_url,
-        username=ctx.env.indexer_username,
-        password=ctx.env.indexer_password,
-    )
-    if final_status in (401, 403):
-        _emit_diagnostic(
-            ctx,
-            step="wait_for_services",
-            component="wazuh_indexer",
-            impact=DiagnosticImpact.TELEMETRY,
-            severity=DiagnosticSeverity.WARNING,
-            message=(
-                "Wazuh Indexer rejected the configured INDEXER_PASSWORD "
-                f"(HTTP {final_status}) while its listener was responding"
-            ),
-            operator_action=(
-                "The persisted wazuh-indexer-data volume likely still holds a "
-                "previous admin password, so the changed .env credentials no "
-                "longer match. Run `aptl lab stop -v` then `aptl lab start` to "
-                "reset the indexer security state, or restore the original "
-                "INDEXER_PASSWORD in .env."
-            ),
-        )
-    else:
-        _emit_diagnostic(
-            ctx,
-            step="wait_for_services",
-            component="wazuh_indexer",
-            impact=DiagnosticImpact.TELEMETRY,
-            severity=DiagnosticSeverity.WARNING,
-            message=(
-                "Wazuh Indexer did not become ready within "
-                f"{int(indexer_result.elapsed_seconds)}s"
-            ),
-            operator_action=(
-                "Check indexer container logs; SIEM ingest will not work "
-                "until indexer is healthy"
-            ),
-        )
-
-
 @_runtime_require(
     lambda ctx: config_is_loaded(ctx.config),
     description="config_is_loaded(ctx.config)",
@@ -1905,7 +1873,7 @@ def _emit_indexer_readiness_diagnostic(
     description="env_is_loaded(ctx.env)",
 )
 def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
-    """Wait for Wazuh services and emit degraded-readiness diagnostics."""
+    """Wait for Wazuh services; fail startup when one never becomes ready."""
     log.info("Step 9: Waiting for services...")
     # Runtime guards above.
     assert ctx.config is not None and ctx.env is not None
@@ -1914,42 +1882,84 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
     if "wazuh" not in ctx.selected_profiles:
         return None
 
+    # One readiness authority per realized service (issue #1002): the backend's
+    # post-start gate already authenticated graph-owned Wazuh APIs and failed
+    # the start closed if they were not ready, so authenticating them again
+    # here would only repeat that work. Services it did not prove (a scenario
+    # declaring no Wazuh generated artifacts) are waited on here under the same
+    # fail-closed policy: a scenario that selects Wazuh does not meet its goals
+    # without it (ADR-030 Wazuh readiness amendment). These probes use the
+    # controller's published loopback ports; that is sound because an
+    # SSH-remote backend never reaches this step (`_step_sync_credentials`
+    # refuses it before any container starts). First failure wins.
+    proved = _backend_proved_readiness(ctx)
+    result: LabResult | None = None
+    if _WAZUH_INDEXER_SERVICE not in proved:
+        result = _wait_for_indexer(ctx)
+    if result is None and _WAZUH_MANAGER_SERVICE not in proved:
+        result = _wait_for_manager_api(ctx)
+    return result
+
+
+def _backend_proved_readiness(ctx: _LabStartContext) -> set[str]:
+    """Return the services the backend authenticated during this start."""
+
+    readiness = getattr(ctx.backend, "authenticated_readiness", None)
+    if not isinstance(readiness, Mapping):
+        return set()
+    return {service for service, ready in readiness.items() if ready is True}
+
+
+def _wait_for_indexer(ctx: _LabStartContext) -> LabResult | None:
+    """Wait for the indexer; return a classified failure if it never readies."""
+
+    assert ctx.env is not None
     # Use the actual published host port for the indexer. If port 9200 was
     # already in use on the host (Cursor / another OpenSearch / a k8s
     # port-forward), `_step_resolve_host_ports` remapped the publish; probing
     # the literal 9200 in that case reaches whatever else is on 9200 and
     # falsely reports the indexer as unready. `ctx.resolved_ports` carries
     # the post-remap answer.
-    indexer_port = next(
+    port = next(
         (
             r.resolved_port
             for r in ctx.resolved_ports
-            if getattr(r, "service", None) == "wazuh.indexer"
+            if getattr(r, "service", None) == _WAZUH_INDEXER_SERVICE
         ),
         9200,
     )
-    indexer_url = f"https://localhost:{indexer_port}"
-    indexer_result = wait_for_service(
-        check_fn=partial(
-            check_indexer_ready,
-            url=indexer_url,
+    return _wait_for_wazuh_api(
+        ctx,
+        _WazuhApiWait(
+            name="Wazuh Indexer",
+            service=_WAZUH_INDEXER_SERVICE,
+            url=f"https://localhost:{port}",
+            probe=probe_indexer_api,
             username=ctx.env.indexer_username,
             password=ctx.env.indexer_password,
+            # Generous cold-boot headroom: OpenSearch's first-boot init (cluster
+            # formation + security index) can run long when the whole SOC stack
+            # and MCP builds start at once.
+            timeout=600,
+            interval=10,
+            # #623: the retained wazuh-indexer-data volume keeps an earlier
+            # admin password, so the current .env credentials no longer match.
+            rejected_action=(
+                "The persisted wazuh-indexer-data volume likely still holds a "
+                "previous admin password. Run `aptl lab stop -v` then `aptl lab "
+                "start` to reset the indexer security state, or restore the "
+                "original INDEXER_PASSWORD in .env."
+            ),
+            logs="`aptl container logs aptl-wazuh-indexer`",
         ),
-        # Generous cold-boot headroom: OpenSearch's first-boot init (cluster
-        # formation + security index) can run long when the whole SOC stack and
-        # MCP builds start at once.
-        timeout=600,
-        interval=10,
-        service_name="Wazuh Indexer",
-        progress=ctx.progress,
     )
-    if not indexer_result.ready:
-        # A one-shot status probe distinguishes unavailable from credential
-        # mismatch against retained indexer state (#623).
-        _emit_indexer_readiness_diagnostic(ctx, indexer_url, indexer_result)
 
-    manager_port = next(
+
+def _wait_for_manager_api(ctx: _LabStartContext) -> LabResult | None:
+    """Wait for the manager API; return a classified failure if it never readies."""
+
+    assert ctx.env is not None
+    port = next(
         (
             r.resolved_port
             for r in ctx.resolved_ports
@@ -1958,35 +1968,84 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
         ),
         55000,
     )
-    manager_result = wait_for_service(
-        check_fn=partial(
-            check_manager_api_ready,
-            url=f"https://localhost:{manager_port}",
+    logs = f"`aptl container logs {_WAZUH_MANAGER_CONTAINER}`"
+    return _wait_for_wazuh_api(
+        ctx,
+        _WazuhApiWait(
+            name="Wazuh Manager API",
+            service=_WAZUH_MANAGER_SERVICE,
+            url=f"https://localhost:{port}",
+            probe=probe_manager_api,
             username=ctx.env.api_username,
             password=ctx.env.api_password,
+            timeout=120,
+            interval=5,
+            rejected_action=(
+                "The manager API rejected API_USERNAME/API_PASSWORD from .env; "
+                "confirm they match the API user the manager container was "
+                f"provisioned with and inspect {logs}."
+            ),
+            logs=logs,
         ),
-        timeout=120,
-        interval=5,
-        service_name="Wazuh Manager API",
+    )
+
+
+@dataclass(frozen=True)
+class _WazuhApiWait:
+    """One Wazuh API readiness wait: where to probe and how to explain failure."""
+
+    name: str
+    service: str
+    url: str
+    probe: Callable[[str, str, str], WazuhApiProbe]
+    username: str
+    password: str = field(repr=False)
+    timeout: int
+    interval: int
+    rejected_action: str
+    logs: str
+
+
+def _wait_for_wazuh_api(ctx: _LabStartContext, spec: _WazuhApiWait) -> LabResult | None:
+    """Poll one Wazuh API within its budget; fail with the last in-budget reason.
+
+    The reason is the last observation made inside the budget -- no probe runs
+    after the deadline, where a different answer could erase the result the
+    budget reached (#1002).
+    """
+
+    last_probe: list[WazuhApiProbe | None] = [None]
+
+    def api_ready() -> bool:
+        """Probe once, remember the observation, and report readiness."""
+        probe = spec.probe(url=spec.url, username=spec.username, password=spec.password)
+        last_probe[0] = probe
+        if not probe.ready:
+            # Expected while the API warms up; the deadline makes it terminal.
+            log.debug("%s not ready yet: %s", spec.name, probe.describe())
+        return probe.ready
+
+    wait = wait_for_service(
+        check_fn=api_ready,
+        timeout=spec.timeout,
+        interval=spec.interval,
+        service_name=spec.name,
         progress=ctx.progress,
     )
-    if not manager_result.ready:
-        _emit_diagnostic(
-            ctx,
-            step="wait_for_services",
-            component="wazuh_manager",
-            impact=DiagnosticImpact.TELEMETRY,
-            severity=DiagnosticSeverity.WARNING,
-            message=(
-                "Wazuh Manager API did not become ready within "
-                f"{int(manager_result.elapsed_seconds)}s"
-            ),
-            operator_action=(
-                "Check manager container logs; agents will not report "
-                "until manager API is healthy"
-            ),
-        )
-    return None
+    if wait.ready:
+        return None
+    probe = last_probe[0]
+    if probe is not None and probe.category == "credentials_rejected":
+        action = spec.rejected_action
+    else:
+        action = f"Inspect {spec.logs}."
+    detail = probe.describe() if probe is not None else "no probe completed"
+    error = (
+        f"{spec.name} did not become ready within {int(wait.elapsed_seconds)}s: "
+        f"{spec.service} at {spec.url} {detail}. {action}"
+    )
+    log.error("%s", error)
+    return LabResult(success=False, error=error)
 
 
 @_runtime_require(
@@ -2134,10 +2193,17 @@ def _docker_vm_hides_bridge_ips() -> bool:
     description="backend_is_initialized(ctx.backend)",
 )
 def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
-    """Capture a non-fatal inventory snapshot of the started range."""
-    log.info("Step 11: Capturing range snapshot...")
+    """Persist the exact checked terminal container inventory."""
+    log.info("Step 16: Capturing terminal range snapshot...")
+    container_rows = (
+        ctx.terminal_status.containers if ctx.terminal_status is not None else None
+    )
     try:
-        snapshot = capture_snapshot(config_dir=ctx.project_dir, backend=ctx.backend)
+        snapshot = capture_snapshot(
+            config_dir=ctx.project_dir,
+            backend=ctx.backend,
+            container_rows=container_rows,
+        )
     except Exception:
         # Snapshot is the run-archive inventory; its loss is observability
         # debt, not a hard failure (ADR-030). Keep exception detail in
@@ -2173,7 +2239,7 @@ def _step_write_run_record(ctx: _LabStartContext) -> LabResult | None:
     Non-fatal: a failure to write the record emits a WARNING diagnostic but
     does not abort the lab start. The lab is already running at this point.
     """
-    log.info("Step 11c: Writing run reproducibility record...")
+    log.info("Step 17: Writing terminal run reproducibility record...")
     if ctx.raes_outcome is None or ctx.snapshot is None:
         log.warning(
             "REP-001: Skipping run record — RAES outcome or range snapshot unavailable"
@@ -2202,9 +2268,10 @@ def _resolve_run_target(ctx: _LabStartContext) -> tuple[object, str]:
 
     Prefers the active scenario's trace-scoped run dir (``resolve_active_run_dir``)
     so MCP-side and lab-side artifacts share one directory; otherwise mints a
-    filesystem-safe ``run_<UTC timestamp>`` id under the default run store base
-    dir. The minted id is shaped to pass ``runstore._validate_id``. Resolved
-    once and cached on ctx so orchestration and the run record agree.
+    filesystem-safe ``run_<UTC timestamp>`` id under the configured run store
+    base dir. The minted id is shaped to pass ``runstore._validate_id``.
+    Resolved once and cached on ctx so orchestration, the run record, and the
+    public ``aptl runs`` commands all address the same archive.
     """
     from datetime import datetime, timezone
 
@@ -2214,8 +2281,13 @@ def _resolve_run_target(ctx: _LabStartContext) -> tuple[object, str]:
     active_run_dir = resolve_active_run_dir(state_dir)
     if active_run_dir is not None:
         return LocalRunStore(active_run_dir.parent), active_run_dir.name
+    configured_path = Path(
+        getattr(getattr(ctx.config, "run_storage", None), "local_path", "./runs")
+    )
+    if not configured_path.is_absolute():
+        configured_path = ctx.project_dir / configured_path
     run_id = datetime.now(timezone.utc).strftime("run_%Y%m%dT%H%M%SZ")
-    return LocalRunStore(state_dir / "runs"), run_id
+    return LocalRunStore(configured_path), run_id
 
 
 def _resolve_raes_snapshot(outcome: object) -> object:
@@ -2679,6 +2751,142 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
     return None
 
 
+_MAX_CONTAINER_ATTESTATION_FAILURES = 5
+_MAX_CONTAINER_ATTESTATION_DETAIL = 512
+_TERMINAL_CONTAINER_OBSERVATION_FAILED = (
+    "Terminal project-container state could not be observed"
+)
+_TERMINAL_CONTAINER_RECOVERY_ACTION = (
+    "Inspect the deployment backend, then run `aptl lab stop` or "
+    "`aptl lab start --clean` before retrying"
+)
+
+
+def _container_attestation_detail(
+    backend: "DeploymentBackend", container: Mapping[str, Any]
+) -> str:
+    """Return one bounded, redacted non-running-container description."""
+
+    name = str(container.get("name", container.get("Name", "unknown")))[:128]
+    state = str(container.get("state", container.get("State", "unknown")))[:64]
+    status = str(container.get("status", container.get("Status", "unknown")))[:160]
+    exit_code: object = "unknown"
+    state_error = ""
+    try:
+        inspected = backend.container_inspect(name)
+    except Exception:
+        inspected = {}
+    inspected_state = inspected.get("State") if isinstance(inspected, Mapping) else None
+    if isinstance(inspected_state, Mapping):
+        state = str(inspected_state.get("Status", state))[:64]
+        exit_code = inspected_state.get("ExitCode", exit_code)
+        state_error = str(inspected_state.get("Error", ""))[:256]
+    detail = f"{name!r} state={state!r} status={status!r} exit_code={exit_code!r}"
+    if state_error:
+        detail += f" error={state_error!r}"
+    return str(redact(detail))[:_MAX_CONTAINER_ATTESTATION_DETAIL]
+
+
+def _observe_terminal_project_status(
+    ctx: _LabStartContext,
+) -> tuple[LabStatus | None, LabResult | None]:
+    """Return checked terminal status or one emitted observation failure."""
+
+    assert ctx.backend is not None
+    try:
+        current = ctx.backend.status()
+    except Exception:
+        current = None
+        safe_error = ""
+    else:
+        safe_error = (
+            str(redact(current.error))[:_MAX_CONTAINER_ATTESTATION_DETAIL]
+            if current.error
+            else ""
+        )
+    if current is not None and not safe_error:
+        return current, None
+
+    _emit_diagnostic(
+        ctx,
+        step="attest_project_containers",
+        impact=DiagnosticImpact.READINESS,
+        severity=DiagnosticSeverity.ERROR,
+        message=_TERMINAL_CONTAINER_OBSERVATION_FAILED,
+        operator_action=_TERMINAL_CONTAINER_RECOVERY_ACTION,
+    )
+    error = (
+        f"Terminal project-container observation failed: {safe_error}"
+        if safe_error
+        else _TERMINAL_CONTAINER_OBSERVATION_FAILED
+    )
+    return None, LabResult(
+        success=False,
+        error=error,
+        outcome=StartupOutcome.FAILED,
+    )
+
+
+@_runtime_require(
+    lambda ctx: backend_is_initialized(ctx.backend),
+    description="backend_is_initialized(ctx.backend)",
+)
+def _step_attest_project_containers(ctx: _LabStartContext) -> LabResult | None:
+    """Fail startup unless terminal project inventory is fully running."""
+
+    current, observation_failure = _observe_terminal_project_status(ctx)
+    if current is None:
+        assert observation_failure is not None
+        return observation_failure
+
+    non_running = [
+        container
+        for container in current.containers
+        if str(container.get("state", container.get("State", ""))).casefold()
+        != "running"
+    ]
+    failure_summary: str | None
+    if not current.containers:
+        non_running_summary = "no project containers were observed"
+        failure_summary = non_running_summary
+    elif non_running:
+        details = [
+            _container_attestation_detail(ctx.backend, container)
+            for container in non_running[:_MAX_CONTAINER_ATTESTATION_FAILURES]
+        ]
+        remaining = len(non_running) - len(details)
+        if remaining:
+            details.append(f"{remaining} additional non-running container(s)")
+        non_running_summary = "; ".join(details)
+        failure_summary = non_running_summary
+    else:
+        ctx.terminal_status = current
+        failure_summary = None
+
+    result: LabResult | None = None
+    if failure_summary is not None:
+        _emit_diagnostic(
+            ctx,
+            step="attest_project_containers",
+            impact=DiagnosticImpact.READINESS,
+            severity=DiagnosticSeverity.ERROR,
+            message=(
+                f"Terminal inventory contains {len(non_running)} non-running "
+                "project container(s)"
+            ),
+            operator_action=(
+                "Inspect the named container state, then run `aptl lab stop` or "
+                "`aptl lab start --clean` before retrying"
+            ),
+        )
+        result = LabResult(
+            success=False,
+            error=f"Lab start left project containers non-running: {failure_summary}",
+            outcome=StartupOutcome.FAILED,
+        )
+    return result
+
+
 # Ordered list of steps the orchestrator dispatches. Keep numbered
 # comments in sync with the step bodies above so log lines and source
 # stay aligned.
@@ -2698,12 +2906,13 @@ _LAB_START_STEPS = (
     _step_start_containers,
     _step_wait_for_services,
     _step_test_ssh,
-    _step_capture_snapshot,
-    _step_write_run_record,
     _step_pin_terminal_host_keys,
     _step_build_mcps,
     _step_seed_soc,
     _step_sync_mcp_config,
+    _step_attest_project_containers,
+    _step_capture_snapshot,
+    _step_write_run_record,
 )
 
 _LAB_START_PROGRESS_MESSAGES = {
@@ -2725,12 +2934,13 @@ _LAB_START_PROGRESS_MESSAGES = {
     ),
     "_step_wait_for_services": "Waiting for Wazuh services to become ready.",
     "_step_test_ssh": "Testing SSH reachability.",
-    "_step_capture_snapshot": "Capturing a range snapshot.",
-    "_step_write_run_record": "Writing the run reproducibility record.",
     "_step_pin_terminal_host_keys": "Pinning terminal SSH host keys.",
     "_step_build_mcps": "Building local MCP server artifacts.",
     "_step_seed_soc": "Seeding SOC tools.",
     "_step_sync_mcp_config": "Refreshing MCP client configuration.",
+    "_step_attest_project_containers": "Verifying terminal container state.",
+    "_step_capture_snapshot": "Capturing the terminal range snapshot.",
+    "_step_write_run_record": "Writing the terminal run reproducibility record.",
 }
 
 

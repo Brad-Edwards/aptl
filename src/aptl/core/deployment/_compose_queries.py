@@ -6,8 +6,8 @@ into ``DockerComposeBackend``, which supplies ``_run``, ``_run_streaming``, and
 ``_project_name``.
 """
 
-import subprocess
 import json
+import subprocess
 from typing import Any
 
 from aptl.core.deployment._proc_net_listeners import (
@@ -47,44 +47,6 @@ _LISTENER_OBSERVER_IMAGE = (
     "alpine:3.22@sha256:"
     "14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce"
 )
-
-
-def _parse_labels(labels_str: str) -> dict[str, str]:
-    """Parse a comma-separated `k=v,k=v` labels string from `docker ps`."""
-    if not labels_str:
-        return {}
-    out: dict[str, str] = {}
-    for pair in labels_str.split(","):
-        if "=" in pair:
-            k, v = pair.split("=", 1)
-            out[k.strip()] = v.strip()
-    return out
-
-
-def _parse_ports(ports_str: str) -> list[str]:
-    """Parse a comma-separated ports string from `docker ps`."""
-    if not ports_str:
-        return []
-    return [p.strip() for p in ports_str.split(",") if p.strip()]
-
-
-def _parse_lab_row(line: str) -> dict[str, Any] | None:
-    """Parse a single TSV row from `docker ps --format ...` into a dict.
-
-    Returns ``None`` for short / malformed lines so callers can filter
-    them out cleanly.
-    """
-    parts = line.split("\t", 5)
-    if len(parts) < 5:
-        return None
-    return {
-        "name": parts[0],
-        "image": parts[1],
-        "id": parts[2],
-        "status": parts[3],
-        "labels": _parse_labels(parts[4]),
-        "ports": _parse_ports(parts[5] if len(parts) > 5 else ""),
-    }
 
 
 def _select_shell(probe_returncode: int) -> tuple[str, bool]:
@@ -187,35 +149,6 @@ class ComposeQueryMixin(object):
         if compose_out.returncode == 0:
             result["compose"] = compose_out.stdout.strip()
         return result
-
-    def host_list_lab_containers(self) -> list[dict[str, Any]]:
-        # Scope to the configured compose project via the standard
-        # com.docker.compose.project label rather than just the
-        # ``aptl-`` name prefix, so a snapshot taken against a shared
-        # SSH daemon doesn't expose other tenants' containers that
-        # happen to use the same naming convention.
-        fmt = "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.Labels}}\t{{.Ports}}"
-        result = self._run(
-            [
-                "docker",
-                "ps",
-                "-a",
-                "--filter",
-                f"label=com.docker.compose.project={self._project_name}",
-                "--filter",
-                "name=aptl-",
-                "--format",
-                fmt,
-            ],
-            timeout=_HOST_INVENTORY_TIMEOUT,
-        )
-        if result.returncode != 0 or not result.stdout.strip():
-            return []
-        return [
-            row
-            for row in (_parse_lab_row(line) for line in result.stdout.splitlines())
-            if row is not None
-        ]
 
     def host_list_lab_networks(self, name_prefix: str) -> list[str]:
         # Scope to the current compose project's networks. Combined with

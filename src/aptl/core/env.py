@@ -48,6 +48,7 @@ class DotenvHydrationResult:
     path: Path
     created: bool
     updated_keys: tuple[str, ...] = ()
+    overridden_keys: tuple[str, ...] = ()
 
     @property
     def changed(self) -> bool:
@@ -152,6 +153,23 @@ _HYDRATED_ENV_SPECS: tuple[
     ("GRAFANA_ADMIN_PASSWORD", lambda _project_dir, _values: secrets.token_urlsafe(24)),
 )
 
+# Keys whose value must match a hash or default baked into a checked-in service
+# config — specifically the OpenSearch demo users in the indexer's
+# ``config/wazuh_indexer/internal_users.yml`` (``admin`` and ``kibanaserver``).
+# The indexer never recomputes those hashes from ``.env``, so a divergent value
+# cannot authenticate; it is a fixture, not a user-selectable secret. Hydration
+# therefore reconciles these authoritatively rather than preserving a user
+# override (which otherwise fails the authenticated-readiness gate deep in the
+# RAES handoff with a misleading contract-invalid cascade). Genuine secrets
+# (API_PASSWORD, WAZUH_CLUSTER_KEY, tokens, Grafana) keep the preserve-if-set
+# behavior below.
+_AUTHORITATIVE_FIXTURE_KEYS: frozenset[str] = frozenset({
+    "INDEXER_USERNAME",
+    "INDEXER_PASSWORD",
+    "DASHBOARD_USERNAME",
+    "DASHBOARD_PASSWORD",
+})
+
 
 def _needs_hydration(value: str | None) -> bool:
     """Return True for missing, empty, or template placeholder values."""
@@ -252,18 +270,42 @@ def _write_dotenv(path: Path, content: str) -> None:
 def hydrate_dotenv(path: Path) -> DotenvHydrationResult:
     """Create or repair a project ``.env`` with runnable lab credentials.
 
-    Existing non-placeholder values are preserved. Missing, empty, or
-    ``.env.example``-style placeholders are populated with values that match
-    the current Docker Compose/templates contract.
+    Missing, empty, or ``.env.example``-style placeholder values are populated
+    with values that match the current Docker Compose/templates contract.
+    Genuine secrets that are already set are preserved. The hash-pinned
+    fixtures in :data:`_AUTHORITATIVE_FIXTURE_KEYS` are the exception: a
+    divergent user value for those cannot authenticate against the indexer's
+    checked-in security config, so hydration reconciles them to the required
+    fixture value and records each such override in ``overridden_keys``.
     """
     created = not path.exists()
     original = "" if created else path.read_text(encoding="utf-8")
     current = {} if created else load_dotenv(path)
     values = {key: current.get(key, "") for key, _ in _HYDRATED_ENV_SPECS}
     updated: list[str] = []
+    overridden: list[str] = []
 
     for key, factory in _HYDRATED_ENV_SPECS:
-        if _needs_hydration(current.get(key)):
+        current_value = current.get(key)
+        if key in _AUTHORITATIVE_FIXTURE_KEYS:
+            required = factory(path.parent, values)
+            values[key] = required
+            if _needs_hydration(current_value):
+                updated.append(key)
+            elif current_value != required:
+                log.warning(
+                    "%s in %s does not match the value the indexer's "
+                    "checked-in security config accepts; reconciling it to the "
+                    "required fixture. This credential is not user-selectable "
+                    "in the current stack (see "
+                    "config/wazuh_indexer/internal_users.yml).",
+                    key,
+                    path,
+                )
+                updated.append(key)
+                overridden.append(key)
+            continue
+        if _needs_hydration(current_value):
             values[key] = factory(path.parent, values)
             updated.append(key)
 
@@ -273,6 +315,7 @@ def hydrate_dotenv(path: Path) -> DotenvHydrationResult:
         path=path,
         created=created,
         updated_keys=tuple(updated),
+        overridden_keys=tuple(overridden),
     )
 
 

@@ -10,7 +10,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from aptl.utils.curl_safe import basic_auth_header, curl_json, curl_status
+from aptl.utils.curl_safe import CurlOutcome, basic_auth_header, curl_request
 from aptl.utils.logging import get_logger
 
 log = get_logger("services")
@@ -88,69 +88,132 @@ def wait_for_service(
                 error=f"{service_name} timed out after {elapsed:.0f}s",
             )
 
-        sleep(interval)
+        # Never sleep past the deadline: the last check runs at the deadline,
+        # not an interval after it (#1002).
+        sleep(min(interval, deadline - now))
 
 
-def check_indexer_status(url: str, username: str, password: str) -> int | None:
-    """Return the Wazuh Indexer's HTTP status, or ``None`` for no response.
+@dataclass(frozen=True)
+class WazuhApiProbe:
+    """Secret-free outcome of one phased Wazuh indexer or manager API probe.
 
-    This is the classification probe: it distinguishes "not listening
-    yet" (``None``) from "listening but rejecting the configured
-    credentials" (401/403), which a plain readiness boolean cannot.
-    Credentials are passed via a 0600 header temp file, never argv
-    (ADR-029) — see ``aptl.utils.curl_safe.curl_status``.
-
-    Args:
-        url: The indexer URL (e.g., ``https://localhost:9200``).
-        username: Authentication username.
-        password: Authentication password.
-
-    Returns:
-        The HTTP status code, or ``None`` if the indexer gave no HTTP
-        response at all (transport failure, timeout, connection refused).
+    ``phase`` is the phase that stopped the probe (``transport``,
+    ``authentication``, ``manager_status``) or ``ready``. ``category`` is the
+    normalized reason: a ``curl_safe`` transport category such as
+    ``tls_handshake``, or ``credentials_rejected``, ``http_error``,
+    ``invalid_response``, ``not_ready``. Only numeric curl and HTTP codes are
+    kept -- never a URL, header, token, body, or curl stderr.
     """
-    return curl_status(url, auth=(username, password), insecure=True, timeout=10)
+
+    phase: str
+    category: str
+    curl_exit: int | None = None
+    http_status: int | None = None
+
+    @property
+    def ready(self) -> bool:
+        """Return whether every phase succeeded."""
+
+        return self.phase == "ready"
+
+    def describe(self) -> str:
+        """Return a bounded, operator-facing summary of this outcome."""
+
+        if self.ready:
+            return "ready"
+        if self.http_status is not None:
+            code = f" (HTTP {self.http_status})"
+        elif self.curl_exit is not None:
+            code = f" (curl exit {self.curl_exit})"
+        else:
+            code = ""
+        return f"{self.phase} phase failed: {self.category}{code}"
 
 
-def check_indexer_ready(url: str, username: str, password: str) -> bool:
-    """Check if the Wazuh Indexer is responding to HTTPS requests.
+def probe_indexer_api(url: str, username: str, password: str) -> WazuhApiProbe:
+    """Probe the Wazuh indexer API phase by phase and classify the outcome.
 
-    Delegates to :func:`check_indexer_status`; ready means a 2xx status
-    was returned for the given credentials.
-
-    Args:
-        url: The indexer URL (e.g., ``https://localhost:9200``).
-        username: Authentication username.
-        password: Authentication password.
-
-    Returns:
-        True if the indexer responds with a 2xx status, False otherwise.
+    Transport first, with a credential-free request: any HTTP status proves
+    TCP, TLS, and HTTP completed. Only then does the probe authenticate, and
+    ready means a 2xx for the configured credentials. A 401/403 is the
+    retained-volume credential mismatch from #623. One attempt, no retries;
+    the polling owner holds the deadline (#1002).
     """
-    status = check_indexer_status(url, username, password)
-    return status is not None and 200 <= status < 300
-
-
-def check_manager_api_ready(url: str, username: str, password: str) -> bool:
-    """Authenticate and require a semantically successful manager status."""
 
     base = url.rstrip("/")
-    auth = curl_json(
+    transport = curl_request(f"{base}/", insecure=True, timeout=10)
+    if transport.http_status is None:
+        return _api_failure("transport", transport)
+    auth = curl_request(
+        f"{base}/",
+        auth_header=basic_auth_header(username, password),
+        insecure=True,
+        timeout=10,
+    )
+    status = auth.http_status
+    if status is not None and 200 <= status < 300:
+        return WazuhApiProbe("ready", "ready", http_status=status)
+    return _api_failure("authentication", auth)
+
+
+def probe_manager_api(url: str, username: str, password: str) -> WazuhApiProbe:
+    """Probe the Wazuh manager API phase by phase and classify the outcome.
+
+    Transport comes first, with a credential-free request: any HTTP status
+    proves TCP, TLS, and HTTP completed, so a listener that is still starting
+    is observed without sending credentials to it. Only then does the probe
+    authenticate and require a semantically successful manager status. It
+    performs one attempt and never retries; the polling owner holds the
+    deadline and decides whether a failure is warm-up or terminal (#1002).
+    """
+
+    base = url.rstrip("/")
+    transport = curl_request(f"{base}/", insecure=True, timeout=10)
+    if transport.http_status is None:
+        return _api_failure("transport", transport)
+
+    auth = curl_request(
         f"{base}/security/user/authenticate",
         auth_header=basic_auth_header(username, password),
         insecure=True,
         method="POST",
         timeout=10,
     )
-    token = _manager_api_token(auth)
+    token = _manager_api_token(auth.payload) if auth.http_status == 200 else None
     if token is None:
-        return False
-    status = curl_json(
+        return _api_failure("authentication", auth)
+
+    return _manager_status_probe(base, token)
+
+
+def _manager_status_probe(base: str, token: str) -> WazuhApiProbe:
+    """Run the manager-status phase with an authenticated session token."""
+
+    status = curl_request(
         f"{base}/manager/status",
         auth_header=f"Bearer {token}",
         insecure=True,
         timeout=10,
     )
-    return _manager_status_ready(status)
+    if status.http_status != 200:
+        return _api_failure("manager_status", status)
+    if _manager_status_ready(status.payload):
+        return WazuhApiProbe("ready", "ready", http_status=200)
+    return WazuhApiProbe("manager_status", "not_ready", http_status=200)
+
+
+def _api_failure(phase: str, outcome: CurlOutcome) -> WazuhApiProbe:
+    """Classify a failed request in *phase* from its transport outcome."""
+
+    if outcome.http_status is None:
+        category = outcome.category
+    elif outcome.http_status in (401, 403):
+        category = "credentials_rejected"
+    elif outcome.http_status == 200:
+        category = "invalid_response"
+    else:
+        category = "http_error"
+    return WazuhApiProbe(phase, category, outcome.exit_code, outcome.http_status)
 
 
 def _manager_api_token(payload: object) -> str | None:

@@ -14,7 +14,12 @@ from raes_contracts.planning import RuntimeDomain
 from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot, SnapshotEntry
 from raes_processor.compiler import compile_runtime_model
 from raes_processor.planner import plan
-from raes_runtime.evaluation_result_contracts import evaluation_result_contract_diagnostics
+from raes_runtime.evaluation_result_contracts import (
+    evaluation_result_contract_diagnostics,
+)
+from raes_runtime.proposition_truth_contracts import (
+    proposition_truth_contract_diagnostics,
+)
 from raes.parser import parse_sdl
 
 from aptl.backends.raes_evaluator import AptlEvaluator
@@ -27,7 +32,7 @@ _EVALUATION_SCENARIO = dedent(
     name: evaluator-test
     nodes:
       vm:
-        type: vm
+        type: compute
         os: linux
         resources: {ram: 1 gib, cpu: 1}
         conditions: {health: ops}
@@ -87,6 +92,7 @@ _EVALUATION_SCENARIO = dedent(
     """
 )
 
+
 def _evaluation_plan():
     scenario = parse_sdl(_EVALUATION_SCENARIO)
     execution_plan = plan(compile_runtime_model(scenario), create_aptl_manifest())
@@ -134,6 +140,32 @@ def test_start_reports_running_until_observed_state_is_available():
         ]
         assert history[0]["status"] == EvaluationResultStatus.PENDING.value
         assert history[-1]["status"] == EvaluationResultStatus.RUNNING.value
+
+
+def test_start_decides_exact_declared_node_presence() -> None:
+    from raes_conformance.conformance.target_planning import (
+        DEFAULT_TARGET_CONFORMANCE_SCENARIO,
+    )
+    from raes_processor.reference import run_reference_processor
+
+    execution_plan = run_reference_processor(
+        DEFAULT_TARGET_CONFORMANCE_SCENARIO,
+        create_aptl_manifest(),
+    ).execution_plan
+
+    result = AptlEvaluator().start(
+        execution_plan.evaluation,
+        _snapshot_with_node_status("ready"),
+    )
+
+    assert result.success is True
+    truth = result.snapshot.proposition_truth_results[
+        "evaluation.assertion.health"
+    ]
+    assert truth["evaluation_basis"] == "declared_state"
+    assert truth["proposition_outcome"] == "true"
+    assert truth["assertion_outcome"] == "true"
+    assert proposition_truth_contract_diagnostics(result.snapshot) == []
 
 
 def test_start_derives_condition_pass_but_objective_stays_unresolved():
@@ -376,7 +408,8 @@ def test_start_preserves_existing_provisioning_entries():
 
     assert "provision.node.vm" in result.snapshot.entries
     assert any(
-        entry.domain == RuntimeDomain.EVALUATION for entry in result.snapshot.entries.values()
+        entry.domain == RuntimeDomain.EVALUATION
+        for entry in result.snapshot.entries.values()
     )
 
 
@@ -421,7 +454,10 @@ def test_start_fails_closed_on_evaluation_missing_result_contract():
     )
 
     assert result.success is False
-    assert any(d.code == "aptl.evaluator.evaluation-contract-missing" for d in result.diagnostics)
+    assert any(
+        d.code == "aptl.evaluator.evaluation-contract-missing"
+        for d in result.diagnostics
+    )
 
 
 def test_start_fails_closed_on_invalid_result_contract():
@@ -436,7 +472,10 @@ def test_start_fails_closed_on_invalid_result_contract():
     )
 
     assert result.success is False
-    assert any(d.code == "aptl.evaluator.evaluation-contract-invalid" for d in result.diagnostics)
+    assert any(
+        d.code == "aptl.evaluator.evaluation-contract-invalid"
+        for d in result.diagnostics
+    )
 
 
 def test_start_fails_closed_on_scoring_chain_resource():

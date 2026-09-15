@@ -44,6 +44,10 @@ class SourceResult:
     dropped_count: int = 0
     source_min_time: str | None = None
     source_max_time: str | None = None
+    chunks: tuple[bytes, ...] = ()
+    media_type: str = "application/json"
+    observer_effect: str | None = None
+    source_pipeline: dict[str, object] = field(default_factory=dict)
 
 
 @runtime_checkable
@@ -111,7 +115,9 @@ class WindowedQueryCollector:
         return _to_outcome(result, handle.started_at, finished_at)
 
 
-def _to_outcome(result: SourceResult, started_at: str, finished_at: str) -> CollectorOutcome:
+def _to_outcome(
+    result: SourceResult, started_at: str, finished_at: str
+) -> CollectorOutcome:
     """Map a :class:`SourceResult` to a :class:`CollectorOutcome`.
 
     A source failure passes through without chunks; a success serializes the
@@ -126,16 +132,23 @@ def _to_outcome(result: SourceResult, started_at: str, finished_at: str) -> Coll
             dropped_count=result.dropped_count,
             detail=f"source reported {result.status.value}",
         )
-    status = CollectorStatus.OK if result.records else CollectorStatus.EMPTY_OK
-    chunks = [json.dumps(result.records, separators=(",", ":")).encode("utf-8")]
+    has_content = bool(result.records or result.chunks)
+    status = CollectorStatus.OK if has_content else CollectorStatus.EMPTY_OK
+    chunks = (
+        result.chunks
+        if result.chunks
+        else (json.dumps(result.records, separators=(",", ":")).encode("utf-8"),)
+    )
     return CollectorOutcome(
         status=status,
         started_at=started_at,
         finished_at=finished_at,
         chunks=chunks,
-        media_type="application/json",
-        event_count=len(result.records),
+        media_type=result.media_type,
+        event_count=len(result.records) if result.records else len(result.chunks),
         dropped_count=result.dropped_count,
         source_min_time=result.source_min_time,
         source_max_time=result.source_max_time,
+        observer_effect=result.observer_effect,
+        source_pipeline=result.source_pipeline,
     )

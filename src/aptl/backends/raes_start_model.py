@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from raes_contracts.runtime_state import RuntimeSnapshot
 
 from aptl.core.lab_types import LabResult
+from aptl.core.experiment.capture_plan import CapturePlan, empty_capture_plan
 
 if TYPE_CHECKING:
     from raes_processor.models import ExecutionPlan
@@ -37,6 +38,7 @@ class AdmittedScenarioStart:
     target: RuntimeTarget
     execution_plan: ExecutionPlan
     realization: AptlRealization | None
+    capture_plan: CapturePlan = field(default_factory=empty_capture_plan)
 
 
 @dataclass(frozen=True)
@@ -59,3 +61,4 @@ class AcesStartOutcome:
     manifest_payload: dict[str, Any] = field(default_factory=dict)
     pack_interaction_evidence: dict[str, Any] = field(default_factory=dict)
     retryable: bool = False
+    capture_plan: CapturePlan | None = None

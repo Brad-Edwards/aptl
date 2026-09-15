@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from aptl.core.deployment._compose_base_substrate import ComposeBaseSubstrateMixin
+from aptl.core.deployment._compose_autoremove import ComposeAutoremoveMixin
 from aptl.core.deployment._compose_build_dedupe import (
     write_duplicate_build_override,
 )
@@ -39,6 +40,7 @@ from aptl.core.appliance_boundary import (
 )
 from aptl.core.config import validate_compose_project_name
 from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.utils.logging import get_logger
 
@@ -48,6 +50,7 @@ _DOCKER_TIMEOUT = 30
 
 class DockerComposeBackend(
     DockerEndpointBindingMixin,
+    ComposeAutoremoveMixin,
     ComposeRuntimeInventoryMixin,
     ComposeProjectInventoryMixin,
     ComposeQueryMixin,
@@ -291,10 +294,18 @@ class DockerComposeBackend(
         Returns:
             LabResult indicating success or failure.
         """
+        root = scenario_root if scenario_root is not None else self._project_dir
+        failure = self._start_preflight(profiles, root)
+        if failure is not None:
+            return failure
         build = build and not self._offline_staged
         compose_files = self._start_compose_files(
             build=build, scenario_root=scenario_root
         )
+        if "otel" in profiles:
+            compose_files = self._with_observability_files(
+                compose_files or (root / "docker-compose.yml",), profiles
+            )
         cmd = self._build_command(
             "up", profiles, compose_files=compose_files, scenario_root=scenario_root
         )
@@ -320,6 +331,17 @@ class DockerComposeBackend(
 
         log.info("Lab started successfully")
         return LabResult(success=True, message="Lab started")
+
+    def _start_preflight(self, profiles: list[str], root: Path) -> LabResult | None:
+        """Run observability configuration and ownership checks before start."""
+
+        failure = self._observability_preflight(
+            DeploymentRealizationSpec(profiles=tuple(profiles), nodes=(), networks=()),
+            root,
+        )
+        if failure is None and "otel" in profiles:
+            failure = self._observability_ownership_check()
+        return failure
 
     def _start_compose_files(
         self, *, build: bool, scenario_root: Path | None = None

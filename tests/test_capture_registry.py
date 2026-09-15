@@ -51,7 +51,11 @@ def _read(*parts: str) -> bytes:
 
 def _reference_spec_payload() -> dict:
     """Return the parsed reference capture-spec fixture payload (single requirement)."""
-    return json.loads(_read("experiment-core", "experiment-capture-spec-v1", "valid", "reference.json"))
+    return json.loads(
+        _read(
+            "experiment-core", "experiment-capture-spec-v1", "valid", "reference.json"
+        )
+    )
 
 
 def _spec_with(**requirement_overrides: object) -> ExperimentCaptureSpecModel:
@@ -89,6 +93,10 @@ def _covering_registration(**overrides: object) -> CollectorRegistration:
         "sealing_modes": frozenset({"digest"}),
         "supports_chain_of_custody": False,
         "supports_retention": True,
+        "redaction_policies": frozenset({"redact_secrets"}),
+        "retention_policies": frozenset(
+            {"Retain raw evidence for the experiment review window."}
+        ),
         "supports_loss_disclosure": True,
         "visibility_class": CaptureVisibility.EVALUATOR_ONLY,
         "limits": _LIMITS,
@@ -97,11 +105,45 @@ def _covering_registration(**overrides: object) -> CollectorRegistration:
     return CollectorRegistration(**fields)
 
 
-def _bind_reference(registration: CollectorRegistration, **requirement_overrides: object) -> CaptureBinding | None:
+def _bind_reference(
+    registration: CollectorRegistration, **requirement_overrides: object
+) -> CaptureBinding | None:
     """Match the reference requirement (with overrides) against a single-registration registry."""
     spec = _spec_with(**requirement_overrides)
     requirement = next(iter(spec.capture_requirements.values()))
     return CollectorRegistry((registration,)).match(spec, requirement)
+
+
+def test_best_effort_tempo_delivery_cannot_admit_required_loss_accounting():
+    from aptl.core.experiment.capture_registrations import BUILTIN_REGISTRATIONS
+
+    tempo = next(
+        item
+        for item in BUILTIN_REGISTRATIONS
+        if item.registration_id == "aptl.collector.tempo-traces"
+    )
+    spec = _spec_with(
+        capture_kind="trace",
+        capture_scope="run",
+        retention_policy="run_lifetime",
+        redaction_policy="redact_secrets",
+        loss_disclosure_required=True,
+    )
+    requirement = next(iter(spec.capture_requirements.values()))
+    assert CollectorRegistry((tempo,)).match(spec, requirement) is None
+    # This is specifically the unavailable loss guarantee, not a wrong media,
+    # role, scope or policy that accidentally makes the negative test pass.
+    payload = spec.model_dump(mode="json")
+    payload["capture_requirements"][requirement.requirement_id][
+        "loss_disclosure_required"
+    ] = False
+    best_effort = ExperimentCaptureSpecModel.model_validate(payload)
+    assert (
+        CollectorRegistry((tempo,)).match(
+            best_effort, best_effort.capture_requirements[requirement.requirement_id]
+        )
+        is not None
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +261,12 @@ class TestMatchOneMissPerAxisFailsClosed:
     guard for that axis must make the match return ``None``."""
 
     def test_contract_version_mismatch(self):
-        assert _bind_reference(_covering_registration(contract_version="experiment-capture-spec/v2")) is None
+        assert (
+            _bind_reference(
+                _covering_registration(contract_version="experiment-capture-spec/v2")
+            )
+            is None
+        )
 
     def test_capture_kind_mismatch(self):
         assert _bind_reference(_covering_registration(capture_kind="log")) is None
@@ -228,19 +275,42 @@ class TestMatchOneMissPerAxisFailsClosed:
         assert _bind_reference(_covering_registration(capture_scope="service")) is None
 
     def test_window_kind_not_supported(self):
-        assert _bind_reference(_covering_registration(window_kinds=frozenset({"task"}))) is None
+        assert (
+            _bind_reference(_covering_registration(window_kinds=frozenset({"task"})))
+            is None
+        )
 
     def test_media_type_not_a_subset(self):
-        assert _bind_reference(_covering_registration(media_types=frozenset({"text/plain"}))) is None
+        assert (
+            _bind_reference(
+                _covering_registration(media_types=frozenset({"text/plain"}))
+            )
+            is None
+        )
 
     def test_required_artifact_role_not_a_subset(self):
-        assert _bind_reference(_covering_registration(required_artifact_roles=frozenset({"report"}))) is None
+        assert (
+            _bind_reference(
+                _covering_registration(required_artifact_roles=frozenset({"report"}))
+            )
+            is None
+        )
 
     def test_sensitivity_not_supported(self):
-        assert _bind_reference(_covering_registration(supported_sensitivities=frozenset({"public"}))) is None
+        assert (
+            _bind_reference(
+                _covering_registration(supported_sensitivities=frozenset({"public"}))
+            )
+            is None
+        )
 
     def test_integrity_mode_not_a_subset(self):
-        assert _bind_reference(_covering_registration(integrity_modes=frozenset({"sha512-digest"}))) is None
+        assert (
+            _bind_reference(
+                _covering_registration(integrity_modes=frozenset({"sha512-digest"}))
+            )
+            is None
+        )
 
     def test_redaction_required_but_unsupported(self):
         registration = _covering_registration(supports_redaction=False)
@@ -259,10 +329,15 @@ class TestMatchOneMissPerAxisFailsClosed:
         # against a registration that also does not support them — the guards
         # are "required implies supported", not "supported implies required".
         registration = _covering_registration(
-            supports_redaction=False, supports_retention=False, supports_loss_disclosure=False
+            supports_redaction=False,
+            supports_retention=False,
+            supports_loss_disclosure=False,
         )
         binding = _bind_reference(
-            registration, redaction_policy=None, retention_policy=None, loss_disclosure_required=False
+            registration,
+            redaction_policy=None,
+            retention_policy=None,
+            loss_disclosure_required=False,
         )
         assert binding is not None
 
@@ -280,7 +355,9 @@ class TestMatchIsDeterministic:
         assert forward is not None
         assert reverse is not None
         # Both cover; ID-sorted selection picks "aaa" regardless of insertion order.
-        assert forward.registration_id == reverse.registration_id == "aptl.collector.aaa"
+        assert (
+            forward.registration_id == reverse.registration_id == "aptl.collector.aaa"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -289,6 +366,16 @@ class TestMatchIsDeterministic:
 
 
 class TestConfigDigest:
+    @pytest.mark.parametrize(
+        "field,value",
+        [
+            ("redaction_policy", "aggregate-only-unknown-policy"),
+            ("retention_policy", "delete-every-copy-after-one-second"),
+        ],
+    )
+    def test_boolean_support_does_not_admit_arbitrary_policy(self, field, value):
+        assert _bind_reference(_covering_registration(), **{field: value}) is None
+
     def test_two_identical_registrations_share_a_digest(self):
         left = _covering_registration().effective_config_digest()
         right = _covering_registration().effective_config_digest()
@@ -296,7 +383,9 @@ class TestConfigDigest:
 
     def test_changing_any_declared_field_changes_the_digest(self):
         base = _covering_registration().effective_config_digest()
-        changed = _covering_registration(implementation_version="2.0.0").effective_config_digest()
+        changed = _covering_registration(
+            implementation_version="2.0.0"
+        ).effective_config_digest()
         assert base != changed
 
 
@@ -318,7 +407,9 @@ class TestObservationProjection:
     def test_populated_registry_aggregates_declarations(self):
         registry = CollectorRegistry(
             (
-                _covering_registration(registration_id="aptl.collector.a", capture_kind="trace"),
+                _covering_registration(
+                    registration_id="aptl.collector.a", capture_kind="trace"
+                ),
                 _covering_registration(
                     registration_id="aptl.collector.b",
                     capture_kind="log",
@@ -331,9 +422,15 @@ class TestObservationProjection:
 
         assert observation is not None
         assert observation.supported_capture_kinds == frozenset({"trace", "log"})
-        assert observation.supported_channel_kinds == frozenset({"evaluation-history", "backend-log"})
-        assert observation.supported_media_types == frozenset({"application/json", "text/plain"})
-        assert observation.supported_evidence_contracts == OBSERVATION_EVIDENCE_CONTRACTS
+        assert observation.supported_channel_kinds == frozenset(
+            {"evaluation-history", "backend-log"}
+        )
+        assert observation.supported_media_types == frozenset(
+            {"application/json", "text/plain"}
+        )
+        assert (
+            observation.supported_evidence_contracts == OBSERVATION_EVIDENCE_CONTRACTS
+        )
 
     def test_projection_uses_governed_vocabulary_terms(self):
         # ObservationCapabilities validates channel/capture/sealing terms
@@ -358,14 +455,20 @@ class TestFuzzRegistry:
     @given(version=st.text(alphabet="0123456789.", min_size=1, max_size=8))
     @settings(max_examples=40, deadline=2000)
     def test_config_digest_is_stable_across_reconstruction(self, version):
-        left = _covering_registration(implementation_version=version).effective_config_digest()
-        right = _covering_registration(implementation_version=version).effective_config_digest()
+        left = _covering_registration(
+            implementation_version=version
+        ).effective_config_digest()
+        right = _covering_registration(
+            implementation_version=version
+        ).effective_config_digest()
         assert left == right
 
     @given(shuffle=st.permutations([f"aptl.collector.c{i}" for i in range(4)]))
     @settings(max_examples=40, deadline=2000)
     def test_match_selection_is_insertion_order_independent(self, shuffle):
-        registrations = tuple(_covering_registration(registration_id=rid) for rid in shuffle)
+        registrations = tuple(
+            _covering_registration(registration_id=rid) for rid in shuffle
+        )
         spec = _spec_with()
         requirement = next(iter(spec.capture_requirements.values()))
         binding = CollectorRegistry(registrations).match(spec, requirement)
@@ -398,13 +501,22 @@ class TestProjectionIsOrderCanonical:
         assert binding is not None
         projection = binding.binding_projection()
         assert projection["expected_media_types"] == ["application/json", "text/plain"]
-        assert projection["integrity_requirements"] == ["blake3-digest", "sha256-digest"]
+        assert projection["integrity_requirements"] == [
+            "blake3-digest",
+            "sha256-digest",
+        ]
         assert projection["required_artifact_roles"] == ["observation", "report"]
 
     def test_authored_axis_order_does_not_change_the_projection(self):
-        registration = _covering_registration(media_types=frozenset({"application/json", "text/plain"}))
-        forward = _bind_reference(registration, expected_media_types=["application/json", "text/plain"])
-        reverse = _bind_reference(registration, expected_media_types=["text/plain", "application/json"])
+        registration = _covering_registration(
+            media_types=frozenset({"application/json", "text/plain"})
+        )
+        forward = _bind_reference(
+            registration, expected_media_types=["application/json", "text/plain"]
+        )
+        reverse = _bind_reference(
+            registration, expected_media_types=["text/plain", "application/json"]
+        )
         assert forward is not None
         assert reverse is not None
         assert forward.binding_projection() == reverse.binding_projection()

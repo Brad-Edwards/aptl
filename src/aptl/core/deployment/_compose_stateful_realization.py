@@ -5,8 +5,6 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import yaml
-
 from aptl.core.certs import CertResult, ensure_ssl_certs
 from aptl.core.soc_ca import derive_soc_service_certs, ensure_soc_certs
 from aptl.core.credentials import (
@@ -22,7 +20,6 @@ from aptl.core.deployment._compose_stateful_constants import (
     MIN_OVERRIDE_COMPOSE_VERSION,
     SOC_CERT_PROFILE,
     SOC_CERTS_ROOT_RELPATH,
-    STATEFUL_OVERRIDE_RELPATH,
     WAZUH_MANAGER_CONFIG_PROVENANCES,
 )
 from aptl.core.deployment._compose_stateful_graph import (
@@ -31,15 +28,20 @@ from aptl.core.deployment._compose_stateful_graph import (
     stateful_realization_errors,
 )
 from aptl.core.deployment._compose_stateful_model import (
+    artifact_environment_file_path,
     artifact_source_path as _artifact_source_path,
     effective_stateful_model_errors as _effective_stateful_model_errors,
-    stateful_override_payload,
+    stateful_override_payload as _stateful_override_payload,
+)
+from aptl.core.deployment._compose_stateful_override import write_stateful_override
+from aptl.core.deployment._cortex_service_credentials import (
+    CORTEX_SERVICE_CREDENTIALS_PROFILE,
+    realize_cortex_service_credentials,
 )
 from aptl.core.deployment._compose_stateful_readiness import (
     ComposeStatefulReadinessMixin,
     _load_stateful_env,
 )
-from aptl.core.deployment._compose_stateful_services import StatefulDumper
 from aptl.core.deployment._flag_signing_keys import (
     FLAG_SIGNING_PROFILE_V2,
     realize_flag_signing_keys,
@@ -50,11 +52,13 @@ from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
     DeploymentRealizationSpec,
+    valid_environment_variable_name,
 )
 from aptl.core.lab_types import LabResult
 
 artifact_source_path = _artifact_source_path
 effective_stateful_model_errors = _effective_stateful_model_errors
+stateful_override_payload = _stateful_override_payload
 
 
 class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
@@ -144,7 +148,10 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
                     f"generator {artifact.generator!r}."
                 ),
             )
-        return realizer(artifact, scenario_root)
+        failure = realizer(artifact, scenario_root)
+        if failure is None and artifact.environment_consumers:
+            failure = self._realize_artifact_environment_files(artifact, scenario_root)
+        return failure
 
     @staticmethod
     def _realize_ssh_key_bundle(
@@ -191,6 +198,17 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
 
         if artifact.provenance == FLAG_SIGNING_PROFILE_V2:
             return self._realize_flag_signing_keys(artifact, scenario_root)
+        if artifact.provenance == CORTEX_SERVICE_CREDENTIALS_PROFILE:
+            error = realize_cortex_service_credentials(artifact, scenario_root)
+            return LabResult(success=False, error=error) if error is not None else None
+        return self._realize_wazuh_config(artifact, scenario_root)
+
+    def _realize_wazuh_config(
+        self,
+        artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Render and verify one Wazuh manager configuration artifact."""
 
         unsupported_binding = (
             artifact.provenance not in WAZUH_MANAGER_CONFIG_PROVENANCES
@@ -240,6 +258,33 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
                     f"Generated artifact {artifact.address} is missing declared output."
                 ),
             )
+        return failure
+
+    @staticmethod
+    def _realize_artifact_environment_files(
+        artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Write exact output-to-variable bindings without putting secrets in YAML."""
+
+        failure = None
+        if artifact.provenance != CORTEX_SERVICE_CREDENTIALS_PROFILE:
+            failure = LabResult(
+                success=False,
+                error=(
+                    f"Generated artifact {artifact.address} has unsupported "
+                    "environment delivery."
+                ),
+            )
+        else:
+            try:
+                by_service = _artifact_environment_bindings(artifact, scenario_root)
+                _write_artifact_environment_files(artifact, scenario_root, by_service)
+            except (OSError, ValueError):
+                failure = LabResult(
+                    success=False,
+                    error=f"Generated artifact {artifact.address} environment delivery failed.",
+                )
         return failure
 
     @staticmethod
@@ -361,6 +406,49 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
             raise subprocess.TimeoutExpired(command, timeout) from exc
 
 
+def _artifact_environment_bindings(
+    artifact: DeploymentGeneratedArtifactRealization,
+    scenario_root: Path,
+) -> dict[str, list[tuple[str, Path]]]:
+    """Validate and group exact generated-output environment bindings."""
+
+    root = artifact_source_path(scenario_root, artifact)
+    outputs = {output.name: root / output.path for output in artifact.outputs}
+    by_service: dict[str, list[tuple[str, Path]]] = {}
+    for consumer in artifact.environment_consumers:
+        if not valid_environment_variable_name(consumer.environment_variable):
+            raise ValueError("invalid generated environment variable")
+        source = outputs.get(consumer.output_name)
+        if source is None or not source.is_file():
+            raise ValueError("missing declared generated output")
+        by_service.setdefault(consumer.service_name, []).append(
+            (consumer.environment_variable, source)
+        )
+    return by_service
+
+
+def _write_artifact_environment_files(
+    artifact: DeploymentGeneratedArtifactRealization,
+    scenario_root: Path,
+    by_service: dict[str, list[tuple[str, Path]]],
+) -> None:
+    """Write validated output bindings as owner-only Compose env files."""
+
+    for service_name, bindings in by_service.items():
+        target = artifact_environment_file_path(scenario_root, artifact, service_name)
+        relative = target.relative_to(scenario_root.resolve())
+        target = _canonical_generated_path(scenario_root, relative)
+        _ensure_secure_dir(target.parent)
+        lines = []
+        for variable, source in sorted(bindings):
+            value = source.read_text(encoding="utf-8").strip()
+            if not value or "\n" in value or "\r" in value:
+                raise ValueError("invalid generated environment value")
+            lines.append(f"{variable}={value}")
+        _atomic_write_secure(target, "\n".join(lines) + "\n")
+        target.chmod(0o600)
+
+
 def _certificate_bundle_failure(
     artifact: DeploymentGeneratedArtifactRealization,
     scenario_root: Path,
@@ -400,30 +488,3 @@ def _certificate_bundle_failure(
         if errors:
             failure = LabResult(success=False, error=errors[0])
     return failure
-
-
-def write_stateful_override(
-    scenario_root: Path,
-    project_name: str,
-    realization: DeploymentRealizationSpec,
-) -> Path | None:
-    """Atomically write the contained Compose stateful-resource override.
-
-    The override is a scenario-local generated artifact, written under
-    ``scenario_root`` (the bundle root), not the engine checkout (issue #874).
-    """
-
-    override_path: Path | None = None
-    if realization.generated_artifacts or realization.persistent_volumes:
-        payload = stateful_override_payload(scenario_root, project_name, realization)
-        override_path = _canonical_generated_path(
-            scenario_root,
-            STATEFUL_OVERRIDE_RELPATH,
-        )
-        _ensure_secure_dir(override_path.parent)
-        _canonical_generated_path(scenario_root, STATEFUL_OVERRIDE_RELPATH)
-        _atomic_write_secure(
-            override_path,
-            yaml.dump(payload, Dumper=StatefulDumper, sort_keys=True),
-        )
-    return override_path

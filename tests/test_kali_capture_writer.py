@@ -1,351 +1,280 @@
-"""Unit tests for the kali-capture sidecar writer daemon (ADR-041 / issue #305)."""
+"""Unit tests for the sidecar-owned Kali PTY broker."""
+
 from __future__ import annotations
 
 import base64
 import importlib.util
-import os
+import json
 import stat
+import sys
 from pathlib import Path
 
 import pytest
 
-# The capture writer runs inside the (Linux) kali container; its 0o700/0o600
-# hardening is unenforceable on a Windows host, where st_mode reads 0o666/0o777.
-_skip_no_posix_modes = pytest.mark.skipif(
-    os.name != "posix", reason="POSIX file modes are unenforced on Windows"
+from aptl.core.evidence.adapters.techvault import (
+    TranscriptFrame,
+    transcript_chain_digest,
 )
 
-# Load writer module from containers/kali-capture/writer.py
-_WRITER_PATH = Path(__file__).parent.parent / "containers/kali-capture/writer.py"
-
-# Opaque connection-owner tokens (the writer treats them as hashable handles).
-_OWNER_A = 1
-_OWNER_B = 2
+_BROKER_PATH = Path(__file__).parent.parent / "containers/kali-capture/broker.py"
 
 
-def _load_writer():
-    if not _WRITER_PATH.exists():
-        pytest.skip("containers/kali-capture/writer.py not yet written")
-    spec = importlib.util.spec_from_file_location("kali_capture_writer", _WRITER_PATH)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+def _load_broker():
+    spec = importlib.util.spec_from_file_location("kali_capture_broker", _BROKER_PATH)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 @pytest.fixture(scope="module")
-def writer_mod():
-    return _load_writer()
+def broker():
+    return _load_broker()
 
 
-class TestIdValidation:
-    def test_valid_simple(self, writer_mod):
-        assert writer_mod.validate_id("abc123", "x") == "abc123"
+def test_activation_is_create_once_and_idempotent(broker, tmp_path):
+    runtime = tmp_path / "runtime"
+    first = broker.activate_authority(
+        runtime,
+        run_id="run-1",
+        plan_id="capture-plan-1",
+        binding_id="aptl.collector.redteam-session-transcript",
+        now=lambda: "2026-09-14T10:00:00Z",
+    )
+    second = broker.activate_authority(
+        runtime,
+        run_id="run-1",
+        plan_id="capture-plan-1",
+        binding_id="aptl.collector.redteam-session-transcript",
+        now=lambda: "2026-09-14T10:00:01Z",
+    )
 
-    def test_valid_underscore_prefix(self, writer_mod):
-        assert writer_mod.validate_id("_unbound", "x") == "_unbound"
-
-    def test_valid_dot_dash(self, writer_mod):
-        assert writer_mod.validate_id("run-1.0", "x") == "run-1.0"
-
-    def test_dotdot_rejected(self, writer_mod):
-        with pytest.raises(ValueError, match=".."):
-            writer_mod.validate_id("../evil", "x")
-
-    def test_slash_rejected(self, writer_mod):
-        with pytest.raises(ValueError, match="invalid"):
-            writer_mod.validate_id("a/b", "x")
-
-    def test_empty_rejected(self, writer_mod):
-        with pytest.raises(ValueError):
-            writer_mod.validate_id("", "x")
-
-    def test_leading_dot_rejected(self, writer_mod):
-        with pytest.raises(ValueError):
-            writer_mod.validate_id(".hidden", "x")
+    assert first == second
+    assert first["activated_at"] == "2026-09-14T10:00:00Z"
+    assert stat.S_IMODE((runtime / "authority.json").stat().st_mode) == 0o600
 
 
-class TestMessageParsing:
-    def test_path_bearing_message_rejected(self, writer_mod):
-        frame = {"type": "session_start", "run_id": "r1", "session_id": "s1", "output_path": "/evil"}
-        with pytest.raises(ValueError, match="forbidden"):
-            writer_mod.validate_frame(frame)
+def test_activation_refuses_changed_authority(broker, tmp_path):
+    runtime = tmp_path / "runtime"
+    broker.activate_authority(
+        runtime,
+        run_id="run-1",
+        plan_id="capture-plan-1",
+        binding_id="aptl.collector.redteam-session-transcript",
+    )
 
-    def test_delete_message_rejected(self, writer_mod):
-        frame = {"type": "delete", "run_id": "r1", "session_id": "s1"}
-        with pytest.raises(ValueError, match="forbidden"):
-            writer_mod.validate_frame(frame)
-
-    def test_truncate_message_rejected(self, writer_mod):
-        frame = {"type": "truncate", "run_id": "r1", "session_id": "s1"}
-        with pytest.raises(ValueError, match="forbidden"):
-            writer_mod.validate_frame(frame)
-
-    def test_chmod_field_rejected(self, writer_mod):
-        frame = {"type": "session_start", "run_id": "r1", "session_id": "s1", "chmod": "777"}
-        with pytest.raises(ValueError, match="forbidden"):
-            writer_mod.validate_frame(frame)
-
-    def test_valid_session_start_accepted(self, writer_mod):
-        frame = {"type": "session_start", "run_id": "r1", "session_id": "s1", "ts": 1}
-        writer_mod.validate_frame(frame)  # should not raise
-
-    def test_valid_pty_chunk_accepted(self, writer_mod):
-        frame = {
-            "type": "pty_chunk",
-            "session_id": "s1",
-            "ts": 1,
-            "b64": base64.b64encode(b"hello").decode(),
-        }
-        writer_mod.validate_frame(frame)  # should not raise
-
-    def test_valid_session_end_accepted(self, writer_mod):
-        frame = {"type": "session_end", "session_id": "s1", "ts": 1}
-        writer_mod.validate_frame(frame)  # should not raise
-
-
-class TestSessionDirs:
-    @_skip_no_posix_modes
-    def test_session_start_creates_dirs(self, writer_mod, tmp_path):
-        capture_root = str(tmp_path / "captures")
-        state = writer_mod.WriterState(capture_root=capture_root)
-        assert state.handle_session_start("runA", "sessB", _OWNER_A) is True
-        pty_dir = tmp_path / "captures" / "runA" / "sessB" / "pty"
-        pcap_dir = tmp_path / "captures" / "runA" / "sessB" / "pcap"
-        assert pty_dir.is_dir()
-        assert pcap_dir.is_dir()
-        assert (stat.S_IMODE(pty_dir.stat().st_mode) & 0o777) == 0o700
-        assert (stat.S_IMODE(pcap_dir.stat().st_mode) & 0o777) == 0o700
-
-    def test_pty_chunk_appends_bytes(self, writer_mod, tmp_path):
-        capture_root = str(tmp_path / "captures")
-        state = writer_mod.WriterState(capture_root=capture_root)
-        state.handle_session_start("runA", "sessB", _OWNER_A)
-        raw = b"hello world"
-        state.handle_pty_chunk("sessB", base64.b64encode(raw).decode(), _OWNER_A)
-        ts_file = tmp_path / "captures" / "runA" / "sessB" / "pty" / "typescript"
-        assert ts_file.read_bytes() == raw
-
-    def test_pty_chunk_appends_multiple(self, writer_mod, tmp_path):
-        capture_root = str(tmp_path / "captures")
-        state = writer_mod.WriterState(capture_root=capture_root)
-        state.handle_session_start("runX", "sessY", _OWNER_A)
-        state.handle_pty_chunk("sessY", base64.b64encode(b"foo").decode(), _OWNER_A)
-        state.handle_pty_chunk("sessY", base64.b64encode(b"bar").decode(), _OWNER_A)
-        ts_file = tmp_path / "captures" / "runX" / "sessY" / "pty" / "typescript"
-        assert ts_file.read_bytes() == b"foobar"
-
-    def test_pty_chunk_unknown_session_ignored(self, writer_mod, tmp_path):
-        capture_root = str(tmp_path / "captures")
-        state = writer_mod.WriterState(capture_root=capture_root)
-        # No session started — should not crash
-        state.handle_pty_chunk("no_such_session", base64.b64encode(b"x").decode(), _OWNER_A)
-
-    def test_session_end_marks_closed(self, writer_mod, tmp_path):
-        capture_root = str(tmp_path / "captures")
-        state = writer_mod.WriterState(capture_root=capture_root)
-        state.handle_session_start("runA", "sessC", _OWNER_A)
-        state.handle_session_end("sessC", _OWNER_A)
-        assert "sessC" not in state.active_sessions
-
-    @_skip_no_posix_modes
-    def test_typescript_file_mode_0600(self, writer_mod, tmp_path):
-        capture_root = str(tmp_path / "captures")
-        state = writer_mod.WriterState(capture_root=capture_root)
-        state.handle_session_start("runA", "sessD", _OWNER_A)
-        state.handle_pty_chunk("sessD", base64.b64encode(b"x").decode(), _OWNER_A)
-        state.handle_session_end("sessD", _OWNER_A)
-        ts_file = tmp_path / "captures" / "runA" / "sessD" / "pty" / "typescript"
-        if ts_file.exists():
-            assert (stat.S_IMODE(ts_file.stat().st_mode) & 0o777) == 0o600
-
-
-class TestConnectionOwnership:
-    """Codex pre-push F1/F3: a session is owned by the connection that started
-    it. Other connections cannot inject bytes into it, end it, or clobber it,
-    and a dropped connection finalizes the sessions it owned.
-    """
-
-    def test_pty_chunk_from_non_owner_ignored(self, writer_mod, tmp_path):
-        state = writer_mod.WriterState(capture_root=str(tmp_path / "captures"))
-        state.handle_session_start("runA", "sess1", _OWNER_A)
-        # Owner B tries to forge bytes into owner A's session — must be ignored.
-        state.handle_pty_chunk("sess1", base64.b64encode(b"FORGED").decode(), _OWNER_B)
-        # Owner A's legit bytes land.
-        state.handle_pty_chunk("sess1", base64.b64encode(b"real").decode(), _OWNER_A)
-        ts = tmp_path / "captures" / "runA" / "sess1" / "pty" / "typescript"
-        assert ts.read_bytes() == b"real"
-
-    def test_session_end_from_non_owner_ignored(self, writer_mod, tmp_path):
-        state = writer_mod.WriterState(capture_root=str(tmp_path / "captures"))
-        state.handle_session_start("runA", "sess2", _OWNER_A)
-        # Owner B tries to end owner A's session early — must be ignored.
-        state.handle_session_end("sess2", _OWNER_B)
-        assert "sess2" in state.active_sessions
-        # The real owner can still end it.
-        state.handle_session_end("sess2", _OWNER_A)
-        assert "sess2" not in state.active_sessions
-
-    def test_duplicate_start_different_owner_rejected(self, writer_mod, tmp_path):
-        state = writer_mod.WriterState(capture_root=str(tmp_path / "captures"))
-        state.handle_session_start("runA", "sess3", _OWNER_A)
-        state.handle_pty_chunk("sess3", base64.b64encode(b"keep").decode(), _OWNER_A)
-        # Owner B re-starts the same session id: must be rejected, not clobber.
-        assert state.handle_session_start("runA", "sess3", _OWNER_B) is False
-        assert state.active_sessions["sess3"]["owner"] == _OWNER_A
-        # Owner A's data is intact (no truncating re-open).
-        state.handle_pty_chunk("sess3", base64.b64encode(b"more").decode(), _OWNER_A)
-        ts = tmp_path / "captures" / "runA" / "sess3" / "pty" / "typescript"
-        assert ts.read_bytes() == b"keepmore"
-
-    def test_duplicate_start_same_owner_idempotent(self, writer_mod, tmp_path):
-        state = writer_mod.WriterState(capture_root=str(tmp_path / "captures"))
-        assert state.handle_session_start("runA", "sess4", _OWNER_A) is True
-        assert state.handle_session_start("runA", "sess4", _OWNER_A) is True
-
-    def test_reopen_after_finalize_rejected(self, writer_mod, tmp_path):
-        # A session id is single-use: once finalized it must not be reopened for
-        # append, or forged bytes could be tacked onto harvested evidence
-        # (codex cycle 2 F3).
-        state = writer_mod.WriterState(capture_root=str(tmp_path / "captures"))
-        state.handle_session_start("runA", "sess5", _OWNER_A)
-        state.handle_pty_chunk("sess5", base64.b64encode(b"original").decode(), _OWNER_A)
-        state.handle_session_end("sess5", _OWNER_A)
-        # A fresh connection tries to reopen the same id — must be rejected.
-        assert state.handle_session_start("runA", "sess5", _OWNER_B) is False
-        # And the post-finalize append is dropped (session is not active).
-        state.handle_pty_chunk("sess5", base64.b64encode(b"FORGED").decode(), _OWNER_B)
-        ts = tmp_path / "captures" / "runA" / "sess5" / "pty" / "typescript"
-        assert ts.read_bytes() == b"original"
-
-    def test_finalize_owner_closes_owned_sessions(self, writer_mod, tmp_path):
-        state = writer_mod.WriterState(capture_root=str(tmp_path / "captures"))
-        state.handle_session_start("runA", "sessE", _OWNER_A)
-        state.handle_session_start("runA", "sessF", _OWNER_A)
-        state.handle_session_start("runA", "sessG", _OWNER_B)
-        # Connection A drops: only its sessions finalize; B's stays.
-        state.finalize_owner(_OWNER_A)
-        assert "sessE" not in state.active_sessions
-        assert "sessF" not in state.active_sessions
-        assert "sessG" in state.active_sessions
-
-    def test_ping_and_peercred_helpers_exist(self, writer_mod):
-        # The connection handler reads SO_PEERCRED for forensics; the helper
-        # must be present and tolerate a non-socket gracefully.
-        assert hasattr(writer_mod, "peer_credentials")
-        assert writer_mod.peer_credentials(object()) is None
-
-
-class _FakeProc:
-    """Stand-in for a tcpdump subprocess.Popen handle."""
-
-    def __init__(self):
-        self.terminated = False
-        self.killed = False
-        self.waited = False
-
-    def terminate(self):
-        self.terminated = True
-
-    def wait(self, timeout=None):
-        self.waited = True
-        return 0
-
-    def kill(self):
-        self.killed = True
-
-
-class TestPcapLifecycle:
-    """tcpdump per-session lifecycle (ADR-041): the sidecar owns pcap.
-
-    The real tcpdump is never spawned in unit tests — ``pcap_spawn`` is
-    injected so the lifecycle (start on session_start, terminate on
-    session_end) is asserted without NET_RAW or a packet source.
-    """
-
-    def test_pcap_disabled_by_default(self, writer_mod, tmp_path):
-        # Default WriterState must NOT spawn tcpdump, so the bare unit tests
-        # above never launch a real capture.
-        calls = []
-
-        def spy_spawn(argv, **kwargs):
-            calls.append(argv)
-            return _FakeProc()
-
-        state = writer_mod.WriterState(
-            capture_root=str(tmp_path / "captures"), pcap_spawn=spy_spawn
+    with pytest.raises(ValueError, match="authority conflict"):
+        broker.activate_authority(
+            runtime,
+            run_id="run-2",
+            plan_id="capture-plan-1",
+            binding_id="aptl.collector.redteam-session-transcript",
         )
-        state.handle_session_start("runA", "sessP", _OWNER_A)
-        assert calls == [], "tcpdump must not spawn when enable_pcap is False"
 
-    def test_session_start_launches_pcap(self, writer_mod, tmp_path):
-        calls = []
 
-        def spy_spawn(argv, **kwargs):
-            calls.append(argv)
-            return _FakeProc()
-
-        state = writer_mod.WriterState(
-            capture_root=str(tmp_path / "captures"),
-            enable_pcap=True,
-            pcap_spawn=spy_spawn,
+@pytest.mark.parametrize("value", ["", ".hidden", "../escape", "a/b", "a b"])
+def test_activation_rejects_unsafe_ids(broker, tmp_path, value):
+    with pytest.raises(ValueError):
+        broker.activate_authority(
+            tmp_path / "runtime",
+            run_id=value,
+            plan_id="capture-plan-1",
+            binding_id="aptl.collector.redteam-session-transcript",
         )
-        state.handle_session_start("runA", "sessP", _OWNER_A)
-        assert len(calls) == 1, "tcpdump should be spawned once on session_start"
-        argv = calls[0]
-        assert argv[0] == "tcpdump"
-        # Writes into the per-session pcap dir.
-        pcap_path = str(tmp_path / "captures" / "runA" / "sessP" / "pcap" / "session.pcap")
-        assert pcap_path in argv, f"tcpdump should target {pcap_path}; got {argv}"
-        # Drops the SSH control noise.
-        assert "not port 22" in argv
 
-    def test_session_end_kills_pcap(self, writer_mod, tmp_path):
-        fake = _FakeProc()
 
-        def spy_spawn(argv, **kwargs):
-            return fake
-
-        state = writer_mod.WriterState(
-            capture_root=str(tmp_path / "captures"),
-            enable_pcap=True,
-            pcap_spawn=spy_spawn,
+def test_recorder_writes_ordered_directional_frames_and_chain(broker, tmp_path):
+    authority = {
+        "run_id": "run-1",
+        "plan_id": "capture-plan-1",
+        "binding_id": "aptl.collector.redteam-session-transcript",
+        "activated_at": "2026-09-14T10:00:00Z",
+    }
+    instants = iter(
+        (
+            "2026-09-14T10:00:01Z",
+            "2026-09-14T10:00:02Z",
+            "2026-09-14T10:00:03Z",
+            "2026-09-14T10:00:04Z",
         )
-        state.handle_session_start("runA", "sessQ", _OWNER_A)
-        assert not fake.terminated
-        state.handle_session_end("sessQ", _OWNER_A)
-        assert fake.terminated, "tcpdump must be terminated on session_end"
+    )
+    recorder = broker.SessionRecorder(
+        tmp_path / "captures",
+        authority,
+        session_id="session-1",
+        now=lambda: next(instants),
+    )
+    recorder.append("input", b"whoami\n")
+    recorder.append("output", b"kali\r\n")
+    recorder.finish("clean-exit")
 
-    def test_finalize_owner_kills_pcap(self, writer_mod, tmp_path):
-        fake = _FakeProc()
-        state = writer_mod.WriterState(
-            capture_root=str(tmp_path / "captures"),
-            enable_pcap=True,
-            pcap_spawn=lambda argv, **kw: fake,
+    exported = broker.export_capture(tmp_path / "captures", authority)
+    assert exported["accepted_session_ids"] == ["session-1"]
+    session = exported["sessions"][0]
+    assert session["close_reason"] == "clean-exit"
+    assert [frame["direction"] for frame in session["frames"]] == [
+        "input",
+        "output",
+    ]
+    frames = tuple(
+        TranscriptFrame(
+            sequence=frame["sequence"],
+            timestamp=frame["timestamp"],
+            direction=frame["direction"],
+            data=base64.b64decode(frame["data_b64"], validate=True),
         )
-        state.handle_session_start("runA", "sessQ2", _OWNER_A)
-        # Connection drop (EOF) must stop the tcpdump too.
-        state.finalize_owner(_OWNER_A)
-        assert fake.terminated, "tcpdump must be terminated on connection drop"
-
-    def test_pcap_command_uses_fixed_rotation(self, writer_mod, tmp_path):
-        argv = writer_mod.default_pcap_command(tmp_path / "session.pcap")
-        # Rotation flags cap a single session's pcap footprint.
-        assert "-C" in argv and "100" in argv
-        assert "-W" in argv and "10" in argv
-
-    def test_pcap_start_failure_is_best_effort(self, writer_mod, tmp_path):
-        # A tcpdump that fails to spawn must not break the session — the
-        # typescript still records.
-        def boom_spawn(argv, **kwargs):
-            raise FileNotFoundError("tcpdump not installed")
-
-        state = writer_mod.WriterState(
-            capture_root=str(tmp_path / "captures"),
-            enable_pcap=True,
-            pcap_spawn=boom_spawn,
+        for frame in session["frames"]
+    )
+    assert session["final_chain_digest"] == transcript_chain_digest(frames)
+    assert (
+        stat.S_IMODE(
+            (tmp_path / "captures/run-1/sessions/session-1/metadata.json")
+            .stat()
+            .st_mode
         )
-        state.handle_session_start("runA", "sessR", _OWNER_A)  # must not raise
-        state.handle_pty_chunk("sessR", base64.b64encode(b"data").decode(), _OWNER_A)
-        state.handle_session_end("sessR", _OWNER_A)
-        ts_file = tmp_path / "captures" / "runA" / "sessR" / "pty" / "typescript"
-        assert ts_file.read_bytes() == b"data"
+        == 0o600
+    )
+
+
+def test_export_refuses_accepted_session_without_final_metadata(broker, tmp_path):
+    authority = {
+        "run_id": "run-1",
+        "plan_id": "capture-plan-1",
+        "binding_id": "aptl.collector.redteam-session-transcript",
+        "activated_at": "2026-09-14T10:00:00Z",
+    }
+    broker.SessionRecorder(tmp_path / "captures", authority, session_id="session-1")
+
+    with pytest.raises(ValueError, match="not finalized"):
+        broker.export_capture(tmp_path / "captures", authority)
+
+
+def test_inner_ssh_command_uses_only_loopback_target_and_preserves_original_as_one_arg(
+    broker,
+):
+    original = "printf '%s' 'hello world'"
+
+    command = broker.inner_ssh_command(original)
+
+    assert command[-2] == "kali@127.0.0.1"
+    assert "2222" in command
+    assert command[-1] == original
+    assert command.count(original) == 1
+    assert "StrictHostKeyChecking=yes" in command
+
+
+def test_session_identity_preserves_mcp_correlation_ids(broker):
+    authority = {"run_id": "run-1"}
+
+    session_id = broker.session_identity_from_environment(
+        authority,
+        {
+            "APTL_SESSION_ID": "session-1",
+            "APTL_RUN_ID": "run-1",
+            "APTL_TRACE_ID": "run-1",
+        },
+    )
+
+    assert session_id == "session-1"
+
+
+@pytest.mark.parametrize(
+    "environment",
+    [
+        {
+            "APTL_SESSION_ID": "session-1",
+            "APTL_RUN_ID": "other-run",
+            "APTL_TRACE_ID": "other-run",
+        },
+        {
+            "APTL_SESSION_ID": "session-1",
+            "APTL_RUN_ID": "run-1",
+            "APTL_TRACE_ID": "other-run",
+        },
+        {
+            "APTL_SESSION_ID": "../unsafe",
+            "APTL_RUN_ID": "run-1",
+            "APTL_TRACE_ID": "run-1",
+        },
+    ],
+)
+def test_session_identity_rejects_invalid_correlation(broker, environment):
+    with pytest.raises(ValueError):
+        broker.session_identity_from_environment({"run_id": "run-1"}, environment)
+
+
+def test_broker_rejects_new_session_after_quiesce_closes_admission(
+    broker, tmp_path, monkeypatch
+):
+    runtime = tmp_path / "runtime"
+    captures = tmp_path / "captures"
+    broker.activate_authority(
+        runtime,
+        run_id="run-1",
+        plan_id="capture-plan-1",
+        binding_id="aptl.collector.redteam-session-transcript",
+    )
+    broker.quiesce(runtime)
+    monkeypatch.setattr(broker, "_RUNTIME_ROOT", runtime)
+    monkeypatch.setattr(broker, "_CAPTURE_ROOT", captures)
+    monkeypatch.setenv("APTL_SESSION_ID", "session-1")
+    monkeypatch.setenv("APTL_RUN_ID", "run-1")
+    monkeypatch.setenv("APTL_TRACE_ID", "run-1")
+    monkeypatch.setattr(broker.signal, "signal", lambda *_args: None)
+
+    with pytest.raises(ValueError, match="admission is closed"):
+        broker.run_broker()
+
+    assert not (captures / "run-1/accepted-sessions.jsonl").exists()
+
+
+def test_broker_source_contains_no_shell_execution_or_legacy_capture_privileges():
+    source = _BROKER_PATH.read_text(encoding="utf-8")
+
+    assert "shell=True" not in source
+    assert "auditd" not in source
+    assert "tcpdump" not in source
+    assert "accton" not in source
+
+
+def test_export_payload_is_json_serializable(broker, tmp_path):
+    authority = {
+        "run_id": "run-1",
+        "plan_id": "capture-plan-1",
+        "binding_id": "aptl.collector.redteam-session-transcript",
+        "activated_at": "2026-09-14T10:00:00Z",
+    }
+    recorder = broker.SessionRecorder(
+        tmp_path / "captures", authority, session_id="session-1"
+    )
+    recorder.finish("remote-eof")
+
+    json.dumps(broker.export_capture(tmp_path / "captures", authority))
+
+
+def test_recorder_discloses_loss_instead_of_exceeding_run_quota(
+    broker,
+    tmp_path,
+    monkeypatch,
+):
+    authority = {
+        "run_id": "run-1",
+        "plan_id": "capture-plan-1",
+        "binding_id": "aptl.collector.redteam-session-transcript",
+        "activated_at": "2026-09-14T10:00:00Z",
+    }
+    monkeypatch.setattr(broker, "_MAX_CAPTURE_BYTES", 1024)
+    recorder = broker.SessionRecorder(
+        tmp_path / "captures",
+        authority,
+        session_id="session-1",
+    )
+
+    recorder.append("output", b"one byte exceeds the reserved envelope")
+    recorder.finish("clean-exit")
+
+    session = broker.export_capture(tmp_path / "captures", authority)["sessions"][0]
+    assert session["frames"] == []
+    assert session["loss_count"] == 1

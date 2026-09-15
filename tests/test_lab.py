@@ -209,6 +209,29 @@ class TestComposeCommandBuilder:
 class TestLabStart:
     """Tests for lab start logic."""
 
+    @staticmethod
+    def _compose_up_call(mock_subprocess):
+        for call in mock_subprocess.call_args_list:
+            cmd_args = call.args[0]
+            if "compose" in cmd_args and "up" in cmd_args:
+                return call
+        raise AssertionError("docker compose up was not called")
+
+    @staticmethod
+    def _observability_inventory_then(*, compose_returncode=0, compose_stderr=""):
+        """Return empty ownership inventories before the Compose result."""
+
+        def run(command, **_kwargs):
+            if "compose" in command and "up" in command:
+                return MagicMock(
+                    returncode=compose_returncode,
+                    stdout="",
+                    stderr=compose_stderr,
+                )
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        return run
+
     def test_start_calls_compose_up(self, mock_subprocess):
         """start_lab should invoke docker compose up with correct profiles."""
         from aptl.core.config import AptlConfig
@@ -218,13 +241,12 @@ class TestLabStart:
             lab={"name": "test"},
             containers={"wazuh": True, "victim": True, "kali": False, "reverse": False},
         )
-        mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_subprocess.side_effect = self._observability_inventory_then()
 
         result = start_lab(config)
 
         assert result.success is True
-        mock_subprocess.assert_called_once()
-        cmd_args = mock_subprocess.call_args[0][0]
+        cmd_args = self._compose_up_call(mock_subprocess).args[0]
         assert "up" in cmd_args
         assert "wazuh" in cmd_args
         assert "victim" in cmd_args
@@ -236,8 +258,9 @@ class TestLabStart:
         from aptl.core.lab import start_lab
 
         config = AptlConfig(lab={"name": "test"})
-        mock_subprocess.return_value = MagicMock(
-            returncode=1, stdout="", stderr="Error: something went wrong"
+        mock_subprocess.side_effect = self._observability_inventory_then(
+            compose_returncode=1,
+            compose_stderr="Error: something went wrong",
         )
 
         result = start_lab(config)
@@ -252,12 +275,13 @@ class TestLabStart:
         from pathlib import Path
 
         config = AptlConfig(lab={"name": "test"})
-        mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_subprocess.side_effect = self._observability_inventory_then()
 
-        start_lab(config, project_dir=Path("/opt/aptl"))
+        project_dir = Path(__file__).resolve().parents[1]
+        start_lab(config, project_dir=project_dir)
 
-        kwargs = mock_subprocess.call_args[1]
-        assert kwargs["cwd"] == Path("/opt/aptl")
+        kwargs = self._compose_up_call(mock_subprocess).kwargs
+        assert kwargs["cwd"] == project_dir
 
 
 class TestLabStop:
@@ -361,16 +385,12 @@ class TestLabStop:
         mock_subprocess.assert_not_called()
 
     def test_stop_always_includes_otel_profile(self, mock_subprocess, tmp_path):
-        """stop_lab must tear down every profile start_lab always brings up.
+        """Recovery teardown includes optional backend OTel apparatus.
 
-        start_lab unconditionally adds "otel" (Collector + Tempo + Grafana
-        are core infrastructure, not an aptl.json container toggle) even
-        when aptl.json has no "otel" key at all. Before this fix, stop_lab's
-        profile set came from config.containers.enabled_profiles() alone, so
-        `docker compose down` never targeted the otel-profiled containers —
-        they stayed attached to the project's networks/volumes, and a
-        subsequent clean-state reboot failed cleanup outright with "network
-        has active endpoints" (caught by a real local live-gate boot).
+        Ordinary scenario startup no longer adds OTel. An earlier explicitly
+        admitted or operator-started apparatus run can still leave those
+        resources attached, so scenario-independent teardown includes the
+        profile even though it is not an aptl.json container toggle.
         """
         import json
         from aptl.core.lab import stop_lab
@@ -958,9 +978,7 @@ class TestCheckBindMounts:
 
         assert _step_check_bind_mounts(ctx) is None
 
-    def test_step_reads_the_compose_model_from_the_admitted_bundle_root(
-        self, tmp_path
-    ):
+    def test_step_reads_the_compose_model_from_the_admitted_bundle_root(self, tmp_path):
         """The Compose model is scenario input, read from the admitted bundle.
 
         An env-pack bundle ships no ``docker-compose.yml``; the backend
@@ -981,15 +999,11 @@ class TestCheckBindMounts:
         pack_root = tmp_path / ".aptl" / "staged-packs" / "fixture"
         pack_root.mkdir(parents=True)
         ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
-        ctx.admitted_surface = _admitted_surface(
-            pack_root, selected_profiles=("soc",)
-        )
+        ctx.admitted_surface = _admitted_surface(pack_root, selected_profiles=("soc",))
 
         assert _step_check_bind_mounts(ctx) is None
 
-    def test_step_filters_by_admitted_profiles_not_the_config_ceiling(
-        self, tmp_path
-    ):
+    def test_step_filters_by_admitted_profiles_not_the_config_ceiling(self, tmp_path):
         """A reduced scenario is not judged against services it never starts.
 
         ``containers.enabled_profiles()`` is the operator's capability ceiling;
@@ -1017,9 +1031,7 @@ class TestCheckBindMounts:
         assert "soc" in ctx.config.containers.enabled_profiles()
         assert _step_check_bind_mounts(ctx) is None
 
-    def test_step_still_fails_an_admitted_service_with_a_missing_source(
-        self, tmp_path
-    ):
+    def test_step_still_fails_an_admitted_service_with_a_missing_source(self, tmp_path):
         """The compatibility guard still protects the project-tree model."""
         from aptl.core.lab import _LabStartContext, _step_check_bind_mounts
 
@@ -1635,10 +1647,43 @@ class TestOrchestrateLabStart:
         from aptl.core.lab import orchestrate_lab_start
 
         mocks = self._patch_all_steps(mocker, tmp_path)
+        order = []
+        tracked_effects = (
+            "admit",
+            "project_presence",
+            "ssh",
+            "sysreqs",
+            "certs",
+            "start",
+            "wait_indexer",
+            "terminal_status",
+            "capture_snapshot",
+        )
+        for name in tracked_effects:
+            return_value = mocks[name].return_value
+            mocks[name].side_effect = (
+                lambda *args, _name=name, _value=return_value, **kwargs: (
+                    order.append(_name) or _value
+                )
+            )
 
         result = orchestrate_lab_start(tmp_path)
 
         assert result.success is True
+        assert order == [
+            "admit",
+            "project_presence",
+            "ssh",
+            "sysreqs",
+            "certs",
+            "start",
+            "wait_indexer",
+            "wait_indexer",
+            "wait_indexer",
+            "wait_indexer",
+            "terminal_status",
+            "capture_snapshot",
+        ]
         mocks["ssh"].assert_called_once()
         mocks["sysreqs"].assert_called_once()
         mocks["buildx"].assert_called_once()
@@ -2107,9 +2152,7 @@ class TestAdmittedStartSurface:
 
         assert admit.call_args.kwargs["scenario_path"] is None
 
-    def test_explicit_selection_reaches_the_resolver_unchanged(
-        self, mocker, tmp_path
-    ):
+    def test_explicit_selection_reaches_the_resolver_unchanged(self, mocker, tmp_path):
         """An operator-selected scenario path is not rewritten before resolution."""
         from aptl.core.lab import _load_admitted_start_surface
 
@@ -2647,7 +2690,6 @@ class TestResolveHostPortsStep:
                 "soc",
                 "fileshare",
                 "dns",
-                "otel",
             },
             existing_bindings={},
         )
@@ -3307,8 +3349,7 @@ class TestStartupClassificationWiring:
 
         assert result is not None
         assert (
-            derive_startup_outcome(ctx.diagnostics, fatal=True)
-            is StartupOutcome.FAILED
+            derive_startup_outcome(ctx.diagnostics, fatal=True) is StartupOutcome.FAILED
         )
 
     def test_wait_for_services_skips_services_the_backend_already_proved(

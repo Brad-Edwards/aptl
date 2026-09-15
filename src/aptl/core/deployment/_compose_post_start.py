@@ -10,12 +10,16 @@ only then are accounts realized.
 
 from __future__ import annotations
 
-from aptl.core.deployment._compose_service_health import wait_for_realized_health
+from aptl.core.deployment._compose_service_health import (
+    runtime_expects_completion,
+    wait_for_realized_health,
+)
 from aptl.core.deployment._compose_runtime_observation import (
     ComposeRuntimeOrchestrationObservationMixin,
 )
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import DeploymentRealizationSpec
+from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.lab_types import LabResult
 
 
@@ -26,6 +30,7 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
         self,
         start_result: LabResult,
         realization: DeploymentRealizationSpec,
+        observation_context: DeploymentObservationContext,
     ) -> LabResult:
         """Return the final result after start, network, health, and accounts.
 
@@ -37,11 +42,12 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
 
         if not start_result.success:
             return start_result
-        return self._post_start_result(realization)
+        return self._post_start_result(realization, observation_context)
 
     def _post_start_result(
         self,
         realization: DeploymentRealizationSpec,
+        observation_context: DeploymentObservationContext,
     ) -> LabResult:
         """Reconcile networks, await health, then realize accounts, in order.
 
@@ -70,11 +76,18 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
         if result is None:
             result = self._verify_runtime_orchestration(realization)
         if result is None:
-            result = self._realize_accounts_step(realization) or LabResult(
-                success=True,
-                message="Lab realized",
+            result = self._realize_accounts_step(realization)
+        if result is None:
+            retirement_failures = self._retire_completed_autoremove_nodes(
+                realization,
+                observation_context,
             )
-        return result
+            if retirement_failures:
+                result = LabResult(
+                    success=False,
+                    error="; ".join(retirement_failures[:5]),
+                )
+        return result or LabResult(success=True, message="Lab realized")
 
     def _await_realized_service_health(
         self,
@@ -89,10 +102,21 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
         healthcheck reports healthy.
         """
 
-        containers = [
-            node.container_name for node in realization.nodes if node.container_name
+        completed = [
+            node.container_name
+            for node in realization.nodes
+            if node.container_name and runtime_expects_completion(node.runtime)
         ]
-        return wait_for_realized_health(self, containers)
+        ongoing = [
+            node.container_name
+            for node in realization.nodes
+            if node.container_name and not runtime_expects_completion(node.runtime)
+        ]
+        return wait_for_realized_health(
+            self,
+            ongoing,
+            completed_container_names=completed,
+        )
 
     def _realize_accounts_step(
         self,

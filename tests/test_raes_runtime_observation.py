@@ -11,6 +11,7 @@ disclosed as a commitment, never raw.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,9 +22,14 @@ from raes_contracts.planning import (
     PlannedResource,
     ProvisioningPlan,
     ProvisionOp,
+    RealizationResolutionSource,
     RuntimeDomain,
 )
 from raes_contracts.runtime_state import RuntimeSnapshot
+from raes_contracts.realization_authority import (
+    RealizationAuthorityMode,
+    ResolvedRealizationAuthority,
+)
 from raes_processor.semantics.realization import (
     CONCERN_PAYLOAD_PATH,
     REALIZATION_DOMAIN,
@@ -32,12 +38,18 @@ from raes_processor.semantics.realization import (
 )
 
 from raes_contracts.apparatus import RealizationVerificationScope
+from raes_contracts.vocabulary import ObservationStrength
 
 from aptl.backends.raes_diagnostics import snapshot_after_apply
 from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.backends.raes_observation import observe_realization
+from aptl.backends.raes_planning_compat import DAEMON_READBACK_RUNTIME_CONCERNS
 from aptl.backends.raes_realization_model import AptlRealization, NodeRealization
 from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.deployment.observation import (
+    CompletedContainerReceipt,
+    DeploymentObservationContext,
+)
 
 _ADDRESS = "provision.node.vm"
 _CONTAINER = "aptl-vm"
@@ -54,6 +66,7 @@ class _Backend:
         inspect,
         *,
         exec_results=None,
+        file_reads=None,
         exec_raises=False,
         exists=True,
         listeners=None,
@@ -61,6 +74,7 @@ class _Backend:
     ):
         self._inspect = inspect
         self._exec_results = exec_results or {}
+        self._file_reads = file_reads or {}
         self._exec_raises = exec_raises
         self._exists = exists
         self._listeners = listeners or {}
@@ -76,8 +90,12 @@ class _Backend:
         if self._exec_raises:
             raise BackendTimeoutError("docker exec timed out")
         table = self._exec_results.get(name, {})
-        returncode, stdout = table.get(cmd[0], (1, ""))
+        returncode, stdout = table.get(tuple(cmd), table.get(cmd[0], (1, "")))
         return SimpleNamespace(returncode=returncode, stdout=stdout, stderr="")
+
+    def container_file_read(self, name, path, *, max_bytes):
+        value = self._file_reads.get((name, path))
+        return value if value is None or len(value) <= max_bytes else None
 
     def observe_container_listeners(self, name):
         if self._listeners_raise:
@@ -88,18 +106,37 @@ class _Backend:
         return []
 
 
-def _inspect(*, env=(), ports=None, cap_add=(), cap_drop=(), mounts=()):
+def _inspect(
+    *,
+    env=(),
+    ports=None,
+    cap_add=(),
+    cap_drop=(),
+    mounts=(),
+    restart="no",
+    memory=0,
+    entrypoint=None,
+    command=None,
+    autoremove=False,
+):
     """Build a realized-container ``docker inspect`` dict."""
 
     return {
         "State": {"Running": True, "Health": {"Status": "healthy"}},
         "Platform": "linux",
         "NetworkSettings": {"Networks": {}},
-        "Config": {"Env": list(env)},
+        "Config": {
+            "Env": list(env),
+            "Entrypoint": entrypoint,
+            "Cmd": command,
+        },
         "HostConfig": {
             "PortBindings": ports or {},
             "CapAdd": list(cap_add),
             "CapDrop": list(cap_drop),
+            "RestartPolicy": {"Name": restart},
+            "Memory": memory,
+            "AutoRemove": autoremove,
         },
         "Mounts": list(mounts),
     }
@@ -127,7 +164,7 @@ def _node_realization(runtime: RuntimeConfiguration) -> NodeRealization:
 def _plan(runtime: RuntimeConfiguration) -> ProvisioningPlan:
     payload = {
         "name": "vm",
-        "node_type": "vm",
+        "node_kind": "compute",
         "os_family": "linux",
         "spec": {"node": {"runtime": runtime.model_dump(mode="json", by_alias=True)}},
     }
@@ -146,8 +183,35 @@ def _plan(runtime: RuntimeConfiguration) -> ProvisioningPlan:
     return ProvisioningPlan(resources={_ADDRESS: resource}, operations=[op])
 
 
-def _observe(runtime: RuntimeConfiguration, backend: _Backend):
+def _observe(
+    runtime: RuntimeConfiguration,
+    backend: _Backend,
+    observation_context: DeploymentObservationContext | None = None,
+    *,
+    open_process_defaults: bool = False,
+):
     plan = _plan(runtime)
+    if open_process_defaults:
+        plan = replace(
+            plan,
+            realization_authority=(
+                ResolvedRealizationAuthority(
+                    address=_ADDRESS,
+                    field_path=(
+                        "nodes.vm.runtime.operational_policy.resource_limits."
+                        "process_limits"
+                    ),
+                    domain=REALIZATION_DOMAIN,
+                    requirement_kind="process-resource-limits",
+                    payload_pointer=(
+                        "/spec/node/runtime/operational_policy/resource_limits/"
+                        "process_limits"
+                    ),
+                    mode=RealizationAuthorityMode.OPEN,
+                    source=RealizationResolutionSource.AUTHORED_SCOPE,
+                ),
+            ),
+        )
     realization = AptlRealization(
         profiles=frozenset(),
         nodes=(_node_realization(runtime),),
@@ -155,23 +219,70 @@ def _observe(runtime: RuntimeConfiguration, backend: _Backend):
         placements=(),
         diagnostics=(),
     )
-    return plan, observe_realization(backend, realization, plan, Path("."))
+    return plan, observe_realization(
+        backend,
+        realization,
+        plan,
+        Path("."),
+        observation_context=observation_context,
+    )
 
 
-def _gate(runtime: RuntimeConfiguration, backend: _Backend, kind: str):
+def _gate(
+    runtime: RuntimeConfiguration,
+    backend: _Backend,
+    kind: str,
+    *,
+    explicitness: ExplicitnessClass = ExplicitnessClass.EXACT,
+    observation_context: DeploymentObservationContext | None = None,
+):
     """Drive RAES's own disclosure gate end-to-end for one EXACT concern."""
 
-    plan, observations = _observe(runtime, backend)
+    plan, observations = _observe(
+        runtime,
+        backend,
+        observation_context,
+        open_process_defaults=(
+            kind == "process-resource-limits" and explicitness is ExplicitnessClass.OPEN
+        ),
+    )
     snapshot = snapshot_after_apply(plan, RuntimeSnapshot(), observations)
+    concern_path = CONCERN_PAYLOAD_PATH[kind]
+    guest_kinds = {
+        "process-resource-limits",
+        "runtime-dependency-manifests",
+        "runtime-filesystem-inventory",
+        "runtime-local-identity",
+        "runtime-packages",
+        "runtime-service-manager-units",
+    }
+    corroborated_kinds = guest_kinds | DAEMON_READBACK_RUNTIME_CONCERNS
     requirement = CompiledRealizationRequirement(
-        field_path=f"nodes.vm.runtime.{kind}",
+        field_path="nodes.vm." + ".".join(concern_path[2:]),
         address=_ADDRESS,
         domain=REALIZATION_DOMAIN,
         requirement_kind=kind,
-        explicitness=ExplicitnessClass.EXACT,
+        explicitness=explicitness,
         provenance=ExplicitnessProvenance.AUTHOR_DECLARED,
+        verification_scope=(
+            RealizationVerificationScope.CONFIGURATION
+            if kind in corroborated_kinds
+            else None
+        ),
+        required_observation_strength=(
+            ObservationStrength.GUEST_OBSERVED
+            if kind in guest_kinds
+            else ObservationStrength.DAEMON_OBSERVED
+            if kind in DAEMON_READBACK_RUNTIME_CONCERNS
+            else None
+        ),
     )
-    diagnostics, provenance = realization_disclosure((requirement,), plan, snapshot)
+    diagnostics, provenance = realization_disclosure(
+        (requirement,),
+        plan,
+        snapshot,
+        manifest=create_aptl_manifest() if kind in corroborated_kinds else None,
+    )
     return [d.code for d in diagnostics], provenance, observations
 
 
@@ -202,7 +313,25 @@ def test_environment_realized_and_matched_is_disclosed_and_passes():
     codes, provenance, observations = _gate(runtime, backend, "runtime-environment")
     assert codes == []
     assert _ENV_PATH in observations[_ADDRESS].concerns
-    assert [p.provenance for p in provenance] == [ExplicitnessProvenance.AUTHOR_DECLARED]
+    assert [p.provenance for p in provenance] == [
+        ExplicitnessProvenance.AUTHOR_DECLARED
+    ]
+
+
+def test_environment_readback_discloses_daemon_observation_strength():
+    runtime = _env_runtime("bar")
+    backend = _Backend({_CONTAINER: _inspect(env=["FOO=bar"])})
+    plan, observations = _observe(runtime, backend)
+
+    snapshot = snapshot_after_apply(plan, RuntimeSnapshot(), observations)
+
+    disclosure = next(
+        item
+        for item in snapshot.realization_observations
+        if item.requirement_kind == "runtime-environment"
+    )
+    assert disclosure.verification_scope is RealizationVerificationScope.CONFIGURATION
+    assert disclosure.observation_strength is ObservationStrength.DAEMON_OBSERVED
 
 
 def test_environment_realized_differently_is_rejected():
@@ -227,7 +356,9 @@ def test_environment_secret_fixture_discloses_commitment_not_raw_value():
     assert codes == []
     disclosed = observations[_ADDRESS].concerns[_ENV_PATH]
     assert "planted" not in str(disclosed)
-    assert disclosed[0]["value_commitment"].startswith("raes-runtime-value-jcs-sha256-v1:")
+    assert disclosed[0]["value_commitment"].startswith(
+        "raes-runtime-value-jcs-sha256-v1:"
+    )
     assert "value" not in disclosed[0]
 
 
@@ -286,6 +417,521 @@ def test_environment_probe_missing_config_fails_closed():
 
 
 # --------------------------------------------------------------------------- #
+# daemon-owned container policy
+# --------------------------------------------------------------------------- #
+
+
+def test_restart_policy_is_disclosed_from_daemon_state():
+    runtime = _runtime(operational_policy={"restart": "always"})
+    backend = _Backend({_CONTAINER: _inspect(restart="always")})
+
+    codes, _provenance, observations = _gate(runtime, backend, "runtime-restart-policy")
+
+    assert codes == []
+    assert (
+        observations[_ADDRESS].concerns[CONCERN_PAYLOAD_PATH["runtime-restart-policy"]]
+        == "always"
+    )
+
+
+def test_restart_policy_mismatch_is_rejected():
+    runtime = _runtime(operational_policy={"restart": "always"})
+    backend = _Backend({_CONTAINER: _inspect(restart="unless-stopped")})
+
+    codes, _provenance, _observations = _gate(
+        runtime, backend, "runtime-restart-policy"
+    )
+
+    assert _GATE_REJECT in codes
+
+
+def test_backend_restart_default_is_disclosed_as_open_realization():
+    runtime = _runtime()
+    backend = _Backend({_CONTAINER: _inspect(restart="unless-stopped")})
+
+    codes, provenance, observations = _gate(
+        runtime,
+        backend,
+        "runtime-restart-policy",
+        explicitness=ExplicitnessClass.OPEN,
+    )
+
+    assert codes == []
+    assert (
+        observations[_ADDRESS].concerns[CONCERN_PAYLOAD_PATH["runtime-restart-policy"]]
+        == "unless_stopped"
+    )
+    assert [item.provenance for item in provenance] == [
+        ExplicitnessProvenance.BACKEND_REALIZED
+    ]
+
+
+def test_node_memory_limit_is_disclosed_from_daemon_state():
+    runtime = _runtime(operational_policy={"resource_limits": {"memory": 1073741824}})
+    backend = _Backend({_CONTAINER: _inspect(memory=1073741824)})
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-node-memory-limit"
+    )
+
+    assert codes == []
+    assert (
+        observations[_ADDRESS].concerns[
+            CONCERN_PAYLOAD_PATH["runtime-node-memory-limit"]
+        ]
+        == 1073741824
+    )
+
+
+def test_container_entrypoint_and_command_are_read_from_daemon_state():
+    runtime = _runtime(
+        container={
+            "entrypoint": ["/usr/bin/app"],
+            "command": ["--serve", "8080"],
+        }
+    )
+    backend = _Backend(
+        {_CONTAINER: _inspect(entrypoint=["/usr/bin/app"], command=["--serve", "8080"])}
+    )
+
+    for kind in ("runtime-container-entrypoint", "runtime-container-command"):
+        codes, _provenance, observations = _gate(runtime, backend, kind)
+        assert codes == []
+        assert CONCERN_PAYLOAD_PATH[kind] in observations[_ADDRESS].concerns
+
+
+def test_verified_autoremove_receipt_realizes_removed_completed_node():
+    runtime = _runtime(container={"autoremove": True, "entrypoint": ["/usr/bin/init"]})
+    completed = _inspect(entrypoint=["/usr/bin/init"], autoremove=False)
+    completed["State"] = {"Running": False, "Status": "exited", "ExitCode": 0}
+    backend = _Backend({}, exists=False)
+    context = DeploymentObservationContext(
+        completed_autoremove={
+            _CONTAINER: CompletedContainerReceipt(inspect=completed),
+        }
+    )
+
+    codes, _provenance, observations = _gate(
+        runtime,
+        backend,
+        "runtime-container-autoremove",
+        observation_context=context,
+    )
+
+    assert codes == []
+    assert observations[_ADDRESS].realized is True
+    assert (
+        observations[_ADDRESS].concerns[
+            CONCERN_PAYLOAD_PATH["runtime-container-autoremove"]
+        ]
+        is True
+    )
+
+
+def test_removed_node_without_verified_autoremove_receipt_is_rejected():
+    runtime = _runtime(container={"autoremove": True})
+    backend = _Backend({}, exists=False)
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-container-autoremove"
+    )
+
+    assert observations[_ADDRESS].realized is False
+    assert _GATE_REJECT in codes
+
+
+def test_docker_control_interface_is_disclosed_from_daemon_mount_state():
+    runtime = _runtime(
+        local_control_interfaces=[
+            {
+                "control_interface_id": "docker-daemon",
+                "path": "/var/run/docker.sock",
+                "kind": "unix_socket",
+                "bind_source": "/var/run/docker.sock",
+                "bind_source_sensitivity": "plain",
+                "access": "read_write",
+            }
+        ]
+    )
+    backend = _Backend(
+        {
+            _CONTAINER: _inspect(
+                mounts=[
+                    {
+                        "Type": "bind",
+                        "Source": "/var/run/docker.sock",
+                        "Destination": "/var/run/docker.sock",
+                        "RW": True,
+                    }
+                ]
+            )
+        }
+    )
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-local-control-interfaces"
+    )
+
+    assert codes == []
+    assert (
+        CONCERN_PAYLOAD_PATH["runtime-local-control-interfaces"]
+        in observations[_ADDRESS].concerns
+    )
+
+
+def test_docker_control_interface_access_mismatch_is_rejected():
+    runtime = _runtime(
+        local_control_interfaces=[
+            {
+                "control_interface_id": "docker-daemon",
+                "path": "/var/run/docker.sock",
+                "kind": "unix_socket",
+                "bind_source": "/var/run/docker.sock",
+                "bind_source_sensitivity": "plain",
+                "access": "read_only",
+            }
+        ]
+    )
+    backend = _Backend(
+        {
+            _CONTAINER: _inspect(
+                mounts=[
+                    {
+                        "Type": "bind",
+                        "Source": "/var/run/docker.sock",
+                        "Destination": "/var/run/docker.sock",
+                        "RW": True,
+                    }
+                ]
+            )
+        }
+    )
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-local-control-interfaces"
+    )
+
+    assert (
+        CONCERN_PAYLOAD_PATH["runtime-local-control-interfaces"]
+        not in observations[_ADDRESS].concerns
+    )
+    assert _GATE_REJECT in codes
+
+
+def test_backend_process_limit_defaults_are_disclosed_from_guest_state():
+    runtime = _runtime()
+    limits = b"""Limit                     Soft Limit           Hard Limit           Units
+Max open files            65536                65536                files
+Max locked memory         unlimited            unlimited            bytes
+"""
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        file_reads={(_CONTAINER, "/proc/1/limits"): limits},
+    )
+
+    codes, provenance, observations = _gate(
+        runtime,
+        backend,
+        "process-resource-limits",
+        explicitness=ExplicitnessClass.OPEN,
+    )
+
+    assert codes == []
+    observed = observations[_ADDRESS].concerns[
+        CONCERN_PAYLOAD_PATH["process-resource-limits"]
+    ]
+    assert {(item["resource"], item["soft"], item["hard"]) for item in observed} == {
+        ("locked_memory_bytes", "unlimited", "unlimited"),
+        ("open_file_descriptors", 65536, 65536),
+    }
+    assert [item.provenance for item in provenance] == [
+        ExplicitnessProvenance.BACKEND_REALIZED
+    ]
+
+
+def test_backend_process_limit_defaults_are_omitted_without_open_authority():
+    runtime = _runtime()
+    limits = b"""Limit                     Soft Limit           Hard Limit           Units
+Max open files            65536                65536                files
+"""
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        file_reads={(_CONTAINER, "/proc/1/limits"): limits},
+    )
+
+    _plan_value, observations = _observe(runtime, backend)
+
+    assert (
+        CONCERN_PAYLOAD_PATH["process-resource-limits"]
+        not in observations[_ADDRESS].concerns
+    )
+
+
+# --------------------------------------------------------------------------- #
+# guest runtime inventory
+# --------------------------------------------------------------------------- #
+
+_PACKAGES_PATH = CONCERN_PAYLOAD_PATH["runtime-packages"]
+_FILESYSTEM_PATH = CONCERN_PAYLOAD_PATH["runtime-filesystem-inventory"]
+_SERVICE_UNITS_PATH = CONCERN_PAYLOAD_PATH["runtime-service-manager-units"]
+
+
+def test_declared_package_is_disclosed_only_after_guest_query_matches():
+    runtime = _runtime(packages=[{"manager": "apt", "name": "curl", "version": "*"}])
+    query = (
+        "dpkg-query",
+        "-W",
+        "-f=${Package}\\t${Version}\\t${Architecture}\\n",
+        "curl",
+    )
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={_CONTAINER: {query: (0, "curl\t8.10.1-1\tamd64\n")}},
+    )
+
+    codes, _provenance, observations = _gate(runtime, backend, "runtime-packages")
+
+    assert codes == []
+    assert _PACKAGES_PATH in observations[_ADDRESS].concerns
+
+
+def test_missing_declared_package_is_omitted_and_rejected():
+    runtime = _runtime(packages=[{"manager": "apt", "name": "curl", "version": "*"}])
+    backend = _Backend({_CONTAINER: _inspect()})
+
+    codes, _provenance, observations = _gate(runtime, backend, "runtime-packages")
+
+    assert _PACKAGES_PATH not in observations[_ADDRESS].concerns
+    assert _GATE_REJECT in codes
+
+
+def test_declared_directory_is_disclosed_only_after_guest_type_probe():
+    runtime = _runtime(
+        filesystem_inventory=[
+            {"path": "/srv/bounded-participant", "entry_type": "directory"}
+        ]
+    )
+    probe = ("test", "-d", "/srv/bounded-participant")
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={_CONTAINER: {probe: (0, "")}},
+    )
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-filesystem-inventory"
+    )
+
+    assert codes == []
+    assert _FILESYSTEM_PATH in observations[_ADDRESS].concerns
+
+
+def test_missing_declared_directory_is_omitted_and_rejected():
+    runtime = _runtime(
+        filesystem_inventory=[
+            {"path": "/srv/bounded-participant", "entry_type": "directory"}
+        ]
+    )
+    backend = _Backend({_CONTAINER: _inspect()})
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-filesystem-inventory"
+    )
+
+    assert _FILESYSTEM_PATH not in observations[_ADDRESS].concerns
+    assert _GATE_REJECT in codes
+
+
+def test_declared_systemd_unit_is_disclosed_after_guest_state_queries_match():
+    runtime = _runtime(
+        service_manager_units=[
+            {
+                "unit_id": "bounded-participant-web",
+                "unit_name": "bounded-participant-web.service",
+                "enabled_state": "enabled",
+                "active_state": "active",
+            }
+        ]
+    )
+    unit = "bounded-participant-web.service"
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                ("systemctl", "show", "--property=LoadState", "--value", unit): (
+                    0,
+                    "loaded\n",
+                ),
+                ("systemctl", "is-enabled", unit): (0, "enabled\n"),
+                ("systemctl", "is-active", unit): (0, "active\n"),
+            }
+        },
+    )
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-service-manager-units"
+    )
+
+    assert codes == []
+    assert _SERVICE_UNITS_PATH in observations[_ADDRESS].concerns
+
+
+def test_mismatched_systemd_unit_state_is_omitted_and_rejected():
+    runtime = _runtime(
+        service_manager_units=[
+            {
+                "unit_id": "bounded-participant-web",
+                "unit_name": "bounded-participant-web.service",
+                "enabled_state": "enabled",
+                "active_state": "active",
+            }
+        ]
+    )
+    unit = "bounded-participant-web.service"
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                ("systemctl", "show", "--property=LoadState", "--value", unit): (
+                    0,
+                    "loaded\n",
+                ),
+                ("systemctl", "is-enabled", unit): (0, "enabled\n"),
+                ("systemctl", "is-active", unit): (3, "inactive\n"),
+            }
+        },
+    )
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-service-manager-units"
+    )
+
+    assert _SERVICE_UNITS_PATH not in observations[_ADDRESS].concerns
+    assert _GATE_REJECT in codes
+
+
+def test_local_identity_is_disclosed_only_after_guest_account_readback():
+    runtime = _runtime(
+        local_identity={
+            "groups": [{"name": "analyst"}],
+            "users": [
+                {
+                    "username": "alice",
+                    "primary_group": "analyst",
+                    "supplemental_groups": ["wheel"],
+                }
+            ],
+        }
+    )
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                ("getent", "group", "analyst"): (0, "analyst:x:1000:\n"),
+                ("getent", "passwd", "alice"): (
+                    0,
+                    "alice:x:1000:1000::/home/alice:/bin/bash\n",
+                ),
+                ("id", "-gn", "alice"): (0, "analyst\n"),
+                ("id", "-Gn", "alice"): (0, "analyst wheel\n"),
+            }
+        },
+    )
+
+    codes, _provenance, observations = _gate(runtime, backend, "runtime-local-identity")
+
+    assert codes == []
+    assert (
+        CONCERN_PAYLOAD_PATH["runtime-local-identity"]
+        in observations[_ADDRESS].concerns
+    )
+
+
+def test_local_identity_group_mismatch_is_omitted_and_rejected():
+    runtime = _runtime(
+        local_identity={
+            "groups": [{"name": "analyst"}],
+            "users": [
+                {
+                    "username": "alice",
+                    "primary_group": "analyst",
+                    "supplemental_groups": ["wheel"],
+                }
+            ],
+        }
+    )
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                ("getent", "group", "analyst"): (0, "analyst:x:1000:\n"),
+                ("getent", "passwd", "alice"): (
+                    0,
+                    "alice:x:1000:1000::/home/alice:/bin/bash\n",
+                ),
+                ("id", "-gn", "alice"): (0, "analyst\n"),
+                ("id", "-Gn", "alice"): (0, "analyst docker wheel\n"),
+            }
+        },
+    )
+
+    codes, _provenance, observations = _gate(runtime, backend, "runtime-local-identity")
+
+    assert (
+        CONCERN_PAYLOAD_PATH["runtime-local-identity"]
+        not in observations[_ADDRESS].concerns
+    )
+    assert _GATE_REJECT in codes
+
+
+def test_local_identity_empty_declared_group_rejects_observed_members():
+    runtime = _runtime(
+        local_identity={
+            "groups": [{"name": "analyst"}],
+            "users": [],
+        }
+    )
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                ("getent", "group", "analyst"): (0, "analyst:x:1000:bob\n"),
+            }
+        },
+    )
+
+    codes, _provenance, observations = _gate(runtime, backend, "runtime-local-identity")
+
+    assert (
+        CONCERN_PAYLOAD_PATH["runtime-local-identity"]
+        not in observations[_ADDRESS].concerns
+    )
+    assert _GATE_REJECT in codes
+
+
+def test_dependency_manifest_is_disclosed_after_file_and_install_readback():
+    runtime = _runtime(
+        dependency_manifests=[
+            {"ecosystem": "pip", "path": "/app/pyproject.toml", "name": "demo"}
+        ]
+    )
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        file_reads={(_CONTAINER, "/app/pyproject.toml"): b"[project]\nname='demo'\n"},
+        exec_results={_CONTAINER: {("pip", "show", "demo"): (0, "Name: demo\n")}},
+    )
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-dependency-manifests"
+    )
+
+    assert codes == []
+    assert (
+        CONCERN_PAYLOAD_PATH["runtime-dependency-manifests"]
+        in observations[_ADDRESS].concerns
+    )
+
+
+# --------------------------------------------------------------------------- #
 # published-ports
 # --------------------------------------------------------------------------- #
 
@@ -310,7 +956,11 @@ def _ports_runtime(host_ip="127.0.0.1", host_port=8080):
 def test_published_port_realized_and_matched_passes():
     runtime = _ports_runtime()
     backend = _Backend(
-        {_CONTAINER: _inspect(ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}]})}
+        {
+            _CONTAINER: _inspect(
+                ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}]}
+            )
+        }
     )
     codes, _provenance, observations = _gate(runtime, backend, "published-ports")
     assert codes == []
@@ -322,7 +972,11 @@ def test_published_port_omitted_host_ip_corroborated_on_loopback():
     # expects the loopback binding, not the raw declared empty string.
     runtime = _ports_runtime(host_ip="")
     backend = _Backend(
-        {_CONTAINER: _inspect(ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}]})}
+        {
+            _CONTAINER: _inspect(
+                ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}]}
+            )
+        }
     )
     codes, _provenance, _observations = _gate(runtime, backend, "published-ports")
     assert codes == []
@@ -339,7 +993,11 @@ def test_published_port_not_bound_is_omitted_and_rejected():
 def test_published_port_different_host_port_is_rejected():
     runtime = _ports_runtime(host_port=8080)
     backend = _Backend(
-        {_CONTAINER: _inspect(ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "9999"}]})}
+        {
+            _CONTAINER: _inspect(
+                ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "9999"}]}
+            )
+        }
     )
     codes, _provenance, _observations = _gate(runtime, backend, "published-ports")
     assert _GATE_REJECT in codes
@@ -362,7 +1020,11 @@ def test_published_port_wildcard_bind_does_not_satisfy_loopback_declaration():
 def test_published_port_explicit_wildcard_bind_does_not_satisfy_loopback_declaration():
     runtime = _ports_runtime(host_ip="127.0.0.1")
     backend = _Backend(
-        {_CONTAINER: _inspect(ports={"8080/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8080"}]})}
+        {
+            _CONTAINER: _inspect(
+                ports={"8080/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8080"}]}
+            )
+        }
     )
     codes, _provenance, _observations = _gate(runtime, backend, "published-ports")
     assert _GATE_REJECT in codes
@@ -394,7 +1056,11 @@ def test_wildcard_declared_port_realized_only_on_loopback_is_rejected():
     # loopback is under-exposed and must not be echoed back as an exact match.
     runtime = _ports_runtime(host_ip="0.0.0.0")
     backend = _Backend(
-        {_CONTAINER: _inspect(ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}]})}
+        {
+            _CONTAINER: _inspect(
+                ports={"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}]}
+            )
+        }
     )
     codes, _provenance, observations = _gate(runtime, backend, "published-ports")
     assert _PORTS_PATH not in observations[_ADDRESS].concerns
@@ -434,9 +1100,7 @@ def test_capability_beyond_declared_and_init_baseline_is_rejected():
     # gets no init baseline, so an undeclared SYS_ADMIN must fail closed rather
     # than pass behind the echoed declared policy.
     runtime = _runtime(linux_capabilities={"add": ["CAP_NET_ADMIN"]})
-    backend = _Backend(
-        {_CONTAINER: _inspect(cap_add=["NET_ADMIN", "SYS_ADMIN"])}
-    )
+    backend = _Backend({_CONTAINER: _inspect(cap_add=["NET_ADMIN", "SYS_ADMIN"])})
     codes, _provenance, observations = _gate(runtime, backend, "linux-capabilities")
     assert _CAPS_PATH not in observations[_ADDRESS].concerns
     assert _GATE_REJECT in codes
@@ -553,8 +1217,18 @@ def test_undeclared_bind_mount_is_rejected():
         {
             _CONTAINER: _inspect(
                 mounts=[
-                    {"Type": "bind", "Source": "/host/data", "Destination": "/data", "RW": False},
-                    {"Type": "bind", "Source": "/host/secret", "Destination": "/secret", "RW": True},
+                    {
+                        "Type": "bind",
+                        "Source": "/host/data",
+                        "Destination": "/data",
+                        "RW": False,
+                    },
+                    {
+                        "Type": "bind",
+                        "Source": "/host/secret",
+                        "Destination": "/secret",
+                        "RW": True,
+                    },
                 ]
             )
         }
@@ -568,15 +1242,32 @@ def test_systemd_cgroup_bind_is_a_known_baseline_not_excess():
     # A systemd node's init adds the /sys/fs/cgroup bind; it is the one baseline
     # mount docker inspect reports, so it must not count as undeclared excess.
     runtime = _runtime(
-        mounts=[{"target": "/data", "source": "/host/data", "source_kind": "bind", "read_only": True}],
+        mounts=[
+            {
+                "target": "/data",
+                "source": "/host/data",
+                "source_kind": "bind",
+                "read_only": True,
+            }
+        ],
         service_manager_units=_systemd_units(),
     )
     backend = _Backend(
         {
             _CONTAINER: _inspect(
                 mounts=[
-                    {"Type": "bind", "Source": "/host/data", "Destination": "/data", "RW": False},
-                    {"Type": "bind", "Source": "/sys/fs/cgroup", "Destination": "/sys/fs/cgroup", "RW": True},
+                    {
+                        "Type": "bind",
+                        "Source": "/host/data",
+                        "Destination": "/data",
+                        "RW": False,
+                    },
+                    {
+                        "Type": "bind",
+                        "Source": "/sys/fs/cgroup",
+                        "Destination": "/sys/fs/cgroup",
+                        "RW": True,
+                    },
                 ]
             )
         }
@@ -601,7 +1292,11 @@ def _tmpfs_mount_runtime(read_only=True):
 def test_tmpfs_mount_realized_and_matched_passes():
     runtime = _tmpfs_mount_runtime(read_only=True)
     backend = _Backend(
-        {_CONTAINER: _inspect(mounts=[{"Type": "tmpfs", "Destination": "/scratch", "RW": False}])}
+        {
+            _CONTAINER: _inspect(
+                mounts=[{"Type": "tmpfs", "Destination": "/scratch", "RW": False}]
+            )
+        }
     )
     codes, _provenance, observations = _gate(runtime, backend, "runtime-mounts")
     assert codes == []
@@ -614,7 +1309,11 @@ def test_tmpfs_mount_wrong_read_only_state_is_rejected():
     # (issue #876 core review).
     runtime = _tmpfs_mount_runtime(read_only=True)
     backend = _Backend(
-        {_CONTAINER: _inspect(mounts=[{"Type": "tmpfs", "Destination": "/scratch", "RW": True}])}
+        {
+            _CONTAINER: _inspect(
+                mounts=[{"Type": "tmpfs", "Destination": "/scratch", "RW": True}]
+            )
+        }
     )
     codes, _provenance, observations = _gate(runtime, backend, "runtime-mounts")
     assert _MOUNTS_PATH not in observations[_ADDRESS].concerns
@@ -944,7 +1643,12 @@ def _log_forwarder_runtime():
 
     return _runtime(
         mounts=[
-            {"target": "/logs", "source": "db_data", "source_kind": "volume", "read_only": True}
+            {
+                "target": "/logs",
+                "source": "db_data",
+                "source_kind": "volume",
+                "read_only": True,
+            }
         ],
         forwarding_agents=[
             {
@@ -1054,7 +1758,14 @@ def test_log_forwarder_with_realized_source_mount_is_corroborated():
     backend = _Backend(
         {
             _CONTAINER: _inspect(
-                mounts=[{"Type": "volume", "Source": "db_data", "Destination": "/logs", "RW": False}]
+                mounts=[
+                    {
+                        "Type": "volume",
+                        "Source": "db_data",
+                        "Destination": "/logs",
+                        "RW": False,
+                    }
+                ]
             )
         }
     )
@@ -1062,10 +1773,14 @@ def test_log_forwarder_with_realized_source_mount_is_corroborated():
     assert codes == []
     assert _FORWARDING_PATH in observations[_ADDRESS].concerns
     disclosures = [
-        d for d in snapshot.realization_observations if d.requirement_kind == "forwarding-agents"
+        d
+        for d in snapshot.realization_observations
+        if d.requirement_kind == "forwarding-agents"
     ]
     assert disclosures
-    assert disclosures[0].verification_scope is RealizationVerificationScope.CONFIGURATION
+    assert (
+        disclosures[0].verification_scope is RealizationVerificationScope.CONFIGURATION
+    )
 
 
 def test_content_sync_reload_socket_mount_is_corroborated():
@@ -1107,7 +1822,9 @@ def test_log_forwarder_on_node_declaring_no_mounts_is_dropped_and_rejected():
     # rejected, so an agent tailing a path that does not exist is never reported
     # as realized SIEM coverage.
     runtime = _runtime(
-        forwarding_agents=_log_forwarder_runtime().model_dump(mode="json")["forwarding_agents"]
+        forwarding_agents=_log_forwarder_runtime().model_dump(mode="json")[
+            "forwarding_agents"
+        ]
     )
     assert not runtime.mounts
     backend = _Backend({_CONTAINER: _inspect(mounts=[])})
@@ -1161,13 +1878,17 @@ def test_forwarding_agent_without_observable_footprint_is_dropped():
 
 
 # --------------------------------------------------------------------------- #
-# node without runtime concerns is untouched
+# empty runtime reports only selected backend defaults
 # --------------------------------------------------------------------------- #
 
 
-def test_node_without_runtime_declares_no_runtime_concerns():
+def test_empty_runtime_reports_only_observed_backend_restart_default():
     runtime = _runtime()
     backend = _Backend({_CONTAINER: _inspect()})
     _plan_, observations = _observe(runtime, backend)
     concerns = observations[_ADDRESS].concerns
-    assert concerns == {("node_type",): "vm", ("os_family",): "linux"}
+    assert concerns == {
+        ("node_kind",): "compute",
+        ("os_family",): "linux",
+        CONCERN_PAYLOAD_PATH["runtime-restart-policy"]: "no",
+    }

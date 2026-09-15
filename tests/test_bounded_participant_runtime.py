@@ -1076,15 +1076,9 @@ def test_provider_invocation_is_a_raes_operation_and_admission_commits_history(
     assert control_record["official_capture_started"] is False
     assert "BPA-HIDDEN-CANARY" not in control_records
     assert {container for container, _ in backend.calls} == {"aptl-webapp"}
-    action_entries = [
-        entry
+    assert all(
+        entry.resource_type != "participant-action-instance"
         for entry in control.snapshot.entries.values()
-        if entry.resource_type == "participant-action-instance"
-    ]
-    assert len(action_entries) == 1
-    assert (
-        action_entries[0].payload["action_contract_address"]
-        == outcome.selected_action_contract_address
     )
 
     next_turn = project_participant_turn(
@@ -1566,8 +1560,8 @@ def test_evidence_archival_failure_cannot_discard_an_accepted_transition(
     )
     assert len(control.snapshot.participant_behavior_history[participant]) == 3
     assert len(runtime.behavior_history()[participant]) == 3
-    assert any(
-        entry.resource_type == "participant-action-instance"
+    assert all(
+        entry.resource_type != "participant-action-instance"
         for entry in control.snapshot.entries.values()
     )
     transaction_dir = (

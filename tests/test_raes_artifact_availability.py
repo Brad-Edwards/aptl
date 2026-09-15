@@ -18,7 +18,9 @@ from pathlib import Path
 
 import pytest
 from raes.parser import parse_sdl_file
-from raes_processor.semantics.artifact_realization import artifact_requirement_diagnostics
+from raes_processor.semantics.artifact_realization import (
+    artifact_requirement_diagnostics,
+)
 from raes_processor.semantics.realization import CompiledRealizationRequirement
 from raes_processor.compiler import compile_runtime_model
 
@@ -57,7 +59,7 @@ def _scenario(tmp_path: Path, digest: str = _DIGEST):
             type: switch
             description: Fixture network.
           target:
-            type: vm
+            type: compute
             os: linux
             source:
               name: example/app
@@ -119,7 +121,9 @@ def test_scenario_authoring_an_artifact_requirement_produces_facts(tmp_path):
 
     context = artifact_availability_for_scenario(scenario, probe)
 
-    assert [entry.address for entry in context.requirements] == ["provision.node.target"]
+    assert [entry.address for entry in context.requirements] == [
+        "provision.node.target"
+    ]
     assert context.requirements[0].available_artifact_digests == [_DIGEST]
     assert probe.calls == [(f"example/app@{_DIGEST}", None)]
 
@@ -178,9 +182,15 @@ def test_facts_are_scoped_to_the_declaring_address(tmp_path):
 def test_shipped_scenario_declares_artifact_demand_for_every_imaged_node(tmp_path):
     """The shipped scenario pins each artifact-bearing address to an exact artifact."""
 
+    from raes import instantiate_scenario
+
     from tests.helpers import techvault_scenario_path
 
     scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
+    scenario = instantiate_scenario(
+        scenario,
+        parameters={"flag_ad_user": "flag-user", "flag_ad_root": "flag-root"},
+    )
     probe = _Probe(set())
 
     context = artifact_availability_for_scenario(scenario, probe)
@@ -188,9 +198,8 @@ def test_shipped_scenario_declares_artifact_demand_for_every_imaged_node(tmp_pat
     # One address per artifact-bearing address — every image-backed node and
     # every digest-pinned content placement in the full TechVault env-pack. The
     # ADR-088 conversion (#889) removed the `cortex-index-init` image-backed node.
-    # Env-packs 4.0.2 then added eight digest-pinned rules/decoder/integration
-    # content placements, taking the reviewed inventory from 43 to 51.
-    assert len(context.requirements) == 51
+    # The 6.0 pack's reviewed inventory contains 50 exact artifact demands.
+    assert len(context.requirements) == 50
     addresses = {requirement.address for requirement in context.requirements}
     assert {
         "provision.content.ad-rules",
@@ -342,4 +351,6 @@ def test_a_requirement_routed_to_a_registry_pull_is_not_pack_content(
         timing="backend-preparation",
     )
 
-    assert _env_pack_digest_and_provenance(_pack_requirement(route=pull), tmp_path) is None
+    assert (
+        _env_pack_digest_and_provenance(_pack_requirement(route=pull), tmp_path) is None
+    )

@@ -18,6 +18,7 @@ from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 from aptl.core.deployment._compose_realization_networks import _concrete_network_name
+from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.lab_types import LabResult, LabStatus
 
 if TYPE_CHECKING:
@@ -59,9 +60,7 @@ class _NoStartBackend(object):
     # provisioner builds is stable across runs.
 
     @staticmethod
-    def artifact_available(
-        image_ref: str, *, allow_remote: bool | None = None
-    ) -> bool:
+    def artifact_available(image_ref: str, *, allow_remote: bool | None = None) -> bool:
         """Report every declared artifact as obtainable in the offline gate."""
 
         del image_ref, allow_remote
@@ -75,6 +74,15 @@ class _NoStartBackend(object):
 
         del dockerfile_path, context_path
         return _simulated_digest(image_ref)
+
+    @staticmethod
+    def substrate_image_identity(image_ref: str) -> tuple[str, str] | None:
+        """Return a deterministic local substrate identity for static planning."""
+
+        return (
+            _simulated_digest(image_ref),
+            "application/vnd.oci.image.config.v1+json",
+        )
 
     @staticmethod
     def container_image_digest(container_name: str) -> str | None:
@@ -96,12 +104,13 @@ class _NoStartBackend(object):
         build: bool = True,
         scenario_root: Path | None = None,
         substrate_digests: Mapping[str, str] | None = None,
+        observation_context: DeploymentObservationContext | None = None,
     ) -> LabResult:
         """Record the typed realization as realized without starting Docker."""
         # `build`, `scenario_root`, and `substrate_digests` are accepted for
         # DeploymentBackend parity; this offline backend builds nothing, reads no
         # scenario filesystem, and starts no base container.
-        del build, scenario_root, substrate_digests
+        del build, scenario_root, substrate_digests, observation_context
         self._container_names = {
             node.container_name
             for node in getattr(realization, "nodes", ())
@@ -163,19 +172,52 @@ class _NoStartBackend(object):
     def container_exec(
         self, name: str, cmd: list[str], *, timeout: int | None = None
     ) -> subprocess.CompletedProcess[str]:
-        """Answer the image-free content-type readback probe from simulated shapes.
+        """Answer bounded readback probes from the simulated Linux container.
 
-        This mirrors only the ``test -d``/``test -f`` probes observation issues
-        for image-free content (ADR-048); it is not a general exec simulator.
+        This mirrors only the guest OS identity and ``test -d``/``test -f``
+        content probes used by offline conformance; it is not a general exec
+        simulator.
         """
 
-        del name, timeout
+        del timeout
+        if name in self._container_names and cmd == ["cat", "/etc/os-release"]:
+            return subprocess.CompletedProcess(
+                args=cmd,
+                returncode=0,
+                stdout='ID="ubuntu"\nVERSION_ID="22.04"\n',
+                stderr="",
+            )
         kind = self._image_free_destinations.get(cmd[-1]) if len(cmd) >= 2 else None
         matched = bool(cmd) and (
             (cmd[0:2] == ["test", "-d"] and kind == "directory")
             or (cmd[0:2] == ["test", "-f"] and kind == "file")
         )
         return subprocess.CompletedProcess(args=cmd, returncode=0 if matched else 1)
+
+    def container_file_read(
+        self,
+        name: str,
+        path: str,
+        *,
+        max_bytes: int,
+    ) -> bytes | None:
+        """Return bounded fixture bytes for provider-side static readback."""
+
+        if name not in self._container_names or max_bytes < 1:
+            return None
+        fixtures = {
+            "/etc/os-release": b'ID="ubuntu"\nVERSION_ID="22.04"\n',
+            "/proc/1/limits": (
+                b"Limit                     Soft Limit           Hard Limit"
+                b"           Units\n"
+                b"Max open files            1048576              1048576"
+                b"              files\n"
+                b"Max locked memory         8388608              8388608"
+                b"              bytes\n"
+            ),
+        }
+        payload = fixtures.get(path)
+        return payload if payload is not None and len(payload) <= max_bytes else None
 
     def container_exists(self, name: str) -> bool:
         """Return whether the simulated project realized this container."""

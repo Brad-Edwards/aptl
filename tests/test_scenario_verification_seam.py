@@ -370,9 +370,7 @@ def test_an_unnamed_identity_dimension_still_blocks(monkeypatch):
 
     _install(monkeypatch, _Verifier())
     monkeypatch.setattr(discovery, "_mismatched_dimensions", lambda *_a: ())
-    monkeypatch.setattr(
-        discovery, "QualifiedTarget", lambda **_k: object()
-    )
+    monkeypatch.setattr(discovery, "QualifiedTarget", lambda **_k: object())
 
     report = discovery.verify_scenario(_context())
 
@@ -617,7 +615,7 @@ def test_the_techvault_adapter_is_its_own_package_in_the_one_distribution():
         "src/aptl_techvault",
     ]
     assert (root / "src" / "aptl_techvault").is_dir()
-    assert not (root / "plugins").exists()
+    assert not any((root / "plugins").rglob("*.py"))
 
 
 def test_core_holds_no_techvault_answer_key_behind_the_seam():

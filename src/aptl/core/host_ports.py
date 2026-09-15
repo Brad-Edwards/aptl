@@ -272,9 +272,7 @@ def _parse_entry(service: str, entry: object) -> PortSpec | None:
     )
 
 
-def _service_selected(
-    cfg: object, active_profiles: set[str] | None
-) -> bool:
+def _service_selected(cfg: object, active_profiles: set[str] | None) -> bool:
     """Return whether one Compose service participates in this topology."""
     if not isinstance(cfg, dict):
         return False
@@ -310,17 +308,25 @@ def published_port_specs(
     project_dir: Path, active_profiles: set[str] | None = None
 ) -> list[PortSpec]:
     """Load the published-port declarations for a Compose project."""
-    compose = _load_compose(project_dir)
-    return (
-        parse_published_ports(compose, active_profiles)
-        if compose is not None
-        else []
+    # Import lazily: deployment's package initializer imports its port
+    # realization module, which imports ``port_available`` from this module.
+    from aptl.core.deployment._compose_observability import (
+        OBSERVABILITY_COMPOSE_FILE,
     )
 
+    specs: list[PortSpec] = []
+    for filename in (_COMPOSE_FILENAME, OBSERVABILITY_COMPOSE_FILE):
+        compose = _load_compose(project_dir, filename)
+        if compose is not None:
+            specs.extend(parse_published_ports(compose, active_profiles))
+    return specs
 
-def _load_compose(project_dir: Path) -> dict[str, object] | None:
+
+def _load_compose(
+    project_dir: Path, filename: str = _COMPOSE_FILENAME
+) -> dict[str, object] | None:
     """Load the project compose file if it exists and is a mapping."""
-    compose_path = project_dir / _COMPOSE_FILENAME
+    compose_path = project_dir / filename
     if not compose_path.exists():
         return None
     try:
@@ -446,8 +452,7 @@ def resolve_host_ports(
         }
         current_ports.discard(None)
         complete = len(current_ports) == 1 and all(
-            (spec.service, spec.container_port, spec.proto) in current
-            for spec in specs
+            (spec.service, spec.container_port, spec.proto) in current for spec in specs
         )
         existing_port = next(iter(current_ports)) if complete else None
         resolved.append(

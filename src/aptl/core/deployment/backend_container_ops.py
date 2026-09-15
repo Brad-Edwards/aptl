@@ -124,6 +124,21 @@ class ContainerOpsBackend(Protocol):
         """
         ...
 
+    def container_file_read(
+        self,
+        name: str,
+        path: str,
+        *,
+        max_bytes: int,
+    ) -> bytes | None:
+        """Read one bounded file from a running or stopped container.
+
+        The read is performed by the Docker provider rather than by executing a
+        workload-controlled binary in the container. ``None`` means the file
+        could not be copied or exceeded the caller's bound.
+        """
+        ...
+
     def observe_container_listeners(self, name: str) -> ContainerListeners | None:
         """Return a container's listeners read from outside its trust boundary.
 

@@ -1,5 +1,11 @@
 # TechVault curated live validation gate
 
+> Historical evidence notice: these 2026-06-24/25 records predate issue #992.
+> OTel and Kali capture are now backend apparatus, the observability-only SDL
+> variant has been retired, and current TechVault native evidence does not
+> admit the optional OTel stack. The rows below remain immutable historical
+> evidence and are not a current startup contract.
+
 This gate live-proves the small curated RAES startup variants from
 [curated variants](../sdl/techvault-curated-variants.md). The
 [static validation gate](techvault-static-validation-gate.md) and
@@ -53,18 +59,19 @@ matrix records both the RAES `realized_nodes` (the modelling authority) and the
 
 ## Matched configuration per variant
 
-A curated variant selects a subset of the enabled Compose profiles. To boot only
-its reduced surface through the public path, the operator config enables exactly
-that variant's container profiles. The always-on `otel` core needs no flag.
+A current curated variant selects a subset of the enabled Compose profiles. To
+boot only its reduced surface through the public path, the operator config
+enables exactly that variant's container profiles. Backend observability
+apparatus is admitted separately when required; it is not a selected scenario
+profile.
 
 | Catalog id | `aptl.json` containers enabled | Selected profiles |
 |---|---|---|
-| `techvault-observability-core` | none | `otel` |
-| `techvault-defensive-min` | `wazuh` | `wazuh`, `otel` |
-| `techvault-enterprise-web` | `enterprise`, `wazuh` | `enterprise`, `wazuh`, `otel` |
-| `techvault-attacker-target` | `kali`, `victim`, `wazuh` | `kali`, `victim`, `wazuh`, `otel` |
+| `techvault-defensive-min` | `wazuh` | `wazuh` |
+| `techvault-enterprise-web` | `enterprise`, `wazuh` | `enterprise`, `wazuh` |
+| `techvault-attacker-target` | `kali`, `victim`, `wazuh` | `kali`, `victim`, `wazuh` |
 
-## Recorded results
+## Historical recorded results
 
 The recorded evidence combines the original 2026-06-24 boot-only rows from
 issue #535 with the refreshed DSL-010 participant-runtime row. Every variant
@@ -81,8 +88,8 @@ through the promoted participant runtime.
 | `techvault-enterprise-web` | 2026-06-24 | Lab is ready. | 99s | 10 | 3 | PASS |
 | `techvault-attacker-target` | 2026-06-25 | Lab is ready. | 154s | 9 | 4 | PASS + participant action |
 
-The booted containers and networks for each run equal the RAES-realized selected
-profile surface:
+In these historical runs, the booted containers and networks equalled the
+then-current RAES-realized selected profile surface:
 
 - `techvault-observability-core`: `aptl-grafana-otel`, `aptl-otel-collector`,
   `aptl-tempo` on `aptl_aptl-security`.
@@ -151,8 +158,9 @@ aptl lab stop -v -y
 - Variants that omit `kali` or the SOC stack are intentionally not subject to the
   full gate's Kali reachability and Suricata telemetry probes. Their absence is
   part of the reduced surface, not an ambiguous startup failure.
-- The `techvault-observability-core`, `techvault-defensive-min`, and
-  `techvault-enterprise-web` recorded rows above pass `--skip-seed` in their
+- The retired `techvault-observability-core` row and the historical
+  `techvault-defensive-min` and `techvault-enterprise-web` rows above pass
+  `--skip-seed` in their
   `command` field. That predates issue #550's fix, which scopes the SOC seed
   step (and the SOC compose-retry watchdog) to the scenario's realized
   `selected_profiles` instead of the global `config.containers.soc` flag; before

@@ -48,7 +48,7 @@ __version__ = "0.2.0"
 #: against, and it takes a verifier release -- not a wider declaration -- to
 #: admit one. An empty claim is not a wildcard for future scenario content.
 TECHVAULT_PACK_SET_DIGEST = (
-    "sha256:c532775575d99438f4b4890d49a4fdb7354921f0405afdaa9f370ea4fe3f5a20"
+    "sha256:6300b3d539ab9c1e2287b9852e5408e1811516b818a7acf015f045cb3c9c5b89"
 )
 
 #: The pack release these bytes belong to. Version and digest are declared as
@@ -84,6 +84,7 @@ SIEM_NODE = "aptl-wazuh-manager"
 
 #: The network sensor whose EVE output feeds the SIEM.
 SENSOR_NODE = "aptl-suricata"
+
 
 class TechVaultVerifier(object):
     """Verifies that TechVault's defensive stack observed the attack.

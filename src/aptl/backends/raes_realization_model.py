@@ -11,6 +11,7 @@ from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
     DeploymentAclRealization,
     DeploymentContentRealization,
+    DeploymentCaptureApparatus,
     DeploymentGeneratedArtifactRealization,
     DeploymentImageRealization,
     DeploymentNetworkAttachment,
@@ -198,7 +199,12 @@ class AptlRealization(object):
     pack_identity: PackIdentity | None = None
     pack_interaction: ResolvedPackBackendInteraction | None = None
 
-    def deployment_spec(self, profiles: list[str]) -> DeploymentRealizationSpec:
+    def deployment_spec(
+        self,
+        profiles: list[str],
+        *,
+        capture_apparatus: tuple[DeploymentCaptureApparatus, ...] = (),
+    ) -> DeploymentRealizationSpec:
         """Return typed backend realization input for this RAES realization."""
 
         nodes = tuple(
@@ -238,6 +244,7 @@ class AptlRealization(object):
             ),
             generated_artifacts=self.generated_artifacts,
             persistent_volumes=self.persistent_volumes,
+            capture_apparatus=capture_apparatus,
         )
 
     def details(self) -> dict[str, object]:

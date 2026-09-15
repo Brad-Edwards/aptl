@@ -12,6 +12,7 @@ boundary").
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -26,8 +27,19 @@ from aptl.core.experiment.capture_registry import CaptureBinding, CaptureVisibil
 from aptl.core.runstore import LocalRunStore
 from aptl.utils.redaction import redact
 
-#: Media types the coordinator can structurally redact before persistence.
-_JSON_MEDIA_TYPES = frozenset({"application/json", "application/x-ndjson", "application/jsonl"})
+#: Media types with a trusted, bounded redaction path before persistence.
+_JSON_MEDIA_TYPES = frozenset(
+    {"application/json", "application/x-ndjson", "application/jsonl"}
+)
+_REDACTABLE_MEDIA_TYPES = _JSON_MEDIA_TYPES | {"text/plain"}
+_REDACTION_HANDLERS = {
+    # APTL's shared recursive redactor is deliberately the stronger handler:
+    # it removes credentials and sensitivity-labelled values.  Both authored
+    # policies are named explicitly here so an unknown policy can never be
+    # treated as either one by a truthy boolean conversion.
+    "redact_secrets": redact,
+    "redact_sensitive": redact,
+}
 
 #: Run-relative subdirectory for content-addressed raw evidence blobs.
 _EVIDENCE_SUBDIR = "evidence/blobs"
@@ -83,7 +95,11 @@ def _media_type_of(outcome: CollectorOutcome, binding: CaptureBinding) -> str:
     """Return the effective media type (collector-reported, else the binding's first expected)."""
     if outcome.media_type is not None:
         return outcome.media_type
-    return binding.expected_media_types[0] if binding.expected_media_types else "application/octet-stream"
+    return (
+        binding.expected_media_types[0]
+        if binding.expected_media_types
+        else "application/octet-stream"
+    )
 
 
 def media_type_supported(outcome: CollectorOutcome, binding: CaptureBinding) -> bool:
@@ -93,35 +109,112 @@ def media_type_supported(outcome: CollectorOutcome, binding: CaptureBinding) -> 
     return _media_type_of(outcome, binding) in binding.expected_media_types
 
 
-def _redact_json_bytes(raw: bytes) -> tuple[bytes, bool]:
-    """Redact a JSON / JSONL payload structurally; return (bytes, changed).
-
-    Non-parseable content is treated as opaque (returned unchanged, not
-    redacted) so a malformed payload never silently loses its loss-disclosure
-    signal — the caller records it as retained-as-is.
-    """
-    try:
-        parsed = json.loads(raw)
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return raw, False
-    safe = redact(parsed)
+def _redact_json_bytes(
+    raw: bytes, handler: Callable[[object], object]
+) -> tuple[bytes, bool]:
+    """Redact one JSON value; malformed input must never pass through raw."""
+    parsed = json.loads(raw)
+    safe = handler(parsed)
     if safe == parsed:
         return raw, False
     return json.dumps(safe, separators=(",", ":")).encode("utf-8"), True
 
 
-def _prepare_bytes(outcome: CollectorOutcome, media_type: str) -> tuple[list[bytes], str]:
+def _prepare_bytes(
+    outcome: CollectorOutcome, media_type: str, binding: CaptureBinding
+) -> tuple[Sequence[bytes], str]:
     """Return the (possibly redacted) chunks + the redaction_state for persistence.
 
-    Structured JSON is redacted through the shared boundary before it is ever
-    written (preflight); opaque bytes are passed through and marked ``none``
-    (their ADR-029 handling is the source/sensitivity policy, not this pass).
+    Bound input before joining or decoding it. Reject an oversized
+    document rather than retaining a truncated, potentially secret-bearing
+    fragment. Opaque capture cannot satisfy a required redaction policy.
     """
-    if media_type in _JSON_MEDIA_TYPES:
-        joined = b"".join(outcome.chunks)
-        redacted, changed = _redact_json_bytes(joined)
-        return [redacted], ("redacted" if changed else "none")
-    return list(outcome.chunks), "none"
+    if media_type not in _REDACTABLE_MEDIA_TYPES:
+        if binding.redaction_required:
+            raise ValueError("capture media type has no trusted redaction adapter")
+        return outcome.chunks, "none"
+
+    raw = _consume_bounded_chunks(outcome.chunks, binding.limits.max_bytes)
+    handler = _redaction_handler(binding)
+    redacted, changed = _prepare_redactable_bytes(raw, media_type, handler)
+    if len(redacted) > binding.limits.max_bytes:
+        raise BufferError("redacted capture exceeds its admitted byte budget")
+    return [redacted], ("redacted" if changed else "none")
+
+
+def _consume_bounded_chunks(chunks: Sequence[bytes], max_bytes: int) -> bytes:
+    """Join a complete stream without reading beyond its admitted byte budget."""
+
+    raw = bytearray()
+    for chunk in chunks:
+        if len(chunk) > max_bytes - len(raw):
+            raise BufferError("capture exceeds its admitted byte budget")
+        raw.extend(chunk)
+    return bytes(raw)
+
+
+def _redaction_handler(
+    binding: CaptureBinding,
+) -> Callable[[object], object] | None:
+    """Resolve only the binding's explicitly admitted trusted handler."""
+
+    handler = None
+    if binding.redaction_required:
+        handler = _REDACTION_HANDLERS.get(binding.redaction_policy or "")
+        if handler is None:
+            raise ValueError("capture redaction policy has no trusted handler")
+    return handler
+
+
+def _prepare_redactable_bytes(
+    raw: bytes,
+    media_type: str,
+    handler: Callable[[object], object] | None,
+) -> tuple[bytes, bool]:
+    """Validate and optionally redact one complete structured/text payload."""
+
+    if media_type == "application/json":
+        if handler is not None:
+            prepared = _redact_json_bytes(raw, handler)
+        else:
+            json.loads(raw)
+            prepared = raw, False
+    elif media_type == "text/plain":
+        prepared = _prepare_text_bytes(raw, handler)
+    else:
+        prepared = _prepare_json_lines(raw, handler)
+    return prepared
+
+
+def _prepare_text_bytes(
+    raw: bytes, handler: Callable[[object], object] | None
+) -> tuple[bytes, bool]:
+    """Decode complete UTF-8 text and apply its trusted redaction policy."""
+
+    text = raw.decode("utf-8")
+    safe = handler(text) if handler is not None else text
+    if not isinstance(safe, str):
+        raise TypeError("text redaction handler returned non-text")
+    return safe.encode("utf-8"), safe != text
+
+
+def _prepare_json_lines(
+    raw: bytes, handler: Callable[[object], object] | None
+) -> tuple[bytes, bool]:
+    """Validate and optionally redact every non-empty NDJSON record."""
+
+    lines: list[tuple[bytes, bool]] = []
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        if handler is None:
+            json.loads(line)
+            lines.append((line, False))
+        else:
+            lines.append(_redact_json_bytes(line, handler))
+    changed = any(was_changed for _, was_changed in lines)
+    redacted = b"\n".join(line for line, _ in lines) + (b"\n" if lines else b"")
+    return redacted, changed
 
 
 def persist_success_outcome(
@@ -142,15 +235,22 @@ def persist_success_outcome(
     ``redaction_state="withheld"`` so a participant projection can drop it.
     """
     media_type = _media_type_of(outcome, binding)
-    chunks, structured_redaction_state = _prepare_bytes(outcome, media_type)
+    chunks, structured_redaction_state = _prepare_bytes(outcome, media_type, binding)
 
     content = content_store.create_content_addressed(
-        run_store, run_id, chunks, subdir=_EVIDENCE_SUBDIR, max_bytes=binding.limits.max_bytes
+        run_store,
+        run_id,
+        chunks,
+        subdir=_EVIDENCE_SUBDIR,
+        max_bytes=binding.limits.max_bytes,
     )
 
     effective_status = _effective_status(outcome, content=content, binding=binding)
 
-    withheld = binding.visibility_class in (CaptureVisibility.EVALUATOR_ONLY, CaptureVisibility.APPARATUS_ONLY)
+    withheld = binding.visibility_class in (
+        CaptureVisibility.EVALUATOR_ONLY,
+        CaptureVisibility.APPARATUS_ONLY,
+    )
     redaction_state = "withheld" if withheld else structured_redaction_state
     loss_disclosure = _loss_disclosure(
         outcome, effective_status=effective_status, redaction_state=redaction_state
@@ -164,7 +264,7 @@ def persist_success_outcome(
         outcome=outcome,
         captured_at=captured_at,
         disclosure=RecordDisclosure(
-            sensitivity=binding.sensitivity,
+            sensitivity=_record_sensitivity(binding.sensitivity),
             redaction_state=redaction_state,
             loss_disclosure=loss_disclosure,
         ),
@@ -193,7 +293,7 @@ def persist_success_outcome(
 #: disclosure whenever the record is redacted or withheld).
 _REDACTION_DISCLOSURES = {
     "withheld": "content withheld from participant projection (evaluator-only/apparatus-only visibility)",
-    "redacted": "structured payload redacted at the persistence boundary (ADR-029)",
+    "redacted": "payload redacted at the persistence boundary (ADR-029)",
 }
 
 #: Disclosure text per limit/loss status the coordinator enforces. ``{dropped}``
@@ -203,6 +303,26 @@ _STATUS_DISCLOSURES = {
     CollectorStatus.TRUNCATION: "content truncated to the admitted quota; {dropped} event(s) dropped",
     CollectorStatus.MID_RUN_LOSS: "{dropped} event(s) dropped mid-run",
 }
+
+# Capture-demand sensitivity and evidence-record sensitivity are different
+# governed vocabularies. ``plain`` means the retained payload is not marked
+# sensitive; the portable evidence record expresses that as ``public``.
+_RECORD_SENSITIVITY = {
+    "plain": "public",
+    "public": "public",
+    "internal": "internal",
+    "restricted": "restricted",
+    "redacted": "redacted",
+}
+
+
+def _record_sensitivity(value: str) -> str:
+    """Map an admitted capture sensitivity to the portable record vocabulary."""
+
+    try:
+        return _RECORD_SENSITIVITY[value]
+    except KeyError as exc:
+        raise ValueError("unsupported evidence-record sensitivity") from exc
 
 
 def _elapsed_seconds(outcome: CollectorOutcome) -> float:
@@ -236,7 +356,10 @@ def _effective_status(
 
 
 def _loss_disclosure(
-    outcome: CollectorOutcome, *, effective_status: CollectorStatus, redaction_state: str
+    outcome: CollectorOutcome,
+    *,
+    effective_status: CollectorStatus,
+    redaction_state: str,
 ) -> str | None:
     """Return a mandatory, bounded loss/redaction disclosure, or ``None`` when there is nothing to disclose.
 

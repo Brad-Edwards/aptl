@@ -107,16 +107,20 @@ withheld.
 
 ## Curated startup variants
 
-Startup defaults to `techvault-operational` (the full stack). Four curated
+Startup defaults to the installed `techvault` environment pack. Three curated
 slices prove that Compose profiles are realized from declared node content rather
 than the scenario name:
 
 | Catalog id | Includes | Realized profiles |
 |---|---|---|
-| `techvault-attacker-target` | Kali and capture sidecar, one monitored victim, Wazuh core, OTEL core | `kali`, `victim`, `wazuh`, `otel` |
-| `techvault-enterprise-web` | Vulnerable webapp, database, AD, workstation, Wazuh core, OTEL core | `enterprise`, `wazuh`, `otel` |
-| `techvault-defensive-min` | Wazuh manager, indexer, dashboard, OTEL core | `wazuh`, `otel` |
-| `techvault-observability-core` | OTEL collector, Tempo, Grafana | `otel` |
+| `techvault-attacker-target` | Kali, one monitored victim, Wazuh core | `kali`, `victim`, `wazuh` |
+| `techvault-enterprise-web` | Vulnerable webapp, database, AD, workstation, Wazuh core | `enterprise`, `wazuh` |
+| `techvault-defensive-min` | Wazuh manager, indexer, dashboard | `wazuh` |
+
+Capture and OTel services are backend apparatus, not scenario nodes. APTL adds
+only admitted apparatus that is necessary for required evidence and permitted
+by the scenario's realization scopes. TechVault's native evidence paths do not
+require OTel, so its normal startup omits that optional stack.
 
 Select a variant with `aptl lab start --scenario <catalog id>`. See
 [Curated RAES Variants](../sdl/techvault-curated-variants.md) for the full

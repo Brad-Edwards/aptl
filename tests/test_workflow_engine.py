@@ -23,7 +23,7 @@ _WORKFLOW_SCENARIO = dedent(
     name: workflow-engine-test
     nodes:
       vm:
-        type: vm
+        type: compute
         os: linux
         resources: {ram: 1 gib, cpu: 1}
         conditions: {health: ops}
@@ -88,7 +88,9 @@ def _workflow_payload():
     scenario = parse_sdl(_WORKFLOW_SCENARIO)
     execution_plan = plan(compile_runtime_model(scenario), create_aptl_manifest())
     workflow_op = next(
-        op for op in execution_plan.orchestration.operations if op.resource_type == "workflow"
+        op
+        for op in execution_plan.orchestration.operations
+        if op.resource_type == "workflow"
     )
     return workflow_op.address, workflow_op.payload
 
@@ -102,7 +104,9 @@ def test_drive_linear_objective_workflow_reports_succeeded():
     record = engine.drive(
         address,
         payload,
-        objective_outcomes={"evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED},
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED
+        },
     )
 
     state = WorkflowExecutionState.from_payload(record.result)
@@ -110,9 +114,18 @@ def test_drive_linear_objective_workflow_reports_succeeded():
     assert state.steps["run"].lifecycle == WorkflowStepLifecycle.COMPLETED
     assert state.steps["run"].outcome == WorkflowStepOutcome.SUCCEEDED
     assert state.steps["run"].attempts == 1
-    assert record.history[0]["event_type"] == WorkflowHistoryEventType.WORKFLOW_STARTED.value
-    assert any(event["event_type"] == WorkflowHistoryEventType.STEP_STARTED.value for event in record.history)
-    assert any(event["event_type"] == WorkflowHistoryEventType.WORKFLOW_COMPLETED.value for event in record.history)
+    assert (
+        record.history[0]["event_type"]
+        == WorkflowHistoryEventType.WORKFLOW_STARTED.value
+    )
+    assert any(
+        event["event_type"] == WorkflowHistoryEventType.STEP_STARTED.value
+        for event in record.history
+    )
+    assert any(
+        event["event_type"] == WorkflowHistoryEventType.WORKFLOW_COMPLETED.value
+        for event in record.history
+    )
 
 
 def test_drive_failed_objective_reports_workflow_failed():
@@ -123,13 +136,18 @@ def test_drive_failed_objective_reports_workflow_failed():
     record = engine.drive(
         address,
         payload,
-        objective_outcomes={"evaluation.objective.validate": WorkflowStepOutcome.FAILED},
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.FAILED
+        },
     )
 
     state = WorkflowExecutionState.from_payload(record.result)
     assert state.workflow_status == WorkflowStatus.FAILED
     assert state.steps["run"].outcome == WorkflowStepOutcome.FAILED
-    assert record.history[-1]["event_type"] == WorkflowHistoryEventType.WORKFLOW_FAILED.value
+    assert (
+        record.history[-1]["event_type"]
+        == WorkflowHistoryEventType.WORKFLOW_FAILED.value
+    )
 
 
 def test_driven_state_is_workflow_contract_clean():
@@ -139,7 +157,9 @@ def test_driven_state_is_workflow_contract_clean():
     record = engine.drive(
         address,
         payload,
-        objective_outcomes={"evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED},
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED
+        },
     )
 
     from raes_contracts.runtime_state import RuntimeSnapshot, SnapshotEntry
@@ -168,7 +188,9 @@ def test_history_timestamps_are_monotonic():
     record = engine.drive(
         address,
         payload,
-        objective_outcomes={"evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED},
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED
+        },
     )
     timestamps = [event["timestamp"] for event in record.history]
     assert timestamps == sorted(timestamps)
@@ -203,13 +225,17 @@ def test_drive_returns_existing_state_when_not_pending():
     driven = engine.drive(
         address,
         payload,
-        objective_outcomes={"evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED},
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED
+        },
     )
 
     again = engine.drive(
         address,
         payload,
-        objective_outcomes={"evaluation.objective.validate": WorkflowStepOutcome.FAILED},
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.FAILED
+        },
     )
 
     assert again.result == driven.result
@@ -223,7 +249,7 @@ def test_drive_failed_objective_with_on_failure_successor():
             name: workflow-on-failure
             nodes:
               vm:
-                type: vm
+                type: compute
                 os: linux
                 resources: {ram: 1 gib, cpu: 1}
                 conditions: {health: ops}
@@ -287,20 +313,29 @@ def test_drive_failed_objective_with_on_failure_successor():
     )
     execution_plan = plan(compile_runtime_model(scenario), create_aptl_manifest())
     workflow_op = next(
-        op for op in execution_plan.orchestration.operations if op.resource_type == "workflow"
+        op
+        for op in execution_plan.orchestration.operations
+        if op.resource_type == "workflow"
     )
     engine = WorkflowEngine()
-    engine.register_pending(workflow_op.address, workflow_op.payload, "2026-06-22T12:00:00Z")
+    engine.register_pending(
+        workflow_op.address, workflow_op.payload, "2026-06-22T12:00:00Z"
+    )
 
     record = engine.drive(
         workflow_op.address,
         workflow_op.payload,
-        objective_outcomes={"evaluation.objective.validate": WorkflowStepOutcome.FAILED},
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.FAILED
+        },
     )
 
     state = WorkflowExecutionState.from_payload(record.result)
     assert state.workflow_status == WorkflowStatus.SUCCEEDED
-    assert record.history[-1]["event_type"] == WorkflowHistoryEventType.WORKFLOW_COMPLETED.value
+    assert (
+        record.history[-1]["event_type"]
+        == WorkflowHistoryEventType.WORKFLOW_COMPLETED.value
+    )
 
 
 def test_drive_exhausted_objective_fails_workflow():
@@ -311,9 +346,14 @@ def test_drive_exhausted_objective_fails_workflow():
     record = engine.drive(
         address,
         payload,
-        objective_outcomes={"evaluation.objective.validate": WorkflowStepOutcome.EXHAUSTED},
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.EXHAUSTED
+        },
     )
 
     state = WorkflowExecutionState.from_payload(record.result)
     assert state.workflow_status == WorkflowStatus.FAILED
-    assert record.history[-1]["event_type"] == WorkflowHistoryEventType.WORKFLOW_FAILED.value
+    assert (
+        record.history[-1]["event_type"]
+        == WorkflowHistoryEventType.WORKFLOW_FAILED.value
+    )

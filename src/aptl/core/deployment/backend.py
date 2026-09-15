@@ -27,6 +27,7 @@ from aptl.core.deployment.realization import (
     DeploymentRealizationSpec,
 )
 from aptl.core.deployment.boundary import BoundaryEnforcementSpec
+from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.appliance_boundary import (
     ApplianceBoundaryBinding,
     ApplianceBoundaryPolicy,
@@ -70,6 +71,7 @@ class DeploymentBackend(HostInventoryBackend, ContainerOpsBackend, Protocol):
         build: bool = True,
         scenario_root: Path,
         substrate_digests: Mapping[str, str] | None = None,
+        observation_context: DeploymentObservationContext | None = None,
     ) -> LabResult:
         """Realize a typed scenario deployment through the backend.
 
@@ -90,6 +92,8 @@ class DeploymentBackend(HostInventoryBackend, ContainerOpsBackend, Protocol):
                 route 3, issue #876). A route-3 node's base container starts from
                 exactly this config id with ``--pull=never``, so the mutable tag
                 is never re-resolved at apply.
+            observation_context: Request-scoped evidence carrier shared with the
+                post-apply observation pass. Implementations must not retain it.
 
         Returns:
             LabResult indicating success or failure.

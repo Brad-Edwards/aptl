@@ -18,7 +18,7 @@ from raes_contracts.contracts import (
     ExperimentReferenceModel,
     ExperimentRunModel,
     ExperimentResultSummaryModel,
-    validate_experiment_run_against_task,
+    validate_experiment_run_structure_against_task,
 )
 from raes_contracts.contracts.experiment_manifest_references import (
     ExperimentRunEvidenceArtifactReferenceModel,
@@ -38,8 +38,9 @@ class TestCompletedComposition:
         assert run.run_id == context.attempt_id
         assert run.run_status == "completed"
         assert run.outcome_status == "succeeded"
-        # The composer already ran this, but prove the seal-gate invariant holds.
-        validate_experiment_run_against_task(reference_task(), run)
+        # The composer owns structural composition. Content-backed evidence
+        # satisfaction is gated where immutable capture/readback inputs exist.
+        validate_experiment_run_structure_against_task(reference_task(), run)
 
     def test_task_ref_is_derived_from_the_task(self) -> None:
         run = build_experiment_run_model(completed_context())
@@ -134,7 +135,9 @@ class TestRetryLineage:
 
 
 class TestCrossArtifactValidationGate:
-    def test_result_summary_without_matching_evidence_artifact_is_rejected(self) -> None:
+    def test_result_summary_without_matching_evidence_artifact_is_rejected(
+        self,
+    ) -> None:
         """A reported result must cite a concrete evidence artifact (criterion C)."""
         dangling = ExperimentResultSummaryModel(
             metric_id="foothold-achieved",

@@ -27,6 +27,7 @@ from aptl.core.deployment._compose_runtime_orchestration import (
     docker_authority_admissions_by_address,
     docker_socket_volume,
 )
+from aptl.core.deployment._compose_service_health import runtime_expects_completion
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
     DeploymentNodeRealization,
@@ -59,6 +60,12 @@ def render_realization_compose(spec: DeploymentRealizationSpec) -> dict[str, obj
         if node.service_name and node.address in image_by_address
     }
     service_names = set(emitted_services)
+    completion_services = {
+        node.service_name
+        for node in spec.nodes
+        if node.service_name in service_names
+        and runtime_expects_completion(node.runtime)
+    }
 
     services: dict[str, dict[str, object]] = {}
     for node in spec.nodes:
@@ -68,6 +75,7 @@ def render_realization_compose(spec: DeploymentRealizationSpec) -> dict[str, obj
             node,
             image_by_address[node.address],
             service_names,
+            completion_services,
             docker_authority_admission=admissions.get(node.address),
         )
 
@@ -82,6 +90,7 @@ def _render_service(
     node: DeploymentNodeRealization,
     image: DeploymentImageRealization,
     service_names: set[str],
+    completion_services: set[str],
     *,
     docker_authority_admission: DeploymentDockerAuthorityAdmission | None,
 ) -> dict[str, object]:
@@ -111,7 +120,7 @@ def _render_service(
     # Published host ports are owned by the dedicated port override
     # (write_port_override); declaring them here too would publish each host
     # port twice and fail with "address already in use" (issue #875).
-    depends = _service_dependencies(node, service_names)
+    depends = _service_dependencies(node, service_names, completion_services)
     if depends:
         service["depends_on"] = depends
     service.update(_operational_config(node.runtime))
@@ -169,6 +178,10 @@ def _environment_config(runtime: object) -> dict[str, str]:
         name = getattr(variable, "name", "")
         if not name:
             continue
+        if getattr(variable, "value_from", None) is not None:
+            # Generated values are delivered by the admitted artifact binding;
+            # an empty entry here would override Compose's env_file value.
+            continue
         raw = getattr(variable, "value_classification", "")
         classification = str(getattr(raw, "value", raw) or "")
         if classification == _OPERATOR_SECRET_CLASSIFICATION:
@@ -200,6 +213,16 @@ def _operational_config(runtime: object) -> dict[str, object]:
     environment = _environment_config(runtime)
     if environment:
         config["environment"] = environment
+    policy = getattr(runtime, "operational_policy", None)
+    if policy is not None:
+        restart = getattr(policy, "restart", None)
+        restart_value = str(getattr(restart, "value", restart) or "")
+        if restart_value:
+            config["restart"] = restart_value.replace("_", "-")
+        limits = getattr(policy, "resource_limits", None)
+        memory = getattr(limits, "memory", None) if limits is not None else None
+        if memory is not None:
+            config["mem_limit"] = memory
     config.update(_container_config(getattr(runtime, "container", None)))
     capabilities = _capability_config(runtime)
     if capabilities:
@@ -223,10 +246,9 @@ def _container_config(container: object) -> dict[str, object]:
         config["privileged"] = True
     if _truthy(getattr(container, "autoremove", None)):
         # A node declaring autoremove is a one-shot (an init job that runs to
-        # completion and exits, e.g. an index bootstrap). Compose has no --rm,
-        # so the run-once intent is expressed as restart: "no"; without this
-        # the base "unless-stopped" policy restarts the finished job forever
-        # (issue #875).
+        # completion and exits, e.g. an index bootstrap). Compose has no
+        # service-level --rm, so restart: "no" lets post-start reconciliation
+        # first observe its successful exit and then remove it (issue #992).
         config["restart"] = "no"
     return config
 
@@ -290,7 +312,8 @@ def _network_namespace_container(node: DeploymentNodeRealization) -> str | None:
 def _service_dependencies(
     node: DeploymentNodeRealization,
     service_names: set[str],
-) -> list[str]:
+    completion_services: set[str],
+) -> list[str] | dict[str, dict[str, str]]:
     """Return ordering dependencies restricted to emitted services."""
 
     depends: list[str] = []
@@ -298,7 +321,18 @@ def _service_dependencies(
         name = dependency.rsplit(".", 1)[-1]
         if name in service_names and name != node.service_name and name not in depends:
             depends.append(name)
-    return depends
+    if not any(name in completion_services for name in depends):
+        return depends
+    return {
+        name: {
+            "condition": (
+                "service_completed_successfully"
+                if name in completion_services
+                else "service_started"
+            )
+        }
+        for name in depends
+    }
 
 
 def _pinned_addresses_by_network(

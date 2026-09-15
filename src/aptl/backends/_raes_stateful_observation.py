@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Mapping
-from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 
@@ -20,26 +20,23 @@ from aptl.backends._raes_observation_helpers import (
     ObservedResource,
     artifact_spec as _artifact_spec,
     consumer_mount_evidence as _consumer_mount_evidence,
-    container_realized as _container_realized,
-    mount_present as _mount_present,
-    settled_inspect as _settled_inspect,
     volume_spec as _volume_spec,
 )
 from aptl.core.deployment._compose_stateful_constants import (
     CERTIFICATE_PROVENANCE,
     SOC_CERT_PROFILE,
 )
-from aptl.core.deployment._compose_stateful_model import (
-    _consumer_output_names,
-    _uses_per_output_mounts,
+from aptl.backends._raes_artifact_delivery_observation import (
+    artifact_consumers_mounted as _artifact_consumers_mounted,
+    artifact_environment_delivered as _artifact_environment_delivered,
+    authenticated_consumers_ready as _authenticated_consumers_ready,
+    consumers_mounted as _consumers_mounted,
 )
 from aptl.core.deployment._compose_stateful_realization import artifact_source_path
 from aptl.core.deployment._stateful_certificates import certificate_bundle_evidence
-from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
     DeploymentPersistentVolumeRealization,
-    DeploymentStatefulConsumer,
 )
 from aptl.core.soc_ca import soc_bundle_evidence
 from aptl.utils.logging import get_logger
@@ -69,21 +66,15 @@ def _observe_generated_artifact(
     if artifact is None or not isinstance(realization_root, Path):
         return ObservedResource(realized=False)
     source = artifact_source_path(realization_root, artifact)
-    outputs_present = _artifact_outputs_present(source, artifact)
-    consumers_mounted = outputs_present and _artifact_consumers_mounted(
-        backend, artifact, node_containers, source, image_free_addresses
-    )
-    consumers_ready = consumers_mounted and _authenticated_consumers_ready(
-        backend, artifact.consumers
-    )
-    realized = consumers_ready
-    evidence = (
-        _artifact_evidence(backend, realization_root, source, artifact)
-        if realized
-        else {}
-    )
-    realized = realized and (
-        artifact.generator != "certificate_bundle" or "certificate" in evidence
+    realized, outputs_present, consumers_mounted, consumers_ready, evidence = (
+        _artifact_realization_state(
+            backend,
+            artifact,
+            node_containers,
+            realization_root,
+            source,
+            image_free_addresses,
+        )
     )
     if not realized:
         # An unrealized observation always fails the SEM-218 gate, so the
@@ -103,6 +94,45 @@ def _observe_generated_artifact(
         realized=True,
         concerns={CONCERN_PAYLOAD_PATH["generated-artifact"]: _artifact_spec(artifact)},
         evidence=evidence,
+    )
+
+
+def _artifact_realization_state(
+    backend: "DeploymentBackend",
+    artifact: DeploymentGeneratedArtifactRealization,
+    node_containers: dict[str, str],
+    realization_root: Path,
+    source: Path,
+    image_free_addresses: frozenset[str],
+) -> tuple[bool, bool, bool, bool, dict[str, object]]:
+    """Compute artifact output, delivery, readiness, and evidence state."""
+
+    outputs_present = _artifact_outputs_present(source, artifact)
+    consumers_mounted = outputs_present and _artifact_consumers_mounted(
+        backend, artifact, node_containers, source, image_free_addresses
+    )
+    environment_delivered = outputs_present and _artifact_environment_delivered(
+        backend, artifact, node_containers, source
+    )
+    consumers_ready = (
+        consumers_mounted
+        and environment_delivered
+        and _authenticated_consumers_ready(backend, artifact.consumers)
+    )
+    evidence = (
+        _artifact_evidence(backend, realization_root, source, artifact)
+        if consumers_ready
+        else {}
+    )
+    realized = consumers_ready and (
+        artifact.generator != "certificate_bundle" or "certificate" in evidence
+    )
+    return (
+        realized,
+        outputs_present,
+        consumers_mounted,
+        consumers_ready,
+        evidence,
     )
 
 
@@ -156,7 +186,6 @@ def _observe_persistent_volume(
     )
 
 
-
 def _artifact_evidence(
     backend: "DeploymentBackend",
     realization_root: Path,
@@ -169,6 +198,15 @@ def _artifact_evidence(
         "address": artifact.address,
         "status": "ready",
         "consumer_mounts": _consumer_mount_evidence(artifact.consumers),
+        "environment_bindings": [
+            {
+                "target_address": consumer.target_address,
+                "environment_variable": consumer.environment_variable,
+                "output": consumer.output_name,
+                "status": "present",
+            }
+            for consumer in artifact.environment_consumers
+        ],
     }
     readiness = getattr(backend, "authenticated_readiness", {})
     if isinstance(readiness, Mapping):
@@ -222,263 +260,3 @@ def _certificate_evidence(
         if artifact.provenance == CERTIFICATE_PROVENANCE
         else None,
     )
-
-
-def _consumers_mounted(
-    backend: "DeploymentBackend",
-    consumers: tuple[DeploymentStatefulConsumer, ...],
-    node_containers: dict[str, str],
-    *,
-    mount_type: str,
-    source: str,
-) -> bool:
-    """Return whether every consumer has the exact observed mount contract."""
-
-    return all(
-        _consumer_volume_mounted(
-            backend, consumer, node_containers, mount_type=mount_type, source=source
-        )
-        for consumer in consumers
-    )
-
-
-def _consumer_volume_mounted(
-    backend: "DeploymentBackend",
-    consumer: DeploymentStatefulConsumer,
-    node_containers: dict[str, str],
-    *,
-    mount_type: str,
-    source: str,
-) -> bool:
-    """Return whether one consumer's container shows the desired mount."""
-
-    container = node_containers.get(consumer.target_address)
-    if not container:
-        log.warning(
-            "consumer %s has no realized container to observe",
-            consumer.target_address,
-        )
-        return False
-    info = _settled_inspect(backend, container)
-    if not _container_realized(info):
-        log.warning(
-            "consumer container %s not settled/healthy for observation",
-            container,
-        )
-        return False
-    mounted = _mount_present(info, consumer, mount_type=mount_type, source=source)
-    if not mounted:
-        log.warning(
-            "consumer container %s missing %s mount of %s",
-            container,
-            mount_type,
-            source,
-        )
-    return mounted
-
-
-def _artifact_consumers_mounted(
-    backend: "DeploymentBackend",
-    artifact: DeploymentGeneratedArtifactRealization,
-    node_containers: dict[str, str],
-    source: Path,
-    image_free_addresses: frozenset[str],
-) -> bool:
-    """Return whether every consumer received exactly its declared outputs."""
-
-    return all(
-        _artifact_consumer_realized(
-            backend,
-            artifact,
-            consumer,
-            node_containers,
-            source,
-            consumer.target_address in image_free_addresses,
-        )
-        for consumer in artifact.consumers
-    )
-
-
-def _artifact_consumer_realized(
-    backend: "DeploymentBackend",
-    artifact: DeploymentGeneratedArtifactRealization,
-    consumer: DeploymentStatefulConsumer,
-    node_containers: dict[str, str],
-    source: Path,
-    image_free: bool,
-) -> bool:
-    """Return whether one consumer received the artifact the way it was delivered.
-
-    Delivery is not one shape: only a Compose service can carry a bind, so an
-    image-free node's outputs are placed into its container as files instead
-    (issue #875). Observing every consumer as if it were bind-mounted demands a
-    mount realization never emitted and reports a delivered artifact as
-    unrealized, so each consumer is read back through the mechanism that
-    actually delivered it.
-    """
-
-    settled = _settled_consumer_container(backend, consumer, node_containers)
-    if settled is None:
-        return False
-    container, info = settled
-    if image_free:
-        return _placed_outputs_present(backend, artifact, consumer, container)
-    return all(
-        _mount_present(
-            info,
-            consumer,
-            mount_type="bind",
-            source=mount_source,
-            destination=destination,
-        )
-        for mount_source, destination in _expected_consumer_mounts(
-            artifact, consumer, source
-        )
-    )
-
-
-def _settled_consumer_container(
-    backend: "DeploymentBackend",
-    consumer: DeploymentStatefulConsumer,
-    node_containers: dict[str, str],
-) -> tuple[str, dict[str, Any]] | None:
-    """Return a consumer's settled container name and inspect record, or None.
-
-    ``None`` means the consumer offers nothing observable — no realized container,
-    or one that never settled healthy — so the caller fails closed.
-    """
-
-    container = node_containers.get(consumer.target_address)
-    if not container:
-        log.warning(
-            "artifact consumer %s has no realized container to observe",
-            consumer.target_address,
-        )
-        return None
-    info = _settled_inspect(backend, container)
-    if not _container_realized(info):
-        log.warning(
-            "artifact consumer container %s not settled/healthy for observation",
-            container,
-        )
-        return None
-    return container, info
-
-
-def _expected_consumer_mounts(
-    artifact: DeploymentGeneratedArtifactRealization,
-    consumer: DeploymentStatefulConsumer,
-    source: Path,
-) -> list[tuple[str, str]]:
-    """Return the (host source, container destination) binds realization emitted.
-
-    Derived from the same two functions the Compose stateful override is built
-    from, so the observed contract cannot drift from the realized one. A
-    consumer receives only its selected, non-``producer_private`` outputs -- a
-    whole-directory expectation would demand mounts of material realization
-    deliberately withheld from it.
-    """
-
-    if not _uses_per_output_mounts(artifact, consumer):
-        return [(str(source), consumer.mount_destination)]
-    by_name = {output.name: output for output in artifact.outputs}
-    return [
-        (
-            str(source / by_name[name].path),
-            str(PurePosixPath(consumer.mount_destination) / by_name[name].path),
-        )
-        for name in _consumer_output_names(artifact, consumer)
-    ]
-
-
-def _placed_outputs_present(
-    backend: "DeploymentBackend",
-    artifact: DeploymentGeneratedArtifactRealization,
-    consumer: DeploymentStatefulConsumer,
-    container: str,
-) -> bool:
-    """Return whether an image-free consumer holds every output placed into it.
-
-    The generic materializer writes each selected output as a file at
-    ``<mount_destination>/<output path>``, so the readback is the presence of
-    those exact paths in the container. Nothing is read out -- only existence is
-    observed -- and a probe that cannot be completed observes nothing, so the
-    SEM-218 gate rejects rather than assumes delivery.
-    """
-
-    by_name = {output.name: output for output in artifact.outputs}
-    names = _consumer_output_names(artifact, consumer)
-    if not names:
-        log.warning(
-            "artifact %s places no output into image-free consumer %s",
-            artifact.address,
-            consumer.target_address,
-        )
-        return False
-    return all(
-        _placed_output_present(
-            backend,
-            artifact,
-            consumer,
-            container,
-            str(PurePosixPath(consumer.mount_destination) / by_name[name].path),
-        )
-        for name in names
-    )
-
-
-def _placed_output_present(
-    backend: "DeploymentBackend",
-    artifact: DeploymentGeneratedArtifactRealization,
-    consumer: DeploymentStatefulConsumer,
-    container: str,
-    destination: str,
-) -> bool:
-    """Return whether one placed output exists at ``destination`` in the container."""
-
-    try:
-        placed = (
-            backend.container_exec(container, ["test", "-f", destination]).returncode
-            == 0
-        )
-    except (BackendTimeoutError, OSError) as exc:
-        log.warning(
-            "could not observe placed artifact output in %s (%s)",
-            container,
-            type(exc).__name__,
-        )
-        return False
-    if not placed:
-        log.warning(
-            "artifact %s output missing from image-free consumer %s",
-            artifact.address,
-            consumer.target_address,
-        )
-        return False
-    return True
-
-
-def _authenticated_consumers_ready(
-    backend: "DeploymentBackend",
-    consumers: tuple[DeploymentStatefulConsumer, ...],
-) -> bool:
-    """Require authenticated readback for every Wazuh artifact consumer."""
-
-    expected = {
-        consumer.service_name
-        for consumer in consumers
-        if consumer.service_name in {"wazuh.indexer", "wazuh.manager"}
-    }
-    if not expected:
-        return True
-    readiness = getattr(backend, "authenticated_readiness", {})
-    ready = isinstance(readiness, Mapping) and all(
-        readiness.get(service) is True for service in expected
-    )
-    if not ready:
-        log.warning(
-            "authenticated readiness not recorded for %s (map=%s)",
-            sorted(expected),
-            dict(readiness) if isinstance(readiness, Mapping) else type(readiness),
-        )
-    return ready

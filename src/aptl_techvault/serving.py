@@ -17,7 +17,7 @@ from aptl.backends.pack_interaction import (
 __version__ = "0.1.0"
 
 _PACK_SET_DIGEST = (
-    "sha256:c532775575d99438f4b4890d49a4fdb7354921f0405afdaa9f370ea4fe3f5a20"
+    "sha256:6300b3d539ab9c1e2287b9852e5408e1811516b818a7acf015f045cb3c9c5b89"
 )
 
 _GROUP_BY_COMPONENT = {
@@ -35,29 +35,21 @@ _GROUP_BY_COMPONENT = {
     "provision.node.thehive-cassandra": "soc",
     "provision.node.thehive-es": "soc",
     "provision.node.cortex": "soc",
+    "provision.node.cortex-initializer": "soc",
     "provision.node.shuffle-backend": "soc",
     "provision.node.shuffle-frontend": "soc",
     "provision.node.shuffle-opensearch": "soc",
     "provision.node.shuffle-orborus": "soc",
-    "provision.node.wazuh-sidecar-db": "soc",
-    "provision.node.wazuh-sidecar-suricata": "soc",
     # Enterprise workloads
     "provision.node.ad": "enterprise",
     "provision.node.db": "enterprise",
     "provision.node.webapp": "enterprise",
-    "provision.node.webapp-proxy": "enterprise",
     "provision.node.workstation": "enterprise",
     # Operator-selectable endpoints and infrastructure
     "provision.node.dns": "dns",
     "provision.node.fileshare": "fileshare",
     "provision.node.victim": "victim",
     "provision.node.kali": "kali",
-    "provision.node.kali-capture": "kali",
-    "provision.node.kali-ssh-proxy": "kali",
-    # Backend-owned observability group
-    "provision.node.aptl-otel-collector": "otel",
-    "provision.node.aptl-tempo": "otel",
-    "provision.node.aptl-grafana-otel": "otel",
 }
 
 

@@ -33,6 +33,8 @@ from __future__ import annotations
 # are intentionally absent.
 ASSET_ROOTS: tuple[str, ...] = (
     "docker-compose.yml",
+    "docker-compose.observability.yml",
+    "docker-compose.capture.yml",
     ".dockerignore",
     "generate-indexer-certs.yml",
     ".env.example",

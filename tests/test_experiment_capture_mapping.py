@@ -51,7 +51,11 @@ def _read(*parts: str) -> bytes:
 
 def _load_reference_capture_spec() -> ExperimentCaptureSpecModel:
     """Load the realistic reference capture spec from the corpus."""
-    payload = json.loads(_read("experiment-core", "experiment-capture-spec-v1", "valid", "reference.json"))
+    payload = json.loads(
+        _read(
+            "experiment-core", "experiment-capture-spec-v1", "valid", "reference.json"
+        )
+    )
     return ExperimentCaptureSpecModel.model_validate(payload)
 
 
@@ -73,6 +77,10 @@ def _covering_registration(**overrides: object) -> CollectorRegistration:
         "sealing_modes": frozenset({"digest"}),
         "supports_chain_of_custody": False,
         "supports_retention": True,
+        "redaction_policies": frozenset({"redact_secrets"}),
+        "retention_policies": frozenset(
+            {"Retain raw evidence for the experiment review window."}
+        ),
         "supports_loss_disclosure": True,
         "visibility_class": CaptureVisibility.EVALUATOR_ONLY,
         "limits": _LIMITS,
@@ -95,7 +103,9 @@ class TestBindCaptureRequirementsFailsClosed:
             bind_capture_requirements([spec], policy=policy)
 
         assert excinfo.value.diagnostics
-        assert all(d.domain == EXPERIMENT_ADMISSION_DOMAIN for d in excinfo.value.diagnostics)
+        assert all(
+            d.domain == EXPERIMENT_ADMISSION_DOMAIN for d in excinfo.value.diagnostics
+        )
 
     def test_the_rejection_names_the_unsupported_capture_kind_and_scope(self):
         spec = _load_reference_capture_spec()
@@ -104,7 +114,9 @@ class TestBindCaptureRequirementsFailsClosed:
         with pytest.raises(AdmissionRejection) as excinfo:
             bind_capture_requirements([spec], policy=policy)
 
-        messages = " ".join(d.message + " " + d.address for d in excinfo.value.diagnostics)
+        messages = " ".join(
+            d.message + " " + d.address for d in excinfo.value.diagnostics
+        )
         assert "trace" in messages
         assert "network" in messages
 
@@ -142,7 +154,9 @@ class TestBindCaptureRequirementsSuccess:
         registry = CollectorRegistry((_covering_registration(),))
         spec = _load_reference_capture_spec()
 
-        bindings = bind_capture_requirements([spec], registry=registry, policy=default_admission_policy())
+        bindings = bind_capture_requirements(
+            [spec], registry=registry, policy=default_admission_policy()
+        )
 
         assert len(bindings) == 1
         assert bindings[0].registration_id == "aptl.collector.network-trace"
@@ -153,7 +167,14 @@ class TestBindCaptureRequirementsSuccess:
         # ANY unbound requirement rejects the whole admission.
         registry = CollectorRegistry((_covering_registration(),))
         covered = _load_reference_capture_spec()
-        payload = json.loads(_read("experiment-core", "experiment-capture-spec-v1", "valid", "reference.json"))
+        payload = json.loads(
+            _read(
+                "experiment-core",
+                "experiment-capture-spec-v1",
+                "valid",
+                "reference.json",
+            )
+        )
         requirement = next(iter(payload["capture_requirements"].values()))
         requirement["capture_kind"] = "log"
         payload["capture_requirements"] = {requirement["requirement_id"]: requirement}
@@ -161,7 +182,9 @@ class TestBindCaptureRequirementsSuccess:
         policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            bind_capture_requirements([covered, uncovered], registry=registry, policy=policy)
+            bind_capture_requirements(
+                [covered, uncovered], registry=registry, policy=policy
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +197,9 @@ class TestCaptureDegradationAcceptance:
         registry = CollectorRegistry((_covering_registration(),))
         spec = _load_reference_capture_spec()
 
-        binding = bind_capture_requirements([spec], registry=registry, policy=default_admission_policy())[0]
+        binding = bind_capture_requirements(
+            [spec], registry=registry, policy=default_admission_policy()
+        )[0]
 
         assert binding.accepted_limitation is None
         assert binding.comparability_disclosure_ref is None
@@ -221,8 +246,25 @@ class TestCaptureDegradationAcceptance:
 from hypothesis import given, settings  # noqa: E402
 from hypothesis import strategies as st  # noqa: E402
 
-_CAPTURE_KINDS = ("artifact", "observation", "trace", "telemetry", "log", "packet-capture", "other")
-_CAPTURE_SCOPES = ("task", "run", "apparatus", "participant", "backend", "processor", "network", "service")
+_CAPTURE_KINDS = (
+    "artifact",
+    "observation",
+    "trace",
+    "telemetry",
+    "log",
+    "packet-capture",
+    "other",
+)
+_CAPTURE_SCOPES = (
+    "task",
+    "run",
+    "apparatus",
+    "participant",
+    "backend",
+    "processor",
+    "network",
+    "service",
+)
 
 #: The (capture_kind, capture_scope) pairs the production built-in fleet covers
 #: for the reference requirement's other axes (media/integrity/window/etc.).
@@ -249,10 +291,24 @@ class TestFuzzCaptureRequirementsDeterministic:
     def test_every_legal_kind_scope_combination_is_deterministic_against_the_default_fleet(
         self, capture_kind, capture_scope
     ):
-        payload = json.loads(_read("experiment-core", "experiment-capture-spec-v1", "valid", "reference.json"))
+        payload = json.loads(
+            _read(
+                "experiment-core",
+                "experiment-capture-spec-v1",
+                "valid",
+                "reference.json",
+            )
+        )
         requirement = next(iter(payload["capture_requirements"].values()))
         requirement["capture_kind"] = capture_kind
         requirement["capture_scope"] = capture_scope
+        # Hold every non-fuzzed axis at the exact common built-in policy. The
+        # corpus fixture intentionally uses free-form legacy retention prose,
+        # which the v2 registry now rejects rather than treating as equivalent
+        # to run_lifetime. Loss disclosure is disabled here because the Tempo
+        # source cannot truthfully account for upstream exporter loss.
+        requirement["retention_policy"] = "run_lifetime"
+        requirement["loss_disclosure_required"] = False
         payload["capture_requirements"] = {requirement["requirement_id"]: requirement}
         spec = ExperimentCaptureSpecModel.model_validate(payload)
         policy = default_admission_policy()

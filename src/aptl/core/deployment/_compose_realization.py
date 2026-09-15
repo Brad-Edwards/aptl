@@ -8,6 +8,10 @@ from pathlib import Path
 from aptl.core.deployment._compose_account_realization import (
     ComposeRealizationAccountMixin,
 )
+from aptl.core.deployment._compose_observability import ComposeObservabilityMixin
+from aptl.core.deployment._compose_capture_apparatus import (
+    ComposeCaptureApparatusMixin,
+)
 from aptl.core.deployment._compose_content_realization import (
     ComposeRealizationContentMixin,
 )
@@ -24,6 +28,9 @@ from aptl.core.deployment._compose_post_start import (
     ComposeRealizationPostStartMixin,
 )
 from aptl.core.deployment._compose_port_realization import published_port_conflicts
+from aptl.core.deployment._compose_port_readback import (
+    owned_bindings as _owned_bindings,
+)
 from aptl.core.deployment._compose_service_index_realization import (
     ComposeRealizationServiceIndexMixin,
 )
@@ -52,6 +59,7 @@ from aptl.core.deployment._compose_runtime_orchestration import (
     ComposeRuntimeOrchestrationRouteMixin,
 )
 from aptl.core.deployment.realization import DeploymentRealizationSpec
+from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.lab_types import LabResult
 
 __all__ = [
@@ -67,6 +75,8 @@ __all__ = [
 
 
 class ComposeRealizationMixin(
+    ComposeCaptureApparatusMixin,
+    ComposeObservabilityMixin,
     ComposeRuntimeOrchestrationRouteMixin,
     ComposeMixedRealizationMixin,
     ComposeBoundaryRealizationMixin,
@@ -105,6 +115,7 @@ class ComposeRealizationMixin(
         build: bool = True,
         scenario_root: Path,
         substrate_digests: Mapping[str, str] | None = None,
+        observation_context: DeploymentObservationContext | None = None,
     ) -> LabResult:
         """Realize a typed scenario deployment through Docker Compose.
 
@@ -123,22 +134,41 @@ class ComposeRealizationMixin(
         resolution of the mutable tag.
         """
 
-        # Request-scoped, like the network bindings below: the base start reads it
-        # by node address and never re-resolves the tag it was verified from.
-        self._realization_substrate_digests = dict(substrate_digests or {})
-        failure = self._runtime_orchestration_preflight(realization)
-        if failure is not None:
-            return failure
-        # Route from per-node facts, never a whole-graph flag. A mixed graph is
-        # normal (ADR-051): some nodes come from a pinned artifact, some are
-        # built from a specification, some are composed from declared state. The
-        # only whole-graph question left is whether Compose has anything to
-        # start.
-        if not _needs_compose(realization):
-            return self._realize_without_compose(realization, scenario_root)
-        return self._realize_mixed_or_legacy(
-            realization, build=build, scenario_root=scenario_root
+        observation_context = observation_context or DeploymentObservationContext()
+        failure = self._realization_preflight(
+            realization, scenario_root, substrate_digests
         )
+        if failure is not None:
+            result = failure
+        elif not _needs_compose(realization):
+            result = self._realize_without_compose(realization, scenario_root)
+        else:
+            result = self._realize_mixed_or_legacy(
+                realization,
+                build=build,
+                scenario_root=scenario_root,
+                observation_context=observation_context,
+            )
+        return result
+
+    def _realization_preflight(
+        self,
+        realization: DeploymentRealizationSpec,
+        scenario_root: Path,
+        substrate_digests: Mapping[str, str] | None,
+    ) -> LabResult | None:
+        """Run ordered backend preflights before any scenario mutation."""
+
+        failure = self._capture_apparatus_preflight(realization, scenario_root)
+        if failure is None:
+            failure = self._observability_preflight(realization, scenario_root)
+        if failure is None:
+            # Request-scoped: base start consumes the already-verified identity.
+            self._realization_substrate_digests = dict(substrate_digests or {})
+            failure = self._runtime_orchestration_preflight(realization)
+        if failure is None:
+            failure = self._start_backend_observability(realization.profiles)
+        return failure
 
     def _realize_networks_and_boundaries(
         self,
@@ -212,22 +242,37 @@ class ComposeRealizationMixin(
         compose-side generation reuses the same material.
         """
 
+        self._image_free_generated_environment = {}
         ops_by_address: dict[str, list[object]] = {}
+        generated_environment: dict[str, dict[str, str]] = {}
         for artifact in realization.generated_artifacts:
             consumers = [
                 consumer
                 for consumer in artifact.consumers
                 if consumer.target_address in addresses
             ]
-            if not consumers:
+            environment_consumers = [
+                consumer
+                for consumer in artifact.environment_consumers
+                if consumer.target_address in addresses
+            ]
+            if not consumers and not environment_consumers:
                 continue
             failure = self._realize_one_generated_artifact(artifact, realization_root)
             if failure is None:
                 failure = _append_image_free_artifact_ops(
                     ops_by_address, artifact, consumers, realization_root
                 )
+            if failure is None:
+                failure = _append_image_free_environment_bindings(
+                    generated_environment,
+                    artifact,
+                    environment_consumers,
+                    realization_root,
+                )
             if failure is not None:
                 return failure, {}
+        self._image_free_generated_environment = generated_environment
         return None, {addr: tuple(ops) for addr, ops in ops_by_address.items()}
 
     def _realize_without_compose(
@@ -387,65 +432,36 @@ def _append_image_free_artifact_ops(
     return None
 
 
-def _port_maps(payload: str) -> list[dict[str, object]]:
-    """Return each parsable port map from a JSON-lines ``docker inspect`` payload.
+def _append_image_free_environment_bindings(
+    bindings_by_address: dict[str, dict[str, str]],
+    artifact: object,
+    consumers: list[object],
+    realization_root: Path,
+) -> LabResult | None:
+    """Resolve admitted generated outputs for generic-container env delivery."""
 
-    A line that is blank, unparsable, or not a map is skipped rather than
-    failing the caller: unreadable state must fall back to the probe alone, not
-    claim a port is ours on bad evidence.
-    """
+    from aptl.core.deployment._compose_stateful_model import artifact_source_path
+    from aptl.core.deployment.realization import valid_environment_variable_name
 
-    import json
-
-    maps: list[dict[str, object]] = []
-    for line in payload.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        try:
-            ports = json.loads(stripped)
-        except ValueError:
-            continue
-        if isinstance(ports, dict):
-            maps.append(ports)
-    return maps
-
-
-def _binding_addresses(host_ip: str) -> list[str]:
-    """Return the host addresses one published binding satisfies.
-
-    Docker reports an all-interfaces publish with an empty or ``0.0.0.0`` host
-    IP, and a loopback declaration is satisfied by one.
-    """
-
-    if host_ip in ("", "0.0.0.0"):
-        return [host_ip, "127.0.0.1"]
-    return [host_ip]
-
-
-def _entry_bindings(
-    entries: object, protocol: str
-) -> list[tuple[str, int, str]]:
-    """Return the binding triples one container port's host entries publish."""
-
-    bindings: list[tuple[str, int, str]] = []
-    for entry in entries or ():
-        raw_port = str(entry.get("HostPort") or "")
-        if not raw_port.isdigit():
-            continue
-        for address in _binding_addresses(str(entry.get("HostIp") or "")):
-            bindings.append((address, int(raw_port), protocol))
-    return bindings
-
-
-def _owned_bindings(payload: str) -> list[tuple[str, int, str]]:
-    """Parse ``docker inspect`` port maps into host binding triples."""
-
-    return [
-        binding
-        for ports in _port_maps(payload)
-        for container_port, entries in ports.items()
-        for binding in _entry_bindings(
-            entries, str(container_port).rpartition("/")[2] or "tcp"
+    source_root = artifact_source_path(realization_root, artifact)
+    outputs = {output.name: source_root / output.path for output in artifact.outputs}
+    try:
+        for consumer in consumers:
+            if not valid_environment_variable_name(consumer.environment_variable):
+                raise ValueError("invalid generated environment variable name")
+            output = outputs.get(consumer.output_name)
+            if output is None or not output.is_file():
+                raise ValueError("missing generated output")
+            value = output.read_text(encoding="utf-8").strip()
+            if not value or "\n" in value or "\r" in value:
+                raise ValueError("invalid generated environment value")
+            node_bindings = bindings_by_address.setdefault(consumer.target_address, {})
+            if consumer.environment_variable in node_bindings:
+                raise ValueError("duplicate generated environment target")
+            node_bindings[consumer.environment_variable] = value
+    except (OSError, ValueError):
+        return LabResult(
+            success=False,
+            error=f"Generated artifact {artifact.address} environment delivery failed.",
         )
-    ]
+    return None

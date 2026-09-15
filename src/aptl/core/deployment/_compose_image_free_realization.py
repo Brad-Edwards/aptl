@@ -33,6 +33,8 @@ def _needs_compose(realization: DeploymentRealizationSpec) -> bool:
     stateful prerequisites and validation.
     """
 
+    if realization.capture_apparatus:
+        return True
     if not realization.nodes:
         return True
     materialized = _image_free_node_addresses(realization)

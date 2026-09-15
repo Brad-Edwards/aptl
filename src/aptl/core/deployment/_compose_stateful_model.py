@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import hashlib
 from pathlib import Path, PurePosixPath
 
 from aptl.core.credentials import RENDERED_MANAGER_RELPATH
 from aptl.core.deployment._flag_signing_keys import FLAG_SIGNING_PROFILE_V2
+from aptl.core.deployment._cortex_service_credentials import (
+    CORTEX_SERVICE_CREDENTIALS_PROFILE,
+    CORTEX_SERVICE_CREDENTIALS_ROOT_RELPATH,
+)
 from aptl.core.deployment._compose_stateful_constants import (
     CERTIFICATE_ROOT_RELPATH,
     FLAG_SIGNING_ROOT_RELPATH,
@@ -14,16 +19,16 @@ from aptl.core.deployment._compose_stateful_constants import (
     SOC_CERTS_ROOT_RELPATH,
     SSH_KEY_BUNDLE_ROOT_RELPATH,
     WAZUH_MANAGER_CONFIG_PROVENANCES,
-    REALIZATION_ADDRESS_LABEL,
-    REALIZATION_LIFECYCLE_LABEL,
-    REALIZATION_PROJECT_LABEL,
 )
 from aptl.core.deployment._compose_stateful_services import (
     wazuh_service_definitions,
 )
+from aptl.core.deployment._compose_stateful_volumes import (
+    effective_volume_errors,
+    expected_volume_labels,
+)
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
-    DeploymentPersistentVolumeRealization,
     DeploymentRealizationSpec,
 )
 
@@ -44,6 +49,7 @@ def stateful_override_payload(
 
     services = wazuh_service_definitions()
     _append_artifact_mounts(services, scenario_root, realization)
+    _append_artifact_environment(services, scenario_root, realization)
     volumes = _append_volume_mounts(services, project_name, realization)
     payload: dict[str, object] = {"services": services}
     if volumes:
@@ -75,7 +81,14 @@ def effective_stateful_model_errors(
             realization,
         )
     )
-    errors.extend(_effective_volume_errors(payload, project_name, realization))
+    errors.extend(
+        effective_volume_errors(
+            payload,
+            project_name,
+            realization,
+            _non_compose_consumer_addresses(realization),
+        )
+    )
     return errors
 
 
@@ -99,9 +112,28 @@ def artifact_source_path(
         relative = Path(SSH_KEY_BUNDLE_ROOT_RELPATH) / artifact.name
     elif provenance == FLAG_SIGNING_PROFILE_V2:
         relative = Path(FLAG_SIGNING_ROOT_RELPATH) / artifact.name
+    elif provenance == CORTEX_SERVICE_CREDENTIALS_PROFILE:
+        relative = Path(CORTEX_SERVICE_CREDENTIALS_ROOT_RELPATH)
     else:
         relative = Path(RENDERED_MANAGER_RELPATH)
     return scenario_root.resolve() / relative
+
+
+def artifact_environment_file_path(
+    scenario_root: Path,
+    artifact: DeploymentGeneratedArtifactRealization,
+    service_name: str,
+) -> Path:
+    """Return a contained opaque path for one generated environment delivery."""
+
+    artifact_key = hashlib.sha256(artifact.address.encode()).hexdigest()[:20]
+    service_key = hashlib.sha256(service_name.encode()).hexdigest()[:20]
+    return (
+        scenario_root.resolve()
+        / ".aptl/realization/generated-environment"
+        / artifact_key
+        / f"{service_key}.env"
+    )
 
 
 def _consumer_output_names(
@@ -121,9 +153,7 @@ def _consumer_output_names(
         names = [name for name in selected if name in by_name]
     else:
         names = [output.name for output in artifact.outputs]
-    return [
-        name for name in names if by_name[name].disposition != "producer_private"
-    ]
+    return [name for name in names if by_name[name].disposition != "producer_private"]
 
 
 def _non_compose_consumer_addresses(
@@ -171,6 +201,35 @@ def _append_artifact_mounts(
                         "read_only": True,
                     }
                 )
+
+
+def _append_artifact_environment(
+    services: dict[str, dict[str, object]],
+    scenario_root: Path,
+    realization: DeploymentRealizationSpec,
+) -> None:
+    """Bind generated secret values through owner-only Compose env files."""
+
+    non_compose = _non_compose_consumer_addresses(realization)
+    for artifact in realization.generated_artifacts:
+        service_names = sorted(
+            {
+                consumer.service_name
+                for consumer in artifact.environment_consumers
+                if consumer.target_address not in non_compose
+            }
+        )
+        for service_name in service_names:
+            service = services.setdefault(service_name, {})
+            env_files = service.setdefault("env_file", [])
+            assert isinstance(env_files, list)
+            env_files.append(
+                str(
+                    artifact_environment_file_path(
+                        scenario_root, artifact, service_name
+                    )
+                )
+            )
 
 
 def _uses_per_output_mounts(
@@ -248,7 +307,7 @@ def _append_volume_mounts(
         if not compose_consumers:
             continue
         volumes[volume.name] = {
-            "labels": _expected_volume_labels(
+            "labels": expected_volume_labels(
                 volume.address,
                 volume.lifecycle,
                 project_name,
@@ -412,81 +471,3 @@ def _under_certificate_root(source: str, cert_root: str) -> bool:
     """Return whether a mount source is the certificate root or one child."""
 
     return source == cert_root or source.startswith(f"{cert_root}/")
-
-
-def _compose_persistent_volumes(
-    realization: DeploymentRealizationSpec,
-) -> list[DeploymentPersistentVolumeRealization]:
-    """Return the persistent volumes at least one Compose service mounts.
-
-    Only volumes with a Compose consumer appear in the override (a volume used
-    solely by a non-Compose node is delivered by the generic materializer).
-    """
-
-    non_compose = _non_compose_consumer_addresses(realization)
-    return [
-        volume
-        for volume in realization.persistent_volumes
-        if any(
-            consumer.target_address not in non_compose
-            for consumer in volume.consumers
-        )
-    ]
-
-
-def _effective_volume_errors(
-    payload: Mapping[str, object],
-    project_name: str,
-    realization: DeploymentRealizationSpec,
-) -> list[str]:
-    """Return identity/label mismatches for effective persistent volumes."""
-
-    compose_volumes = _compose_persistent_volumes(realization)
-    if not compose_volumes:
-        return []
-    observed = payload.get("volumes")
-    if not isinstance(observed, Mapping):
-        return ["Effective Compose model has no volumes mapping."]
-    return [
-        f"Effective persistent volume {volume.address} has unexpected identity."
-        for volume in compose_volumes
-        if not _effective_volume_matches(
-            observed.get(volume.name),
-            project_name,
-            volume.name,
-            _expected_volume_labels(
-                volume.address,
-                volume.lifecycle,
-                project_name,
-            ),
-        )
-    ]
-
-
-def _effective_volume_matches(
-    definition: object,
-    project_name: str,
-    volume_name: str,
-    expected_labels: dict[str, str],
-) -> bool:
-    """Return whether one effective volume has the admitted identity."""
-
-    return bool(
-        isinstance(definition, Mapping)
-        and definition.get("labels") == expected_labels
-        and definition.get("name") == f"{project_name}_{volume_name}"
-    )
-
-
-def _expected_volume_labels(
-    address: str,
-    lifecycle: str,
-    project_name: str,
-) -> dict[str, str]:
-    """Return required labels for a project-scoped persistent volume."""
-
-    return {
-        REALIZATION_ADDRESS_LABEL: address,
-        REALIZATION_LIFECYCLE_LABEL: lifecycle,
-        REALIZATION_PROJECT_LABEL: project_name,
-    }

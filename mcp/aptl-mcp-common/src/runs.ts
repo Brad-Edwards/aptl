@@ -20,8 +20,15 @@
  * the same file (already done by `loadParentContext` in telemetry.ts).
  */
 
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import {
+  chmodSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+} from 'node:fs';
+import { dirname, resolve } from 'node:path';
 
 // Mirrors `_ID_RE` in `runstore.py`. Identifiers become directory
 // components, so reject anything that could break out of the tree.
@@ -189,7 +196,24 @@ export function createPtyTeeWriter(
   }
   const file = mcpSessionJsonl(stateDir, tid, resolvedSessionId);
 
+  // Create the census entry before the SSH request is made. Its filename is
+  // the control-plane-owned expected-session inventory used at finalization,
+  // including sessions that produce no output. The broker independently
+  // records the sessions it accepted; finalization requires the two sets to
+  // agree instead of letting either side attest its own completeness.
   let dirEnsured = false;
+  try {
+    mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+    const descriptor = openSync(file, 'a', 0o600);
+    closeSync(descriptor);
+    chmodSync(file, 0o600);
+    dirEnsured = true;
+  } catch (err) {
+    // Capture remains best-effort on the tool path. A missing census entry
+    // will make required transcript finalization fail closed if the broker
+    // nevertheless accepted the session.
+    console.error('[PTY-TEE] census initialization failed:', err);
+  }
   // Serialize all writes through one promise chain so concurrent `data`
   // events on the SSH stream cannot reorder JSONL lines. Without this,
   // a burst of three `stream.emit('data', ...)` calls each kicks off an

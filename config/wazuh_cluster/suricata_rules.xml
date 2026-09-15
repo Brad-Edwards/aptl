@@ -1,10 +1,19 @@
 <!-- Suricata IDS Integration Rules for APTL Lab -->
 <group name="aptl,suricata,ids,">
 
-  <!-- Base Suricata alert decoder -->
+  <!-- Base for APTL Suricata alert classification.
+
+       This MUST chain off the built-in Suricata alert rule (86601 in
+       ruleset/rules/0475-suricata_rules.xml) via <if_sid>, NOT declare its
+       own <decoded_as>json</decoded_as> parent. Wazuh assigns each JSON event
+       to a single atomic (decoded_as) parent, and the built-in 86600 parent
+       is loaded first, so a competing 303000 decoded_as parent never wins and
+       none of its children (303001-303060) ever fire — every Suricata alert
+       falls through to the generic 86601. Chaining off 86601 makes these the
+       higher-level classification of the built-in alert instead of a rival
+       tree, so e.g. a web attack now surfaces as 303020 as intended. -->
   <rule id="303000" level="0">
-    <decoded_as>json</decoded_as>
-    <field name="event_type">alert</field>
+    <if_sid>86601</if_sid>
     <description>Suricata IDS alert</description>
     <group>suricata,ids,</group>
   </rule>
@@ -81,9 +90,11 @@
     <group>suricata,ids,credential_theft,</group>
   </rule>
 
-  <!-- Suricata flow events (for network monitoring) -->
+  <!-- Suricata flow events (for network monitoring). Chains off the built-in
+       Suricata parent (86600) for the same reason as 303000 above: a rival
+       decoded_as parent would never win against the built-in one. -->
   <rule id="303100" level="0">
-    <decoded_as>json</decoded_as>
+    <if_sid>86600</if_sid>
     <field name="event_type">flow</field>
     <description>Suricata network flow</description>
     <group>suricata,flow,</group>
@@ -91,7 +102,7 @@
 
   <!-- Suricata DNS events -->
   <rule id="303110" level="0">
-    <decoded_as>json</decoded_as>
+    <if_sid>86600</if_sid>
     <field name="event_type">dns</field>
     <description>Suricata DNS event</description>
     <group>suricata,dns,</group>

@@ -58,14 +58,14 @@
       "description": "Search MISP threat events. Filter by date, tags, or threat level. Example: {\"body\": {\"tags\": [\"tlp:white\"], \"date_from\": \"2024-01-01\"}}"
     },
     "add_indicator": {
-      "url": "https://localhost:8443/attributes/add",
+      "url": "https://localhost:8443/attributes/add/{event_id}",
       "method": "POST",
       "auth": {
         "type": "apikey",
         "header": "Authorization",
         "apiKey": "${MISP_API_KEY}"
       },
-      "description": "Add a new indicator of compromise to MISP. Required fields: event_id, type, value. Example: {\"body\": {\"event_id\": 1, \"type\": \"ip-dst\", \"value\": \"10.0.0.1\", \"comment\": \"C2 server\"}}"
+      "description": "Add an indicator of compromise to a MISP event. The event_id is a path parameter (pass it in params); type and value go in body. MISP's /attributes/add requires the event id in the URL. Example: {\"params\": {\"event_id\": 1}, \"body\": {\"type\": \"ip-dst\", \"value\": \"10.0.0.1\", \"comment\": \"C2 server\"}}"
     },
     "correlate_observable": {
       "url": "https://localhost:8443/attributes/restSearch",

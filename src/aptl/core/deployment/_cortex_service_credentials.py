@@ -32,12 +32,13 @@ def realize_cortex_service_credentials(
     """Create or reuse the exact two distinct secret outputs declared by TechVault."""
 
     actual = {output.name: output.path for output in artifact.outputs}
-    if (
+    invalid_contract = (
         artifact.provenance != CORTEX_SERVICE_CREDENTIALS_PROFILE
         or artifact.lifecycle != "reuse_valid"
         or actual != _EXPECTED_OUTPUTS
         or any(output.sensitivity != "secret" for output in artifact.outputs)
-    ):
+    )
+    if invalid_contract:
         return (
             "Cortex service credential artifact does not match its producer contract."
         )
@@ -51,22 +52,23 @@ def realize_cortex_service_credentials(
             name: _read_valid_token(root / relative)
             for name, relative in _EXPECTED_OUTPUTS.items()
         }
-        if all(existing.values()) and len(set(existing.values())) == 2:
-            return None
-        generated = _distinct_tokens()
-        for name, relative in _EXPECTED_OUTPUTS.items():
-            target = _canonical_generated_path(
-                scenario_root, CORTEX_SERVICE_CREDENTIALS_ROOT_RELPATH / relative
-            )
-            _ensure_secure_dir(target.parent)
-            _atomic_write_secure(target, generated[name] + "\n")
-            target.chmod(0o600)
+        if not all(existing.values()) or len(set(existing.values())) != 2:
+            generated = _distinct_tokens()
+            for name, relative in _EXPECTED_OUTPUTS.items():
+                target = _canonical_generated_path(
+                    scenario_root, CORTEX_SERVICE_CREDENTIALS_ROOT_RELPATH / relative
+                )
+                _ensure_secure_dir(target.parent)
+                _atomic_write_secure(target, generated[name] + "\n")
+                target.chmod(0o600)
     except (OSError, ValueError):
         return "Cortex service credential generation failed."
     return None
 
 
 def _read_valid_token(path: Path) -> str | None:
+    """Read one generated token only when its bytes match the contract."""
+
     try:
         token = path.read_text(encoding="utf-8").strip()
     except OSError:
@@ -75,6 +77,8 @@ def _read_valid_token(path: Path) -> str | None:
 
 
 def _distinct_tokens() -> dict[str, str]:
+    """Generate the two distinct service identities required by the pack."""
+
     initializer = secrets.token_urlsafe(32)
     connector = secrets.token_urlsafe(32)
     while connector == initializer:

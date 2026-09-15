@@ -161,13 +161,11 @@ def test_capture_rejection_precedes_artifact_probe(scenario, tmp_path, monkeypat
         lambda *args, **kwargs: pytest.fail("artifact probe before capture admission"),
     )
 
+    config = AptlConfig()
+    backend = MagicMock()
+    parameters = {"flag_ad_user": "flag-user", "flag_ad_root": "flag-root"}
     with pytest.raises(AdmissionRejection):
-        raes.admit_raes_scenario(
-            tmp_path,
-            AptlConfig(),
-            MagicMock(),
-            parameters={"flag_ad_user": "flag-user", "flag_ad_root": "flag-root"},
-        )
+        raes.admit_raes_scenario(tmp_path, config, backend, parameters=parameters)
 
 
 def test_no_evidence_intent_needs_no_capture_plan(scenario):

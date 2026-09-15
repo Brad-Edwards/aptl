@@ -214,17 +214,11 @@ class TestTerminalSemantics:
         def interrupted():
             raise KeyboardInterrupt
 
+        collectors = {
+            binding.registration_id: _FakeCollector(binding.registration_id, log=log)
+        }
         with pytest.raises(KeyboardInterrupt):
-            _acquire(
-                tmp_path,
-                [binding],
-                {
-                    binding.registration_id: _FakeCollector(
-                        binding.registration_id, log=log
-                    )
-                },
-                trial_body=interrupted,
-            )
+            _acquire(tmp_path, [binding], collectors, trial_body=interrupted)
         assert log == [
             ("start", binding.registration_id),
             ("stop", binding.registration_id),
@@ -259,19 +253,14 @@ class TestTerminalSemantics:
                 super().stop(handle)
                 raise KeyboardInterrupt
 
+        collectors = {
+            first.registration_id: _FakeCollector(first.registration_id, log=log),
+            second.registration_id: InterruptingCollector(
+                second.registration_id, log=log
+            ),
+        }
         with pytest.raises(KeyboardInterrupt):
-            _acquire(
-                tmp_path,
-                [first, second],
-                {
-                    first.registration_id: _FakeCollector(
-                        first.registration_id, log=log
-                    ),
-                    second.registration_id: InterruptingCollector(
-                        second.registration_id, log=log
-                    ),
-                },
-            )
+            _acquire(tmp_path, [first, second], collectors)
         assert ("stop", first.registration_id) in log
         if phase == "stop":
             assert log[-2:] == [

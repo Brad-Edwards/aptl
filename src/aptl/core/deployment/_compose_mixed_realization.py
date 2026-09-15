@@ -63,9 +63,8 @@ class ComposeMixedRealizationMixin:
             scenario_root,
             self._project_dir,
         )
-        if failure is not None:
-            return failure, realization, ()
-        failure = self._prepare_capture_target(realization)
+        if failure is None:
+            failure = self._prepare_capture_target(realization)
         if failure is not None:
             return failure, realization, ()
         excluded_services = (

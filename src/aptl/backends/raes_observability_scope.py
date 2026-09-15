@@ -82,13 +82,12 @@ def observability_scope_decision(scenario: object) -> ObservabilityScopeDecision
         return ObservabilityScopeDecision(environment_visible=False)
     provenance = getattr(scenario, "instantiation_provenance", None)
     designation = getattr(scenario, "realization", None)
-    records = (
-        provenance.realization_designations
-        if provenance is not None
-        else designation_records(designation)
-        if designation is not None
-        else ()
-    )
+    if provenance is not None:
+        records = provenance.realization_designations
+    elif designation is not None:
+        records = designation_records(designation)
+    else:
+        records = ()
     resolutions = tuple(
         resolve_realization_designation(records, field_pointer=pointer)
         for pointer in _FOOTPRINT
@@ -96,6 +95,7 @@ def observability_scope_decision(scenario: object) -> ObservabilityScopeDecision
     allowed = all(
         resolution.closure is Closure.OPEN_WORLD for resolution in resolutions
     )
+    reason = "minimum-intrusion" if allowed else "closed-realization-scope"
     return ObservabilityScopeDecision(
         enabled=False,
         environment_visible=True,
@@ -108,5 +108,5 @@ def observability_scope_decision(scenario: object) -> ObservabilityScopeDecision
                 }
             )
         ),
-        reason="minimum-intrusion" if allowed else "closed-realization-scope",
+        reason=reason,
     )

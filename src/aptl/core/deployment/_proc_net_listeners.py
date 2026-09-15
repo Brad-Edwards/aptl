@@ -14,11 +14,11 @@ readback is not permission to launch an observer container.
 
 from __future__ import annotations
 
-import socket
 import re
+import socket
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Mapping
 
 # Label each table before parsing the complete bounded snapshot.
 SECTION_MARKER = "@@"
@@ -44,6 +44,8 @@ class ContainerListeners:
 
 
 def _bounded_read(path: Path, limit: int) -> str:
+    """Read one ASCII kernel table without exceeding its byte budget."""
+
     with path.open("rb") as stream:
         raw = stream.read(limit + 1)
     if len(raw) > limit:
@@ -79,39 +81,57 @@ def read_container_listeners(
     lifetime. Unsupported hosts, denied access, exit/reuse races and truncated
     snapshots return unavailable, not an empty successful observation.
     """
-    container_id = inspected.get("Id")
-    state = inspected.get("State")
-    if not isinstance(container_id, str) or not re.fullmatch(
-        "[0-9a-f]{64}", container_id
-    ):
+    process = _container_process(inspected, proc_root)
+    if process is None:
         return None
-    if not isinstance(state, dict) or state.get("Running") is not True:
-        return None
-    pid = state.get("Pid")
-    if type(pid) is not int or pid <= 0:
-        return None
-    proc = proc_root / str(pid)
+    proc, container_id = process
     try:
-        identity = _process_identity(proc, container_id)
-        remaining = _READ_LIMIT
-        sections = []
-        for name in _TABLES:
-            table = _bounded_read(proc / "net" / name, remaining)
-            header = table.split("\n", 1)[0].split()
-            expected = (
-                ["Num", "RefCount", "Protocol"]
-                if name == "unix"
-                else ["sl", "local_address"]
-            )
-            if header[: len(expected)] != expected:
-                return None
-            remaining -= len(table)
-            sections.append(f"{SECTION_MARKER}{name}\n{table}")
-        if _process_identity(proc, container_id) != identity:
-            return None
+        sections = _read_listener_tables(proc, container_id)
     except (OSError, ValueError, IndexError):
         return None
     return parse_proc_net_listeners("\n".join(sections))
+
+
+def _container_process(
+    inspected: Mapping[str, object], proc_root: Path
+) -> tuple[Path, str] | None:
+    """Validate daemon process metadata before touching the host namespace."""
+
+    container_id = inspected.get("Id")
+    state = inspected.get("State")
+    pid = state.get("Pid") if isinstance(state, dict) else None
+    valid = (
+        isinstance(container_id, str)
+        and re.fullmatch(r"[0-9a-f]{64}", container_id) is not None
+        and isinstance(state, dict)
+        and state.get("Running") is True
+        and type(pid) is int
+        and pid > 0
+    )
+    return (proc_root / str(pid), container_id) if valid else None
+
+
+def _read_listener_tables(proc: Path, container_id: str) -> list[str]:
+    """Read every required kernel table under one stable process identity."""
+
+    identity = _process_identity(proc, container_id)
+    remaining = _READ_LIMIT
+    sections = []
+    for name in _TABLES:
+        table = _bounded_read(proc / "net" / name, remaining)
+        header = table.split("\n", 1)[0].split()
+        expected = (
+            ["Num", "RefCount", "Protocol"]
+            if name == "unix"
+            else ["sl", "local_address"]
+        )
+        if header[: len(expected)] != expected:
+            raise ValueError(f"invalid native listener table: {name}")
+        remaining -= len(table)
+        sections.append(f"{SECTION_MARKER}{name}\n{table}")
+    if _process_identity(proc, container_id) != identity:
+        raise ValueError("container process changed during listener readback")
+    return sections
 
 
 def parse_proc_net_listeners(text: str) -> ContainerListeners:

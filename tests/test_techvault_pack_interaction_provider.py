@@ -55,10 +55,10 @@ def test_provider_is_bound_to_the_released_shuffle_contract() -> None:
 
 
 def test_provider_does_not_adopt_backend_apparatus_as_pack_components() -> None:
+    provider = TechVaultPackInteraction()
+    context = _context("provision.node.aptl-grafana-otel", "provision.node.cortex")
     with pytest.raises(ValueError, match="unsupported-component-address"):
-        TechVaultPackInteraction().resolve(
-            _context("provision.node.aptl-grafana-otel", "provision.node.cortex")
-        )
+        provider.resolve(context)
 
 
 def test_unknown_component_fails_instead_of_returning_a_partial_mapping() -> None:

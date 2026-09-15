@@ -12,11 +12,11 @@ from __future__ import annotations
 import json
 import secrets
 from collections.abc import Callable, Mapping, Sequence
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlunsplit
 
-from aptl.core.deployment._compose_stateful_model import artifact_source_path
 from aptl.core.evidence.adapters.techvault import (
     CORTEX_ANALYZER_ID,
     CORTEX_OBSERVABLE,
@@ -26,14 +26,26 @@ from aptl.core.evidence.adapters.techvault import (
     SuricataRuleReadinessSource,
     SuricataWazuhSqliSource,
 )
+from aptl.core.evidence.adapters.techvault_native_support import (
+    MAX_SOURCE_BYTES,
+    bounded,
+    connector_projection,
+    content_identities,
+    find_node,
+    generated_output,
+    inside_window,
+    published_url,
+    utc_iso_now,
+    webapp_address,
+)
 from aptl.utils.curl_safe import basic_auth_header, curl_json
 
 _CORTEX_REGISTRATION = "aptl.collector.cortex-enrichment"
 _READINESS_REGISTRATION = "aptl.collector.suricata-rule-readiness"
 _SQLI_REGISTRATION = "aptl.collector.suricata-wazuh-sqli"
-_MAX_SOURCE_BYTES = 2 * 1024 * 1024
 _SURICATA_CONTAINER = "aptl-suricata"
 _KALI_CONTAINER = "aptl-kali"
+_TIMESTAMP_FIELD = "@timestamp"
 
 _SURICATA_READINESS_SCRIPT = r"""
 set -eu
@@ -48,138 +60,13 @@ sed -nE 's/.*sid:([0-9]+).*/sid=\1/p' /etc/suricata/rules/local.rules
 """.strip()
 
 
-def _iso_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+@dataclass(frozen=True)
+class TechVaultNativeDependencies:
+    """Injectable boundaries used by deterministic owner tests."""
 
-
-def _bounded(value: object) -> bool:
-    try:
-        return (
-            len(json.dumps(value, separators=(",", ":"), default=str).encode())
-            <= _MAX_SOURCE_BYTES
-        )
-    except (TypeError, ValueError, RecursionError):
-        return False
-
-
-def _node(realization: object, name: str) -> object | None:
-    return next(
-        (
-            item
-            for item in getattr(realization, "nodes", ())
-            if getattr(item, "name", None) == name
-        ),
-        None,
-    )
-
-
-def _published_url(
-    realization: object, name: str, port: int, scheme: str
-) -> str | None:
-    node = _node(realization, name)
-    if node is None:
-        return None
-    matches = [
-        item
-        for item in getattr(node, "published_ports", ())
-        if getattr(item, "container_port", None) == port
-        and getattr(item, "protocol", "tcp") == "tcp"
-    ]
-    if len(matches) != 1 or getattr(matches[0], "host_port", None) is None:
-        return None
-    host = getattr(matches[0], "host_ip", "127.0.0.1")
-    if host not in {"127.0.0.1", "::1", "localhost"}:
-        return None
-    return f"{scheme}://127.0.0.1:{matches[0].host_port}"
-
-
-def _generated_output(
-    realization: object, project_dir: Path, provenance: str, output_name: str
-) -> str | None:
-    artifacts = [
-        item
-        for item in getattr(realization, "generated_artifacts", ())
-        if getattr(item, "provenance", None) == provenance
-    ]
-    if len(artifacts) != 1:
-        return None
-    outputs = [
-        item
-        for item in getattr(artifacts[0], "outputs", ())
-        if getattr(item, "name", None) == output_name
-    ]
-    if len(outputs) != 1:
-        return None
-    root = artifact_source_path(project_dir, artifacts[0]).resolve()
-    target = (root / outputs[0].path).resolve()
-    if not target.is_relative_to(root):
-        return None
-    try:
-        value = target.read_text(encoding="utf-8").strip()
-    except OSError:
-        return None
-    return value or None
-
-
-def _content_identities(realization: object) -> dict[str, str] | None:
-    required = {"suricata-config", "suricata-local-rules"}
-    identities: dict[str, str] = {}
-    for placement in getattr(realization, "placements", ()):
-        content = getattr(placement, "content", None)
-        name = getattr(content, "content_name", None)
-        if name not in required:
-            continue
-        artifact_id = getattr(content, "artifact_id", None)
-        digest = getattr(content, "artifact_digest", None)
-        if not isinstance(artifact_id, str) or not isinstance(digest, str):
-            return None
-        identities[name] = f"{artifact_id}@{digest}"
-    return identities if set(identities) == required else None
-
-
-def _webapp_address(realization: object) -> str | None:
-    kali = _node(realization, "kali")
-    webapp = _node(realization, "webapp")
-    if kali is None or webapp is None:
-        return None
-    kali_networks = dict(getattr(kali, "static_address_assignments", ()))
-    web_networks = dict(getattr(webapp, "static_address_assignments", ()))
-    shared = sorted(set(kali_networks) & set(web_networks))
-    return web_networks[shared[0]] if len(shared) == 1 else None
-
-
-def _connector_projection(
-    value: object, *, cortex_context: bool = False
-) -> dict[str, str] | None:
-    if isinstance(value, Mapping):
-        name = str(value.get("name", value.get("service", "")))[:128]
-        status = str(value.get("status", "")).upper()
-        local_context = cortex_context or "cortex" in name.lower()
-        if local_context and status == "OK":
-            return {"name": name or "cortex", "status": "OK"}
-        for key, item in value.items():
-            found = _connector_projection(
-                item,
-                cortex_context=local_context or "cortex" in str(key).lower(),
-            )
-            if found is not None:
-                return found
-    elif isinstance(value, Sequence) and not isinstance(value, str | bytes):
-        for item in value:
-            found = _connector_projection(item, cortex_context=cortex_context)
-            if found is not None:
-                return found
-    return None
-
-
-def _inside_window(value: object, start_iso: str, end_iso: str) -> bool:
-    try:
-        instant = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        start = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
-        end = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
-    except (TypeError, ValueError):
-        return False
-    return start <= instant <= end
+    request_json: Callable[..., object | None] = curl_json
+    now: Callable[[], str] = utc_iso_now
+    sleep: Callable[[float], None] | None = None
 
 
 class TechVaultNativeEvidenceOwner:
@@ -193,28 +80,29 @@ class TechVaultNativeEvidenceOwner:
         project_dir: Path,
         indexer_auth: tuple[str, str],
         thehive_api_key: str,
-        request_json: Callable[..., object | None] = curl_json,
-        now: Callable[[], str] = _iso_now,
-        sleep: Callable[[float], None] | None = None,
+        dependencies: TechVaultNativeDependencies | None = None,
     ) -> None:
+        """Bind trusted operations to one admitted TechVault realization."""
+
+        selected_dependencies = dependencies or TechVaultNativeDependencies()
         self._backend = backend
         self._realization = realization
         self._project_dir = project_dir
         self._indexer_auth = indexer_auth
         self._thehive_api_key = thehive_api_key
-        self._request_json = request_json
-        self._now = now
-        self._sleep = sleep
-        self._cortex_url = _published_url(realization, "cortex", 9001, "http")
-        self._thehive_url = _published_url(realization, "thehive", 9000, "http")
-        self._indexer_url = _published_url(realization, "wazuh-indexer", 9200, "https")
-        self._connector_key = _generated_output(
+        self._request_json = selected_dependencies.request_json
+        self._now = selected_dependencies.now
+        self._sleep = selected_dependencies.sleep
+        self._cortex_url = published_url(realization, "cortex", 9001, "http")
+        self._thehive_url = published_url(realization, "thehive", 9000, "http")
+        self._indexer_url = published_url(realization, "wazuh-indexer", 9200, "https")
+        self._connector_key = generated_output(
             realization,
             project_dir,
             "techvault:cortex-service-credentials/v1",
             "connector-api-key",
         )
-        self._webapp_ip = _webapp_address(realization)
+        self._webapp_ip = webapp_address(realization)
 
     def sources(self) -> dict[str, object]:
         """Return exact registration-id to source bindings."""
@@ -241,18 +129,14 @@ class TechVaultNativeEvidenceOwner:
     def cortex_query(self, start_iso: str, end_iso: str) -> Mapping[str, object] | None:
         """Execute the exact analyzer and read TheHive's native connector status."""
 
-        if (
-            not self._cortex_url
-            or not self._thehive_url
-            or not self._connector_key
-            or not self._thehive_api_key
-        ):
+        prerequisites = self._cortex_prerequisites()
+        if prerequisites is None:
             return None
-        auth = f"Bearer {self._connector_key}"
+        cortex_url, thehive_url, auth = prerequisites
         analyzers = self._request_json(
-            f"{self._cortex_url}/api/analyzer", auth_header=auth, timeout=30
+            f"{cortex_url}/api/analyzer", auth_header=auth, timeout=30
         )
-        if not isinstance(analyzers, list) or not _bounded(analyzers):
+        if not isinstance(analyzers, list) or not bounded(analyzers):
             return None
         selected = [
             item
@@ -261,11 +145,46 @@ class TechVaultNativeEvidenceOwner:
             and item.get("analyzerDefinitionId") == CORTEX_ANALYZER_ID
             and item.get("id")
         ]
+        return self._run_cortex_query(
+            cortex_url,
+            thehive_url,
+            auth,
+            analyzers,
+            selected,
+        )
+
+    def _cortex_prerequisites(self) -> tuple[str, str, str] | None:
+        """Return complete Cortex/TheHive endpoint credentials when available."""
+
+        result = None
+        if (
+            self._cortex_url
+            and self._thehive_url
+            and self._connector_key
+            and self._thehive_api_key
+        ):
+            result = (
+                self._cortex_url,
+                self._thehive_url,
+                f"Bearer {self._connector_key}",
+            )
+        return result
+
+    def _run_cortex_query(
+        self,
+        cortex_url: str,
+        thehive_url: str,
+        auth: str,
+        analyzers: list[object],
+        selected: list[Mapping[str, object]],
+    ) -> Mapping[str, object] | None:
+        """Run the uniquely selected analyzer and project its bounded response."""
+
         if len(selected) != 1:
             return None
         started_at = self._now()
         job = self._request_json(
-            f"{self._cortex_url}/api/analyzer/{selected[0]['id']}/run",
+            f"{cortex_url}/api/analyzer/{selected[0]['id']}/run",
             auth_header=auth,
             body={"data": CORTEX_OBSERVABLE, "dataType": "ip", "tlp": 2, "pap": 2},
             method="POST",
@@ -273,30 +192,61 @@ class TechVaultNativeEvidenceOwner:
         )
         if not isinstance(job, Mapping) or not job.get("id"):
             return None
+        return self._read_cortex_result(
+            cortex_url,
+            thehive_url,
+            auth,
+            analyzers,
+            str(job["id"]),
+            started_at,
+        )
+
+    def _read_cortex_result(
+        self,
+        cortex_url: str,
+        thehive_url: str,
+        auth: str,
+        analyzers: list[object],
+        job_id: str,
+        started_at: str,
+    ) -> Mapping[str, object] | None:
+        """Read and reduce Cortex report plus TheHive connector health."""
+
         report = self._request_json(
-            f"{self._cortex_url}/api/job/{job['id']}/waitreport?atMost=2minute",
+            f"{cortex_url}/api/job/{job_id}/waitreport?atMost=2minute",
             auth_header=auth,
             timeout=150,
         )
         connector = self._request_json(
-            f"{self._thehive_url}/api/v1/status",
+            f"{thehive_url}/api/v1/status",
             auth_header=f"Bearer {self._thehive_api_key}",
             timeout=30,
         )
         finished_at = self._now()
-        if not isinstance(report, Mapping) or not _bounded(report):
+        if not isinstance(report, Mapping) or not bounded(report):
             return None
-        full = (
-            (report.get("report") or {}).get("full")
-            if isinstance(report.get("report"), Mapping)
-            else None
+        return self._project_cortex_result(
+            analyzers, report, connector, started_at, finished_at
         )
+
+    @staticmethod
+    def _project_cortex_result(
+        analyzers: list[object],
+        report: Mapping[str, object],
+        connector: object,
+        started_at: str,
+        finished_at: str,
+    ) -> Mapping[str, object] | None:
+        """Project only evidence-contract fields from native service responses."""
+
+        report_body = report.get("report")
+        full = report_body.get("full") if isinstance(report_body, Mapping) else None
         if isinstance(full, str):
             try:
                 full = json.loads(full)
             except json.JSONDecodeError:
                 return None
-        projected_connector = _connector_projection(connector)
+        projected_connector = connector_projection(connector)
         if not isinstance(full, Mapping) or projected_connector is None:
             return None
         return {
@@ -324,10 +274,10 @@ class TechVaultNativeEvidenceOwner:
     ) -> Mapping[str, object] | None:
         """Join admitted identities with a native configuration/readback probe."""
 
-        node = _node(self._realization, "suricata")
+        node = find_node(self._realization, "suricata")
         image = getattr(node, "image", None) if node is not None else None
         image_ref = getattr(image, "image_ref", None)
-        identities = _content_identities(self._realization)
+        identities = content_identities(self._realization)
         image_digest_read = getattr(self._backend, "container_image_digest", None)
         image_digest = (
             image_digest_read(_SURICATA_CONTAINER)
@@ -348,48 +298,63 @@ class TechVaultNativeEvidenceOwner:
             _SURICATA_READINESS_SCRIPT,
             timeout=120,
         )
-        if result.returncode != 0 or len(result.stdout.encode()) > _MAX_SOURCE_BYTES:
+        if result.returncode != 0 or len(result.stdout.encode()) > MAX_SOURCE_BYTES:
             return None
+        parsed = self._parse_suricata_readiness(result.stdout)
+        outcome = None
+        if parsed is not None:
+            digests, sids = parsed
+            outcome = {
+                "image_ref": image_ref,
+                "image_digest": image_digest,
+                "content_identities": identities,
+                "realized_byte_digests": digests,
+                "native_configuration_ok": True,
+                "selected_sources": ["suricata-builtin", "techvault-local"],
+                "local_sids": sids,
+            }
+        return outcome
+
+    @staticmethod
+    def _parse_suricata_readiness(
+        stdout: str,
+    ) -> tuple[dict[str, str], list[int]] | None:
+        """Parse exact digest and SID lines from the bounded native probe."""
+
         digests: dict[str, str] = {}
         sids: list[int] = []
-        for line in result.stdout.splitlines():
+        valid = True
+        paths = {
+            "/etc/suricata/suricata.yaml": "suricata-config",
+            "/etc/suricata/rules/local.rules": "suricata-local-rules",
+        }
+        for line in stdout.splitlines():
             if line.startswith("sid="):
                 try:
                     sids.append(int(line.removeprefix("sid=")))
                 except ValueError:
-                    return None
+                    valid = False
+                    break
                 continue
             fields = line.split()
-            if len(fields) == 2 and len(fields[0]) == 64:
-                if fields[1] == "/etc/suricata/suricata.yaml":
-                    digests["suricata-config"] = "sha256:" + fields[0]
-                elif fields[1] == "/etc/suricata/rules/local.rules":
-                    digests["suricata-local-rules"] = "sha256:" + fields[0]
-        return {
-            "image_ref": image_ref,
-            "image_digest": image_digest,
-            "content_identities": identities,
-            "realized_byte_digests": digests,
-            "native_configuration_ok": True,
-            "selected_sources": ["suricata-builtin", "techvault-local"],
-            "local_sids": sids,
-        }
+            if len(fields) == 2 and len(fields[0]) == 64 and fields[1] in paths:
+                digests[paths[fields[1]]] = "sha256:" + fields[0]
+        return (digests, sids) if valid else None
 
     def trigger_sqli(self) -> Mapping[str, object] | None:
         """Send one fixed participant-equivalent Kali login probe."""
 
-        if not self._webapp_ip:
-            return None
         execute = getattr(self._backend, "container_exec_with_input", None)
-        if not callable(execute):
+        if not self._webapp_ip or not callable(execute):
             return None
         trigger_id = "aptl-probe-" + secrets.token_hex(8)
         triggered_at = self._now()
         payload = (
             "username=%27+UNION+SELECT+%27"
             + trigger_id
-            + "%27--&password=aptl-observation-probe"
+            + "%27--&password=aptl-observation-probe"  # NOSONAR S2068: fixed probe
         )
+        endpoint = urlunsplit(("http", self._webapp_ip, "/login", "", ""))
         result = execute(
             _KALI_CONTAINER,
             [
@@ -403,7 +368,7 @@ class TechVaultNativeEvidenceOwner:
                 "Content-Type: application/x-www-form-urlencoded",
                 "--data-binary",
                 "@-",
-                f"http://{self._webapp_ip}/login",
+                endpoint,
             ],
             payload,
             timeout=30,
@@ -427,11 +392,11 @@ class TechVaultNativeEvidenceOwner:
 
         result = self._backend.container_exec(
             _SURICATA_CONTAINER,
-            ["tail", "-c", str(_MAX_SOURCE_BYTES + 1), "/var/log/suricata/eve.json"],
+            ["tail", "-c", str(MAX_SOURCE_BYTES + 1), "/var/log/suricata/eve.json"],
             timeout=30,
         )
         raw = result.stdout.encode()
-        if result.returncode != 0 or len(raw) > _MAX_SOURCE_BYTES:
+        if result.returncode != 0 or len(raw) > MAX_SOURCE_BYTES:
             return None
         events: list[Mapping[str, object]] = []
         for line in result.stdout.splitlines():
@@ -444,7 +409,7 @@ class TechVaultNativeEvidenceOwner:
                 isinstance(event, Mapping)
                 and isinstance(alert, Mapping)
                 and alert.get("signature_id") == SURICATA_SQLI_SID
-                and _inside_window(event.get("timestamp"), start_iso, end_iso)
+                and inside_window(event.get("timestamp"), start_iso, end_iso)
             ):
                 events.append(event)
         return events[:256]
@@ -466,19 +431,27 @@ class TechVaultNativeEvidenceOwner:
                             {"term": {"rule.id": WAZUH_SQLI_RULE_ID}},
                             {
                                 "range": {
-                                    "@timestamp": {"gte": start_iso, "lte": end_iso}
+                                    _TIMESTAMP_FIELD: {"gte": start_iso, "lte": end_iso}
                                 }
                             },
                         ]
                     }
                 },
                 "size": 100,
-                "sort": [{"@timestamp": "asc"}],
+                "sort": [{_TIMESTAMP_FIELD: "asc"}],
             },
             insecure=True,
             timeout=30,
         )
-        if not isinstance(response, Mapping) or not _bounded(response):
+        return self._normalize_wazuh_response(response)
+
+    @staticmethod
+    def _normalize_wazuh_response(
+        response: object,
+    ) -> Sequence[Mapping[str, object]] | None:
+        """Reduce a bounded indexer response to its allowlisted hit sources."""
+
+        if not isinstance(response, Mapping) or not bounded(response):
             return None
         hits = (
             (response.get("hits") or {}).get("hits")
@@ -493,9 +466,9 @@ class TechVaultNativeEvidenceOwner:
             if not isinstance(source, Mapping):
                 continue
             item = dict(source)
-            item["timestamp"] = source.get("timestamp", source.get("@timestamp"))
+            item["timestamp"] = source.get("timestamp", source.get(_TIMESTAMP_FIELD))
             normalized.append(item)
         return normalized
 
 
-__all__ = ("TechVaultNativeEvidenceOwner",)
+__all__ = ("TechVaultNativeDependencies", "TechVaultNativeEvidenceOwner")

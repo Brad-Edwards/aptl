@@ -24,19 +24,18 @@
 #
 # Usage:
 #   docs/raes/techvault-curated-live-validation-gate/run-curated-live-proof.sh <catalog-id>
-#   <catalog-id> in: techvault-observability-core | techvault-defensive-min |
-#                    techvault-enterprise-web | techvault-attacker-target
+#   <catalog-id> in: techvault-defensive-min | techvault-enterprise-web |
+#                    techvault-attacker-target
 #
 set -uo pipefail
 
 CATALOG_ID="${1:-}"
 case "$CATALOG_ID" in
-  techvault-observability-core) MATCHED='{}' ;;
   techvault-defensive-min)      MATCHED='{"wazuh":true}' ;;
   techvault-enterprise-web)     MATCHED='{"enterprise":true,"wazuh":true}' ;;
   techvault-attacker-target)    MATCHED='{"kali":true,"victim":true,"wazuh":true}' ;;
   *)
-    echo "usage: $0 <techvault-observability-core|techvault-defensive-min|techvault-enterprise-web|techvault-attacker-target>" >&2
+    echo "usage: $0 <techvault-defensive-min|techvault-enterprise-web|techvault-attacker-target>" >&2
     exit 2 ;;
 esac
 

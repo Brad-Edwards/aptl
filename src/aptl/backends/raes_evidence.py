@@ -33,16 +33,15 @@ def _capture_apparatus(
     """Admit only observers genuinely required by the compiled demands."""
 
     if _TRANSCRIPT_DEMAND_ID not in demand_ids:
-        return ()
+        return tuple()
     provenance = getattr(scenario, "instantiation_provenance", None)
     designation = getattr(scenario, "realization", None)
-    records = (
-        provenance.realization_designations
-        if provenance is not None
-        else designation_records(designation)
-        if designation is not None
-        else ()
-    )
+    if provenance is not None:
+        records = provenance.realization_designations
+    elif designation is not None:
+        records = designation_records(designation)
+    else:
+        records = ()
     resolutions = tuple(
         resolve_realization_designation(records, field_pointer=pointer)
         for pointer in _KALI_CAPTURE_FOOTPRINT
@@ -53,7 +52,8 @@ def _capture_apparatus(
                 diagnostic(
                     "aptl.capture-apparatus.closed-realization-scope",
                     "evidence_requirements.redteam-session-transcript",
-                    "The required session transcript needs an added observer, but its governing realization scope is closed.",
+                    "The required session transcript needs an added observer, "
+                    "but its governing realization scope is closed.",
                 ),
             )
         )

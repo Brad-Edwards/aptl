@@ -49,6 +49,7 @@ from raes_contracts.contracts import (
     ConfigurationTargetRegistryModel,
     LiteralBindingValueModel,
 )
+from raes_contracts.realization_envelope import BackendRealizationEnvelopeModel
 from aptl.backends.raes_artifact_mechanisms import aptl_artifact_mechanisms
 from aptl.backends.identity import APTL_RAES_TARGET_NAME, APTL_RAES_TARGET_VERSION
 from aptl.backends.raes_operating_systems import APTL_OPERATING_SYSTEMS
@@ -464,7 +465,7 @@ def create_aptl_manifest() -> BackendManifest:
     )
 
 
-def create_aptl_realization_envelope():
+def create_aptl_realization_envelope() -> BackendRealizationEnvelopeModel:
     """Return APTL's canonical, digest-validated realization envelope."""
 
     return _REALIZATION_ENVELOPE

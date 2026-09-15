@@ -23,7 +23,8 @@ def test_exact_release_receives_fresh_per_run_ad_flags() -> None:
     first = runtime_parameters_for_bundle(_bundle())
     second = runtime_parameters_for_bundle(_bundle())
 
-    assert first is not None and second is not None
+    assert first is not None
+    assert second is not None
     assert set(first) == {"flag_ad_user", "flag_ad_root"}
     assert first != second
     assert str(first["flag_ad_user"]).startswith("APTL{user_ad_")

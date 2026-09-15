@@ -269,7 +269,7 @@ jobs:
         run: |
           sudo sysctl -w vm.max_map_count=262144
           cd "$RUNNER_TEMP/clean-install/ci-lab"
-          "$RUNNER_TEMP/clean-venv/bin/aptl" lab start --scenario techvault-observability-core
+          "$RUNNER_TEMP/clean-venv/bin/aptl" lab start --scenario techvault-defensive-min
       - name: Stop the lab and remove its volumes
         if: always()
         run: |

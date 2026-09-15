@@ -81,6 +81,38 @@ def _network_ipam_configs(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return configs or [{}]
 
 
+def _kali_capture_active(project_dir: Path) -> bool:
+    """Fail closed when transcript authority state cannot be loaded."""
+
+    try:
+        from aptl.backends.raes_evidence_acquisition import (
+            load_active_transcript_authorities,
+        )
+
+        active = bool(load_active_transcript_authorities(project_dir))
+    except Exception:
+        active = True
+    return active
+
+
+def _read_copied_file(destination: Path, max_bytes: int) -> bytes | None:
+    """Read one regular copied file without following a replacement symlink."""
+
+    payload = None
+    try:
+        with os.fdopen(
+            os.open(destination, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC),
+            "rb",
+        ) as handle:
+            if stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                candidate = handle.read(max_bytes + 1)
+                if len(candidate) <= max_bytes:
+                    payload = candidate
+    except OSError:
+        pass
+    return payload
+
+
 def _network_bridge(
     payload: dict[str, Any],
     options: dict[str, str],
@@ -256,38 +288,27 @@ class ComposeQueryMixin(object):
         return self._run(cmd, timeout=timeout)
 
     def container_shell(self, name: str, *, shell: str | None = None) -> int:
-        if name == "aptl-kali":
-            try:
-                from aptl.backends.raes_evidence_acquisition import (
-                    load_active_transcript_authorities,
-                )
-
-                capture_active = bool(
-                    load_active_transcript_authorities(self._project_dir)
-                )
-            except Exception:
-                capture_active = True
-            if capture_active:
-                log.error(
-                    "Direct Kali container TTY refused while admitted session capture is active"
-                )
-                return 1
-        if shell is not None:
-            return self._run_streaming(["docker", "exec", "-it", name, shell])
-        # Probe non-interactively for bash before launching the TTY,
-        # then run exactly one interactive shell. See ADR-023.
-        probe = self._run(["docker", "exec", name, "/bin/bash", "-c", "true"])
-        chosen, should_run = _select_shell(probe.returncode)
-        if not should_run:
-            log.warning(
-                "container_shell probe of %s failed (exit %d): %s",
-                name,
-                probe.returncode,
-                probe.stderr.strip(),
+        if name == "aptl-kali" and _kali_capture_active(self._project_dir):
+            log.error(
+                "Direct Kali container TTY refused while admitted session capture is active"
             )
-            return probe.returncode
-        if chosen == "/bin/sh":
-            log.info("bash unavailable in %s; using /bin/sh", name)
+            return 1
+        chosen = shell
+        if chosen is None:
+            # Probe non-interactively for bash before launching the TTY,
+            # then run exactly one interactive shell. See ADR-023.
+            probe = self._run(["docker", "exec", name, "/bin/bash", "-c", "true"])
+            chosen, should_run = _select_shell(probe.returncode)
+            if not should_run:
+                log.warning(
+                    "container_shell probe of %s failed (exit %d): %s",
+                    name,
+                    probe.returncode,
+                    probe.stderr.strip(),
+                )
+                return probe.returncode
+            if chosen == "/bin/sh":
+                log.info("bash unavailable in %s; using /bin/sh", name)
         return self._run_streaming(["docker", "exec", "-it", name, chosen])
 
     def container_exec(
@@ -387,20 +408,7 @@ class ComposeQueryMixin(object):
             )
             if result.returncode != 0:
                 return None
-            try:
-                with os.fdopen(
-                    os.open(
-                        destination,
-                        os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC,
-                    ),
-                    "rb",
-                ) as handle:
-                    if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
-                        return None
-                    payload = handle.read(max_bytes + 1)
-            except OSError:
-                return None
-        return payload if len(payload) <= max_bytes else None
+            return _read_copied_file(destination, max_bytes)
 
     def observe_container_listeners(self, name: str) -> ContainerListeners | None:
         """Read identity-bound host kernel tables without adding apparatus.

@@ -530,11 +530,12 @@ def test_active_transcript_authority_rejects_conflicting_binding(tmp_path):
         run_id="run-1",
     )
 
+    conflicting = replace(binding, requirement_id="different-transcript")
     with pytest.raises(ValueError, match="active transcript authority conflict"):
         persist_active_transcript_authority(
             project_dir=tmp_path,
             plan=plan,
-            binding=replace(binding, requirement_id="different-transcript"),
+            binding=conflicting,
             run_store=store,
             run_id="run-1",
         )
@@ -794,7 +795,8 @@ def test_lab_stop_still_tears_down_when_required_transcript_finalization_fails(
 
     result = lab._stop_lab_owned(True, tmp_path, backend)
 
-    assert stopped and stopped[0][1] is True
+    assert stopped
+    assert stopped[0][1] is True
     assert result.success is False
     assert (
         result.error == "aptl.scenario-evidence.required-transcript-finalization-failed"

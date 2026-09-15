@@ -215,7 +215,8 @@ class TestSecretRedaction:
         )
         assert result.disposition is AcquisitionDisposition.INVALIDATED
         assert result.reports[0].status is CollectorStatus.FINALIZATION_FAILURE
-        assert not result.refs and not result.records
+        assert not result.refs
+        assert not result.records
         assert not list((tmp_path / "runs").rglob("*.json"))
         assert _SECRET not in str(result)
 
@@ -256,7 +257,8 @@ class TestSecretRedaction:
         )
         assert result.disposition is AcquisitionDisposition.INVALIDATED
         assert result.reports[0].status is CollectorStatus.TRUNCATION
-        assert not result.records and not result.refs
+        assert not result.records
+        assert not result.refs
 
     def test_control_plane_secret_is_redacted_from_stored_bytes(self, tmp_path):
         store = LocalRunStore(tmp_path / "runs")

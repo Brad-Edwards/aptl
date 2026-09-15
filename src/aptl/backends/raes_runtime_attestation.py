@@ -188,6 +188,8 @@ _TECHVAULT_PROJECTION_DIGESTS: Mapping[tuple[str, str], str] = {
 
 
 def _identified_release(identity: PackIdentity | None) -> bool:
+    """Return whether the bundle is the one attested TechVault release."""
+
     return bool(
         identity is not None
         and identity.pack_id == "techvault"
@@ -197,6 +199,8 @@ def _identified_release(identity: PackIdentity | None) -> bool:
 
 
 def _expected_image_digest(node: NodeRealization) -> str | None:
+    """Read an exact immutable digest from the node's admitted image reference."""
+
     image = getattr(node, "image", None)
     image_ref = getattr(image, "image_ref", None)
     if not isinstance(image_ref, str) or "@" not in image_ref:

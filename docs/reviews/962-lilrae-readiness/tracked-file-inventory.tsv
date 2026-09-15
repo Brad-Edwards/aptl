@@ -1537,6 +1537,7 @@ src/aptl/core/deployment/_compose_observability.py	backend-substrate	Post-baseli
 src/aptl/core/deployment/_cortex_service_credentials.py	backend-substrate	Post-baseline runtime credential delivery; retain with deployment authority
 src/aptl/core/evidence/adapters/techvault.py	scenario-integration-plugin	Selected TechVault evidence integration; generic capture remains backend-owned
 src/aptl/core/evidence/adapters/techvault_native.py	scenario-integration-plugin	Selected TechVault native evidence integration; generic capture remains backend-owned
+src/aptl/core/evidence/adapters/techvault_native_support.py	scenario-integration-plugin	Selected TechVault native evidence support; generic capture remains backend-owned
 src/aptl/core/experiment/capture_plan.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
 src/aptl/core/telemetry_export.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl_techvault/runtime_parameters.py	core-runtime	Retain in APTL core runtime; no migration

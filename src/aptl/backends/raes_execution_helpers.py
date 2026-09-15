@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from raes_runtime.registry import RuntimeTarget
 
@@ -28,12 +28,12 @@ def evaluation_results(
 def interpret_realization(
     target: RuntimeTarget,
     execution_plan: ExecutionPlan,
-) -> tuple[dict[str, Any], list[str], dict[str, Any]]:
+) -> tuple[dict[str, object], list[str], dict[str, object]]:
     """Interpret one provisioning plan into details and backend profiles."""
 
-    details: dict[str, Any] = {}
+    details: dict[str, object] = {}
     profiles: list[str] = []
-    pack_interaction_evidence: dict[str, Any] = {}
+    pack_interaction_evidence: dict[str, object] = {}
     provisioner = target.provisioner
     if isinstance(provisioner, AptlProvisioner):
         realization = provisioner.realize_plan(execution_plan.provisioning)

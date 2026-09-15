@@ -9,7 +9,10 @@ from types import SimpleNamespace
 
 from aptl.core.deployment.realization import DeploymentPublishedPort
 from aptl.core.evidence.adapters.techvault import TECHVAULT_LOCAL_SIDS
-from aptl.core.evidence.adapters.techvault_native import TechVaultNativeEvidenceOwner
+from aptl.core.evidence.adapters.techvault_native import (
+    TechVaultNativeDependencies,
+    TechVaultNativeEvidenceOwner,
+)
 from aptl.core.evidence.outcomes import CollectorStatus
 
 _START = "2026-09-14T10:00:00Z"
@@ -163,9 +166,11 @@ def _owner(tmp_path, backend=None, request_json=_request):
         project_dir=tmp_path,
         indexer_auth=("admin", "password"),
         thehive_api_key="operator-api-key",
-        request_json=request_json,
-        now=lambda: next(times),
-        sleep=lambda _seconds: None,
+        dependencies=TechVaultNativeDependencies(
+            request_json=request_json,
+            now=lambda: next(times),
+            sleep=lambda _seconds: None,
+        ),
     )
 
 
@@ -250,8 +255,10 @@ def test_missing_connector_credential_is_source_unavailable(tmp_path):
         project_dir=tmp_path,
         indexer_auth=("admin", "password"),
         thehive_api_key="operator-api-key",
-        request_json=_request,
-        sleep=lambda _seconds: None,
+        dependencies=TechVaultNativeDependencies(
+            request_json=_request,
+            sleep=lambda _seconds: None,
+        ),
     )
 
     assert owner.cortex_query(_START, _END) is None

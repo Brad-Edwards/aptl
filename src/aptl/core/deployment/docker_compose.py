@@ -295,16 +295,9 @@ class DockerComposeBackend(
             LabResult indicating success or failure.
         """
         root = scenario_root if scenario_root is not None else self._project_dir
-        failure = self._observability_preflight(
-            DeploymentRealizationSpec(profiles=tuple(profiles), nodes=(), networks=()),
-            root,
-        )
+        failure = self._start_preflight(profiles, root)
         if failure is not None:
             return failure
-        if "otel" in profiles:
-            failure = self._observability_ownership_check()
-            if failure is not None:
-                return failure
         build = build and not self._offline_staged
         compose_files = self._start_compose_files(
             build=build, scenario_root=scenario_root
@@ -338,6 +331,17 @@ class DockerComposeBackend(
 
         log.info("Lab started successfully")
         return LabResult(success=True, message="Lab started")
+
+    def _start_preflight(self, profiles: list[str], root: Path) -> LabResult | None:
+        """Run observability configuration and ownership checks before start."""
+
+        failure = self._observability_preflight(
+            DeploymentRealizationSpec(profiles=tuple(profiles), nodes=(), networks=()),
+            root,
+        )
+        if failure is None and "otel" in profiles:
+            failure = self._observability_ownership_check()
+        return failure
 
     def _start_compose_files(
         self, *, build: bool, scenario_root: Path | None = None

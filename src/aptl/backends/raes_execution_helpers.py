@@ -38,9 +38,6 @@ def interpret_realization(
     if isinstance(provisioner, AptlProvisioner):
         realization = provisioner.realize_plan(execution_plan.provisioning)
         details = realization.details()
-        profiles = select_backend_profiles(
-            provisioner.config,
-            realization.profiles,
-        )
+        profiles = provisioner.selected_profiles(realization)
         pack_interaction_evidence = realization.pack_interaction_evidence(profiles)
     return details, profiles, pack_interaction_evidence

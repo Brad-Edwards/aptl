@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import hashlib
 from pathlib import Path, PurePosixPath
 
 from aptl.core.credentials import RENDERED_MANAGER_RELPATH
 from aptl.core.deployment._flag_signing_keys import FLAG_SIGNING_PROFILE_V2
+from aptl.core.deployment._cortex_service_credentials import (
+    CORTEX_SERVICE_CREDENTIALS_PROFILE,
+    CORTEX_SERVICE_CREDENTIALS_ROOT_RELPATH,
+)
 from aptl.core.deployment._compose_stateful_constants import (
     CERTIFICATE_ROOT_RELPATH,
     FLAG_SIGNING_ROOT_RELPATH,
@@ -44,6 +49,7 @@ def stateful_override_payload(
 
     services = wazuh_service_definitions()
     _append_artifact_mounts(services, scenario_root, realization)
+    _append_artifact_environment(services, scenario_root, realization)
     volumes = _append_volume_mounts(services, project_name, realization)
     payload: dict[str, object] = {"services": services}
     if volumes:
@@ -99,9 +105,28 @@ def artifact_source_path(
         relative = Path(SSH_KEY_BUNDLE_ROOT_RELPATH) / artifact.name
     elif provenance == FLAG_SIGNING_PROFILE_V2:
         relative = Path(FLAG_SIGNING_ROOT_RELPATH) / artifact.name
+    elif provenance == CORTEX_SERVICE_CREDENTIALS_PROFILE:
+        relative = Path(CORTEX_SERVICE_CREDENTIALS_ROOT_RELPATH)
     else:
         relative = Path(RENDERED_MANAGER_RELPATH)
     return scenario_root.resolve() / relative
+
+
+def artifact_environment_file_path(
+    scenario_root: Path,
+    artifact: DeploymentGeneratedArtifactRealization,
+    service_name: str,
+) -> Path:
+    """Return a contained opaque path for one generated environment delivery."""
+
+    artifact_key = hashlib.sha256(artifact.address.encode()).hexdigest()[:20]
+    service_key = hashlib.sha256(service_name.encode()).hexdigest()[:20]
+    return (
+        scenario_root.resolve()
+        / ".aptl/realization/generated-environment"
+        / artifact_key
+        / f"{service_key}.env"
+    )
 
 
 def _consumer_output_names(
@@ -121,9 +146,7 @@ def _consumer_output_names(
         names = [name for name in selected if name in by_name]
     else:
         names = [output.name for output in artifact.outputs]
-    return [
-        name for name in names if by_name[name].disposition != "producer_private"
-    ]
+    return [name for name in names if by_name[name].disposition != "producer_private"]
 
 
 def _non_compose_consumer_addresses(
@@ -171,6 +194,35 @@ def _append_artifact_mounts(
                         "read_only": True,
                     }
                 )
+
+
+def _append_artifact_environment(
+    services: dict[str, dict[str, object]],
+    scenario_root: Path,
+    realization: DeploymentRealizationSpec,
+) -> None:
+    """Bind generated secret values through owner-only Compose env files."""
+
+    non_compose = _non_compose_consumer_addresses(realization)
+    for artifact in realization.generated_artifacts:
+        service_names = sorted(
+            {
+                consumer.service_name
+                for consumer in artifact.environment_consumers
+                if consumer.target_address not in non_compose
+            }
+        )
+        for service_name in service_names:
+            service = services.setdefault(service_name, {})
+            env_files = service.setdefault("env_file", [])
+            assert isinstance(env_files, list)
+            env_files.append(
+                str(
+                    artifact_environment_file_path(
+                        scenario_root, artifact, service_name
+                    )
+                )
+            )
 
 
 def _uses_per_output_mounts(
@@ -428,8 +480,7 @@ def _compose_persistent_volumes(
         volume
         for volume in realization.persistent_volumes
         if any(
-            consumer.target_address not in non_compose
-            for consumer in volume.consumers
+            consumer.target_address not in non_compose for consumer in volume.consumers
         )
     ]
 

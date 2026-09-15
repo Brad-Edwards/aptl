@@ -45,6 +45,7 @@ from aptl.backends.raes_artifact_mechanisms import (
     select_route_over_mechanisms,
 )
 from aptl.backends.raes_substrate import realized_substrate_identity
+from aptl.core.deployment.observation import DeploymentObservationContext
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -194,7 +195,9 @@ def authored_source_requirement(source: object) -> ArtifactRequirement | None:
 
     from raes.artifact_requirements import ArtifactRequirement as _Requirement
 
-    authored = source.get("artifact_requirement") if isinstance(source, Mapping) else None
+    authored = (
+        source.get("artifact_requirement") if isinstance(source, Mapping) else None
+    )
     if authored is None:
         return None
     try:
@@ -223,6 +226,7 @@ def satisfactions_for_plan(
     manifest: BackendManifest,
     *,
     requirement_kind: str,
+    observation_context: DeploymentObservationContext | None = None,
 ) -> dict[str, dict[str, object]]:
     """Return the ``artifact_satisfaction`` payload for each realized address.
 
@@ -250,8 +254,12 @@ def satisfactions_for_plan(
         # reads the backing image's manifest digest.
         if route_is_dynamic_composition(route):
             realized = backend.container_image_config_id(container)
+            if realized is None and observation_context is not None:
+                realized = observation_context.completed_image_config_id(container)
         else:
             realized = backend.container_image_digest(container)
+            if realized is None and observation_context is not None:
+                realized = observation_context.completed_image_digest(container)
         if not realized:
             continue
         payload = satisfaction_payload(

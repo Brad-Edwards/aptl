@@ -284,7 +284,7 @@ def test_missing_or_unexpected_runtime_service_fails() -> None:
     [
         (
             "selected_profiles",
-            ["kali", "victim", "wazuh"],
+            ["kali", "victim"],
             "reported selected profiles do not match the admitted profile surface",
         ),
         (

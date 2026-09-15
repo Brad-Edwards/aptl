@@ -73,8 +73,13 @@ def _observe_generated_artifact(
     consumers_mounted = outputs_present and _artifact_consumers_mounted(
         backend, artifact, node_containers, source, image_free_addresses
     )
-    consumers_ready = consumers_mounted and _authenticated_consumers_ready(
-        backend, artifact.consumers
+    environment_delivered = outputs_present and _artifact_environment_delivered(
+        backend, artifact, node_containers, source
+    )
+    consumers_ready = (
+        consumers_mounted
+        and environment_delivered
+        and _authenticated_consumers_ready(backend, artifact.consumers)
     )
     realized = consumers_ready
     evidence = (
@@ -156,7 +161,6 @@ def _observe_persistent_volume(
     )
 
 
-
 def _artifact_evidence(
     backend: "DeploymentBackend",
     realization_root: Path,
@@ -169,6 +173,15 @@ def _artifact_evidence(
         "address": artifact.address,
         "status": "ready",
         "consumer_mounts": _consumer_mount_evidence(artifact.consumers),
+        "environment_bindings": [
+            {
+                "target_address": consumer.target_address,
+                "environment_variable": consumer.environment_variable,
+                "output": consumer.output_name,
+                "status": "present",
+            }
+            for consumer in artifact.environment_consumers
+        ],
     }
     readiness = getattr(backend, "authenticated_readiness", {})
     if isinstance(readiness, Mapping):
@@ -188,6 +201,40 @@ def _artifact_evidence(
         if certificate is not None:
             evidence["certificate"] = certificate
     return evidence
+
+
+def _artifact_environment_delivered(
+    backend: "DeploymentBackend",
+    artifact: DeploymentGeneratedArtifactRealization,
+    node_containers: dict[str, str],
+    source: Path,
+) -> bool:
+    """Verify every generated environment value against daemon readback."""
+
+    outputs = {output.name: source / output.path for output in artifact.outputs}
+    for consumer in artifact.environment_consumers:
+        container = node_containers.get(consumer.target_address)
+        output = outputs.get(consumer.output_name)
+        if not container or output is None:
+            return False
+        try:
+            expected = output.read_text(encoding="utf-8").strip()
+        except OSError:
+            return False
+        if not expected:
+            return False
+        info = _settled_inspect(backend, container)
+        config = info.get("Config") if isinstance(info, Mapping) else None
+        entries = config.get("Env") if isinstance(config, Mapping) else None
+        realized: dict[str, str] = {}
+        if isinstance(entries, list):
+            for entry in entries:
+                if isinstance(entry, str) and "=" in entry:
+                    name, _, value = entry.partition("=")
+                    realized[name] = value
+        if realized.get(consumer.environment_variable) != expected:
+            return False
+    return True
 
 
 def _certificate_evidence(

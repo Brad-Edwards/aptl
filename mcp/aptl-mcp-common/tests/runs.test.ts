@@ -133,6 +133,27 @@ describe('createPtyTeeWriter', () => {
   // `setTimeout` race produces both flaky failures and false
   // passes under CI load.
 
+  it('creates the expected-session census entry before any output arrives', () => {
+    const tid = 'a'.repeat(32);
+    writeFileSync(
+      join(tmp, 'trace-context.json'),
+      JSON.stringify({ trace_id: tid, span_id: 'b'.repeat(16) }),
+    );
+
+    createPtyTeeWriter('silent-session', env);
+
+    const file = join(
+      tmp,
+      'runs',
+      tid,
+      'mcp-side',
+      'sessions',
+      'silent-session.jsonl',
+    );
+    expect(existsSync(file)).toBe(true);
+    expect(readFileSync(file, 'utf-8')).toBe('');
+  });
+
   it('appends one JSONL line per chunk to mcp-side/sessions/<session>.jsonl', async () => {
     const tid = 'a'.repeat(32);
     writeFileSync(

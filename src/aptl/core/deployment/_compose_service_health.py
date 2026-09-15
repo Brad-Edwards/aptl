@@ -48,6 +48,16 @@ REALIZATION_HEALTH_TIMEOUT = 900
 REALIZATION_HEALTH_INTERVAL = 5
 
 
+def runtime_expects_completion(runtime: object) -> bool:
+    """Return whether the declared runtime is a run-to-completion container."""
+
+    container = getattr(runtime, "container", None) if runtime is not None else None
+    value = getattr(container, "autoremove", None) if container is not None else None
+    if isinstance(value, bool):
+        return value
+    return isinstance(value, str) and value.strip().lower() in {"true", "1", "yes"}
+
+
 def container_health(info: dict[str, Any]) -> str:
     """Return a container's observed health, or ``""`` when it has no healthcheck.
 
@@ -73,9 +83,30 @@ def container_running(info: dict[str, Any]) -> bool:
     return bool(state.get("Running")) if isinstance(state, dict) else False
 
 
-def container_settled(info: dict[str, Any]) -> bool:
+def container_completed_successfully(info: dict[str, Any]) -> bool:
+    """Return whether a declared run-once container exited successfully."""
+
+    state = info.get("State")
+    if not isinstance(state, dict) or state.get("Running") is True:
+        return False
+    exit_code = state.get("ExitCode")
+    return bool(
+        state.get("Status") == "exited"
+        and isinstance(exit_code, int)
+        and not isinstance(exit_code, bool)
+        and exit_code == 0
+    )
+
+
+def container_settled(
+    info: dict[str, Any],
+    *,
+    expect_completion: bool = False,
+) -> bool:
     """Return whether a container has reached its final, realized state."""
 
+    if expect_completion:
+        return container_completed_successfully(info)
     if not container_running(info):
         return False
     health = container_health(info)
@@ -85,14 +116,25 @@ def container_settled(info: dict[str, Any]) -> bool:
 def unhealthy_container_reasons(
     backend: "DeploymentBackend",
     container_names: Sequence[str],
+    *,
+    completed_container_names: Sequence[str] = (),
 ) -> list[str]:
     """Return one operator-facing reason per container that is not realized."""
 
     reasons: list[str] = []
-    for name in container_names:
+    completed = frozenset(completed_container_names)
+    for name in (*container_names, *completed_container_names):
         info = backend.container_inspect(name)
         if not info:
             reasons.append(f"container {name!r} was never created")
+        elif name in completed and not container_completed_successfully(info):
+            state = info.get("State")
+            status = state.get("Status") if isinstance(state, dict) else None
+            exit_code = state.get("ExitCode") if isinstance(state, dict) else None
+            if status == "exited" and isinstance(exit_code, int):
+                reasons.append(f"container {name!r} exited with code {exit_code}")
+            else:
+                reasons.append(f"container {name!r} has not completed successfully")
         elif not container_running(info):
             reasons.append(f"container {name!r} is not running")
         else:
@@ -109,6 +151,7 @@ def wait_for_realized_health(
     backend: "DeploymentBackend",
     container_names: Sequence[str],
     *,
+    completed_container_names: Sequence[str] = (),
     timeout: int = REALIZATION_HEALTH_TIMEOUT,
     interval: int = REALIZATION_HEALTH_INTERVAL,
     time_source: Callable[[], float] = time.monotonic,
@@ -123,8 +166,11 @@ def wait_for_realized_health(
     realized.
     """
 
-    names = [name for name in container_names if name]
-    if not names:
+    completed = [name for name in completed_container_names if name]
+    completed_set = frozenset(completed)
+    names = [name for name in container_names if name and name not in completed_set]
+    all_names = [*names, *completed]
+    if not all_names:
         return []
 
     # `compose up` has already returned, so every service it was asked to start
@@ -134,7 +180,7 @@ def wait_for_realized_health(
     # yet to settle.
     missing = [
         f"container {name!r} was never created"
-        for name in names
+        for name in all_names
         if not backend.container_inspect(name)
     ]
     if missing:
@@ -142,7 +188,8 @@ def wait_for_realized_health(
 
     return _await_all_settled(
         backend,
-        names,
+        all_names,
+        completed_container_names=completed,
         timeout=timeout,
         interval=interval,
         time_source=time_source,
@@ -154,6 +201,7 @@ def _await_all_settled(
     backend: "DeploymentBackend",
     names: Sequence[str],
     *,
+    completed_container_names: Sequence[str],
     timeout: int,
     interval: int,
     time_source: Callable[[], float],
@@ -161,10 +209,16 @@ def _await_all_settled(
 ) -> list[str]:
     """Poll existing containers until all settle; return reasons on timeout."""
 
+    completed = frozenset(completed_container_names)
+
     def all_settled() -> bool:
         """Return whether every awaited container is running and healthy."""
         return all(
-            container_settled(backend.container_inspect(name)) for name in names
+            container_settled(
+                backend.container_inspect(name),
+                expect_completion=name in completed,
+            )
+            for name in names
         )
 
     result = wait_for_service(
@@ -177,7 +231,11 @@ def _await_all_settled(
     )
     if result.ready:
         return []
-    reasons = unhealthy_container_reasons(backend, names) or [
+    reasons = unhealthy_container_reasons(
+        backend,
+        [name for name in names if name not in completed],
+        completed_container_names=completed_container_names,
+    ) or [
         f"realized services did not become healthy within {timeout}s",
     ]
     log.warning(

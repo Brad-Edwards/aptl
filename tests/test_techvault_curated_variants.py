@@ -61,7 +61,7 @@ class _Variant:
     catalog_id: str
     filename: str
     config: AptlConfig
-    # Content-derived realization profiles (otel is the always-on core profile).
+    # Content-derived scenario-serving profiles. Backend apparatus is separate.
     expected_profiles: frozenset[str]
 
     @property
@@ -71,28 +71,22 @@ class _Variant:
 
 VARIANTS = (
     _Variant(
-        catalog_id="techvault-observability-core",
-        filename="techvault-observability-core.sdl.yaml",
-        config=_config(),
-        expected_profiles=frozenset({"otel"}),
-    ),
-    _Variant(
         catalog_id="techvault-enterprise-web",
         filename="techvault-enterprise-web.sdl.yaml",
         config=_config("enterprise", "wazuh"),
-        expected_profiles=frozenset({"enterprise", "wazuh", "otel"}),
+        expected_profiles=frozenset({"enterprise", "wazuh"}),
     ),
     _Variant(
         catalog_id="techvault-defensive-min",
         filename="techvault-defensive-min.sdl.yaml",
         config=_config("wazuh"),
-        expected_profiles=frozenset({"wazuh", "otel"}),
+        expected_profiles=frozenset({"wazuh"}),
     ),
     _Variant(
         catalog_id="techvault-attacker-target",
         filename="techvault-attacker-target.sdl.yaml",
         config=_config("kali", "victim", "wazuh"),
-        expected_profiles=frozenset({"kali", "victim", "wazuh", "otel"}),
+        expected_profiles=frozenset({"kali", "victim", "wazuh"}),
     ),
 )
 
@@ -146,7 +140,9 @@ def test_variant_selected_profiles_form_valid_compose_project(variant: _Variant)
         select_backend_profiles(variant.config, frozenset(details.get("profiles", [])))
     )
     gaps = index.cross_profile_dependency_gaps(selected)
-    assert gaps == {}, f"{variant.catalog_id} selects an invalid compose project: {gaps}"
+    assert gaps == {}, (
+        f"{variant.catalog_id} selects an invalid compose project: {gaps}"
+    )
 
 
 @pytest.mark.parametrize("variant", VARIANTS, ids=lambda v: v.catalog_id)
@@ -180,7 +176,9 @@ def test_variant_selection_is_content_driven_not_name_driven(variant: _Variant):
     """Renaming the scenario must not change the realized profile set."""
     text = variant.path.read_text(encoding="utf-8")
     original = parse_sdl(text)
-    renamed = parse_sdl(text.replace("name: " + _scenario_name(text), "name: renamed-x", 1))
+    renamed = parse_sdl(
+        text.replace("name: " + _scenario_name(text), "name: renamed-x", 1)
+    )
 
     original_details, original_check = check_provisioning_realization(
         scenario=original, project_dir=PROJECT_ROOT, config=variant.config

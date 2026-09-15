@@ -15,14 +15,24 @@ from aptl.core.correlation.clock import FixedClockProvider
 from aptl.core.evidence.coordinator import acquire_evidence
 from aptl.core.evidence.outcomes import AcquisitionDisposition, CollectorStatus
 from aptl.core.evidence.protocol import CollectorOutcome, RunScope
-from aptl.core.experiment.capture_registry import CaptureBinding, CaptureLimits, CaptureVisibility
+from aptl.core.experiment.capture_registry import (
+    CaptureBinding,
+    CaptureLimits,
+    CaptureVisibility,
+)
 from aptl.core.runstore import LocalRunStore
 
 _CLOCK = FixedClockProvider(measurement_time="2026-07-20T00:00:00Z")
 _SCOPE = RunScope(run_id="run-1", planned_trial_id="trial-1", attempt_id="attempt-1")
 
 
-def _binding(*, requirement_id="req-a", registration_id="aptl.collector.a", max_bytes=4096, **overrides) -> CaptureBinding:
+def _binding(
+    *,
+    requirement_id="req-a",
+    registration_id="aptl.collector.a",
+    max_bytes=4096,
+    **overrides,
+) -> CaptureBinding:
     """Build a representative pinned binding for the coordinator tests."""
     fields: dict[str, object] = {
         "capture_spec_id": "cap-1",
@@ -45,13 +55,17 @@ def _binding(*, requirement_id="req-a", registration_id="aptl.collector.a", max_
         "retention_policy": "retain",
         "loss_disclosure_required": True,
         "visibility_class": CaptureVisibility.EVALUATOR_ONLY,
-        "limits": CaptureLimits(max_bytes=max_bytes, max_artifact_count=10, max_duration_s=60),
+        "limits": CaptureLimits(
+            max_bytes=max_bytes, max_artifact_count=10, max_duration_s=60
+        ),
     }
     fields.update(overrides)
     return CaptureBinding(**fields)
 
 
-def _ok_outcome(payload: bytes = b'{"event": 1}', *, count: int = 1) -> CollectorOutcome:
+def _ok_outcome(
+    payload: bytes = b'{"event": 1}', *, count: int = 1
+) -> CollectorOutcome:
     """A successful JSON capture outcome."""
     return CollectorOutcome(
         status=CollectorStatus.OK,
@@ -66,7 +80,15 @@ def _ok_outcome(payload: bytes = b'{"event": 1}', *, count: int = 1) -> Collecto
 class _FakeCollector:
     """A fake collector recording start/stop order, with configurable behavior."""
 
-    def __init__(self, registration_id, *, outcome=None, start_raises=False, stop_raises=False, log=None):
+    def __init__(
+        self,
+        registration_id,
+        *,
+        outcome=None,
+        start_raises=False,
+        stop_raises=False,
+        log=None,
+    ):
         self._registration_id = registration_id
         self._outcome = outcome if outcome is not None else _ok_outcome()
         self._start_raises = start_raises
@@ -106,7 +128,11 @@ def _acquire(tmp_path, bindings, collectors, **kwargs):
 class TestSuccessPath:
     def test_all_ok_is_sealed_ready_with_records_and_refs(self, tmp_path):
         binding = _binding()
-        result = _acquire(tmp_path, [binding], {"aptl.collector.a": _FakeCollector("aptl.collector.a")})
+        result = _acquire(
+            tmp_path,
+            [binding],
+            {"aptl.collector.a": _FakeCollector("aptl.collector.a")},
+        )
 
         assert result.disposition is AcquisitionDisposition.SEALED_READY
         assert len(result.records) == 1
@@ -137,15 +163,128 @@ class TestSuccessPath:
             chunks=[b"[]"],
             media_type="application/json",
         )
-        result = _acquire(tmp_path, [binding], {"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome=outcome)})
+        result = _acquire(
+            tmp_path,
+            [binding],
+            {"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome=outcome)},
+        )
         assert result.disposition is AcquisitionDisposition.SEALED_READY
 
 
 class TestTerminalSemantics:
+    @pytest.mark.parametrize("failure", ["missing", "mismatch", "startup"])
+    def test_one_unavailable_required_capture_prevents_participant_execution(
+        self, tmp_path, failure
+    ):
+        log = []
+        first = _binding(requirement_id="first", registration_id="aptl.collector.first")
+        second = _binding(
+            requirement_id="second", registration_id="aptl.collector.second"
+        )
+        collectors = {
+            first.registration_id: _FakeCollector(first.registration_id, log=log)
+        }
+        if failure != "missing":
+            collectors[second.registration_id] = _FakeCollector(
+                "wrong-registration"
+                if failure == "mismatch"
+                else second.registration_id,
+                start_raises=failure == "startup",
+                log=log,
+            )
+        result = _acquire(
+            tmp_path,
+            [first, second],
+            collectors,
+            trial_body=lambda: log.append(("participant", "executed")),
+        )
+        assert ("participant", "executed") not in log
+        assert result.disposition is AcquisitionDisposition.INCONCLUSIVE
+        if failure == "startup":
+            assert ("stop", first.registration_id) in log
+        else:
+            assert (
+                log == []
+            )  # Resolve the entire capture set before starting any observer.
+
+    def test_interrupt_still_stops_every_started_collector(self, tmp_path):
+        log = []
+        binding = _binding()
+
+        def interrupted():
+            raise KeyboardInterrupt
+
+        with pytest.raises(KeyboardInterrupt):
+            _acquire(
+                tmp_path,
+                [binding],
+                {
+                    binding.registration_id: _FakeCollector(
+                        binding.registration_id, log=log
+                    )
+                },
+                trial_body=interrupted,
+            )
+        assert log == [
+            ("start", binding.registration_id),
+            ("stop", binding.registration_id),
+        ]
+
+    def test_no_capture_obligations_does_not_suppress_participant_execution(
+        self, tmp_path
+    ):
+        log = []
+        result = _acquire(tmp_path, [], {}, trial_body=lambda: log.append("executed"))
+        assert log == ["executed"]
+        assert result.disposition is AcquisitionDisposition.SEALED_READY
+
+    @pytest.mark.parametrize("phase", ["start", "stop"])
+    def test_interrupted_collector_does_not_skip_other_collector_cleanup(
+        self, tmp_path, phase
+    ):
+        log = []
+        first = _binding(requirement_id="first", registration_id="aptl.collector.first")
+        second = _binding(
+            requirement_id="second", registration_id="aptl.collector.second"
+        )
+
+        class InterruptingCollector(_FakeCollector):
+            def start(self, context):
+                handle = super().start(context)
+                if phase == "start":
+                    raise KeyboardInterrupt
+                return handle
+
+            def stop(self, handle):
+                super().stop(handle)
+                raise KeyboardInterrupt
+
+        with pytest.raises(KeyboardInterrupt):
+            _acquire(
+                tmp_path,
+                [first, second],
+                {
+                    first.registration_id: _FakeCollector(
+                        first.registration_id, log=log
+                    ),
+                    second.registration_id: InterruptingCollector(
+                        second.registration_id, log=log
+                    ),
+                },
+            )
+        assert ("stop", first.registration_id) in log
+        if phase == "stop":
+            assert log[-2:] == [
+                ("stop", second.registration_id),
+                ("stop", first.registration_id),
+            ]
+
     def test_startup_failure_is_inconclusive(self, tmp_path):
         binding = _binding()
         result = _acquire(
-            tmp_path, [binding], {"aptl.collector.a": _FakeCollector("aptl.collector.a", start_raises=True)}
+            tmp_path,
+            [binding],
+            {"aptl.collector.a": _FakeCollector("aptl.collector.a", start_raises=True)},
         )
         assert result.disposition is AcquisitionDisposition.INCONCLUSIVE
         assert result.reports[0].status is CollectorStatus.STARTUP_FAILURE
@@ -153,7 +292,9 @@ class TestTerminalSemantics:
     def test_finalization_failure_invalidates_a_required_capture(self, tmp_path):
         binding = _binding()
         result = _acquire(
-            tmp_path, [binding], {"aptl.collector.a": _FakeCollector("aptl.collector.a", stop_raises=True)}
+            tmp_path,
+            [binding],
+            {"aptl.collector.a": _FakeCollector("aptl.collector.a", stop_raises=True)},
         )
         assert result.disposition is AcquisitionDisposition.INVALIDATED
         assert result.reports[0].status is CollectorStatus.FINALIZATION_FAILURE
@@ -167,17 +308,31 @@ class TestTerminalSemantics:
 
     def test_over_quota_truncation_invalidates_a_required_capture(self, tmp_path):
         binding = _binding(max_bytes=4)  # smaller than the payload
-        result = _acquire(tmp_path, [binding], {"aptl.collector.a": _FakeCollector("aptl.collector.a")})
+        result = _acquire(
+            tmp_path,
+            [binding],
+            {"aptl.collector.a": _FakeCollector("aptl.collector.a")},
+        )
         assert result.reports[0].status is CollectorStatus.TRUNCATION
         assert result.disposition is AcquisitionDisposition.INVALIDATED
 
     def test_accepted_degradation_truncation_is_completed_partial(self, tmp_path):
-        binding = _binding(max_bytes=4, accepted_limitation="partial-window", comparability_disclosure_ref="disc:1")
-        result = _acquire(tmp_path, [binding], {"aptl.collector.a": _FakeCollector("aptl.collector.a")})
+        binding = _binding(
+            max_bytes=4,
+            accepted_limitation="partial-window",
+            comparability_disclosure_ref="disc:1",
+        )
+        result = _acquire(
+            tmp_path,
+            [binding],
+            {"aptl.collector.a": _FakeCollector("aptl.collector.a")},
+        )
         assert result.reports[0].status is CollectorStatus.TRUNCATION
         assert result.disposition is AcquisitionDisposition.COMPLETED_PARTIAL
-        # The evidence record still exists, with a mandatory loss disclosure.
-        assert result.records[0].raw_content.loss_disclosure is not None
+        # A truncated structured document cannot be safely redacted. Disclose
+        # the loss, but do not manufacture evidence or retain a raw fragment.
+        assert result.records == ()
+        assert result.diagnostics[0].code == "aptl.experiment-capture.truncation"
 
 
 class TestReverseOrderStop:
@@ -201,7 +356,11 @@ class TestRegistrationMismatch:
     def test_a_collector_whose_id_mismatches_the_binding_is_rejected(self, tmp_path):
         binding = _binding(registration_id="aptl.collector.a")
         # Wired under the right key but reporting a different id.
-        result = _acquire(tmp_path, [binding], {"aptl.collector.a": _FakeCollector("aptl.collector.WRONG")})
+        result = _acquire(
+            tmp_path,
+            [binding],
+            {"aptl.collector.a": _FakeCollector("aptl.collector.WRONG")},
+        )
         assert result.disposition is AcquisitionDisposition.INCONCLUSIVE
         assert any("registration-mismatch" in d.code for d in result.diagnostics)
 
@@ -215,40 +374,81 @@ class TestLimitEnforcement:
     def test_mid_run_dropped_events_downgrade_to_loss_and_invalidate(self, tmp_path):
         binding = _binding()
         outcome = CollectorOutcome(
-            status=CollectorStatus.OK, started_at="2026-07-20T00:00:00Z", finished_at="2026-07-20T00:00:00Z",
-            chunks=[b'{"e": 1}'], media_type="application/json", event_count=1, dropped_count=3,
+            status=CollectorStatus.OK,
+            started_at="2026-07-20T00:00:00Z",
+            finished_at="2026-07-20T00:00:00Z",
+            chunks=[b'{"e": 1}'],
+            media_type="application/json",
+            event_count=1,
+            dropped_count=3,
         )
-        result = _acquire(tmp_path, [binding], {"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome=outcome)})
+        result = _acquire(
+            tmp_path,
+            [binding],
+            {"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome=outcome)},
+        )
         # A positive dropped_count is never silently OK / seal-ready.
         assert result.reports[0].status is CollectorStatus.MID_RUN_LOSS
         assert result.disposition is AcquisitionDisposition.INVALIDATED
 
     def test_over_artifact_count_is_truncation(self, tmp_path):
-        binding = _binding(limits=CaptureLimits(max_bytes=8192, max_artifact_count=1, max_duration_s=60))
-        outcome = CollectorOutcome(
-            status=CollectorStatus.OK, started_at="2026-07-20T00:00:00Z", finished_at="2026-07-20T00:00:00Z",
-            chunks=[b'[{"e":1},{"e":2},{"e":3}]'], media_type="application/json", event_count=3,
+        binding = _binding(
+            limits=CaptureLimits(
+                max_bytes=8192, max_artifact_count=1, max_duration_s=60
+            )
         )
-        result = _acquire(tmp_path, [binding], {"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome=outcome)})
+        outcome = CollectorOutcome(
+            status=CollectorStatus.OK,
+            started_at="2026-07-20T00:00:00Z",
+            finished_at="2026-07-20T00:00:00Z",
+            chunks=[b'[{"e":1},{"e":2},{"e":3}]'],
+            media_type="application/json",
+            event_count=3,
+        )
+        result = _acquire(
+            tmp_path,
+            [binding],
+            {"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome=outcome)},
+        )
         assert result.reports[0].status is CollectorStatus.TRUNCATION
         assert result.disposition is AcquisitionDisposition.INVALIDATED
 
     def test_over_duration_is_timeout(self, tmp_path):
-        binding = _binding(limits=CaptureLimits(max_bytes=8192, max_artifact_count=10, max_duration_s=1))
+        binding = _binding(
+            limits=CaptureLimits(
+                max_bytes=8192, max_artifact_count=10, max_duration_s=1
+            )
+        )
         # The outcome's own start/finish span 5s, exceeding the 1s admitted duration.
         outcome = CollectorOutcome(
-            status=CollectorStatus.OK, started_at="2026-07-20T00:00:00Z", finished_at="2026-07-20T00:00:05Z",
-            chunks=[b'{"e": 1}'], media_type="application/json", event_count=1,
+            status=CollectorStatus.OK,
+            started_at="2026-07-20T00:00:00Z",
+            finished_at="2026-07-20T00:00:05Z",
+            chunks=[b'{"e": 1}'],
+            media_type="application/json",
+            event_count=1,
         )
-        result = _acquire(tmp_path, [binding], {"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome=outcome)})
+        result = _acquire(
+            tmp_path,
+            [binding],
+            {"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome=outcome)},
+        )
         assert result.reports[0].status is CollectorStatus.TIMEOUT
         assert result.disposition is AcquisitionDisposition.INVALIDATED
 
 
 class TestBindingKeyIsCaptureSpecScoped:
     def test_two_specs_sharing_a_requirement_id_do_not_collide(self, tmp_path):
-        b1 = _binding(capture_spec_id="cap-1", requirement_id="shared", registration_id="aptl.collector.a")
-        b2 = _binding(capture_spec_id="cap-2", requirement_id="shared", registration_id="aptl.collector.b")
+        b1 = _binding(
+            capture_spec_id="cap-1",
+            requirement_id="shared",
+            registration_id="aptl.collector.a",
+        )
+        b2 = _binding(
+            capture_spec_id="cap-2",
+            requirement_id="shared",
+            registration_id="aptl.collector.b",
+        )
         collectors = {
             "aptl.collector.a": _FakeCollector("aptl.collector.a"),
             "aptl.collector.b": _FakeCollector("aptl.collector.b"),
@@ -271,7 +471,9 @@ class TestTrialBodyLifecycle:
         called = []
         binding = _binding()
         _acquire(
-            tmp_path, [binding], {"aptl.collector.a": _FakeCollector("aptl.collector.a")},
+            tmp_path,
+            [binding],
+            {"aptl.collector.a": _FakeCollector("aptl.collector.a")},
             trial_body=lambda: called.append("ran"),
         )
         assert called == ["ran"]
@@ -283,13 +485,18 @@ class TestTrialBodyLifecycle:
         _acquire(tmp_path, [binding], {}, trial_body=lambda: called.append("ran"))
         assert called == []
 
-    def test_a_raising_trial_body_still_runs_cleanup_and_captures_evidence(self, tmp_path):
+    def test_a_raising_trial_body_still_runs_cleanup_and_captures_evidence(
+        self, tmp_path
+    ):
         def _boom():
             raise RuntimeError("trial failed")
 
         binding = _binding()
         result = _acquire(
-            tmp_path, [binding], {"aptl.collector.a": _FakeCollector("aptl.collector.a")}, trial_body=_boom
+            tmp_path,
+            [binding],
+            {"aptl.collector.a": _FakeCollector("aptl.collector.a")},
+            trial_body=_boom,
         )
         # The raise is swallowed; the collector is still stopped and its evidence captured.
         assert len(result.records) == 1
@@ -300,10 +507,18 @@ class TestMediaTypeCheck:
     def test_unexpected_media_type_is_a_loss_and_invalidates(self, tmp_path):
         binding = _binding()  # expects application/json
         outcome = CollectorOutcome(
-            status=CollectorStatus.OK, started_at="2026-07-20T00:00:00Z", finished_at="2026-07-20T00:00:00Z",
-            chunks=[b"plain text"], media_type="text/plain", event_count=1,
+            status=CollectorStatus.OK,
+            started_at="2026-07-20T00:00:00Z",
+            finished_at="2026-07-20T00:00:00Z",
+            chunks=[b"plain text"],
+            media_type="text/plain",
+            event_count=1,
         )
-        result = _acquire(tmp_path, [binding], {"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome=outcome)})
+        result = _acquire(
+            tmp_path,
+            [binding],
+            {"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome=outcome)},
+        )
         assert result.reports[0].status is CollectorStatus.MID_RUN_LOSS
         assert any("media-type-mismatch" in d.code for d in result.diagnostics)
         assert result.disposition is AcquisitionDisposition.INVALIDATED

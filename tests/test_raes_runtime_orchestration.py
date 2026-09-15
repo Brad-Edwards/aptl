@@ -142,6 +142,17 @@ def test_same_node_authority_join_and_child_closure_are_preserved() -> None:
     )
 
 
+def test_omitted_host_source_uses_the_admitted_local_docker_endpoint() -> None:
+    runtime = _runtime().model_copy(deep=True)
+    runtime.local_control_interfaces[0].bind_source = ""
+
+    node = _spec(runtime).nodes[0]
+    admission = admit_docker_authorities((node,))[0]
+
+    assert admission.endpoint_source == "/var/run/docker.sock"
+    assert admission.endpoint_target == "/var/run/docker.sock"
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -290,7 +301,9 @@ def test_an_authority_without_children_is_still_admitted_with_its_controls() -> 
 
     payload = _runtime().model_dump(mode="json")
     payload["orchestration_authorities"][0]["realized_children"] = []
-    node = replace(_spec().nodes[0], runtime=RuntimeConfiguration.model_validate(payload))
+    node = replace(
+        _spec().nodes[0], runtime=RuntimeConfiguration.model_validate(payload)
+    )
 
     admissions = admit_docker_authorities((node,))
 
@@ -398,7 +411,9 @@ def test_owned_host_ports_are_read_from_this_project_only(tmp_path) -> None:
         '{"53/udp":[{"HostIp":"127.0.0.1","HostPort":"5353"}]}\n'
     )
     backend, calls = _ports_backend(
-        tmp_path, _completed(stdout="abc123\ndef456\n"), _completed(stdout=inspect_output)
+        tmp_path,
+        _completed(stdout="abc123\ndef456\n"),
+        _completed(stdout=inspect_output),
     )
 
     owned = backend._published_host_ports()
@@ -448,7 +463,9 @@ def test_an_all_interfaces_publish_satisfies_a_loopback_declaration(tmp_path) ->
         (_completed(stdout="abc123\n"), _completed(stdout='["not","a","map"]\n')),
         (
             _completed(stdout="abc123\n"),
-            _completed(stdout='{"80/tcp":[{"HostIp":"127.0.0.1","HostPort":"nope"}]}\n'),
+            _completed(
+                stdout='{"80/tcp":[{"HostIp":"127.0.0.1","HostPort":"nope"}]}\n'
+            ),
         ),
     ],
 )
@@ -481,9 +498,7 @@ def test_a_foreign_holder_of_a_declared_port_still_refuses_the_start(tmp_path) -
         networks=(),
         published_ports=(DeploymentPublishedPort(container_port=80, host_port=8099),),
     )
-    spec = DeploymentRealizationSpec(
-        profiles=(), nodes=(node,), networks=(), images=()
-    )
+    spec = DeploymentRealizationSpec(profiles=(), nodes=(node,), networks=(), images=())
     backend = DockerComposeBackend(tmp_path)
     # Nothing of ours publishes it, and the probe finds it taken.
     backend._run = lambda cmd, *, timeout=None: _completed()
@@ -973,9 +988,7 @@ def test_authority_attestation_survives_a_holder_without_a_docker_cli(
     assert backend._runtime_authority_matches("aptl-orborus", admission)
 
     backend.container_exec = MagicMock(
-        return_value=subprocess.CompletedProcess(
-            [], 0, stdout="daemon-b\n", stderr=""
-        )
+        return_value=subprocess.CompletedProcess([], 0, stdout="daemon-b\n", stderr="")
     )
     assert not backend._runtime_authority_matches("aptl-orborus", admission)
 

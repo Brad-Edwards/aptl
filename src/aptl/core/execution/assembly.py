@@ -31,7 +31,9 @@ from raes_contracts.contracts import (
     ExperimentTaskModel,
     ParticipantImplementationProvenanceModel,
 )
-from raes_contracts.contracts.experiment_capture import ExperimentRawEvidenceContentModel
+from raes_contracts.contracts.experiment_capture import (
+    ExperimentRawEvidenceContentModel,
+)
 from raes_contracts.contracts.experiment_manifest_references import (
     ExperimentEvidenceSatisfactionReferenceModel,
     ExperimentRunEvidenceArtifactReferenceModel,
@@ -98,7 +100,9 @@ class TrialOutcome:
     """What the injected workload returns for one executed trial."""
 
     signal: TrialTerminalSignal
-    result_summaries: Mapping[str, ExperimentResultSummaryModel] = field(default_factory=dict)
+    result_summaries: Mapping[str, ExperimentResultSummaryModel] = field(
+        default_factory=dict
+    )
     evaluator_outcome: str | None = None
     deviations: tuple[str, ...] = ()
     invalidation_reason: str | None = None
@@ -194,7 +198,11 @@ def write_lifecycle_evidence(
     }
     blob = rfc8785.dumps(payload)
     insertion = create_content_addressed(
-        store, attempt_id, [blob], subdir=_LIFECYCLE_SUBDIR, max_bytes=_LIFECYCLE_MAX_BYTES
+        store,
+        attempt_id,
+        [blob],
+        subdir=_LIFECYCLE_SUBDIR,
+        max_bytes=_LIFECYCLE_MAX_BYTES,
     )
     digest_hex = hashlib.sha256(blob).hexdigest()
     artifact = ExperimentArtifactRefModel(
@@ -224,6 +232,7 @@ def write_lifecycle_evidence(
         run_ref=ExperimentReferenceModel(ref_kind="run", ref_id=attempt_id),
         source_refs=[ExperimentReferenceModel(ref_kind="backend", ref_id="aptl")],
         evidence_kind="log",
+        output_contract="aptl.lifecycle-attestation/v1",
         captured_at=ended_at,
         capture_window_ref="attempt",
         raw_content=ExperimentRawEvidenceContentModel(artifact_ref=artifact),
@@ -231,7 +240,9 @@ def write_lifecycle_evidence(
         redaction_state="none",
     )
     sealed_spec = SealedArtifactSpec.from_artifact_ref(
-        run_relative_path=insertion.relative_path, artifact_ref=artifact, role="lifecycle"
+        run_relative_path=insertion.relative_path,
+        artifact_ref=artifact,
+        role="lifecycle",
     )
     # Persist the evidence RECORD too (not only its content blob), so the
     # record the run traceability references is itself in the sealed byte
@@ -244,7 +255,10 @@ def write_lifecycle_evidence(
         path=record_relpath, media_type=_JSON_MEDIA_TYPE, role="evidence-record"
     )
     return _LifecycleEvidence(
-        artifact=artifact, record=record, sealed_spec=sealed_spec, record_spec=record_spec
+        artifact=artifact,
+        record=record,
+        sealed_spec=sealed_spec,
+        record_spec=record_spec,
     )
 
 
@@ -345,10 +359,17 @@ def assemble_context(
     ended_at = inputs.ended_at
 
     lifecycle = write_lifecycle_evidence(
-        store, attempt_id=attempt_id, scope=scope, resolution=resolution, ended_at=ended_at
+        store,
+        attempt_id=attempt_id,
+        scope=scope,
+        resolution=resolution,
+        ended_at=ended_at,
     )
 
-    evidence_artifacts = (lifecycle.artifact, *evidence_artifacts_from_acquisition(acquisition))
+    evidence_artifacts = (
+        lifecycle.artifact,
+        *evidence_artifacts_from_acquisition(acquisition),
+    )
     # Seal every referenced evidence record AND its content blob: the
     # lifecycle attestation (blob + record) plus each acquisition blob and
     # its persisted record ledger. The traceability names these records, so

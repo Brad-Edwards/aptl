@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -30,6 +31,16 @@ AclProtocol = Literal["any", "tcp", "udp", "icmp"]
 # port on the operator's LAN (ADR-034 Host Exposure Amendment); an author who
 # wants that must say so with an explicit host_ip.
 LOOPBACK_HOST_IP = "127.0.0.1"
+_ENVIRONMENT_VARIABLE_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def valid_environment_variable_name(value: object) -> bool:
+    """Return whether ``value`` is a conventional, env-file-safe name."""
+
+    return (
+        isinstance(value, str)
+        and _ENVIRONMENT_VARIABLE_NAME.fullmatch(value) is not None
+    )
 
 
 @dataclass(frozen=True)
@@ -377,6 +388,27 @@ class DeploymentGeneratedArtifactOutput(object):
 
 
 @dataclass(frozen=True)
+class DeploymentGeneratedArtifactEnvironmentConsumer(object):
+    """One declared generated-output to container-environment delivery."""
+
+    target_address: str
+    node_name: str
+    service_name: str
+    output_name: str
+    environment_variable: str
+    delivery_mode: str = "environment"
+
+    def details(self) -> dict[str, object]:
+        return {
+            "node": self.node_name,
+            "target_address": self.target_address,
+            "delivery_mode": self.delivery_mode,
+            "output": self.output_name,
+            "environment_variable": self.environment_variable,
+        }
+
+
+@dataclass(frozen=True)
 class DeploymentGeneratedArtifactRealization(object):
     """One RAES generated-artifact operation admitted for deployment."""
 
@@ -387,6 +419,9 @@ class DeploymentGeneratedArtifactRealization(object):
     provenance: str
     outputs: tuple[DeploymentGeneratedArtifactOutput, ...]
     consumers: tuple[DeploymentStatefulConsumer, ...]
+    environment_consumers: tuple[
+        DeploymentGeneratedArtifactEnvironmentConsumer, ...
+    ] = ()
     ordering_dependencies: tuple[str, ...] = ()
     refresh_dependencies: tuple[str, ...] = ()
 
@@ -399,6 +434,9 @@ class DeploymentGeneratedArtifactRealization(object):
             "provenance": self.provenance,
             "outputs": [output.details() for output in self.outputs],
             "consumers": [consumer.details() for consumer in self.consumers],
+            "environment_consumers": [
+                consumer.details() for consumer in self.environment_consumers
+            ],
             "ordering_dependencies": list(self.ordering_dependencies),
             "refresh_dependencies": list(self.refresh_dependencies),
         }
@@ -429,6 +467,30 @@ class DeploymentPersistentVolumeRealization(object):
 
 
 @dataclass(frozen=True)
+class DeploymentCaptureApparatus(object):
+    """One scope-admitted backend observer that deployment must realize."""
+
+    apparatus_id: str
+    service_name: str
+    container_name: str
+    target_refs: tuple[str, ...]
+    governing_scopes: tuple[str, ...]
+    environment_visible: bool
+    observer_effects: tuple[str, ...]
+
+    def details(self) -> dict[str, object]:
+        return {
+            "apparatus_id": self.apparatus_id,
+            "service_name": self.service_name,
+            "container_name": self.container_name,
+            "target_refs": list(self.target_refs),
+            "governing_scopes": list(self.governing_scopes),
+            "environment_visible": self.environment_visible,
+            "observer_effects": list(self.observer_effects),
+        }
+
+
+@dataclass(frozen=True)
 class DeploymentRealizationSpec(object):
     """Portable input for typed deployment backend realization."""
 
@@ -445,6 +507,7 @@ class DeploymentRealizationSpec(object):
     ] = ()
     generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
     persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()
+    capture_apparatus: tuple[DeploymentCaptureApparatus, ...] = ()
     # ADR-048 image-free materialization is no longer a whole-spec flag: routing
     # is derived per node at realize() time (``_needs_compose`` /
     # ``_image_free_node_addresses``) so a graph that mixes pinned artifacts,

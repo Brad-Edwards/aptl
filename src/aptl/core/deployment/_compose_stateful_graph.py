@@ -11,6 +11,9 @@ from aptl.core.deployment._compose_stateful_constants import (
     WAZUH_CERT_PROFILES,
 )
 from aptl.core.deployment._flag_signing_keys import FLAG_SIGNING_PROFILE_V2
+from aptl.core.deployment._cortex_service_credentials import (
+    CORTEX_SERVICE_CREDENTIALS_PROFILE,
+)
 from aptl.core.deployment._wazuh_identity import wazuh_cluster_identity
 
 # Certificate-bundle provenances APTL can realize: the in-tree provenance file
@@ -114,7 +117,8 @@ def _artifact_errors(realization: DeploymentRealizationSpec) -> list[str]:
             )
         if (
             artifact.generator == "rendered_config"
-            and artifact.provenance != FLAG_SIGNING_PROFILE_V2
+            and artifact.provenance
+            not in {FLAG_SIGNING_PROFILE_V2, CORTEX_SERVICE_CREDENTIALS_PROFILE}
             and len(artifact.outputs) != 1
         ):
             # The wazuh manager config renders a single file; the flag-signing
@@ -125,6 +129,13 @@ def _artifact_errors(realization: DeploymentRealizationSpec) -> list[str]:
         if any(consumer.access_mode != "read_only" for consumer in artifact.consumers):
             errors.append(
                 f"Generated artifact {artifact.address} must be mounted read-only."
+            )
+        if (
+            artifact.environment_consumers
+            and artifact.provenance != CORTEX_SERVICE_CREDENTIALS_PROFILE
+        ):
+            errors.append(
+                f"Generated artifact {artifact.address} has unsupported environment delivery."
             )
         if any(not _safe_relative(output.path) for output in artifact.outputs):
             errors.append(

@@ -175,7 +175,8 @@ def _selection_boundary_challenge(
     return _rejected_admission_check(
         context,
         challenge_id,
-        status is not None and status.state is OperationState.FAILED,
+        not admission.receipt.accepted
+        or (status is not None and status.state is OperationState.FAILED),
     )
 
 
@@ -338,6 +339,7 @@ def _replay_challenge(
         first_evidence_count,
         identical,
         identical_status,
+        conflicting,
         conflicting_status,
         final_evidence_count,
     )
@@ -362,6 +364,7 @@ def _replay_was_bounded(
     first_evidence_count: int,
     identical: object,
     identical_status: object,
+    conflicting: object,
     conflicting_status: object,
     final_evidence_count: int,
 ) -> bool:
@@ -370,10 +373,12 @@ def _replay_was_bounded(
     first_succeeded = getattr(first_status, "state", None) is OperationState.SUCCEEDED
     same_operation = (
         identical.receipt.operation_id == first.receipt.operation_id
+        or not identical.receipt.accepted
         or getattr(identical_status, "state", None) is OperationState.FAILED
     )
     conflict_failed = (
-        getattr(conflicting_status, "state", None) is OperationState.FAILED
+        not conflicting.receipt.accepted
+        or getattr(conflicting_status, "state", None) is OperationState.FAILED
     )
     return (
         first_succeeded

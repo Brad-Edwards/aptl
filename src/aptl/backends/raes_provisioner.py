@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from raes_contracts.diagnostics import Diagnostic
-from raes_contracts.planning import ProvisioningPlan
-from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot
+from raes_contracts.planning import ProvisioningPlan, RuntimeDomain
+from raes_contracts.realization_structure import validate_realization_value
+from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot, SnapshotEntry
 
 from aptl.backends.raes_diagnostics import (
     PROVISIONING_ADDRESS,
@@ -23,8 +25,16 @@ from aptl.backends.raes_artifact_mechanisms import (
 )
 from aptl.backends.raes_artifact_satisfaction import satisfactions_for_plan
 from aptl.backends.raes_content_satisfaction import content_satisfactions_for_plan
-from aptl.backends.raes_manifest import create_aptl_manifest
-from aptl.backends.raes_observation import observation_evidence, observe_realization
+from aptl.backends.raes_manifest import (
+    create_aptl_manifest,
+    create_aptl_realization_envelope,
+)
+from aptl.backends.raes_observability_scope import ObservabilityScopeDecision
+from aptl.backends.raes_observation import (
+    observation_evidence,
+    observe_realization,
+    operational_realization_observations,
+)
 from aptl.backends.raes_realization import (
     AptlRealization,
     interpret_provisioning_plan,
@@ -34,6 +44,12 @@ from aptl.backends.raes_profiles import (
     select_backend_profiles,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.experiment.capture_plan import CapturePlan, empty_capture_plan
+from aptl.core.deployment.realization import (
+    DeploymentCaptureApparatus,
+    DeploymentRealizationSpec,
+)
+from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
@@ -41,6 +57,70 @@ if TYPE_CHECKING:
 
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.scenario_bundle import ScenarioBundle
+
+
+_MAX_APPLY_DETAILS_BYTES = 65_536
+
+
+def _compact_realization_details(realization: AptlRealization) -> dict[str, object]:
+    """Return identities/counts; complete realized state lives in the snapshot."""
+
+    full = realization.details()
+    return {
+        "profiles": full["profiles"],
+        "resource_counts": full["resource_counts"],
+        "nodes": [
+            {
+                "address": node.address,
+                "name": node.name,
+                "backend_services": list(node.backend_services),
+                "container_name": node.container_name,
+                "profiles": list(node.profiles),
+            }
+            for node in realization.nodes
+        ],
+        "networks": [network.details() for network in realization.networks],
+        "placements": [
+            {
+                "address": placement.address,
+                "resource_type": placement.resource_type,
+                "target_address": placement.target_address,
+            }
+            for placement in realization.placements
+        ],
+        "generated_artifacts": [
+            {"address": artifact.address}
+            for artifact in realization.generated_artifacts
+        ],
+        "persistent_volumes": [
+            {"address": volume.address} for volume in realization.persistent_volumes
+        ],
+    }
+
+
+def _bounded_apply_details(
+    details: dict[str, object], realization: AptlRealization
+) -> dict[str, object]:
+    """Keep RAES ApplyResult details finite without losing observer additions."""
+
+    try:
+        serialized_size = len(json.dumps(details, allow_nan=False).encode("utf-8"))
+    except (TypeError, ValueError):
+        serialized_size = _MAX_APPLY_DETAILS_BYTES + 1
+    if (
+        serialized_size <= _MAX_APPLY_DETAILS_BYTES
+        and validate_realization_value(details).conformant
+    ):
+        return details
+
+    compact = {**details, "realization": _compact_realization_details(realization)}
+    evidence = compact.get("observation_evidence")
+    if isinstance(evidence, dict):
+        compact["observation_evidence"] = {
+            "projection": "runtime-snapshot",
+            "record_count": len(evidence),
+        }
+    return compact
 
 
 @dataclass
@@ -67,6 +147,10 @@ class AptlProvisioner(object):
     # exact id rather than resolving the mutable tag a second time at apply
     # (issue #876 cycle-6 review). None for a scenario with no artifact demand.
     artifact_availability: ArtifactAvailabilityContext | None = None
+    capture_plan: CapturePlan = field(default_factory=empty_capture_plan)
+    observability_scope: ObservabilityScopeDecision = field(
+        default_factory=ObservabilityScopeDecision
+    )
     _cached_plan: object | None = field(default=None, init=False, repr=False)
     _cached_realization: AptlRealization | None = field(
         default=None, init=False, repr=False
@@ -113,7 +197,9 @@ class AptlProvisioner(object):
                     success=False,
                     snapshot=working_snapshot,
                     diagnostics=diagnostics,
-                    details={"realization": realization.details()},
+                    details=_bounded_apply_details(
+                        {"realization": realization.details()}, realization
+                    ),
                 )
         self.last_failure_diagnostics = (
             () if result.success else tuple(result.diagnostics)
@@ -133,10 +219,13 @@ class AptlProvisioner(object):
             success=False,
             snapshot=snapshot,
             diagnostics=diagnostics,
-            details={
-                "profiles": selected_profiles,
-                "realization": realization.details(),
-            },
+            details=_bounded_apply_details(
+                {
+                    "profiles": selected_profiles,
+                    "realization": realization.details(),
+                },
+                realization,
+            ),
         )
 
     def _lowered_spec(
@@ -145,7 +234,7 @@ class AptlProvisioner(object):
         diagnostics: list[Diagnostic],
         selected_profiles: list[str],
         realization: AptlRealization,
-    ) -> tuple[object | None, ApplyResult | None]:
+    ) -> tuple[DeploymentRealizationSpec | None, ApplyResult | None]:
         """Return the lowered deployment spec, or the failure preventing one."""
 
         validity_diagnostics = self._compose_validity_diagnostics(selected_profiles)
@@ -155,7 +244,21 @@ class AptlProvisioner(object):
                 snapshot, diagnostics, selected_profiles, realization
             )
         try:
-            return realization.deployment_spec(selected_profiles), None
+            return realization.deployment_spec(
+                selected_profiles,
+                capture_apparatus=tuple(
+                    DeploymentCaptureApparatus(
+                        apparatus_id=item.apparatus_id,
+                        service_name=item.service_name,
+                        container_name=item.container_name,
+                        target_refs=item.target_refs,
+                        governing_scopes=item.governing_scopes,
+                        environment_visible=item.environment_visible,
+                        observer_effects=item.observer_effects,
+                    )
+                    for item in self.capture_plan.apparatus
+                ),
+            ), None
         # Lowering reports an unrealizable graph by raising with a stable code
         # in the message. RAES's backend-call boundary turns any ValueError or
         # TypeError out of apply into the fixed text "Backend could not
@@ -182,16 +285,18 @@ class AptlProvisioner(object):
         realization: AptlRealization,
     ) -> ApplyResult:
         """Apply a validated RAES plan to the deployment backend."""
-        selected_profiles = select_backend_profiles(self.config, realization.profiles)
+        selected_profiles = self.selected_profiles(realization)
         deployment_spec, failure = self._lowered_spec(
             snapshot, diagnostics, selected_profiles, realization
         )
         if failure is not None:
             return failure
+        observation_context = DeploymentObservationContext()
         start_result = self.deployment_backend.realize(
             deployment_spec,
             scenario_root=self.bundle.root,
             substrate_digests=self._availability_substrate_digests(),
+            observation_context=observation_context,
         )
         if not start_result.success:
             diagnostics.append(
@@ -199,6 +304,18 @@ class AptlProvisioner(object):
                     "aptl.provisioner.backend-start-failed",
                     PROVISIONING_ADDRESS,
                     start_result.error or "APTL deployment backend failed.",
+                )
+            )
+            return self._failed_apply(
+                snapshot, diagnostics, selected_profiles, realization
+            )
+        apparatus_observations = self._capture_apparatus_observations(deployment_spec)
+        if apparatus_observations is None:
+            diagnostics.append(
+                diagnostic(
+                    "aptl.capture-apparatus.realization-unverified",
+                    PROVISIONING_ADDRESS,
+                    "Required capture apparatus could not be verified after realization.",
                 )
             )
             return self._failed_apply(
@@ -213,20 +330,100 @@ class AptlProvisioner(object):
             realization,
             plan,
             scenario_root=self.bundle.root,
+            observation_context=observation_context,
         )
         realized_snapshot = self._with_artifact_satisfactions(
-            plan, snapshot_after_apply(plan, snapshot, observations), realization
+            plan,
+            snapshot_after_apply(plan, snapshot, observations),
+            realization,
+            observation_context,
+        )
+        realized_snapshot = self._with_capture_apparatus_entries(
+            realized_snapshot, apparatus_observations
+        )
+        realization_envelope = create_aptl_realization_envelope()
+        realized_snapshot = replace(
+            realized_snapshot,
+            realization_envelope=realization_envelope.identity,
+        )
+        operational_observations = operational_realization_observations(
+            plan=plan,
+            observations=observations,
+            envelope=realization_envelope,
+            previous=snapshot.realization_observations,
         )
         return ApplyResult(
             success=True,
             snapshot=realized_snapshot,
             diagnostics=diagnostics,
-            changed_addresses=realized_changed_addresses(plan, realized_snapshot),
-            details={
-                "profiles": selected_profiles,
-                "realization": realization.details(),
-                "observation_evidence": observation_evidence(observations),
-            },
+            changed_addresses=[
+                *realized_changed_addresses(plan, realized_snapshot),
+                *(entry["runtime_address"] for entry in apparatus_observations),
+            ],
+            details=_bounded_apply_details(
+                {
+                    "profiles": selected_profiles,
+                    "realization": realization.details(),
+                    "observation_evidence": observation_evidence(observations),
+                    "observability": {
+                        "enabled": self.observability_scope.enabled,
+                        "reason": self.observability_scope.reason,
+                        "governing_scopes": list(
+                            self.observability_scope.governing_scopes
+                        ),
+                    },
+                    "capture_apparatus": list(apparatus_observations),
+                },
+                realization,
+            ),
+            operational_realization_observations=operational_observations,
+        )
+
+    def _capture_apparatus_observations(
+        self, deployment_spec: DeploymentRealizationSpec
+    ) -> tuple[dict[str, object], ...] | None:
+        """Read back the actual added observer set from the deployment owner."""
+
+        if not deployment_spec.capture_apparatus:
+            return ()
+        observe = getattr(self.deployment_backend, "observe_capture_apparatus", None)
+        if not callable(observe):
+            return None
+        result = observe(deployment_spec)
+        if result is None or len(result) != len(deployment_spec.capture_apparatus):
+            return None
+        return tuple(
+            {
+                **item,
+                "runtime_address": "apparatus.capture.kali-session-capture",
+            }
+            for item in result
+        )
+
+    @staticmethod
+    def _with_capture_apparatus_entries(
+        snapshot: RuntimeSnapshot,
+        observations: tuple[dict[str, object], ...],
+    ) -> RuntimeSnapshot:
+        """Report every actual observability addition in portable runtime state."""
+
+        if not observations:
+            return snapshot
+        entries = dict(snapshot.entries)
+        for observation in observations:
+            address = str(observation["runtime_address"])
+            entries[address] = SnapshotEntry(
+                address=address,
+                domain=RuntimeDomain.PROVISIONING,
+                resource_type="capture-apparatus",
+                payload=dict(observation),
+            )
+        return snapshot.with_entries(entries)
+
+    def selected_profiles(self, realization: AptlRealization) -> list[str]:
+        """Apply the admitted scope decision to the ordinary backend profiles."""
+        return self.observability_scope.select_profiles(
+            select_backend_profiles(self.config, realization.profiles)
         )
 
     def _availability_substrate_digests(self) -> dict[str, str]:
@@ -265,6 +462,7 @@ class AptlProvisioner(object):
         plan: ProvisioningPlan,
         realized: RuntimeSnapshot,
         realization: AptlRealization,
+        observation_context: DeploymentObservationContext,
     ) -> RuntimeSnapshot:
         """Attach artifact satisfaction disclosures to the realized snapshot.
 
@@ -301,6 +499,7 @@ class AptlProvisioner(object):
                 self.deployment_backend,
                 manifest,
                 requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
+                observation_context=observation_context,
             ),
             **content_satisfactions_for_plan(
                 plan,

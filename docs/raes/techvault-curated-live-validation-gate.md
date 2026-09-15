@@ -1,5 +1,11 @@
 # TechVault curated live validation gate
 
+> Historical evidence notice: these 2026-06-24/25 records predate issue #992.
+> OTel and Kali capture are now backend apparatus, the observability-only SDL
+> variant has been retired, and current TechVault native evidence does not
+> admit the optional OTel stack. The rows below remain immutable historical
+> evidence and are not a current startup contract.
+
 This gate live-proves the small curated RAES startup variants from
 [curated variants](../sdl/techvault-curated-variants.md). The
 [static validation gate](techvault-static-validation-gate.md) and

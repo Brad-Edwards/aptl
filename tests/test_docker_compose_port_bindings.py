@@ -7,9 +7,9 @@ operator's LAN. Deliberate attack-surface services (the enterprise victim
 targets) must stay published on all interfaces so the in-range red team can
 reach them.
 
-This test parses ``docker-compose.yml`` and pins both halves of that boundary,
-so a future edit cannot silently re-expose a SOC management port nor
-accidentally loopback-bind a victim target.
+This test parses the base and backend-observability Compose assets and pins both
+halves of that boundary, so a future edit cannot silently re-expose a SOC
+management port nor accidentally loopback-bind a victim target.
 """
 
 import re
@@ -32,6 +32,7 @@ def _resolve_compose_vars(text: str) -> str:
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PATH = PROJECT_ROOT / "docker-compose.yml"
+OBSERVABILITY_COMPOSE_PATH = PROJECT_ROOT / "docker-compose.observability.yml"
 
 # SOC / control-plane management surfaces that MUST bind loopback only.
 # Each entry is (service_name, host_port) for every host-published port.
@@ -100,7 +101,12 @@ def _parse_port(entry) -> tuple[str | None, int | None, str]:
 
 @pytest.fixture(scope="module")
 def compose() -> dict:
-    return yaml.safe_load(COMPOSE_PATH.read_text(encoding="utf-8"))
+    base = yaml.safe_load(COMPOSE_PATH.read_text(encoding="utf-8"))
+    observability = yaml.safe_load(
+        OBSERVABILITY_COMPOSE_PATH.read_text(encoding="utf-8")
+    )
+    base["services"].update(observability.get("services", {}))
+    return base
 
 
 def _published_for(compose: dict, service: str, host_port: int):

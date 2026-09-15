@@ -17,9 +17,8 @@ from raes_contracts.runtime_state import (
 from raes_contracts.vocabulary import ObservationStrength
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 
-_FORWARDING_AGENTS_PATH = CONCERN_PAYLOAD_PATH["forwarding-agents"]
-
 from aptl.backends.raes_observation import ObservedResource
+from aptl.backends.raes_planning_compat import DAEMON_READBACK_RUNTIME_CONCERNS
 from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
 
@@ -38,6 +37,22 @@ SUPPORTED_RESOURCE_TYPES = frozenset(
         "generated-artifact",
         "persistent-volume",
     }
+)
+
+_GUEST_READBACK_RUNTIME_CONCERNS = frozenset(
+    {
+        "process-resource-limits",
+        "runtime-dependency-manifests",
+        "runtime-filesystem-inventory",
+        "runtime-local-identity",
+        "runtime-packages",
+        "runtime-service-manager-units",
+    }
+)
+_RUNTIME_READBACK_CONCERNS = (
+    DAEMON_READBACK_RUNTIME_CONCERNS
+    | _GUEST_READBACK_RUNTIME_CONCERNS
+    | {"forwarding-agents"}
 )
 
 
@@ -172,31 +187,38 @@ def _realization_observation_disclosures(
 ) -> tuple[RealizationObservationDisclosure, ...]:
     """Disclose how APTL corroborated each realized ``configuration``-scope concern.
 
-    raes 3.3.0's runtime gate accepts an EXACT concern with a non-null
+    RAES's runtime gate accepts a concern with a non-null
     verification scope only when the returned snapshot carries a matching
-    observation disclosure whose scope + strength the backend manifest also
-    declares. Today that is forwarding-agents: for every node whose forwarding
-    agents the observer corroborated (present in its observed concerns), disclose
-    that APTL read them back at ``configuration`` scope, ``daemon-observed``
-    strength — the same corroboration the manifest advertises, so the claim is
-    backed by real readback rather than a bare capability assertion.
+    observation disclosure whose scope and strength the backend manifest also
+    declares. Disclose only a concern present in the actual observation map;
+    absence therefore still fails closed instead of turning a capability claim
+    into evidence.
     """
 
     disclosures: list[RealizationObservationDisclosure] = []
     for address, observed in observations.items():
-        if _FORWARDING_AGENTS_PATH not in observed.concerns:
-            continue
         node_name = address.removeprefix("provision.node.")
-        disclosures.append(
-            RealizationObservationDisclosure(
-                address=address,
-                field_path=f"nodes.{node_name}.runtime.forwarding_agents",
-                domain="runtime-realization",
-                requirement_kind="forwarding-agents",
-                verification_scope=RealizationVerificationScope.CONFIGURATION,
-                observation_strength=ObservationStrength.DAEMON_OBSERVED,
-            )
-        )
+        for kinds, strength in (
+            (
+                DAEMON_READBACK_RUNTIME_CONCERNS | {"forwarding-agents"},
+                ObservationStrength.DAEMON_OBSERVED,
+            ),
+            (_GUEST_READBACK_RUNTIME_CONCERNS, ObservationStrength.GUEST_OBSERVED),
+        ):
+            for kind in sorted(kinds):
+                path = CONCERN_PAYLOAD_PATH[kind]
+                if path not in observed.concerns:
+                    continue
+                disclosures.append(
+                    RealizationObservationDisclosure(
+                        address=address,
+                        field_path=f"nodes.{node_name}." + ".".join(path[2:]),
+                        domain="runtime-realization",
+                        requirement_kind=kind,
+                        verification_scope=RealizationVerificationScope.CONFIGURATION,
+                        observation_strength=strength,
+                    )
+                )
     return tuple(disclosures)
 
 
@@ -241,12 +263,7 @@ def _observed_payload(
             # raes 3.1.0 per-node runtime realization concerns (#876): observed
             # off the realized container and written at their nested payload
             # paths, or removed so an unrealized EXACT declaration is rejected.
-            "runtime-environment",
-            "runtime-mounts",
-            "linux-capabilities",
-            "published-ports",
-            "forwarding-agents",
-            "service-listeners",
+            *sorted(_RUNTIME_READBACK_CONCERNS),
         ),
         # ADR-088 (#889): a content-placement carrying a service materialization
         # exposes the service-search-index-schema-materialization concern, which
@@ -267,9 +284,7 @@ def _observed_payload(
     return payload
 
 
-def _set_path(
-    payload: dict[str, object], path: tuple[str, ...], value: object
-) -> None:
+def _set_path(payload: dict[str, object], path: tuple[str, ...], value: object) -> None:
     """Set a nested concern value, building intermediate mappings as needed."""
 
     current = payload

@@ -134,15 +134,15 @@ Scenarios are [Reproducible Agentic Environments SDL](docs/sdl/index.md) documen
 
 The SDL language and the reusable environment-pack format live in the RAES companion repositories—[OpenRAE/rae](https://github.com/OpenRAE/rae) (SDL and semantics) and [OpenRAE/env-packs](https://github.com/OpenRAE/env-packs) (pack definitions, templates, schemas, and authoring support). APTL consumes those definitions and realizes them as a running Docker lab; the lab lifecycle and runtime stay APTL-owned.
 
-The APTL startup catalog ships the operational default plus four curated slices:
+The default comes from the installed TechVault environment pack. The APTL
+catalog also ships three curated slices:
 
 | Scenario id | Boots | Omits |
 |---|---|---|
-| `techvault-operational` | TechVault enterprise, Kali, SOC, and observability (default) | Mail and reverse engineering |
-| `techvault-attacker-target` | Kali + one monitored victim + Wazuh core + observability | Enterprise web tier, wider SOC stack |
-| `techvault-enterprise-web` | Vulnerable webapp + DB + AD + Wazuh core + observability | Red-team apparatus, wider SOC stack |
-| `techvault-defensive-min` | Wazuh manager / indexer / dashboard + observability | Attacker and enterprise components, wider SOC stack |
-| `techvault-observability-core` | OTEL collector + Tempo + Grafana | Everything else—the smallest bounded surface |
+| installed `techvault` pack | TechVault enterprise, Kali, and SOC (default) | Optional backend OTel stack when native evidence is sufficient |
+| `techvault-attacker-target` | Kali + one monitored victim + Wazuh core | Enterprise web tier, wider SOC stack, backend apparatus |
+| `techvault-enterprise-web` | Vulnerable webapp + DB + AD + Wazuh core | Red-team apparatus, wider SOC stack, backend apparatus |
+| `techvault-defensive-min` | Wazuh manager / indexer / dashboard | Attacker and enterprise components, wider SOC stack, backend apparatus |
 
 Authoring and selection details: [SDL Reference](docs/sdl/index.md) · [Curated TechVault Variants](docs/sdl/techvault-curated-variants.md).
 

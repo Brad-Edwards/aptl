@@ -1,7 +1,7 @@
 """The scenario states where detection telemetry comes from and where it goes (#866).
 
 Declaring containers proves the range exists. It does not say that Suricata's EVE
-output is what the Wazuh sidecar tails, that the sidecar ships to the manager, or
+output is what its in-node Wazuh agent tails, that the agent ships to the manager, or
 that MISP intelligence becomes live Suricata rules. Those facts are what make
 TechVault a *purple-team* range rather than a set of processes, and RAES has typed
 surfaces for all of them (ADR-040/042/044/050).
@@ -29,17 +29,16 @@ def _runtime(scenario: dict, node: str) -> dict:
     return scenario["nodes"][node].get("runtime") or {}
 
 
-def test_suricata_eve_output_is_the_file_the_sidecar_tails(scenario):
+def test_suricata_eve_output_is_the_file_its_forwarder_tails(scenario):
     """The detection-to-SIEM hand-off is one declared path, stated on both ends."""
 
     engine = _runtime(scenario, "suricata")["network_detection_engines"][0]
     eve = next(s for s in engine["output_streams"] if s["format"] == "eve_json")
 
-    agent = _runtime(scenario, "wazuh-sidecar-suricata")["forwarding_agents"][0]
+    agent = _runtime(scenario, "suricata")["forwarding_agents"][0]
     tailed = next(s for s in agent["sources"] if s["kind"] == "tailed_path")
 
-    # Both sides name the same file, each through its own mount of the shared
-    # suricata_logs volume: /var/log/suricata for the writer, /logs for the reader.
+    # The engine and its in-node forwarder name the same EVE file.
     assert eve["path"].endswith("/eve.json")
     assert tailed["location"].endswith("/eve.json")
     assert tailed["parse_format"] == "eve_json"
@@ -48,7 +47,7 @@ def test_suricata_eve_output_is_the_file_the_sidecar_tails(scenario):
 def test_both_wazuh_agents_ship_to_the_declared_manager(scenario):
     """A forwarder that ships nowhere is not a telemetry path."""
 
-    for node in ("wazuh-sidecar-suricata", "wazuh-sidecar-db"):
+    for node in ("suricata", "db"):
         agent = _runtime(scenario, node)["forwarding_agents"][0]
         assert agent["agent_kind"] == "log_forwarder"
         targets = agent["ship_targets"]
@@ -73,7 +72,7 @@ def test_the_manager_ingestion_port_is_a_listener_it_actually_declares(scenario)
     }
     shipped_ports = {
         target["ingestion_port"]
-        for node in ("wazuh-sidecar-suricata", "wazuh-sidecar-db")
+        for node in ("suricata", "db")
         for target in _runtime(scenario, node)["forwarding_agents"][0]["ship_targets"]
     }
 
@@ -89,7 +88,10 @@ def test_misp_intelligence_becomes_loadable_suricata_content(scenario):
     assert any(t["kind"] == "ioc_to_rule" for t in sync["transforms"])
 
     reload_channel = sync["reload_channels"][0]
-    assert reload_channel["target_ref"] == "suricata"
+    assert reload_channel["target_ref"] == (
+        "nodes.suricata.runtime.network_detection_engines."
+        "suricata-engine.control_channels.command-socket"
+    )
 
     # The engine must actually consume what the sync writes, and say so.
     engine = _runtime(scenario, "suricata")["network_detection_engines"][0]

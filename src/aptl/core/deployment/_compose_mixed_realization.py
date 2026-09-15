@@ -16,6 +16,7 @@ from aptl.core.deployment._compose_runtime_orchestration import (
     realization_has_docker_authority,
 )
 from aptl.core.deployment.realization import DeploymentRealizationSpec
+from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.lab_types import LabResult
 
 
@@ -28,6 +29,7 @@ class ComposeMixedRealizationMixin:
         *,
         build: bool,
         scenario_root: Path,
+        observation_context: DeploymentObservationContext,
     ) -> LabResult:
         """Realize a spec with at least one still-Compose-managed node."""
 
@@ -42,6 +44,7 @@ class ComposeMixedRealizationMixin:
             build=build,
             scenario_root=scenario_root,
             excluded_services=excluded_services,
+            observation_context=observation_context,
         )
 
     def _prepare_mixed_subset(
@@ -60,6 +63,9 @@ class ComposeMixedRealizationMixin:
             scenario_root,
             self._project_dir,
         )
+        if failure is not None:
+            return failure, realization, ()
+        failure = self._prepare_capture_target(realization)
         if failure is not None:
             return failure, realization, ()
         excluded_services = (
@@ -84,6 +90,7 @@ class ComposeMixedRealizationMixin:
         build: bool,
         scenario_root: Path,
         excluded_services: tuple[str, ...],
+        observation_context: DeploymentObservationContext,
     ) -> LabResult:
         """Run each ordered Compose stage and return the first failure."""
 
@@ -116,6 +123,7 @@ class ComposeMixedRealizationMixin:
                 compose_files=compose_files,
                 excluded_services=excluded_services,
                 scenario_root=scenario_root,
+                observation_context=observation_context,
             )
         return failure or LabResult(success=True)
 
@@ -162,6 +170,7 @@ class ComposeMixedRealizationMixin:
         compose_files: tuple[Path, ...] | None,
         excluded_services: tuple[str, ...],
         scenario_root: Path,
+        observation_context: DeploymentObservationContext,
     ) -> LabResult:
         """Run phased startup and post-start reconciliation."""
 
@@ -186,5 +195,9 @@ class ComposeMixedRealizationMixin:
                 exclude_services=excluded_services,
                 scenario_root=scenario_root,
             )
-            failure = self._realization_result(start_result, realization)
+            failure = self._realization_result(
+                start_result,
+                realization,
+                observation_context,
+            )
         return failure

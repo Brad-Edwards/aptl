@@ -1048,66 +1048,6 @@ services:
         limits:
           memory: 64m
 
-  # ---------------------------------------------------------------------------
-  # ADR-041 / issue #305: Kali Capture Sidecar
-  #
-  # The SOLE owner of the kali_captures volume (read-write). The Kali workload
-  # does not mount the volume at all, so a sudo-capable agent cannot read,
-  # list, delete, or modify any session's evidence. The sidecar receives PTY
-  # bytes over an abstract Unix socket, runs the per-session tcpdump, and hosts
-  # auditd + process accounting. The MCP-red server harvests captures via
-  # `docker cp aptl-kali-capture:...` (see capture_container_name in
-  # mcp/mcp-red/docker-lab-config.json).
-  #
-  # Shares ONLY the Kali network namespace, so tcpdump observes Kali's traffic
-  # and the abstract Unix socket is mutually reachable. It must NOT share the
-  # PID namespace: with a shared PID namespace a sudo-root Kali shell can see
-  # the sidecar's PIDs and traverse `/proc/<sidecar-pid>/root/var/log/aptl/
-  # captures` into the sidecar's mount namespace, reading or deleting the
-  # evidence the sidecar owns — defeating the whole boundary (codex pre-push
-  # cycle 1 finding F2). auditd and process accounting are kernel-wide and do
-  # not need PID sharing to observe Kali's processes. NOTE: `network_mode:
-  # container:aptl-kali` forbids hostname/ports/networks/extra_hosts on this
-  # service — Docker rejects the combination at `up` time. Do not re-add a
-  # `hostname:`. Referenced by the container name (not `service:kali`) because
-  # ADR-048 (#581) materializes kali directly via the generic materializer,
-  # not as a Compose-started container — `service:kali` cannot resolve a
-  # container Compose never started. The container name is stable either way.
-  # ---------------------------------------------------------------------------
-  kali-capture:
-    profiles: ["kali"]
-    build:
-      context: ./containers/kali-capture
-      dockerfile: Dockerfile
-    container_name: aptl-kali-capture
-    restart: unless-stopped
-    # ADR-033 §2 pattern: run under Docker's bundled init so the per-session
-    # tcpdump / auditd / accton children are reaped rather than zombified.
-    init: true
-    # Share ONLY Kali's network namespace (abstract socket + tcpdump). PID
-    # namespace is deliberately NOT shared (codex F2 — /proc traversal).
-    network_mode: "container:aptl-kali"
-    depends_on:
-      - kali
-    volumes:
-      # Read-write owner of the captures volume (ADR-041 security boundary).
-      - kali_captures:/var/log/aptl/captures
-      # Bind-mount the canonical APTL audit ruleset from the kali image's
-      # build context so rule text is never duplicated (ADR-041 §Maintainability).
-      - ./containers/kali/audit/aptl.rules:/etc/audit/rules.d/aptl.rules:ro
-    cap_add:
-      # ADR-041: capture-only capabilities live here, never on the kali workload.
-      - AUDIT_CONTROL  # auditctl — load rules, start/stop auditd
-      - AUDIT_WRITE    # write audit events
-      - SYS_PACCT      # accton — enable process accounting
-      - NET_RAW        # tcpdump on the shared (Kali) network namespace
-    # No host ports: the only new control surface is the abstract Unix socket
-    # which is local to the shared PID/network namespace (ADR-041 §Security).
-    deploy:
-      resources:
-        limits:
-          memory: 256m
-
   # Reverse Engineering Container
   reverse:
     profiles: ["reverse"]
@@ -1216,73 +1156,6 @@ services:
           memory: 256m
 
   # ==========================================================================
-  # OBSERVABILITY STACK (OpenTelemetry)
-  # ==========================================================================
-
-  aptl-otel-collector:
-    profiles: ["otel"]
-    container_name: aptl-otel-collector
-    image: otel/opentelemetry-collector-contrib:0.123.0
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:${APTL_HP_APTL_OTEL_COLLECTOR_4317:-4317}:4317"
-      - "127.0.0.1:${APTL_HP_APTL_OTEL_COLLECTOR_4318:-4318}:4318"
-    volumes:
-      - ./config/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
-    healthcheck:
-      test: ["CMD", "/otelcol-contrib", "validate", "--config", "/etc/otelcol-contrib/config.yaml"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    networks:
-      aptl-security:
-        ipv4_address: 172.20.0.53
-    deploy:
-      resources:
-        limits:
-          memory: 256m
-
-  aptl-tempo:
-    profiles: ["otel"]
-    container_name: aptl-tempo
-    image: grafana/tempo:2.7.2
-    restart: unless-stopped
-    command: ["-config.file=/etc/tempo/tempo.yaml"]
-    ports:
-      - "127.0.0.1:${APTL_HP_APTL_TEMPO_3200:-3200}:3200"
-    volumes:
-      - ./config/otel/tempo-config.yaml:/etc/tempo/tempo.yaml:ro
-      - tempo_data:/var/tempo
-    networks:
-      aptl-security:
-        ipv4_address: 172.20.0.51
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-
-  aptl-grafana-otel:
-    profiles: ["otel"]
-    container_name: aptl-grafana-otel
-    image: grafana/grafana:11.6.0
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:${APTL_HP_APTL_GRAFANA_OTEL_3000:-3100}:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - ./config/otel/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/tempo.yaml:ro
-      - grafana_otel_data:/var/lib/grafana
-    networks:
-      aptl-security:
-        ipv4_address: 172.20.0.52
-    deploy:
-      resources:
-        limits:
-          memory: 256m
 
 # ==========================================================================
 # NETWORKS
@@ -1403,15 +1276,4 @@ volumes:
   mailserver_logs:
 
   # Application volumes
-  # kali_logs (was /var/log) removed under ADR-033. Replaced with
-  # kali_captures (mounted at /var/log/aptl/captures) so per-session
-  # behavioural captures stay inside a docker-managed volume — the
-  # kali user cannot escape its current session subdir to read
-  # prior runs' MCP-side records, and the MCP server harvests data
-  # out via `docker cp` on session close.
-  kali_captures:
   reverse_logs:
-
-  # OpenTelemetry
-  tempo_data:
-  grafana_otel_data:

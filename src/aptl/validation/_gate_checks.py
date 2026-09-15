@@ -15,14 +15,19 @@ from typing import TYPE_CHECKING
 
 from raes_conformance.conformance import run_target_conformance
 from raes_processor.compiler import compile_scenario_runtime_model
-from raes_runtime.manager import RuntimeManager
-from raes import SDLError, parse_sdl_file
+from raes import SDLError, instantiate_scenario, parse_sdl_file
 from raes.module_registry import LOCKFILE_NAME
 from raes.scenario import Scenario
 
 from aptl.backends.raes import create_aptl_runtime_target, resolve_scenario_bundle
+from aptl.backends.raes_artifact_availability import (
+    artifact_availability_for_scenario,
+)
+from aptl.backends._raes_conformance_probe import APTL_TARGET_CONFORMANCE_SCENARIO
+from aptl.backends.raes_planning_compat import plan_aptl_scenario
 from aptl.backends.raes_profiles import public_start_profiles, select_backend_profiles
 from aptl.backends.raes_realization import interpret_provisioning_plan
+from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.utils.redaction import redact
 from aptl.validation._gate_no_start_backend import _NoStartBackend
 from aptl.validation._gate_raes_cli import (
@@ -45,6 +50,33 @@ if TYPE_CHECKING:
 # scenarios that declare imports; the ones this repo ships today do not. The
 # ``raes`` CLI invocations themselves live in ``_gate_raes_cli``.
 _IMPORT_LOCK_TIMEOUT_S = 600
+
+
+def _static_validation_scenario(scenario: Scenario) -> Scenario:
+    """Instantiate required variables with typed, non-runtime witness values.
+
+    A static gate proves that a scenario can compile; it does not choose the
+    values of a future run.  Required variables without defaults therefore use
+    deterministic type-correct witnesses here.  Live admission still requires
+    an explicit owner for every real binding.
+    """
+
+    values: dict[str, object] = {}
+    witnesses: dict[str, object] = {
+        "string": "aptl-static-validation-value",
+        "integer": 0,
+        "number": 0,
+        "boolean": False,
+    }
+    for name, variable in scenario.variables.items():
+        if not variable.required or variable.default is not None:
+            continue
+        values[name] = (
+            variable.allowed_values[0]
+            if variable.allowed_values
+            else witnesses[str(getattr(variable.type, "value", variable.type))]
+        )
+    return instantiate_scenario(scenario, values) if values else scenario
 
 
 def check_parse(scenario_path: Path) -> tuple[Scenario | None, GateCheck]:
@@ -96,7 +128,7 @@ def check_import_lock(scenario_path: Path, scenario: Scenario) -> GateCheck:
 def check_compile(scenario: Scenario) -> GateCheck:
     """Compile the scenario runtime model (exercises semantic validation)."""
     try:
-        compile_scenario_runtime_model(scenario)
+        compile_scenario_runtime_model(_static_validation_scenario(scenario))
     # broad-except: RAES raises a family of compile errors
     except Exception as exc:
         return GateCheck(
@@ -116,7 +148,16 @@ def check_backend_conformance(
     profiles_root: Path | None,
     reference_scenario: Scenario | None = None,
 ) -> GateCheck:
-    """Confirm APTL's canonical manifest passes target + published-CLI conformance."""
+    """Confirm APTL's canonical manifest passes target + published-CLI conformance.
+
+    The target-adapter corpus is hermetic and intentionally uses RAES's own
+    probe scenario.  Admission of the caller's scenario is a separate gate in
+    :func:`check_provisioning_realization`, where APTL can provide the trusted
+    artifact-availability facts that a real plan requires.  Feeding the caller's
+    scenario to ``run_target_conformance`` would make the adapter probe reject
+    exact artifacts solely because that API has no availability input.
+    """
+    del reference_scenario
     try:
         # Conformance validates APTL's own in-tree configuration, so the bundle
         # is the in-tree bundle (root == project_dir); only the manifest is read.
@@ -124,19 +165,24 @@ def check_backend_conformance(
             project_dir=project_dir,
             config=config,
             backend=_NoStartBackend(),
-            bundle=resolve_scenario_bundle(project_dir, None, config),
+            bundle=project_tree_bundle(
+                project_dir,
+                project_dir / "scenarios" / "conformance-probe.sdl.yaml",
+            ),
         )
         report = run_target_conformance(
             target,
             profile=profile,
             root=fixtures_root,
             profiles_root=profiles_root,
-            reference_scenario=reference_scenario,
+            reference_scenario=APTL_TARGET_CONFORMANCE_SCENARIO,
         )
     # broad-except: RAES surfaces diverse errors
     except Exception as exc:
         return GateCheck(
-            "backend_conformance", False, (redact(f"run_target_conformance raised: {exc}"),)
+            "backend_conformance",
+            False,
+            (redact(f"run_target_conformance raised: {exc}"),),
         )
 
     diagnostics = _target_conformance_diagnostics(report)
@@ -157,13 +203,38 @@ def check_provisioning_realization(
         # resolve from the engine checkout — a pack ships none — so component_root
         # stays project_dir (ADR-051), matching the live start path.
         bundle = resolve_scenario_bundle(project_dir, None, config)
+        backend = _NoStartBackend()
+        static_scenario = _static_validation_scenario(scenario)
+        availability = artifact_availability_for_scenario(
+            static_scenario,
+            backend,
+            scenario_root=bundle.root,
+            component_root=project_dir,
+        )
         target = create_aptl_runtime_target(
             project_dir=project_dir,
             config=config,
-            backend=_NoStartBackend(),
+            backend=backend,
             bundle=bundle,
+            artifact_availability=availability,
         )
-        execution_plan = RuntimeManager(target).plan(scenario)
+        execution_plan = plan_aptl_scenario(
+            target=target,
+            bundle=bundle,
+            scenario=static_scenario,
+            artifact_availability=availability,
+        )
+        planning_diagnostics = [
+            redact(f"{d.code}: {d.message}")
+            for d in execution_plan.diagnostics
+            if _severity(d) == "error"
+        ]
+        if planning_diagnostics:
+            return None, GateCheck(
+                "provisioning_realization",
+                False,
+                tuple(planning_diagnostics),
+            )
         realization = interpret_provisioning_plan(
             plan=execution_plan.provisioning,
             config=config,
@@ -229,7 +300,10 @@ def _requires_live_realization_harness(case: object) -> bool:
         getattr(case, "contract_name", "") == "realization-envelope-v1"
         and not getattr(case, "passed", True)
         and bool(diagnostics)
-        and all(getattr(d, "code", "") in _LIVE_HARNESS_REALIZATION_CODES for d in diagnostics)
+        and all(
+            getattr(d, "code", "") in _LIVE_HARNESS_REALIZATION_CODES
+            for d in diagnostics
+        )
     )
 
 
@@ -261,10 +335,14 @@ def _target_conformance_diagnostics(report: BackendConformanceReport) -> list[st
     """Turn a target conformance report into gate diagnostics."""
     diagnostics: list[str] = []
     failing_cases = [case for case in getattr(report, "cases", ()) if not case.passed]
-    tolerated_cases = [case for case in failing_cases if _requires_live_realization_harness(case)]
+    tolerated_cases = [
+        case for case in failing_cases if _requires_live_realization_harness(case)
+    ]
     blocking_cases = [case for case in failing_cases if case not in tolerated_cases]
     report_codes = sorted({d.code for d in report.diagnostics})
-    failure = _report_failure_diagnostic(report, tolerated_cases, blocking_cases, report_codes)
+    failure = _report_failure_diagnostic(
+        report, tolerated_cases, blocking_cases, report_codes
+    )
     if failure is not None:
         diagnostics.append(failure)
     if report.unsupported_contract_gaps:

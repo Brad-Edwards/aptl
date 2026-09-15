@@ -89,10 +89,16 @@ def test_manifest_advertises_released_stateful_contract() -> None:
     manifest = create_aptl_manifest()
 
     assert manifest.provisioner.supports_generated_artifacts is True
+    assert {
+        str(getattr(mode, "value", mode))
+        for mode in manifest.provisioner.supported_generated_artifact_delivery_modes
+    } == {"mount", "environment"}
     assert manifest.provisioner.supports_persistent_volumes is True
 
 
-def test_interpreter_lowers_stateful_resources_into_deployment_spec(tmp_path: Path) -> None:
+def test_interpreter_lowers_stateful_resources_into_deployment_spec(
+    tmp_path: Path,
+) -> None:
     _write_compose(tmp_path)
     artifact = _resource(
         "generated-artifact",
@@ -160,7 +166,96 @@ def test_interpreter_lowers_stateful_resources_into_deployment_spec(tmp_path: Pa
     assert spec.persistent_volumes == realization.persistent_volumes
 
 
-def test_interpreter_rejects_unknown_stateful_consumer_before_backend(tmp_path: Path) -> None:
+def test_interpreter_lowers_generated_environment_consumers(tmp_path: Path) -> None:
+    """RAES 4.1 environment delivery remains an authored artifact binding."""
+
+    _write_compose(tmp_path)
+    artifact = _resource(
+        "generated-artifact",
+        "cortex-service-credentials",
+        {
+            "generator": "rendered_config",
+            "lifecycle": "reuse_valid",
+            "provenance": "techvault:cortex-service-credentials/v1",
+            "outputs": [
+                {
+                    "name": "connector-api-key",
+                    "path": "cortex/connector-api-key",
+                    "sensitivity": "secret",
+                }
+            ],
+            "consumers": [],
+            "environment_consumers": [
+                {
+                    "node": "wazuh-indexer",
+                    "target_address": "provision.node.wazuh-indexer",
+                    "delivery_mode": "environment",
+                    "output": "connector-api-key",
+                    "environment_variable": "TH_CORTEX_KEYS",
+                }
+            ],
+        },
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan(_node("wazuh-indexer"), artifact),
+        config=_config(),
+        bundle=_bundle(tmp_path),
+    )
+
+    assert [item.code for item in realization.diagnostics] == []
+    generated = realization.generated_artifacts[0]
+    assert generated.consumers == ()
+    assert generated.environment_consumers[0].environment_variable == "TH_CORTEX_KEYS"
+    assert generated.environment_consumers[0].output_name == "connector-api-key"
+
+
+def test_interpreter_rejects_environment_consumer_name_injection(
+    tmp_path: Path,
+) -> None:
+    _write_compose(tmp_path)
+    artifact = _resource(
+        "generated-artifact",
+        "cortex-service-credentials",
+        {
+            "generator": "rendered_config",
+            "lifecycle": "reuse_valid",
+            "provenance": "techvault:cortex-service-credentials/v1",
+            "outputs": [
+                {
+                    "name": "connector-api-key",
+                    "path": "cortex/connector-api-key",
+                    "sensitivity": "secret",
+                }
+            ],
+            "consumers": [],
+            "environment_consumers": [
+                {
+                    "node": "wazuh-indexer",
+                    "target_address": "provision.node.wazuh-indexer",
+                    "delivery_mode": "environment",
+                    "output": "connector-api-key",
+                    "environment_variable": "SAFE\nINJECTED",
+                }
+            ],
+        },
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan(_node("wazuh-indexer"), artifact),
+        config=_config(),
+        bundle=_bundle(tmp_path),
+    )
+
+    assert realization.generated_artifacts == ()
+    assert "aptl.provisioner.stateful-resource-invalid" in {
+        item.code for item in realization.diagnostics
+    }
+
+
+def test_interpreter_rejects_unknown_stateful_consumer_before_backend(
+    tmp_path: Path,
+) -> None:
     _write_compose(tmp_path)
     artifact = _resource(
         "generated-artifact",
@@ -170,7 +265,11 @@ def test_interpreter_rejects_unknown_stateful_consumer_before_backend(tmp_path: 
             "lifecycle": "regenerate_on_change",
             "provenance": "config/wazuh-manager.conf.template",
             "outputs": [
-                {"name": "manager-conf", "path": "ossec.conf", "sensitivity": "restricted"}
+                {
+                    "name": "manager-conf",
+                    "path": "ossec.conf",
+                    "sensitivity": "restricted",
+                }
             ],
             "consumers": [
                 {

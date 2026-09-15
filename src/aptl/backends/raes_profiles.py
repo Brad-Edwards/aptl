@@ -16,10 +16,12 @@ from aptl.backends._compose_profile_index import (
 )
 from aptl.core.config import AptlConfig, ContainerSettings
 
-CORE_PROFILES = ("otel",)
+# No backend apparatus is an always-on scenario profile. Apparatus selection is
+# applied after evidence and scope admission by ``ObservabilityScopeDecision``.
+CORE_PROFILES: tuple[str, ...] = ()
 # The finite vocabulary a deployment-serving provider may assign. Container
-# toggles and backend-owned always-on profiles are the only authorities; the
-# separate web lifecycle is intentionally absent.
+# toggles are the only scenario-serving authorities; the separate web and
+# backend-apparatus lifecycles are intentionally absent.
 OPERATOR_GROUP_VOCABULARY = (*ContainerSettings.model_fields, *CORE_PROFILES)
 # Legacy in-tree fallback ONLY (issue #875, SDL-authority class). These map
 # older in-tree scenario node names to their docker-compose service names so
@@ -65,8 +67,7 @@ def load_compose_profile_index(project_dir: Path) -> ComposeProfileIndex:
     )
     return ComposeProfileIndex(
         alias_to_profiles={
-            alias: frozenset(profiles)
-            for alias, profiles in alias_to_profiles.items()
+            alias: frozenset(profiles) for alias, profiles in alias_to_profiles.items()
         },
         alias_to_services={
             alias: frozenset(service_names)
@@ -140,11 +141,7 @@ def configured_profiles(config: AptlConfig) -> list[str]:
 
 def public_start_profiles(config: AptlConfig) -> list[str]:
     """Return the Compose profiles used by the public lab start path."""
-    selected = configured_profiles(config)
-    for profile in CORE_PROFILES:
-        if profile not in selected:
-            selected.append(profile)
-    return selected
+    return configured_profiles(config)
 
 
 def select_backend_profiles(
@@ -379,7 +376,9 @@ def _build_aliases(service_def: Mapping[str, object]) -> set[str]:
 def _raw_node_values(address: str, payload: Mapping[str, Any]) -> set[str]:
     """Collect raw string values that can identify a RAES node."""
     raw_values = {address}
-    raw_values.update(_payload_string_values(payload, ("name", "node_name", "target_node")))
+    raw_values.update(
+        _payload_string_values(payload, ("name", "node_name", "target_node"))
+    )
     spec = payload.get("spec")
     if isinstance(spec, Mapping):
         node_spec = spec.get("node")

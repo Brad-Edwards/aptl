@@ -19,7 +19,11 @@ from aptl.core.evidence.coordinator import acquire_evidence
 from aptl.core.evidence.outcomes import AcquisitionDisposition, CollectorStatus
 from aptl.core.evidence.protocol import CollectorOutcome, RunScope
 from aptl.core.evidence.visibility import project_for_participant
-from aptl.core.experiment.capture_registry import CaptureBinding, CaptureLimits, CaptureVisibility
+from aptl.core.experiment.capture_registry import (
+    CaptureBinding,
+    CaptureLimits,
+    CaptureVisibility,
+)
 from aptl.core.runstore import LocalRunStore
 from aptl.utils.pathsafe import PathContainmentError
 
@@ -28,17 +32,34 @@ _SCOPE = RunScope(run_id="run-1", planned_trial_id="trial-1", attempt_id="a1")
 _SECRET = "sk-live-super-secret-token-abcdef1234567890"
 
 
-def _binding(*, visibility=CaptureVisibility.PARTICIPANT_VISIBLE, **overrides) -> CaptureBinding:
+def _binding(
+    *, visibility=CaptureVisibility.PARTICIPANT_VISIBLE, **overrides
+) -> CaptureBinding:
     fields: dict = {
-        "capture_spec_id": "cap-1", "requirement_id": "req-a", "window_refs": ("run-window",),
-        "registration_id": "aptl.collector.a", "implementation_version": "1.0.0",
-        "contract_version": "experiment-capture-spec/v1", "effective_config_digest": "sha256:" + "cd" * 32,
-        "channel_ref_id": "chan", "channel_ref_version": "1.0.0", "channel_kind": "participant-observation",
-        "capture_kind": "observation", "capture_scope": "participant", "expected_media_types": ("application/json",),
-        "required_artifact_roles": ("observation",), "sensitivity": "internal", "redaction_required": True,
-        "integrity_requirements": ("sha256-digest",), "retention_policy": "retain", "loss_disclosure_required": True,
+        "capture_spec_id": "cap-1",
+        "requirement_id": "req-a",
+        "window_refs": ("run-window",),
+        "registration_id": "aptl.collector.a",
+        "implementation_version": "1.0.0",
+        "contract_version": "experiment-capture-spec/v1",
+        "effective_config_digest": "sha256:" + "cd" * 32,
+        "channel_ref_id": "chan",
+        "channel_ref_version": "1.0.0",
+        "channel_kind": "participant-observation",
+        "capture_kind": "observation",
+        "capture_scope": "participant",
+        "expected_media_types": ("application/json",),
+        "required_artifact_roles": ("observation",),
+        "sensitivity": "internal",
+        "redaction_required": True,
+        "redaction_policy": "redact_secrets",
+        "integrity_requirements": ("sha256-digest",),
+        "retention_policy": "retain",
+        "loss_disclosure_required": True,
         "visibility_class": visibility,
-        "limits": CaptureLimits(max_bytes=8192, max_artifact_count=10, max_duration_s=60),
+        "limits": CaptureLimits(
+            max_bytes=8192, max_artifact_count=10, max_duration_s=60
+        ),
     }
     fields.update(overrides)
     return CaptureBinding(**fields)
@@ -62,19 +83,193 @@ class _FakeCollector:
 
 def _json_outcome(records):
     return CollectorOutcome(
-        status=CollectorStatus.OK, started_at="2026-07-20T00:00:00Z", finished_at="2026-07-20T00:00:05Z",
-        chunks=[json.dumps(records).encode("utf-8")], media_type="application/json", event_count=len(records),
+        status=CollectorStatus.OK,
+        started_at="2026-07-20T00:00:00Z",
+        finished_at="2026-07-20T00:00:05Z",
+        chunks=[json.dumps(records).encode("utf-8")],
+        media_type="application/json",
+        event_count=len(records),
     )
 
 
 class TestSecretRedaction:
+    def test_unknown_redaction_policy_fails_closed(self, tmp_path):
+        result = acquire_evidence(
+            bindings=[_binding(redaction_policy="unknown-policy")],
+            collectors={
+                "aptl.collector.a": _FakeCollector(
+                    "aptl.collector.a", _json_outcome([{"token": _SECRET}])
+                )
+            },
+            run_store=LocalRunStore(tmp_path / "runs"),
+            scope=_SCOPE,
+            clock=_CLOCK,
+        )
+        assert result.disposition is AcquisitionDisposition.INVALIDATED
+        assert result.records == ()
+
+    def test_plain_text_redaction_crosses_chunks_and_hashes_only_retained_bytes(
+        self, tmp_path
+    ):
+        import hashlib
+
+        store = LocalRunStore(tmp_path / "runs")
+        payload = (
+            "session 1 input: token=" + _SECRET + "\noutput: fertig ✓\n"
+        ).encode()
+        # Both a secret and a UTF-8 code point cross source chunk boundaries.
+        chunks = [payload[:30], payload[30:-2], payload[-2:]]
+        outcome = CollectorOutcome(
+            status=CollectorStatus.OK,
+            started_at=_CLOCK.now(),
+            finished_at=_CLOCK.now(),
+            chunks=chunks,
+            media_type="text/plain",
+            event_count=2,
+        )
+        result = acquire_evidence(
+            bindings=[_binding(expected_media_types=("text/plain",))],
+            collectors={
+                "aptl.collector.a": _FakeCollector("aptl.collector.a", outcome)
+            },
+            run_store=store,
+            scope=_SCOPE,
+            clock=_CLOCK,
+        )
+        assert result.disposition is AcquisitionDisposition.SEALED_READY
+        stored = (store.get_run_path("run-1") / result.refs[0].content_uri).read_bytes()
+        assert _SECRET.encode() not in stored
+        assert "output: fertig ✓" in stored.decode()
+        assert (
+            result.refs[0].content_digest
+            == "sha256:" + hashlib.sha256(stored).hexdigest()
+        )
+        assert result.records[0].redaction_state == "redacted"
+        assert result.records[0].raw_content.loss_disclosure
+
+    @pytest.mark.parametrize(
+        "media_type", ["application/x-ndjson", "application/jsonl"]
+    )
+    def test_every_json_line_is_redacted(self, tmp_path, media_type):
+        store = LocalRunStore(tmp_path / "runs")
+        payload = (
+            b"\n".join(
+                json.dumps({"token": _SECRET, "event": index}).encode()
+                for index in range(2)
+            )
+            + b"\n"
+        )
+        outcome = CollectorOutcome(
+            status=CollectorStatus.OK,
+            started_at=_CLOCK.now(),
+            finished_at=_CLOCK.now(),
+            chunks=[payload[:11], payload[11:]],
+            media_type=media_type,
+            event_count=2,
+        )
+        result = acquire_evidence(
+            bindings=[_binding(expected_media_types=(media_type,))],
+            collectors={
+                "aptl.collector.a": _FakeCollector("aptl.collector.a", outcome)
+            },
+            run_store=store,
+            scope=_SCOPE,
+            clock=_CLOCK,
+        )
+        assert result.disposition is AcquisitionDisposition.SEALED_READY
+        stored = (store.get_run_path("run-1") / result.refs[0].content_uri).read_bytes()
+        assert _SECRET.encode() not in stored
+        assert [json.loads(line)["event"] for line in stored.splitlines()] == [0, 1]
+        assert result.records[0].redaction_state == "redacted"
+
+    @pytest.mark.parametrize(
+        "media_type,payload",
+        [
+            ("application/json", b'{"token":"' + _SECRET.encode()),
+            ("application/json", b"\xff" + _SECRET.encode()),
+            ("application/jsonl", b'{"event":1}\n{"token":"' + _SECRET.encode()),
+            ("application/octet-stream", _SECRET.encode()),
+            ("text/plain", b"\xff" + _SECRET.encode()),
+        ],
+    )
+    def test_unredactable_capture_is_not_retained_or_sealed(
+        self, tmp_path, media_type, payload
+    ):
+        store = LocalRunStore(tmp_path / "runs")
+        outcome = CollectorOutcome(
+            status=CollectorStatus.OK,
+            started_at=_CLOCK.now(),
+            finished_at=_CLOCK.now(),
+            chunks=[payload],
+            media_type=media_type,
+            event_count=1,
+        )
+        result = acquire_evidence(
+            bindings=[_binding(expected_media_types=(media_type,))],
+            collectors={
+                "aptl.collector.a": _FakeCollector("aptl.collector.a", outcome)
+            },
+            run_store=store,
+            scope=_SCOPE,
+            clock=_CLOCK,
+        )
+        assert result.disposition is AcquisitionDisposition.INVALIDATED
+        assert result.reports[0].status is CollectorStatus.FINALIZATION_FAILURE
+        assert not result.refs and not result.records
+        assert not list((tmp_path / "runs").rglob("*.json"))
+        assert _SECRET not in str(result)
+
+    @pytest.mark.parametrize(
+        "media_type", ["application/json", "application/x-ndjson", "text/plain"]
+    )
+    def test_oversized_json_stops_consuming_before_join_or_decode(
+        self, tmp_path, media_type
+    ):
+        def chunks():
+            yield b" " * 33
+            pytest.fail("capture consumed beyond its admitted byte budget")
+
+        store = LocalRunStore(tmp_path / "runs")
+        outcome = CollectorOutcome(
+            status=CollectorStatus.OK,
+            started_at=_CLOCK.now(),
+            finished_at=_CLOCK.now(),
+            chunks=chunks(),
+            media_type=media_type,
+            event_count=1,
+        )
+        result = acquire_evidence(
+            bindings=[
+                _binding(
+                    expected_media_types=(media_type,),
+                    limits=CaptureLimits(
+                        max_bytes=32, max_artifact_count=10, max_duration_s=60
+                    ),
+                )
+            ],
+            collectors={
+                "aptl.collector.a": _FakeCollector("aptl.collector.a", outcome)
+            },
+            run_store=store,
+            scope=_SCOPE,
+            clock=_CLOCK,
+        )
+        assert result.disposition is AcquisitionDisposition.INVALIDATED
+        assert result.reports[0].status is CollectorStatus.TRUNCATION
+        assert not result.records and not result.refs
+
     def test_control_plane_secret_is_redacted_from_stored_bytes(self, tmp_path):
         store = LocalRunStore(tmp_path / "runs")
         binding = _binding()
         outcome = _json_outcome([{"user": "admin", "api_key": _SECRET}])
         result = acquire_evidence(
-            bindings=[binding], collectors={"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome)},
-            run_store=store, scope=_SCOPE, clock=_CLOCK,
+            bindings=[binding],
+            collectors={
+                "aptl.collector.a": _FakeCollector("aptl.collector.a", outcome)
+            },
+            run_store=store,
+            scope=_SCOPE,
+            clock=_CLOCK,
         )
         stored = (store.get_run_path("run-1") / result.refs[0].content_uri).read_bytes()
         assert _SECRET.encode() not in stored
@@ -85,8 +280,13 @@ class TestSecretRedaction:
         binding = _binding()
         outcome = _json_outcome([{"token": _SECRET}])
         result = acquire_evidence(
-            bindings=[binding], collectors={"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome)},
-            run_store=store, scope=_SCOPE, clock=_CLOCK,
+            bindings=[binding],
+            collectors={
+                "aptl.collector.a": _FakeCollector("aptl.collector.a", outcome)
+            },
+            run_store=store,
+            scope=_SCOPE,
+            clock=_CLOCK,
         )
         assert result.records[0].raw_content.loss_disclosure is not None
 
@@ -94,8 +294,12 @@ class TestSecretRedaction:
 class TestVisibilityProjection:
     def _ref(self, visibility_class):
         return EvidenceRef(
-            evidence_record_id="e1", content_uri="evidence/x", content_digest="sha256:" + "ab" * 32,
-            capture_spec_id="cap-1", requirement_id="req-a", registration_id="aptl.collector.a",
+            evidence_record_id="e1",
+            content_uri="evidence/x",
+            content_digest="sha256:" + "ab" * 32,
+            capture_spec_id="cap-1",
+            requirement_id="req-a",
+            registration_id="aptl.collector.a",
             visibility_class=visibility_class,
         )
 
@@ -110,13 +314,20 @@ class TestVisibilityProjection:
         classes = {r.visibility_class for r in visible}
         assert classes == {"participant-visible", "disclosed"}
 
-    def test_evaluator_only_evidence_never_enters_the_participant_projection(self, tmp_path):
+    def test_evaluator_only_evidence_never_enters_the_participant_projection(
+        self, tmp_path
+    ):
         store = LocalRunStore(tmp_path / "runs")
         binding = _binding(visibility=CaptureVisibility.EVALUATOR_ONLY)
         outcome = _json_outcome([{"detection": 1}])
         result = acquire_evidence(
-            bindings=[binding], collectors={"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome)},
-            run_store=store, scope=_SCOPE, clock=_CLOCK,
+            bindings=[binding],
+            collectors={
+                "aptl.collector.a": _FakeCollector("aptl.collector.a", outcome)
+            },
+            run_store=store,
+            scope=_SCOPE,
+            clock=_CLOCK,
         )
         assert result.disposition is AcquisitionDisposition.SEALED_READY
         assert project_for_participant(result.refs) == ()
@@ -132,4 +343,6 @@ class TestHostilePersistence:
         (run_dir / "evidence").symlink_to(outside, target_is_directory=True)
 
         with pytest.raises(PathContainmentError):
-            create_content_addressed(store, "run-1", [b"x"], subdir="evidence/blobs", max_bytes=64)
+            create_content_addressed(
+                store, "run-1", [b"x"], subdir="evidence/blobs", max_bytes=64
+            )

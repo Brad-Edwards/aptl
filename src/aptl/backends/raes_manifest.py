@@ -35,6 +35,7 @@ from raes_backend_protocols.capabilities import (
 from raes_backend_protocols.manifest import backend_manifest_v2_model
 from raes_contracts.apparatus import (
     ConceptBinding,
+    ProcessResourceLimitCapability,
     RealizationObservationCapability,
     RealizationSupportDeclaration,
     RealizationSupportMode,
@@ -50,10 +51,14 @@ from raes_contracts.contracts import (
 )
 from aptl.backends.raes_artifact_mechanisms import aptl_artifact_mechanisms
 from aptl.backends.identity import APTL_RAES_TARGET_NAME, APTL_RAES_TARGET_VERSION
+from aptl.backends.raes_operating_systems import APTL_OPERATING_SYSTEMS
+from aptl.backends.raes_planning_compat import DAEMON_READBACK_RUNTIME_CONCERNS
 from aptl.backends.raes_realization_envelope import build_aptl_realization_envelope
 from raes_contracts.vocabulary import (
     ObservationStrength,
     ParticipantFeatureSupportLevel,
+    ProcessResourceLimitKind,
+    ProcessResourceLimitScope,
     WorkflowFeature,
     WorkflowStatePredicateFeature,
 )
@@ -70,8 +75,23 @@ from aptl.core.experiment.capture_registry import (
     OBSERVATION_EVIDENCE_CONTRACTS,
 )
 
-APTL_EXPERIMENT_ACTION_TIMEOUT_TARGET = (
-    "participant-runtime.action-timeout-seconds"
+APTL_EXPERIMENT_ACTION_TIMEOUT_TARGET = "participant-runtime.action-timeout-seconds"
+
+APTL_PROCESS_RESOURCE_LIMITS = (
+    ProcessResourceLimitCapability(
+        resource=ProcessResourceLimitKind.OPEN_FILE_DESCRIPTORS,
+        scopes=frozenset({ProcessResourceLimitScope.SUBTREE}),
+        minimum=0,
+        maximum=None,
+        supports_unlimited=True,
+    ),
+    ProcessResourceLimitCapability(
+        resource=ProcessResourceLimitKind.LOCKED_MEMORY_BYTES,
+        scopes=frozenset({ProcessResourceLimitScope.SUBTREE}),
+        minimum=0,
+        maximum=None,
+        supports_unlimited=True,
+    ),
 )
 
 _EXPERIMENT_CONFIGURATION_REGISTRY = ConfigurationTargetRegistryModel(
@@ -168,11 +188,10 @@ _ORCHESTRATOR = OrchestratorCapabilities(
 # scoring out of the authored SDL surface, so the manifest deliberately does not
 # claim support for the OCR scoring chain (`metrics`/`evaluations`/`tlos`/`goals`).
 #
-# ADR-088 service materialization (#889) declares its readback proof as a
-# boolean observed-state postcondition on the exact content subject, evidenced
-# through the native service's api_response. APTL evaluates exactly that shape
-# by fresh native readback, so it declares the propositions/assertions sections
-# and the boolean/all/api_response support the readback uses — not a general
+# ADR-088 service materialization (#889) and EXP-010 TechVault native evidence
+# (#992) declare boolean observed-state postconditions. APTL evaluates only the
+# exact predicate/evidence bindings implemented by its fresh native readbacks;
+# those bindings use api_response and log channels. This is not a general
 # proposition-evaluation engine.
 _EVALUATOR = EvaluatorCapabilities(
     name="aptl-rte-evaluator",
@@ -181,10 +200,10 @@ _EVALUATOR = EvaluatorCapabilities(
     ),
     supports_scoring=False,
     supports_objectives=True,
-    supported_predicate_families=frozenset({"boolean"}),
+    supported_predicate_families=frozenset({"boolean", "presence"}),
     supported_quantifiers=frozenset({"all"}),
     supported_truth_outcomes=frozenset({"true", "false", "unknown", "unsupported"}),
-    supported_evidence_channels=frozenset({"api_response"}),
+    supported_evidence_channels=frozenset({"api_response", "log"}),
     supported_time_domains=frozenset({"scenario_time"}),
     preserves_binding_provenance=True,
 )
@@ -220,8 +239,9 @@ _PARTICIPANT_RUNTIME = ParticipantRuntimeCapabilities(
 # terms (validated against contracts/concept-authority/controlled-vocabularies-v1).
 _PROVISIONER = ProvisionerCapabilities(
     name="aptl-docker-compose-provisioner",
-    supported_node_types=frozenset({"switch", "vm"}),
+    supported_node_types=frozenset({"switch", "compute"}),
     supported_os_families=frozenset({"linux"}),
+    operating_systems=APTL_OPERATING_SYSTEMS,
     supported_content_types=frozenset({"dataset", "directory", "file"}),
     # Manifest honesty (#577, ADR-046 addendum): advertise only the account
     # features the backend materializes AND verifies by read-after-write — the
@@ -260,6 +280,9 @@ _PROVISIONER = ProvisionerCapabilities(
     supported_generated_artifact_kinds=frozenset(
         {"certificate_bundle", "rendered_config", "ssh_key_bundle"}
     ),
+    # APTL realizes both existing read-only mounts and RAES 4.1's generated
+    # output -> environment projection. It does not claim env_file delivery.
+    supported_generated_artifact_delivery_modes=frozenset({"mount", "environment"}),
     supports_persistent_volumes=True,
 )
 
@@ -313,28 +336,67 @@ _REALIZATION_SUPPORT = (
         # node/content declared-capability-match kind.
         supported_exact_requirement_kinds=frozenset(
             {
+                *DAEMON_READBACK_RUNTIME_CONCERNS,
                 "declared-capability-match",
+                "forwarding-agents",
+                "runtime-dependency-manifests",
+                "runtime-filesystem-inventory",
+                "runtime-local-identity",
+                "runtime-packages",
+                "runtime-service-manager-units",
                 "service-search-index-schema-materialization",
             }
         ),
         disclosure_kinds=frozenset(
             {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
         ),
-        # Per-concern observation capability (raes 3.3.0). Only concerns raes
-        # compiles with a non-null verification_scope need one; today that is
-        # forwarding-agents, whose scope is `configuration` when the agent
-        # declares any sources/transforms/ship_targets/reload_channels/settings.
-        # APTL corroborates it by reading the realized container's declared
-        # forwarding data-path footprint back off host-side `docker inspect`
-        # (daemon-observed), and discloses only corroborated agents — so this
-        # declaration is honest: it is backed by real readback
-        # (raes_runtime_observation._observe_forwarding_agents), not an echo.
+        # Per-concern observation capability. APTL corroborates environment,
+        # mounts, capabilities, ports, listeners, and forwarding-agent state
+        # from host-side native readback; package, filesystem, service-manager,
+        # and operating-system identity require bounded guest readback. The
+        # runtime discloses only facts actually observed, never a planned echo.
         observation_capabilities={
+            **{
+                kind: RealizationObservationCapability(
+                    verification_scope=RealizationVerificationScope.CONFIGURATION,
+                    observation_strength=ObservationStrength.DAEMON_OBSERVED,
+                )
+                for kind in sorted(DAEMON_READBACK_RUNTIME_CONCERNS)
+            },
+            "operating-system": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.PRESENCE,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
+            ),
             "forwarding-agents": RealizationObservationCapability(
                 verification_scope=RealizationVerificationScope.CONFIGURATION,
                 observation_strength=ObservationStrength.DAEMON_OBSERVED,
             ),
+            "runtime-filesystem-inventory": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.CONFIGURATION,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
+            ),
+            "runtime-local-identity": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.CONFIGURATION,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
+            ),
+            "runtime-dependency-manifests": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.CONFIGURATION,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
+            ),
+            "runtime-packages": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.CONFIGURATION,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
+            ),
+            "runtime-service-manager-units": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.CONFIGURATION,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
+            ),
+            "process-resource-limits": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.CONFIGURATION,
+                observation_strength=ObservationStrength.GUEST_OBSERVED,
+            ),
         },
+        process_resource_limits=APTL_PROCESS_RESOURCE_LIMITS,
         artifact_mechanisms=list(aptl_artifact_mechanisms()),
         constraints={},
     ),
@@ -400,6 +462,12 @@ def create_aptl_manifest() -> BackendManifest:
         participant_runtime=_PARTICIPANT_RUNTIME,
         **capability_options,
     )
+
+
+def create_aptl_realization_envelope():
+    """Return APTL's canonical, digest-validated realization envelope."""
+
+    return _REALIZATION_ENVELOPE
 
 
 def create_aptl_binding_manifest_model(

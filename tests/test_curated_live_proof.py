@@ -28,9 +28,6 @@ from aptl.validation.curated_live_proof import (
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCENARIOS_DIR = PROJECT_ROOT / "scenarios"
 
-# The always-on observability core every public start includes.
-OTEL_SERVICES = frozenset({"aptl-grafana-otel", "aptl-otel-collector", "aptl-tempo"})
-
 
 @dataclass(frozen=True)
 class _Variant:
@@ -38,7 +35,7 @@ class _Variant:
     filename: str
     containers: dict[str, bool]
     expected_profiles: frozenset[str]
-    # Compose services beyond the OTEL core the selected profiles must activate.
+    # Compose services the selected scenario-serving profiles must activate.
     extra_services: frozenset[str]
     expected_networks: frozenset[str]
 
@@ -53,18 +50,10 @@ class _Variant:
 
 VARIANTS = (
     _Variant(
-        catalog_id="techvault-observability-core",
-        filename="techvault-observability-core.sdl.yaml",
-        containers={},
-        expected_profiles=frozenset({"otel"}),
-        extra_services=frozenset(),
-        expected_networks=frozenset({"aptl-security"}),
-    ),
-    _Variant(
         catalog_id="techvault-defensive-min",
         filename="techvault-defensive-min.sdl.yaml",
         containers={"wazuh": True},
-        expected_profiles=frozenset({"wazuh", "otel"}),
+        expected_profiles=frozenset({"wazuh"}),
         extra_services=frozenset({"wazuh.manager", "wazuh.indexer", "wazuh.dashboard"}),
         expected_networks=frozenset({"aptl-security", "aptl-dmz", "aptl-internal"}),
     ),
@@ -72,7 +61,7 @@ VARIANTS = (
         catalog_id="techvault-enterprise-web",
         filename="techvault-enterprise-web.sdl.yaml",
         containers={"enterprise": True, "wazuh": True},
-        expected_profiles=frozenset({"enterprise", "wazuh", "otel"}),
+        expected_profiles=frozenset({"enterprise", "wazuh"}),
         # `--profile enterprise wazuh` activates the enterprise tier plus the
         # full wazuh profile (dashboard included, though the SDL declares only
         # manager + indexer): Compose activates services by profile, not by
@@ -97,11 +86,10 @@ VARIANTS = (
         catalog_id="techvault-attacker-target",
         filename="techvault-attacker-target.sdl.yaml",
         containers={"kali": True, "victim": True, "wazuh": True},
-        expected_profiles=frozenset({"kali", "victim", "wazuh", "otel"}),
+        expected_profiles=frozenset({"kali", "victim", "wazuh"}),
         extra_services=frozenset(
             {
                 "kali",
-                "kali-capture",
                 "kali-ssh-proxy",
                 "victim",
                 "wazuh.manager",
@@ -138,8 +126,8 @@ def _good_snapshot(matrix) -> dict:
 def _container_name(service: str) -> str:
     """Map a Compose service name to its running container name.
 
-    `wazuh.manager` runs as `aptl-wazuh-manager`; the otel/enterprise services
-    already carry their `aptl-`/bare container names. The normalized-alias bind
+    `wazuh.manager` runs as `aptl-wazuh-manager`; enterprise services already
+    carry their bare container names. The normalized-alias bind
     in the comparison tolerates either, so a deterministic stand-in is enough.
     """
     if service.startswith("wazuh."):
@@ -154,7 +142,6 @@ def test_expected_matrix_is_content_derived_and_reduced(variant: _Variant):
     assert set(matrix.selected_profiles) == variant.expected_profiles
     assert matrix.realized_nodes  # realization produced RAES nodes
     services = set(matrix.expected_services)
-    assert OTEL_SERVICES.issubset(services)
     assert variant.extra_services.issubset(services)
     assert set(matrix.expected_networks) == variant.expected_networks
 
@@ -167,7 +154,7 @@ def test_compare_passes_on_matching_snapshot(variant: _Variant):
 
 
 def test_compare_fails_on_missing_container():
-    variant = VARIANTS[0]  # observability-core
+    variant = VARIANTS[0]
     matrix = expected_reduced_matrix(PROJECT_ROOT, variant.config, variant.path)
     snapshot = _good_snapshot(matrix)
     snapshot["containers"] = snapshot["containers"][:-1]
@@ -180,14 +167,14 @@ def test_compare_fails_on_unexpected_container():
     variant = VARIANTS[0]
     matrix = expected_reduced_matrix(PROJECT_ROOT, variant.config, variant.path)
     snapshot = _good_snapshot(matrix)
-    snapshot["containers"].append({"name": "aptl-wazuh-manager", "status": "Up 1m"})
+    snapshot["containers"].append({"name": "aptl-suricata", "status": "Up 1m"})
     ok, diagnostics = compare_to_snapshot(matrix, snapshot)
     assert not ok
     assert any("unexpected steady-state container" in d for d in diagnostics)
 
 
 def test_compare_fails_on_unexpected_network():
-    variant = VARIANTS[0]  # observability-core: only aptl-security expected
+    variant = VARIANTS[0]
     matrix = expected_reduced_matrix(PROJECT_ROOT, variant.config, variant.path)
     snapshot = _good_snapshot(matrix)
     snapshot["networks"].append({"name": "aptl_aptl-redteam"})
@@ -209,7 +196,7 @@ def test_compare_ignores_exited_one_shot_container():
 
 
 def test_compare_fails_on_missing_network():
-    variant = VARIANTS[1]  # defensive-min (multiple networks)
+    variant = VARIANTS[1]  # enterprise-web (multiple networks)
     matrix = expected_reduced_matrix(PROJECT_ROOT, variant.config, variant.path)
     snapshot = _good_snapshot(matrix)
     snapshot["networks"] = snapshot["networks"][:-1]
@@ -343,8 +330,5 @@ def test_participant_action_proof_uses_control_plane_and_records_behavior(
     assert behavior[0]["actor_provenance"].startswith(
         "participant-implementation:aptl-curated-live-proof@1.0.0"
     )
-    assert any(
-        address.startswith(f"{PARTICIPANT_ACTION_ADDRESS}.")
-        for address in proof["participant_snapshot_entries"]
-    )
+    assert proof["participant_snapshot_entries"] == {}
     assert proof["post_action_range_snapshot"]["containers"][0]["name"] == "aptl-kali"

@@ -7,10 +7,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from raes_contracts.realization_observation import ObservedOperatingSystemIdentity
+
 from aptl.core.deployment._compose_realization_networks import (
     _match_managed_network,
 )
 from aptl.core.deployment._compose_service_health import (
+    container_completed_successfully,
     container_health,
     container_running,
 )
@@ -44,6 +47,7 @@ class ObservedResource(object):
     realized: bool
     concerns: dict[tuple[str, ...], object] = field(default_factory=dict)
     evidence: dict[str, object] = field(default_factory=dict)
+    operating_system: ObservedOperatingSystemIdentity | None = None
 
 
 def consumer_mount_evidence(
@@ -132,6 +136,9 @@ def artifact_spec(
         "provenance": artifact.provenance,
         "outputs": [output.details() for output in artifact.outputs],
         "consumers": [consumer_spec(consumer) for consumer in artifact.consumers],
+        "environment_consumers": [
+            consumer.details() for consumer in artifact.environment_consumers
+        ],
         "ordering_dependencies": _author_dependencies(artifact.ordering_dependencies),
         "refresh_dependencies": _author_dependencies(artifact.refresh_dependencies),
     }
@@ -222,7 +229,11 @@ def _transitional_state(info: Mapping[str, Any]) -> bool:
     return container_running(info) and container_health(info) == "starting"
 
 
-def container_realized(info: Mapping[str, Any]) -> bool:
+def container_realized(
+    info: Mapping[str, Any],
+    *,
+    expect_completion: bool = False,
+) -> bool:
     """Return whether an inspected container has reached its realized state.
 
     A running, healthy container is realized. A container that merely exited
@@ -231,6 +242,8 @@ def container_realized(info: Mapping[str, Any]) -> bool:
 
     if not info:
         return False
+    if expect_completion:
+        return container_completed_successfully(dict(info))
     health = container_health(info)
     return container_running(info) and (not health or health == "healthy")
 
@@ -309,9 +322,19 @@ def _exec_probed_content_type(
     """
 
     try:
-        if backend.container_exec(container_name, ["test", "-d", destination]).returncode == 0:
+        if (
+            backend.container_exec(
+                container_name, ["test", "-d", destination]
+            ).returncode
+            == 0
+        ):
             return "directory"
-        if backend.container_exec(container_name, ["test", "-f", destination]).returncode == 0:
+        if (
+            backend.container_exec(
+                container_name, ["test", "-f", destination]
+            ).returncode
+            == 0
+        ):
             return "file"
     except (BackendTimeoutError, OSError) as exc:
         log.warning(

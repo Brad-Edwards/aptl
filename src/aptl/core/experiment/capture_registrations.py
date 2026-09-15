@@ -20,6 +20,8 @@ projection validates them at manifest build.
 
 from __future__ import annotations
 
+from raes_backend_protocols.capabilities import ObservationCaptureOffer
+
 from aptl.core.experiment.capture_registry import (
     CaptureLimits,
     CaptureVisibility,
@@ -29,7 +31,112 @@ from aptl.core.experiment.capture_registry import (
 #: Shared limits for the built-in windowed sources: 8 MiB / 5 minutes / 4096
 #: artifacts per capture. Generous but bounded — the coordinator truncates a
 #: source that exceeds the byte quota and discloses it.
-_LIMITS = CaptureLimits(max_bytes=8 * 1024 * 1024, max_artifact_count=4096, max_duration_s=300)
+_LIMITS = CaptureLimits(
+    max_bytes=8 * 1024 * 1024, max_artifact_count=4096, max_duration_s=300
+)
+
+_CORTEX_SCOPE = (
+    "Exact analyzer inventory, successful TechVaultScenarioContext_1_0 execution "
+    "for 172.20.1.30, and TheHive Cortex connector status OK."
+)
+_TRANSCRIPT_SCOPE = (
+    "Every interactive shell session on the red-team workstation, with the "
+    "commands issued and the responses returned, attributable to a session and "
+    "ordered in time."
+)
+_SURICATA_READINESS_SCOPE = (
+    "Exact image and content identities and realized-byte digests, native "
+    "Suricata configuration result, selected source paths, and active local SIDs "
+    "and count."
+)
+_SQLI_SCOPE = (
+    "A fresh Kali-to-webapp POST /login containing UNION SELECT must yield "
+    "Suricata signature_id 1000010 and Wazuh rule id 303020; unrelated alerts "
+    "and aggregate counts do not satisfy this requirement."
+)
+
+
+def _offer(
+    offer_id: str,
+    *,
+    artifact_role: str,
+    media_type: str,
+    capture_kind: str,
+    source_refs: frozenset[str],
+    scope: str,
+    scope_refs: frozenset[str],
+    channel_kind: str,
+    window_kinds: frozenset[str],
+    integrity_mode: str,
+    redaction_policy: str,
+    source_class: str = "native",
+) -> ObservationCaptureOffer:
+    """Build one exact RAES offer; no wildcard can broaden TechVault admission."""
+
+    return ObservationCaptureOffer(
+        offer_id=offer_id,
+        offer_version="1.0.0",
+        output_contract="experiment-evidence-record-v1",
+        field_selectors=("",),
+        artifact_roles=frozenset({artifact_role}),
+        media_types=frozenset({media_type}),
+        capture_kind=capture_kind,
+        source_classes=frozenset({source_class}),
+        source_refs=source_refs,
+        scopes=frozenset({scope}),
+        scope_refs=scope_refs,
+        channel_kinds=frozenset({channel_kind}),
+        channel_refs=frozenset(),
+        window_kinds=window_kinds,
+        integrity_modes=frozenset({integrity_mode}),
+        sensitivity="plain",
+        availability="available",
+        fidelity="complete",
+        disclosure="redacted",
+        retention_policy_refs=frozenset({"run_lifetime"}),
+        export_policy="not-required",
+        redaction_policy=redaction_policy,
+    )
+
+
+_TECHVAULT_LIMITS = {
+    "cortex": CaptureLimits(1024 * 1024, 32, 300),
+    "readiness": CaptureLimits(256 * 1024, 1, 300),
+    "sqli": CaptureLimits(2 * 1024 * 1024, 256, 300),
+    "transcript": CaptureLimits(32 * 1024 * 1024, 4096, 24 * 60 * 60),
+}
+
+
+def _techvault_registration(
+    registration_id: str,
+    *,
+    offer: ObservationCaptureOffer,
+    limits: CaptureLimits,
+    chain_of_custody: bool = False,
+) -> CollectorRegistration:
+    return CollectorRegistration(
+        registration_id=registration_id,
+        implementation_version="1.0.0",
+        contract_version="experiment-capture-spec/v1",
+        channel_kind=next(iter(offer.channel_kinds)),
+        capture_kind=offer.capture_kind,
+        capture_scope="scenario",
+        window_kinds=offer.window_kinds,
+        media_types=offer.media_types,
+        required_artifact_roles=offer.artifact_roles,
+        supported_sensitivities=frozenset({"plain"}),
+        supports_redaction=True,
+        integrity_modes=offer.integrity_modes,
+        sealing_modes=frozenset({"digest"}),
+        supports_chain_of_custody=chain_of_custody,
+        supports_retention=True,
+        supports_loss_disclosure=True,
+        visibility_class=CaptureVisibility.EVALUATOR_ONLY,
+        limits=limits,
+        redaction_policies=frozenset({offer.redaction_policy or ""}),
+        retention_policies=offer.retention_policy_refs,
+        capture_offer=offer,
+    )
 
 
 def _builtin(
@@ -39,6 +146,7 @@ def _builtin(
     capture_scope: str,
     channel_kind: str,
     visibility_class: CaptureVisibility,
+    supports_loss_disclosure: bool = True,
 ) -> CollectorRegistration:
     """Build one built-in registration from the per-source axes + shared defaults.
 
@@ -63,15 +171,121 @@ def _builtin(
         sealing_modes=frozenset({"digest"}),
         supports_chain_of_custody=False,
         supports_retention=True,
-        supports_loss_disclosure=True,
+        redaction_policies=frozenset({"redact_secrets"}),
+        retention_policies=frozenset({"run_lifetime"}),
+        supports_loss_disclosure=supports_loss_disclosure,
         visibility_class=visibility_class,
         limits=_LIMITS,
     )
 
 
+_CORTEX_ENRICHMENT = _techvault_registration(
+    "aptl.collector.cortex-enrichment",
+    offer=_offer(
+        "aptl.collector.cortex-enrichment",
+        artifact_role="service_materialization_readback",
+        media_type="application/json",
+        capture_kind="observation",
+        source_refs=frozenset(
+            {
+                "nodes.cortex.runtime.platform_applications.cortex-enrichment",
+                "nodes.thehive.runtime.platform_applications.thehive-case-management",
+            }
+        ),
+        scope=_CORTEX_SCOPE,
+        scope_refs=frozenset({"nodes.cortex", "nodes.thehive"}),
+        channel_kind="participant-observation",
+        window_kinds=frozenset({"system_under_test"}),
+        integrity_mode="checksum",
+        redaction_policy="redact_secrets",
+    ),
+    limits=_TECHVAULT_LIMITS["cortex"],
+)
+
+_REDTEAM_SESSION_TRANSCRIPT = _techvault_registration(
+    "aptl.collector.redteam-session-transcript",
+    offer=_offer(
+        "aptl.collector.redteam-session-transcript",
+        artifact_role="participant_session_transcript",
+        media_type="text/plain",
+        capture_kind="observation",
+        source_refs=frozenset(),
+        scope=_TRANSCRIPT_SCOPE,
+        scope_refs=frozenset({"nodes.kali"}),
+        channel_kind="participant-observation",
+        window_kinds=frozenset({"the full run, from range readiness through teardown"}),
+        integrity_mode="chain_of_custody",
+        redaction_policy="redact_secrets",
+        source_class="apparatus",
+    ),
+    limits=_TECHVAULT_LIMITS["transcript"],
+    chain_of_custody=True,
+)
+
+_SURICATA_RULE_READINESS = _techvault_registration(
+    "aptl.collector.suricata-rule-readiness",
+    offer=_offer(
+        "aptl.collector.suricata-rule-readiness",
+        artifact_role="network_detection_rule_readiness",
+        media_type="text/plain",
+        capture_kind="log",
+        source_refs=frozenset(
+            {
+                "nodes.suricata.runtime.network_detection_engines.suricata-engine.rule_sources.suricata-builtin",
+                "nodes.suricata.runtime.network_detection_engines.suricata-engine.rule_sources.techvault-local",
+            }
+        ),
+        scope=_SURICATA_READINESS_SCOPE,
+        scope_refs=frozenset(
+            {
+                "nodes.suricata",
+                "content.suricata-config",
+                "content.suricata-local-rules",
+            }
+        ),
+        channel_kind="backend-log",
+        window_kinds=frozenset({"system_under_test"}),
+        integrity_mode="checksum",
+        redaction_policy="redact_sensitive",
+    ),
+    limits=_TECHVAULT_LIMITS["readiness"],
+)
+
+_SURICATA_WAZUH_SQLI = _techvault_registration(
+    "aptl.collector.suricata-wazuh-sqli",
+    offer=_offer(
+        "aptl.collector.suricata-wazuh-sqli",
+        artifact_role="network_detection_alert",
+        media_type="application/x-ndjson",
+        capture_kind="log",
+        source_refs=frozenset(
+            {
+                "nodes.suricata.runtime.network_detection_engines.suricata-engine.output_streams.eve-json",
+                "nodes.wazuh-manager.runtime.security_monitoring_managers.wazuh-manager.content_sets.suricata-rules",
+            }
+        ),
+        scope=_SQLI_SCOPE,
+        scope_refs=frozenset(
+            {
+                "nodes.webapp.runtime.applications.techvault-portal",
+                "nodes.suricata.runtime.network_detection_engines.suricata-engine.rule_sources.techvault-local",
+            }
+        ),
+        channel_kind="backend-log",
+        window_kinds=frozenset({"event", "participant_equivalent"}),
+        integrity_mode="checksum",
+        redaction_policy="redact_sensitive",
+    ),
+    limits=_TECHVAULT_LIMITS["sqli"],
+)
+
 #: The trusted built-in fleet — one per source owner, covering the acceptance
 #: criterion's synchronized red / container / network / defensive evidence.
 BUILTIN_REGISTRATIONS: tuple[CollectorRegistration, ...] = (
+    _CORTEX_ENRICHMENT,
+    _REDTEAM_SESSION_TRANSCRIPT,
+    _SURICATA_RULE_READINESS,
+    _SURICATA_WAZUH_SQLI,
     # Red-team activity via the MCP result envelope (participant's own action).
     _builtin(
         "aptl.collector.mcp-red",
@@ -111,5 +325,34 @@ BUILTIN_REGISTRATIONS: tuple[CollectorRegistration, ...] = (
         capture_scope="run",
         channel_kind="workflow-history",
         visibility_class=CaptureVisibility.APPARATUS_ONLY,
+        # A successful Tempo query does not account for SDK sampling, exporter
+        # queues, retry exhaustion or ingestion losses upstream of the query.
+        supports_loss_disclosure=False,
     ),
+)
+
+# The source is the native API projection already observed by provisioning,
+# reported through runtime-snapshot concerns, not best-effort OTel delivery.
+# It is wired by the scenario provisioner, not the generic query-source fleet.
+SERVICE_INDEX_READBACK_REGISTRATION = CollectorRegistration(
+    registration_id="aptl.collector.service-index-readback",
+    implementation_version="1.0.0",
+    contract_version="experiment-capture-spec/v1",
+    channel_kind="runtime-snapshot",
+    capture_kind="observation",
+    capture_scope="service",
+    window_kinds=frozenset({"event"}),
+    media_types=frozenset({"application/json"}),
+    required_artifact_roles=frozenset({"service_materialization_readback"}),
+    supported_sensitivities=frozenset({"public"}),
+    supports_redaction=True,
+    redaction_policies=frozenset({"redact_secrets"}),
+    integrity_modes=frozenset({"sha256-digest"}),
+    sealing_modes=frozenset({"digest"}),
+    supports_chain_of_custody=False,
+    supports_retention=True,
+    retention_policies=frozenset({"run_lifetime"}),
+    supports_loss_disclosure=True,
+    visibility_class=CaptureVisibility.APPARATUS_ONLY,
+    limits=_LIMITS,
 )

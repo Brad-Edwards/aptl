@@ -31,9 +31,14 @@ from aptl.core.deployment._compose_stateful_graph import (
     stateful_realization_errors,
 )
 from aptl.core.deployment._compose_stateful_model import (
+    artifact_environment_file_path,
     artifact_source_path as _artifact_source_path,
     effective_stateful_model_errors as _effective_stateful_model_errors,
     stateful_override_payload,
+)
+from aptl.core.deployment._cortex_service_credentials import (
+    CORTEX_SERVICE_CREDENTIALS_PROFILE,
+    realize_cortex_service_credentials,
 )
 from aptl.core.deployment._compose_stateful_readiness import (
     ComposeStatefulReadinessMixin,
@@ -50,6 +55,7 @@ from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
     DeploymentRealizationSpec,
+    valid_environment_variable_name,
 )
 from aptl.core.lab_types import LabResult
 
@@ -144,7 +150,10 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
                     f"generator {artifact.generator!r}."
                 ),
             )
-        return realizer(artifact, scenario_root)
+        failure = realizer(artifact, scenario_root)
+        if failure is None and artifact.environment_consumers:
+            failure = self._realize_artifact_environment_files(artifact, scenario_root)
+        return failure
 
     @staticmethod
     def _realize_ssh_key_bundle(
@@ -191,6 +200,9 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
 
         if artifact.provenance == FLAG_SIGNING_PROFILE_V2:
             return self._realize_flag_signing_keys(artifact, scenario_root)
+        if artifact.provenance == CORTEX_SERVICE_CREDENTIALS_PROFILE:
+            error = realize_cortex_service_credentials(artifact, scenario_root)
+            return LabResult(success=False, error=error) if error is not None else None
 
         unsupported_binding = (
             artifact.provenance not in WAZUH_MANAGER_CONFIG_PROVENANCES
@@ -241,6 +253,62 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
                 ),
             )
         return failure
+
+    @staticmethod
+    def _realize_artifact_environment_files(
+        artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Write exact output-to-variable bindings without putting secrets in YAML."""
+
+        if artifact.provenance != CORTEX_SERVICE_CREDENTIALS_PROFILE:
+            return LabResult(
+                success=False,
+                error=(
+                    f"Generated artifact {artifact.address} has unsupported "
+                    "environment delivery."
+                ),
+            )
+        root = artifact_source_path(scenario_root, artifact)
+        outputs = {output.name: root / output.path for output in artifact.outputs}
+        by_service: dict[str, list[tuple[str, Path]]] = {}
+        for consumer in artifact.environment_consumers:
+            if not valid_environment_variable_name(consumer.environment_variable):
+                return LabResult(
+                    success=False,
+                    error=f"Generated artifact {artifact.address} environment delivery failed.",
+                )
+            source = outputs.get(consumer.output_name)
+            if source is None or not source.is_file():
+                return LabResult(
+                    success=False,
+                    error=f"Generated artifact {artifact.address} is missing declared output.",
+                )
+            by_service.setdefault(consumer.service_name, []).append(
+                (consumer.environment_variable, source)
+            )
+        try:
+            for service_name, bindings in by_service.items():
+                target = artifact_environment_file_path(
+                    scenario_root, artifact, service_name
+                )
+                relative = target.relative_to(scenario_root.resolve())
+                target = _canonical_generated_path(scenario_root, relative)
+                _ensure_secure_dir(target.parent)
+                lines = []
+                for variable, source in sorted(bindings):
+                    value = source.read_text(encoding="utf-8").strip()
+                    if not value or "\n" in value or "\r" in value:
+                        raise ValueError("invalid generated environment value")
+                    lines.append(f"{variable}={value}")
+                _atomic_write_secure(target, "\n".join(lines) + "\n")
+                target.chmod(0o600)
+        except (OSError, ValueError):
+            return LabResult(
+                success=False,
+                error=f"Generated artifact {artifact.address} environment delivery failed.",
+            )
+        return None
 
     @staticmethod
     def _realize_flag_signing_keys(

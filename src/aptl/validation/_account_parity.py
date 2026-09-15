@@ -100,7 +100,10 @@ def _parse_provisioner_facts(script_text: str) -> _ProvisionerFacts:
 
 
 def check_account_provisioner_parity(
-    *, scenario: Scenario, project_dir: Path
+    *,
+    scenario: Scenario,
+    project_dir: Path,
+    realization_details: Mapping[str, object] | None = None,
 ) -> GateCheck:
     """Confirm every SDL-declared account attribute is provisioner-authoritative.
 
@@ -132,6 +135,10 @@ def check_account_provisioner_parity(
     groups, or SPNs than the SDL declares; a phantom SDL account or a
     phantom SDL-declared attribute still fails).
     """
+    if realization_details is not None:
+        diagnostics = _realized_account_parity(scenario, realization_details)
+        return GateCheck("account_provisioner_parity", *_outcome(diagnostics))
+
     script_path = project_dir / _PROVISION_USERS_SCRIPT
     if not script_path.exists():
         return GateCheck(
@@ -153,6 +160,61 @@ def check_account_provisioner_parity(
     for name, account in scenario.accounts.items():
         diagnostics.extend(_account_parity_diagnostics(name, account, facts))
     return GateCheck("account_provisioner_parity", *_outcome(diagnostics))
+
+
+def _realized_account_parity(
+    scenario: Scenario, realization_details: Mapping[str, object]
+) -> list[str]:
+    """Compare authored accounts with the admitted backend account placements."""
+
+    placements = realization_details.get("placements")
+    rows = placements if isinstance(placements, list) else []
+    by_name = {
+        str(row.get("name")): row
+        for row in rows
+        if isinstance(row, dict)
+        and row.get("resource_type") == "account-placement"
+        and isinstance(row.get("account"), dict)
+    }
+    diagnostics: list[str] = []
+    for name, account in scenario.accounts.items():
+        row = by_name.get(name)
+        if row is None:
+            diagnostics.append(
+                redact(f"SDL account {name!r} has no admitted account placement")
+            )
+            continue
+        realized = row["account"]
+        expected = {
+            "username": account.username,
+            "groups": sorted(account.groups),
+            "mail": account.mail,
+            "spn": account.spn,
+            "disabled": bool(account.disabled),
+        }
+        actual = {
+            "username": realized.get("username"),
+            "groups": sorted(realized.get("groups") or []),
+            "mail": realized.get("mail"),
+            "spn": realized.get("spn"),
+            "disabled": realized.get("disabled"),
+        }
+        target = row.get("target_node")
+        if target != f"provision.node.{account.node}":
+            diagnostics.append(
+                redact(
+                    f"SDL account {name!r} has a mismatched admitted account-placement target_node"
+                )
+            )
+        for field_name, expected_value in expected.items():
+            if actual[field_name] != expected_value:
+                diagnostics.append(
+                    redact(
+                        f"SDL account {name!r} has a mismatched admitted "
+                        f"account-placement field {field_name!r}"
+                    )
+                )
+    return diagnostics
 
 
 def _account_parity_diagnostics(
@@ -184,7 +246,9 @@ def _group_parity_diagnostics(
     label: str, account: Account, username: str, facts: _ProvisionerFacts
 ) -> list[str]:
     """Report SDL-declared groups the provisioner never adds this user to."""
-    missing_groups = set(account.groups) - facts.groups_by_user.get(username, frozenset())
+    missing_groups = set(account.groups) - facts.groups_by_user.get(
+        username, frozenset()
+    )
     if not missing_groups:
         return []
     return [
@@ -220,7 +284,9 @@ def _spn_parity_diagnostics(
 ) -> list[str]:
     """Report a declared SPN the provisioner never sets for this user."""
     declared_spn = account.spn
-    if not declared_spn or declared_spn in facts.spns_by_user.get(username, frozenset()):
+    if not declared_spn or declared_spn in facts.spns_by_user.get(
+        username, frozenset()
+    ):
         return []
     return [
         redact(

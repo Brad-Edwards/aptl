@@ -10,6 +10,7 @@ scenario id.
 gate validates.
 """
 
+import copy
 import subprocess
 import tempfile
 from pathlib import Path
@@ -74,7 +75,14 @@ _OPERATIONAL_BUNDLE = techvault_scenario_bundle(
 )
 OPERATIONAL_SCENARIO = _OPERATIONAL_BUNDLE.sdl_path
 PAPER_SCENARIO = PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
-PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy", "webapp-proxy"})
+PROFILE_INFRASTRUCTURE_SERVICES = frozenset(
+    {
+        "kali-ssh-proxy",
+        "webapp-proxy",
+        "wazuh-sidecar-db",
+        "wazuh-sidecar-suricata",
+    }
+)
 
 
 def _bundle(root, sdl_path=None):
@@ -154,12 +162,16 @@ def test_operational_scenario_matches_public_start_profiles_and_services():
 
 
 def test_operational_scenario_lowers_wazuh_stateful_resources():
+    from aptl_techvault.runtime_parameters import runtime_parameters_for_bundle
+
     config = load_config(PROJECT_ROOT / "aptl.json")
     scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
     assert scenario is not None
     assert parse_check.passed, parse_check.diagnostics
 
-    bundle = _bundle(PROJECT_ROOT, OPERATIONAL_SCENARIO)
+    bundle = _OPERATIONAL_BUNDLE
+    parameters = runtime_parameters_for_bundle(bundle)
+    assert parameters is not None
     execution_plan = RuntimeManager(
         create_aptl_runtime_target(
             project_dir=PROJECT_ROOT,
@@ -167,7 +179,7 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
             backend=_NoStartBackend(),
             bundle=bundle,
         )
-    ).plan(scenario)
+    ).plan(scenario, parameters=parameters)
     realization = interpret_provisioning_plan(
         plan=execution_plan.provisioning,
         config=config,
@@ -185,17 +197,23 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
     generators = {item["generator"] for item in details["generated_artifacts"]}
     assert generators == {"certificate_bundle", "rendered_config", "ssh_key_bundle"}
     artifacts = {item["name"]: item for item in details["generated_artifacts"]}
-    assert {output["path"] for output in artifacts["wazuh-indexer-certs"]["outputs"]} == {
+    assert {
+        output["path"] for output in artifacts["wazuh-indexer-certs"]["outputs"]
+    } == {
         "root-ca.pem",
         "wazuh.indexer-key.pem",
         "wazuh.indexer.pem",
     }
-    assert {output["path"] for output in artifacts["wazuh-manager-certs"]["outputs"]} == {
+    assert {
+        output["path"] for output in artifacts["wazuh-manager-certs"]["outputs"]
+    } == {
         "root-ca-manager.pem",
         "wazuh.manager-key.pem",
         "wazuh.manager.pem",
     }
-    assert {output["path"] for output in artifacts["wazuh-dashboard-certs"]["outputs"]} == {
+    assert {
+        output["path"] for output in artifacts["wazuh-dashboard-certs"]["outputs"]
+    } == {
         "root-ca.pem",
         "wazuh.dashboard-key.pem",
         "wazuh.dashboard.pem",
@@ -412,7 +430,7 @@ def _write_compose(project_dir, services):
     (project_dir / "docker-compose.yml").write_text("\n".join(lines))
 
 
-def _node_plan(node_name, *, node_type="vm", os_family="linux"):
+def _node_plan(node_name, *, node_kind="compute", os_family="linux"):
     address = f"provision.node.{node_name}"
     resource = PlannedResource(
         address=address,
@@ -421,7 +439,7 @@ def _node_plan(node_name, *, node_type="vm", os_family="linux"):
         payload={
             "name": node_name,
             "node_name": node_name,
-            "node_type": node_type,
+            "node_kind": node_kind,
             "os_family": os_family,
             "spec": {"node": {"name": node_name}, "infrastructure": {}},
         },
@@ -621,9 +639,7 @@ def test_check_import_lock_missing_and_unavailable(tmp_path, monkeypatch):
 
     check = check_import_lock(path, scenario)
     assert not check.passed
-    assert any(
-        "missing import lockfile" in d for d in check.diagnostics
-    )
+    assert any("missing import lockfile" in d for d in check.diagnostics)
 
     (tmp_path / LOCKFILE_NAME).write_text("{}")
     monkeypatch.setattr(gc, "run_raes", lambda *a, **k: None)
@@ -670,6 +686,98 @@ def test_check_provisioning_realization_handles_raise(monkeypatch):
     assert not check.passed
 
 
+def test_check_provisioning_realization_rejects_planner_errors(monkeypatch, tmp_path):
+    """The static gate must not interpret a plan RAES already rejected."""
+
+    scenario = SimpleNamespace(variables={})
+    availability = object()
+    target = object()
+    plan_error = SimpleNamespace(
+        severity="error",
+        code="realization.unsupported-exact-requirement",
+        message="backend cannot prove the authored exact runtime concern",
+    )
+    execution_plan = SimpleNamespace(
+        diagnostics=(plan_error,),
+        provisioning=object(),
+    )
+    planned: dict[str, object] = {}
+
+    bundle = SimpleNamespace(root=tmp_path)
+    monkeypatch.setattr(gc, "resolve_scenario_bundle", lambda *_args: bundle)
+    monkeypatch.setattr(
+        gc,
+        "artifact_availability_for_scenario",
+        lambda selected_scenario, backend, **kwargs: availability,
+        raising=False,
+    )
+    monkeypatch.setattr(gc, "create_aptl_runtime_target", lambda **_kwargs: target)
+
+    def _plan_aptl_scenario(**kwargs):
+        assert kwargs.pop("target") is target
+        assert kwargs.pop("bundle") is bundle
+        planned.update(kwargs)
+        return execution_plan
+
+    monkeypatch.setattr(gc, "plan_aptl_scenario", _plan_aptl_scenario)
+    interpreted = False
+
+    def _interpret(**_kwargs):
+        nonlocal interpreted
+        interpreted = True
+        raise AssertionError("a rejected plan must not be interpreted")
+
+    monkeypatch.setattr(gc, "interpret_provisioning_plan", _interpret)
+
+    details, check = check_provisioning_realization(
+        scenario=scenario,
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "t"}),
+    )
+
+    assert details is None
+    assert not check.passed
+    assert not interpreted
+    assert planned["artifact_availability"] is availability
+    assert any(plan_error.code in diagnostic for diagnostic in check.diagnostics)
+
+
+def test_backend_conformance_uses_hermetic_probe_scenario(monkeypatch, tmp_path):
+    """Scenario admission is separate from the backend adapter's probe corpus."""
+
+    target = object()
+    report = SimpleNamespace(
+        passed=True,
+        cases=(),
+        diagnostics=(),
+        unsupported_contract_gaps=(),
+        unsupported_capability_gaps=(),
+    )
+    observed_options: dict[str, object] = {}
+    monkeypatch.setattr(gc, "resolve_scenario_bundle", lambda *_args: object())
+    monkeypatch.setattr(gc, "create_aptl_runtime_target", lambda **_kwargs: target)
+
+    def _run(selected_target, **options):
+        assert selected_target is target
+        observed_options.update(options)
+        return report
+
+    monkeypatch.setattr(gc, "run_target_conformance", _run)
+    monkeypatch.setattr(gc, "conformance_cli_diagnostics", lambda *_args: [])
+
+    check = check_backend_conformance(
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "t"}),
+        profile="full-remote-control-plane",
+        fixtures_root=None,
+        profiles_root=None,
+        reference_scenario=SimpleNamespace(variables={}),
+    )
+
+    assert check.passed
+    assert "name: aptl-conformance" in observed_options["reference_scenario"]
+
+
 def test_check_provisioning_realization_fails_on_profile_mismatch(tmp_path):
     from textwrap import dedent
 
@@ -684,7 +792,7 @@ def test_check_provisioning_realization_fails_on_profile_mismatch(tmp_path):
               internal-net:
                 type: switch
               kali:
-                type: vm
+                type: compute
                 services:
                   - {name: ssh, port: 22, protocol: tcp}
             infrastructure:
@@ -751,14 +859,13 @@ def test_operational_scenario_content_and_accounts_are_honest():
     ]
     assert content_placements
     # A content-placement lowers to exactly one typed realization: an ordinary
-    # file/directory ("content"), a logical evidence dataset ("dataset"), or (ADR-088,
-    # issue #889) a service-search-index-schema materialization
-    # ("service_index_schema") -- the Cortex job index is realized honestly.
+    # file/directory ("content") or a logical evidence dataset ("dataset").
+    # TechVault 6.0 removed the old Cortex job index schema placement.
     assert all(
         "content" in p or "dataset" in p or "service_index_schema" in p
         for p in content_placements
     )
-    assert any("service_index_schema" in p for p in content_placements)
+    assert not any("service_index_schema" in p for p in content_placements)
     assert account_placements
     assert all("account" in p for p in account_placements)
 
@@ -775,7 +882,7 @@ def test_provisioning_realization_fails_on_unrealizable_content(tmp_path):
             name: bad-content
             nodes:
               fileshare:
-                type: vm
+                type: compute
                 services:
                   - {name: smb, port: 445, protocol: tcp}
             content:
@@ -814,38 +921,177 @@ def test_provisioning_realization_fails_on_unrealizable_content(tmp_path):
 
 
 def test_account_provisioner_parity_passes_for_operational_scenario():
+    config = load_config(PROJECT_ROOT / "aptl.json")
     scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
     assert parse_check.passed
     assert scenario is not None
 
+    details, realization_check = check_provisioning_realization(
+        scenario=scenario, project_dir=PROJECT_ROOT, config=config
+    )
+    assert realization_check.passed, realization_check.diagnostics
+    assert details is not None
+
     check = check_account_provisioner_parity(
-        scenario=scenario, project_dir=PROJECT_ROOT
+        scenario=scenario,
+        project_dir=PROJECT_ROOT,
+        realization_details=details,
     )
 
     assert check.passed, check.diagnostics
 
 
-def test_account_provisioner_parity_fails_on_phantom_account():
-    from raes.accounts import Account, PasswordStrength
+@pytest.fixture(scope="module")
+def operational_realization_details():
+    """Plan the released pack once for realized account-parity rejection tests."""
+
+    config = load_config(PROJECT_ROOT / "aptl.json")
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed
+    assert scenario is not None
+    details, realization_check = check_provisioning_realization(
+        scenario=scenario, project_dir=PROJECT_ROOT, config=config
+    )
+    assert realization_check.passed, realization_check.diagnostics
+    assert details is not None
+    return details
+
+
+def _account_row(details, name):
+    copied = copy.deepcopy(details)
+    row = next(
+        item
+        for item in copied["placements"]
+        if item.get("resource_type") == "account-placement" and item.get("name") == name
+    )
+    return copied, row
+
+
+def test_account_provisioner_parity_fails_on_missing_realized_account(
+    operational_realization_details,
+):
 
     scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
     assert parse_check.passed
     assert scenario is not None
-    scenario.accounts["phantom-user"] = Account(
-        username="not-a-real-provisioner-user",
-        node="ad",
-        password_strength=PasswordStrength.WEAK,
-    )
+    details, row = _account_row(operational_realization_details, "ad-jessica-williams")
+    details["placements"].remove(row)
 
     check = check_account_provisioner_parity(
-        scenario=scenario, project_dir=PROJECT_ROOT
+        scenario=scenario,
+        project_dir=PROJECT_ROOT,
+        realization_details=details,
     )
 
     assert not check.passed
-    assert any("not-a-real-provisioner-user" in d for d in check.diagnostics)
+    assert any(
+        "ad-jessica-williams" in d and "no admitted account placement" in d
+        for d in check.diagnostics
+    )
 
 
-def test_account_provisioner_parity_fails_closed_when_script_missing(tmp_path):
+def test_account_provisioner_parity_fails_on_wrong_realized_target(
+    operational_realization_details,
+):
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed
+    assert scenario is not None
+    details, row = _account_row(operational_realization_details, "ad-jessica-williams")
+    row["target_node"] = "provision.node.webapp"
+
+    check = check_account_provisioner_parity(
+        scenario=scenario,
+        project_dir=PROJECT_ROOT,
+        realization_details=details,
+    )
+
+    assert not check.passed
+    assert any("target_node" in d for d in check.diagnostics)
+
+
+def test_account_provisioner_parity_fails_on_undeclared_group(
+    operational_realization_details,
+):
+    """A declared group the provisioner never adds must fail closed."""
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed
+    assert scenario is not None
+    details, row = _account_row(operational_realization_details, "ad-jessica-williams")
+    row["account"]["groups"] = [*row["account"]["groups"], "Finance"]
+
+    check = check_account_provisioner_parity(
+        scenario=scenario,
+        project_dir=PROJECT_ROOT,
+        realization_details=details,
+    )
+
+    assert not check.passed
+    assert any("groups" in d for d in check.diagnostics)
+
+
+def test_account_provisioner_parity_fails_on_mail_mismatch(
+    operational_realization_details,
+):
+    """A declared mail address that doesn't match the provisioner's --mail must fail closed."""
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed
+    assert scenario is not None
+    details, row = _account_row(operational_realization_details, "ad-jessica-williams")
+    row["account"]["mail"] = "jessica.williams@example.com"
+
+    check = check_account_provisioner_parity(
+        scenario=scenario,
+        project_dir=PROJECT_ROOT,
+        realization_details=details,
+    )
+
+    assert not check.passed
+    assert any("mail" in d.lower() for d in check.diagnostics)
+
+
+def test_account_provisioner_parity_fails_on_spn_mismatch(
+    operational_realization_details,
+):
+    """A declared SPN the provisioner never sets via `samba-tool spn add` must fail closed."""
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed
+    assert scenario is not None
+    details, row = _account_row(operational_realization_details, "ad-svc-sql")
+    row["account"]["spn"] = "HTTP/bogus.techvault.local"
+
+    check = check_account_provisioner_parity(
+        scenario=scenario,
+        project_dir=PROJECT_ROOT,
+        realization_details=details,
+    )
+
+    assert not check.passed
+    assert any("spn" in d.lower() for d in check.diagnostics)
+
+
+def test_account_provisioner_parity_fails_on_undisabled_account(
+    operational_realization_details,
+):
+    """A declared disabled=True account the provisioner never disables must fail closed."""
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed
+    assert scenario is not None
+    details, row = _account_row(operational_realization_details, "ad-former-employee")
+    row["account"]["disabled"] = not bool(
+        scenario.accounts["ad-former-employee"].disabled
+    )
+
+    check = check_account_provisioner_parity(
+        scenario=scenario,
+        project_dir=PROJECT_ROOT,
+        realization_details=details,
+    )
+
+    assert not check.passed
+    assert any("disabled" in d.lower() for d in check.diagnostics)
+
+
+def test_account_provisioner_parity_fallback_fails_when_script_missing(tmp_path):
     scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
     assert parse_check.passed
     assert scenario is not None
@@ -854,70 +1100,6 @@ def test_account_provisioner_parity_fails_closed_when_script_missing(tmp_path):
 
     assert not check.passed
     assert any("provisioner script missing" in d.lower() for d in check.diagnostics)
-
-
-def test_account_provisioner_parity_fails_on_undeclared_group():
-    """A declared group the provisioner never adds must fail closed."""
-    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
-    assert parse_check.passed
-    assert scenario is not None
-    account = scenario.accounts["ad-jessica-williams"]
-    account.groups = [*account.groups, "Finance"]
-
-    check = check_account_provisioner_parity(
-        scenario=scenario, project_dir=PROJECT_ROOT
-    )
-
-    assert not check.passed
-    assert any("Finance" in d and "group" in d.lower() for d in check.diagnostics)
-
-
-def test_account_provisioner_parity_fails_on_mail_mismatch():
-    """A declared mail address that doesn't match the provisioner's --mail must fail closed."""
-    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
-    assert parse_check.passed
-    assert scenario is not None
-    account = scenario.accounts["ad-jessica-williams"]
-    account.mail = "jessica.williams@example.com"
-
-    check = check_account_provisioner_parity(
-        scenario=scenario, project_dir=PROJECT_ROOT
-    )
-
-    assert not check.passed
-    assert any("mail" in d.lower() for d in check.diagnostics)
-
-
-def test_account_provisioner_parity_fails_on_spn_mismatch():
-    """A declared SPN the provisioner never sets via `samba-tool spn add` must fail closed."""
-    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
-    assert parse_check.passed
-    assert scenario is not None
-    account = scenario.accounts["ad-svc-sql"]
-    account.spn = "HTTP/bogus.techvault.local"
-
-    check = check_account_provisioner_parity(
-        scenario=scenario, project_dir=PROJECT_ROOT
-    )
-
-    assert not check.passed
-    assert any("spn" in d.lower() for d in check.diagnostics)
-
-
-def test_account_provisioner_parity_fails_on_undisabled_account():
-    """A declared disabled=True account the provisioner never disables must fail closed."""
-    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
-    assert parse_check.passed
-    assert scenario is not None
-    account = scenario.accounts["ad-former-employee"]
-    account.disabled = True
-
-    check = check_account_provisioner_parity(
-        scenario=scenario, project_dir=PROJECT_ROOT
-    )
-
-    assert not check.passed
-    assert any("disabled" in d.lower() for d in check.diagnostics)
 
 
 def test_provisioner_relaxes_password_policy_before_user_creation():

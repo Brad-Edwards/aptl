@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -26,7 +27,9 @@ from aptl.core.deployment._stateful_certificates import (
     certificate_bundle_evidence,
     validate_certificate_bundle,
 )
+from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.deployment.realization import (
+    DeploymentGeneratedArtifactEnvironmentConsumer,
     DeploymentGeneratedArtifactOutput,
     DeploymentGeneratedArtifactRealization,
     DeploymentImageRealization,
@@ -162,6 +165,266 @@ def _rendered_config_spec() -> DeploymentRealizationSpec:
         networks=(),
         generated_artifacts=(artifact,),
     )
+
+
+def _cortex_credentials_spec() -> DeploymentRealizationSpec:
+    artifact = DeploymentGeneratedArtifactRealization(
+        address="provision.generated-artifact.cortex-service-credentials",
+        name="cortex-service-credentials",
+        generator="rendered_config",
+        lifecycle="reuse_valid",
+        provenance="techvault:cortex-service-credentials/v1",
+        outputs=(
+            DeploymentGeneratedArtifactOutput(
+                name="initializer-api-key",
+                path="cortex/initializer-api-key",
+                sensitivity="secret",
+            ),
+            DeploymentGeneratedArtifactOutput(
+                name="connector-api-key",
+                path="cortex/connector-api-key",
+                sensitivity="secret",
+            ),
+        ),
+        consumers=(),
+        environment_consumers=(
+            DeploymentGeneratedArtifactEnvironmentConsumer(
+                target_address="provision.node.thehive",
+                node_name="thehive",
+                service_name="thehive",
+                output_name="connector-api-key",
+                environment_variable="TH_CORTEX_KEYS",
+            ),
+            DeploymentGeneratedArtifactEnvironmentConsumer(
+                target_address="provision.node.cortex-initializer",
+                node_name="cortex-initializer",
+                service_name="cortex-initializer",
+                output_name="initializer-api-key",
+                environment_variable="CORTEX_ADMIN_KEY",
+            ),
+        ),
+    )
+    return DeploymentRealizationSpec(
+        profiles=("soc",),
+        nodes=(
+            DeploymentNodeRealization(
+                address="provision.node.thehive",
+                name="thehive",
+                service_name="thehive",
+                container_name="aptl-thehive",
+                networks=(),
+            ),
+            DeploymentNodeRealization(
+                address="provision.node.cortex-initializer",
+                name="cortex-initializer",
+                service_name="cortex-initializer",
+                container_name="aptl-cortex-initializer",
+                networks=(),
+            ),
+        ),
+        networks=(),
+        images=(
+            DeploymentImageRealization(
+                address="provision.node.thehive",
+                service_name="thehive",
+                source_name="thehive",
+                source_version="1",
+                image_ref="thehive@sha256:" + "a" * 64,
+                mode="pull",
+                policy_rule="exact-artifact",
+            ),
+            DeploymentImageRealization(
+                address="provision.node.cortex-initializer",
+                service_name="cortex-initializer",
+                source_name="cortex",
+                source_version="1",
+                image_ref="cortex@sha256:" + "b" * 64,
+                mode="pull",
+                policy_rule="exact-artifact",
+            ),
+        ),
+        generated_artifacts=(artifact,),
+    )
+
+
+def test_cortex_credentials_are_generated_distinctly_and_reused(tmp_path: Path) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    artifact = _cortex_credentials_spec().generated_artifacts[0]
+
+    assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
+    root = tmp_path / ".aptl/realization/cortex-service-credentials"
+    initializer = (root / "cortex/initializer-api-key").read_text().strip()
+    connector = (root / "cortex/connector-api-key").read_text().strip()
+    assert len(initializer) >= 32
+    assert len(connector) >= 32
+    assert initializer != connector
+    assert (root.stat().st_mode & 0o777) == 0o700
+    assert ((root / "cortex/connector-api-key").stat().st_mode & 0o777) == 0o600
+
+    assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
+    assert (root / "cortex/initializer-api-key").read_text().strip() == initializer
+    assert (root / "cortex/connector-api-key").read_text().strip() == connector
+
+
+def test_cortex_credentials_bind_only_declared_environment_names(
+    tmp_path: Path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    spec = _cortex_credentials_spec()
+    artifact = spec.generated_artifacts[0]
+    assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
+
+    payload = stateful_override_payload(tmp_path, "aptl-test", spec)
+
+    thehive_env_files = payload["services"]["thehive"]["env_file"]
+    assert len(thehive_env_files) == 1
+    text = Path(thehive_env_files[0]).read_text()
+    assert text.startswith("TH_CORTEX_KEYS=")
+    assert "CORTEX_ADMIN_KEY" not in text
+    assert payload["services"]["cortex-initializer"]["env_file"]
+
+
+def test_generated_environment_file_rejects_variable_name_injection(
+    tmp_path: Path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    spec = _cortex_credentials_spec()
+    artifact = spec.generated_artifacts[0]
+    injected = replace(
+        artifact.environment_consumers[0],
+        environment_variable="SAFE\nINJECTED",
+    )
+    artifact = replace(
+        artifact,
+        environment_consumers=(injected, *artifact.environment_consumers[1:]),
+    )
+
+    failure = backend._realize_one_generated_artifact(artifact, tmp_path)
+
+    assert failure is not None
+    assert failure.success is False
+    assert not list((tmp_path / ".aptl/realization/env").glob("*.env"))
+
+
+def test_image_free_generated_environment_uses_the_declared_output(
+    tmp_path: Path,
+) -> None:
+    from dataclasses import replace
+
+    from aptl.backends.raes_base_substrate import BaseContainerSpec
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    spec = _cortex_credentials_spec()
+    artifact = spec.generated_artifacts[0]
+    consumer = replace(
+        artifact.environment_consumers[0],
+        target_address="provision.node.kali",
+        node_name="kali",
+        service_name="kali",
+        environment_variable="CORTEX_KEY",
+    )
+    artifact = replace(artifact, environment_consumers=(consumer,))
+    realization = replace(spec, generated_artifacts=(artifact,))
+
+    failure, operations = backend._image_free_generated_artifact_ops(
+        realization,
+        frozenset({"provision.node.kali"}),
+        tmp_path,
+    )
+
+    assert failure is None
+    assert operations == {}
+    argv: list[str] = []
+    backend._append_base_environment(
+        argv,
+        BaseContainerSpec(
+            node_address="provision.node.kali",
+            container_name="aptl-kali",
+            image_ref="debian:12-slim",
+            runs_services=True,
+            environment_names=("CORTEX_KEY",),
+        ),
+    )
+    body = Path(argv[1]).read_text()
+    expected = (
+        (
+            tmp_path
+            / ".aptl/realization/cortex-service-credentials/cortex/connector-api-key"
+        )
+        .read_text()
+        .strip()
+    )
+    assert body == f"CORTEX_KEY={expected}\n"
+
+
+def test_base_environment_file_rejects_variable_name_injection(tmp_path: Path) -> None:
+    from aptl.backends.raes_base_substrate import BaseContainerSpec
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    argv: list[str] = []
+    spec = BaseContainerSpec(
+        node_address="provision.node.kali",
+        container_name="aptl-kali",
+        image_ref="debian:12-slim",
+        runs_services=False,
+        environment_names=("SAFE\nINJECTED",),
+        environment_defaults=(("SAFE\nINJECTED", "value"),),
+    )
+
+    with pytest.raises(BackendSeedError, match="environment variable name"):
+        backend._append_base_environment(argv, spec)
+
+    assert argv == []
+    assert not (tmp_path / ".aptl/realization/env/aptl-kali.env").exists()
+
+
+def test_base_environment_file_rejects_value_line_injection(tmp_path: Path) -> None:
+    from aptl.backends.raes_base_substrate import BaseContainerSpec
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    argv: list[str] = []
+    spec = BaseContainerSpec(
+        node_address="provision.node.kali",
+        container_name="aptl-kali",
+        image_ref="debian:12-slim",
+        runs_services=False,
+        environment_names=("SAFE",),
+        environment_defaults=(("SAFE", "value\nINJECTED=1"),),
+    )
+
+    with pytest.raises(BackendSeedError, match="environment value"):
+        backend._append_base_environment(argv, spec)
+
+    assert argv == []
+    assert not (tmp_path / ".aptl/realization/env/aptl-kali.env").exists()
+
+
+def test_image_free_environment_binding_rejects_variable_name_injection(
+    tmp_path: Path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    spec = _cortex_credentials_spec()
+    artifact = spec.generated_artifacts[0]
+    consumer = replace(
+        artifact.environment_consumers[0],
+        target_address="provision.node.kali",
+        node_name="kali",
+        service_name="kali",
+        environment_variable="SAFE\nINJECTED",
+    )
+    artifact = replace(artifact, environment_consumers=(consumer,))
+    realization = replace(spec, generated_artifacts=(artifact,))
+
+    failure, operations = backend._image_free_generated_artifact_ops(
+        realization,
+        frozenset({"provision.node.kali"}),
+        tmp_path,
+    )
+
+    assert failure is not None
+    assert failure.success is False
+    assert operations == {}
+    assert backend._image_free_generated_environment == {}
 
 
 def _certificate_outputs() -> tuple[DeploymentGeneratedArtifactOutput, ...]:
@@ -579,7 +842,7 @@ def test_generated_compose_model_is_validated_before_up(
     monkeypatch.setattr(
         backend,
         "_realization_result",
-        lambda start_result, spec: start_result,
+        lambda start_result, spec, observation_context: start_result,
     )
 
     result = backend.realize(spec, build=False, scenario_root=tmp_path)
@@ -793,13 +1056,15 @@ def test_stateful_wazuh_readiness_is_authenticated_and_observed(
     checked: list[tuple[str, str, str]] = []
     monkeypatch.setattr(
         f"{_READINESS}.probe_indexer_api",
-        lambda url, username, password: checked.append((url, username, password))
-        or _indexer_probe(200),
+        lambda url, username, password: (
+            checked.append((url, username, password)) or _indexer_probe(200)
+        ),
     )
     monkeypatch.setattr(
         f"{_READINESS}.probe_manager_api",
-        lambda url, username, password: checked.append((url, username, password))
-        or _manager_probe(*_MANAGER_READY),
+        lambda url, username, password: (
+            checked.append((url, username, password)) or _manager_probe(*_MANAGER_READY)
+        ),
     )
 
     result = backend._verify_stateful_authenticated_readiness(
@@ -906,8 +1171,9 @@ def test_a_proven_service_is_not_reprobed_while_another_warms_up(
     indexer_probes: list[str] = []
     monkeypatch.setattr(
         f"{_READINESS}.probe_indexer_api",
-        lambda url, username, password: indexer_probes.append(url)
-        or _indexer_probe(next(indexer_statuses)),
+        lambda url, username, password: (
+            indexer_probes.append(url) or _indexer_probe(next(indexer_statuses))
+        ),
     )
     probes = iter(
         [
@@ -948,8 +1214,9 @@ def test_persistent_manager_tls_failure_fails_closed_with_its_phase(
     probes: list[str] = []
     monkeypatch.setattr(
         f"{_READINESS}.probe_manager_api",
-        lambda url, username, password: probes.append(url)
-        or _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35),
+        lambda url, username, password: (
+            probes.append(url) or _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35)
+        ),
     )
     slept = _polling(monkeypatch, timeout=10, clock=[0.0, 5.0, 10.0])
 
@@ -988,8 +1255,9 @@ def test_readiness_retry_sleep_is_clamped_to_the_remaining_budget(
     probes: list[str] = []
     monkeypatch.setattr(
         f"{_READINESS}.probe_manager_api",
-        lambda url, username, password: probes.append(url)
-        or _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35),
+        lambda url, username, password: (
+            probes.append(url) or _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35)
+        ),
     )
     # 8s budget, 5s interval: after the second round only 2s remain, so the
     # loop sleeps 2s and makes its last probe at the deadline.
@@ -1081,13 +1349,13 @@ def test_unpublished_api_port_is_reported_without_probing(
     probed: list[str] = []
     monkeypatch.setattr(
         f"{_READINESS}.probe_indexer_api",
-        lambda url, username, password: probed.append(url)
-        or _indexer_probe(200),
+        lambda url, username, password: probed.append(url) or _indexer_probe(200),
     )
     monkeypatch.setattr(
         f"{_READINESS}.probe_manager_api",
-        lambda url, username, password: probed.append(url)
-        or _manager_probe(*_MANAGER_READY),
+        lambda url, username, password: (
+            probed.append(url) or _manager_probe(*_MANAGER_READY)
+        ),
     )
     _polling(monkeypatch, timeout=0, clock=[0.0, 0.0])
 
@@ -1137,9 +1405,7 @@ def test_authenticated_readiness_rejects_an_unapplied_manager_config(
 
     monkeypatch.setattr(backend, "container_exec", _exec)
 
-    result = backend._verify_stateful_authenticated_readiness(
-        _rendered_config_spec()
-    )
+    result = backend._verify_stateful_authenticated_readiness(_rendered_config_spec())
 
     assert result is not None
     assert result.success is False
@@ -1192,9 +1458,7 @@ def test_authenticated_readiness_accepts_an_applied_manager_config(
 
     monkeypatch.setattr(backend, "container_exec", _exec)
 
-    result = backend._verify_stateful_authenticated_readiness(
-        _rendered_config_spec()
-    )
+    result = backend._verify_stateful_authenticated_readiness(_rendered_config_spec())
 
     assert result is None
     assert executed == ["aptl-wazuh-manager"]
@@ -1362,7 +1626,9 @@ def test_image_free_consumers_receive_their_selected_outputs_as_placed_files(
         ),
     )
     realization = DeploymentRealizationSpec(
-        profiles=(), nodes=(), networks=(),
+        profiles=(),
+        nodes=(),
+        networks=(),
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
@@ -1389,7 +1655,9 @@ def test_an_artifact_with_no_image_free_consumer_is_not_generated_here(
     staged = _stub_ssh_generator(monkeypatch)
     consumer = _image_free_consumer("kali", selected=("target-authorized-keys",))
     realization = DeploymentRealizationSpec(
-        profiles=(), nodes=(), networks=(),
+        profiles=(),
+        nodes=(),
+        networks=(),
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
@@ -1407,10 +1675,15 @@ def test_a_generator_failure_stops_image_free_placement(
     """Nothing is placed from an artifact that failed to generate."""
 
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    backend._image_free_generated_environment = {
+        "provision.node.workstation": {"STALE_SECRET": "must-not-survive"}
+    }
     _stub_ssh_generator(monkeypatch, error="no entropy source")
     consumer = _image_free_consumer("workstation", selected=("target-authorized-keys",))
     realization = DeploymentRealizationSpec(
-        profiles=(), nodes=(), networks=(),
+        profiles=(),
+        nodes=(),
+        networks=(),
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
@@ -1421,6 +1694,7 @@ def test_a_generator_failure_stops_image_free_placement(
     assert failure is not None
     assert failure.success is False
     assert ops == {}
+    assert backend._image_free_generated_environment == {}
 
 
 def test_a_declared_output_that_never_materialized_stops_image_free_placement(
@@ -1431,11 +1705,15 @@ def test_a_declared_output_that_never_materialized_stops_image_free_placement(
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     monkeypatch.setattr(
         "aptl.core.deployment._compose_stateful_realization.realize_ssh_key_bundle",
-        lambda artifact, staging_root, **kwargs: None,  # reports success, writes nothing
+        lambda artifact, staging_root, **kwargs: (
+            None
+        ),  # reports success, writes nothing
     )
     consumer = _image_free_consumer("workstation", selected=("target-authorized-keys",))
     realization = DeploymentRealizationSpec(
-        profiles=(), nodes=(), networks=(),
+        profiles=(),
+        nodes=(),
+        networks=(),
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
@@ -1506,9 +1784,7 @@ def test_the_soc_service_set_is_derived_from_the_declared_bundle_outputs(
 
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     artifact = _soc_artifact()
-    requested = _stub_soc_certs(
-        monkeypatch, written=[o.path for o in artifact.outputs]
-    )
+    requested = _stub_soc_certs(monkeypatch, written=[o.path for o in artifact.outputs])
 
     assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
 
@@ -1644,16 +1920,23 @@ def _content_override_spec(tmp_path: Path):
         profiles=(),
         nodes=(
             DeploymentNodeRealization(
-                address="provision.node.tempo", name="tempo", service_name="tempo",
-                container_name="aptl-tempo", networks=(),
+                address="provision.node.tempo",
+                name="tempo",
+                service_name="tempo",
+                container_name="aptl-tempo",
+                networks=(),
             ),
         ),
         networks=(),
         images=(
             DeploymentImageRealization(
-                address="provision.node.tempo", service_name="tempo",
-                source_name="img", source_version="1", image_ref="img:1",
-                mode="pull", policy_rule="allowed-source",
+                address="provision.node.tempo",
+                service_name="tempo",
+                source_name="img",
+                source_version="1",
+                image_ref="img:1",
+                mode="pull",
+                policy_rule="allowed-source",
             ),
         ),
         content=(
@@ -1714,9 +1997,7 @@ def test_no_image_node_content_means_no_override_file(tmp_path: Path) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     empty = DeploymentRealizationSpec(profiles=(), nodes=(), networks=())
 
-    assert (
-        backend._write_image_node_content_override(empty, tmp_path, tmp_path) is None
-    )
+    assert backend._write_image_node_content_override(empty, tmp_path, tmp_path) is None
     assert not (tmp_path / ".aptl/realization/compose.content.yml").exists()
 
 

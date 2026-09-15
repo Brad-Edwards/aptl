@@ -700,7 +700,8 @@ scenarios/paper-agent-loop.sdl.yaml	split-pack-delivery	Inventory exact content 
 scenarios/techvault-attacker-target.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scenarios/techvault-defensive-min.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scenarios/techvault-enterprise-web.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
-scenarios/techvault-observability-core.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+src/aptl/backends/raes_planning_compat.py	backend-owned-runtime	Temporary TechVault planning compatibility for unconstrained native observation provenance
+tests/test_raes_planning_compat.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 scripts/aptl-env.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/aptl-range.service	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/ci/assert_project_teardown.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
@@ -1519,3 +1520,36 @@ web/tests/setup.ts	tests-follow-owner	Retain meaningful boundary and parity test
 web/tsconfig.json	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
 web/vite.config.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
 web/vitest.config.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+containers/kali-capture/broker.py	backend-substrate	Post-baseline capture apparatus; retain with evidence custody authority
+containers/kali-capture/sshd_config	backend-substrate	Post-baseline capture apparatus; retain with evidence custody authority
+docker-compose.capture.yml	backend-substrate	Post-baseline capture apparatus; retain with evidence custody authority
+docker-compose.observability.yml	backend-substrate	Post-baseline optional observability apparatus; retain with deployment authority
+docs/architecture/issue-992-backend-observability-ownership-preflight.md	architecture-history	Preserve architecture boundary and implementation rationale
+mcp/aptl-mcp-common/src/telemetry-export.ts	core-candidate	Migrate only after public-import, history and scenario-independence verification
+mcp/aptl-mcp-common/tests/telemetry-export.test.ts	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+src/aptl/backends/raes_evidence.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_evidence_acquisition.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_observability_scope.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_operating_systems.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_runtime_guest_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_capture_apparatus.py	backend-substrate	Post-baseline capture apparatus mechanism; retain with deployment authority
+src/aptl/core/deployment/_compose_observability.py	backend-substrate	Post-baseline optional observability mechanism; retain with deployment authority
+src/aptl/core/deployment/_cortex_service_credentials.py	backend-substrate	Post-baseline runtime credential delivery; retain with deployment authority
+src/aptl/core/evidence/adapters/techvault.py	scenario-integration-plugin	Selected TechVault evidence integration; generic capture remains backend-owned
+src/aptl/core/evidence/adapters/techvault_native.py	scenario-integration-plugin	Selected TechVault native evidence integration; generic capture remains backend-owned
+src/aptl/core/experiment/capture_plan.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/telemetry_export.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl_techvault/runtime_parameters.py	core-runtime	Retain in APTL core runtime; no migration
+tests/test_backend_observability.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_capture_apparatus.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_evidence.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_evidence_acquisition.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_raes_native_evidence_truth.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_techvault_evidence_sources.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_techvault_native_evidence.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_techvault_runtime_parameters.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+src/aptl/backends/raes_runtime_attestation.py	backend-owned-runtime	Remove release-specific TechVault compatibility after OpenRAE/rae#1285
+src/aptl/core/deployment/_compose_autoremove.py	backend-substrate	Retain exact one-shot container lifecycle realization with deployment authority
+src/aptl/core/deployment/observation.py	core-runtime	Retain typed request-scoped deployment evidence carrier
+tests/test_compose_autoremove.py	tests-follow-owner	Retain exact autoremove lifecycle and fail-closed receipt coverage
+tests/test_raes_runtime_attestation.py	tests-follow-owner	Remove release-specific assertions with the compatibility layer while retaining fail-closed evidence coverage

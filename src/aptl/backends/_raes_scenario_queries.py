@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 from aptl.backends.raes_diagnostics import render_raes_diagnostics
 from aptl.backends.raes_profiles import select_backend_profiles
+from aptl.backends.raes_provisioner import AptlProvisioner
 from aptl.core.config import AptlConfig
 from aptl.core.deployment._compose_stateful_model import artifact_source_path
 from aptl.core.scenario_bundle import ScenarioSourceKind
@@ -84,12 +85,16 @@ def start_surface_of(
     """Project one admitted execution onto the facts pre-start steps need."""
 
     realization = _admitted_realization(admitted)
+    provisioner = admitted.target.provisioner
+    profiles = (
+        provisioner.selected_profiles(realization)
+        if isinstance(provisioner, AptlProvisioner)
+        else select_backend_profiles(config, realization.profiles)
+    )
     return AdmittedStartSurface(
         bundle_root=admitted.bundle.root,
         source_kind=admitted.bundle.source_kind,
-        selected_profiles=tuple(
-            select_backend_profiles(config, realization.profiles)
-        ),
+        selected_profiles=tuple(profiles),
         stateful_artifact_ownership=_artifact_ownership(
             admitted.bundle.root, realization
         ),

@@ -73,13 +73,19 @@ def _authority_class_is_supported(authority: RuntimeOrchestrationAuthority) -> b
 
 
 def _control_interface_is_supported(interface: RuntimeControlInterface) -> bool:
-    """Whether an interface is the exact canonical read-write Docker socket."""
+    """Whether an interface is the exact canonical read-write Docker socket.
+
+    RAES permits an in-world endpoint to omit its host bind source.  For the
+    one host-root-equivalent Docker authority APTL supports, the backend then
+    realizes that endpoint from its already-bound canonical local socket.  Any
+    authored non-empty source must still match exactly.
+    """
 
     return bool(
         _value(getattr(interface, "kind", "")) == "unix_socket"
         and _value(getattr(interface, "access", "")) == "read_write"
         and getattr(interface, "path", "") == DOCKER_SOCKET_PATH
-        and getattr(interface, "bind_source", "") == DOCKER_SOCKET_PATH
+        and getattr(interface, "bind_source", "") in {"", DOCKER_SOCKET_PATH}
         and not getattr(interface, "protocol", "")
     )
 
@@ -97,6 +103,12 @@ def _authority_binding_is_supported(
         and _authority_class_is_supported(authority)
         and _control_interface_is_supported(interface)
     )
+
+
+def _docker_bind_source(interface: RuntimeControlInterface) -> str:
+    """Resolve RAES's optional host source to APTL's admitted local endpoint."""
+
+    return str(interface.bind_source or DOCKER_SOCKET_PATH)
 
 
 def docker_control_authorities(
@@ -324,7 +336,7 @@ def admit_docker_authorities(
                 engine=_value(authority.engine),
                 privilege_class=_value(authority.privilege_class),
                 endpoint_kind=_value(interface.kind),
-                endpoint_source=str(interface.bind_source),
+                endpoint_source=_docker_bind_source(interface),
                 endpoint_target=str(interface.path),
                 endpoint_read_write=_value(interface.access) == "read_write",
                 spawn_requirements=requirements,

@@ -256,7 +256,13 @@ export class HTTPClient {
 
     // Build headers (await for wazuh-jwt path, no-op for others)
     const authHeaders = await this.getAuthHeadersAsync();
+    // `Accept: application/json` is required for JSON APIs that content-negotiate
+    // their responses: MISP, for one, HTTP 302-redirects a POST (e.g.
+    // /attributes/add) to its web UI when the client does not explicitly accept
+    // JSON, which silently breaks writes like add_indicator. Declared first so
+    // callers (default_headers / per-call headers) can still override it.
     const headers: Record<string, string> = {
+      'Accept': 'application/json',
       'Content-Type': 'application/json',
       ...default_headers,
       ...authHeaders,

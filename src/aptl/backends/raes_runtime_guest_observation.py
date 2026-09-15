@@ -192,21 +192,28 @@ def _parse_process_limits(
 ) -> dict[str, tuple[int | str, int | str]]:
     """Parse the bounded procfs limit rows APTL selects and observes."""
 
-    if payload is None:
-        return {}
-    try:
-        text = payload.decode("utf-8", errors="strict")
-    except UnicodeDecodeError:
-        return {}
+    text = _decode_process_limits(payload)
     observed: dict[str, tuple[int | str, int | str]] = {}
-    for line in text.splitlines():
+    valid = text is not None
+    for line in text.splitlines() if text is not None else ():
         valid, row = _process_limit_row(line)
         if not valid:
-            return {}
+            break
         if row is not None:
             resource, soft, hard = row
             observed[resource] = (soft, hard)
-    return observed
+    return observed if valid else {}
+
+
+def _decode_process_limits(payload: bytes | None) -> str | None:
+    """Decode a bounded procfs limits payload as strict UTF-8."""
+
+    if payload is None:
+        return None
+    try:
+        return payload.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        return None
 
 
 def _process_limit_row(

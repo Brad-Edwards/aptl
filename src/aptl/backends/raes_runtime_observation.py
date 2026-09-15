@@ -66,6 +66,7 @@ _LOCAL_CONTROL_INTERFACES_PATH = CONCERN_PAYLOAD_PATH[
 ]
 _LOCAL_IDENTITY_PATH = CONCERN_PAYLOAD_PATH["runtime-local-identity"]
 _DEPENDENCY_MANIFESTS_PATH = CONCERN_PAYLOAD_PATH["runtime-dependency-manifests"]
+_DOCKER_SOCKET = "/var/run/docker.sock"
 
 # The excess-detection, scope, and init-baseline helpers this module's observers
 # rely on live in :mod:`aptl.backends._runtime_concern_excess`; they are imported
@@ -392,8 +393,8 @@ def _supported_local_control_interface(interface: object) -> tuple[str, str] | N
     supported = (
         kind == "unix_socket"
         and access in {"read_only", "read_write"}
-        and interface.path == "/var/run/docker.sock"
-        and source == "/var/run/docker.sock"
+        and interface.path == _DOCKER_SOCKET
+        and source == _DOCKER_SOCKET
         and not interface.protocol
     )
     return (source, access) if supported else None
@@ -406,7 +407,7 @@ def _local_control_mount_matches(mount: object, source: str, access: str) -> boo
         isinstance(mount, Mapping)
         and mount.get("Type") == "bind"
         and mount.get("Source") == source
-        and mount.get("Destination") == "/var/run/docker.sock"
+        and mount.get("Destination") == _DOCKER_SOCKET
         and bool(mount.get("RW")) == (access == "read_write")
     )
 

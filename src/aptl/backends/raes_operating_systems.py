@@ -57,28 +57,52 @@ def parse_os_release(payload: bytes | str) -> ObservedOperatingSystemIdentity | 
     rows; malformed, unknown, or newer releases therefore fail closed.
     """
 
+    text = _decode_os_release(payload)
+    fields = _parse_os_release_fields(text) if text is not None else None
+    return _supported_os_identity(fields) if fields is not None else None
+
+
+def _decode_os_release(payload: bytes | str) -> str | None:
+    """Decode a bounded strict UTF-8 os-release document."""
+
     raw = payload.encode("utf-8") if isinstance(payload, str) else payload
-    if not isinstance(raw, bytes) or len(raw) > _MAX_OS_RELEASE_BYTES:
-        return None
-    try:
-        text = raw.decode("utf-8", errors="strict")
-    except UnicodeDecodeError:
-        return None
+    text = None
+    if isinstance(raw, bytes) and len(raw) <= _MAX_OS_RELEASE_BYTES:
+        try:
+            text = raw.decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            pass
+    return text
+
+
+def _parse_os_release_fields(text: str) -> dict[str, str] | None:
+    """Parse unique printable os-release assignments without shell expansion."""
 
     fields: dict[str, str] = {}
+    valid = True
     for line in text.splitlines():
         if not line or line.startswith("#"):
             continue
         key, separator, value = line.partition("=")
         if not separator or _KEY_RE.fullmatch(key) is None or key in fields:
-            return None
+            valid = False
+            break
         if value.startswith(('"', "'")):
             if len(value) < 2 or value[-1] != value[0]:
-                return None
+                valid = False
+                break
             value = value[1:-1]
         if any(ord(char) < 0x20 or ord(char) > 0x7E for char in value):
-            return None
+            valid = False
+            break
         fields[key] = value
+    return fields if valid else None
+
+
+def _supported_os_identity(
+    fields: Mapping[str, str],
+) -> ObservedOperatingSystemIdentity | None:
+    """Resolve parsed fields only inside APTL's finite support declaration."""
 
     distribution = _DISTRIBUTION_NAMES.get(fields.get("ID", "").lower())
     version = fields.get("VERSION_ID", "")
@@ -90,10 +114,12 @@ def parse_os_release(payload: bytes | str) -> ObservedOperatingSystemIdentity | 
         and version in row.versions
         for row in APTL_OPERATING_SYSTEMS
     )
-    if not supported:
-        return None
-    return ObservedOperatingSystemIdentity(
-        family="linux", distribution=distribution, version=version
+    return (
+        ObservedOperatingSystemIdentity(
+            family="linux", distribution=distribution, version=version
+        )
+        if supported
+        else None
     )
 
 

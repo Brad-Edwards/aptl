@@ -12,7 +12,7 @@ boundary").
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -109,10 +109,12 @@ def media_type_supported(outcome: CollectorOutcome, binding: CaptureBinding) -> 
     return _media_type_of(outcome, binding) in binding.expected_media_types
 
 
-def _redact_json_bytes(raw: bytes, handler: object) -> tuple[bytes, bool]:
+def _redact_json_bytes(
+    raw: bytes, handler: Callable[[object], object]
+) -> tuple[bytes, bool]:
     """Redact one JSON value; malformed input must never pass through raw."""
     parsed = json.loads(raw)
-    safe = handler(parsed)  # type: ignore[operator]
+    safe = handler(parsed)
     if safe == parsed:
         return raw, False
     return json.dumps(safe, separators=(",", ":")).encode("utf-8"), True
@@ -127,49 +129,89 @@ def _prepare_bytes(
     document rather than retaining a truncated, potentially secret-bearing
     fragment. Opaque capture cannot satisfy a required redaction policy.
     """
-    if media_type in _REDACTABLE_MEDIA_TYPES:
-        raw = bytearray()
-        for chunk in outcome.chunks:
-            if len(chunk) > binding.limits.max_bytes - len(raw):
-                raise BufferError("capture exceeds its admitted byte budget")
-            raw.extend(chunk)
-        handler = None
+    if media_type not in _REDACTABLE_MEDIA_TYPES:
         if binding.redaction_required:
-            handler = _REDACTION_HANDLERS.get(binding.redaction_policy or "")
-            if handler is None:
-                raise ValueError("capture redaction policy has no trusted handler")
-        if media_type == "application/json":
-            if handler is None:
-                json.loads(raw)
-                redacted, changed = bytes(raw), False
-            else:
-                redacted, changed = _redact_json_bytes(bytes(raw), handler)
-        elif media_type == "text/plain":
-            # Decode only the complete bounded stream: both UTF-8 sequences
-            # and credential patterns may span chunks. Invalid text fails
-            # closed, without replacement decoding or a raw-byte fallback.
-            text = raw.decode("utf-8")
-            safe = handler(text) if handler is not None else text
-            changed = safe != text
-            redacted = safe.encode("utf-8")
-        else:
-            lines = []
-            for line in raw.splitlines():
-                if not line.strip():
-                    continue
-                if handler is None:
-                    json.loads(line)
-                    lines.append((line, False))
-                else:
-                    lines.append(_redact_json_bytes(line, handler))
-            changed = any(was_changed for _, was_changed in lines)
-            redacted = b"\n".join(line for line, _ in lines) + (b"\n" if lines else b"")
-        if len(redacted) > binding.limits.max_bytes:
-            raise BufferError("redacted capture exceeds its admitted byte budget")
-        return [redacted], ("redacted" if changed else "none")
-    if not binding.redaction_required:
+            raise ValueError("capture media type has no trusted redaction adapter")
         return outcome.chunks, "none"
-    raise ValueError("capture media type has no trusted redaction adapter")
+
+    raw = _consume_bounded_chunks(outcome.chunks, binding.limits.max_bytes)
+    handler = _redaction_handler(binding)
+    redacted, changed = _prepare_redactable_bytes(raw, media_type, handler)
+    if len(redacted) > binding.limits.max_bytes:
+        raise BufferError("redacted capture exceeds its admitted byte budget")
+    return [redacted], ("redacted" if changed else "none")
+
+
+def _consume_bounded_chunks(chunks: Sequence[bytes], max_bytes: int) -> bytes:
+    """Join a complete stream without reading beyond its admitted byte budget."""
+
+    raw = bytearray()
+    for chunk in chunks:
+        if len(chunk) > max_bytes - len(raw):
+            raise BufferError("capture exceeds its admitted byte budget")
+        raw.extend(chunk)
+    return bytes(raw)
+
+
+def _redaction_handler(
+    binding: CaptureBinding,
+) -> Callable[[object], object] | None:
+    """Resolve only the binding's explicitly admitted trusted handler."""
+
+    handler = None
+    if binding.redaction_required:
+        handler = _REDACTION_HANDLERS.get(binding.redaction_policy or "")
+        if handler is None:
+            raise ValueError("capture redaction policy has no trusted handler")
+    return handler
+
+
+def _prepare_redactable_bytes(
+    raw: bytes,
+    media_type: str,
+    handler: Callable[[object], object] | None,
+) -> tuple[bytes, bool]:
+    """Validate and optionally redact one complete structured/text payload."""
+
+    if media_type == "application/json":
+        if handler is not None:
+            return _redact_json_bytes(raw, handler)
+        json.loads(raw)
+        return raw, False
+    if media_type == "text/plain":
+        return _prepare_text_bytes(raw, handler)
+    return _prepare_json_lines(raw, handler)
+
+
+def _prepare_text_bytes(
+    raw: bytes, handler: Callable[[object], object] | None
+) -> tuple[bytes, bool]:
+    """Decode complete UTF-8 text and apply its trusted redaction policy."""
+
+    text = raw.decode("utf-8")
+    safe = handler(text) if handler is not None else text
+    if not isinstance(safe, str):
+        raise TypeError("text redaction handler returned non-text")
+    return safe.encode("utf-8"), safe != text
+
+
+def _prepare_json_lines(
+    raw: bytes, handler: Callable[[object], object] | None
+) -> tuple[bytes, bool]:
+    """Validate and optionally redact every non-empty NDJSON record."""
+
+    lines: list[tuple[bytes, bool]] = []
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        if handler is None:
+            json.loads(line)
+            lines.append((line, False))
+        else:
+            lines.append(_redact_json_bytes(line, handler))
+    changed = any(was_changed for _, was_changed in lines)
+    redacted = b"\n".join(line for line, _ in lines) + (b"\n" if lines else b"")
+    return redacted, changed
 
 
 def persist_success_outcome(
@@ -272,6 +314,8 @@ _RECORD_SENSITIVITY = {
 
 
 def _record_sensitivity(value: str) -> str:
+    """Map an admitted capture sensitivity to the portable record vocabulary."""
+
     try:
         return _RECORD_SENSITIVITY[value]
     except KeyError as exc:

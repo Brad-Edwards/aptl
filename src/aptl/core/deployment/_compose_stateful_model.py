@@ -19,16 +19,16 @@ from aptl.core.deployment._compose_stateful_constants import (
     SOC_CERTS_ROOT_RELPATH,
     SSH_KEY_BUNDLE_ROOT_RELPATH,
     WAZUH_MANAGER_CONFIG_PROVENANCES,
-    REALIZATION_ADDRESS_LABEL,
-    REALIZATION_LIFECYCLE_LABEL,
-    REALIZATION_PROJECT_LABEL,
 )
 from aptl.core.deployment._compose_stateful_services import (
     wazuh_service_definitions,
 )
+from aptl.core.deployment._compose_stateful_volumes import (
+    effective_volume_errors,
+    expected_volume_labels,
+)
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
-    DeploymentPersistentVolumeRealization,
     DeploymentRealizationSpec,
 )
 
@@ -81,7 +81,14 @@ def effective_stateful_model_errors(
             realization,
         )
     )
-    errors.extend(_effective_volume_errors(payload, project_name, realization))
+    errors.extend(
+        effective_volume_errors(
+            payload,
+            project_name,
+            realization,
+            _non_compose_consumer_addresses(realization),
+        )
+    )
     return errors
 
 
@@ -300,7 +307,7 @@ def _append_volume_mounts(
         if not compose_consumers:
             continue
         volumes[volume.name] = {
-            "labels": _expected_volume_labels(
+            "labels": expected_volume_labels(
                 volume.address,
                 volume.lifecycle,
                 project_name,
@@ -464,80 +471,3 @@ def _under_certificate_root(source: str, cert_root: str) -> bool:
     """Return whether a mount source is the certificate root or one child."""
 
     return source == cert_root or source.startswith(f"{cert_root}/")
-
-
-def _compose_persistent_volumes(
-    realization: DeploymentRealizationSpec,
-) -> list[DeploymentPersistentVolumeRealization]:
-    """Return the persistent volumes at least one Compose service mounts.
-
-    Only volumes with a Compose consumer appear in the override (a volume used
-    solely by a non-Compose node is delivered by the generic materializer).
-    """
-
-    non_compose = _non_compose_consumer_addresses(realization)
-    return [
-        volume
-        for volume in realization.persistent_volumes
-        if any(
-            consumer.target_address not in non_compose for consumer in volume.consumers
-        )
-    ]
-
-
-def _effective_volume_errors(
-    payload: Mapping[str, object],
-    project_name: str,
-    realization: DeploymentRealizationSpec,
-) -> list[str]:
-    """Return identity/label mismatches for effective persistent volumes."""
-
-    compose_volumes = _compose_persistent_volumes(realization)
-    if not compose_volumes:
-        return []
-    observed = payload.get("volumes")
-    if not isinstance(observed, Mapping):
-        return ["Effective Compose model has no volumes mapping."]
-    return [
-        f"Effective persistent volume {volume.address} has unexpected identity."
-        for volume in compose_volumes
-        if not _effective_volume_matches(
-            observed.get(volume.name),
-            project_name,
-            volume.name,
-            _expected_volume_labels(
-                volume.address,
-                volume.lifecycle,
-                project_name,
-            ),
-        )
-    ]
-
-
-def _effective_volume_matches(
-    definition: object,
-    project_name: str,
-    volume_name: str,
-    expected_labels: dict[str, str],
-) -> bool:
-    """Return whether one effective volume has the admitted identity."""
-
-    return bool(
-        isinstance(definition, Mapping)
-        and definition.get("labels") == expected_labels
-        and definition.get("name") == f"{project_name}_{volume_name}"
-    )
-
-
-def _expected_volume_labels(
-    address: str,
-    lifecycle: str,
-    project_name: str,
-) -> dict[str, str]:
-    """Return required labels for a project-scoped persistent volume."""
-
-    return {
-        REALIZATION_ADDRESS_LABEL: address,
-        REALIZATION_LIFECYCLE_LABEL: lifecycle,
-        REALIZATION_PROJECT_LABEL: project_name,
-    }

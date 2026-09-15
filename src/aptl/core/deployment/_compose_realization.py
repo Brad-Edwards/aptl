@@ -28,6 +28,9 @@ from aptl.core.deployment._compose_post_start import (
     ComposeRealizationPostStartMixin,
 )
 from aptl.core.deployment._compose_port_realization import published_port_conflicts
+from aptl.core.deployment._compose_port_readback import (
+    owned_bindings as _owned_bindings,
+)
 from aptl.core.deployment._compose_service_index_realization import (
     ComposeRealizationServiceIndexMixin,
 )
@@ -132,34 +135,40 @@ class ComposeRealizationMixin(
         """
 
         observation_context = observation_context or DeploymentObservationContext()
-        # Request-scoped, like the network bindings below: the base start reads it
-        # by node address and never re-resolves the tag it was verified from.
-        failure = self._capture_apparatus_preflight(realization, scenario_root)
-        if failure is not None:
-            return failure
-        failure = self._observability_preflight(realization, scenario_root)
-        if failure is not None:
-            return failure
-        self._realization_substrate_digests = dict(substrate_digests or {})
-        failure = self._runtime_orchestration_preflight(realization)
-        if failure is not None:
-            return failure
-        failure = self._start_backend_observability(realization.profiles)
-        if failure is not None:
-            return failure
-        # Route from per-node facts, never a whole-graph flag. A mixed graph is
-        # normal (ADR-051): some nodes come from a pinned artifact, some are
-        # built from a specification, some are composed from declared state. The
-        # only whole-graph question left is whether Compose has anything to
-        # start.
-        if not _needs_compose(realization):
-            return self._realize_without_compose(realization, scenario_root)
-        return self._realize_mixed_or_legacy(
-            realization,
-            build=build,
-            scenario_root=scenario_root,
-            observation_context=observation_context,
+        failure = self._realization_preflight(
+            realization, scenario_root, substrate_digests
         )
+        if failure is not None:
+            result = failure
+        elif not _needs_compose(realization):
+            result = self._realize_without_compose(realization, scenario_root)
+        else:
+            result = self._realize_mixed_or_legacy(
+                realization,
+                build=build,
+                scenario_root=scenario_root,
+                observation_context=observation_context,
+            )
+        return result
+
+    def _realization_preflight(
+        self,
+        realization: DeploymentRealizationSpec,
+        scenario_root: Path,
+        substrate_digests: Mapping[str, str] | None,
+    ) -> LabResult | None:
+        """Run ordered backend preflights before any scenario mutation."""
+
+        failure = self._capture_apparatus_preflight(realization, scenario_root)
+        if failure is None:
+            failure = self._observability_preflight(realization, scenario_root)
+        if failure is None:
+            # Request-scoped: base start consumes the already-verified identity.
+            self._realization_substrate_digests = dict(substrate_digests or {})
+            failure = self._runtime_orchestration_preflight(realization)
+        if failure is None:
+            failure = self._start_backend_observability(realization.profiles)
+        return failure
 
     def _realize_networks_and_boundaries(
         self,
@@ -456,65 +465,3 @@ def _append_image_free_environment_bindings(
             error=f"Generated artifact {artifact.address} environment delivery failed.",
         )
     return None
-
-
-def _port_maps(payload: str) -> list[dict[str, object]]:
-    """Return each parsable port map from a JSON-lines ``docker inspect`` payload.
-
-    A line that is blank, unparsable, or not a map is skipped rather than
-    failing the caller: unreadable state must fall back to the probe alone, not
-    claim a port is ours on bad evidence.
-    """
-
-    import json
-
-    maps: list[dict[str, object]] = []
-    for line in payload.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        try:
-            ports = json.loads(stripped)
-        except ValueError:
-            continue
-        if isinstance(ports, dict):
-            maps.append(ports)
-    return maps
-
-
-def _binding_addresses(host_ip: str) -> list[str]:
-    """Return the host addresses one published binding satisfies.
-
-    Docker reports an all-interfaces publish with an empty or ``0.0.0.0`` host
-    IP, and a loopback declaration is satisfied by one.
-    """
-
-    if host_ip in ("", "0.0.0.0"):
-        return [host_ip, "127.0.0.1"]
-    return [host_ip]
-
-
-def _entry_bindings(entries: object, protocol: str) -> list[tuple[str, int, str]]:
-    """Return the binding triples one container port's host entries publish."""
-
-    bindings: list[tuple[str, int, str]] = []
-    for entry in entries or ():
-        raw_port = str(entry.get("HostPort") or "")
-        if not raw_port.isdigit():
-            continue
-        for address in _binding_addresses(str(entry.get("HostIp") or "")):
-            bindings.append((address, int(raw_port), protocol))
-    return bindings
-
-
-def _owned_bindings(payload: str) -> list[tuple[str, int, str]]:
-    """Parse ``docker inspect`` port maps into host binding triples."""
-
-    return [
-        binding
-        for ports in _port_maps(payload)
-        for container_port, entries in ports.items()
-        for binding in _entry_bindings(
-            entries, str(container_port).rpartition("/")[2] or "tcp"
-        )
-    ]

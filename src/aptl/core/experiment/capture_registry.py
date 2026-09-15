@@ -36,7 +36,7 @@ roots").
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 
@@ -49,6 +49,10 @@ from raes_contracts.contracts import (
     ExperimentCaptureSpecModel,
 )
 
+from aptl.core.experiment._capture_matching import (
+    registration_covers,
+    window_kinds_by_ref,
+)
 from aptl.core.experiment.trial_plan import compute_source_set_digest
 
 #: Versioned identity of the registry declaration shape itself. A change to
@@ -315,75 +319,6 @@ class CaptureBinding:
         }
 
 
-def _window_kinds_by_ref(spec: ExperimentCaptureSpecModel) -> Mapping[str, str]:
-    """Return a map from each capture-window ID to its window kind for spec."""
-    return {window.window_id: window.window_kind for window in spec.capture_windows}
-
-
-def _windows_supported(
-    window_refs: Sequence[str],
-    window_kinds_by_ref: Mapping[str, str],
-    supported_window_kinds: frozenset[str],
-) -> bool:
-    """Return whether every referenced window resolves to a supported window kind.
-
-    A window ref that does not resolve to a declared spec window is treated as
-    unsupported (fail closed) rather than skipped.
-    """
-    for window_ref in window_refs:
-        kind = window_kinds_by_ref.get(window_ref)
-        if kind is None or kind not in supported_window_kinds:
-            return False
-    return True
-
-
-def _registration_covers(
-    registration: CollectorRegistration,
-    requirement: ExperimentCaptureRequirementModel,
-    *,
-    contract_version: str,
-    window_kinds_by_ref: Mapping[str, str],
-) -> bool:
-    """Return whether registration deterministically covers requirement on every axis.
-
-    Every authored requirement axis is checked (preflight "Registry/policy
-    validation"): contract version, capture kind/scope, window semantics, media
-    types, artifact roles, sensitivity, integrity, redaction, retention, and
-    loss disclosure. Subset axes require the requirement to be a SUBSET of what
-    the registration declares — a requirement asking for more than a
-    registration covers is not matched by it. The author's ``channel_ref`` is
-    NOT a match axis: it names an author-defined measurement channel APTL
-    cannot pre-enumerate; it is recorded on the binding for traceability
-    instead. Collected as one boolean list so this stays a single return.
-    """
-    checks = (
-        registration.contract_version == contract_version,
-        registration.capture_kind == requirement.capture_kind,
-        registration.capture_scope == requirement.capture_scope,
-        _windows_supported(
-            requirement.window_refs, window_kinds_by_ref, registration.window_kinds
-        ),
-        frozenset(requirement.expected_media_types) <= registration.media_types,
-        frozenset(requirement.required_artifact_roles)
-        <= registration.required_artifact_roles,
-        requirement.sensitivity in registration.supported_sensitivities,
-        frozenset(requirement.integrity_requirements) <= registration.integrity_modes,
-        requirement.redaction_policy is None
-        or (
-            registration.supports_redaction
-            and requirement.redaction_policy in registration.redaction_policies
-        ),
-        requirement.retention_policy is None
-        or (
-            registration.supports_retention
-            and requirement.retention_policy in registration.retention_policies
-        ),
-        registration.supports_loss_disclosure
-        or not requirement.loss_disclosure_required,
-    )
-    return all(checks)
-
-
 @dataclass(frozen=True)
 class CollectorRegistry:
     """An immutable set of trusted collector registrations, keyed by ID.
@@ -424,13 +359,13 @@ class CollectorRegistry:
         no trusted registration covers the requirement — the caller rejects
         admission; it is never a silent skip.
         """
-        window_kinds_by_ref = _window_kinds_by_ref(spec)
+        kinds_by_ref = window_kinds_by_ref(spec)
         for registration in self._ordered():
-            if _registration_covers(
+            if registration_covers(
                 registration,
                 requirement,
                 contract_version=spec.schema_version,
-                window_kinds_by_ref=window_kinds_by_ref,
+                kinds_by_ref=kinds_by_ref,
             ):
                 return _bind(spec, requirement, registration)
         return None

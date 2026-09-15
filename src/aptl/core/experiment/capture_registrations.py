@@ -20,6 +20,8 @@ projection validates them at manifest build.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from raes_backend_protocols.capabilities import ObservationCaptureOffer
 
 from aptl.core.experiment.capture_registry import (
@@ -34,6 +36,8 @@ from aptl.core.experiment.capture_registry import (
 _LIMITS = CaptureLimits(
     max_bytes=8 * 1024 * 1024, max_artifact_count=4096, max_duration_s=300
 )
+_CAPTURE_SPEC_CONTRACT = "experiment-capture-spec/v1"
+_JSON_MEDIA_TYPE = "application/json"
 
 _CORTEX_SCOPE = (
     "Exact analyzer inventory, successful TechVaultScenarioContext_1_0 execution "
@@ -56,21 +60,24 @@ _SQLI_SCOPE = (
 )
 
 
-def _offer(
-    offer_id: str,
-    *,
-    artifact_role: str,
-    media_type: str,
-    capture_kind: str,
-    source_refs: frozenset[str],
-    scope: str,
-    scope_refs: frozenset[str],
-    channel_kind: str,
-    window_kinds: frozenset[str],
-    integrity_mode: str,
-    redaction_policy: str,
-    source_class: str = "native",
-) -> ObservationCaptureOffer:
+@dataclass(frozen=True)
+class _OfferSpec:
+    """The varying axes of one exact TechVault observation offer."""
+
+    artifact_role: str
+    media_type: str
+    capture_kind: str
+    source_refs: frozenset[str]
+    scope: str
+    scope_refs: frozenset[str]
+    channel_kind: str
+    window_kinds: frozenset[str]
+    integrity_mode: str
+    redaction_policy: str
+    source_class: str = "native"
+
+
+def _offer(offer_id: str, spec: _OfferSpec) -> ObservationCaptureOffer:
     """Build one exact RAES offer; no wildcard can broaden TechVault admission."""
 
     return ObservationCaptureOffer(
@@ -78,24 +85,24 @@ def _offer(
         offer_version="1.0.0",
         output_contract="experiment-evidence-record-v1",
         field_selectors=("",),
-        artifact_roles=frozenset({artifact_role}),
-        media_types=frozenset({media_type}),
-        capture_kind=capture_kind,
-        source_classes=frozenset({source_class}),
-        source_refs=source_refs,
-        scopes=frozenset({scope}),
-        scope_refs=scope_refs,
-        channel_kinds=frozenset({channel_kind}),
+        artifact_roles=frozenset({spec.artifact_role}),
+        media_types=frozenset({spec.media_type}),
+        capture_kind=spec.capture_kind,
+        source_classes=frozenset({spec.source_class}),
+        source_refs=spec.source_refs,
+        scopes=frozenset({spec.scope}),
+        scope_refs=spec.scope_refs,
+        channel_kinds=frozenset({spec.channel_kind}),
         channel_refs=frozenset(),
-        window_kinds=window_kinds,
-        integrity_modes=frozenset({integrity_mode}),
+        window_kinds=spec.window_kinds,
+        integrity_modes=frozenset({spec.integrity_mode}),
         sensitivity="plain",
         availability="available",
         fidelity="complete",
         disclosure="redacted",
         retention_policy_refs=frozenset({"run_lifetime"}),
         export_policy="not-required",
-        redaction_policy=redaction_policy,
+        redaction_policy=spec.redaction_policy,
     )
 
 
@@ -114,10 +121,12 @@ def _techvault_registration(
     limits: CaptureLimits,
     chain_of_custody: bool = False,
 ) -> CollectorRegistration:
+    """Bind one TechVault offer to its implementation and runtime limits."""
+
     return CollectorRegistration(
         registration_id=registration_id,
         implementation_version="1.0.0",
-        contract_version="experiment-capture-spec/v1",
+        contract_version=_CAPTURE_SPEC_CONTRACT,
         channel_kind=next(iter(offer.channel_kinds)),
         capture_kind=offer.capture_kind,
         capture_scope="scenario",
@@ -158,12 +167,12 @@ def _builtin(
     return CollectorRegistration(
         registration_id=registration_id,
         implementation_version="1.0.0",
-        contract_version="experiment-capture-spec/v1",
+        contract_version=_CAPTURE_SPEC_CONTRACT,
         channel_kind=channel_kind,
         capture_kind=capture_kind,
         capture_scope=capture_scope,
         window_kinds=frozenset({"run", "task", "interval"}),
-        media_types=frozenset({"application/json"}),
+        media_types=frozenset({_JSON_MEDIA_TYPE}),
         required_artifact_roles=frozenset({"observation"}),
         supported_sensitivities=frozenset({"public", "internal", "restricted"}),
         supports_redaction=True,
@@ -183,21 +192,23 @@ _CORTEX_ENRICHMENT = _techvault_registration(
     "aptl.collector.cortex-enrichment",
     offer=_offer(
         "aptl.collector.cortex-enrichment",
-        artifact_role="service_materialization_readback",
-        media_type="application/json",
-        capture_kind="observation",
-        source_refs=frozenset(
-            {
-                "nodes.cortex.runtime.platform_applications.cortex-enrichment",
-                "nodes.thehive.runtime.platform_applications.thehive-case-management",
-            }
+        _OfferSpec(
+            artifact_role="service_materialization_readback",
+            media_type=_JSON_MEDIA_TYPE,
+            capture_kind="observation",
+            source_refs=frozenset(
+                {
+                    "nodes.cortex.runtime.platform_applications.cortex-enrichment",
+                    "nodes.thehive.runtime.platform_applications.thehive-case-management",
+                }
+            ),
+            scope=_CORTEX_SCOPE,
+            scope_refs=frozenset({"nodes.cortex", "nodes.thehive"}),
+            channel_kind="participant-observation",
+            window_kinds=frozenset({"system_under_test"}),
+            integrity_mode="checksum",
+            redaction_policy="redact_secrets",
         ),
-        scope=_CORTEX_SCOPE,
-        scope_refs=frozenset({"nodes.cortex", "nodes.thehive"}),
-        channel_kind="participant-observation",
-        window_kinds=frozenset({"system_under_test"}),
-        integrity_mode="checksum",
-        redaction_policy="redact_secrets",
     ),
     limits=_TECHVAULT_LIMITS["cortex"],
 )
@@ -206,17 +217,21 @@ _REDTEAM_SESSION_TRANSCRIPT = _techvault_registration(
     "aptl.collector.redteam-session-transcript",
     offer=_offer(
         "aptl.collector.redteam-session-transcript",
-        artifact_role="participant_session_transcript",
-        media_type="text/plain",
-        capture_kind="observation",
-        source_refs=frozenset(),
-        scope=_TRANSCRIPT_SCOPE,
-        scope_refs=frozenset({"nodes.kali"}),
-        channel_kind="participant-observation",
-        window_kinds=frozenset({"the full run, from range readiness through teardown"}),
-        integrity_mode="chain_of_custody",
-        redaction_policy="redact_secrets",
-        source_class="apparatus",
+        _OfferSpec(
+            artifact_role="participant_session_transcript",
+            media_type="text/plain",
+            capture_kind="observation",
+            source_refs=frozenset(),
+            scope=_TRANSCRIPT_SCOPE,
+            scope_refs=frozenset({"nodes.kali"}),
+            channel_kind="participant-observation",
+            window_kinds=frozenset(
+                {"the full run, from range readiness through teardown"}
+            ),
+            integrity_mode="chain_of_custody",
+            redaction_policy="redact_secrets",
+            source_class="apparatus",
+        ),
     ),
     limits=_TECHVAULT_LIMITS["transcript"],
     chain_of_custody=True,
@@ -226,27 +241,29 @@ _SURICATA_RULE_READINESS = _techvault_registration(
     "aptl.collector.suricata-rule-readiness",
     offer=_offer(
         "aptl.collector.suricata-rule-readiness",
-        artifact_role="network_detection_rule_readiness",
-        media_type="text/plain",
-        capture_kind="log",
-        source_refs=frozenset(
-            {
-                "nodes.suricata.runtime.network_detection_engines.suricata-engine.rule_sources.suricata-builtin",
-                "nodes.suricata.runtime.network_detection_engines.suricata-engine.rule_sources.techvault-local",
-            }
+        _OfferSpec(
+            artifact_role="network_detection_rule_readiness",
+            media_type="text/plain",
+            capture_kind="log",
+            source_refs=frozenset(
+                {
+                    "nodes.suricata.runtime.network_detection_engines.suricata-engine.rule_sources.suricata-builtin",
+                    "nodes.suricata.runtime.network_detection_engines.suricata-engine.rule_sources.techvault-local",
+                }
+            ),
+            scope=_SURICATA_READINESS_SCOPE,
+            scope_refs=frozenset(
+                {
+                    "nodes.suricata",
+                    "content.suricata-config",
+                    "content.suricata-local-rules",
+                }
+            ),
+            channel_kind="backend-log",
+            window_kinds=frozenset({"system_under_test"}),
+            integrity_mode="checksum",
+            redaction_policy="redact_sensitive",
         ),
-        scope=_SURICATA_READINESS_SCOPE,
-        scope_refs=frozenset(
-            {
-                "nodes.suricata",
-                "content.suricata-config",
-                "content.suricata-local-rules",
-            }
-        ),
-        channel_kind="backend-log",
-        window_kinds=frozenset({"system_under_test"}),
-        integrity_mode="checksum",
-        redaction_policy="redact_sensitive",
     ),
     limits=_TECHVAULT_LIMITS["readiness"],
 )
@@ -255,26 +272,28 @@ _SURICATA_WAZUH_SQLI = _techvault_registration(
     "aptl.collector.suricata-wazuh-sqli",
     offer=_offer(
         "aptl.collector.suricata-wazuh-sqli",
-        artifact_role="network_detection_alert",
-        media_type="application/x-ndjson",
-        capture_kind="log",
-        source_refs=frozenset(
-            {
-                "nodes.suricata.runtime.network_detection_engines.suricata-engine.output_streams.eve-json",
-                "nodes.wazuh-manager.runtime.security_monitoring_managers.wazuh-manager.content_sets.suricata-rules",
-            }
+        _OfferSpec(
+            artifact_role="network_detection_alert",
+            media_type="application/x-ndjson",
+            capture_kind="log",
+            source_refs=frozenset(
+                {
+                    "nodes.suricata.runtime.network_detection_engines.suricata-engine.output_streams.eve-json",
+                    "nodes.wazuh-manager.runtime.security_monitoring_managers.wazuh-manager.content_sets.suricata-rules",
+                }
+            ),
+            scope=_SQLI_SCOPE,
+            scope_refs=frozenset(
+                {
+                    "nodes.webapp.runtime.applications.techvault-portal",
+                    "nodes.suricata.runtime.network_detection_engines.suricata-engine.rule_sources.techvault-local",
+                }
+            ),
+            channel_kind="backend-log",
+            window_kinds=frozenset({"event", "participant_equivalent"}),
+            integrity_mode="checksum",
+            redaction_policy="redact_sensitive",
         ),
-        scope=_SQLI_SCOPE,
-        scope_refs=frozenset(
-            {
-                "nodes.webapp.runtime.applications.techvault-portal",
-                "nodes.suricata.runtime.network_detection_engines.suricata-engine.rule_sources.techvault-local",
-            }
-        ),
-        channel_kind="backend-log",
-        window_kinds=frozenset({"event", "participant_equivalent"}),
-        integrity_mode="checksum",
-        redaction_policy="redact_sensitive",
     ),
     limits=_TECHVAULT_LIMITS["sqli"],
 )
@@ -337,12 +356,12 @@ BUILTIN_REGISTRATIONS: tuple[CollectorRegistration, ...] = (
 SERVICE_INDEX_READBACK_REGISTRATION = CollectorRegistration(
     registration_id="aptl.collector.service-index-readback",
     implementation_version="1.0.0",
-    contract_version="experiment-capture-spec/v1",
+    contract_version=_CAPTURE_SPEC_CONTRACT,
     channel_kind="runtime-snapshot",
     capture_kind="observation",
     capture_scope="service",
     window_kinds=frozenset({"event"}),
-    media_types=frozenset({"application/json"}),
+    media_types=frozenset({_JSON_MEDIA_TYPE}),
     required_artifact_roles=frozenset({"service_materialization_readback"}),
     supported_sensitivities=frozenset({"public"}),
     supports_redaction=True,

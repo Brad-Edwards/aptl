@@ -1081,7 +1081,7 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
     from raes_runtime.manager import RuntimeManager
     from raes import parse_sdl_file
 
-    from aptl.backends.raes import create_aptl_runtime_target
+    from aptl.backends.raes import RuntimeTargetOptions, create_aptl_runtime_target
     from aptl.backends.raes_participant_actions import (
         DEFAULT_PARTICIPANT_ACTIONS,
         participant_action_specs_from_runtime_model,
@@ -1130,7 +1130,7 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
         bundle=_bundle(tmp_path),
         config=config,
         backend=backend,
-        participant_action_specs=participant_action_specs,
+        options=RuntimeTargetOptions(participant_action_specs=participant_action_specs),
     )
     control_plane = RuntimeControlPlane(target)
 
@@ -2395,11 +2395,8 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
         project_dir,
         config,
         backend,
-        participant_action_specs=None,
         bundle,
-        artifact_availability=None,
-        capture_plan=None,
-        observability_scope=None,
+        options=None,
     ):
         from aptl.backends.raes_participant_runtime import AptlParticipantRuntime
 
@@ -2411,9 +2408,9 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
                 bundle=bundle,
                 config=config,
                 deployment_backend=backend,
-                artifact_availability=artifact_availability,
-                capture_plan=capture_plan,
-                observability_scope=observability_scope,
+                artifact_availability=options.artifact_availability,
+                capture_plan=options.capture_plan,
+                observability_scope=options.observability_scope,
             ),
             orchestrator=RecordingOrchestrator(),
             evaluator=raes.AptlEvaluator(),

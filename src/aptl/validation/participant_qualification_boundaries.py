@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -334,14 +334,16 @@ def _replay_challenge(
     conflicting_status = context.control.get_operation(conflicting.receipt.operation_id)
     final_evidence_count = action_evidence_count(context)
     duplicate_prevented = _replay_was_bounded(
-        first,
-        first_status,
-        first_evidence_count,
-        identical,
-        identical_status,
-        conflicting,
-        conflicting_status,
-        final_evidence_count,
+        _ReplayResults(
+            first=first,
+            first_status=first_status,
+            first_evidence_count=first_evidence_count,
+            identical=identical,
+            identical_status=identical_status,
+            conflicting=conflicting,
+            conflicting_status=conflicting_status,
+            final_evidence_count=final_evidence_count,
+        )
     )
     return ParticipantQualificationCheck(
         check_id="BC-07",
@@ -358,32 +360,39 @@ def _replay_challenge(
     )
 
 
-def _replay_was_bounded(
-    first: object,
-    first_status: object,
-    first_evidence_count: int,
-    identical: object,
-    identical_status: object,
-    conflicting: object,
-    conflicting_status: object,
-    final_evidence_count: int,
-) -> bool:
+@dataclass(frozen=True)
+class _ReplayResults:
+    """First execution plus identical and conflicting replay observations."""
+
+    first: object
+    first_status: object
+    first_evidence_count: int
+    identical: object
+    identical_status: object
+    conflicting: object
+    conflicting_status: object
+    final_evidence_count: int
+
+
+def _replay_was_bounded(results: _ReplayResults) -> bool:
     """Evaluate the idempotent and conflicting replay outcomes."""
 
-    first_succeeded = getattr(first_status, "state", None) is OperationState.SUCCEEDED
+    first_succeeded = (
+        getattr(results.first_status, "state", None) is OperationState.SUCCEEDED
+    )
     same_operation = (
-        identical.receipt.operation_id == first.receipt.operation_id
-        or not identical.receipt.accepted
-        or getattr(identical_status, "state", None) is OperationState.FAILED
+        results.identical.receipt.operation_id == results.first.receipt.operation_id
+        or not results.identical.receipt.accepted
+        or getattr(results.identical_status, "state", None) is OperationState.FAILED
     )
     conflict_failed = (
-        not conflicting.receipt.accepted
-        or getattr(conflicting_status, "state", None) is OperationState.FAILED
+        not results.conflicting.receipt.accepted
+        or getattr(results.conflicting_status, "state", None) is OperationState.FAILED
     )
     return (
         first_succeeded
-        and first_evidence_count == 1
-        and final_evidence_count == 1
+        and results.first_evidence_count == 1
+        and results.final_evidence_count == 1
         and same_operation
         and conflict_failed
     )

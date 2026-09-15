@@ -211,15 +211,17 @@ def test_acquire_native_evidence_persists_only_immediate_native_bindings(
     )
 
     result = acquisition.acquire_native_evidence(
-        plan=plan,
-        backend=object(),
-        realization=object(),
-        project_dir=tmp_path,
-        indexer_auth=("admin", "password"),
-        thehive_api_key="operator-api-key",
-        run_store=store,
-        run_id="run-1",
-        clock=_SequenceClock(*times),
+        acquisition.NativeEvidenceRequest(
+            plan=plan,
+            backend=object(),
+            realization=object(),
+            project_dir=tmp_path,
+            indexer_auth=("admin", "password"),
+            thehive_api_key="operator-api-key",
+            run_store=store,
+            run_id="run-1",
+            clock=_SequenceClock(*times),
+        )
     )
 
     assert result.disposition is AcquisitionDisposition.SEALED_READY
@@ -257,18 +259,20 @@ def test_acquire_native_evidence_fails_when_a_required_source_is_unavailable(
     )
 
     result = acquisition.acquire_native_evidence(
-        plan=plan,
-        backend=object(),
-        realization=object(),
-        project_dir=tmp_path,
-        indexer_auth=("admin", "password"),
-        thehive_api_key="operator-api-key",
-        run_store=LocalRunStore(tmp_path / "runs"),
-        run_id="run-1",
-        clock=_SequenceClock(
-            "2026-09-14T00:00:00Z",
-            "2026-09-14T00:00:01Z",
-        ),
+        acquisition.NativeEvidenceRequest(
+            plan=plan,
+            backend=object(),
+            realization=object(),
+            project_dir=tmp_path,
+            indexer_auth=("admin", "password"),
+            thehive_api_key="operator-api-key",
+            run_store=LocalRunStore(tmp_path / "runs"),
+            run_id="run-1",
+            clock=_SequenceClock(
+                "2026-09-14T00:00:00Z",
+                "2026-09-14T00:00:01Z",
+            ),
+        )
     )
 
     assert result.disposition is AcquisitionDisposition.INCONCLUSIVE
@@ -326,7 +330,7 @@ def test_lab_start_native_step_retains_successful_acquisition(tmp_path, monkeypa
         records=("native-record",),
     )
     monkeypatch.setattr(
-        acquisition, "acquire_native_evidence", lambda **_kwargs: capture
+        acquisition, "acquire_native_evidence", lambda *_args, **_kwargs: capture
     )
     refreshed_snapshot = RuntimeSnapshot(metadata={"native-evidence": "evaluated"})
     monkeypatch.setattr(
@@ -358,7 +362,7 @@ def test_lab_start_native_step_rejects_failed_truth_refresh(tmp_path, monkeypatc
         records=("native-record",),
     )
     monkeypatch.setattr(
-        acquisition, "acquire_native_evidence", lambda **_kwargs: capture
+        acquisition, "acquire_native_evidence", lambda *_args, **_kwargs: capture
     )
     monkeypatch.setattr(
         raes_evaluator,
@@ -388,7 +392,7 @@ def test_lab_start_native_step_rejects_failed_required_acquisition(
     binding = _binding("aptl.collector.cortex-enrichment", "cortex")
     capture = SimpleNamespace(disposition=AcquisitionDisposition.INCONCLUSIVE)
     monkeypatch.setattr(
-        acquisition, "acquire_native_evidence", lambda **_kwargs: capture
+        acquisition, "acquire_native_evidence", lambda *_args, **_kwargs: capture
     )
     context = _lab_context(
         tmp_path, SimpleNamespace(runtime_bindings=lambda: (binding,))

@@ -397,51 +397,65 @@ def refresh_evidence_truth(
     evaluator.bind_evidence_records(evidence_records)
     control_plane = RuntimeControlPlane(target, initial_snapshot=snapshot)
     try:
-        control_plane.register_planner_produced_plan(execution_plan)
-        receipt = control_plane.submit_evaluation(execution_plan.evaluation)
-        if not receipt.accepted:
-            return EvidenceTruthRefresh(
-                status=OperationState.FAILED,
-                snapshot=control_plane.snapshot,
-                diagnostics=tuple(receipt.diagnostics),
-            )
-        operation = control_plane.get_operation(receipt.operation_id)
-        if operation is None:
-            return EvidenceTruthRefresh(
-                status=OperationState.FAILED,
-                snapshot=control_plane.snapshot,
-                diagnostics=(
-                    evaluation_diagnostic(
-                        "aptl.evaluator.native-evidence-refresh-incomplete",
-                        EVALUATION_ADDRESS,
-                        "RAES did not return a terminal evidence evaluation operation.",
-                    ),
-                ),
-            )
-        refreshed_snapshot = control_plane.snapshot
-        if (
-            operation.state is OperationState.SUCCEEDED
-            and not native_evidence_truth_is_complete(
-                execution_plan.evaluation,
-                refreshed_snapshot,
-                evidence_records,
-            )
-        ):
-            return EvidenceTruthRefresh(
-                status=OperationState.FAILED,
-                snapshot=refreshed_snapshot,
-                diagnostics=(
-                    evaluation_diagnostic(
-                        "aptl.evaluator.native-evidence-truth-incomplete",
-                        EVALUATION_ADDRESS,
-                        "Not every required native evidence record decided its exact authored proposition.",
-                    ),
-                ),
-            )
-        return EvidenceTruthRefresh(
-            status=operation.state,
-            snapshot=refreshed_snapshot,
-            diagnostics=tuple(operation.diagnostics),
-        )
+        return _run_evidence_refresh(control_plane, execution_plan, evidence_records)
     finally:
         control_plane.close()
+
+
+def _run_evidence_refresh(
+    control_plane: RuntimeControlPlane,
+    execution_plan: ExecutionPlan,
+    evidence_records: tuple[ExperimentEvidenceRecordModel, ...],
+) -> EvidenceTruthRefresh:
+    """Run one registered evaluation and return its exact terminal disposition."""
+
+    control_plane.register_planner_produced_plan(execution_plan)
+    receipt = control_plane.submit_evaluation(execution_plan.evaluation)
+    operation = (
+        control_plane.get_operation(receipt.operation_id) if receipt.accepted else None
+    )
+    snapshot = control_plane.snapshot
+    if not receipt.accepted:
+        result = EvidenceTruthRefresh(
+            status=OperationState.FAILED,
+            snapshot=snapshot,
+            diagnostics=tuple(receipt.diagnostics),
+        )
+    elif operation is None:
+        result = EvidenceTruthRefresh(
+            status=OperationState.FAILED,
+            snapshot=snapshot,
+            diagnostics=(
+                evaluation_diagnostic(
+                    "aptl.evaluator.native-evidence-refresh-incomplete",
+                    EVALUATION_ADDRESS,
+                    "RAES did not return a terminal evidence evaluation operation.",
+                ),
+            ),
+        )
+    elif (
+        operation.state is OperationState.SUCCEEDED
+        and not native_evidence_truth_is_complete(
+            execution_plan.evaluation,
+            snapshot,
+            evidence_records,
+        )
+    ):
+        result = EvidenceTruthRefresh(
+            status=OperationState.FAILED,
+            snapshot=snapshot,
+            diagnostics=(
+                evaluation_diagnostic(
+                    "aptl.evaluator.native-evidence-truth-incomplete",
+                    EVALUATION_ADDRESS,
+                    "Not every required native evidence record decided its exact authored proposition.",
+                ),
+            ),
+        )
+    else:
+        result = EvidenceTruthRefresh(
+            status=operation.state,
+            snapshot=snapshot,
+            diagnostics=tuple(operation.diagnostics),
+        )
+    return result

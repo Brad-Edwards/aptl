@@ -738,7 +738,7 @@ def test_check_provisioning_realization_rejects_planner_errors(monkeypatch, tmp_
     assert details is None
     assert not check.passed
     assert not interpreted
-    assert planned["artifact_availability"] is availability
+    assert planned["options"].artifact_availability is availability
     assert any(plan_error.code in diagnostic for diagnostic in check.diagnostics)
 
 

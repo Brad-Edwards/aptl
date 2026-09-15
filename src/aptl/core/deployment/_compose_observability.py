@@ -23,31 +23,48 @@ OBSERVABILITY_VOLUMES = frozenset({"tempo_data", "grafana_otel_data"})
 _OWNERSHIP_CONFLICT = "aptl.observability-ownership-conflict"
 
 
-def _model_collides(model: dict) -> bool:
-    services = model.get("services") or {}
-    if OBSERVABILITY_SERVICES.intersection(services):
-        return True
-    if OBSERVABILITY_NETWORK in (model.get("networks") or {}):
-        return True
-    if OBSERVABILITY_VOLUMES.intersection(model.get("volumes") or {}):
-        return True
-    for service in services.values():
-        if service.get("container_name") in OBSERVABILITY_SERVICES:
-            return True
-        if OBSERVABILITY_NETWORK in (service.get("networks") or {}):
-            return True
-        for mount in service.get("volumes") or []:
-            source = (
-                mount.get("source")
-                if isinstance(mount, dict)
-                else mount.split(":", 1)[0]
-            )
-            if source in OBSERVABILITY_VOLUMES:
-                return True
-    return False
+def _model_collides(model: dict[str, object]) -> bool:
+    """Return whether authored Compose state claims a reserved resource."""
+
+    services = model.get("services")
+    service_map = services if isinstance(services, dict) else {}
+    networks = model.get("networks")
+    volumes = model.get("volumes")
+    direct_collision = any(
+        (
+            bool(OBSERVABILITY_SERVICES.intersection(service_map)),
+            isinstance(networks, dict) and OBSERVABILITY_NETWORK in networks,
+            isinstance(volumes, dict)
+            and bool(OBSERVABILITY_VOLUMES.intersection(volumes)),
+        )
+    )
+    return direct_collision or any(
+        _service_collides(service) for service in service_map.values()
+    )
+
+
+def _service_collides(service: object) -> bool:
+    """Return whether one authored service references a reserved resource."""
+
+    if not isinstance(service, dict):
+        return False
+    mounts = service.get("volumes") or []
+    mount_sources = {
+        mount.get("source") if isinstance(mount, dict) else str(mount).split(":", 1)[0]
+        for mount in mounts
+    }
+    return any(
+        (
+            service.get("container_name") in OBSERVABILITY_SERVICES,
+            OBSERVABILITY_NETWORK in (service.get("networks") or {}),
+            bool(OBSERVABILITY_VOLUMES.intersection(mount_sources)),
+        )
+    )
 
 
 def _spec_collides(realization: DeploymentRealizationSpec) -> bool:
+    """Return whether lowered scenario resources claim a reserved resource."""
+
     return (
         any(
             {node.name, node.service_name, node.container_name}.intersection(
@@ -101,37 +118,46 @@ class ComposeObservabilityMixin:
     def _observability_preflight(
         self, realization: DeploymentRealizationSpec, scenario_root: Path
     ) -> LabResult | None:
+        """Validate ownership, credentials, and trusted config before mutation."""
+
         if "otel" not in realization.profiles:
             return None
         try:
-            source = scenario_root / "docker-compose.yml"
-            model = (
-                yaml.safe_load(source.read_text(encoding="utf-8"))
-                if source.exists()
-                else {}
-            )
-            if _spec_collides(realization) or _model_collides(model):
-                return LabResult(success=False, error=_OWNERSHIP_CONFLICT)
-            env_file = self._project_dir / ".env"
-            environment = load_dotenv(env_file) if env_file.exists() else {}
-            environment.update(os.environ)
-            password = environment.get("GRAFANA_ADMIN_PASSWORD", "")
-            if validate_required_env(
-                environment, ["GRAFANA_ADMIN_PASSWORD"]
-            ) or contains_placeholder(password):
-                return LabResult(
-                    success=False, error="aptl.observability-credential-unavailable"
-                )
-            observability_compose_file(self._project_dir)
+            error = self._observability_preflight_error(realization, scenario_root)
         except (OSError, ValueError, TypeError, KeyError, yaml.YAMLError):
-            return LabResult(
-                success=False, error="aptl.observability-config-unavailable"
-            )
+            error = "aptl.observability-config-unavailable"
+        return LabResult(success=False, error=error) if error is not None else None
+
+    def _observability_preflight_error(
+        self, realization: DeploymentRealizationSpec, scenario_root: Path
+    ) -> str | None:
+        """Return the first observability-specific preflight error."""
+
+        source = scenario_root / "docker-compose.yml"
+        model = (
+            yaml.safe_load(source.read_text(encoding="utf-8"))
+            if source.exists()
+            else {}
+        )
+        if _spec_collides(realization) or _model_collides(model):
+            return _OWNERSHIP_CONFLICT
+        env_file = self._project_dir / ".env"
+        environment = load_dotenv(env_file) if env_file.exists() else {}
+        environment.update(os.environ)
+        password = environment.get("GRAFANA_ADMIN_PASSWORD", "")
+        unavailable = validate_required_env(
+            environment, ["GRAFANA_ADMIN_PASSWORD"]
+        ) or contains_placeholder(password)
+        if unavailable:
+            return "aptl.observability-credential-unavailable"
+        observability_compose_file(self._project_dir)
         return None
 
     def _with_observability_files(
         self, files: tuple[Path, ...], profiles: tuple[str, ...] | list[str]
     ) -> tuple[Path, ...]:
+        """Add the trusted observability model only when scope admitted it."""
+
         if "otel" not in profiles:
             return files
         apparatus = observability_compose_file(self._project_dir)
@@ -144,22 +170,27 @@ class ComposeObservabilityMixin:
         if "otel" not in profiles:
             return None
         failure = self._observability_ownership_check()
-        if failure is not None:
-            return failure
-        files = self._with_observability_files((), profiles)
-        command = self._build_command(
-            "config", ["otel"], compose_files=files, scenario_root=self._project_dir
-        )
-        if self._compose_syntax_error(command) is not None:
-            return LabResult(success=False, error="aptl.observability-config-invalid")
-        result = self._start_with_compose_files(
-            ["otel"], build=False, compose_files=files, scenario_root=self._project_dir
-        )
-        return (
-            None
-            if result.success
-            else LabResult(success=False, error="aptl.observability-start-failed")
-        )
+        if failure is None:
+            files = self._with_observability_files((), profiles)
+            command = self._build_command(
+                "config", ["otel"], compose_files=files, scenario_root=self._project_dir
+            )
+            if self._compose_syntax_error(command) is not None:
+                failure = LabResult(
+                    success=False, error="aptl.observability-config-invalid"
+                )
+            else:
+                result = self._start_with_compose_files(
+                    ["otel"],
+                    build=False,
+                    compose_files=files,
+                    scenario_root=self._project_dir,
+                )
+                if not result.success:
+                    failure = LabResult(
+                        success=False, error="aptl.observability-start-failed"
+                    )
+        return failure
 
     def _observability_ownership_check(self) -> LabResult | None:
         """Reject existing same-name foreign containers, networks AND volumes.
@@ -176,41 +207,57 @@ class ComposeObservabilityMixin:
             },
         }
         try:
-            for kind, reserved in names_by_kind.items():
-                command = ["docker", kind, "ls"]
-                if kind == "container":
-                    command.append("-a")
-                command.extend(
-                    ["--format", "{{.Names}}" if kind == "container" else "{{.Name}}"]
-                )
-                listed = self._run(command, timeout=30)
-                if listed.returncode != 0:
-                    raise ValueError("inventory unavailable")
-                present = reserved.intersection(listed.stdout.splitlines())
-                if not present:
-                    continue
-                inspected = self._run(
-                    ["docker", "inspect", "--type", kind, *sorted(present)], timeout=30
-                )
-                if inspected.returncode != 0:
-                    raise ValueError("inventory unavailable")
-                resources = json.loads(inspected.stdout)
-                if not isinstance(resources, list) or len(resources) != len(present):
-                    raise ValueError("incomplete inventory")
-                for resource in resources:
-                    labels = (
-                        resource.get("Config", {}).get("Labels")
-                        if kind == "container"
-                        else resource.get("Labels")
-                    )
-                    if (
-                        not isinstance(labels, dict)
-                        or labels.get("com.docker.compose.project")
-                        != self._project_name
-                    ):
-                        return LabResult(success=False, error=_OWNERSHIP_CONFLICT)
+            collision = any(
+                self._reserved_resource_collision(kind, reserved)
+                for kind, reserved in names_by_kind.items()
+            )
         except (OSError, ValueError, TypeError, AttributeError, BackendTimeoutError):
             return LabResult(
                 success=False, error="aptl.observability-inventory-unavailable"
             )
-        return None
+        return (
+            LabResult(success=False, error=_OWNERSHIP_CONFLICT) if collision else None
+        )
+
+    def _reserved_resource_collision(
+        self, kind: str, reserved: frozenset[str] | set[str]
+    ) -> bool:
+        """Return whether a present reserved resource belongs to another project."""
+
+        command = ["docker", kind, "ls"]
+        if kind == "container":
+            command.append("-a")
+        command.extend(
+            ["--format", "{{.Names}}" if kind == "container" else "{{.Name}}"]
+        )
+        listed = self._run(command, timeout=30)
+        if listed.returncode != 0:
+            raise ValueError("inventory unavailable")
+        present = reserved.intersection(listed.stdout.splitlines())
+        if not present:
+            return False
+        inspected = self._run(
+            ["docker", "inspect", "--type", kind, *sorted(present)], timeout=30
+        )
+        resources = json.loads(inspected.stdout) if inspected.returncode == 0 else None
+        if not isinstance(resources, list) or len(resources) != len(present):
+            raise ValueError("incomplete inventory")
+        return any(
+            self._foreign_observability_resource(kind, resource)
+            for resource in resources
+        )
+
+    def _foreign_observability_resource(self, kind: str, resource: object) -> bool:
+        """Return whether inspected resource labels omit this Compose owner."""
+
+        if not isinstance(resource, dict):
+            return True
+        labels = (
+            resource.get("Config", {}).get("Labels")
+            if kind == "container"
+            else resource.get("Labels")
+        )
+        return bool(
+            not isinstance(labels, dict)
+            or labels.get("com.docker.compose.project") != self._project_name
+        )

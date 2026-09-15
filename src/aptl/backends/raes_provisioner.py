@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from raes_contracts.diagnostics import Diagnostic
-from raes_contracts.planning import ProvisioningPlan, RuntimeDomain
-from raes_contracts.realization_structure import validate_realization_value
-from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot, SnapshotEntry
+from raes_contracts.planning import ProvisioningPlan
+from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot
+
+from aptl.backends._raes_apply_reporting import (
+    bounded_apply_details as _bounded_apply_details,
+    capture_apparatus_observations,
+    with_artifact_satisfactions,
+    with_capture_apparatus_entries,
+)
 
 from aptl.backends.raes_diagnostics import (
     PROVISIONING_ADDRESS,
@@ -19,14 +24,8 @@ from aptl.backends.raes_diagnostics import (
     realized_changed_addresses,
     snapshot_after_apply,
 )
-from aptl.backends.raes_artifact_mechanisms import (
-    SOURCE_ARTIFACT_REQUIREMENT_KIND,
-    dynamic_composition_provenance_ref,
-)
-from aptl.backends.raes_artifact_satisfaction import satisfactions_for_plan
-from aptl.backends.raes_content_satisfaction import content_satisfactions_for_plan
+from aptl.backends.raes_artifact_mechanisms import dynamic_composition_provenance_ref
 from aptl.backends.raes_manifest import (
-    create_aptl_manifest,
     create_aptl_realization_envelope,
 )
 from aptl.backends.raes_observability_scope import ObservabilityScopeDecision
@@ -57,70 +56,6 @@ if TYPE_CHECKING:
 
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.scenario_bundle import ScenarioBundle
-
-
-_MAX_APPLY_DETAILS_BYTES = 65_536
-
-
-def _compact_realization_details(realization: AptlRealization) -> dict[str, object]:
-    """Return identities/counts; complete realized state lives in the snapshot."""
-
-    full = realization.details()
-    return {
-        "profiles": full["profiles"],
-        "resource_counts": full["resource_counts"],
-        "nodes": [
-            {
-                "address": node.address,
-                "name": node.name,
-                "backend_services": list(node.backend_services),
-                "container_name": node.container_name,
-                "profiles": list(node.profiles),
-            }
-            for node in realization.nodes
-        ],
-        "networks": [network.details() for network in realization.networks],
-        "placements": [
-            {
-                "address": placement.address,
-                "resource_type": placement.resource_type,
-                "target_address": placement.target_address,
-            }
-            for placement in realization.placements
-        ],
-        "generated_artifacts": [
-            {"address": artifact.address}
-            for artifact in realization.generated_artifacts
-        ],
-        "persistent_volumes": [
-            {"address": volume.address} for volume in realization.persistent_volumes
-        ],
-    }
-
-
-def _bounded_apply_details(
-    details: dict[str, object], realization: AptlRealization
-) -> dict[str, object]:
-    """Keep RAES ApplyResult details finite without losing observer additions."""
-
-    try:
-        serialized_size = len(json.dumps(details, allow_nan=False).encode("utf-8"))
-    except (TypeError, ValueError):
-        serialized_size = _MAX_APPLY_DETAILS_BYTES + 1
-    if (
-        serialized_size <= _MAX_APPLY_DETAILS_BYTES
-        and validate_realization_value(details).conformant
-    ):
-        return details
-
-    compact = {**details, "realization": _compact_realization_details(realization)}
-    evidence = compact.get("observation_evidence")
-    if isinstance(evidence, dict):
-        compact["observation_evidence"] = {
-            "projection": "runtime-snapshot",
-            "record_count": len(evidence),
-        }
-    return compact
 
 
 @dataclass
@@ -291,6 +226,38 @@ class AptlProvisioner(object):
         )
         if failure is not None:
             return failure
+        started = self._start_and_observe_apparatus(
+            deployment_spec,
+            snapshot,
+            diagnostics,
+            selected_profiles,
+            realization,
+        )
+        if isinstance(started, ApplyResult):
+            return started
+        observation_context, apparatus_observations = started
+
+        return self._successful_apply(
+            plan,
+            snapshot,
+            diagnostics,
+            realization,
+            observation_context,
+            apparatus_observations,
+        )
+
+    def _start_and_observe_apparatus(
+        self,
+        deployment_spec: DeploymentRealizationSpec,
+        snapshot: RuntimeSnapshot,
+        diagnostics: list[Diagnostic],
+        selected_profiles: list[str],
+        realization: AptlRealization,
+    ) -> (
+        tuple[DeploymentObservationContext, tuple[dict[str, object], ...]] | ApplyResult
+    ):
+        """Start the lowered deployment and verify every added observer."""
+
         observation_context = DeploymentObservationContext()
         start_result = self.deployment_backend.realize(
             deployment_spec,
@@ -309,7 +276,9 @@ class AptlProvisioner(object):
             return self._failed_apply(
                 snapshot, diagnostics, selected_profiles, realization
             )
-        apparatus_observations = self._capture_apparatus_observations(deployment_spec)
+        apparatus_observations = capture_apparatus_observations(
+            self.deployment_backend, deployment_spec
+        )
         if apparatus_observations is None:
             diagnostics.append(
                 diagnostic(
@@ -321,6 +290,20 @@ class AptlProvisioner(object):
             return self._failed_apply(
                 snapshot, diagnostics, selected_profiles, realization
             )
+        return observation_context, apparatus_observations
+
+    def _successful_apply(
+        self,
+        plan: ProvisioningPlan,
+        snapshot: RuntimeSnapshot,
+        diagnostics: list[Diagnostic],
+        realization: AptlRealization,
+        observation_context: DeploymentObservationContext,
+        apparatus_observations: tuple[dict[str, object], ...],
+    ) -> ApplyResult:
+        """Observe and report one deployment whose start checks succeeded."""
+
+        selected_profiles = self.selected_profiles(realization)
         # The snapshot must record what the backend realized, not what the plan
         # asked for: the SEM-218 gate reads the realized value out of it, so
         # echoing the plan back would make the gate compare the plan against
@@ -338,7 +321,7 @@ class AptlProvisioner(object):
             realization,
             observation_context,
         )
-        realized_snapshot = self._with_capture_apparatus_entries(
+        realized_snapshot = with_capture_apparatus_entries(
             realized_snapshot, apparatus_observations
         )
         realization_envelope = create_aptl_realization_envelope()
@@ -378,47 +361,6 @@ class AptlProvisioner(object):
             ),
             operational_realization_observations=operational_observations,
         )
-
-    def _capture_apparatus_observations(
-        self, deployment_spec: DeploymentRealizationSpec
-    ) -> tuple[dict[str, object], ...] | None:
-        """Read back the actual added observer set from the deployment owner."""
-
-        if not deployment_spec.capture_apparatus:
-            return ()
-        observe = getattr(self.deployment_backend, "observe_capture_apparatus", None)
-        if not callable(observe):
-            return None
-        result = observe(deployment_spec)
-        if result is None or len(result) != len(deployment_spec.capture_apparatus):
-            return None
-        return tuple(
-            {
-                **item,
-                "runtime_address": "apparatus.capture.kali-session-capture",
-            }
-            for item in result
-        )
-
-    @staticmethod
-    def _with_capture_apparatus_entries(
-        snapshot: RuntimeSnapshot,
-        observations: tuple[dict[str, object], ...],
-    ) -> RuntimeSnapshot:
-        """Report every actual observability addition in portable runtime state."""
-
-        if not observations:
-            return snapshot
-        entries = dict(snapshot.entries)
-        for observation in observations:
-            address = str(observation["runtime_address"])
-            entries[address] = SnapshotEntry(
-                address=address,
-                domain=RuntimeDomain.PROVISIONING,
-                resource_type="capture-apparatus",
-                payload=dict(observation),
-            )
-        return snapshot.with_entries(entries)
 
     def selected_profiles(self, realization: AptlRealization) -> list[str]:
         """Apply the admitted scope decision to the ordinary backend profiles."""
@@ -464,63 +406,16 @@ class AptlProvisioner(object):
         realization: AptlRealization,
         observation_context: DeploymentObservationContext,
     ) -> RuntimeSnapshot:
-        """Attach artifact satisfaction disclosures to the realized snapshot.
+        """Attach artifact disclosures derived from realized state."""
 
-        RAES's runtime non-approximation gate reads ``artifact_satisfaction``
-        off each entry to prove the backend realized the artifact the author
-        pinned. A node's disclosure is derived from the digest read back off the
-        running container; a content placement's is derived from the bytes the
-        pack resolved for it (issue #875), because copied content is not an OCI
-        image and has no container digest. Either way an address whose artifact
-        cannot be established, or whose realized digest differs from the pin,
-        simply gets no disclosure and the gate rejects the apply.
-
-        Only addresses the observation pass reported realized have a snapshot
-        entry at all, so a disclosure can never outlive the realization it
-        describes. A scenario that authors no artifact requirement produces no
-        disclosures and the snapshot is returned unchanged.
-        """
-
-        container_names = {
-            node.address: node.container_name
-            for node in realization.nodes
-            if node.container_name
-        }
-        content_by_address = {
-            placement.address: placement.content
-            for placement in realization.placements
-            if placement.content is not None
-        }
-        manifest = create_aptl_manifest()
-        disclosures = {
-            **satisfactions_for_plan(
-                plan,
-                container_names,
-                self.deployment_backend,
-                manifest,
-                requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
-                observation_context=observation_context,
-            ),
-            **content_satisfactions_for_plan(
-                plan,
-                content_by_address,
-                self.bundle.root,
-                manifest,
-                requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
-            ),
-        }
-        if not disclosures:
-            return realized
-        entries = dict(realized.entries)
-        for address, disclosure in disclosures.items():
-            entry = entries.get(address)
-            if entry is None:
-                continue
-            entries[address] = replace(
-                entry,
-                payload={**entry.payload, "artifact_satisfaction": disclosure},
-            )
-        return realized.with_entries(entries)
+        return with_artifact_satisfactions(
+            plan,
+            realized,
+            realization,
+            observation_context,
+            self.deployment_backend,
+            self.bundle.root,
+        )
 
     def _compose_validity_diagnostics(
         self, selected_profiles: list[str]

@@ -204,7 +204,7 @@ def _stop_all(
                 clock,
                 "collector raised during stop",
             )
-        except BaseException as exc:
+        except (KeyboardInterrupt, SystemExit, GeneratorExit) as exc:
             # Finish reverse-order cleanup even if one stop is interrupted.
             # Do not convert an operator interrupt into apparent success.
             if interrupted is None:
@@ -280,38 +280,11 @@ def _process_outcome(
     Diagnostic | None,
 ]:
     """Turn one collector outcome into a report (+ record/ref for a success, + diagnostic for a failure)."""
+    failure = _pre_persistence_failure(binding, outcome)
+    if failure is not None:
+        return failure
+
     accepted = binding.accepted_limitation is not None
-    if outcome.status not in SUCCESS_STATUSES:
-        code = STATUS_DIAGNOSTIC_CODES.get(
-            outcome.status, "aptl.experiment-capture.unknown-failure"
-        )
-        address = f"capture.{binding.capture_spec_id}.{binding.requirement_id}"
-        diagnostic = capture_diagnostic(
-            code, address, f"collector reported {outcome.status.value}"
-        )
-        report = CollectorReport(
-            registration_id=binding.registration_id,
-            requirement_id=binding.requirement_id,
-            status=outcome.status,
-            accepted_degradation=accepted,
-            diagnostic_code=code,
-        )
-        return report, None, None, diagnostic
-
-    if not media_type_supported(outcome, binding):
-        address = f"capture.{binding.capture_spec_id}.{binding.requirement_id}"
-        diagnostic = capture_diagnostic(
-            _CODE_MEDIA_MISMATCH, address, _MSG_MEDIA_MISMATCH
-        )
-        report = CollectorReport(
-            registration_id=binding.registration_id,
-            requirement_id=binding.requirement_id,
-            status=CollectorStatus.MID_RUN_LOSS,
-            accepted_degradation=accepted,
-            diagnostic_code=_CODE_MEDIA_MISMATCH,
-        )
-        return report, None, None, diagnostic
-
     try:
         processed = persist_success_outcome(
             binding=binding,
@@ -321,7 +294,7 @@ def _process_outcome(
             planned_trial_id=scope.planned_trial_id,
             captured_at=outcome.finished_at,
         )
-    except (BufferError, ValueError, UnicodeError, RecursionError, OSError) as exc:
+    except (BufferError, ValueError, RecursionError, OSError) as exc:
         # Persistence is part of capture, not an exception-shaped escape from
         # terminal accounting. Never project the exception or source bytes.
         status = (
@@ -352,6 +325,55 @@ def _process_outcome(
         ),
     )
     return report, processed.record, processed.ref, None
+
+
+def _pre_persistence_failure(
+    binding: CaptureBinding,
+    outcome: CollectorOutcome,
+) -> (
+    tuple[
+        CollectorReport,
+        ExperimentEvidenceRecordModel | None,
+        EvidenceRef | None,
+        Diagnostic | None,
+    ]
+    | None
+):
+    """Project source/media failures before any bytes reach persistence."""
+
+    accepted = binding.accepted_limitation is not None
+    if outcome.status not in SUCCESS_STATUSES:
+        code = STATUS_DIAGNOSTIC_CODES.get(
+            outcome.status, "aptl.experiment-capture.unknown-failure"
+        )
+        address = f"capture.{binding.capture_spec_id}.{binding.requirement_id}"
+        diagnostic = capture_diagnostic(
+            code, address, f"collector reported {outcome.status.value}"
+        )
+        report = CollectorReport(
+            registration_id=binding.registration_id,
+            requirement_id=binding.requirement_id,
+            status=outcome.status,
+            accepted_degradation=accepted,
+            diagnostic_code=code,
+        )
+        return report, None, None, diagnostic
+
+    result = None
+    if not media_type_supported(outcome, binding):
+        address = f"capture.{binding.capture_spec_id}.{binding.requirement_id}"
+        diagnostic = capture_diagnostic(
+            _CODE_MEDIA_MISMATCH, address, _MSG_MEDIA_MISMATCH
+        )
+        report = CollectorReport(
+            registration_id=binding.registration_id,
+            requirement_id=binding.requirement_id,
+            status=CollectorStatus.MID_RUN_LOSS,
+            accepted_degradation=accepted,
+            diagnostic_code=_CODE_MEDIA_MISMATCH,
+        )
+        result = (report, None, None, diagnostic)
+    return result
 
 
 def _disposition(reports: Sequence[CollectorReport]) -> AcquisitionDisposition:

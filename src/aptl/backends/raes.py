@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -37,7 +38,11 @@ from aptl.backends.raes_runtime_orchestration import (
     prepare_runtime_orchestration_for_scenario,
 )
 from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, create_aptl_manifest
-from aptl.backends.raes_planning_compat import AptlRuntimeManager, plan_aptl_scenario
+from aptl.backends.raes_planning_compat import (
+    AptlPlanningOptions,
+    AptlRuntimeManager,
+    plan_aptl_scenario,
+)
 from aptl.backends.raes_evaluator import AptlEvaluator
 from aptl.backends.raes_orchestrator import AptlOrchestrator
 from aptl.backends.raes_participant_actions import (
@@ -88,17 +93,24 @@ INSTANTIATION_FAILURE_MESSAGE = (
 _RETRYABLE_APPLY_DIAGNOSTIC_CODES = frozenset({"aptl.provisioner.backend-start-failed"})
 
 
+@dataclass(frozen=True)
+class RuntimeTargetOptions:
+    """Optional authorities and evidence state bound into one runtime target."""
+
+    participant_action_specs: Mapping[str, ParticipantActionSpec] | None = None
+    participant_plan_authority: ParticipantPlanAuthority | None = None
+    artifact_availability: ArtifactAvailabilityContext | None = None
+    capture_plan: CapturePlan | None = None
+    observability_scope: ObservabilityScopeDecision | None = None
+
+
 def create_aptl_runtime_target(
     *,
     project_dir: Path,
     config: AptlConfig,
     backend: "DeploymentBackend",
-    participant_action_specs: Mapping[str, ParticipantActionSpec] | None = None,
-    participant_plan_authority: ParticipantPlanAuthority | None = None,
     bundle: ScenarioBundle,
-    artifact_availability: ArtifactAvailabilityContext | None = None,
-    capture_plan: CapturePlan | None = None,
-    observability_scope: ObservabilityScopeDecision | None = None,
+    options: RuntimeTargetOptions | None = None,
 ) -> RuntimeTarget:
     """Build APTL's canonical ``full-remote-control-plane`` runtime target.
 
@@ -112,23 +124,25 @@ def create_aptl_runtime_target(
     (issue #876 cycle-6 review).
     """
 
+    selected = options or RuntimeTargetOptions()
     provisioner = AptlProvisioner(
         project_dir=project_dir,
         config=config,
         deployment_backend=backend,
         bundle=bundle,
-        artifact_availability=artifact_availability,
-        capture_plan=capture_plan or empty_capture_plan(),
-        observability_scope=observability_scope or ObservabilityScopeDecision(),
+        artifact_availability=selected.artifact_availability,
+        capture_plan=selected.capture_plan or empty_capture_plan(),
+        observability_scope=selected.observability_scope
+        or ObservabilityScopeDecision(),
     )
     orchestrator = AptlOrchestrator()
     action_specs = dict(DEFAULT_PARTICIPANT_ACTIONS)
-    if participant_action_specs:
-        action_specs.update(participant_action_specs)
+    if selected.participant_action_specs:
+        action_specs.update(selected.participant_action_specs)
     participant_runtime = AptlParticipantRuntime(
         deployment_backend=backend,
         action_specs=action_specs,
-        plan_authority=participant_plan_authority,
+        plan_authority=selected.participant_plan_authority,
     )
     return RuntimeTarget(
         name=APTL_RAES_TARGET_NAME,
@@ -276,28 +290,22 @@ def admit_raes_scenario(
         config=config,
         backend=backend,
         bundle=bundle,
-        artifact_availability=availability,
-        capture_plan=capture_plan,
-        observability_scope=observability_scope_decision(scenario),
+        options=RuntimeTargetOptions(
+            artifact_availability=availability,
+            capture_plan=capture_plan,
+            observability_scope=observability_scope_decision(scenario),
+        ),
     )
     runtime_manager = RuntimeManager(target)
-    execution_plan = (
-        plan_aptl_scenario(
-            target=target,
-            bundle=bundle,
-            scenario=scenario,
-            parameters=dict(parameters),
+    execution_plan = plan_aptl_scenario(
+        target=target,
+        bundle=bundle,
+        scenario=scenario,
+        options=AptlPlanningOptions(
+            parameters=dict(parameters) if parameters is not None else None,
             artifact_availability=availability,
             runtime_manager=runtime_manager,
-        )
-        if parameters is not None
-        else plan_aptl_scenario(
-            target=target,
-            bundle=bundle,
-            scenario=scenario,
-            artifact_availability=availability,
-            runtime_manager=runtime_manager,
-        )
+        ),
     )
     provisioner = target.provisioner
     realization = (

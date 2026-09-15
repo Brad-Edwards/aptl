@@ -323,8 +323,10 @@ def test_aptl_planning_applies_compatibility_before_raes_planner(
         target=target,
         bundle=bundle,
         scenario=object(),
-        artifact_availability="availability",
-        runtime_manager=manager,
+        options=raes_planning_compat.AptlPlanningOptions(
+            artifact_availability="availability",
+            runtime_manager=manager,
+        ),
     )
 
     assert result == "planned"

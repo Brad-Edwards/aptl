@@ -108,39 +108,45 @@ def _artifact_errors(realization: DeploymentRealizationSpec) -> list[str]:
 
     errors: list[str] = []
     for artifact in realization.generated_artifacts:
-        if (
-            artifact.generator == "certificate_bundle"
-            and artifact.provenance not in _SUPPORTED_CERTIFICATE_PROVENANCES
-        ):
-            errors.append(
-                f"Generated artifact {artifact.address} has unsupported provenance."
-            )
-        if (
-            artifact.generator == "rendered_config"
-            and artifact.provenance
-            not in {FLAG_SIGNING_PROFILE_V2, CORTEX_SERVICE_CREDENTIALS_PROFILE}
-            and len(artifact.outputs) != 1
-        ):
-            # The wazuh manager config renders a single file; the flag-signing
-            # profile legitimately renders a seed plus one key per node (#875).
-            errors.append(
-                f"Rendered config {artifact.address} must declare exactly one output."
-            )
-        if any(consumer.access_mode != "read_only" for consumer in artifact.consumers):
-            errors.append(
-                f"Generated artifact {artifact.address} must be mounted read-only."
-            )
-        if (
-            artifact.environment_consumers
-            and artifact.provenance != CORTEX_SERVICE_CREDENTIALS_PROFILE
-        ):
-            errors.append(
-                f"Generated artifact {artifact.address} has unsupported environment delivery."
-            )
-        if any(not _safe_relative(output.path) for output in artifact.outputs):
-            errors.append(
-                f"Generated artifact {artifact.address} has an unsafe output path."
-            )
+        errors.extend(_one_artifact_errors(artifact))
+    return errors
+
+
+def _one_artifact_errors(artifact: object) -> list[str]:
+    """Return all graph validation errors for one generated artifact."""
+
+    errors: list[str] = []
+    if (
+        artifact.generator == "certificate_bundle"
+        and artifact.provenance not in _SUPPORTED_CERTIFICATE_PROVENANCES
+    ):
+        errors.append(
+            f"Generated artifact {artifact.address} has unsupported provenance."
+        )
+    if (
+        artifact.generator == "rendered_config"
+        and artifact.provenance
+        not in {FLAG_SIGNING_PROFILE_V2, CORTEX_SERVICE_CREDENTIALS_PROFILE}
+        and len(artifact.outputs) != 1
+    ):
+        errors.append(
+            f"Rendered config {artifact.address} must declare exactly one output."
+        )
+    if any(consumer.access_mode != "read_only" for consumer in artifact.consumers):
+        errors.append(
+            f"Generated artifact {artifact.address} must be mounted read-only."
+        )
+    if (
+        artifact.environment_consumers
+        and artifact.provenance != CORTEX_SERVICE_CREDENTIALS_PROFILE
+    ):
+        errors.append(
+            f"Generated artifact {artifact.address} has unsupported environment delivery."
+        )
+    if any(not _safe_relative(output.path) for output in artifact.outputs):
+        errors.append(
+            f"Generated artifact {artifact.address} has an unsafe output path."
+        )
     return errors
 
 

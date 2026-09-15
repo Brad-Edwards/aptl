@@ -32,8 +32,9 @@ def _capture_apparatus(
 ) -> tuple[CaptureApparatus, ...]:
     """Admit only observers genuinely required by the compiled demands."""
 
+    apparatus: tuple[CaptureApparatus, ...] = ()
     if _TRANSCRIPT_DEMAND_ID not in demand_ids:
-        return tuple()
+        return apparatus
     provenance = getattr(scenario, "instantiation_provenance", None)
     designation = getattr(scenario, "realization", None)
     if provenance is not None:
@@ -57,7 +58,7 @@ def _capture_apparatus(
                 ),
             )
         )
-    return (
+    apparatus = (
         CaptureApparatus(
             apparatus_id="aptl.apparatus.kali-session-capture",
             service_name="kali-capture",
@@ -83,6 +84,7 @@ def _capture_apparatus(
             ),
         ),
     )
+    return apparatus
 
 
 def admit_sdl_evidence(

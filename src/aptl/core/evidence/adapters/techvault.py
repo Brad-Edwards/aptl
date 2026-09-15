@@ -2,44 +2,36 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
 from datetime import datetime
+from typing import cast
 
 from aptl.core.evidence.adapters.sources import SourceResult
+from aptl.core.evidence.adapters.techvault_transcript import (
+    RedteamSessionTranscriptSource,
+    TranscriptFrame,
+    TranscriptSession,
+    transcript_chain_digest,
+)
+from aptl.core.evidence.adapters.techvault_readiness import (
+    TECHVAULT_LOCAL_SIDS,
+    SuricataRuleReadinessSource,
+)
 from aptl.core.evidence.outcomes import CollectorStatus
 
 CORTEX_ANALYZER_ID = "TechVaultScenarioContext_1_0"
-CORTEX_OBSERVABLE = "172.20.1.30"
+CORTEX_OBSERVABLE = "172.20.1.30"  # NOSONAR S1313: admitted synthetic lab IP
 SURICATA_SQLI_SID = 1000010
 WAZUH_SQLI_RULE_ID = "303020"
-TECHVAULT_LOCAL_SIDS = frozenset(
-    {
-        1000001,
-        1000002,
-        1000010,
-        1000011,
-        1000012,
-        1000020,
-        1000030,
-        1000031,
-        1000040,
-        1000050,
-        1000060,
-        1000061,
-        1000070,
-        1000080,
-        1000090,
-        1000091,
-    }
-)
 _MAX_NATIVE_JSON_BYTES = 2 * 1024 * 1024
+_UTC_OFFSET = "+00:00"
 
 
 def _bounded_json(value: object) -> bytes | None:
+    """Encode one native response only when it fits the admitted byte bound."""
+
     try:
         raw = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     except (TypeError, ValueError, RecursionError):
@@ -48,6 +40,8 @@ def _bounded_json(value: object) -> bytes | None:
 
 
 def _failure(status: CollectorStatus = CollectorStatus.MID_RUN_LOSS) -> SourceResult:
+    """Build a source result that retains no unvalidated native payload."""
+
     return SourceResult(status=status)
 
 
@@ -58,6 +52,8 @@ class CortexEnrichmentSource:
         self,
         query: Callable[[str, str], Mapping[str, object] | None],
     ) -> None:
+        """Bind the trusted native Cortex query owner."""
+
         self._query = query
 
     def fetch(self, start_iso: str, end_iso: str) -> SourceResult:
@@ -66,55 +62,70 @@ class CortexEnrichmentSource:
             return _failure(CollectorStatus.SOURCE_UNAVAILABLE)
         if not _valid_cortex_payload(payload, start_iso, end_iso):
             return _failure()
-        safe = {
-            "enabled_analyzers": sorted(
-                str(item["id"])
-                for item in payload["analyzers"]  # type: ignore[index]
-                if item.get("enabled") is True  # type: ignore[union-attr]
-            ),
-            "report": {
-                key: payload["report"][key]  # type: ignore[index]
-                for key in (
-                    "analyzer_id",
-                    "observable",
-                    "status",
-                    "started_at",
-                    "finished_at",
-                    "scenario_role",
-                )
-                if key in payload["report"]  # type: ignore[operator]
-            },
-            "thehive_connector": {
-                "name": payload["connector"]["name"],  # type: ignore[index]
-                "status": payload["connector"]["status"],  # type: ignore[index]
-            },
-        }
-        raw = _bounded_json(safe)
-        if raw is None:
-            return _failure(CollectorStatus.TRUNCATION)
-        return SourceResult(
-            status=CollectorStatus.OK,
-            records=[safe],
-            source_min_time=str(payload["report"]["started_at"]),  # type: ignore[index]
-            source_max_time=str(payload["report"]["finished_at"]),  # type: ignore[index]
-            source_pipeline={
-                "source_refs": [
-                    {
-                        "ref_kind": "other",
-                        "ref_id": "nodes.cortex.runtime.platform_applications.cortex-enrichment",
-                    },
-                    {
-                        "ref_kind": "other",
-                        "ref_id": "nodes.thehive.runtime.platform_applications.thehive-case-management",
-                    },
-                ]
-            },
-        )
+        return _cortex_result(payload)
+
+
+def _cortex_result(payload: Mapping[str, object]) -> SourceResult:
+    """Project a validated Cortex response into the portable source result."""
+
+    analyzers = cast(Sequence[object], payload["analyzers"])
+    report = cast(Mapping[str, object], payload["report"])
+    connector = cast(Mapping[str, object], payload["connector"])
+    safe = {
+        "enabled_analyzers": sorted(
+            str(item["id"])
+            for item in analyzers
+            if isinstance(item, Mapping) and item.get("enabled") is True
+        ),
+        "report": {
+            key: report[key]
+            for key in (
+                "analyzer_id",
+                "observable",
+                "status",
+                "started_at",
+                "finished_at",
+                "scenario_role",
+            )
+            if key in report
+        },
+        "thehive_connector": {
+            "name": connector["name"],
+            "status": connector["status"],
+        },
+    }
+    if _bounded_json(safe) is None:
+        return _failure(CollectorStatus.TRUNCATION)
+    return SourceResult(
+        status=CollectorStatus.OK,
+        records=[safe],
+        source_min_time=str(report["started_at"]),
+        source_max_time=str(report["finished_at"]),
+        source_pipeline={
+            "source_refs": [
+                {
+                    "ref_kind": "other",
+                    "ref_id": (
+                        "nodes.cortex.runtime.platform_applications.cortex-enrichment"
+                    ),
+                },
+                {
+                    "ref_kind": "other",
+                    "ref_id": (
+                        "nodes.thehive.runtime.platform_applications."
+                        "thehive-case-management"
+                    ),
+                },
+            ]
+        },
+    )
 
 
 def _valid_cortex_payload(
     payload: Mapping[str, object], start_iso: str, end_iso: str
 ) -> bool:
+    """Validate the exact analyzer, report, connector, and temporal contract."""
+
     analyzers = payload.get("analyzers")
     report = payload.get("report")
     connector = payload.get("connector")
@@ -125,106 +136,43 @@ def _valid_cortex_payload(
         or not isinstance(connector, Mapping)
     ):
         return False
+    return (
+        _valid_analyzers(analyzers)
+        and _valid_cortex_report(report, start_iso, end_iso)
+        and _valid_connector(connector)
+        and _bounded_json(payload) is not None
+    )
+
+
+def _valid_analyzers(analyzers: Sequence[object]) -> bool:
+    """Require exactly one enabled analyzer with the admitted identity."""
+
     required = [
         item
         for item in analyzers
         if isinstance(item, Mapping) and item.get("id") == CORTEX_ANALYZER_ID
     ]
+    return len(required) == 1 and required[0].get("enabled") is True
+
+
+def _valid_cortex_report(
+    report: Mapping[str, object], start_iso: str, end_iso: str
+) -> bool:
+    """Validate the report identity, outcome, and bounded time window."""
+
     return (
-        len(required) == 1
-        and required[0].get("enabled") is True
-        and report.get("analyzer_id") == CORTEX_ANALYZER_ID
+        report.get("analyzer_id") == CORTEX_ANALYZER_ID
         and report.get("observable") == CORTEX_OBSERVABLE
         and str(report.get("status", "")).lower() in {"success", "succeeded"}
         and _inside_window(report.get("started_at"), start_iso, end_iso)
         and _inside_window(report.get("finished_at"), start_iso, end_iso)
-        and connector.get("status") == "OK"
-        and bool(connector.get("name"))
-        and _bounded_json(payload) is not None
     )
 
 
-class SuricataRuleReadinessSource:
-    """Validate native Suricata configuration and emit path-free readiness text."""
+def _valid_connector(connector: Mapping[str, object]) -> bool:
+    """Require one named healthy TheHive-to-Cortex connector."""
 
-    def __init__(
-        self, query: Callable[[str, str], Mapping[str, object] | None]
-    ) -> None:
-        self._query = query
-
-    def fetch(self, start_iso: str, end_iso: str) -> SourceResult:
-        payload = self._query(start_iso, end_iso)
-        if payload is None:
-            return _failure(CollectorStatus.SOURCE_UNAVAILABLE)
-        if not _valid_readiness_payload(payload):
-            return _failure()
-        digests = payload["realized_byte_digests"]
-        identities = payload["content_identities"]
-        lines = [
-            f"image_ref={payload['image_ref']}",
-            f"image_digest={payload['image_digest']}",
-            "native_configuration=ok",
-            "source=suricata-builtin",
-            "source=techvault-local",
-            *(
-                f"content_identity.{key}={identities[key]}"
-                for key in sorted(identities)
-            ),
-            *(f"content_digest.{key}={digests[key]}" for key in sorted(digests)),  # type: ignore[index]
-            *(f"local_sid={sid}" for sid in sorted(TECHVAULT_LOCAL_SIDS)),
-            f"local_rule_count={len(TECHVAULT_LOCAL_SIDS)}",
-        ]
-        return SourceResult(
-            status=CollectorStatus.OK,
-            chunks=(("\n".join(lines) + "\n").encode(),),
-            media_type="text/plain",
-            source_pipeline={
-                "source_refs": [
-                    {
-                        "ref_kind": "other",
-                        "ref_id": "nodes.suricata.runtime.network_detection_engines.suricata-engine.rule_sources.suricata-builtin",
-                    },
-                    {
-                        "ref_kind": "other",
-                        "ref_id": "nodes.suricata.runtime.network_detection_engines.suricata-engine.rule_sources.techvault-local",
-                    },
-                ]
-            },
-        )
-
-
-def _valid_readiness_payload(payload: Mapping[str, object]) -> bool:
-    digests = payload.get("realized_byte_digests")
-    identities = payload.get("content_identities")
-    sources = payload.get("selected_sources")
-    sids = payload.get("local_sids")
-    image_ref = payload.get("image_ref")
-    image_digest = payload.get("image_digest")
-    return (
-        payload.get("native_configuration_ok") is True
-        and isinstance(image_ref, str)
-        and _sha256(image_digest)
-        and image_ref.endswith(f"@{image_digest}")
-        and isinstance(digests, Mapping)
-        and set(digests) == {"suricata-config", "suricata-local-rules"}
-        and all(_sha256(value) for value in digests.values())
-        and isinstance(identities, Mapping)
-        and set(identities) == {"suricata-config", "suricata-local-rules"}
-        and all(
-            isinstance(value, str)
-            and "@sha256:" in value
-            and value.rsplit("@", 1)[-1] == digests.get(key)
-            for key, value in identities.items()
-        )
-        and isinstance(sources, Sequence)
-        and not isinstance(sources, str | bytes)
-        and set(sources) == {"suricata-builtin", "techvault-local"}
-        and isinstance(sids, Sequence)
-        and not isinstance(sids, str | bytes)
-        and len(sids) == len(TECHVAULT_LOCAL_SIDS)
-        and {int(value) for value in sids if isinstance(value, int | str)}
-        == TECHVAULT_LOCAL_SIDS
-    )
+    return connector.get("status") == "OK" and bool(connector.get("name"))
 
 
 class SuricataWazuhSqliSource:
@@ -240,6 +188,8 @@ class SuricataWazuhSqliSource:
         poll_interval_seconds: float = 0.0,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
+        """Bind the trigger and two native alert-query owners."""
+
         self._trigger = trigger
         self._query_suricata = query_suricata
         self._query_wazuh = query_wazuh
@@ -251,6 +201,24 @@ class SuricataWazuhSqliSource:
         trigger = self._trigger()
         if trigger is None or not _valid_trigger(trigger, start_iso, end_iso):
             return _failure(CollectorStatus.SOURCE_UNAVAILABLE)
+        pair, unavailable = self._poll_pair(trigger, end_iso)
+        if pair is None:
+            status = (
+                CollectorStatus.SOURCE_UNAVAILABLE
+                if unavailable
+                else CollectorStatus.MID_RUN_LOSS
+            )
+            return _failure(status)
+        return _sqli_result(trigger, pair)
+
+    def _poll_pair(
+        self, trigger: Mapping[str, object], end_iso: str
+    ) -> tuple[
+        tuple[Mapping[str, object], Mapping[str, object]] | None,
+        bool,
+    ]:
+        """Poll both native stores for one exact correlated alert pair."""
+
         pair = None
         unavailable = False
         for attempt in range(self._poll_attempts):
@@ -264,51 +232,62 @@ class SuricataWazuhSqliSource:
                 break
             if attempt + 1 < self._poll_attempts and self._poll_interval_seconds:
                 self._sleep(self._poll_interval_seconds)
-        if pair is None:
-            return _failure(
-                CollectorStatus.SOURCE_UNAVAILABLE
-                if unavailable
-                else CollectorStatus.MID_RUN_LOSS
-            )
-        suricata_event, wazuh_event = pair
-        rows = (
-            _sqli_projection("suricata", trigger, suricata_event),
-            _sqli_projection("wazuh", trigger, wazuh_event),
-        )
-        chunks = tuple(
-            json.dumps(row, sort_keys=True, separators=(",", ":")).encode() + b"\n"
-            for row in rows
-        )
-        return SourceResult(
-            status=CollectorStatus.OK,
-            records=list(rows),
-            chunks=chunks,
-            media_type="application/x-ndjson",
-            source_min_time=str(suricata_event["timestamp"]),
-            source_max_time=str(wazuh_event["timestamp"]),
-            observer_effect="one fixed POST /login containing UNION SELECT",
-            source_pipeline={
-                "source_refs": [
-                    {
-                        "ref_kind": "other",
-                        "ref_id": "nodes.suricata.runtime.network_detection_engines.suricata-engine.output_streams.eve-json",
-                    },
-                    {
-                        "ref_kind": "other",
-                        "ref_id": "nodes.wazuh-manager.runtime.security_monitoring_managers.wazuh-manager.content_sets.suricata-rules",
-                    },
-                ],
-                "correlation": "shared-suricata-flow-id",
-            },
-        )
+        return pair, unavailable
+
+
+def _sqli_result(
+    trigger: Mapping[str, object],
+    pair: tuple[Mapping[str, object], Mapping[str, object]],
+) -> SourceResult:
+    """Project one correlated native alert pair into portable NDJSON."""
+
+    suricata_event, wazuh_event = pair
+    rows = (
+        _sqli_projection("suricata", trigger, suricata_event),
+        _sqli_projection("wazuh", trigger, wazuh_event),
+    )
+    chunks = tuple(
+        json.dumps(row, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+        for row in rows
+    )
+    return SourceResult(
+        status=CollectorStatus.OK,
+        records=list(rows),
+        chunks=chunks,
+        media_type="application/x-ndjson",
+        source_min_time=str(suricata_event["timestamp"]),
+        source_max_time=str(wazuh_event["timestamp"]),
+        observer_effect="one fixed POST /login containing UNION SELECT",
+        source_pipeline={
+            "source_refs": [
+                {
+                    "ref_kind": "other",
+                    "ref_id": (
+                        "nodes.suricata.runtime.network_detection_engines."
+                        "suricata-engine.output_streams.eve-json"
+                    ),
+                },
+                {
+                    "ref_kind": "other",
+                    "ref_id": (
+                        "nodes.wazuh-manager.runtime.security_monitoring_managers."
+                        "wazuh-manager.content_sets.suricata-rules"
+                    ),
+                },
+            ],
+            "correlation": "shared-suricata-flow-id",
+        },
+    )
 
 
 def _valid_trigger(trigger: Mapping[str, object], start_iso: str, end_iso: str) -> bool:
+    """Validate the fixed probe identity, shape, and time bound."""
+
     return (
         bool(trigger.get("trigger_id"))
         and trigger.get("method") == "POST"
         and trigger.get("path") == "/login"
-        and trigger.get("source_ip") == "172.20.1.30"
+        and trigger.get("source_ip") == CORTEX_OBSERVABLE
         and bool(trigger.get("destination_ip"))
         and trigger.get("contains_union_select") is True
         and _inside_window(trigger.get("triggered_at"), start_iso, end_iso)
@@ -321,6 +300,8 @@ def _exact_correlated_pair(
     wazuh: Sequence[Mapping[str, object]],
     end_iso: str,
 ) -> tuple[Mapping[str, object], Mapping[str, object]] | None:
+    """Return exactly one pair joined by flow identity, or no evidence."""
+
     start_iso = str(trigger["triggered_at"])
     sensor = [
         event
@@ -351,6 +332,8 @@ def _event_matches_trigger(
     start_iso: str,
     end_iso: str,
 ) -> bool:
+    """Bind an event to the probe endpoints and acquisition window."""
+
     source = event.get("src_ip", _nested(event, "data", "src_ip"))
     destination = event.get("dest_ip", _nested(event, "data", "dest_ip"))
     return (
@@ -365,6 +348,8 @@ def _sqli_projection(
     trigger: Mapping[str, object],
     event: Mapping[str, object],
 ) -> dict[str, object]:
+    """Project only the correlated fields required by the evidence contract."""
+
     flow_id = event.get("flow_id", _nested(event, "data", "flow_id"))
     return {
         "source": source,
@@ -378,140 +363,9 @@ def _sqli_projection(
     }
 
 
-@dataclass(frozen=True)
-class TranscriptFrame:
-    sequence: int
-    timestamp: str
-    direction: str
-    data: bytes
-
-
-@dataclass(frozen=True)
-class TranscriptSession:
-    session_id: str
-    started_at: str
-    finished_at: str
-    close_reason: str
-    frames: tuple[TranscriptFrame, ...]
-    final_chain_digest: str
-    loss_count: int = 0
-
-
-class RedteamSessionTranscriptSource:
-    """Require complete sidecar-owned custody for every admitted session."""
-
-    def __init__(
-        self,
-        expected_session_ids: Callable[[], Sequence[str] | None],
-        read_sessions: Callable[[], Sequence[TranscriptSession] | None],
-    ) -> None:
-        self._expected_session_ids = expected_session_ids
-        self._read_sessions = read_sessions
-
-    def fetch(self, start_iso: str, end_iso: str) -> SourceResult:
-        expected = self._expected_session_ids()
-        sessions = self._read_sessions()
-        if expected is None or sessions is None:
-            return _failure(CollectorStatus.SOURCE_UNAVAILABLE)
-        if len(expected) != len(set(expected)) or len(sessions) != len(
-            {session.session_id for session in sessions}
-        ):
-            return _failure()
-        if set(expected) != {session.session_id for session in sessions}:
-            return _failure()
-        if any(
-            not _valid_transcript_session(session, start_iso, end_iso)
-            for session in sessions
-        ):
-            return _failure()
-        chunks: list[bytes] = []
-        frame_count = 0
-        for session in sorted(
-            sessions, key=lambda item: (item.started_at, item.session_id)
-        ):
-            chunks.append(f"=== session {session.session_id} start ===\n".encode())
-            for frame in session.frames:
-                chunks.append(
-                    f"[{frame.sequence}:{frame.direction}:{frame.timestamp}] ".encode()
-                    + frame.data
-                    + b"\n"
-                )
-                frame_count += 1
-            chunks.append(
-                f"=== session {session.session_id} end close={session.close_reason} chain={session.final_chain_digest} ===\n".encode()
-            )
-        return SourceResult(
-            status=CollectorStatus.OK if sessions else CollectorStatus.EMPTY_OK,
-            chunks=tuple(chunks),
-            media_type="text/plain",
-            source_min_time=min(
-                (item.started_at for item in sessions), default=start_iso
-            ),
-            source_max_time=max(
-                (item.finished_at for item in sessions), default=end_iso
-            ),
-            source_pipeline={
-                "source_refs": [
-                    {
-                        "ref_kind": "apparatus-context",
-                        "ref_id": "apparatus.capture.kali-session-capture",
-                    }
-                ],
-                "custody": "sidecar-owned-pty-master-sha256-chain",
-                "session_count": len(sessions),
-                "frame_count": frame_count,
-            },
-        )
-
-
-def _valid_transcript_session(
-    session: TranscriptSession, start_iso: str, end_iso: str
-) -> bool:
-    if (
-        not session.session_id
-        or session.loss_count
-        or session.close_reason
-        not in {"clean-exit", "remote-eof", "signal", "forced-teardown"}
-        or not _inside_window(session.started_at, start_iso, end_iso)
-        or not _inside_window(session.finished_at, start_iso, end_iso)
-        or any(frame.sequence != index for index, frame in enumerate(session.frames, 1))
-        or any(frame.direction not in {"input", "output"} for frame in session.frames)
-        or any(
-            not _inside_window(frame.timestamp, session.started_at, session.finished_at)
-            for frame in session.frames
-        )
-    ):
-        return False
-    try:
-        for frame in session.frames:
-            frame.data.decode("utf-8")
-    except UnicodeDecodeError:
-        return False
-    return _transcript_chain(session.frames) == session.final_chain_digest
-
-
-def _transcript_chain(frames: Sequence[TranscriptFrame]) -> str:
-    chain = bytes(32)
-    for frame in frames:
-        header = f"{frame.sequence}\0{frame.timestamp}\0{frame.direction}\0".encode()
-        chain = hashlib.sha256(chain + header + frame.data).digest()
-    return "sha256:" + chain.hex()
-
-
-def transcript_chain_digest(frames: Sequence[TranscriptFrame]) -> str:
-    """Return the custody-chain digest used by the sidecar and source verifier."""
-
-    return _transcript_chain(frames)
-
-
-def _sha256(value: object) -> bool:
-    if not isinstance(value, str) or not value.startswith("sha256:"):
-        return False
-    tail = value.removeprefix("sha256:")
-    return len(tail) == 64 and all(char in "0123456789abcdef" for char in tail)
-
-
 def _nested(value: Mapping[str, object], *keys: str) -> object:
+    """Read a bounded mapping path without accepting non-mapping intermediates."""
+
     current: object = value
     for key in keys:
         if not isinstance(current, Mapping):
@@ -521,6 +375,8 @@ def _nested(value: Mapping[str, object], *keys: str) -> object:
 
 
 def _suricata_sid(event: Mapping[str, object]) -> int | None:
+    """Read a Suricata signature identifier as an integer."""
+
     value = _nested(event, "alert", "signature_id")
     try:
         return int(value)  # type: ignore[arg-type]
@@ -529,6 +385,8 @@ def _suricata_sid(event: Mapping[str, object]) -> int | None:
 
 
 def _embedded_suricata_sid(event: Mapping[str, object]) -> int | None:
+    """Read the Suricata signature embedded in a Wazuh event."""
+
     value = _nested(event, "data", "alert", "signature_id")
     try:
         return int(value)  # type: ignore[arg-type]
@@ -537,14 +395,18 @@ def _embedded_suricata_sid(event: Mapping[str, object]) -> int | None:
 
 
 def _wazuh_rule_id(event: Mapping[str, object]) -> str:
+    """Read a Wazuh rule identifier as text."""
+
     return str(_nested(event, "rule", "id") or "")
 
 
 def _inside_window(value: object, start_iso: str, end_iso: str) -> bool:
+    """Return whether an ISO timestamp lies inside the closed capture window."""
+
     try:
-        instant = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        start = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
-        end = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
+        instant = datetime.fromisoformat(str(value).replace("Z", _UTC_OFFSET))
+        start = datetime.fromisoformat(start_iso.replace("Z", _UTC_OFFSET))
+        end = datetime.fromisoformat(end_iso.replace("Z", _UTC_OFFSET))
     except (TypeError, ValueError):
         return False
     return start <= instant <= end

@@ -36,6 +36,7 @@ _CONTENT_PLACEMENT = "content-placement"
 _TRUE = "true"
 _FALSE = "false"
 _POSITIVE = "positive"
+_TRUTH_RESULT_SCHEMA = "proposition-truth-result/v1"
 
 # Provenance of the probe that decided an observed-state truth: APTL's native
 # service-search-index-schema readback implementation and the capability it
@@ -208,29 +209,11 @@ def _native_evidence_record(
     a different requirement, predicate, semantic reference, or channel.
     """
 
-    requirement_refs = _string_tuple(ppayload.get("evidence_requirement_refs"))
-    if len(requirement_refs) != 1:
+    context = _native_evidence_context(ppayload)
+    if context is None:
         return None
-    requirement_ref = requirement_refs[0]
-    capability = _NATIVE_EVIDENCE_CAPABILITIES.get(requirement_ref)
-    if capability is None:
-        return None
-    spec = ppayload.get("spec")
-    predicate = spec.get("predicate") if isinstance(spec, Mapping) else None
-    if not isinstance(predicate, Mapping):
-        return None
-    if (
-        ppayload.get("predicate_kind") != "boolean"
-        or ppayload.get("quantifier") != "all"
-        or _string_tuple(ppayload.get("evidence_channels"))
-        != (capability.evidence_channel,)
-        or _string_tuple(ppayload.get("unresolved_evidence_channel_refs"))
-        or predicate.get("kind") != "boolean"
-        or predicate.get("property") != capability.predicate_property
-        or predicate.get("semantic_ref") != capability.semantic_ref
-        or predicate.get("operator") != "equals"
-        or predicate.get("expected") is not True
-    ):
+    requirement_ref, capability, predicate = context
+    if not _native_predicate_matches(ppayload, capability, predicate):
         return None
     candidates = tuple(
         record
@@ -243,6 +226,44 @@ def _native_evidence_record(
         and record.raw_content.content_checksum.algorithm == "sha256"
     )
     return candidates[0] if len(candidates) == 1 else None
+
+
+def _native_evidence_context(
+    ppayload: Mapping[str, Any],
+) -> tuple[str, _NativeEvidenceCapability, Mapping[str, object]] | None:
+    """Resolve one exact evidence requirement, capability, and predicate."""
+
+    result = None
+    requirement_refs = _string_tuple(ppayload.get("evidence_requirement_refs"))
+    if len(requirement_refs) == 1:
+        requirement_ref = requirement_refs[0]
+        capability = _NATIVE_EVIDENCE_CAPABILITIES.get(requirement_ref)
+        spec = ppayload.get("spec")
+        predicate = spec.get("predicate") if isinstance(spec, Mapping) else None
+        if capability is not None and isinstance(predicate, Mapping):
+            result = requirement_ref, capability, predicate
+    return result
+
+
+def _native_predicate_matches(
+    ppayload: Mapping[str, Any],
+    capability: _NativeEvidenceCapability,
+    predicate: Mapping[str, object],
+) -> bool:
+    """Validate every authored axis bound to one native evidence capability."""
+
+    return not (
+        ppayload.get("predicate_kind") != "boolean"
+        or ppayload.get("quantifier") != "all"
+        or _string_tuple(ppayload.get("evidence_channels"))
+        != (capability.evidence_channel,)
+        or _string_tuple(ppayload.get("unresolved_evidence_channel_refs"))
+        or predicate.get("kind") != "boolean"
+        or predicate.get("property") != capability.predicate_property
+        or predicate.get("semantic_ref") != capability.semantic_ref
+        or predicate.get("operator") != "equals"
+        or predicate.get("expected") is not True
+    )
 
 
 def _native_evidence_result(
@@ -262,7 +283,7 @@ def _native_evidence_result(
     digest = f"sha256:{record.raw_content.content_checksum.value}"
     requirement_ref = record.capture_requirement_ref
     return {
-        "schema_version": "proposition-truth-result/v1",
+        "schema_version": _TRUTH_RESULT_SCHEMA,
         "result_id": f"aptl:{assertion_address}:{record.evidence_record_id}",
         "proposition_address": proposition_address,
         "assertion_address": assertion_address,
@@ -300,17 +321,7 @@ def _declared_node_presence_result(
     spec = ppayload.get("spec")
     predicate = spec.get("predicate") if isinstance(spec, Mapping) else None
     subjects = _string_tuple(ppayload.get("subject_addresses"))
-    if (
-        not isinstance(predicate, Mapping)
-        or ppayload.get("predicate_kind") != "presence"
-        or ppayload.get("quantifier") != "all"
-        or _string_tuple(ppayload.get("evidence_requirement_refs"))
-        or predicate.get("kind") != "presence"
-        or predicate.get("property") != "node"
-        or predicate.get("semantic_ref") != "urn:raes:declared-property:node"
-        or predicate.get("operator") != "exists"
-        or not subjects
-    ):
+    if not _declared_presence_predicate(ppayload, predicate, subjects):
         return None
     outcome = (
         _TRUE
@@ -322,7 +333,7 @@ def _declared_node_presence_result(
         else _FALSE
     )
     return {
-        "schema_version": "proposition-truth-result/v1",
+        "schema_version": _TRUTH_RESULT_SCHEMA,
         "result_id": f"aptl:{assertion_address}",
         "proposition_address": proposition_address,
         "assertion_address": assertion_address,
@@ -341,6 +352,26 @@ def _declared_node_presence_result(
     }
 
 
+def _declared_presence_predicate(
+    ppayload: Mapping[str, Any],
+    predicate: object,
+    subjects: tuple[str, ...],
+) -> bool:
+    """Validate the one declared-state predicate APTL can decide."""
+
+    return (
+        isinstance(predicate, Mapping)
+        and ppayload.get("predicate_kind") == "presence"
+        and ppayload.get("quantifier") == "all"
+        and not _string_tuple(ppayload.get("evidence_requirement_refs"))
+        and predicate.get("kind") == "presence"
+        and predicate.get("property") == "node"
+        and predicate.get("semantic_ref") == "urn:raes:declared-property:node"
+        and predicate.get("operator") == "exists"
+        and bool(subjects)
+    )
+
+
 def _project_assertion_result(
     assertion_address: str,
     apayload: Mapping[str, Any],
@@ -356,20 +387,44 @@ def _project_assertion_result(
         if isinstance(proposition_address, str)
         else None
     )
+    result = None
     if ppayload is None:
-        return None
-    polarity = apayload.get("polarity", _POSITIVE)
-    polarity = polarity if polarity in (_POSITIVE, "negative") else _POSITIVE
-    if ppayload.get("evaluation_basis") == _DECLARED_STATE:
-        return _declared_node_presence_result(
+        return result
+    polarity_value = apayload.get("polarity", _POSITIVE)
+    polarity = (
+        polarity_value if polarity_value in (_POSITIVE, "negative") else _POSITIVE
+    )
+    basis = ppayload.get("evaluation_basis")
+    if basis == _DECLARED_STATE:
+        result = _declared_node_presence_result(
             assertion_address,
             proposition_address,
             polarity,
             ppayload,
             snapshot,
         )
-    if ppayload.get("evaluation_basis") != _OBSERVED_STATE:
-        return None
+    elif basis == _OBSERVED_STATE:
+        result = _observed_assertion_result(
+            assertion_address,
+            proposition_address,
+            polarity,
+            ppayload,
+            snapshot,
+            evidence_records,
+        )
+    return result
+
+
+def _observed_assertion_result(
+    assertion_address: str,
+    proposition_address: str,
+    polarity: str,
+    ppayload: Mapping[str, Any],
+    snapshot: RuntimeSnapshot,
+    evidence_records: tuple[ExperimentEvidenceRecordModel, ...],
+) -> dict[str, Any] | None:
+    """Project native evidence or corroborated service-content truth."""
+
     native_result = _native_evidence_result(
         assertion_address,
         proposition_address,
@@ -388,7 +443,7 @@ def _project_assertion_result(
     assertion_outcome = outcome if polarity == _POSITIVE else _invert(outcome)
     evidence_refs = _string_tuple(ppayload.get("evidence_requirement_refs"))
     result: dict[str, Any] = {
-        "schema_version": "proposition-truth-result/v1",
+        "schema_version": _TRUTH_RESULT_SCHEMA,
         "result_id": f"aptl:{assertion_address}",
         "proposition_address": proposition_address,
         "assertion_address": assertion_address,

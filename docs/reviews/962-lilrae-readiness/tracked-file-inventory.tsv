@@ -767,22 +767,30 @@ src/aptl/appliance/versioning.py	optional-delivery	Keep sealed-seat boundary out
 src/aptl/backends/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_compose_profile_index.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_apply_helpers.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_apply_reporting.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_artifact_delivery_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_conformance_probe.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_content_spec.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_dataset_content.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_evaluator_engine.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_evaluator_progress.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_guest_os_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_guest_package_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_image_policy.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_observation_helpers.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_observation_index.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_operational_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_proposition_truth.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_realization_diagnostics.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_scenario_queries.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_scenario_resolution.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_service_index_placement.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_stateful_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_transcript_parsing.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_runtime_concern_disclosure.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_runtime_concern_excess.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_runtime_mount_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_runtime_network_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/identity.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/pack_interaction.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/pack_interaction_discovery.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -922,6 +930,7 @@ src/aptl/core/deployment/_compose_network_conflicts.py	core-candidate	Migrate on
 src/aptl/core/deployment/_compose_network_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_node_generation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_port_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_port_readback.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_post_start.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_project_cleanup.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_project_inventory.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -940,6 +949,7 @@ src/aptl/core/deployment/_compose_spawn_image_realization.py	backend-substrate	P
 src/aptl/core/deployment/_compose_stateful_constants.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_stateful_graph.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_stateful_model.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_stateful_volumes.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_stateful_readiness.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_stateful_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_stateful_services.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -961,6 +971,7 @@ src/aptl/core/deployment/boundary_compiler.py	core-candidate	Migrate only after 
 src/aptl/core/deployment/docker_compose.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/errors.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_realization_primitives.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/ssh_compose.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/detection.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/endpoints.py	mixed-lifecycle-policy	Separate scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
@@ -1008,6 +1019,7 @@ src/aptl/core/experiment/admission_steps.py	split-research	Move research policy/
 src/aptl/core/experiment/apparatus.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
 src/aptl/core/experiment/bindings.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
 src/aptl/core/experiment/capture_mapping.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
+src/aptl/core/experiment/_capture_matching.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
 src/aptl/core/experiment/capture_registrations.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
 src/aptl/core/experiment/capture_registry.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
 src/aptl/core/experiment/controller.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
@@ -1533,11 +1545,15 @@ src/aptl/backends/raes_observability_scope.py	core-candidate	Migrate only after 
 src/aptl/backends/raes_operating_systems.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_runtime_guest_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_capture_apparatus.py	backend-substrate	Post-baseline capture apparatus mechanism; retain with deployment authority
+src/aptl/core/deployment/_compose_capture_config.py	backend-substrate	Post-baseline capture apparatus mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_observability.py	backend-substrate	Post-baseline optional observability mechanism; retain with deployment authority
+src/aptl/core/deployment/_compose_stateful_override.py	backend-substrate	Retain scenario-local stateful override persistence with deployment authority
 src/aptl/core/deployment/_cortex_service_credentials.py	backend-substrate	Post-baseline runtime credential delivery; retain with deployment authority
 src/aptl/core/evidence/adapters/techvault.py	scenario-integration-plugin	Selected TechVault evidence integration; generic capture remains backend-owned
 src/aptl/core/evidence/adapters/techvault_native.py	scenario-integration-plugin	Selected TechVault native evidence integration; generic capture remains backend-owned
 src/aptl/core/evidence/adapters/techvault_native_support.py	scenario-integration-plugin	Selected TechVault native evidence support; generic capture remains backend-owned
+src/aptl/core/evidence/adapters/techvault_readiness.py	scenario-integration-plugin	Selected TechVault readiness evidence integration; generic capture remains backend-owned
+src/aptl/core/evidence/adapters/techvault_transcript.py	scenario-integration-plugin	Selected TechVault transcript evidence integration; generic capture remains backend-owned
 src/aptl/core/experiment/capture_plan.py	split-research	Move research policy/campaign orchestration; retain generic safety/evidence primitives
 src/aptl/core/telemetry_export.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl_techvault/runtime_parameters.py	core-runtime	Retain in APTL core runtime; no migration

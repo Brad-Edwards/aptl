@@ -275,26 +275,29 @@ def _environment_consumers(
 ) -> list[DeploymentGeneratedArtifactEnvironmentConsumer]:
     """Resolve generated outputs delivered through a node environment."""
 
+    result: list[DeploymentGeneratedArtifactEnvironmentConsumer] = []
     if raw_consumers is None:
-        return []
+        return result
     if not isinstance(raw_consumers, list):
         _append_invalid(resource, diagnostics)
-        return []
-    consumers: list[DeploymentGeneratedArtifactEnvironmentConsumer] = []
-    for raw in raw_consumers:
-        consumer = _environment_consumer(resource, raw, nodes, diagnostics)
-        if consumer is not None:
-            consumers.append(consumer)
-    if len(consumers) != len(raw_consumers):
-        return []
+        return result
+    consumers = [
+        consumer
+        for raw in raw_consumers
+        if (consumer := _environment_consumer(resource, raw, nodes, diagnostics))
+        is not None
+    ]
     identities = {
         (consumer.target_address, consumer.environment_variable)
         for consumer in consumers
     }
-    if len(identities) != len(consumers):
+    complete = len(consumers) == len(raw_consumers)
+    unique = len(identities) == len(consumers)
+    if complete and unique:
+        result = consumers
+    elif complete:
         _append_invalid(resource, diagnostics)
-        return []
-    return consumers
+    return result
 
 
 def _environment_consumer(

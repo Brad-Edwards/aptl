@@ -17,9 +17,9 @@ to fail admission when APTL cannot meet it.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from threading import RLock
 from typing import TYPE_CHECKING
 
@@ -31,7 +31,7 @@ from raes_contracts.contracts import (
 )
 from raes_contracts.planning import RealizationResolutionSource
 from raes_contracts.realization_profiles import PlanProfileAuthority
-from raes_contracts.runtime_state import RuntimeSnapshot
+from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot
 from raes_contracts.vocabulary import ObservationStrength
 from raes_processor.compiler import compile_scenario_runtime_model
 from raes_processor.models import RuntimeModel
@@ -87,6 +87,8 @@ _APTL_OPEN_DEFAULT_CONCERNS = frozenset(
 
 
 def _is_identified_techvault_pack(bundle: ScenarioBundle) -> bool:
+    """Return whether this is the exact pack authorized for compatibility."""
+
     identity = bundle.pack_identity
     return (
         bundle.source_kind is ScenarioSourceKind.ENV_PACK
@@ -98,7 +100,9 @@ def _is_identified_techvault_pack(bundle: ScenarioBundle) -> bool:
 
 
 @contextmanager
-def _techvault_runtime_value_limits(bundle: ScenarioBundle | None):
+def _techvault_runtime_value_limits(
+    bundle: ScenarioBundle | None,
+) -> Iterator[None]:
     """Temporarily retain RAES's finite bounds with a larger node budget."""
 
     if bundle is None or not _is_identified_techvault_pack(bundle):
@@ -132,6 +136,8 @@ def _techvault_runtime_value_limits(bundle: ScenarioBundle | None):
 
 
 def _requirement_identity(item: object) -> tuple[object, ...]:
+    """Return the stable identity joining a requirement to its authority."""
+
     return (
         getattr(item, "address", None),
         getattr(item, "field_path", None),
@@ -178,6 +184,8 @@ def _selected_open_requirement(scenario: object | None, requirement: object) -> 
 
 
 def _image_backed_node(scenario: object, requirement: object) -> bool:
+    """Return whether a requirement's node has a materialized image source."""
+
     nodes = getattr(scenario, "nodes", None)
     address = getattr(requirement, "address", None)
     if not isinstance(nodes, Mapping) or not isinstance(address, str):
@@ -213,49 +221,23 @@ def apply_techvault_observation_strength_compatibility(
     delegated_identities: set[tuple[object, ...]] = set()
     requirements = []
     for requirement in model.realization_requirements:
-        identity = _requirement_identity(requirement)
-        if identity in authority_identities and not _selected_open_requirement(
-            scenario, requirement
-        ):
-            requirement = replace(requirement, explicitness=None, delegated=True)
-            delegated_identities.add(identity)
-        eligible = (
-            not requirement.delegated
-            and requirement.requirement_kind in DAEMON_READBACK_RUNTIME_CONCERNS
-            and requirement.required_observation_strength
-            is ObservationStrength.GUEST_OBSERVED
+        requirement, adjusted, delegated = _adjust_requirement(
+            requirement,
+            scenario=scenario,
+            authority_identities=authority_identities,
         )
-        if eligible:
-            requirement = replace(
-                requirement,
-                required_observation_strength=ObservationStrength.DAEMON_OBSERVED,
-            )
+        identity = _requirement_identity(requirement)
+        if adjusted:
             adjusted_identities.add(_requirement_identity(requirement))
+        if delegated:
+            delegated_identities.add(identity)
         requirements.append(requirement)
 
     if not adjusted_identities and not delegated_identities:
         return model
 
     authority = tuple(
-        replace(
-            item,
-            **(
-                {
-                    "delegated": True,
-                    "source": RealizationResolutionSource.APPARATUS_DEFAULT,
-                }
-                if _requirement_identity(item) in delegated_identities
-                else {
-                    "required_observation_strength": ObservationStrength.DAEMON_OBSERVED
-                }
-            ),
-        )
-        if _requirement_identity(item) in delegated_identities
-        or (
-            item.required_observation_strength is ObservationStrength.GUEST_OBSERVED
-            and _requirement_identity(item) in adjusted_identities
-        )
-        else item
+        _adjust_authority(item, adjusted_identities, delegated_identities)
         for item in model.realization_authority
     )
     return replace(
@@ -263,6 +245,60 @@ def apply_techvault_observation_strength_compatibility(
         realization_requirements=tuple(requirements),
         realization_authority=authority,
     )
+
+
+def _adjust_requirement(
+    requirement: object,
+    *,
+    scenario: object | None,
+    authority_identities: set[tuple[object, ...]],
+) -> tuple[object, bool, bool]:
+    """Apply delegation and provenance compatibility to one requirement."""
+
+    identity = _requirement_identity(requirement)
+    delegated = identity in authority_identities and not _selected_open_requirement(
+        scenario, requirement
+    )
+    if delegated:
+        requirement = replace(requirement, explicitness=None, delegated=True)
+    adjusted = (
+        not requirement.delegated
+        and requirement.requirement_kind in DAEMON_READBACK_RUNTIME_CONCERNS
+        and requirement.required_observation_strength
+        is ObservationStrength.GUEST_OBSERVED
+    )
+    if adjusted:
+        requirement = replace(
+            requirement,
+            required_observation_strength=ObservationStrength.DAEMON_OBSERVED,
+        )
+    return requirement, adjusted, delegated
+
+
+def _adjust_authority(
+    authority: object,
+    adjusted: set[tuple[object, ...]],
+    delegated: set[tuple[object, ...]],
+) -> object:
+    """Mirror an adjusted requirement onto its compiled authority."""
+
+    identity = _requirement_identity(authority)
+    if identity in delegated:
+        return replace(
+            authority,
+            delegated=True,
+            source=RealizationResolutionSource.APPARATUS_DEFAULT,
+        )
+    if (
+        identity in adjusted
+        and authority.required_observation_strength
+        is ObservationStrength.GUEST_OBSERVED
+    ):
+        return replace(
+            authority,
+            required_observation_strength=ObservationStrength.DAEMON_OBSERVED,
+        )
+    return authority
 
 
 class AptlRuntimeManager(_RaesRuntimeManager):
@@ -287,7 +323,7 @@ class AptlRuntimeManager(_RaesRuntimeManager):
         )
         self._aptl_bundle = bundle or getattr(target.provisioner, "bundle", None)
 
-    def apply(self, execution_plan: ExecutionPlan):
+    def apply(self, execution_plan: ExecutionPlan) -> ApplyResult:
         """Apply with a finite node budget for the exact released large plan."""
 
         with _techvault_runtime_value_limits(self._aptl_bundle):
@@ -332,39 +368,48 @@ class AptlRuntimeManager(_RaesRuntimeManager):
         )
 
 
+@dataclass(frozen=True)
+class AptlPlanningOptions:
+    """Optional inputs to one APTL-adjusted RAES planning operation."""
+
+    snapshot: RuntimeSnapshot | None = None
+    parameters: Mapping[str, object] | None = None
+    profile: str | None = None
+    artifact_availability: ArtifactAvailabilityContext | None = None
+    profile_authority: PlanProfileAuthority | None = None
+    runtime_manager: _RaesRuntimeManager | None = None
+
+
 def plan_aptl_scenario(
     *,
     target: RuntimeTarget,
     bundle: ScenarioBundle,
     scenario: object,
-    snapshot: RuntimeSnapshot | None = None,
-    parameters: Mapping[str, object] | None = None,
-    profile: str | None = None,
-    artifact_availability: ArtifactAvailabilityContext | None = None,
-    profile_authority: PlanProfileAuthority | None = None,
-    runtime_manager: _RaesRuntimeManager | None = None,
+    options: AptlPlanningOptions | None = None,
 ) -> ExecutionPlan:
     """Compile and plan through APTL's temporary TechVault compatibility seam."""
 
-    manager = runtime_manager or AptlRuntimeManager(target, bundle=bundle)
-    options: dict[str, object] = {}
-    if parameters is not None:
-        options["parameters"] = dict(parameters)
-    if profile is not None:
-        options["profile"] = profile
-    if artifact_availability is not None:
-        options["artifact_availability"] = artifact_availability
-    if profile_authority is not None:
-        options["profile_authority"] = profile_authority
+    selected = options or AptlPlanningOptions()
+    manager = selected.runtime_manager or AptlRuntimeManager(target, bundle=bundle)
+    plan_options: dict[str, object] = {}
+    if selected.parameters is not None:
+        plan_options["parameters"] = dict(selected.parameters)
+    if selected.profile is not None:
+        plan_options["profile"] = selected.profile
+    if selected.artifact_availability is not None:
+        plan_options["artifact_availability"] = selected.artifact_availability
+    if selected.profile_authority is not None:
+        plan_options["profile_authority"] = selected.profile_authority
     return (
-        manager.plan(scenario, **options)
-        if snapshot is None
-        else manager.plan(scenario, snapshot, **options)
+        manager.plan(scenario, **plan_options)
+        if selected.snapshot is None
+        else manager.plan(scenario, selected.snapshot, **plan_options)
     )
 
 
 __all__ = [
     "AptlRuntimeManager",
+    "AptlPlanningOptions",
     "DAEMON_READBACK_RUNTIME_CONCERNS",
     "apply_techvault_observation_strength_compatibility",
     "plan_aptl_scenario",

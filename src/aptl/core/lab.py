@@ -92,11 +92,14 @@ from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
     from docker.client import DockerClient
+    from raes_contracts.contracts import ExperimentEvidenceRecordModel
 
     from aptl.backends._raes_scenario_queries import AdmittedStartSurface
+    from aptl.backends.raes_realization_model import AptlRealization
     from aptl.backends.raes import AcesStartOutcome
     from aptl.backends.raes_start_model import AcesRunTarget, AdmittedScenarioStart
     from aptl.core.deployment.backend import DeploymentBackend
+    from aptl.core.experiment.capture_plan import CapturePlan
 
 log = get_logger("lab")
 
@@ -118,6 +121,12 @@ _STALE_NETWORK_RECOVERY_HINT = (
 )
 _WAZUH_MANAGER_SERVICE = "wazuh.manager"
 _WAZUH_INDEXER_SERVICE = "wazuh.indexer"
+_TRANSCRIPT_UNAVAILABLE = "aptl.scenario-evidence.required-transcript-unavailable"
+_TRANSCRIPT_FINALIZATION_FAILED = (
+    "aptl.scenario-evidence.required-transcript-finalization-failed"
+)
+_NATIVE_CAPTURE_FAILED = "aptl.scenario-evidence.required-native-capture-failed"
+_NATIVE_EVALUATION_FAILED = "aptl.scenario-evidence.required-native-evaluation-failed"
 
 
 def _looks_like_stale_realization_network_error(error: str) -> bool:
@@ -477,29 +486,30 @@ def _finalize_required_transcript_capture(
     )
     from aptl.core.evidence.outcomes import AcquisitionDisposition
 
+    result = None
+    failed = False
     try:
         active = load_active_transcript_authorities(project_dir)
-        if not active:
-            return None
-        if len(active) != 1:
-            raise ValueError("multiple pending transcript authorities")
-        result = finalize_active_transcript_authority(
-            project_dir=project_dir,
-            state=active[0],
-            backend=backend,
-        )
+        if active:
+            if len(active) != 1:
+                raise ValueError("multiple pending transcript authorities")
+            result = finalize_active_transcript_authority(
+                project_dir=project_dir,
+                state=active[0],
+                backend=backend,
+            )
     except Exception:
         log.error("Required transcript finalization failed before teardown")
-        return LabResult(
-            success=False,
-            error=("aptl.scenario-evidence.required-transcript-finalization-failed"),
-        )
-    if result.disposition is not AcquisitionDisposition.SEALED_READY:
-        return LabResult(
-            success=False,
-            error=("aptl.scenario-evidence.required-transcript-finalization-failed"),
-        )
-    return None
+        failed = True
+    failed = failed or bool(
+        result is not None
+        and result.disposition is not AcquisitionDisposition.SEALED_READY
+    )
+    return (
+        LabResult(success=False, error=_TRANSCRIPT_FINALIZATION_FAILED)
+        if failed
+        else None
+    )
 
 
 def _lifecycle_busy_result(action: str) -> LabResult:
@@ -1269,6 +1279,9 @@ def _load_admitted_start_surface(
     from aptl.core.scenario_bundle import EnvPackError
 
     assert ctx.config is not None and ctx.backend is not None
+    admitted = None
+    surface = None
+    failure = None
     try:
         admitted, surface = admit_start_surface(
             ctx.project_dir,
@@ -1277,26 +1290,28 @@ def _load_admitted_start_surface(
             scenario_path=ctx.scenario_path,
         )
     except AdmissionRejection as exc:
-        return LabResult(
+        failure = LabResult(
             success=False,
             error=render_raes_diagnostics(
                 list(exc.diagnostics), stage_label="Scenario evidence admission failed"
             ),
         )
     except SDLInstantiationError:
-        return LabResult(success=False, error=INSTANTIATION_FAILURE_MESSAGE)
+        failure = LabResult(success=False, error=INSTANTIATION_FAILURE_MESSAGE)
     except (EnvPackError, SDLError, OSError, TypeError, ValueError) as exc:
-        return LabResult(
+        failure = LabResult(
             success=False,
             error=(
                 "RAES scenario admission failed before artifact preparation: "
                 f"{redact(str(exc))}"
             ),
         )
-    ctx.admitted_start = admitted
-    ctx.admitted_surface = surface
-    ctx.stateful_artifact_ownership = surface.stateful_artifact_ownership
-    return None
+    if failure is None:
+        assert admitted is not None and surface is not None
+        ctx.admitted_start = admitted
+        ctx.admitted_surface = surface
+        ctx.stateful_artifact_ownership = surface.stateful_artifact_ownership
+    return failure
 
 
 def _ssh_key_step_failure(result: SSHKeyResult, what: str) -> LabResult | None:
@@ -2297,38 +2312,33 @@ def _step_activate_capture_apparatus(ctx: _LabStartContext) -> LabResult | None:
     if not transcript:
         return None
     activate = getattr(ctx.backend, "activate_capture_apparatus", None)
+    failure = None
+    authority = None
     if (
         len(transcript) != 1
         or not callable(activate)
         or ctx.run_store is None
         or ctx.run_id is None
     ):
-        return LabResult(
-            success=False,
-            error="aptl.scenario-evidence.required-transcript-unavailable",
-        )
-    try:
-        persist_active_transcript_authority(
-            project_dir=ctx.project_dir,
-            plan=plan,
-            binding=transcript[0],
-            run_store=ctx.run_store,
-            run_id=ctx.run_id,
-        )
-        authority = activate(plan_id=plan.plan_id, run_id=ctx.run_id)
-    except Exception:
-        log.error("Required transcript apparatus activation failed")
-        return LabResult(
-            success=False,
-            error="aptl.scenario-evidence.required-transcript-unavailable",
-        )
-    if not isinstance(authority, dict):
-        return LabResult(
-            success=False,
-            error="aptl.scenario-evidence.required-transcript-unavailable",
-        )
-    ctx.transcript_capture_authority = authority
-    return None
+        failure = LabResult(success=False, error=_TRANSCRIPT_UNAVAILABLE)
+    else:
+        try:
+            persist_active_transcript_authority(
+                project_dir=ctx.project_dir,
+                plan=plan,
+                binding=transcript[0],
+                run_store=ctx.run_store,
+                run_id=ctx.run_id,
+            )
+            authority = activate(plan_id=plan.plan_id, run_id=ctx.run_id)
+        except Exception:
+            log.error("Required transcript apparatus activation failed")
+            failure = LabResult(success=False, error=_TRANSCRIPT_UNAVAILABLE)
+    if failure is None and not isinstance(authority, dict):
+        failure = LabResult(success=False, error=_TRANSCRIPT_UNAVAILABLE)
+    if failure is None:
+        ctx.transcript_capture_authority = authority
+    return failure
 
 
 def _step_write_run_record(ctx: _LabStartContext) -> LabResult | None:
@@ -2839,6 +2849,32 @@ def _step_acquire_required_native_evidence(
         return None
 
     realization = getattr(admitted, "realization", None)
+    request = _native_evidence_request(ctx, plan, realization)
+    capture = None
+    if request is not None:
+        try:
+            capture = acquire_native_evidence(request)
+        except Exception:
+            log.error("Required native scenario evidence acquisition failed")
+    if capture is None:
+        failure = LabResult(success=False, error=_NATIVE_CAPTURE_FAILED)
+    else:
+        ctx.native_evidence_acquisition = capture
+        failure = (
+            _refresh_required_native_evidence(ctx, admitted, capture.records)
+            if capture.disposition is AcquisitionDisposition.SEALED_READY
+            else LabResult(success=False, error=_NATIVE_CAPTURE_FAILED)
+        )
+    return failure
+
+
+def _native_evidence_request(
+    ctx: _LabStartContext, plan: CapturePlan, realization: AptlRealization | None
+) -> object | None:
+    """Build a native acquisition request only from a complete admitted context."""
+
+    from aptl.backends.raes_evidence_acquisition import NativeEvidenceRequest
+
     if (
         ctx.backend is None
         or ctx.env is None
@@ -2846,37 +2882,30 @@ def _step_acquire_required_native_evidence(
         or ctx.run_store is None
         or ctx.run_id is None
     ):
-        return LabResult(
-            success=False,
-            error="aptl.scenario-evidence.required-native-capture-failed",
-        )
+        return None
     try:
-        try:
-            runtime_env = load_dotenv(ctx.project_dir / ".env")
-        except OSError:
-            runtime_env = ctx.raw_env
-        capture = acquire_native_evidence(
-            plan=plan,
-            backend=ctx.backend,
-            realization=realization,
-            project_dir=ctx.project_dir,
-            indexer_auth=(ctx.env.indexer_username, ctx.env.indexer_password),
-            thehive_api_key=runtime_env.get("THEHIVE_API_KEY", ""),
-            run_store=ctx.run_store,
-            run_id=ctx.run_id,
-        )
-    except Exception:
-        log.error("Required native scenario evidence acquisition failed")
-        return LabResult(
-            success=False,
-            error="aptl.scenario-evidence.required-native-capture-failed",
-        )
-    ctx.native_evidence_acquisition = capture
-    if capture.disposition is not AcquisitionDisposition.SEALED_READY:
-        return LabResult(
-            success=False,
-            error="aptl.scenario-evidence.required-native-capture-failed",
-        )
+        runtime_env = load_dotenv(ctx.project_dir / ".env")
+    except OSError:
+        runtime_env = ctx.raw_env
+    return NativeEvidenceRequest(
+        plan=plan,
+        backend=ctx.backend,
+        realization=realization,
+        project_dir=ctx.project_dir,
+        indexer_auth=(ctx.env.indexer_username, ctx.env.indexer_password),
+        thehive_api_key=runtime_env.get("THEHIVE_API_KEY", ""),
+        run_store=ctx.run_store,
+        run_id=ctx.run_id,
+    )
+
+
+def _refresh_required_native_evidence(
+    ctx: _LabStartContext,
+    admitted: object,
+    evidence_records: tuple[ExperimentEvidenceRecordModel, ...],
+) -> LabResult | None:
+    """Refresh RAES truth from sealed native records or fail the start."""
+
     from raes_contracts.runtime_state import OperationState, RuntimeSnapshot
 
     from aptl.backends.raes_evaluator import refresh_evidence_truth
@@ -2884,35 +2913,30 @@ def _step_acquire_required_native_evidence(
     target = getattr(admitted, "target", None)
     execution_plan = getattr(admitted, "execution_plan", None)
     final_snapshot = getattr(ctx.raes_outcome, "final_snapshot", None)
+    failure = None
     if (
         target is None
         or execution_plan is None
         or not isinstance(final_snapshot, RuntimeSnapshot)
     ):
-        return LabResult(
-            success=False,
-            error="aptl.scenario-evidence.required-native-evaluation-failed",
-        )
-    try:
-        refresh = refresh_evidence_truth(
-            target=target,
-            execution_plan=execution_plan,
-            snapshot=final_snapshot,
-            evidence_records=capture.records,
-        )
-    except Exception:
-        log.error("Required native scenario evidence evaluation failed")
-        return LabResult(
-            success=False,
-            error="aptl.scenario-evidence.required-native-evaluation-failed",
-        )
-    if refresh.status is not OperationState.SUCCEEDED:
-        return LabResult(
-            success=False,
-            error="aptl.scenario-evidence.required-native-evaluation-failed",
-        )
-    ctx.raes_outcome.final_snapshot = refresh.snapshot
-    return None
+        failure = LabResult(success=False, error=_NATIVE_EVALUATION_FAILED)
+    else:
+        try:
+            refresh = refresh_evidence_truth(
+                target=target,
+                execution_plan=execution_plan,
+                snapshot=final_snapshot,
+                evidence_records=evidence_records,
+            )
+        except Exception:
+            log.error("Required native scenario evidence evaluation failed")
+            failure = LabResult(success=False, error=_NATIVE_EVALUATION_FAILED)
+        else:
+            if refresh.status is OperationState.SUCCEEDED:
+                ctx.raes_outcome.final_snapshot = refresh.snapshot
+            else:
+                failure = LabResult(success=False, error=_NATIVE_EVALUATION_FAILED)
+    return failure
 
 
 def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:

@@ -12,22 +12,23 @@ from pathlib import Path
 import yaml
 
 from aptl.core.deployment.realization import DeploymentRealizationSpec
-from aptl.core.deployment._compose_stateful_model import artifact_source_path
-from aptl.core.deployment._ssh_key_bundle import SSH_ACCESS_PROFILE_V1
+from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.deployment._compose_capture_config import (
+    KALI_CAPTURE_CONTAINER,
+    KALI_CAPTURE_SERVICE,
+    KALI_CAPTURE_VOLUME,
+    KALI_CONTAINER,
+    KALI_TRANSCRIPT_REGISTRATION,
+    capture_compose_file,
+    capture_credential_paths as _capture_credential_paths,
+    capture_declaration_error as _capture_declaration_error,
+    capture_requested as _capture_requested,
+)
 from aptl.core.lab_types import LabResult
 
-CAPTURE_COMPOSE_FILE = "docker-compose.capture.yml"
-KALI_CAPTURE_APPARATUS_ID = "aptl.apparatus.kali-session-capture"
-KALI_CAPTURE_SERVICE = "kali-capture"
-KALI_CAPTURE_CONTAINER = "aptl-kali-capture"
-KALI_CAPTURE_VOLUME = "kali_captures"
-KALI_CONTAINER = "aptl-kali"
-KALI_TRANSCRIPT_REGISTRATION = "aptl.collector.redteam-session-transcript"
-_SAFE_ID = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9._-]*$")
-_CAPTURE_BIND_TARGETS = {
-    "/run/aptl-source/inner_key": "kali-pivot-private-key",
-    "/run/aptl-source/outer_authorized_keys": "kali-authorized-keys",
-}
+_SAFE_ID = re.compile(r"^\w[\w.-]*$", flags=re.ASCII)
+_TARGET_INGRESS_UNAVAILABLE = "aptl.capture-apparatus.target-ingress-unavailable"
+_BROKER_PATH = "/usr/local/bin/broker.py"
 _KALI_INGRESS_RELOCATION = """
 set -eu
 umask 077
@@ -49,97 +50,20 @@ sshd -T | grep -Fx 'listenaddress 127.0.0.1:2222'
 """.strip()
 
 
-def _capture_requested(realization: DeploymentRealizationSpec) -> bool:
-    return bool(realization.capture_apparatus)
+def _safe_capture_id(value: str) -> bool:
+    """Return whether an authority id is a single safe broker path segment."""
+
+    return ".." not in value and _SAFE_ID.fullmatch(value) is not None
 
 
-def _capture_credential_paths(
-    realization: DeploymentRealizationSpec,
-    realization_root: Path,
-    *,
-    require_files: bool,
-) -> tuple[dict[str, Path], Path]:
-    """Resolve the exact existing Kali credentials reused by the apparatus."""
+def _valid_expected_session_ids(values: tuple[str, ...]) -> bool:
+    """Return whether a bounded expected-session census is broker-safe."""
 
-    artifacts = [
-        item
-        for item in realization.generated_artifacts
-        if item.generator == "ssh_key_bundle"
-        and item.provenance == SSH_ACCESS_PROFILE_V1
-    ]
-    if len(artifacts) != 1:
-        raise ValueError("capture apparatus requires one TechVault SSH bundle")
-    artifact = artifacts[0]
-    outputs = {item.name: item for item in artifact.outputs}
-    if set(_CAPTURE_BIND_TARGETS.values()) - outputs.keys():
-        raise ValueError("capture apparatus credential outputs are unavailable")
-    source_root = artifact_source_path(realization_root, artifact).resolve()
-    root = realization_root.resolve()
-    sources: dict[str, Path] = {}
-    for target, output_name in _CAPTURE_BIND_TARGETS.items():
-        source = (source_root / outputs[output_name].path).resolve()
-        if not source.is_relative_to(root):
-            raise ValueError("capture apparatus credential escaped realization root")
-        if require_files and not source.is_file():
-            raise ValueError("capture apparatus credential was not generated")
-        sources[target] = source
-    pivot_public = Path(f"{sources['/run/aptl-source/inner_key']}.pub").resolve()
-    if not pivot_public.is_relative_to(root):
-        raise ValueError("capture apparatus public key escaped realization root")
-    if require_files and not pivot_public.is_file():
-        raise ValueError("capture apparatus public key was not generated")
-    return sources, pivot_public
-
-
-def capture_compose_file(
-    project_dir: Path,
-    realization: DeploymentRealizationSpec,
-    realization_root: Path,
-) -> Path:
-    """Write the trusted apparatus model with engine-anchored local sources."""
-
-    root = project_dir.resolve()
-    source = root / CAPTURE_COMPOSE_FILE
-    model = yaml.safe_load(source.read_text(encoding="utf-8"))
-    service = model["services"][KALI_CAPTURE_SERVICE]
-    service["build"]["context"] = str(root)
-    sources, _pivot_public = _capture_credential_paths(
-        realization,
-        realization_root,
-        require_files=True,
+    return bool(
+        len(values) <= 2048
+        and all(isinstance(value, str) and _safe_capture_id(value) for value in values)
+        and len(values) == len(set(values))
     )
-    for mount in service.get("volumes", ()):
-        if mount.get("type") != "bind":
-            continue
-        path = sources.get(mount.get("target"))
-        if path is None or not mount.get("read_only"):
-            raise ValueError("invalid capture apparatus bind mount")
-        mount["source"] = str(path)
-    target = root / ".aptl" / "realization" / CAPTURE_COMPOSE_FILE
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(
-        yaml.safe_dump(model, sort_keys=True), encoding="utf-8", newline="\n"
-    )
-    return target
-
-
-def _capture_declaration_error(realization: DeploymentRealizationSpec) -> str | None:
-    """Return a bounded error unless the immutable request is exactly supported."""
-
-    if not _capture_requested(realization):
-        return None
-    if len(realization.capture_apparatus) != 1:
-        return "aptl.capture-apparatus.unsupported-set"
-    item = realization.capture_apparatus[0]
-    if (
-        item.apparatus_id != KALI_CAPTURE_APPARATUS_ID
-        or item.service_name != KALI_CAPTURE_SERVICE
-        or item.container_name != KALI_CAPTURE_CONTAINER
-        or not item.governing_scopes
-        or not item.environment_visible
-    ):
-        return "aptl.capture-apparatus.unsupported-declaration"
-    return None
 
 
 class ComposeCaptureApparatusMixin:
@@ -148,48 +72,46 @@ class ComposeCaptureApparatusMixin:
     def _capture_apparatus_preflight(
         self, realization: DeploymentRealizationSpec, scenario_root: Path
     ) -> LabResult | None:
+        """Validate capture ownership, target ingress, and credential sources."""
+
         error = _capture_declaration_error(realization)
-        if error is not None:
-            return LabResult(success=False, error=error)
-        if not _capture_requested(realization):
-            return None
-        try:
-            image_addresses = {item.address for item in realization.images}
-            targets = [
-                node
-                for node in realization.nodes
-                if node.name == "kali"
-                and node.container_name == KALI_CONTAINER
-                and node.address not in image_addresses
-            ]
-            if len(targets) != 1:
-                return LabResult(
-                    success=False,
-                    error="aptl.capture-apparatus.target-ingress-unavailable",
-                )
-            _capture_credential_paths(
-                realization,
-                self.realization_root,
-                require_files=False,
-            )
-            source = scenario_root / "docker-compose.yml"
-            model = (
-                yaml.safe_load(source.read_text(encoding="utf-8"))
-                if source.exists()
-                else {}
-            )
-            services = model.get("services") or {}
-            volumes = model.get("volumes") or {}
-            if KALI_CAPTURE_SERVICE in services or KALI_CAPTURE_VOLUME in volumes:
-                return LabResult(
-                    success=False,
-                    error="aptl.capture-apparatus.ownership-conflict",
-                )
-        except (OSError, TypeError, KeyError, ValueError, yaml.YAMLError):
-            return LabResult(
-                success=False, error="aptl.capture-apparatus.config-unavailable"
-            )
-        return None
+        if error is None and _capture_requested(realization):
+            try:
+                error = self._capture_preflight_error(realization, scenario_root)
+            except (OSError, TypeError, KeyError, ValueError, yaml.YAMLError):
+                error = "aptl.capture-apparatus.config-unavailable"
+        return LabResult(success=False, error=error) if error is not None else None
+
+    def _capture_preflight_error(
+        self, realization: DeploymentRealizationSpec, scenario_root: Path
+    ) -> str | None:
+        """Return a stable error after validating capture-specific resources."""
+
+        image_addresses = {item.address for item in realization.images}
+        targets = [
+            node
+            for node in realization.nodes
+            if node.name == "kali"
+            and node.container_name == KALI_CONTAINER
+            and node.address not in image_addresses
+        ]
+        if len(targets) != 1:
+            return _TARGET_INGRESS_UNAVAILABLE
+        _capture_credential_paths(
+            realization,
+            self.realization_root,
+            require_files=False,
+        )
+        source = scenario_root / "docker-compose.yml"
+        model = (
+            yaml.safe_load(source.read_text(encoding="utf-8"))
+            if source.exists()
+            else {}
+        )
+        services = model.get("services") or {}
+        volumes = model.get("volumes") or {}
+        collision = KALI_CAPTURE_SERVICE in services or KALI_CAPTURE_VOLUME in volumes
+        return "aptl.capture-apparatus.ownership-conflict" if collision else None
 
     def _with_capture_apparatus_files(
         self,
@@ -218,10 +140,17 @@ class ComposeCaptureApparatusMixin:
             if node.name == "kali" and node.container_name == KALI_CONTAINER
         ]
         if len(targets) != 1:
-            return LabResult(
-                success=False,
-                error="aptl.capture-apparatus.target-ingress-unavailable",
-            )
+            return LabResult(success=False, error=_TARGET_INGRESS_UNAVAILABLE)
+        succeeded = self._relocate_capture_target(realization)
+        return (
+            None
+            if succeeded
+            else LabResult(success=False, error=_TARGET_INGRESS_UNAVAILABLE)
+        )
+
+    def _relocate_capture_target(self, realization: DeploymentRealizationSpec) -> bool:
+        """Move Kali sshd behind the broker and return whether it became ready."""
+
         try:
             _sources, pivot_public = _capture_credential_paths(
                 realization,
@@ -242,33 +171,20 @@ class ComposeCaptureApparatusMixin:
                 script,
                 timeout=30,
             )
-        except Exception:
-            return LabResult(
-                success=False,
-                error="aptl.capture-apparatus.target-ingress-unavailable",
-            )
-        if result.returncode != 0:
-            return LabResult(
-                success=False,
-                error="aptl.capture-apparatus.target-ingress-unavailable",
-            )
-        return None
+        except (BackendTimeoutError, OSError, TypeError, UnicodeError, ValueError):
+            return False
+        return result.returncode == 0
 
     def activate_capture_apparatus(
         self, *, plan_id: str, run_id: str
     ) -> dict[str, object] | None:
         """Bind the dormant broker to one admitted run, then prove it is serving."""
 
-        if (
-            _SAFE_ID.fullmatch(plan_id) is None
-            or _SAFE_ID.fullmatch(run_id) is None
-            or ".." in plan_id
-            or ".." in run_id
-        ):
+        if not _safe_capture_id(plan_id) or not _safe_capture_id(run_id):
             return None
         activate = [
             "python3",
-            "/usr/local/bin/broker.py",
+            _BROKER_PATH,
             "activate",
             "--run-id",
             run_id,
@@ -277,27 +193,7 @@ class ComposeCaptureApparatusMixin:
             "--binding-id",
             KALI_TRANSCRIPT_REGISTRATION,
         ]
-        try:
-            result = self.container_exec(KALI_CAPTURE_CONTAINER, activate, timeout=30)
-            if result.returncode != 0:
-                return None
-            status = None
-            for _attempt in range(30):
-                status = self.container_exec(
-                    KALI_CAPTURE_CONTAINER,
-                    ["python3", "/usr/local/bin/broker.py", "status"],
-                    timeout=5,
-                )
-                if status.returncode == 0:
-                    break
-                time.sleep(0.2)
-            if status is None or status.returncode != 0:
-                return None
-            authority = json.loads(status.stdout)
-        except (OSError, TypeError, ValueError):
-            return None
-        if not isinstance(authority, dict):
-            return None
+        authority = self._activate_capture_authority(activate)
         expected = {
             "run_id": run_id,
             "plan_id": plan_id,
@@ -305,9 +201,42 @@ class ComposeCaptureApparatusMixin:
         }
         return (
             authority
-            if all(authority.get(key) == value for key, value in expected.items())
+            if isinstance(authority, dict)
+            and all(authority.get(key) == value for key, value in expected.items())
             else None
         )
+
+    def _activate_capture_authority(
+        self, activate: list[str]
+    ) -> dict[str, object] | None:
+        """Activate the broker and read its bounded authority after readiness."""
+
+        authority = None
+        try:
+            result = self.container_exec(KALI_CAPTURE_CONTAINER, activate, timeout=30)
+            status = self._ready_capture_status() if result.returncode == 0 else None
+            parsed = json.loads(status.stdout) if status is not None else None
+            if isinstance(parsed, dict):
+                authority = parsed
+        except (OSError, TypeError, ValueError):
+            authority = None
+        return authority
+
+    def _ready_capture_status(self) -> object | None:
+        """Poll the broker status until it reports readiness or budget expires."""
+
+        ready = None
+        for _attempt in range(30):
+            status = self.container_exec(
+                KALI_CAPTURE_CONTAINER,
+                ["python3", _BROKER_PATH, "status"],
+                timeout=5,
+            )
+            if status.returncode == 0:
+                ready = status
+                break
+            time.sleep(0.2)
+        return ready
 
     def quiesce_capture_apparatus(self) -> bool:
         """Atomically close session admission and stop every active broker."""
@@ -315,7 +244,7 @@ class ComposeCaptureApparatusMixin:
         try:
             result = self.container_exec(
                 KALI_CAPTURE_CONTAINER,
-                ["python3", "/usr/local/bin/broker.py", "quiesce"],
+                ["python3", _BROKER_PATH, "quiesce"],
                 timeout=45,
             )
         except (OSError, TypeError, ValueError):
@@ -330,56 +259,61 @@ class ComposeCaptureApparatusMixin:
         """Export only when broker custody matches the owner-supplied census."""
 
         expected = tuple(expected_session_ids)
-        base = ["python3", "/usr/local/bin/broker.py"]
+        payload = (
+            self._export_capture_payload()
+            if _valid_expected_session_ids(expected)
+            else None
+        )
+        accepted = payload.get("accepted_session_ids") if payload is not None else None
+        reconciled = bool(
+            isinstance(accepted, list)
+            and all(isinstance(value, str) for value in accepted)
+            and len(accepted) == len(set(accepted))
+            and set(accepted) == set(expected)
+        )
+        return (
+            {**payload, "expected_session_ids": list(expected)}
+            if payload is not None and reconciled
+            else None
+        )
+
+    def _export_capture_payload(self) -> dict[str, object] | None:
+        """Read and decode one complete quiesced broker export."""
+
+        payload = None
         try:
-            if (
-                len(expected) > 2048
-                or any(
-                    not isinstance(value, str)
-                    or _SAFE_ID.fullmatch(value) is None
-                    or ".." in value
-                    for value in expected
-                )
-                or len(expected) != len(set(expected))
-            ):
-                return None
             exported = self.container_exec(
-                KALI_CAPTURE_CONTAINER, [*base, "export"], timeout=30
+                KALI_CAPTURE_CONTAINER,
+                ["python3", _BROKER_PATH, "export"],
+                timeout=30,
             )
-            if exported.returncode != 0:
-                return None
-            payload = json.loads(exported.stdout)
+            parsed = json.loads(exported.stdout) if exported.returncode == 0 else None
+            if isinstance(parsed, dict):
+                payload = parsed
         except (OSError, TypeError, ValueError):
-            return None
-        if not isinstance(payload, dict):
-            return None
-        accepted = payload.get("accepted_session_ids")
-        if (
-            not isinstance(accepted, list)
-            or any(not isinstance(value, str) for value in accepted)
-            or len(accepted) != len(set(accepted))
-            or set(accepted) != set(expected)
-        ):
-            return None
-        return {**payload, "expected_session_ids": list(expected)}
+            payload = None
+        return payload
 
     def observe_capture_apparatus(
         self, realization: DeploymentRealizationSpec
     ) -> tuple[dict[str, object], ...] | None:
         """Return native, bounded facts for every admitted apparatus resource."""
 
-        if not _capture_requested(realization):
-            return ()
-        item = realization.capture_apparatus[0]
+        result: tuple[dict[str, object], ...] | None = ()
+        if _capture_requested(realization):
+            item = realization.capture_apparatus[0]
+            observation = self._capture_apparatus_observation(item)
+            result = (observation,) if observation is not None else None
+        return result
+
+    def _capture_apparatus_observation(self, item: object) -> dict[str, object] | None:
+        """Read and validate one exact capture sidecar from daemon state."""
+
         observed = self.container_inspect(item.container_name)
-        kali = self.container_inspect("aptl-kali")
+        kali = self.container_inspect(KALI_CONTAINER)
         if not observed or not kali:
             return None
-        labels = observed.get("Config", {}).get("Labels") or {}
         host = observed.get("HostConfig") or {}
-        state = observed.get("State") or {}
-        network_mode = host.get("NetworkMode")
-        kali_id = kali.get("Id")
         mounts = observed.get("Mounts") or []
         capture_mount = next(
             (
@@ -391,41 +325,62 @@ class ComposeCaptureApparatusMixin:
             ),
             None,
         )
-        if (
-            labels.get("com.docker.compose.project") != self._project_name
-            or not state.get("Running")
-            or not isinstance(kali_id, str)
-            or network_mode not in {f"container:{kali_id}", "container:aptl-kali"}
-            or host.get("PidMode") not in {None, ""}
-            or capture_mount is None
-            or observed.get("NetworkSettings", {}).get("Ports")
-            or host.get("ReadonlyRootfs") is not True
-            or set(host.get("CapDrop") or ()) != {"ALL"}
-            or set(host.get("CapAdd") or ())
-            != {
-                "CHOWN",
-                "DAC_OVERRIDE",
-                "NET_BIND_SERVICE",
-                "SETGID",
-                "SETUID",
-                "SYS_CHROOT",
-            }
-        ):
+        if not self._capture_runtime_valid(observed, kali, capture_mount):
             return None
-        return (
-            {
-                **item.details(),
-                "image_ref": observed.get("Config", {}).get("Image"),
-                "image_digest": observed.get("Image"),
-                "running": True,
-                "network_namespace_target": "aptl-kali",
-                "pid_namespace_shared": False,
-                "published_ports": [],
-                "persistent_volumes": [KALI_CAPTURE_VOLUME],
-                "capture_volume_access": "read_write",
-                "participant_ingress": "sidecar-owned-ssh-pty-broker",
-                "participant_ingress_state": "dormant-awaiting-run-binding",
-                "inner_kali_ssh": "tcp://127.0.0.1:2222",
-                "linux_capabilities": sorted(host.get("CapAdd") or ()),
-            },
+        return {
+            **item.details(),
+            "image_ref": observed.get("Config", {}).get("Image"),
+            "image_digest": observed.get("Image"),
+            "running": True,
+            "network_namespace_target": "aptl-kali",
+            "pid_namespace_shared": False,
+            "published_ports": [],
+            "persistent_volumes": [KALI_CAPTURE_VOLUME],
+            "capture_volume_access": "read_write",
+            "participant_ingress": "sidecar-owned-ssh-pty-broker",
+            "participant_ingress_state": "dormant-awaiting-run-binding",
+            "inner_kali_ssh": "tcp://127.0.0.1:2222",
+            "linux_capabilities": sorted(host.get("CapAdd") or ()),
+        }
+
+    def _capture_runtime_valid(
+        self,
+        observed: dict[str, object],
+        kali: dict[str, object],
+        capture_mount: object,
+    ) -> bool:
+        """Validate ownership, isolation, mount, and privilege invariants."""
+
+        labels = observed.get("Config", {}).get("Labels") or {}
+        host = observed.get("HostConfig") or {}
+        state = observed.get("State") or {}
+        kali_id = kali.get("Id")
+        network_mode = host.get("NetworkMode")
+        namespace_modes = (
+            {f"container:{kali_id}", f"container:{KALI_CONTAINER}"}
+            if isinstance(kali_id, str)
+            else set()
         )
+        expected_add = {
+            "CHOWN",
+            "DAC_OVERRIDE",
+            "NET_BIND_SERVICE",
+            "SETGID",
+            "SETUID",
+            "SYS_CHROOT",
+        }
+        checks = (
+            labels.get("com.docker.compose.project") == self._project_name,
+            bool(state.get("Running")),
+            network_mode in namespace_modes,
+            host.get("PidMode") in {None, ""},
+            capture_mount is not None,
+            not observed.get("NetworkSettings", {}).get("Ports"),
+            host.get("ReadonlyRootfs") is True,
+            set(host.get("CapDrop") or ()) == {"ALL"},
+            set(host.get("CapAdd") or ()) == expected_add,
+        )
+        return all(checks)
+
+
+__all__ = ("ComposeCaptureApparatusMixin",)

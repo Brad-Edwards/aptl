@@ -19,12 +19,16 @@ from raes import SDLError, instantiate_scenario, parse_sdl_file
 from raes.module_registry import LOCKFILE_NAME
 from raes.scenario import Scenario
 
-from aptl.backends.raes import create_aptl_runtime_target, resolve_scenario_bundle
+from aptl.backends.raes import (
+    RuntimeTargetOptions,
+    create_aptl_runtime_target,
+    resolve_scenario_bundle,
+)
 from aptl.backends.raes_artifact_availability import (
     artifact_availability_for_scenario,
 )
 from aptl.backends._raes_conformance_probe import APTL_TARGET_CONFORMANCE_SCENARIO
-from aptl.backends.raes_planning_compat import plan_aptl_scenario
+from aptl.backends.raes_planning_compat import AptlPlanningOptions, plan_aptl_scenario
 from aptl.backends.raes_profiles import public_start_profiles, select_backend_profiles
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.scenario_bundle import project_tree_bundle
@@ -216,13 +220,13 @@ def check_provisioning_realization(
             config=config,
             backend=backend,
             bundle=bundle,
-            artifact_availability=availability,
+            options=RuntimeTargetOptions(artifact_availability=availability),
         )
         execution_plan = plan_aptl_scenario(
             target=target,
             bundle=bundle,
             scenario=static_scenario,
-            artifact_availability=availability,
+            options=AptlPlanningOptions(artifact_availability=availability),
         )
         planning_diagnostics = [
             redact(f"{d.code}: {d.message}")

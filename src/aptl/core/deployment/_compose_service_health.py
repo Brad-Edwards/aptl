@@ -124,27 +124,43 @@ def unhealthy_container_reasons(
     reasons: list[str] = []
     completed = frozenset(completed_container_names)
     for name in (*container_names, *completed_container_names):
-        info = backend.container_inspect(name)
-        if not info:
-            reasons.append(f"container {name!r} was never created")
-        elif name in completed and not container_completed_successfully(info):
-            state = info.get("State")
-            status = state.get("Status") if isinstance(state, dict) else None
-            exit_code = state.get("ExitCode") if isinstance(state, dict) else None
-            if status == "exited" and isinstance(exit_code, int):
-                reasons.append(f"container {name!r} exited with code {exit_code}")
-            else:
-                reasons.append(f"container {name!r} has not completed successfully")
-        elif not container_running(info):
-            reasons.append(f"container {name!r} is not running")
-        else:
-            health = container_health(info)
-            if health and health != "healthy":
-                reasons.append(
-                    f"container {name!r} defines a healthcheck but reports "
-                    f"health {health!r}, not 'healthy'"
-                )
+        reason = _unhealthy_container_reason(
+            backend.container_inspect(name),
+            name,
+            expects_completion=name in completed,
+        )
+        if reason is not None:
+            reasons.append(reason)
     return reasons
+
+
+def _unhealthy_container_reason(
+    info: dict[str, Any], name: str, *, expects_completion: bool
+) -> str | None:
+    """Return one bounded reason when a container has not settled."""
+
+    reason = None
+    if not info:
+        reason = f"container {name!r} was never created"
+    elif expects_completion and not container_completed_successfully(info):
+        state = info.get("State")
+        status = state.get("Status") if isinstance(state, dict) else None
+        exit_code = state.get("ExitCode") if isinstance(state, dict) else None
+        reason = (
+            f"container {name!r} exited with code {exit_code}"
+            if status == "exited" and isinstance(exit_code, int)
+            else f"container {name!r} has not completed successfully"
+        )
+    elif not container_running(info):
+        reason = f"container {name!r} is not running"
+    else:
+        health = container_health(info)
+        if health and health != "healthy":
+            reason = (
+                f"container {name!r} defines a healthcheck but reports "
+                f"health {health!r}, not 'healthy'"
+            )
+    return reason
 
 
 def wait_for_realized_health(

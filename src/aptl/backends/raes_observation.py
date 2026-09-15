@@ -31,22 +31,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from raes_contracts.planning import PlannedResource, ProvisioningPlan
-from raes_contracts.realization_envelope import (
-    BackendRealizationEnvelopeModel,
-    ObservationStrength,
-    RealizationConcern,
-)
-from raes_contracts.realization_observation import (
-    RealizationObservation,
-    RealizationObservationDisclosure,
-    bind_compute_substrate_observations,
-    bind_operating_system_observations,
-)
-from raes_contracts.realization_observation_demand import (
-    compute_substrate_collection_addresses,
-)
-from raes_contracts.realization_authority import RealizationAuthorityMode
-from raes_contracts.vocabulary import RealizationVerificationScope
+from raes_contracts.realization_observation import ObservedOperatingSystemIdentity
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 
 from aptl.backends._raes_observation_helpers import (
@@ -56,8 +41,17 @@ from aptl.backends._raes_observation_helpers import (
     observed_content_type as _observed_content_type,
     observed_domain_topology as _observed_domain_topology,
     observed_os_family as _observed_os_family,
-    realized_network_names as _realized_network_names,
     settled_inspect as _settled_inspect,
+)
+from aptl.backends._raes_guest_os_observation import (
+    guest_operating_system as _guest_operating_system,
+)
+from aptl.backends._raes_operational_observation import (
+    operational_realization_observations,
+)
+from aptl.backends._raes_observation_index import (
+    RealizationObservationIndex,
+    build_observation_index,
 )
 from aptl.backends._raes_stateful_observation import (
     _observe_generated_artifact,
@@ -70,23 +64,11 @@ from aptl.backends.raes_realization_model import (
 from aptl.backends.raes_runtime_attestation import (
     observe_techvault_attested_concerns,
 )
-from aptl.backends.raes_operating_systems import parse_os_release
 from aptl.backends.raes_runtime_observation import observe_runtime_concerns
-from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment._compose_service_health import runtime_expects_completion
 from aptl.utils.logging import get_logger
 
 log = get_logger("realization-observe")
-
-_GUEST_RUNTIME_CONCERNS = frozenset(
-    {
-        "runtime-dependency-manifests",
-        "runtime-filesystem-inventory",
-        "runtime-local-identity",
-        "runtime-packages",
-        "runtime-service-manager-units",
-    }
-)
 
 if TYPE_CHECKING:
     from raes.runtime_configuration import RuntimeConfiguration
@@ -94,10 +76,6 @@ if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.deployment.observation import DeploymentObservationContext
     from aptl.core.deployment.realization import DeploymentContentRealization
-
-# Compose defaults the project name to "aptl"; a backend that scopes to a
-# different project exposes its own ``project_name``.
-_DEFAULT_PROJECT_NAME = "aptl"
 
 # RAES node vocabulary for the two things APTL can realize. A compute node becomes a
 # container; a switch node compiles to a network resource and becomes a Docker
@@ -131,102 +109,13 @@ def observe_realization(
     roots coincide.
     """
 
-    observations: dict[str, ObservedResource] = {}
-    realization_root = _realization_root(backend, scenario_root)
-    image_free = _image_free_addresses(realization)
-    node_containers = {
-        node.address: node.container_name
-        for node in realization.nodes
-        if node.container_name
+    index = build_observation_index(backend, realization, plan, scenario_root)
+    observations = {
+        address: _observe_planned_resource(
+            backend, address, resource, index, observation_context
+        )
+        for address, resource in plan.resources.items()
     }
-    node_runtimes = {
-        node.address: node.runtime
-        for node in realization.nodes
-        if node.runtime is not None
-    }
-    network_names = {network.address: network.name for network in realization.networks}
-    placement_targets = {
-        placement.address: placement.target_address
-        for placement in realization.placements
-    }
-    artifacts = {item.address: item for item in realization.generated_artifacts}
-    volumes = {item.address: item for item in realization.persistent_volumes}
-    placement_content = {
-        placement.address: placement.content
-        for placement in realization.placements
-        if placement.content is not None
-    }
-    placement_datasets = {
-        placement.address: placement.dataset
-        for placement in realization.placements
-        if placement.dataset is not None
-    }
-    placement_service_index_schemas = {
-        placement.address: placement.service_index_schema
-        for placement in realization.placements
-        if placement.service_index_schema is not None
-    }
-    project_name = getattr(backend, "project_name", _DEFAULT_PROJECT_NAME)
-    realized_networks = _realized_network_names(backend, project_name)
-    operating_system_addresses = {
-        authority.address
-        for authority in plan.realization_authority
-        if authority.requirement_kind == "os-family"
-        and authority.verification_scope is not None
-    }
-    open_process_limit_addresses = {
-        authority.address
-        for authority in plan.realization_authority
-        if authority.requirement_kind == "process-resource-limits"
-        and authority.mode is RealizationAuthorityMode.OPEN
-    }
-
-    for address, resource in plan.resources.items():
-        if resource.resource_type == "node":
-            observations[address] = _observe_node(
-                backend,
-                node_containers.get(address),
-                declared_domain_topology=_declared_domain_topology(resource),
-                declared_runtime=node_runtimes.get(address),
-                observe_operating_system=address in operating_system_addresses,
-                observe_backend_process_defaults=(
-                    address in open_process_limit_addresses
-                ),
-                observation_context=observation_context,
-            )
-        elif resource.resource_type == "network":
-            observations[address] = _observe_network(
-                network_names.get(address), realized_networks, project_name
-            )
-        elif resource.resource_type == "generated-artifact":
-            observations[address] = _observe_generated_artifact(
-                backend,
-                artifacts.get(address),
-                node_containers,
-                realization_root,
-                image_free,
-            )
-        elif resource.resource_type == "persistent-volume":
-            observations[address] = _observe_persistent_volume(
-                backend,
-                volumes.get(address),
-                node_containers,
-                project_name,
-            )
-        elif address in placement_service_index_schemas:
-            observations[address] = _observe_service_content(
-                backend,
-                address,
-                resource.payload,
-            )
-        else:
-            observations[address] = _observe_placement(
-                backend,
-                node_containers,
-                placement_targets.get(address),
-                placement_content.get(address),
-                placement_datasets.get(address),
-            )
     _add_techvault_runtime_attestations(
         backend,
         realization,
@@ -234,6 +123,61 @@ def observe_realization(
         observation_context,
     )
     return observations
+
+
+def _observe_planned_resource(
+    backend: "DeploymentBackend",
+    address: str,
+    resource: PlannedResource,
+    index: RealizationObservationIndex,
+    observation_context: DeploymentObservationContext | None,
+) -> ObservedResource:
+    """Route one planned resource to its substrate-backed observer."""
+
+    if resource.resource_type == "node":
+        observed = _observe_node(
+            backend,
+            index.node_containers.get(address),
+            declared_domain_topology=_declared_domain_topology(resource),
+            declared_runtime=index.node_runtimes.get(address),
+            observe_operating_system=address in index.operating_system_addresses,
+            observe_backend_process_defaults=(
+                address in index.open_process_limit_addresses
+            ),
+            observation_context=observation_context,
+        )
+    elif resource.resource_type == "network":
+        observed = _observe_network(
+            index.network_names.get(address),
+            index.realized_networks,
+            index.project_name,
+        )
+    elif resource.resource_type == "generated-artifact":
+        observed = _observe_generated_artifact(
+            backend,
+            index.artifacts.get(address),
+            index.node_containers,
+            index.realization_root,
+            index.image_free,
+        )
+    elif resource.resource_type == "persistent-volume":
+        observed = _observe_persistent_volume(
+            backend,
+            index.volumes.get(address),
+            index.node_containers,
+            index.project_name,
+        )
+    elif address in index.placement_service_index_schemas:
+        observed = _observe_service_content(backend, address, resource.payload)
+    else:
+        observed = _observe_placement(
+            backend,
+            index.node_containers,
+            index.placement_targets.get(address),
+            index.placement_content.get(address),
+            index.placement_datasets.get(address),
+        )
+    return observed
 
 
 def _add_techvault_runtime_attestations(
@@ -248,19 +192,8 @@ def _add_techvault_runtime_attestations(
         observed_node = observations.get(node.address)
         if observed_node is None or not observed_node.realized:
             continue
-        content = tuple(
-            placement
-            for placement in realization.placements
-            if placement.target_address == node.address
-            and placement.content is not None
-        )
-        content_verified = bool(content) and all(
-            (
-                (observed := observations.get(placement.address)) is not None
-                and observed.realized
-                and _CONTENT_TYPE_PATH in observed.concerns
-            )
-            for placement in content
+        content, content_verified = _node_content_verification(
+            realization, node.address, observations
         )
         if content and not content_verified:
             continue
@@ -278,6 +211,29 @@ def _add_techvault_runtime_attestations(
             observed_node.concerns.update(concerns)
 
 
+def _node_content_verification(
+    realization: AptlRealization,
+    node_address: str,
+    observations: Mapping[str, ObservedResource],
+) -> tuple[tuple[object, ...], bool]:
+    """Return node content and whether every placement was read back."""
+
+    content = tuple(
+        placement
+        for placement in realization.placements
+        if placement.target_address == node_address and placement.content is not None
+    )
+    verified = bool(content) and all(
+        (
+            (observed := observations.get(placement.address)) is not None
+            and observed.realized
+            and _CONTENT_TYPE_PATH in observed.concerns
+        )
+        for placement in content
+    )
+    return content, verified
+
+
 def observation_evidence(
     observations: Mapping[str, ObservedResource],
 ) -> dict[str, dict[str, object]]:
@@ -288,34 +244,6 @@ def observation_evidence(
         for address, observed in observations.items()
         if observed.realized and observed.evidence
     }
-
-
-def _realization_root(backend: "DeploymentBackend", scenario_root: Path) -> Path:
-    """Return the root the backend wrote its generated realization output to.
-
-    The backend publishes it so the write side and the read-back side share one
-    authority: reading generated artifacts back out of the pristine scenario
-    bundle they were deliberately *not* written into makes every one of them
-    look unrealized, and the SEM-218 gate then rejects an apply that succeeded
-    (issue #875). A backend that publishes no root realizes in place, so the
-    bundle root is the honest fallback.
-    """
-
-    root = getattr(backend, "realization_root", None)
-    return root if isinstance(root, Path) else scenario_root
-
-
-def _image_free_addresses(realization: AptlRealization) -> frozenset[str]:
-    """Return the node addresses that are not Compose services.
-
-    Only a node with a backing image becomes a Compose service and can carry a
-    Compose bind; an image-free node receives its generated-artifact outputs as
-    files placed into its container instead (issue #875). Observation has to
-    distinguish the two or it demands a bind mount that realization never
-    emitted.
-    """
-
-    return frozenset(node.address for node in realization.nodes if node.image is None)
 
 
 def _declared_domain_topology(
@@ -356,23 +284,17 @@ def _observe_node(
     concerns: dict[tuple[str, ...], object] = {
         _NODE_TYPE_PATH: _REALIZED_NODE_TYPE,
     }
-    operating_system = (
-        _guest_operating_system(backend, container_name, observation_context)
-        if observe_operating_system
-        else None
+    operating_system = _record_operating_system_concern(
+        backend,
+        container_name,
+        info,
+        observe_operating_system,
+        observation_context,
+        concerns,
     )
-    if operating_system is not None:
-        concerns[_OS_FAMILY_PATH] = operating_system.family
-    elif not observe_operating_system:
-        os_family = _observed_os_family(info)
-        if os_family is not None:
-            concerns[_OS_FAMILY_PATH] = os_family
-    if declared_domain_topology is not None:
-        topology = _observed_domain_topology(
-            backend, container_name, declared_domain_topology
-        )
-        if topology is not None:
-            concerns[_DOMAIN_TOPOLOGY_PATH] = topology
+    _record_domain_topology_concern(
+        backend, container_name, declared_domain_topology, concerns
+    )
     concerns.update(
         observe_runtime_concerns(
             backend,
@@ -390,170 +312,45 @@ def _observe_node(
     )
 
 
-def _guest_operating_system(
+def _record_operating_system_concern(
     backend: "DeploymentBackend",
     container_name: str,
-    observation_context: DeploymentObservationContext | None = None,
-):
-    """Read guest OS identity without a shell or planned-state fallback.
+    info: Mapping[str, object],
+    observe_operating_system: bool,
+    observation_context: DeploymentObservationContext | None,
+    concerns: dict[tuple[str, ...], object],
+) -> ObservedOperatingSystemIdentity | None:
+    """Record the strongest admitted OS observation and return its identity."""
 
-    A declared run-to-completion node is stopped by the time realization is
-    observed, so ``docker exec`` cannot read it. Docker's archive API can still
-    read the retained guest filesystem without starting another container.
-    """
-
-    payload: str | bytes | None = None
-    try:
-        result = backend.container_exec(container_name, ["cat", "/etc/os-release"])
-    except (BackendTimeoutError, OSError):
-        result = None
-    if result is not None and getattr(result, "returncode", 1) == 0:
-        payload = getattr(result, "stdout", b"")
+    operating_system = None
+    if observe_operating_system:
+        operating_system = _guest_operating_system(
+            backend, container_name, observation_context
+        )
+        if operating_system is not None:
+            concerns[_OS_FAMILY_PATH] = operating_system.family
     else:
-        reader = getattr(backend, "container_file_read", None)
-        if reader is not None:
-            try:
-                payload = reader(
-                    container_name,
-                    "/etc/os-release",
-                    max_bytes=64 * 1024,
-                )
-            except (BackendTimeoutError, OSError):
-                payload = None
-    if payload is None and observation_context is not None:
-        payload = observation_context.completed_file_read(
-            container_name,
-            "/etc/os-release",
-            max_bytes=64 * 1024,
-        )
-    if payload is None:
-        return None
-    return parse_os_release(payload)
+        os_family = _observed_os_family(info)
+        if os_family is not None:
+            concerns[_OS_FAMILY_PATH] = os_family
+    return operating_system
 
 
-def operational_realization_observations(
-    *,
-    plan: ProvisioningPlan,
-    observations: Mapping[str, ObservedResource],
-    envelope: BackendRealizationEnvelopeModel,
-    previous: tuple[RealizationObservationDisclosure, ...] = (),
-) -> tuple[RealizationObservationDisclosure, ...]:
-    """Bind native substrate and guest OS reads to this exact apply operation."""
+def _record_domain_topology_concern(
+    backend: "DeploymentBackend",
+    container_name: str,
+    declared: Mapping[str, object] | None,
+    concerns: dict[tuple[str, ...], object],
+) -> None:
+    """Record domain topology only when daemon readback establishes it."""
 
-    if plan.operation_id is None or plan.realization_envelope != envelope.identity:
-        return ()
-
-    constraint_paths = {
-        item.address: item.field_path
-        for item in plan.realization_constraints
-        if item.concern == "compute-substrate"
-    }
-    native: list[RealizationObservation] = []
-    for sequence, (address, observed) in enumerate(sorted(observations.items())):
-        if not observed.realized:
-            continue
-        if address in constraint_paths:
-            native.append(
-                RealizationObservation(
-                    address=address,
-                    field_path=constraint_paths[address],
-                    concern=RealizationConcern.COMPUTE_SUBSTRATE,
-                    source=ObservationStrength.DAEMON_OBSERVED,
-                    value="operating-system-container",
-                    operation_id=plan.operation_id,
-                    envelope_digest=envelope.digest,
-                    configuration_digest=envelope.configuration.configuration_digest,
-                    observer_version="aptl-docker-inspect/v1",
-                    sequence=sequence * 2,
-                    binding_verified=True,
-                )
-            )
-        if observed.operating_system is not None:
-            native.append(
-                RealizationObservation(
-                    address=address,
-                    field_path=f"{address.removeprefix('provision.node.')}.os",
-                    concern=RealizationConcern.OPERATING_SYSTEM,
-                    source=ObservationStrength.GUEST_OBSERVED,
-                    value=observed.operating_system,
-                    operation_id=plan.operation_id,
-                    envelope_digest=envelope.digest,
-                    configuration_digest=envelope.configuration.configuration_digest,
-                    observer_version="aptl-container-os-release/v1",
-                    sequence=sequence * 2 + 1,
-                    binding_verified=True,
-                )
-            )
-    substrate = bind_compute_substrate_observations(
-        plan=plan,
-        observations=tuple(native),
-        envelope=envelope,
-        previous=previous,
-        selected_addresses=set(compute_substrate_collection_addresses(plan=plan)),
+    topology = (
+        _observed_domain_topology(backend, container_name, declared)
+        if declared is not None
+        else None
     )
-    bound = bind_operating_system_observations(
-        plan=plan,
-        observations=tuple(native),
-        envelope=envelope,
-        previous=substrate,
-    )
-    return _bind_guest_runtime_observations(
-        plan=plan,
-        observations=observations,
-        previous=bound,
-    )
-
-
-def _bind_guest_runtime_observations(
-    *,
-    plan: ProvisioningPlan,
-    observations: Mapping[str, ObservedResource],
-    previous: tuple[RealizationObservationDisclosure, ...],
-) -> tuple[RealizationObservationDisclosure, ...]:
-    """Disclose only runtime concerns actually read back from the guest."""
-
-    authorities = tuple(
-        authority
-        for authority in plan.realization_authority
-        if authority.requirement_kind in _GUEST_RUNTIME_CONCERNS
-    )
-    replaced = {
-        (
-            authority.address,
-            authority.field_path,
-            authority.domain,
-            authority.requirement_kind,
-        )
-        for authority in authorities
-    }
-    retained = tuple(
-        item
-        for item in previous
-        if (
-            item.address,
-            item.field_path,
-            item.domain,
-            item.requirement_kind,
-        )
-        not in replaced
-    )
-    disclosed = []
-    for authority in authorities:
-        observed = observations.get(authority.address)
-        path = CONCERN_PAYLOAD_PATH[authority.requirement_kind]
-        if observed is None or path not in observed.concerns:
-            continue
-        disclosed.append(
-            RealizationObservationDisclosure(
-                address=authority.address,
-                field_path=authority.field_path,
-                domain=authority.domain,
-                requirement_kind=authority.requirement_kind,
-                verification_scope=RealizationVerificationScope.CONFIGURATION,
-                observation_strength=ObservationStrength.GUEST_OBSERVED,
-            )
-        )
-    return (*retained, *disclosed)
+    if topology is not None:
+        concerns[_DOMAIN_TOPOLOGY_PATH] = topology
 
 
 def _observe_network(

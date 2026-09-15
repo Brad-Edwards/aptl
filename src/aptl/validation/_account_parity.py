@@ -139,6 +139,12 @@ def check_account_provisioner_parity(
         diagnostics = _realized_account_parity(scenario, realization_details)
         return GateCheck("account_provisioner_parity", *_outcome(diagnostics))
 
+    return _static_account_parity(scenario, project_dir)
+
+
+def _static_account_parity(scenario: Scenario, project_dir: Path) -> GateCheck:
+    """Compare accounts to the checked-in static provisioner script."""
+
     script_path = project_dir / _PROVISION_USERS_SCRIPT
     if not script_path.exists():
         return GateCheck(
@@ -178,42 +184,50 @@ def _realized_account_parity(
     }
     diagnostics: list[str] = []
     for name, account in scenario.accounts.items():
-        row = by_name.get(name)
-        if row is None:
-            diagnostics.append(
-                redact(f"SDL account {name!r} has no admitted account placement")
+        diagnostics.extend(
+            _realized_account_diagnostics(name, account, by_name.get(name))
+        )
+    return diagnostics
+
+
+def _realized_account_diagnostics(
+    name: str, account: Account, row: object
+) -> list[str]:
+    """Compare one authored account to its admitted placement projection."""
+
+    if not isinstance(row, dict):
+        return [redact(f"SDL account {name!r} has no admitted account placement")]
+    realized = row["account"]
+    assert isinstance(realized, dict)
+    expected = {
+        "username": account.username,
+        "groups": sorted(account.groups),
+        "mail": account.mail,
+        "spn": account.spn,
+        "disabled": bool(account.disabled),
+    }
+    actual = {
+        "username": realized.get("username"),
+        "groups": sorted(realized.get("groups") or []),
+        "mail": realized.get("mail"),
+        "spn": realized.get("spn"),
+        "disabled": realized.get("disabled"),
+    }
+    diagnostics = []
+    if row.get("target_node") != f"provision.node.{account.node}":
+        diagnostics.append(
+            redact(
+                f"SDL account {name!r} has a mismatched admitted account-placement target_node"
             )
-            continue
-        realized = row["account"]
-        expected = {
-            "username": account.username,
-            "groups": sorted(account.groups),
-            "mail": account.mail,
-            "spn": account.spn,
-            "disabled": bool(account.disabled),
-        }
-        actual = {
-            "username": realized.get("username"),
-            "groups": sorted(realized.get("groups") or []),
-            "mail": realized.get("mail"),
-            "spn": realized.get("spn"),
-            "disabled": realized.get("disabled"),
-        }
-        target = row.get("target_node")
-        if target != f"provision.node.{account.node}":
-            diagnostics.append(
-                redact(
-                    f"SDL account {name!r} has a mismatched admitted account-placement target_node"
-                )
-            )
-        for field_name, expected_value in expected.items():
-            if actual[field_name] != expected_value:
-                diagnostics.append(
-                    redact(
-                        f"SDL account {name!r} has a mismatched admitted "
-                        f"account-placement field {field_name!r}"
-                    )
-                )
+        )
+    diagnostics.extend(
+        redact(
+            f"SDL account {name!r} has a mismatched admitted "
+            f"account-placement field {field_name!r}"
+        )
+        for field_name, expected_value in expected.items()
+        if actual[field_name] != expected_value
+    )
     return diagnostics
 
 

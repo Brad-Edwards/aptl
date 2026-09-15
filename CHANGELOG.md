@@ -9,6 +9,21 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [5.3.1](https://github.com/Brad-Edwards/aptl/compare/v5.3.0...v5.3.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* **env:** reconcile hash-pinned indexer/dashboard fixtures during .env hydration ([#1023](https://github.com/Brad-Edwards/aptl/issues/1023)) ([31d8f85](https://github.com/Brad-Edwards/aptl/commit/31d8f853688c02e3c1047d27e5868eddd53750a2)), closes [#1021](https://github.com/Brad-Edwards/aptl/issues/1021)
+* prevent partial lab startup success ([#1001](https://github.com/Brad-Edwards/aptl/issues/1001)) ([16dc3d3](https://github.com/Brad-Edwards/aptl/commit/16dc3d38694b4017f5c6afcfa50a123cf8279ae2))
+* **readiness:** quiet Wazuh API warm-up and fail closed on persistent failure ([#1016](https://github.com/Brad-Edwards/aptl/issues/1016)) ([29bc37e](https://github.com/Brad-Edwards/aptl/commit/29bc37efea39a8cc8179826394fe5590b15077d8))
+* **validation:** stop BC-09's fixture losing the timeout race to its own setup ([#1008](https://github.com/Brad-Edwards/aptl/issues/1008)) ([d66d7b5](https://github.com/Brad-Edwards/aptl/commit/d66d7b566815ad08eb057b2f82b245aac75c682c))
+
+
+### Documentation
+
+* align CLI-003 with the current lab start sequence and ADR-030 failure policy ([#1019](https://github.com/Brad-Edwards/aptl/issues/1019)) ([30e876e](https://github.com/Brad-Edwards/aptl/commit/30e876eb26d4314b17e4cb2fd3d801b9567d8b58))
+
 ## [5.3.0](https://github.com/Brad-Edwards/aptl/compare/v5.2.0...v5.3.0) (2026-09-11)
 
 

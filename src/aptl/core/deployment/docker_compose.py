@@ -96,6 +96,8 @@ class DockerComposeBackend(
         self._docker_socket_identity: tuple[int, int] | None = None
         self._docker_daemon_id: str | None = None
         self._docker_host_override: str | None = None
+        self._docker_socket_path: str | None = None
+        self._docker_socket_host: str | None = None
 
     @property
     def project_dir(self) -> Path:

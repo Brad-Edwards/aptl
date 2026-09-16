@@ -368,6 +368,7 @@ def _consumer(
     node_name = _text(raw.get("node"))
     mount_destination = _text(raw.get("mount_destination"))
     access_mode = _choice(raw, "access_mode", _CONSUMER_ACCESS_MODES)
+    delivery_mode = _text(raw.get("delivery_mode", "mount"))
     node = nodes.get(target_address or "")
     service_name = _only(node.backend_services) if node is not None else None
     if node is None:
@@ -386,7 +387,12 @@ def _consumer(
                 "Stateful resource consumer does not resolve to one backend service.",
             )
         )
-    elif node_name is None or mount_destination is None or access_mode is None:
+    elif (
+        node_name is None
+        or mount_destination is None
+        or access_mode is None
+        or delivery_mode != "mount"
+    ):
         _append_invalid(resource, diagnostics)
     else:
         selected = _selected_outputs(raw.get("selected_outputs"))
@@ -399,6 +405,7 @@ def _consumer(
                 service_name=service_name,
                 mount_destination=mount_destination,
                 access_mode=cast(StatefulConsumerAccessMode, access_mode),
+                delivery_mode=delivery_mode,
                 selected_outputs=selected,
             )
     return None

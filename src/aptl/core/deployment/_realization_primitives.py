@@ -24,7 +24,7 @@ def valid_environment_variable_name(value: object) -> bool:
 
 @dataclass(frozen=True)
 class DeploymentImageRealization:
-    """One image operation resolved from scenario-owned source metadata."""
+    """One image operation resolved from authored or open backend authority."""
 
     address: str
     service_name: str

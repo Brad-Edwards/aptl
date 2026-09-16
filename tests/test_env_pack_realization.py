@@ -19,6 +19,11 @@ from unittest.mock import MagicMock
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_TECHVAULT_FLAG_PARAMETERS = {
+    f"flag_{host}_{level}": f"{host}-{level}"
+    for host in ("victim", "workstation", "webapp", "fileshare", "ad")
+    for level in ("user", "root")
+}
 
 
 def _pack_root() -> Path:
@@ -26,9 +31,11 @@ def _pack_root() -> Path:
 
 
 def _realize_pack(tmp_path):
-    from raes_runtime.manager import RuntimeManager
-
-    from aptl.backends.raes import create_aptl_runtime_target, parse_sdl_file
+    from aptl.backends.raes import (
+        RuntimeManager,
+        create_aptl_runtime_target,
+        parse_sdl_file,
+    )
     from aptl.backends.raes_realization import interpret_provisioning_plan
     from aptl.core.config import AptlConfig
     from aptl.core.scenario_bundle import env_pack_bundle
@@ -52,7 +59,7 @@ def _realize_pack(tmp_path):
     scenario = parse_sdl_file(bundle.sdl_path)
     plan = RuntimeManager(target).plan(
         scenario,
-        parameters={"flag_ad_user": "flag-user", "flag_ad_root": "flag-root"},
+        parameters=_TECHVAULT_FLAG_PARAMETERS,
     )
     return interpret_provisioning_plan(
         plan=plan.provisioning,
@@ -131,9 +138,28 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
     assert services["misp"]["image"]
     assert services["misp"]["container_name"] == "aptl-misp"
     assert services["misp"]["profiles"] == ["soc"]
+    misp = next(node for node in realization.nodes if node.name == "misp")
+    assert misp.image.policy_rule == "backend-open-profile"
+    assert set(misp.backend_selected_concerns) == {
+        "compute-substrate",
+        "published-ports",
+        "runtime-environment",
+    }
     # ...image-free base-OS nodes are realized by the generic materializer, not here.
     assert "webapp" not in services
     assert "workstation" not in services
+    ad = next(node for node in realization.nodes if node.name == "ad")
+    assert (
+        ad.backend_base_image_ref
+        == "aptl/generic-samba-ad-wazuh-agent-base:latest"
+    )
+    assert ad.backend_base_use_image_command is True
+    assert ad.backend_run_capabilities == ("SYS_ADMIN",)
+    assert ad.backend_provider_kind == "samba-active-directory"
+    assert dict(ad.backend_provider_parameters) == {
+        "domain": "TECHVAULT",
+        "realm": "TECHVAULT.LOCAL",
+    }
 
     # Networks use the aptl-<stem> keys and carry ipam from the SDL.
     networks = document["networks"]
@@ -147,48 +173,30 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
         for dependency in service.get("depends_on", []):
             assert dependency in defined
 
-    # The released pack declares cortex-initializer as an autoremove job.
-    # Compose must block TheHive until the job has demonstrably completed;
-    # post-start reconciliation then removes it and retains a bounded receipt.
-    assert services["cortex-initializer"]["restart"] == "no"
-    assert services["thehive"]["depends_on"]["cortex-initializer"] == {
-        "condition": "service_completed_successfully"
-    }
+    # The backend-neutral release no longer authors a Cortex initializer node.
+    # The generated model must not resurrect the removed implementation detail.
+    assert "cortex-initializer" not in services
+    assert "cortex-initializer" not in services["thehive"].get("depends_on", {})
 
 
 @pytest.mark.integration
-def test_techvault_authority_declares_privilege_without_a_child_closure(
+def test_techvault_does_not_invent_a_docker_authority_for_orborus(
     techvault_realization,
 ):
-    """The pack states an authority's privilege; it declares no child inventory.
-
-    This asserted the opposite until the pack could not boot at all. RAES calls
-    a realized child "an observed, realized child workload" and defaults the
-    field to empty, and TechVault's `shuffle-orborus` states its Docker-socket
-    privilege for transparency without declaring an expected inventory. There is
-    therefore no closure to complete and nothing to correlate at plan time --
-    demanding one asked for runtime observation before anything had run, and
-    made every `aptl lab start` raise
-    `aptl.provisioner.spawn-child-correlation-invalid` out of the provisioner.
-
-    A closure that *is* declared and incomplete still raises; that is covered in
-    tests/test_raes_runtime_orchestration.py.
-    """
+    """Backend selection must not add host-root Docker access TechVault omitted."""
 
     realization = techvault_realization
 
     spec = realization.deployment_spec(sorted(realization.profiles))
 
-    orborus = [
+    assert [
         admission
         for admission in spec.docker_authority_admissions
         if admission.node_address == "provision.node.shuffle-orborus"
-    ]
-    assert len(orborus) == 1, "the authority is still admitted"
-    assert orborus[0].spawn_requirements == ()
-    # The privilege controls the admission carries are untouched.
-    assert orborus[0].endpoint_target == "/var/run/docker.sock"
-    assert orborus[0].privilege_class == "host_root_equivalent"
+    ] == []
+    orborus = next(node for node in realization.nodes if node.name == "shuffle-orborus")
+    assert orborus.runtime.local_control_interfaces == []
+    assert orborus.runtime.orchestration_authorities == []
 
 
 def test_generated_base_compose_is_written_under_realization_root_not_the_pack(

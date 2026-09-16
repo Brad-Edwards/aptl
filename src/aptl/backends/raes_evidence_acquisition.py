@@ -53,6 +53,7 @@ NATIVE_TECHVAULT_REGISTRATIONS = frozenset(
 )
 _ACTIVE_AUTHORITY_DIR = ".aptl/capture-authorities"
 _FINALIZED_AUTHORITY_DIR = ".aptl/capture-finalized"
+_FAILED_ACTIVATION_DIR = ".aptl/capture-activation-failed"
 
 
 @dataclass(frozen=True)
@@ -220,8 +221,53 @@ def load_active_transcript_authorities(
                 raise
         else:
             continue
+        try:
+            failed = json.loads(
+                read_contained_nofollow(
+                    project_dir, f"{_FAILED_ACTIVATION_DIR}/{name}"
+                )
+            )
+        except PathContainmentError as exc:
+            if exc.reason != REASON_NOT_FOUND:
+                raise
+        else:
+            if not isinstance(failed, dict) or any(
+                failed.get(key) != value.get(key)
+                for key in ("run_id", "capture_plan_id")
+            ):
+                raise ValueError("failed transcript activation marker mismatch")
+            continue
         authorities.append(value)
     return tuple(authorities)
+
+
+def mark_transcript_activation_failed(
+    *, project_dir: Path, plan_id: str, run_id: str
+) -> None:
+    """Retain an auditable terminal marker for an unactivated startup run."""
+
+    name = f"{run_id}.json"
+    state = json.loads(
+        read_contained_nofollow(project_dir, f"{_ACTIVE_AUTHORITY_DIR}/{name}")
+    )
+    if (
+        not isinstance(state, dict)
+        or state.get("run_id") != run_id
+        or state.get("capture_plan_id") != plan_id
+    ):
+        raise ValueError("failed transcript activation identity mismatch")
+    payload = {
+        "schema_version": "aptl-transcript-activation-failed/v1",
+        "run_id": run_id,
+        "capture_plan_id": plan_id,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    relative = f"{_FAILED_ACTIVATION_DIR}/{name}"
+    try:
+        create_exclusive_nofollow(project_dir, relative, encoded)
+    except FileExistsError:
+        if read_contained_nofollow(project_dir, relative) != encoded:
+            raise ValueError("failed transcript activation marker conflict") from None
 
 
 def _mark_transcript_finalized(
@@ -435,5 +481,6 @@ __all__ = (
     "acquire_native_evidence",
     "finalize_active_transcript_authority",
     "load_active_transcript_authorities",
+    "mark_transcript_activation_failed",
     "persist_active_transcript_authority",
 )

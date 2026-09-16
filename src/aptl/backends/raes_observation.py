@@ -53,6 +53,9 @@ from aptl.backends._raes_observation_index import (
     RealizationObservationIndex,
     build_observation_index,
 )
+from aptl.backends._raes_observation_ordering import (
+    align_techvault_identity_collection_observations,
+)
 from aptl.backends._raes_stateful_observation import (
     _observe_generated_artifact,
     _observe_persistent_volume,
@@ -125,7 +128,11 @@ def observe_realization(
         observations,
         observation_context,
     )
-    return observations
+    return align_techvault_identity_collection_observations(
+        plan=plan,
+        observations=observations,
+        pack_identity=realization.pack_identity,
+    )
 
 
 def _observe_planned_resource(

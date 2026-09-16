@@ -136,6 +136,7 @@ def test_capture_sidecar_sets_key_mode_before_dropping_file_ownership():
     assert chown in entrypoint
     assert entrypoint.index(install) < entrypoint.index(chown)
     assert "install -m 0400 -o kali" not in entrypoint
+    assert "install -d -m 0755 /run/sshd" in entrypoint
 
 
 @pytest.mark.integration

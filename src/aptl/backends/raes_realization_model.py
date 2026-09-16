@@ -57,6 +57,16 @@ class NodeRealization(object):
     # container is started immutably from the verified config id. False for every
     # exact/materialized/Compose-owned node.
     dynamic_composition: bool = False
+    # Value-free accounting for apparatus choices made under OPEN realization
+    # authority.  Exact values remain in the image record and observed runtime
+    # snapshot; this list makes the fact of backend selection explicit in apply
+    # reporting without disclosing credentials.
+    backend_selected_concerns: tuple[str, ...] = ()
+    backend_base_image_ref: str | None = None
+    backend_base_use_image_command: bool = False
+    backend_run_capabilities: tuple[str, ...] = ()
+    backend_provider_kind: str = ""
+    backend_provider_parameters: tuple[tuple[str, str], ...] = ()
 
     def service_names(self) -> tuple[str, ...]:
         """Return the declared service names, for profile/alias matching."""
@@ -100,6 +110,17 @@ class NodeRealization(object):
             details["image"] = self.image.details()
         if self.dynamic_composition:
             details["dynamic_composition"] = True
+        if self.backend_selected_concerns:
+            details["backend_selected_concerns"] = list(self.backend_selected_concerns)
+        if self.backend_base_image_ref is not None:
+            details["backend_base_image_ref"] = self.backend_base_image_ref
+        if self.backend_run_capabilities:
+            details["backend_run_capabilities"] = list(self.backend_run_capabilities)
+        if self.backend_provider_kind:
+            details["backend_provider"] = {
+                "kind": self.backend_provider_kind,
+                "parameters": dict(self.backend_provider_parameters),
+            }
         return details
 
 
@@ -335,5 +356,10 @@ def _deployment_node_realization(
         os_version=node.os_version,
         runtime=node.runtime,
         dynamic_composition=node.dynamic_composition,
+        backend_base_image_ref=node.backend_base_image_ref,
+        backend_base_use_image_command=node.backend_base_use_image_command,
+        backend_run_capabilities=node.backend_run_capabilities,
+        backend_provider_kind=node.backend_provider_kind,
+        backend_provider_parameters=node.backend_provider_parameters,
         profiles=node.profiles,
     )

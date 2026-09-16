@@ -37,7 +37,7 @@ def _enum_value(value: object) -> object:
 
 
 def test_released_pack_supplies_the_complete_shuffle_contract(tmp_path: Path) -> None:
-    assert version("raes-env-packs") == "6.0.0"
+    assert version("raes-env-packs") == "6.0.1"
     scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
     backend = scenario.nodes["shuffle-backend"].runtime
     opensearch = scenario.nodes["shuffle-opensearch"].runtime
@@ -110,6 +110,7 @@ def test_generated_compose_uses_only_the_admitted_shuffle_runtime(
         "service_name": "shuffle-backend",
         "mount_destination": "/shuffle-database",
         "access_mode": "read_write",
+        "delivery_mode": "mount",
         "selected_outputs": [],
     }
     assert volumes["shuffle_opensearch_data"].consumers[0].mount_destination == (

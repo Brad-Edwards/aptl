@@ -173,12 +173,12 @@ def test_dormant_capture_apparatus_is_verified_without_open_ingress(tmp_path):
                     "ReadonlyRootfs": True,
                     "CapDrop": ["ALL"],
                     "CapAdd": [
-                        "CHOWN",
-                        "DAC_OVERRIDE",
-                        "NET_BIND_SERVICE",
-                        "SETGID",
-                        "SETUID",
-                        "SYS_CHROOT",
+                        "CAP_CHOWN",
+                        "CAP_DAC_OVERRIDE",
+                        "CAP_NET_BIND_SERVICE",
+                        "CAP_SETGID",
+                        "CAP_SETUID",
+                        "CAP_SYS_CHROOT",
                     ],
                 },
                 "State": {"Running": True},
@@ -203,6 +203,14 @@ def test_dormant_capture_apparatus_is_verified_without_open_ingress(tmp_path):
 
     assert observed is not None
     assert observed[0]["participant_ingress_state"] == ("dormant-awaiting-run-binding")
+    assert observed[0]["linux_capabilities"] == [
+        "CAP_CHOWN",
+        "CAP_DAC_OVERRIDE",
+        "CAP_NET_BIND_SERVICE",
+        "CAP_SETGID",
+        "CAP_SETUID",
+        "CAP_SYS_CHROOT",
+    ]
     backend.observe_container_listeners.assert_not_called()
 
 

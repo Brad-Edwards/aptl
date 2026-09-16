@@ -33,6 +33,9 @@ from aptl.backends.raes_image_realization import (
     node_source_is_dynamic_composition,
     resolve_node_image,
 )
+from aptl.backends.raes_backend_implementation import (
+    select_backend_node_implementation,
+)
 from aptl.backends.raes_placement_realization import (
     placement_node_lookup as _node_lookup,
     realize_placements as _realize_placements,
@@ -105,6 +108,7 @@ def interpret_provisioning_plan(
 
     payload_resources = _payload_resources(plan, diagnostics)
     nodes, networks, profiles = _realize_nodes_and_networks(
+        plan,
         payload_resources,
         profile_index,
         component_root,
@@ -232,6 +236,7 @@ def _payload_resources(
 
 
 def _realize_nodes_and_networks(
+    plan: ProvisioningPlan,
     payload_resources: list[PlannedResource],
     profile_index: ComposeProfileIndex,
     component_root: Path,
@@ -253,6 +258,7 @@ def _realize_nodes_and_networks(
         payload = resource.payload
         if resource.resource_type == "node":
             node = _realize_node(
+                plan,
                 resource,
                 payload,
                 profile_index,
@@ -297,6 +303,7 @@ def _empty_realization(diagnostics: list[Diagnostic]) -> AptlRealization:
 
 
 def _realize_node(
+    plan: ProvisioningPlan,
     resource: PlannedResource,
     payload: Mapping[str, Any],
     profile_index: ComposeProfileIndex,
@@ -334,6 +341,27 @@ def _realize_node(
     node_os = _node_os(node_spec)
     node_os_version = _node_os_version(node_spec)
     node_runtime = _node_runtime(node_spec)
+    authored_image = resolve_node_image(
+        resource=resource,
+        payload=payload,
+        project_dir=component_root,
+        service_name=service_name,
+        diagnostics=diagnostics,
+    )
+    backend_implementation = None
+    if authored_image is None and not node_source_is_dynamic_composition(
+        payload, resource.address
+    ):
+        backend_implementation = select_backend_node_implementation(
+            plan=plan,
+            resource=resource,
+            runtime=node_runtime,
+            service_name=service_name,
+            component_root=component_root,
+            diagnostics=diagnostics,
+        )
+    if backend_implementation is not None:
+        node_runtime = backend_implementation.runtime
     container_name = _resolved_container_name(
         resource,
         profile_index,
@@ -354,13 +382,15 @@ def _realize_node(
         networks=tuple(sorted(_network_names(infra_spec))),
         static_addresses=tuple(sorted(_static_addresses(infra_spec))),
         static_address_assignments=_static_address_assignments(infra_spec),
-        published_ports=_published_ports(node_spec),
-        image=resolve_node_image(
-            resource=resource,
-            payload=payload,
-            project_dir=component_root,
-            service_name=service_name,
-            diagnostics=diagnostics,
+        published_ports=_runtime_published_ports(node_runtime),
+        image=(
+            authored_image
+            if authored_image is not None
+            else (
+                backend_implementation.image
+                if backend_implementation is not None
+                else None
+            )
         ),
         ordering_dependencies=resource.ordering_dependencies,
         os=node_os,
@@ -369,6 +399,48 @@ def _realize_node(
         dynamic_composition=node_source_is_dynamic_composition(
             payload, resource.address
         ),
+        backend_selected_concerns=(
+            backend_implementation.selected_concerns
+            if backend_implementation is not None
+            else ()
+        ),
+        backend_base_image_ref=(
+            backend_implementation.base_image_ref
+            if backend_implementation is not None
+            else None
+        ),
+        backend_base_use_image_command=(
+            backend_implementation.base_use_image_command
+            if backend_implementation is not None
+            else False
+        ),
+        backend_run_capabilities=(
+            backend_implementation.base_run_capabilities
+            if backend_implementation is not None
+            else ()
+        ),
+        backend_provider_kind=(
+            backend_implementation.provider_kind
+            if backend_implementation is not None
+            else ""
+        ),
+        backend_provider_parameters=(
+            backend_implementation.provider_parameters
+            if backend_implementation is not None
+            else ()
+        ),
+    )
+
+
+def _runtime_published_ports(
+    runtime: RuntimeConfiguration | None,
+) -> tuple[object, ...]:
+    """Extract published ports after backend-open runtime selection."""
+
+    if runtime is None:
+        return ()
+    return _published_ports(
+        {"runtime": runtime.model_dump(mode="python", by_alias=True)}
     )
 
 

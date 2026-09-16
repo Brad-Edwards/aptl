@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -9,12 +10,12 @@ from typing import TYPE_CHECKING
 from raes_contracts.diagnostics import Diagnostic
 from raes_contracts.planning import ProvisioningPlan
 from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot
+from raes_processor.planner import realization_authority_disclosure
 
 from aptl.backends._raes_apply_reporting import (
     bounded_apply_details as _bounded_apply_details,
     capture_apparatus_observations,
     with_artifact_satisfactions,
-    with_capture_apparatus_entries,
 )
 
 from aptl.backends.raes_diagnostics import (
@@ -26,6 +27,7 @@ from aptl.backends.raes_diagnostics import (
 )
 from aptl.backends.raes_artifact_mechanisms import dynamic_composition_provenance_ref
 from aptl.backends.raes_manifest import (
+    create_aptl_manifest,
     create_aptl_realization_envelope,
 )
 from aptl.backends.raes_observability_scope import ObservabilityScopeDecision
@@ -49,6 +51,7 @@ from aptl.core.deployment.realization import (
     DeploymentRealizationSpec,
 )
 from aptl.core.deployment.observation import DeploymentObservationContext
+from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
@@ -56,6 +59,81 @@ if TYPE_CHECKING:
 
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.scenario_bundle import ScenarioBundle
+
+
+log = get_logger("raes-provisioner")
+
+# Application-owned inventories can settle after Compose's health gate.  This
+# is an evidence-readiness budget, not a fixed delay: every pass re-runs native
+# readback and exits immediately when RAES's own authority gate clears.  The
+# bound never permits an absent or partial value to pass admission.
+_REALIZATION_READBACK_TIMEOUT_SECONDS = 300.0
+_REALIZATION_READBACK_INTERVAL_SECONDS = 2.0
+_ASYNC_READBACK_CONCERNS = frozenset(
+    {
+        "forwarding-agents",
+        "generated-artifact",
+        "runtime-app-authorizations",
+        "runtime-applications",
+        "runtime-database-services",
+        "runtime-datastore-services",
+        "runtime-dns-services",
+        "runtime-file-services",
+        "runtime-filesystem-inventory",
+        "runtime-identity-authorities",
+        "runtime-local-identity",
+        "runtime-network-detection-engines",
+        "runtime-platform-applications",
+        "runtime-security-monitoring-managers",
+        "runtime-service-manager-units",
+        "service-listeners",
+    }
+)
+
+
+def _retryable_readback_gaps(
+    plan: ProvisioningPlan,
+    snapshot: RuntimeSnapshot,
+    diagnostics: list[Diagnostic],
+) -> bool:
+    """Return whether every authority failure can be transient native readback.
+
+    An existing node can become observable after its container healthcheck has
+    passed: service-managed units, application APIs, generated files, and
+    listeners finish asynchronously.  Their first read can therefore be absent
+    or incomplete.  Retrying never accepts that intermediate value: RAES runs
+    the exact gate after every read and the apply fails unless a later read is
+    exact before the deadline.  A missing node, unsupported resource type, or
+    closed-scope materialization remains terminal immediately.
+    """
+
+    if not diagnostics:
+        return False
+    for diagnostic in diagnostics:
+        authorities = [
+            authority
+            for authority in plan.realization_authority
+            if authority.address == diagnostic.address
+            and f"'{authority.requirement_kind}'" in diagnostic.message
+        ]
+        if len(authorities) != 1:
+            return False
+        authority = authorities[0]
+        if authority.requirement_kind not in _ASYNC_READBACK_CONCERNS:
+            return False
+        if str(getattr(authority.mode, "value", authority.mode)) == "closed":
+            return False
+        resource = plan.resources.get(authority.address)
+        entry = snapshot.entries.get(authority.address)
+        resource_type = getattr(resource, "resource_type", "")
+        if entry is None:
+            if resource_type != "generated-artifact":
+                return False
+            continue
+        if resource_type in {"node", "generated-artifact"}:
+            continue
+        return False
+    return True
 
 
 @dataclass
@@ -201,6 +279,7 @@ class AptlProvisioner(object):
         # loses the code, the address and the node. The contract is a failed
         # ApplyResult carrying diagnostics; return one.
         except (TypeError, ValueError) as exc:
+            log.exception("Deployment backend realization rejected its lowered model")
             diagnostics.append(
                 diagnostic(
                     "aptl.provisioner.realization-not-lowerable",
@@ -259,12 +338,29 @@ class AptlProvisioner(object):
         """Start the lowered deployment and verify every added observer."""
 
         observation_context = DeploymentObservationContext()
-        start_result = self.deployment_backend.realize(
-            deployment_spec,
-            scenario_root=self.bundle.root,
-            substrate_digests=self._availability_substrate_digests(),
-            observation_context=observation_context,
-        )
+        try:
+            start_result = self.deployment_backend.realize(
+                deployment_spec,
+                scenario_root=self.bundle.root,
+                substrate_digests=self._availability_substrate_digests(),
+                observation_context=observation_context,
+            )
+        # The RAES backend-call boundary replaces a TypeError or ValueError
+        # escaping apply() with an opaque contract diagnostic. Deployment
+        # lowering uses those exception types for invalid realized service
+        # models, so preserve the actionable, redacted reason in the failed
+        # ApplyResult just as _lowered_spec does above.
+        except (TypeError, ValueError) as exc:
+            diagnostics.append(
+                diagnostic(
+                    "aptl.provisioner.backend-start-failed",
+                    PROVISIONING_ADDRESS,
+                    str(exc),
+                )
+            )
+            return self._failed_apply(
+                snapshot, diagnostics, selected_profiles, realization
+            )
         if not start_result.success:
             diagnostics.append(
                 diagnostic(
@@ -304,45 +400,72 @@ class AptlProvisioner(object):
         """Observe and report one deployment whose start checks succeeded."""
 
         selected_profiles = self.selected_profiles(realization)
-        # The snapshot must record what the backend realized, not what the plan
-        # asked for: the SEM-218 gate reads the realized value out of it, so
-        # echoing the plan back would make the gate compare the plan against
-        # itself and pass unconditionally (issue #578).
-        observations = observe_realization(
-            self.deployment_backend,
-            realization,
-            plan,
-            scenario_root=self.bundle.root,
-            observation_context=observation_context,
-        )
-        realized_snapshot = self._with_artifact_satisfactions(
-            plan,
-            snapshot_after_apply(plan, snapshot, observations),
-            realization,
-            observation_context,
-        )
-        realized_snapshot = with_capture_apparatus_entries(
-            realized_snapshot, apparatus_observations
-        )
         realization_envelope = create_aptl_realization_envelope()
-        realized_snapshot = replace(
-            realized_snapshot,
-            realization_envelope=realization_envelope.identity,
-        )
-        operational_observations = operational_realization_observations(
-            plan=plan,
-            observations=observations,
-            envelope=realization_envelope,
-            previous=snapshot.realization_observations,
-        )
+        deadline = time.monotonic() + _REALIZATION_READBACK_TIMEOUT_SECONDS
+        attempts = 0
+        while True:
+            attempts += 1
+            # The snapshot must record what the backend realized, not what the
+            # plan asked for: the SEM-218 gate reads the realized value out of
+            # it, so echoing the plan back would make the gate compare the plan
+            # against itself and pass unconditionally (issue #578).
+            observations = observe_realization(
+                self.deployment_backend,
+                realization,
+                plan,
+                scenario_root=self.bundle.root,
+                observation_context=observation_context,
+            )
+            realized_snapshot = self._with_artifact_satisfactions(
+                plan,
+                snapshot_after_apply(plan, snapshot, observations),
+                realization,
+                observation_context,
+            )
+            realized_snapshot = replace(
+                realized_snapshot,
+                realization_envelope=realization_envelope.identity,
+            )
+            operational_observations = operational_realization_observations(
+                plan=plan,
+                observations=observations,
+                envelope=realization_envelope,
+                previous=realized_snapshot.realization_observations,
+            )
+            validation_snapshot = replace(
+                realized_snapshot,
+                realization_observations=(
+                    *realized_snapshot.realization_observations,
+                    *operational_observations,
+                ),
+            )
+            readback_diagnostics, _ = realization_authority_disclosure(
+                plan,
+                validation_snapshot,
+                manifest=create_aptl_manifest(),
+            )
+            if not readback_diagnostics or not _retryable_readback_gaps(
+                plan, validation_snapshot, readback_diagnostics
+            ):
+                break
+            now = time.monotonic()
+            if now >= deadline:
+                log.warning(
+                    "Realization readback deadline expired with %d unsettled native evidence records",
+                    len(readback_diagnostics),
+                )
+                break
+            if attempts == 1:
+                log.info(
+                    "Waiting for %d native realization evidence records to settle",
+                    len(readback_diagnostics),
+                )
+            time.sleep(min(_REALIZATION_READBACK_INTERVAL_SECONDS, deadline - now))
         return ApplyResult(
             success=True,
             snapshot=realized_snapshot,
             diagnostics=diagnostics,
-            changed_addresses=[
-                *realized_changed_addresses(plan, realized_snapshot),
-                *(entry["runtime_address"] for entry in apparatus_observations),
-            ],
+            changed_addresses=realized_changed_addresses(plan, realized_snapshot),
             details=_bounded_apply_details(
                 {
                     "profiles": selected_profiles,

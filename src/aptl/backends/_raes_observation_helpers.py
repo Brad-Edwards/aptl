@@ -132,7 +132,10 @@ def artifact_spec(
         "lifecycle": artifact.lifecycle,
         "provenance": artifact.provenance,
         "outputs": [output.details() for output in artifact.outputs],
-        "consumers": [consumer_spec(consumer) for consumer in artifact.consumers],
+        "consumers": [
+            consumer_spec(consumer, include_delivery_mode=True)
+            for consumer in artifact.consumers
+        ],
         "environment_consumers": [
             consumer.details() for consumer in artifact.environment_consumers
         ],
@@ -153,7 +156,9 @@ def volume_spec(volume: DeploymentPersistentVolumeRealization) -> dict[str, obje
     }
 
 
-def consumer_spec(consumer: DeploymentStatefulConsumer) -> dict[str, object]:
+def consumer_spec(
+    consumer: DeploymentStatefulConsumer, *, include_delivery_mode: bool = False
+) -> dict[str, object]:
     """Render one stateful consumer as a non-secret concern value.
 
     ``selected_outputs`` is rendered only when the consumer declares it (a
@@ -168,6 +173,8 @@ def consumer_spec(consumer: DeploymentStatefulConsumer) -> dict[str, object]:
         "access_mode": consumer.access_mode,
         "target_address": consumer.target_address,
     }
+    if include_delivery_mode:
+        spec["delivery_mode"] = consumer.delivery_mode
     if consumer.selected_outputs:
         spec["selected_outputs"] = list(consumer.selected_outputs)
     return spec

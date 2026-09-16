@@ -48,7 +48,7 @@ __version__ = "0.2.0"
 #: against, and it takes a verifier release -- not a wider declaration -- to
 #: admit one. An empty claim is not a wildcard for future scenario content.
 TECHVAULT_PACK_SET_DIGEST = (
-    "sha256:6300b3d539ab9c1e2287b9852e5408e1811516b818a7acf015f045cb3c9c5b89"
+    "sha256:edd3bb6252990aeaf506904767182d5a3ef2b3828a498fe64c897dccaf954934"
 )
 
 #: The pack release these bytes belong to. Version and digest are declared as

@@ -276,7 +276,7 @@ def observe_filesystem_inventory(
 def _filesystem_entry_matches(
     backend: "DeploymentBackend", container_name: str, entry: object
 ) -> bool:
-    """Corroborate one supported filesystem entry shape and presence."""
+    """Corroborate one supported filesystem entry and its physical metadata."""
 
     if not _filesystem_shape_supported(entry):
         return False
@@ -292,10 +292,48 @@ def _filesystem_entry_matches(
         "socket": "-S",
         "fifo": "-p",
     }.get(_value(entry.entry_type))
-    return bool(
+    present = bool(
         presence == "present"
         and flag is not None
         and _exec_ok(backend, container_name, ["test", flag, entry.path])
+    )
+    return present and _filesystem_metadata_matches(backend, container_name, entry)
+
+
+def _filesystem_metadata_matches(
+    backend: "DeploymentBackend", container_name: str, entry: object
+) -> bool:
+    """Compare every selected owner/id/mode/size dimension using guest stat."""
+
+    selected = (
+        getattr(entry, "owner_user", ""),
+        getattr(entry, "owner_group", ""),
+        getattr(entry, "uid", None),
+        getattr(entry, "gid", None),
+        getattr(entry, "mode", ""),
+        getattr(entry, "size", None),
+    )
+    if not any(value not in ("", None) for value in selected):
+        return True
+    row = _exec_stdout(
+        backend,
+        container_name,
+        ["stat", "-c", "%U:%G:%u:%g:%a:%s", entry.path],
+    )
+    fields = row.strip().split(":") if row is not None else []
+    if len(fields) != 6:
+        return False
+    owner, group, uid, gid, mode, size = fields
+    declared_mode = str(getattr(entry, "mode", ""))
+    if declared_mode.startswith("0o"):
+        declared_mode = declared_mode[2:]
+    return bool(
+        (not entry.owner_user or owner == entry.owner_user)
+        and (not entry.owner_group or group == entry.owner_group)
+        and (entry.uid is None or uid == str(entry.uid))
+        and (entry.gid is None or gid == str(entry.gid))
+        and (not entry.mode or mode.zfill(4) == declared_mode.zfill(4))
+        and (entry.size is None or size == str(entry.size))
     )
 
 
@@ -303,21 +341,15 @@ def _filesystem_shape_supported(entry: object) -> bool:
     """Return whether APTL can corroborate every selected entry dimension."""
 
     unsupported_values = (
-        getattr(entry, "owner_user", ""),
-        getattr(entry, "owner_group", ""),
-        getattr(entry, "uid", None),
-        getattr(entry, "gid", None),
-        getattr(entry, "mode", ""),
-        getattr(entry, "size", None),
         getattr(entry, "content_digest", ""),
         getattr(entry, "digest_algorithm", ""),
         getattr(entry, "source_path", ""),
         getattr(entry, "provenance", ""),
     )
-    return not any(value not in ("", None) for value in unsupported_values) and (
-        _value(getattr(entry, "stability", "unknown")) == "unknown"
-        and _value(getattr(entry, "sensitivity", "unknown")) == "unknown"
-    )
+    # Stability and sensitivity classify the authored fact; they are not
+    # physical filesystem attributes.  Preserve them in the disclosed value
+    # once every selected physical dimension has been read back.
+    return not any(value not in ("", None) for value in unsupported_values)
 
 
 def observe_service_manager_units(

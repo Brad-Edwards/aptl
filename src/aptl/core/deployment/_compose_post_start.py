@@ -21,6 +21,9 @@ from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.lab_types import LabResult
+from aptl.core.deployment._forwarding_agent_realization import (
+    realize_forwarding_agents,
+)
 
 
 class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMixin):
@@ -70,6 +73,13 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
                 result = LabResult(
                     success=False,
                     error="; ".join(health_failures[:5]),
+                )
+        if result is None:
+            forwarding_failures = realize_forwarding_agents(self, realization.nodes)
+            if forwarding_failures:
+                result = LabResult(
+                    success=False,
+                    error="; ".join(forwarding_failures[:5]),
                 )
         if result is None:
             result = self._verify_stateful_authenticated_readiness(realization)

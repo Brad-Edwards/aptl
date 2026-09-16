@@ -29,8 +29,12 @@ from raes_contracts.contracts import (
     ExperimentStochasticControlModel,
     ParticipantInformationStateContextResolver,
 )
-from raes_contracts.planning import RealizationResolutionSource
+from raes_contracts.planning import (
+    RealizationAuthorityMode,
+    RealizationResolutionSource,
+)
 from raes_contracts.realization_profiles import PlanProfileAuthority
+from raes_contracts.run_scope import PlanScope
 from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot
 from raes_contracts.vocabulary import ObservationStrength
 from raes_processor.compiler import compile_scenario_runtime_model
@@ -46,6 +50,9 @@ from aptl.core.scenario_bundle import ScenarioBundle, ScenarioSourceKind
 from aptl.backends.raes_runtime_attestation import (
     ARTIFACT_ATTESTED_RUNTIME_CONCERNS,
     TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST,
+)
+from aptl.backends._raes_backend_implementation_profiles import (
+    backend_profile_selected_concerns,
 )
 
 TECHVAULT_PACK_ID = "techvault"
@@ -83,6 +90,21 @@ DAEMON_READBACK_RUNTIME_CONCERNS = frozenset(
 # in the demand graph and must be observed/disclosed as backend-realized state.
 _APTL_OPEN_DEFAULT_CONCERNS = frozenset(
     {"process-resource-limits", "runtime-restart-policy"}
+)
+
+# RAES 5.0's recursive relation cannot evaluate these released, authored OPEN
+# values against their own constraint documents (UNRESOLVED, or LIMIT_EXCEEDED
+# for the web application inventory).  APTL's minimum-intrusion realization is
+# the exact authored value with no additions.  Commit that narrower backend
+# choice to the plan so RAES verifies exact native readback instead of applying
+# an unevaluable open relation.  The content-identified pack guard above and
+# APTL #1017 keep this release bridge narrow and removable.
+_TECHVAULT_MINIMUM_INTRUSION_EXACT_CONCERNS = frozenset(
+    {
+        "forwarding-agents",
+        "runtime-applications",
+        "runtime-datastore-services",
+    }
 )
 
 
@@ -176,11 +198,28 @@ def _selected_open_requirement(scenario: object | None, requirement: object) -> 
         scenario is None
         or getattr(requirement, "explicitness", None) is not ExplicitnessClass.OPEN
         or _authored_concern(scenario, requirement)
+        or _backend_profile_selects_concern(scenario, requirement)
         or (
             kind in _APTL_OPEN_DEFAULT_CONCERNS
             and _image_backed_node(scenario, requirement)
         )
     )
+
+
+def _backend_profile_selects_concern(scenario: object, requirement: object) -> bool:
+    """Keep authority for mechanics selected by a semantic backend profile."""
+
+    nodes = getattr(scenario, "nodes", None)
+    address = getattr(requirement, "address", None)
+    kind = getattr(requirement, "requirement_kind", None)
+    if not isinstance(nodes, Mapping) or not isinstance(address, str):
+        return False
+    node = next(
+        (item for name, item in nodes.items() if address == f"provision.node.{name}"),
+        None,
+    )
+    runtime = getattr(node, "runtime", None) if node is not None else None
+    return isinstance(kind, str) and kind in backend_profile_selected_concerns(runtime)
 
 
 def _image_backed_node(scenario: object, requirement: object) -> bool:
@@ -203,12 +242,12 @@ def apply_techvault_observation_strength_compatibility(
     *,
     scenario: object | None = None,
 ) -> RuntimeModel:
-    """Use honest daemon evidence for open TechVault concerns RAES overbinds.
+    """Apply release-scoped TechVault planning compatibility.
 
-    This changes only the required provenance floor.  Configuration-scope
-    corroboration remains mandatory, and the runtime snapshot must still carry
-    a matching daemon-observed disclosure.  No evidence is relabelled and no
-    unsupported concern is admitted.
+    Configuration-scope corroboration remains mandatory and no evidence is
+    relabelled.  For the finite concern set whose released OPEN relation RAES
+    cannot evaluate, APTL commits its least-intrusive choice: exactly the
+    authored value, with no backend additions, verified by native readback.
     """
 
     if not _is_identified_techvault_pack(bundle):
@@ -219,9 +258,10 @@ def apply_techvault_observation_strength_compatibility(
     }
     adjusted_identities: set[tuple[object, ...]] = set()
     delegated_identities: set[tuple[object, ...]] = set()
+    exact_identities: set[tuple[object, ...]] = set()
     requirements = []
     for requirement in model.realization_requirements:
-        requirement, adjusted, delegated = _adjust_requirement(
+        requirement, adjusted, delegated, exact = _adjust_requirement(
             requirement,
             scenario=scenario,
             authority_identities=authority_identities,
@@ -231,13 +271,20 @@ def apply_techvault_observation_strength_compatibility(
             adjusted_identities.add(_requirement_identity(requirement))
         if delegated:
             delegated_identities.add(identity)
+        if exact:
+            exact_identities.add(identity)
         requirements.append(requirement)
 
-    if not adjusted_identities and not delegated_identities:
+    if not adjusted_identities and not delegated_identities and not exact_identities:
         return model
 
     authority = tuple(
-        _adjust_authority(item, adjusted_identities, delegated_identities)
+        _adjust_authority(
+            item,
+            adjusted_identities,
+            delegated_identities,
+            exact_identities,
+        )
         for item in model.realization_authority
     )
     return replace(
@@ -252,7 +299,7 @@ def _adjust_requirement(
     *,
     scenario: object | None,
     authority_identities: set[tuple[object, ...]],
-) -> tuple[object, bool, bool]:
+) -> tuple[object, bool, bool, bool]:
     """Apply delegation and provenance compatibility to one requirement."""
 
     identity = _requirement_identity(requirement)
@@ -261,6 +308,22 @@ def _adjust_requirement(
     )
     if delegated:
         requirement = replace(requirement, explicitness=None, delegated=True)
+    exact = bool(
+        not requirement.delegated
+        and requirement.explicitness is ExplicitnessClass.OPEN
+        and requirement.requirement_kind
+        in _TECHVAULT_MINIMUM_INTRUSION_EXACT_CONCERNS
+        and (scenario is None or _authored_concern(scenario, requirement))
+    )
+    if exact:
+        requirement = replace(
+            requirement,
+            explicitness=ExplicitnessClass.EXACT,
+            structure=None,
+            constraint_document=None,
+            constraint_binding=None,
+            recursive_pending=False,
+        )
     adjusted = (
         not requirement.delegated
         and requirement.requirement_kind in DAEMON_READBACK_RUNTIME_CONCERNS
@@ -272,13 +335,14 @@ def _adjust_requirement(
             requirement,
             required_observation_strength=ObservationStrength.DAEMON_OBSERVED,
         )
-    return requirement, adjusted, delegated
+    return requirement, adjusted, delegated, exact
 
 
 def _adjust_authority(
     authority: object,
     adjusted: set[tuple[object, ...]],
     delegated: set[tuple[object, ...]],
+    exact: set[tuple[object, ...]],
 ) -> object:
     """Mirror an adjusted requirement onto its compiled authority."""
 
@@ -289,6 +353,8 @@ def _adjust_authority(
             delegated=True,
             source=RealizationResolutionSource.APPARATUS_DEFAULT,
         )
+    if identity in exact:
+        authority = replace(authority, mode=RealizationAuthorityMode.EXACT)
     if (
         identity in adjusted
         and authority.required_observation_strength
@@ -338,6 +404,7 @@ class AptlRuntimeManager(_RaesRuntimeManager):
         profile: str | None = None,
         artifact_availability: ArtifactAvailabilityContext | None = None,
         profile_authority: PlanProfileAuthority | None = None,
+        run_scope: PlanScope | None = None,
     ) -> ExecutionPlan:
         """Compile once, adjust the identified pack, then invoke RAES once."""
 
@@ -354,11 +421,18 @@ class AptlRuntimeManager(_RaesRuntimeManager):
                 scenario=scenario,
             )
         effective_snapshot = snapshot if snapshot is not None else self._snapshot
+        scope = PlanScope(
+            target_name=self._target.name,
+            run_id=run_scope.run_id if run_scope is not None else None,
+            instantiation_id=(
+                run_scope.instantiation_id if run_scope is not None else None
+            ),
+        )
         return plan(
             model,
             self._target.manifest,
             effective_snapshot,
-            target_name=self._target.name,
+            scope=scope,
             artifact_availability=artifact_availability,
             profile_context=getattr(
                 self._target.provisioner,

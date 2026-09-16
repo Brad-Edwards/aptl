@@ -163,7 +163,11 @@ def test_capture_rejection_precedes_artifact_probe(scenario, tmp_path, monkeypat
 
     config = AptlConfig()
     backend = MagicMock()
-    parameters = {"flag_ad_user": "flag-user", "flag_ad_root": "flag-root"}
+    parameters = {
+        f"flag_{host}_{level}": f"{host}-{level}"
+        for host in ("victim", "workstation", "webapp", "fileshare", "ad")
+        for level in ("user", "root")
+    }
     with pytest.raises(AdmissionRejection):
         raes.admit_raes_scenario(tmp_path, config, backend, parameters=parameters)
 

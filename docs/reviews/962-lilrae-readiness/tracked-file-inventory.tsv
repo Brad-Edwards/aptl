@@ -1572,3 +1572,10 @@ src/aptl/core/deployment/_compose_autoremove.py	backend-substrate	Retain exact o
 src/aptl/core/deployment/observation.py	core-runtime	Retain typed request-scoped deployment evidence carrier
 tests/test_compose_autoremove.py	tests-follow-owner	Retain exact autoremove lifecycle and fail-closed receipt coverage
 tests/test_raes_runtime_attestation.py	tests-follow-owner	Remove release-specific assertions with the compatibility layer while retaining fail-closed evidence coverage
+containers/generic-systemd-node22-base/Dockerfile	backend-substrate	Retain the APTL-selected Node.js and systemd substrate independently of TechVault
+src/aptl/backends/_raes_backend_implementation_profiles.py	backend-owned-runtime	Retain backend implementation choices selected only under open realization authority
+src/aptl/backends/raes_backend_implementation.py	backend-owned-runtime	Retain backend implementation selection and realization-authority enforcement
+tests/test_raes_backend_implementation.py	tests-follow-owner	Retain open and closed realization-authority regression coverage with the backend owner
+containers/generic-samba-ad-base/Dockerfile	backend-substrate	Retain the generic Samba identity-authority substrate independently of TechVault
+containers/generic-samba-ad-base/provider-start.sh	backend-substrate	Retain the generic Samba provider lifecycle independently of TechVault
+containers/generic-samba-ad-base/provision-domain.sh	backend-substrate	Retain semantic domain bootstrap mechanics independently of TechVault

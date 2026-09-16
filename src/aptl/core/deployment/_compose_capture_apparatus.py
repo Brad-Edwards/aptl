@@ -28,6 +28,20 @@ from aptl.core.lab_types import LabResult
 
 _SAFE_ID = re.compile(r"^\w[\w.-]*$", flags=re.ASCII)
 _TARGET_INGRESS_UNAVAILABLE = "aptl.capture-apparatus.target-ingress-unavailable"
+
+
+def _canonical_capabilities(values: object) -> set[str]:
+    """Normalize Docker/Compose capability spellings to Linux ``CAP_*`` form."""
+
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+        return set()
+    return {
+        value if value.startswith("CAP_") else f"CAP_{value}"
+        for value in values
+        if isinstance(value, str) and value
+    }
+
+
 _BROKER_PATH = "/usr/local/bin/broker.py"
 _KALI_INGRESS_RELOCATION = """
 set -eu
@@ -340,7 +354,9 @@ class ComposeCaptureApparatusMixin:
             "participant_ingress": "sidecar-owned-ssh-pty-broker",
             "participant_ingress_state": "dormant-awaiting-run-binding",
             "inner_kali_ssh": "tcp://127.0.0.1:2222",
-            "linux_capabilities": sorted(host.get("CapAdd") or ()),
+            "linux_capabilities": sorted(
+                _canonical_capabilities(host.get("CapAdd"))
+            ),
         }
 
     def _capture_runtime_valid(
@@ -362,12 +378,12 @@ class ComposeCaptureApparatusMixin:
             else set()
         )
         expected_add = {
-            "CHOWN",
-            "DAC_OVERRIDE",
-            "NET_BIND_SERVICE",
-            "SETGID",
-            "SETUID",
-            "SYS_CHROOT",
+            "CAP_CHOWN",
+            "CAP_DAC_OVERRIDE",
+            "CAP_NET_BIND_SERVICE",
+            "CAP_SETGID",
+            "CAP_SETUID",
+            "CAP_SYS_CHROOT",
         }
         checks = (
             labels.get("com.docker.compose.project") == self._project_name,
@@ -378,7 +394,7 @@ class ComposeCaptureApparatusMixin:
             not observed.get("NetworkSettings", {}).get("Ports"),
             host.get("ReadonlyRootfs") is True,
             set(host.get("CapDrop") or ()) == {"ALL"},
-            set(host.get("CapAdd") or ()) == expected_add,
+            _canonical_capabilities(host.get("CapAdd")) == expected_add,
         )
         return all(checks)
 

@@ -213,6 +213,9 @@ def _ensure_generic_base_images(
                 os=node.os,
                 os_version=node.os_version,
                 runtime=node.runtime,
+                backend_base_image_ref=getattr(
+                    node, "backend_base_image_ref", None
+                ),
             ).image_ref
             for node in nodes
         }

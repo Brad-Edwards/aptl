@@ -2332,6 +2332,7 @@ def _activate_required_transcript(
     """Persist and activate one complete admitted transcript authority."""
 
     from aptl.backends.raes_evidence_acquisition import (
+        mark_transcript_activation_failed,
         persist_active_transcript_authority,
     )
 
@@ -2348,8 +2349,18 @@ def _activate_required_transcript(
         authority = activate(plan_id=plan.plan_id, run_id=ctx.run_id)
     except Exception:
         log.error("Required transcript apparatus activation failed")
-        return None
-    return authority if isinstance(authority, dict) else None
+        authority = None
+    if isinstance(authority, dict):
+        return authority
+    try:
+        mark_transcript_activation_failed(
+            project_dir=ctx.project_dir,
+            plan_id=plan.plan_id,
+            run_id=ctx.run_id,
+        )
+    except Exception:
+        log.error("Required transcript activation failure could not be sealed")
+    return None
 
 
 def _step_write_run_record(ctx: _LabStartContext) -> LabResult | None:

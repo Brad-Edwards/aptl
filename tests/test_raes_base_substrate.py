@@ -42,10 +42,15 @@ def _runtime_with_service() -> RuntimeConfiguration:
 
 class TestBaseContainerSpec:
     def test_image_and_name_derive_from_os_and_address_only(self):
-        spec = base_container_spec("techvault.wazuh-manager", os="linux", os_version="", runtime=None)
-        assert spec.image_ref == base_container_spec(
-            "other.node", os="linux", os_version="", runtime=None
-        ).image_ref  # same OS -> same generic base, regardless of node identity
+        spec = base_container_spec(
+            "techvault.wazuh-manager", os="linux", os_version="", runtime=None
+        )
+        assert (
+            spec.image_ref
+            == base_container_spec(
+                "other.node", os="linux", os_version="", runtime=None
+            ).image_ref
+        )  # same OS -> same generic base, regardless of node identity
         assert "wazuh-manager" in spec.container_name
 
     def test_node_with_service_units_needs_init(self):
@@ -60,7 +65,9 @@ class TestBaseContainerSpec:
         )
         assert spec.runs_services is False
         assert spec.init is None
-        spec_none = base_container_spec("n.node", os="linux", os_version="", runtime=None)
+        spec_none = base_container_spec(
+            "n.node", os="linux", os_version="", runtime=None
+        )
         assert spec_none.runs_services is False
         assert spec_none.init is None
 
@@ -78,6 +85,7 @@ class TestBaseContainerSpec:
         assert "SYS_ADMIN" in spec.init.capabilities
         assert spec.init.cgroup_host is True
         assert spec.init.seccomp_unconfined is True
+        assert spec.init.apparmor_unconfined is True
         assert ("container", "docker") in spec.init.env
         assert spec.init.stop_signal == "SIGRTMIN+3"
         assert "/run/lock" in spec.init.tmpfs
@@ -89,7 +97,9 @@ class TestBaseContainerSpec:
     def test_declared_extra_capabilities_extend_the_fixed_init_set(self):
         runtime = RuntimeConfiguration(
             service_manager_units=[
-                ServiceManagerUnit(unit_id="svc", unit_name="svc.service", active_state="active")
+                ServiceManagerUnit(
+                    unit_id="svc", unit_name="svc.service", active_state="active"
+                )
             ],
             linux_capabilities=RuntimeCapabilityPolicy(add=["CAP_NET_ADMIN"]),
         )
@@ -104,7 +114,9 @@ class TestBaseContainerSpec:
         # has no verified need for must fail admission, not be granted.
         runtime = RuntimeConfiguration(
             service_manager_units=[
-                ServiceManagerUnit(unit_id="svc", unit_name="svc.service", active_state="active")
+                ServiceManagerUnit(
+                    unit_id="svc", unit_name="svc.service", active_state="active"
+                )
             ],
             linux_capabilities=RuntimeCapabilityPolicy(add=["CAP_SYS_ADMIN"]),
         )
@@ -129,7 +141,10 @@ class TestBaseContainerSpec:
                 published_ports=[
                     RuntimePublishedPort(container_port=8080, host_port=8080),
                     RuntimePublishedPort(
-                        container_port=53, protocol="udp", host_ip="127.0.0.1", host_port=5353
+                        container_port=53,
+                        protocol="udp",
+                        host_ip="127.0.0.1",
+                        host_port=5353,
                     ),
                 ]
             )
@@ -146,9 +161,13 @@ class TestBaseContainerSpec:
         assert spec.published_ports[1].host_ip == "127.0.0.1"
 
     def test_no_declared_network_yields_no_published_ports(self):
-        spec = base_container_spec("n.node", os="linux", os_version="", runtime=RuntimeConfiguration())
+        spec = base_container_spec(
+            "n.node", os="linux", os_version="", runtime=RuntimeConfiguration()
+        )
         assert spec.published_ports == ()
-        spec_none = base_container_spec("n.node", os="linux", os_version="", runtime=None)
+        spec_none = base_container_spec(
+            "n.node", os="linux", os_version="", runtime=None
+        )
         assert spec_none.published_ports == ()
 
     def test_declared_volume_mount_is_lowered(self):
@@ -175,9 +194,13 @@ class TestBaseContainerSpec:
         assert spec.volume_mounts[0].read_only is False
 
     def test_no_declared_mounts_yields_no_volume_mounts(self):
-        spec = base_container_spec("n.node", os="linux", os_version="", runtime=RuntimeConfiguration())
+        spec = base_container_spec(
+            "n.node", os="linux", os_version="", runtime=RuntimeConfiguration()
+        )
         assert spec.volume_mounts == ()
-        spec_none = base_container_spec("n.node", os="linux", os_version="", runtime=None)
+        spec_none = base_container_spec(
+            "n.node", os="linux", os_version="", runtime=None
+        )
         assert spec_none.volume_mounts == ()
 
     def test_extra_volume_mounts_extend_declared_mounts(self):
@@ -230,3 +253,31 @@ class TestPlanNode:
         spec, ops = plan_node("n.node", os="linux", os_version="", runtime=None)
         assert spec.runs_services is False
         assert not any(isinstance(op, StartServiceUnitOp) for op in ops)
+
+    def test_backend_selected_base_keeps_spec_and_operations_coherent(self):
+        selected = "aptl/generic-systemd-node22-base:latest"
+
+        spec, ops = plan_node(
+            "n.soc",
+            os="linux",
+            os_version="",
+            runtime=_runtime_with_service(),
+            backend_base_image_ref=selected,
+        )
+
+        assert spec.image_ref == selected
+        assert ops[0] == BaseSubstrateOp(image_ref=selected)
+
+    def test_backend_provider_can_retain_its_image_command(self):
+        spec, _ops = plan_node(
+            "n.ad",
+            os="linux",
+            os_version="",
+            runtime=RuntimeConfiguration(),
+            backend_base_image_ref="aptl/generic-samba-ad-base:latest",
+            backend_base_use_image_command=True,
+            backend_run_capabilities=("SYS_ADMIN",),
+        )
+
+        assert spec.use_image_command is True
+        assert spec.backend_run_capabilities == ("SYS_ADMIN",)

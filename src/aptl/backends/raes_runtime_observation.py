@@ -21,7 +21,6 @@ from aptl.backends._runtime_concern_excess import (
     _normalized_capabilities,
 )
 from aptl.backends._runtime_mount_observation import (
-    _observe_forwarding_agents,
     _observe_mounts,
 )
 from aptl.backends._raes_runtime_network_observation import (
@@ -39,6 +38,9 @@ from aptl.backends.raes_runtime_guest_observation import (
     observe_service_manager_units,
 )
 from aptl.utils.logging import get_logger
+from aptl.core.deployment._forwarding_agent_realization import (
+    forwarding_agents_configured,
+)
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
@@ -122,7 +124,10 @@ def _record_container_policy(
 ) -> None:
     """Record policy controlled directly by the container daemon."""
 
-    if runtime_declared:
+    policy = runtime.operational_policy
+    restart = policy.restart if policy is not None else None
+    restart_value = str(getattr(restart, "value", restart) or "")
+    if runtime_declared and restart_value not in {"", "unknown"}:
         _record(concerns, _RESTART_POLICY_PATH, lambda: _observe_restart_policy(info))
     _record(
         concerns,
@@ -222,7 +227,25 @@ def _record_daemon_inventory(
     _record(
         concerns,
         _FORWARDING_AGENTS_PATH,
-        lambda: _observe_forwarding_agents(info, runtime),
+        lambda: _observe_forwarding_agents(backend, container_name, runtime),
+    )
+
+
+def _observe_forwarding_agents(
+    backend: "DeploymentBackend",
+    container_name: str,
+    runtime: RuntimeConfiguration,
+) -> object | None:
+    """Disclose agents only after their in-world configuration verifies."""
+
+    if not forwarding_agents_configured(backend, container_name, runtime):
+        return None
+    return _disclose(
+        "forwarding-agents",
+        [
+            agent.model_dump(mode="json", by_alias=True)
+            for agent in runtime.forwarding_agents
+        ],
     )
 
 
@@ -281,7 +304,7 @@ def _container_config(info: Mapping[str, Any]) -> Mapping[str, Any]:
 
 
 def _observe_restart_policy(info: Mapping[str, Any]) -> object | None:
-    """Return the daemon's effective restart policy, including APTL defaults."""
+    """Return the daemon's effective explicitly selected restart policy."""
 
     policy = _host_config(info).get("RestartPolicy")
     name = policy.get("Name") if isinstance(policy, Mapping) else None

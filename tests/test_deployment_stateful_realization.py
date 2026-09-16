@@ -19,6 +19,7 @@ from aptl.core.credentials import PathContainmentError
 from aptl.core.certs import CertResult
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment._compose_stateful_realization import (
+    effective_stateful_model_errors,
     stateful_override_payload,
     stateful_realization_errors,
     write_stateful_override,
@@ -909,6 +910,33 @@ def test_effective_compose_model_rejects_undeclared_certificate_mount(
 
     assert result.success is False
     assert "undeclared certificate material" in result.error
+
+
+def test_effective_model_ignores_image_free_certificate_delivery(
+    tmp_path: Path,
+) -> None:
+    """Compose validation does not re-demand a mount delivered as a file."""
+
+    from raes.runtime_configuration import RuntimeConfiguration
+
+    spec = _spec()
+    image_free_node = replace(spec.nodes[0], runtime=RuntimeConfiguration())
+    realization = replace(
+        spec,
+        nodes=(image_free_node,),
+        images=(),
+        persistent_volumes=(),
+    )
+    payload = stateful_override_payload(tmp_path, "aptl-test", realization)
+
+    errors = effective_stateful_model_errors(
+        payload,
+        tmp_path,
+        "aptl-test",
+        realization,
+    )
+
+    assert not any("certificate material" in error for error in errors)
 
 
 def test_invalid_generated_compose_model_blocks_up(tmp_path: Path, monkeypatch) -> None:

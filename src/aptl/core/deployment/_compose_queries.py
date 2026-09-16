@@ -321,6 +321,18 @@ class ComposeQueryMixin(object):
         argv = ["docker", "exec", name, *cmd]
         return self._run(argv, timeout=timeout)
 
+    def container_exec_detached(
+        self,
+        name: str,
+        cmd: list[str],
+        *,
+        timeout: int | None = None,
+    ) -> subprocess.CompletedProcess:
+        """Start one provider-owned process without changing PID 1."""
+
+        argv = ["docker", "exec", "--detach", name, *cmd]
+        return self._run(argv, timeout=timeout)
+
     def container_exec_with_input(
         self,
         name: str,

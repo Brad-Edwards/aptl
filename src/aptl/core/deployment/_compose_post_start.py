@@ -24,6 +24,9 @@ from aptl.core.lab_types import LabResult
 from aptl.core.deployment._forwarding_agent_realization import (
     realize_forwarding_agents,
 )
+from aptl.core.deployment._application_provider_realization import (
+    realize_application_providers,
+)
 
 
 class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMixin):
@@ -73,6 +76,20 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
                 result = LabResult(
                     success=False,
                     error="; ".join(health_failures[:5]),
+                )
+        if result is None:
+            mirror_failures = self._realize_traffic_mirrors(realization)
+            if mirror_failures:
+                result = LabResult(
+                    success=False,
+                    error="; ".join(mirror_failures[:5]),
+                )
+        if result is None:
+            provider_failures = realize_application_providers(self, realization.nodes)
+            if provider_failures:
+                result = LabResult(
+                    success=False,
+                    error="; ".join(provider_failures[:5]),
                 )
         if result is None:
             forwarding_failures = realize_forwarding_agents(self, realization.nodes)

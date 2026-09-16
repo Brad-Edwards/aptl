@@ -91,7 +91,7 @@ BACKEND_IMPLEMENTATION_PROFILES = (
         ),
         runtime_selections={
             "runtime-environment": _environment(
-                _variable("INDEXER_URL", "https://wazuh-indexer:9200"),
+                _variable("INDEXER_URL", "https://wazuh.indexer:9200"),
                 _variable(
                     "INDEXER_USERNAME",
                     classification="operator_secret",
@@ -175,7 +175,7 @@ BACKEND_IMPLEMENTATION_PROFILES = (
                 _variable(
                     "API_PASSWORD", "WazuhPass123!", classification="secret_fixture"
                 ),
-                _variable("WAZUH_API_URL", "https://wazuh-manager"),
+                _variable("WAZUH_API_URL", "https://wazuh.manager"),
             ),
             "published-ports": [_port(5601, 443)],
         },
@@ -494,7 +494,9 @@ def selected_backend_base_image(runtime: object) -> str | None:
     return selection.image_ref if selection is not None else None
 
 
-def selected_backend_base(runtime: object) -> BackendBaseSelection | None:
+def selected_backend_base(
+    runtime: object, services: tuple[object, ...] = ()
+) -> BackendBaseSelection | None:
     """Return a substrate/provider selected from portable runtime semantics."""
 
     components = getattr(runtime, "software_components", ())
@@ -557,11 +559,46 @@ def selected_backend_base(runtime: object) -> BackendBaseSelection | None:
             image_ref = WAZUH_DEBIAN_SYSTEMD_BASE_IMAGE
         else:
             image_ref = WAZUH_DEBIAN_BASE_IMAGE
+        application = _flask_application_provider(runtime, services)
         return BackendBaseSelection(
             image_ref=image_ref,
-            provider_kind="wazuh-agent",
+            provider_kind=(
+                "python-flask-application" if application is not None else "wazuh-agent"
+            ),
+            provider_parameters=application or (),
         )
     return None
+
+
+def _flask_application_provider(
+    runtime: object, services: tuple[object, ...]
+) -> tuple[tuple[str, str], ...] | None:
+    """Select the minimum local provider for one declared Flask HTTP app."""
+
+    applications = [
+        item
+        for item in getattr(runtime, "applications", ())
+        if _plain_value(getattr(item, "framework", "")).lower() == "flask"
+        and getattr(item, "service", None)
+    ]
+    if len(applications) != 1:
+        return None
+    service_name = _plain_value(applications[0].service)
+    ports = [
+        item
+        for item in services
+        if getattr(item, "name", None) == service_name
+        and getattr(item, "protocol", "tcp") == "tcp"
+        and isinstance(getattr(item, "port", None), int)
+    ]
+    if len(ports) != 1:
+        return None
+    return (
+        ("application_id", str(applications[0].application_id)),
+        ("module", "app:app"),
+        ("port", str(ports[0].port)),
+        ("workdir", "/app"),
+    )
 
 
 def matching_backend_implementation_profile(

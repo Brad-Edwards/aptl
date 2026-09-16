@@ -37,6 +37,18 @@ def _tracked(pattern: str) -> list[Path]:
 # `FROM <image>@sha256:<64 hex>`, optionally `AS <stage>`.
 _FROM = re.compile(r"^\s*FROM\s+(?P<ref>\S+)", re.IGNORECASE | re.MULTILINE)
 _DIGEST_PINNED = re.compile(r"^[^\s@]+@sha256:[0-9a-f]{64}$")
+_LOCALLY_BUILT_BASES = frozenset(
+    {
+        "aptl/generic-samba-ad-base:latest",
+        "aptl/generic-samba-ad-wazuh-agent-base:latest",
+        "aptl/generic-systemd-base:latest",
+        "aptl/generic-systemd-base-debian:latest",
+        "aptl/generic-systemd-node22-base:latest",
+        "aptl/generic-systemd-wazuh-agent-base:latest",
+        "aptl/generic-systemd-wazuh-agent-base-debian:latest",
+        "aptl/generic-wazuh-agent-base-debian:latest",
+    }
+)
 
 
 def _dockerfiles() -> list[Path]:
@@ -53,24 +65,31 @@ def _dockerfiles() -> list[Path]:
     return sorted(found)
 
 
-@pytest.mark.parametrize(
-    "dockerfile", _dockerfiles(), ids=lambda p: str(p.relative_to(REPO_ROOT))
-)
-def test_dockerfile_base_images_are_digest_pinned(dockerfile: Path) -> None:
+def _registry_base_refs(dockerfile: Path) -> list[str]:
+    """Return external image refs, excluding stages and built-local substrates."""
+
     text = dockerfile.read_text(encoding="utf-8")
-    # Names of earlier build stages are internal references, not registry pulls.
     stages = {
         m.group(1).lower()
         for m in re.finditer(
             r"^\s*FROM\s+\S+\s+AS\s+(\S+)", text, re.IGNORECASE | re.MULTILINE
         )
     }
-    unpinned = [
+    return [
         ref
         for ref in (m.group("ref") for m in _FROM.finditer(text))
         if ref.lower() not in stages
         and ref.lower() != "scratch"
-        and not _DIGEST_PINNED.match(ref)
+        and ref not in _LOCALLY_BUILT_BASES
+    ]
+
+
+@pytest.mark.parametrize(
+    "dockerfile", _dockerfiles(), ids=lambda p: str(p.relative_to(REPO_ROOT))
+)
+def test_dockerfile_base_images_are_digest_pinned(dockerfile: Path) -> None:
+    unpinned = [
+        ref for ref in _registry_base_refs(dockerfile) if not _DIGEST_PINNED.match(ref)
     ]
     assert not unpinned, (
         f"{dockerfile.relative_to(REPO_ROOT)} pulls a mutable tag: {unpinned}. "
@@ -92,7 +111,11 @@ def test_dependabot_watches_every_dockerfile_directory() -> None:
         # Dependabot accepts a single `directory` or a `directories` list.
         entries = update.get("directories") or [update["directory"]]
         watched.update(entry.rstrip("/") or "/" for entry in entries)
-    needed = {f"/{p.parent.relative_to(REPO_ROOT)}" for p in _dockerfiles()}
+    needed = {
+        f"/{path.parent.relative_to(REPO_ROOT)}"
+        for path in _dockerfiles()
+        if _registry_base_refs(path)
+    }
     assert needed <= watched, (
         f"no docker Dependabot entry for: {sorted(needed - watched)}"
     )

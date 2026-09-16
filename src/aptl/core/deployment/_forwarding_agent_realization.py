@@ -2,10 +2,9 @@
 
 Forwarding agents are scenario state, not optional observability apparatus.  A
 mount that happens to contain one of their inputs does not prove an agent is
-installed or configured.  This module realizes the declared implementation in
-the target node and verifies the exact configuration bytes in-world.  The RAES
-requirement's verification scope is ``configuration``; enrollment and live
-delivery remain separate operational facts and are not fabricated here.
+installed, configured, or running.  This module realizes the declared
+implementation in the target node and verifies the exact configuration bytes
+and required delivery processes in-world.
 """
 
 from __future__ import annotations
@@ -124,10 +123,30 @@ def _realize_wazuh_agent(
         backend, container, _WAZUH_CONFIG, payload, "0640", owner="root:wazuh"
     ):
         return "could not write Wazuh configuration"
+    if not _agent_configured(backend, container, agent):
+        return "Wazuh configuration did not verify"
+    if not _exec_ok(
+        backend, container, ["/var/ossec/bin/wazuh-control", "start"], timeout=120
+    ):
+        return "Wazuh agent did not start"
     return (
         None
-        if _agent_configured(backend, container, agent)
-        else "Wazuh configuration did not verify"
+        if _wazuh_agent_running(backend, container)
+        else "Wazuh agent did not become ready"
+    )
+
+
+def _wazuh_agent_running(backend: ForwardingAgentBackend, container: str) -> bool:
+    """Read back the two processes required for declared log delivery."""
+
+    status = backend.container_exec(
+        container, ["/var/ossec/bin/wazuh-control", "status"], timeout=30
+    )
+    output = str(getattr(status, "stdout", "") or "")
+    return bool(
+        getattr(status, "returncode", 1) == 0
+        and "wazuh-agentd is running" in output
+        and "wazuh-logcollector is running" in output
     )
 
 
@@ -329,22 +348,26 @@ def _wazuh_config(agent: object) -> str | None:
         f"    <config-profile>{escape(name)}</config-profile>",
         "    <notify_time>10</notify_time>",
         "    <time-reconnect>60</time-reconnect>",
-        "    <auto_restart>yes</auto_restart>",
+        # The manager's first shared-config acknowledgement is not a semantic
+        # change to this backend-owned config.  Letting it auto-restart here can
+        # strand a container without an init supervisor in wazuh-control's
+        # minute-per-process stale-PID shutdown loop.
+        "    <auto_restart>no</auto_restart>",
         f"    <crypto_method>{escape(crypto or 'aes')}</crypto_method>",
-        "  </client>",
     ]
     if enrollment is not None:
         lines.extend(
             (
-                "  <enrollment>",
-                "    <enabled>yes</enabled>",
-                f"    <manager_address>{escape(host)}</manager_address>",
-                f"    <port>{int(enrollment)}</port>",
-                "  </enrollment>",
+                "    <enrollment>",
+                "      <enabled>yes</enabled>",
+                f"      <manager_address>{escape(host)}</manager_address>",
+                f"      <port>{int(enrollment)}</port>",
+                "    </enrollment>",
             )
         )
     lines.extend(
         (
+            "  </client>",
             "  <client_buffer>",
             "    <disabled>no</disabled>",
             "    <queue_size>5000</queue_size>",
@@ -359,7 +382,7 @@ def _wazuh_config(agent: object) -> str | None:
         lines.extend(
             (
                 "  <localfile>",
-                f"    <log_format>{escape(_value(source.parse_format))}</log_format>",
+                f"    <log_format>{escape(_wazuh_log_format(source.parse_format))}</log_format>",
                 f"    <location>{escape(location)}</location>",
                 "  </localfile>",
             )
@@ -373,6 +396,13 @@ def _wazuh_config(agent: object) -> str | None:
         )
     )
     return "\n".join(lines) + "\n"
+
+
+def _wazuh_log_format(value: object) -> str:
+    """Map portable source formats onto Wazuh logcollector formats."""
+
+    selected = _value(value)
+    return "json" if selected == "eve_json" else selected
 
 
 def _rsyslog_config(agent: object) -> str | None:

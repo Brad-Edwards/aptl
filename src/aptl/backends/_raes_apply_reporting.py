@@ -104,7 +104,10 @@ def capture_apparatus_observations(
             result = tuple(
                 {
                     **item,
-                    "runtime_address": "apparatus.capture.kali-session-capture",
+                    "runtime_address": (
+                        "apparatus.capture."
+                        + str(item.get("apparatus_id", "unknown")).rsplit(".", 1)[-1]
+                    ),
                 }
                 for item in observed
             )

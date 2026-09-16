@@ -274,6 +274,37 @@ def test_native_evidence_refresh_is_committed_through_the_runtime_control_plane(
     ]
 
 
+def test_native_evidence_refresh_replays_create_plan_after_initial_evaluation():
+    evaluator = AptlEvaluator()
+    target = replace(create_reference_backend_target(), evaluator=evaluator)
+    evaluation = _plan()
+    initially_evaluated = evaluator.start(evaluation, RuntimeSnapshot())
+    assert initially_evaluated.success is True
+    execution_plan = ExecutionPlan(
+        target_name=target.name,
+        manifest=target.manifest,
+        base_snapshot=RuntimeSnapshot(),
+        scenario_name="native-evidence-refresh",
+        model=RuntimeModel(scenario_name="native-evidence-refresh"),
+        provisioning=ProvisioningPlan(),
+        orchestration=OrchestrationPlan(),
+        evaluation=evaluation,
+        observation_owner=RuntimeDomain.PROVISIONING,
+    )
+
+    refresh = refresh_evidence_truth(
+        target=target,
+        execution_plan=execution_plan,
+        snapshot=initially_evaluated.snapshot,
+        evidence_records=(_record("suricata-local-rule-readiness"),),
+    )
+
+    assert refresh.status is OperationState.SUCCEEDED
+    assert sorted(refresh.snapshot.proposition_truth_results) == [
+        "evaluation.assertion.suricata-local-rules-ready"
+    ]
+
+
 def test_native_evidence_refresh_fails_when_the_authored_predicate_does_not_match():
     evaluator = AptlEvaluator()
     target = replace(create_reference_backend_target(), evaluator=evaluator)

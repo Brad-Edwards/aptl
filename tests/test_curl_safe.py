@@ -60,11 +60,13 @@ class TestCurlRequest:
         return captured, outcome
 
     def test_http_response_carries_status_and_parsed_payload(self, monkeypatch):
-        _, outcome = self._run(monkeypatch, stdout='{"error": 0}\n200')
+        captured, outcome = self._run(monkeypatch, stdout='{"error": 0}\n200')
         assert outcome.exit_code == 0
         assert outcome.http_status == 200
         assert outcome.payload == {"error": 0}
         assert outcome.category == "http_response"
+        assert "Accept: application/json" in captured["cmd"]
+        assert "Content-Type: application/json" not in captured["cmd"]
 
     def test_http_error_status_is_reported_not_swallowed(self, monkeypatch):
         """No ``-f``: a 401 is an HTTP answer, not a transport failure."""
@@ -147,6 +149,7 @@ class TestCurlRequest:
         method_at = captured["cmd"].index("-X")
         assert captured["cmd"][method_at : method_at + 2] == ["-X", "POST"]
         assert "-k" in captured["cmd"]
+        assert "Content-Type: application/json" in captured["cmd"]
 
     def test_temp_files_are_unlinked_on_timeout(self, monkeypatch):
         captured, _ = self._run(

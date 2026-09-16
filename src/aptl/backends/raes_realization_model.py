@@ -67,6 +67,12 @@ class NodeRealization(object):
     backend_run_capabilities: tuple[str, ...] = ()
     backend_provider_kind: str = ""
     backend_provider_parameters: tuple[tuple[str, str], ...] = ()
+    # Generated prerequisites selected under the same OPEN authority as this
+    # node's backend runtime additions. They are promoted into the realization's
+    # top-level artifact collection so deployment and reporting see them.
+    backend_generated_artifacts: tuple[
+        DeploymentGeneratedArtifactRealization, ...
+    ] = ()
 
     def service_names(self) -> tuple[str, ...]:
         """Return the declared service names, for profile/alias matching."""

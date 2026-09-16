@@ -26,7 +26,15 @@ from aptl.backends._raes_backend_implementation_profiles import (
     selected_backend_base,
 )
 from aptl.backends.raes_diagnostics import diagnostic
-from aptl.core.deployment.realization import DeploymentImageRealization
+from aptl.core.deployment._cortex_service_credentials import (
+    CORTEX_SERVICE_CREDENTIALS_PROFILE,
+)
+from aptl.core.deployment.realization import (
+    DeploymentGeneratedArtifactEnvironmentConsumer,
+    DeploymentGeneratedArtifactOutput,
+    DeploymentGeneratedArtifactRealization,
+    DeploymentImageRealization,
+)
 
 if TYPE_CHECKING:
     from raes_contracts.diagnostics import Diagnostic
@@ -44,6 +52,7 @@ class BackendNodeImplementation:
     provider_parameters: tuple[tuple[str, str], ...]
     runtime: RuntimeConfiguration
     selected_concerns: tuple[str, ...]
+    generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
 
 
 def select_backend_node_implementation(
@@ -52,6 +61,7 @@ def select_backend_node_implementation(
     resource: PlannedResource,
     runtime: RuntimeConfiguration | None,
     service_name: str | None,
+    services: tuple[object, ...] = (),
     diagnostics: list[Diagnostic],
     component_root: Path = Path("."),
 ) -> BackendNodeImplementation | None:
@@ -63,7 +73,7 @@ def select_backend_node_implementation(
     """
 
     profile = matching_backend_implementation_profile(runtime)
-    base = selected_backend_base(runtime)
+    base = selected_backend_base(runtime, services)
     if profile is None and base is None:
         return None
     if service_name is None or not _compute_substrate_is_open(plan, resource.address):
@@ -127,6 +137,64 @@ def select_backend_node_implementation(
         provider_parameters=(base.provider_parameters if base is not None else ()),
         runtime=selected_runtime,
         selected_concerns=("compute-substrate", *sorted(additions)),
+        generated_artifacts=_selected_generated_artifacts(
+            profile_id=profile.profile_id if profile is not None else "",
+            resource=resource,
+            service_name=service_name,
+            additions=additions,
+        ),
+    )
+
+
+def _selected_generated_artifacts(
+    *,
+    profile_id: str,
+    resource: PlannedResource,
+    service_name: str,
+    additions: dict[str, object],
+) -> tuple[DeploymentGeneratedArtifactRealization, ...]:
+    """Return prerequisites introduced by an admitted backend selection.
+
+    The TheHive profile introduces a generated-value reference only when APTL
+    selects the otherwise-absent runtime environment.  Its backing credential
+    artifact is therefore part of that same OPEN-authority choice.  It must not
+    be inferred from the product identity alone: an authored/closed environment
+    never reaches this function with ``runtime-environment`` in ``additions``.
+    """
+
+    if profile_id != "thehive-5.4" or "runtime-environment" not in additions:
+        return ()
+    return (
+        DeploymentGeneratedArtifactRealization(
+            address="backend.generated-artifact.cortex-service-credentials",
+            name="cortex-service-credentials",
+            generator="rendered_config",
+            lifecycle="reuse_valid",
+            provenance=CORTEX_SERVICE_CREDENTIALS_PROFILE,
+            outputs=(
+                DeploymentGeneratedArtifactOutput(
+                    name="initializer-api-key",
+                    path="cortex/initializer-api-key",
+                    sensitivity="secret",
+                    disposition="producer_private",
+                ),
+                DeploymentGeneratedArtifactOutput(
+                    name="connector-api-key",
+                    path="cortex/connector-api-key",
+                    sensitivity="secret",
+                ),
+            ),
+            consumers=(),
+            environment_consumers=(
+                DeploymentGeneratedArtifactEnvironmentConsumer(
+                    target_address=resource.address,
+                    node_name=resource.address.rsplit(".", 1)[-1],
+                    service_name=service_name,
+                    output_name="connector-api-key",
+                    environment_variable="TH_CORTEX_KEYS",
+                ),
+            ),
+        ),
     )
 
 

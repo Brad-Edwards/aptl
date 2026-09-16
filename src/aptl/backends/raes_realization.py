@@ -71,6 +71,7 @@ from aptl.backends.raes_realization_values import (
     static_addresses as _static_addresses,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.deployment.realization import DeploymentGeneratedArtifactRealization
 from aptl.core.scenario_bundle import ScenarioBundle
 from aptl.utils.redaction import redact
 
@@ -152,6 +153,11 @@ def interpret_provisioning_plan(
     )
     generated_artifacts, persistent_volumes = realize_stateful_resources(
         payload_resources,
+        nodes,
+        diagnostics,
+    )
+    generated_artifacts = _merge_backend_generated_artifacts(
+        generated_artifacts,
         nodes,
         diagnostics,
     )
@@ -348,6 +354,7 @@ def _realize_node(
         service_name=service_name,
         diagnostics=diagnostics,
     )
+    node_services = _service_ports(node_spec)
     backend_implementation = None
     if authored_image is None and not node_source_is_dynamic_composition(
         payload, resource.address
@@ -357,6 +364,7 @@ def _realize_node(
             resource=resource,
             runtime=node_runtime,
             service_name=service_name,
+            services=node_services,
             component_root=component_root,
             diagnostics=diagnostics,
         )
@@ -378,7 +386,7 @@ def _realize_node(
         profiles=tuple(sorted(profiles)),
         backend_services=tuple(sorted(backend_services)),
         container_name=container_name,
-        services=_service_ports(node_spec),
+        services=node_services,
         networks=tuple(sorted(_network_names(infra_spec))),
         static_addresses=tuple(sorted(_static_addresses(infra_spec))),
         static_address_assignments=_static_address_assignments(infra_spec),
@@ -429,6 +437,61 @@ def _realize_node(
             if backend_implementation is not None
             else ()
         ),
+        backend_generated_artifacts=(
+            backend_implementation.generated_artifacts
+            if backend_implementation is not None
+            else ()
+        ),
+    )
+
+
+def _merge_backend_generated_artifacts(
+    authored: list[DeploymentGeneratedArtifactRealization],
+    nodes: list[NodeRealization],
+    diagnostics: list[Diagnostic],
+) -> list[DeploymentGeneratedArtifactRealization]:
+    """Add backend-selected prerequisites without overriding authored state."""
+
+    merged = list(authored)
+    by_name = {artifact.name: artifact for artifact in authored}
+    for candidate in (
+        artifact
+        for node in nodes
+        for artifact in node.backend_generated_artifacts
+    ):
+        existing = by_name.get(candidate.name)
+        if existing is None:
+            merged.append(candidate)
+            by_name[candidate.name] = candidate
+            continue
+        if _same_generated_artifact_contract(existing, candidate):
+            continue
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.backend-generated-artifact-conflict",
+                candidate.address,
+                "A backend-selected generated artifact conflicts with an authored artifact.",
+            )
+        )
+    return merged
+
+
+def _same_generated_artifact_contract(
+    left: DeploymentGeneratedArtifactRealization,
+    right: DeploymentGeneratedArtifactRealization,
+) -> bool:
+    """Compare artifact behavior while allowing authored/backend addresses to differ."""
+
+    return (
+        left.name == right.name
+        and left.generator == right.generator
+        and left.lifecycle == right.lifecycle
+        and left.provenance == right.provenance
+        and left.outputs == right.outputs
+        and left.consumers == right.consumers
+        and left.environment_consumers == right.environment_consumers
+        and left.ordering_dependencies == right.ordering_dependencies
+        and left.refresh_dependencies == right.refresh_dependencies
     )
 
 

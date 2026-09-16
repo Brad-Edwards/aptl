@@ -1579,3 +1579,16 @@ tests/test_raes_backend_implementation.py	tests-follow-owner	Retain open and clo
 containers/generic-samba-ad-base/Dockerfile	backend-substrate	Retain the generic Samba identity-authority substrate independently of TechVault
 containers/generic-samba-ad-base/provider-start.sh	backend-substrate	Retain the generic Samba provider lifecycle independently of TechVault
 containers/generic-samba-ad-base/provision-domain.sh	backend-substrate	Retain semantic domain bootstrap mechanics independently of TechVault
+containers/_wazuh-agent/install-rhel.sh	backend-substrate	Retain backend-owned RHEL-family forwarding-agent installation mechanics
+containers/_wazuh-agent/wazuh.repo	backend-substrate	Retain pinned backend repository input for RHEL-family agent installation
+containers/generic-samba-ad-wazuh-agent-base/Dockerfile	backend-substrate	Retain locally composed Samba and Wazuh substrate selected by the backend
+containers/generic-systemd-wazuh-agent-base-debian/Dockerfile	backend-substrate	Retain locally composed Debian systemd and Wazuh substrate selected by the backend
+containers/generic-systemd-wazuh-agent-base/Dockerfile	backend-substrate	Retain locally composed RHEL systemd and Wazuh substrate selected by the backend
+containers/generic-wazuh-agent-base-debian/Dockerfile	backend-substrate	Retain minimal Debian Wazuh substrate selected by the backend
+containers/suricata-wazuh-agent/Dockerfile	backend-substrate	Retain locally composed Suricata forwarding substrate selected under open authority
+src/aptl/backends/_raes_observation_ordering.py	backend-owned-runtime	Retain deterministic backend observation ordering and dependency handling
+src/aptl/core/deployment/_application_provider_realization.py	backend-substrate	Retain semantic application-provider startup and native readiness verification
+src/aptl/core/deployment/_compose_traffic_mirror.py	backend-observability	Retain scope-admitted minimum-intrusion traffic-mirror realization and readback
+src/aptl/core/deployment/_forwarding_agent_realization.py	backend-observability	Retain semantic forwarding-agent realization and native readback
+tests/test_application_provider_realization.py	tests-follow-owner	Retain semantic application-provider realization coverage with the backend owner
+tests/test_traffic_mirror.py	tests-follow-owner	Retain admitted traffic-mirror realization and reporting coverage with the backend owner

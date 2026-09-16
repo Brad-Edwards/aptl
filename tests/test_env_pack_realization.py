@@ -149,10 +149,7 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
     assert "webapp" not in services
     assert "workstation" not in services
     ad = next(node for node in realization.nodes if node.name == "ad")
-    assert (
-        ad.backend_base_image_ref
-        == "aptl/generic-samba-ad-wazuh-agent-base:latest"
-    )
+    assert ad.backend_base_image_ref == "aptl/generic-samba-ad-wazuh-agent-base:latest"
     assert ad.backend_base_use_image_command is True
     assert ad.backend_run_capabilities == ("SYS_ADMIN",)
     assert ad.backend_provider_kind == "samba-active-directory"
@@ -160,12 +157,36 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
         "domain": "TECHVAULT",
         "realm": "TECHVAULT.LOCAL",
     }
+    webapp = next(node for node in realization.nodes if node.name == "webapp")
+    assert webapp.backend_provider_kind == "python-flask-application"
+    assert dict(webapp.backend_provider_parameters) == {
+        "application_id": "techvault-portal",
+        "module": "app:app",
+        "port": "8080",
+        "workdir": "/app",
+    }
+    assert webapp.backend_selected_concerns == ("compute-substrate",)
 
     # Networks use the aptl-<stem> keys and carry ipam from the SDL.
     networks = document["networks"]
     assert "aptl-security" in networks
     assert networks["aptl-security"]["ipam"]["config"][0]["subnet"] == "172.20.0.0/24"
     assert networks["aptl-dmz"]["internal"] is True
+
+    # Wazuh's certificates and appliance clients use canonical dotted DNS
+    # identities even though the backend-neutral node ids use hyphens.
+    assert services["wazuh-indexer"]["networks"]["aptl-security"]["aliases"] == [
+        "wazuh.indexer"
+    ]
+    assert services["wazuh-manager"]["networks"]["aptl-security"]["aliases"] == [
+        "wazuh.manager"
+    ]
+    assert services["wazuh-manager"]["environment"]["INDEXER_URL"] == (
+        "https://wazuh.indexer:9200"
+    )
+    assert services["wazuh-dashboard"]["environment"]["WAZUH_API_URL"] == (
+        "https://wazuh.manager"
+    )
 
     # depends_on never references a service the document does not define.
     defined = set(services)
@@ -177,6 +198,25 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
     # The generated model must not resurrect the removed implementation detail.
     assert "cortex-initializer" not in services
     assert "cortex-initializer" not in services["thehive"].get("depends_on", {})
+
+    # The released pack leaves TheHive's runtime environment open. APTL's
+    # selected connector binding therefore includes and reports its minimum
+    # backing artifact; it is not inferred when that concern is closed.
+    artifact = next(
+        item
+        for item in realization.generated_artifacts
+        if item.name == "cortex-service-credentials"
+    )
+    assert artifact.address == "backend.generated-artifact.cortex-service-credentials"
+    assert [output.name for output in artifact.outputs] == [
+        "initializer-api-key",
+        "connector-api-key",
+    ]
+    assert artifact.environment_consumers[0].target_address == (
+        "provision.node.thehive"
+    )
+    assert artifact.environment_consumers[0].environment_variable == "TH_CORTEX_KEYS"
+    assert artifact.details() in realization.details()["generated_artifacts"]
 
 
 @pytest.mark.integration
@@ -865,6 +905,34 @@ def test_pack_directory_content_for_an_image_node_merges_files_into_target(
     ]
     assert all(mount["read_only"] is True for mount in mounts)
     assert not any(mount["target"] == "/etc/suricata/rules" for mount in mounts)
+
+
+def test_pack_script_content_for_an_image_node_is_staged_executable(
+    tmp_path, stub_pack
+):
+    """A declared script media type remains executable after byte staging."""
+
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+
+    digest = "sha256:" + "e" * 64
+    stub_pack["analyzer"] = _StubResolved(b"#!/usr/bin/python3\n", digest)
+    spec = _content_spec(
+        content=(
+            _content_item(
+                "pack-file",
+                artifact_id="analyzer",
+                artifact_digest=digest,
+                media_type="text/x-python",
+            ),
+        )
+    )
+
+    override = image_node_content_override(
+        spec, tmp_path / "pack", tmp_path / "engine"
+    )
+
+    source = Path(override["services"]["tempo"]["volumes"][0]["source"])
+    assert source.stat().st_mode & 0o111 == 0o111
 
 
 def test_pack_directory_content_replaces_a_mount_source_made_read_only(

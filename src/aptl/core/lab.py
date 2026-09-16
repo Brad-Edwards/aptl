@@ -484,20 +484,30 @@ def _finalize_required_transcript_capture(
     from aptl.backends.raes_evidence_acquisition import (
         finalize_active_transcript_authority,
         load_active_transcript_authorities,
+        mark_transcript_finalization_failed,
     )
     from aptl.core.evidence.outcomes import AcquisitionDisposition
 
     result = None
     failed = False
+    state = None
     try:
         active = load_active_transcript_authorities(project_dir)
         if active:
             if len(active) != 1:
                 raise ValueError("multiple pending transcript authorities")
+            state = active[0]
+            config_path = find_config(project_dir)
+            config = load_config(config_path) if config_path is not None else AptlConfig()
+            config_root = config_path.parent if config_path is not None else project_dir
+            expected_store = Path(config.run_storage.local_path)
+            if not expected_store.is_absolute():
+                expected_store = config_root / expected_store
             result = finalize_active_transcript_authority(
                 project_dir=project_dir,
-                state=active[0],
+                state=state,
                 backend=backend,
+                expected_run_store_base=expected_store,
             )
     except Exception:
         log.error("Required transcript finalization failed before teardown")
@@ -506,6 +516,11 @@ def _finalize_required_transcript_capture(
         result is not None
         and result.disposition is not AcquisitionDisposition.SEALED_READY
     )
+    if failed and state is not None:
+        try:
+            mark_transcript_finalization_failed(project_dir=project_dir, state=state)
+        except Exception:
+            log.error("Required transcript finalization failure could not be recorded")
     return (
         LabResult(success=False, error=_TRANSCRIPT_FINALIZATION_FAILED)
         if failed
@@ -2877,10 +2892,26 @@ def _step_acquire_required_native_evidence(
         try:
             capture = acquire_native_evidence(request)
         except Exception:
-            log.error("Required native scenario evidence acquisition failed")
+            log.exception("Required native scenario evidence acquisition failed")
     if capture is None:
         failure = LabResult(success=False, error=_NATIVE_CAPTURE_FAILED)
     else:
+        for report in getattr(capture, "reports", ()):
+            log_method = (
+                log.info
+                if report.status.value in {"ok", "empty_ok"}
+                else log.warning
+            )
+            log_method(
+                "Native evidence collector %s reported %s%s",
+                report.registration_id,
+                report.status.value,
+                (
+                    f" ({report.diagnostic_code})"
+                    if report.diagnostic_code is not None
+                    else ""
+                ),
+            )
         ctx.native_evidence_acquisition = capture
         failure = (
             _refresh_required_native_evidence(ctx, admitted, capture.records)

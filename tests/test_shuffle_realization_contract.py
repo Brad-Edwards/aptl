@@ -36,7 +36,9 @@ def _enum_value(value: object) -> object:
     return getattr(value, "value", value)
 
 
-def test_released_pack_supplies_the_complete_shuffle_contract(tmp_path: Path) -> None:
+def test_released_pack_supplies_shuffle_semantics_and_leaves_mechanics_open(
+    tmp_path: Path,
+) -> None:
     assert version("raes-env-packs") == "6.0.1"
     scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
     backend = scenario.nodes["shuffle-backend"].runtime
@@ -46,7 +48,8 @@ def test_released_pack_supplies_the_complete_shuffle_contract(tmp_path: Path) ->
         item.name: (item.value, _enum_value(item.value_classification))
         for item in backend.environment
     }
-    assert environment == EXPECTED_ENVIRONMENT
+    assert environment == {}
+    assert _enum_value(scenario.realization.default) == "open"
 
     listener = backend.service_listeners[0]
     assert listener.service == "shuffle-api"
@@ -70,7 +73,6 @@ def test_released_pack_supplies_the_complete_shuffle_contract(tmp_path: Path) ->
     )
     assert _enum_value(datastore.transport_security.mode) == "tls"
     assert datastore.transport_security.client_verification is False
-    assert environment["SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY"] == ("true", "plain")
 
     assert scenario.persistent_volumes["shuffle_data"].consumers[0].node == (
         "shuffle-backend"
@@ -87,7 +89,8 @@ def test_generated_compose_uses_only_the_admitted_shuffle_runtime(
     from aptl.core.deployment._compose_node_generation import render_realization_compose
 
     realization = _realize_pack(tmp_path)
-    # Issue #913 covers the released Shuffle backend contract. The independent
+    # Issue #913 covers APTL's selection of Shuffle backend mechanics under the
+    # released pack's open authority. The independent
     # Orborus authority remains fail-closed until env-packs #285 supplies its
     # immutable, correlated child closure required by APTL #949.
     spec = _without_downstream_orborus_authority(realization).deployment_spec(
@@ -250,6 +253,12 @@ if [ "$1" = inspect ] && [ "$2" = aptl-shuffle-orborus ]; then
 fi
 if [ "$1" = inspect ] && [ "$2" = aptl-cortex ]; then
     exit 1
+fi
+if [ "$1" = exec ] && [ "$2" = aptl-misp-redis ]; then
+    case "$*" in
+        *" -a redispassword ping"*) printf 'PONG\n' ;;
+        *) printf 'NOAUTH Authentication required.\n' ;;
+    esac
 fi
 if [ "$1" = exec ] && [ "$2" = aptl-shuffle-backend ]; then
     printf '{"name":"Shuffle"}\n'
@@ -418,9 +427,14 @@ def test_soar_fixups_activate_the_generated_soc_tls_material() -> None:
     assert "fix_thehive_tls" in fixup
     assert "/etc/thehive/keystore.p12:ro" in fixup
     assert "/etc/thehive/application.conf:ro" in fixup
-    assert "fix_shuffle_orborus" in fixup
-    assert "ghcr.io/shuffle/shuffle-worker@sha256:" in fixup
-    assert "SHUFFLE_ORBORUS_EXECUTION_TIMEOUT=600" in fixup
+    assert ".aptl/realization/generated-environment" in fixup
+    assert ".aptl/realization/compose.stateful.yml" in fixup
+    assert 'find "$root"' not in fixup
+    assert '--env-file "$cortex_env"' in fixup
+    assert '--env-file "$PROJECT_DIR/config/cortex/thehive-cortex.env"' not in fixup
+    assert "fix_shuffle_orborus" not in fixup
+    assert "SHUFFLE_WORKER_IMAGE" not in fixup
+    assert "/var/run/docker.sock" not in fixup
     assert "verify_soc_tls" in fixup
     assert '--cacert "$CERT_BASE/lab-ca.pem"' in fixup
     assert 'THEHIVE_URL="${THEHIVE_URL:-https://localhost:9000}"' in thehive_key

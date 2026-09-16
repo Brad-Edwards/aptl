@@ -7,7 +7,10 @@ import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
-from aptl.core.deployment.realization import DeploymentPublishedPort
+from aptl.core.deployment.realization import (
+    DeploymentPublishedPort,
+    DeploymentServicePort,
+)
 from aptl.core.evidence.adapters.techvault import TECHVAULT_LOCAL_SIDS
 from aptl.core.evidence.adapters.techvault_native import (
     TechVaultNativeDependencies,
@@ -22,7 +25,7 @@ _END = "2026-09-14T10:01:00Z"
 _DIGEST = "sha256:" + "a" * 64
 
 
-def _node(name, *, port=None, address=None, image=None):
+def _node(name, *, port=None, address=None, image=None, services=()):
     return SimpleNamespace(
         name=name,
         published_ports=(
@@ -34,6 +37,7 @@ def _node(name, *, port=None, address=None, image=None):
             (("dmz-net", address),) if address is not None else ()
         ),
         image=image,
+        services=services,
     )
 
 
@@ -75,7 +79,11 @@ def _realization(project_dir: Path):
             _node("wazuh-indexer", port=9200),
             _node("suricata", image=image),
             _node("kali", address="172.20.1.30"),
-            _node("webapp", address="172.20.1.20"),
+            _node(
+                "webapp",
+                address="172.20.1.20",
+                services=(DeploymentServicePort(name="http", port=8080),),
+            ),
         ),
         placements=content,
         generated_artifacts=(artifact,),
@@ -105,6 +113,8 @@ class _Backend:
             return subprocess.CompletedProcess(cmd, 0, "\n".join(rows) + "\n", "")
         self.probe_payload = payload
         assert "UNION" not in " ".join(cmd)
+        assert cmd[-1] == "http://172.20.1.20:8080/login"
+        assert "-f" not in cmd[1]
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     @staticmethod
@@ -145,7 +155,7 @@ def _request(url, **kwargs):
                             "@timestamp": _FINISH,
                             "rule": {"id": "303020"},
                             "data": {
-                                "flow_id": "42",
+                                "flow_id": "42.000000",
                                 "src_ip": "172.20.1.30",
                                 "dest_ip": "172.20.1.20",
                                 "alert": {"signature_id": 1000010},
@@ -210,6 +220,34 @@ def test_cortex_owner_uses_runtime_thehive_api_key_without_admin_fallback(tmp_pa
     assert result.status is CollectorStatus.OK
     status_request = next(item for item in requests if item[0].endswith("/status"))
     assert status_request[1]["auth_header"] == "Bearer operator-api-key"
+    assert status_request[1]["ca_cert_path"] == str(
+        tmp_path / "config/soc_certs/lab-ca.pem"
+    )
+
+
+def test_cortex_owner_polls_until_thehive_connector_refreshes(tmp_path):
+    status_calls = 0
+
+    def request(url, **kwargs):
+        nonlocal status_calls
+        if url.endswith("/api/v1/status"):
+            status_calls += 1
+            if status_calls == 1:
+                return {
+                    "connectors": {
+                        "cortex": {"status": "ERROR", "servers": []}
+                    }
+                }
+        return _request(url, **kwargs)
+
+    result = (
+        _owner(tmp_path, request_json=request)
+        .sources()["aptl.collector.cortex-enrichment"]
+        .fetch(_START, _END)
+    )
+
+    assert result.status is CollectorStatus.OK
+    assert status_calls == 2
 
 
 def test_suricata_owner_joins_native_success_with_admitted_and_realized_identity(
@@ -239,6 +277,7 @@ def test_sqli_owner_keeps_probe_body_off_argv_and_requires_flow_join(tmp_path):
 
     assert result.status is CollectorStatus.OK
     assert "UNION" in backend.probe_payload
+    assert '"flow_id":"42"' in b"".join(result.chunks).decode()
     assert result.observer_effect == "one fixed POST /login containing UNION SELECT"
 
 

@@ -242,6 +242,101 @@ def test_profile_refuses_partial_runtime_authority() -> None:
     ]
 
 
+def test_thehive_open_environment_selects_its_minimum_generated_prerequisite() -> None:
+    from aptl.backends.raes_backend_implementation import (
+        select_backend_node_implementation,
+    )
+
+    runtime = RuntimeConfiguration.model_validate(
+        {
+            "platform_applications": [
+                {
+                    "platform_application_id": "case-management",
+                    "product": "TheHive",
+                    "version": "5.4",
+                }
+            ]
+        }
+    )
+    plan, resource = _plan(
+        runtime,
+        substrate_posture="open",
+        authorities=(
+            _authority("runtime-environment", "/spec/node/runtime/environment"),
+            _authority(
+                "runtime-container-command", "/spec/node/runtime/container/command"
+            ),
+            _authority(
+                "published-ports", "/spec/node/runtime/network/published_ports"
+            ),
+        ),
+    )
+    diagnostics = []
+
+    selected = select_backend_node_implementation(
+        plan=plan,
+        resource=resource,
+        runtime=runtime,
+        service_name="thehive",
+        diagnostics=diagnostics,
+    )
+
+    assert diagnostics == []
+    assert selected is not None
+    assert len(selected.generated_artifacts) == 1
+    artifact = selected.generated_artifacts[0]
+    assert artifact.address == "backend.generated-artifact.cortex-service-credentials"
+    assert artifact.name == "cortex-service-credentials"
+    assert artifact.outputs[0].disposition == "producer_private"
+    assert artifact.environment_consumers[0].target_address == _ADDRESS
+    assert artifact.environment_consumers[0].service_name == "thehive"
+    assert artifact.environment_consumers[0].environment_variable == "TH_CORTEX_KEYS"
+
+
+def test_thehive_closed_environment_cannot_select_generated_prerequisite() -> None:
+    from aptl.backends.raes_backend_implementation import (
+        select_backend_node_implementation,
+    )
+
+    runtime = RuntimeConfiguration.model_validate(
+        {
+            "platform_applications": [
+                {
+                    "platform_application_id": "case-management",
+                    "product": "TheHive",
+                    "version": "5.4",
+                }
+            ]
+        }
+    )
+    plan, resource = _plan(
+        runtime,
+        substrate_posture="open",
+        authorities=(
+            _authority(
+                "runtime-container-command", "/spec/node/runtime/container/command"
+            ),
+            _authority(
+                "published-ports", "/spec/node/runtime/network/published_ports"
+            ),
+        ),
+    )
+    diagnostics = []
+
+    selected = select_backend_node_implementation(
+        plan=plan,
+        resource=resource,
+        runtime=runtime,
+        service_name="thehive",
+        diagnostics=diagnostics,
+    )
+
+    assert selected is None
+    assert [item.code for item in diagnostics] == [
+        "aptl.provisioner.backend-implementation-not-authorized"
+    ]
+
+
 def test_open_compute_selects_node22_ssh_base_from_portable_semantics() -> None:
     from aptl.backends._raes_backend_implementation_profiles import (
         NODE22_SYSTEMD_BASE_IMAGE,

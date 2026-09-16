@@ -28,6 +28,11 @@ from aptl.core.deployment._compose_runtime_orchestration import (
     docker_socket_volume,
 )
 from aptl.core.deployment._compose_service_health import runtime_expects_completion
+from aptl.core.deployment._compose_stateful_constants import (
+    WAZUH_INDEXER_SERVICE,
+    WAZUH_MANAGER_SERVICE,
+)
+from aptl.core.deployment._wazuh_identity import wazuh_cluster_identity
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
     DeploymentNodeRealization,
@@ -66,6 +71,11 @@ def render_realization_compose(spec: DeploymentRealizationSpec) -> dict[str, obj
         if node.service_name in service_names
         and runtime_expects_completion(node.runtime)
     }
+    wazuh_identity = wazuh_cluster_identity(spec)
+    canonical_aliases = {
+        wazuh_identity.manager_service: (WAZUH_MANAGER_SERVICE,),
+        wazuh_identity.indexer_service: (WAZUH_INDEXER_SERVICE,),
+    }
 
     services: dict[str, dict[str, object]] = {}
     for node in spec.nodes:
@@ -77,6 +87,7 @@ def render_realization_compose(spec: DeploymentRealizationSpec) -> dict[str, obj
             service_names,
             completion_services,
             docker_authority_admission=admissions.get(node.address),
+            network_aliases=canonical_aliases.get(node.service_name, ()),
         )
 
     document: dict[str, object] = {"services": services}
@@ -93,6 +104,7 @@ def _render_service(
     completion_services: set[str],
     *,
     docker_authority_admission: DeploymentDockerAuthorityAdmission | None,
+    network_aliases: tuple[str, ...] = (),
 ) -> dict[str, object]:
     """Render one image node into a Compose service definition."""
 
@@ -113,7 +125,7 @@ def _render_service(
         service["network_mode"] = f"container:{netns_container}"
     else:
         service["hostname"] = node.name
-        networks = _service_networks(node)
+        networks = _service_networks(node, aliases=network_aliases)
         if networks:
             service["networks"] = networks
     # Published host ports are owned by the dedicated port override
@@ -264,21 +276,26 @@ def _capability_config(runtime: object) -> list[str]:
     return [capability.removeprefix("CAP_") for capability in added]
 
 
-def _service_networks(node: DeploymentNodeRealization) -> dict[str, dict[str, str]]:
+def _service_networks(
+    node: DeploymentNodeRealization, *, aliases: tuple[str, ...] = ()
+) -> dict[str, dict[str, object]]:
     """Return the Compose ``networks`` attachment map for a node."""
 
     attachments = node.network_attachments or tuple(
         _Attachment(network) for network in node.networks
     )
-    networks: dict[str, dict[str, str]] = {}
+    networks: dict[str, dict[str, object]] = {}
     for attachment in attachments:
         key = _compose_network_key(attachment.network)
         if not key:
             continue
-        options: dict[str, str] = {}
+        options: dict[str, object] = {}
         address = getattr(attachment, "ipv4_address", None)
         if address:
             options["ipv4_address"] = address
+        selected_aliases = [alias for alias in aliases if alias != node.service_name]
+        if selected_aliases:
+            options["aliases"] = selected_aliases
         networks[key] = options
     return networks
 

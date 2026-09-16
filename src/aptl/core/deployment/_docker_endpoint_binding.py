@@ -49,12 +49,15 @@ def _resolve_local_docker_endpoint() -> tuple[str, str] | None:
     docker_host = os.environ.get("DOCKER_HOST", "").strip()
     if not docker_host:
         return _DEFAULT_DOCKER_SOCKET_PATH, _DEFAULT_DOCKER_SOCKET_HOST
-    if not docker_host.startswith(_UNIX_SCHEME):
-        return None
-    path = docker_host[len(_UNIX_SCHEME):]
-    if not path.startswith("/"):
-        return None
-    return path, docker_host
+    path = (
+        docker_host[len(_UNIX_SCHEME):]
+        if docker_host.startswith(_UNIX_SCHEME)
+        else ""
+    )
+    # An empty path means DOCKER_HOST was non-unix:// (tcp://, ssh://, ...) or a
+    # malformed unix host; a local-authority backend can only drive a unix
+    # socket named by an absolute path.
+    return (path, docker_host) if path.startswith("/") else None
 
 
 class DockerEndpointBindingMixin:

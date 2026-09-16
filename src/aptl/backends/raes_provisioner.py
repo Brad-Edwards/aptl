@@ -10,6 +10,13 @@ from raes_contracts.diagnostics import Diagnostic
 from raes_contracts.planning import ProvisioningPlan
 from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot
 
+from aptl.backends._raes_apply_reporting import (
+    bounded_apply_details as _bounded_apply_details,
+    capture_apparatus_observations,
+    with_artifact_satisfactions,
+    with_capture_apparatus_entries,
+)
+
 from aptl.backends.raes_diagnostics import (
     PROVISIONING_ADDRESS,
     diagnostic,
@@ -17,14 +24,16 @@ from aptl.backends.raes_diagnostics import (
     realized_changed_addresses,
     snapshot_after_apply,
 )
-from aptl.backends.raes_artifact_mechanisms import (
-    SOURCE_ARTIFACT_REQUIREMENT_KIND,
-    dynamic_composition_provenance_ref,
+from aptl.backends.raes_artifact_mechanisms import dynamic_composition_provenance_ref
+from aptl.backends.raes_manifest import (
+    create_aptl_realization_envelope,
 )
-from aptl.backends.raes_artifact_satisfaction import satisfactions_for_plan
-from aptl.backends.raes_content_satisfaction import content_satisfactions_for_plan
-from aptl.backends.raes_manifest import create_aptl_manifest
-from aptl.backends.raes_observation import observation_evidence, observe_realization
+from aptl.backends.raes_observability_scope import ObservabilityScopeDecision
+from aptl.backends.raes_observation import (
+    observation_evidence,
+    observe_realization,
+    operational_realization_observations,
+)
 from aptl.backends.raes_realization import (
     AptlRealization,
     interpret_provisioning_plan,
@@ -34,6 +43,12 @@ from aptl.backends.raes_profiles import (
     select_backend_profiles,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.experiment.capture_plan import CapturePlan, empty_capture_plan
+from aptl.core.deployment.realization import (
+    DeploymentCaptureApparatus,
+    DeploymentRealizationSpec,
+)
+from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
@@ -67,6 +82,10 @@ class AptlProvisioner(object):
     # exact id rather than resolving the mutable tag a second time at apply
     # (issue #876 cycle-6 review). None for a scenario with no artifact demand.
     artifact_availability: ArtifactAvailabilityContext | None = None
+    capture_plan: CapturePlan = field(default_factory=empty_capture_plan)
+    observability_scope: ObservabilityScopeDecision = field(
+        default_factory=ObservabilityScopeDecision
+    )
     _cached_plan: object | None = field(default=None, init=False, repr=False)
     _cached_realization: AptlRealization | None = field(
         default=None, init=False, repr=False
@@ -113,7 +132,9 @@ class AptlProvisioner(object):
                     success=False,
                     snapshot=working_snapshot,
                     diagnostics=diagnostics,
-                    details={"realization": realization.details()},
+                    details=_bounded_apply_details(
+                        {"realization": realization.details()}, realization
+                    ),
                 )
         self.last_failure_diagnostics = (
             () if result.success else tuple(result.diagnostics)
@@ -133,10 +154,13 @@ class AptlProvisioner(object):
             success=False,
             snapshot=snapshot,
             diagnostics=diagnostics,
-            details={
-                "profiles": selected_profiles,
-                "realization": realization.details(),
-            },
+            details=_bounded_apply_details(
+                {
+                    "profiles": selected_profiles,
+                    "realization": realization.details(),
+                },
+                realization,
+            ),
         )
 
     def _lowered_spec(
@@ -145,7 +169,7 @@ class AptlProvisioner(object):
         diagnostics: list[Diagnostic],
         selected_profiles: list[str],
         realization: AptlRealization,
-    ) -> tuple[object | None, ApplyResult | None]:
+    ) -> tuple[DeploymentRealizationSpec | None, ApplyResult | None]:
         """Return the lowered deployment spec, or the failure preventing one."""
 
         validity_diagnostics = self._compose_validity_diagnostics(selected_profiles)
@@ -155,7 +179,21 @@ class AptlProvisioner(object):
                 snapshot, diagnostics, selected_profiles, realization
             )
         try:
-            return realization.deployment_spec(selected_profiles), None
+            return realization.deployment_spec(
+                selected_profiles,
+                capture_apparatus=tuple(
+                    DeploymentCaptureApparatus(
+                        apparatus_id=item.apparatus_id,
+                        service_name=item.service_name,
+                        container_name=item.container_name,
+                        target_refs=item.target_refs,
+                        governing_scopes=item.governing_scopes,
+                        environment_visible=item.environment_visible,
+                        observer_effects=item.observer_effects,
+                    )
+                    for item in self.capture_plan.apparatus
+                ),
+            ), None
         # Lowering reports an unrealizable graph by raising with a stable code
         # in the message. RAES's backend-call boundary turns any ValueError or
         # TypeError out of apply into the fixed text "Backend could not
@@ -182,16 +220,50 @@ class AptlProvisioner(object):
         realization: AptlRealization,
     ) -> ApplyResult:
         """Apply a validated RAES plan to the deployment backend."""
-        selected_profiles = select_backend_profiles(self.config, realization.profiles)
+        selected_profiles = self.selected_profiles(realization)
         deployment_spec, failure = self._lowered_spec(
             snapshot, diagnostics, selected_profiles, realization
         )
         if failure is not None:
             return failure
+        started = self._start_and_observe_apparatus(
+            deployment_spec,
+            snapshot,
+            diagnostics,
+            selected_profiles,
+            realization,
+        )
+        if isinstance(started, ApplyResult):
+            return started
+        observation_context, apparatus_observations = started
+
+        return self._successful_apply(
+            plan,
+            snapshot,
+            diagnostics,
+            realization,
+            observation_context,
+            apparatus_observations,
+        )
+
+    def _start_and_observe_apparatus(
+        self,
+        deployment_spec: DeploymentRealizationSpec,
+        snapshot: RuntimeSnapshot,
+        diagnostics: list[Diagnostic],
+        selected_profiles: list[str],
+        realization: AptlRealization,
+    ) -> (
+        tuple[DeploymentObservationContext, tuple[dict[str, object], ...]] | ApplyResult
+    ):
+        """Start the lowered deployment and verify every added observer."""
+
+        observation_context = DeploymentObservationContext()
         start_result = self.deployment_backend.realize(
             deployment_spec,
             scenario_root=self.bundle.root,
             substrate_digests=self._availability_substrate_digests(),
+            observation_context=observation_context,
         )
         if not start_result.success:
             diagnostics.append(
@@ -204,6 +276,34 @@ class AptlProvisioner(object):
             return self._failed_apply(
                 snapshot, diagnostics, selected_profiles, realization
             )
+        apparatus_observations = capture_apparatus_observations(
+            self.deployment_backend, deployment_spec
+        )
+        if apparatus_observations is None:
+            diagnostics.append(
+                diagnostic(
+                    "aptl.capture-apparatus.realization-unverified",
+                    PROVISIONING_ADDRESS,
+                    "Required capture apparatus could not be verified after realization.",
+                )
+            )
+            return self._failed_apply(
+                snapshot, diagnostics, selected_profiles, realization
+            )
+        return observation_context, apparatus_observations
+
+    def _successful_apply(
+        self,
+        plan: ProvisioningPlan,
+        snapshot: RuntimeSnapshot,
+        diagnostics: list[Diagnostic],
+        realization: AptlRealization,
+        observation_context: DeploymentObservationContext,
+        apparatus_observations: tuple[dict[str, object], ...],
+    ) -> ApplyResult:
+        """Observe and report one deployment whose start checks succeeded."""
+
+        selected_profiles = self.selected_profiles(realization)
         # The snapshot must record what the backend realized, not what the plan
         # asked for: the SEM-218 gate reads the realized value out of it, so
         # echoing the plan back would make the gate compare the plan against
@@ -213,20 +313,59 @@ class AptlProvisioner(object):
             realization,
             plan,
             scenario_root=self.bundle.root,
+            observation_context=observation_context,
         )
         realized_snapshot = self._with_artifact_satisfactions(
-            plan, snapshot_after_apply(plan, snapshot, observations), realization
+            plan,
+            snapshot_after_apply(plan, snapshot, observations),
+            realization,
+            observation_context,
+        )
+        realized_snapshot = with_capture_apparatus_entries(
+            realized_snapshot, apparatus_observations
+        )
+        realization_envelope = create_aptl_realization_envelope()
+        realized_snapshot = replace(
+            realized_snapshot,
+            realization_envelope=realization_envelope.identity,
+        )
+        operational_observations = operational_realization_observations(
+            plan=plan,
+            observations=observations,
+            envelope=realization_envelope,
+            previous=snapshot.realization_observations,
         )
         return ApplyResult(
             success=True,
             snapshot=realized_snapshot,
             diagnostics=diagnostics,
-            changed_addresses=realized_changed_addresses(plan, realized_snapshot),
-            details={
-                "profiles": selected_profiles,
-                "realization": realization.details(),
-                "observation_evidence": observation_evidence(observations),
-            },
+            changed_addresses=[
+                *realized_changed_addresses(plan, realized_snapshot),
+                *(entry["runtime_address"] for entry in apparatus_observations),
+            ],
+            details=_bounded_apply_details(
+                {
+                    "profiles": selected_profiles,
+                    "realization": realization.details(),
+                    "observation_evidence": observation_evidence(observations),
+                    "observability": {
+                        "enabled": self.observability_scope.enabled,
+                        "reason": self.observability_scope.reason,
+                        "governing_scopes": list(
+                            self.observability_scope.governing_scopes
+                        ),
+                    },
+                    "capture_apparatus": list(apparatus_observations),
+                },
+                realization,
+            ),
+            operational_realization_observations=operational_observations,
+        )
+
+    def selected_profiles(self, realization: AptlRealization) -> list[str]:
+        """Apply the admitted scope decision to the ordinary backend profiles."""
+        return self.observability_scope.select_profiles(
+            select_backend_profiles(self.config, realization.profiles)
         )
 
     def _availability_substrate_digests(self) -> dict[str, str]:
@@ -265,63 +404,18 @@ class AptlProvisioner(object):
         plan: ProvisioningPlan,
         realized: RuntimeSnapshot,
         realization: AptlRealization,
+        observation_context: DeploymentObservationContext,
     ) -> RuntimeSnapshot:
-        """Attach artifact satisfaction disclosures to the realized snapshot.
+        """Attach artifact disclosures derived from realized state."""
 
-        RAES's runtime non-approximation gate reads ``artifact_satisfaction``
-        off each entry to prove the backend realized the artifact the author
-        pinned. A node's disclosure is derived from the digest read back off the
-        running container; a content placement's is derived from the bytes the
-        pack resolved for it (issue #875), because copied content is not an OCI
-        image and has no container digest. Either way an address whose artifact
-        cannot be established, or whose realized digest differs from the pin,
-        simply gets no disclosure and the gate rejects the apply.
-
-        Only addresses the observation pass reported realized have a snapshot
-        entry at all, so a disclosure can never outlive the realization it
-        describes. A scenario that authors no artifact requirement produces no
-        disclosures and the snapshot is returned unchanged.
-        """
-
-        container_names = {
-            node.address: node.container_name
-            for node in realization.nodes
-            if node.container_name
-        }
-        content_by_address = {
-            placement.address: placement.content
-            for placement in realization.placements
-            if placement.content is not None
-        }
-        manifest = create_aptl_manifest()
-        disclosures = {
-            **satisfactions_for_plan(
-                plan,
-                container_names,
-                self.deployment_backend,
-                manifest,
-                requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
-            ),
-            **content_satisfactions_for_plan(
-                plan,
-                content_by_address,
-                self.bundle.root,
-                manifest,
-                requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
-            ),
-        }
-        if not disclosures:
-            return realized
-        entries = dict(realized.entries)
-        for address, disclosure in disclosures.items():
-            entry = entries.get(address)
-            if entry is None:
-                continue
-            entries[address] = replace(
-                entry,
-                payload={**entry.payload, "artifact_satisfaction": disclosure},
-            )
-        return realized.with_entries(entries)
+        return with_artifact_satisfactions(
+            plan,
+            realized,
+            realization,
+            observation_context,
+            self.deployment_backend,
+            self.bundle.root,
+        )
 
     def _compose_validity_diagnostics(
         self, selected_profiles: list[str]

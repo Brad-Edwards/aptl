@@ -70,12 +70,19 @@ class ComposeRealizationModelMixin:
             for path in (port_override, stateful_override, content_override)
             if path is not None
         )
-        if not overrides:
+        if (
+            not overrides
+            and "otel" not in realization.profiles
+            and not realization.capture_apparatus
+        ):
             return compose_files
         base_files = compose_files or (
             base_compose_file(realization, scenario_root, realization_root),
         )
-        return (*base_files, *overrides)
+        files = self._with_observability_files(
+            (*base_files, *overrides), realization.profiles
+        )
+        return self._with_capture_apparatus_files(files, realization)
 
     @staticmethod
     def _write_image_node_content_override(

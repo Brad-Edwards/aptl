@@ -32,6 +32,41 @@ from aptl.core.scenario_bundle import (
 pytestmark = pytest.mark.integration
 
 
+def test_released_pack_owns_only_scenario_and_retains_all_four_evidence_contracts(
+    tmp_path,
+):
+    from importlib.metadata import version
+    from raes import parse_sdl
+    from raes_processor.capture_admission import compile_scenario_capture_demands
+
+    assert version("raes-env-packs") == "6.0.0"
+    assert version("raes") == "4.1.0"
+    bundle = env_pack_bundle(tmp_path / "released", "techvault")
+    scenario = parse_sdl(bundle.sdl_path.read_text())
+    assert not {"aptl-otel-collector", "aptl-tempo", "aptl-grafana-otel"}.intersection(
+        scenario.nodes
+    )
+    assert set(scenario.evidence_requirements) == {
+        "cortex-enrichment-readback",
+        "suricata-local-rule-readiness",
+        "suricata-login-sqli-alert",
+        "redteam-session-transcript",
+    }
+    transcript = scenario.evidence_requirements["redteam-session-transcript"]
+    assert transcript.integrity == "chain_of_custody"
+    assert transcript.scope_refs == ["nodes.kali"]
+    assert transcript.window == "the full run, from range readiness through teardown"
+    assert all(
+        intent.loss_disclosure == "required"
+        for intent in scenario.evidence_requirements.values()
+    )
+    # Intent-only SDL requirements are executable demand in the released RAES
+    # boundary; they do not need backend-invented capture-spec references.
+    assert {
+        demand.demand_id for demand in compile_scenario_capture_demands(scenario)
+    } == set(scenario.evidence_requirements)
+
+
 def test_env_pack_bundle_stages_and_validates_the_bundled_techvault_pack(
     tmp_path: Path,
 ) -> None:
@@ -44,7 +79,7 @@ def test_env_pack_bundle_stages_and_validates_the_bundled_techvault_pack(
         pack_id="techvault",
         pack_version="0.1.0",
         set_digest=(
-            "sha256:c532775575d99438f4b4890d49a4fdb7354921f0405afdaa9f370ea4fe3f5a20"
+            "sha256:6300b3d539ab9c1e2287b9852e5408e1811516b818a7acf015f045cb3c9c5b89"
         ),
     )
     # The bundle roots at the staged copy, never at the installed package.
@@ -95,7 +130,9 @@ def test_resolver_fails_closed_on_a_missing_pack(tmp_path: Path) -> None:
         )
 
 
-def test_scenario_selection_resolves_the_env_pack_when_configured(tmp_path: Path) -> None:
+def test_scenario_selection_resolves_the_env_pack_when_configured(
+    tmp_path: Path,
+) -> None:
     # config.scenario.source == "env-pack" selects the staged pack (default
     # selection, no explicit --scenario-path override).
     from aptl.backends.raes import resolve_scenario_bundle
@@ -160,7 +197,9 @@ def test_staging_excludes_installer_bytecode_from_the_pack(tmp_path: Path) -> No
     # byte-compiled in place exactly as pip would on install.
     installed = Path(
         str(
-            __import__("importlib.resources", fromlist=["files"]).files("raes_env_packs")
+            __import__("importlib.resources", fromlist=["files"]).files(
+                "raes_env_packs"
+            )
             / "resources"
             / "packs"
             / "techvault"

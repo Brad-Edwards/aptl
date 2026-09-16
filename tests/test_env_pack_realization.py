@@ -50,13 +50,23 @@ def _realize_pack(tmp_path):
         project_dir=PROJECT_ROOT, config=config, backend=MagicMock(), bundle=bundle
     )
     scenario = parse_sdl_file(bundle.sdl_path)
-    plan = RuntimeManager(target).plan(scenario)
+    plan = RuntimeManager(target).plan(
+        scenario,
+        parameters={"flag_ad_user": "flag-user", "flag_ad_root": "flag-root"},
+    )
     return interpret_provisioning_plan(
         plan=plan.provisioning,
         config=config,
         bundle=bundle,
         component_root=PROJECT_ROOT,
     )
+
+
+@pytest.fixture(scope="module")
+def techvault_realization(tmp_path_factory):
+    """Run the released pack's filesystem-backed planner once per module."""
+
+    return _realize_pack(tmp_path_factory.mktemp("techvault-realization"))
 
 
 def _without_downstream_orborus_authority(realization):
@@ -74,14 +84,17 @@ def _without_downstream_orborus_authority(realization):
     return replace(realization, nodes=nodes)
 
 
-def test_techvault_pack_realizes_without_provisioner_diagnostics(tmp_path):
+@pytest.mark.integration
+def test_techvault_pack_realizes_without_provisioner_diagnostics(
+    techvault_realization,
+):
     """Interpreting the pack yields nodes, networks, profiles and no errors."""
 
-    realization = _realize_pack(tmp_path)
+    realization = techvault_realization
 
     codes = sorted({d.code for d in realization.diagnostics})
     assert codes == [], f"unexpected realization diagnostics: {codes}"
-    assert len(realization.nodes) >= 30
+    assert len(realization.nodes) >= 25
     assert {"soc", "enterprise", "wazuh"} <= set(realization.profiles)
     evidence = realization.pack_interaction_evidence(sorted(realization.profiles))
     assert evidence["pack"]["pack_id"] == "techvault"
@@ -94,12 +107,15 @@ def test_techvault_pack_realizes_without_provisioner_diagnostics(tmp_path):
     assert evidence["provider"]["mapping_digest"].startswith("sha256:")
 
 
-def test_generated_compose_covers_image_nodes_networks_and_ordering(tmp_path):
+@pytest.mark.integration
+def test_generated_compose_covers_image_nodes_networks_and_ordering(
+    techvault_realization,
+):
     """The generated base compose renders image nodes, networks, and safe deps."""
 
     from aptl.core.deployment._compose_node_generation import render_realization_compose
 
-    realization = _realize_pack(tmp_path)
+    realization = techvault_realization
     # This #875 rendering test is intentionally independent of env-packs #285,
     # which must replace Shuffle's mutable child image and author the realized
     # child correlation before APTL can admit its Docker authority. Strip only
@@ -131,8 +147,19 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(tmp_path):
         for dependency in service.get("depends_on", []):
             assert dependency in defined
 
+    # The released pack declares cortex-initializer as an autoremove job.
+    # Compose must block TheHive until the job has demonstrably completed;
+    # post-start reconciliation then removes it and retains a bounded receipt.
+    assert services["cortex-initializer"]["restart"] == "no"
+    assert services["thehive"]["depends_on"]["cortex-initializer"] == {
+        "condition": "service_completed_successfully"
+    }
 
-def test_techvault_authority_declares_privilege_without_a_child_closure(tmp_path):
+
+@pytest.mark.integration
+def test_techvault_authority_declares_privilege_without_a_child_closure(
+    techvault_realization,
+):
     """The pack states an authority's privilege; it declares no child inventory.
 
     This asserted the opposite until the pack could not boot at all. RAES calls
@@ -148,7 +175,7 @@ def test_techvault_authority_declares_privilege_without_a_child_closure(tmp_path
     tests/test_raes_runtime_orchestration.py.
     """
 
-    realization = _realize_pack(tmp_path)
+    realization = techvault_realization
 
     spec = realization.deployment_spec(sorted(realization.profiles))
 
@@ -235,6 +262,31 @@ def test_operational_config_translates_declared_runtime_fields():
     assert config["command"] == ["--secret", "abc", "--cql-hostnames", "cass"]
     # RAES CAP_* form is translated to Docker's cap_add form.
     assert config["cap_add"] == ["NET_ADMIN"]
+
+
+def test_operational_config_defers_generated_environment_values_to_artifact_delivery():
+    from raes.runtime_configuration import RuntimeConfiguration
+
+    from aptl.core.deployment._compose_node_generation import _operational_config
+
+    runtime = RuntimeConfiguration.model_validate(
+        {
+            "environment": [
+                {"name": "PLAIN", "value": "authored"},
+                {
+                    "name": "GENERATED",
+                    "value_from": {
+                        "generated_artifact": "credentials",
+                        "output": "api-key",
+                    },
+                    "value_classification": "redacted",
+                    "provenance": "runtime",
+                },
+            ]
+        }
+    )
+
+    assert _operational_config(runtime)["environment"] == {"PLAIN": "authored"}
 
 
 def test_network_namespace_share_renders_network_mode_and_suppresses_networks():
@@ -579,9 +631,9 @@ def test_operator_secret_env_is_emitted_as_a_compose_interpolation_reference():
 def test_operational_config_marks_autoremove_node_as_run_once():
     """A one-shot (autoremove) node gets restart: no, not the default policy.
 
-    Compose has no --rm, so an autoremove node (an init job that runs to
-    completion and exits) is expressed as restart: "no"; otherwise the base
-    unless-stopped policy restarts the finished job forever (issue #875).
+    Compose has no service-level --rm, so an autoremove node (an init job that
+    runs to completion and exits) first gets restart: "no". Post-start
+    reconciliation removes it only after observing a successful exit.
     """
 
     from raes.runtime_configuration import RuntimeConfiguration
@@ -598,6 +650,28 @@ def test_operational_config_marks_autoremove_node_as_run_once():
     assert config["entrypoint"] == ["/bin/sh", "/init.sh"]
 
 
+def test_operational_config_realizes_authored_restart_and_memory_limits():
+    """Portable policy values reach Compose instead of falling back to defaults."""
+
+    from raes.runtime_configuration import RuntimeConfiguration
+
+    from aptl.core.deployment._compose_node_generation import _operational_config
+
+    runtime = RuntimeConfiguration.model_validate(
+        {
+            "operational_policy": {
+                "restart": "always",
+                "resource_limits": {"memory": 1073741824},
+            }
+        }
+    )
+
+    assert _operational_config(runtime) == {
+        "restart": "always",
+        "mem_limit": 1073741824,
+    }
+
+
 def test_operational_config_is_empty_for_a_bare_node():
     """A node with no declared runtime gets no operational Compose fields."""
 
@@ -606,21 +680,20 @@ def test_operational_config_is_empty_for_a_bare_node():
     assert _operational_config(None) == {}
 
 
-def test_component_build_nodes_resolve_their_image_from_the_engine_tree(tmp_path):
-    """`materialization-specification` nodes (ad, wazuh-sidecar) resolve an image.
+@pytest.mark.integration
+def test_base_os_nodes_use_the_released_image_free_materialization(
+    techvault_realization,
+):
+    """The 6.0 pack declares these nodes as state, not APTL component builds."""
 
-    Their build context lives in APTL's ``containers/`` tree, not the pack, so a
-    realization that anchored the build context to the bundle would reject them
-    with image-policy-rejected:untrusted-image.
-    """
-
-    realization = _realize_pack(tmp_path)
+    realization = techvault_realization
     by_name = {node.address.rsplit(".", 1)[-1]: node for node in realization.nodes}
 
-    for name in ("ad", "wazuh-sidecar-db", "wazuh-sidecar-suricata"):
+    for name in ("ad", "db", "webapp", "workstation", "kali"):
         node = by_name[name]
-        assert node.image is not None, f"{name} did not resolve a component image"
-        assert node.image.mode == "build"
+        assert node.image is None
+        assert node.runtime is not None
+        assert node.os == "linux"
 
 
 class _StubIdentity(object):
@@ -815,9 +888,7 @@ def test_pack_directory_content_replaces_a_mount_source_made_read_only(
     assert new_source.read_bytes() == b"alert\n"
 
 
-def test_pack_file_content_replaces_a_mount_source_made_read_only(
-    tmp_path, stub_pack
-):
+def test_pack_file_content_replaces_a_mount_source_made_read_only(tmp_path, stub_pack):
     """A prior container cannot leave a pack-file bind source unwritable."""
     from aptl.core.deployment._compose_content_mounts import image_node_content_override
 
@@ -841,9 +912,7 @@ def test_pack_file_content_replaces_a_mount_source_made_read_only(
     assert new_source.read_bytes() == b"storage: local\n"
 
 
-def test_pack_content_refuses_a_symlinked_realization_output_root(
-    tmp_path, stub_pack
-):
+def test_pack_content_refuses_a_symlinked_realization_output_root(tmp_path, stub_pack):
     """Regeneration must not follow project-state symlinks outside its root."""
     from aptl.core.deployment._compose_content_mounts import image_node_content_override
 

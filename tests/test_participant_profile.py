@@ -70,7 +70,6 @@ def test_guided_profile_resolves_existing_content_derived_surface() -> None:
         "kali",
         "victim",
         "wazuh",
-        "otel",
     }
     assert "wazuh.manager" in profile.expected_matrix.expected_services
     assert "kali" in profile.expected_matrix.expected_services
@@ -91,9 +90,6 @@ def test_guided_profile_resolves_existing_content_derived_surface() -> None:
         "image-wazuh-manager",
         "image-wazuh-indexer",
         "image-wazuh-dashboard",
-        "image-otel-collector",
-        "image-tempo",
-        "image-grafana",
     } <= locked_ids
     assert {
         service

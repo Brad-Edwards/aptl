@@ -1,0 +1,95 @@
+# Backend apparatus, never a scenario service set. Config binds are anchored
+# to the trusted engine root when composing an external scenario bundle.
+services:
+  aptl-otel-collector:
+    profiles: [otel]
+    container_name: aptl-otel-collector
+    image: otel/opentelemetry-collector-contrib:0.123.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${APTL_HP_APTL_OTEL_COLLECTOR_4317:-4317}:4317"
+      - "127.0.0.1:${APTL_HP_APTL_OTEL_COLLECTOR_4318:-4318}:4318"
+    volumes:
+      - type: bind
+        source: ./config/otel/otel-collector-config.yaml
+        target: /etc/otelcol-contrib/config.yaml
+        read_only: true
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "validate", "--config", "/etc/otelcol-contrib/config.yaml"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks: [aptl-observability]
+    depends_on: [aptl-tempo]
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "2"}
+
+  aptl-tempo:
+    profiles: [otel]
+    container_name: aptl-tempo
+    image: grafana/tempo:2.7.2
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    ports:
+      - "127.0.0.1:${APTL_HP_APTL_TEMPO_3200:-3200}:3200"
+    volumes:
+      - type: bind
+        source: ./config/otel/tempo-config.yaml
+        target: /etc/tempo/tempo.yaml
+        read_only: true
+      - type: volume
+        source: tempo_data
+        target: /var/tempo
+    networks: [aptl-observability]
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "2"}
+
+  aptl-grafana-otel:
+    profiles: [otel]
+    container_name: aptl-grafana-otel
+    image: grafana/grafana:11.6.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${APTL_HP_APTL_GRAFANA_OTEL_3000:-3100}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:?Grafana credential required}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - type: bind
+        source: ./config/otel/grafana-datasources.yaml
+        target: /etc/grafana/provisioning/datasources/tempo.yaml
+        read_only: true
+      - type: volume
+        source: grafana_otel_data
+        target: /var/lib/grafana
+    networks: [aptl-observability]
+    depends_on: [aptl-tempo]
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "2"}
+
+networks:
+  aptl-observability:
+    internal: true
+
+volumes:
+  tempo_data:
+  grafana_otel_data:

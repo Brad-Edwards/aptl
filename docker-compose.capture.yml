@@ -1,0 +1,45 @@
+# Backend-owned capture apparatus. Composed only when the admitted capture
+# plan requires complete Kali interactive-session custody.
+services:
+  kali-capture:
+    profiles: ["kali"]
+    build:
+      context: .
+      dockerfile: containers/kali-capture/Dockerfile
+    container_name: aptl-kali-capture
+    restart: unless-stopped
+    init: true
+    network_mode: "container:aptl-kali"
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    volumes:
+      - type: volume
+        source: kali_captures
+        target: /var/log/aptl/captures
+      - type: bind
+        source: generated:kali-pivot-private-key
+        target: /run/aptl-source/inner_key
+        read_only: true
+      - type: bind
+        source: generated:kali-authorized-keys
+        target: /run/aptl-source/outer_authorized_keys
+        read_only: true
+    cap_drop: [ALL]
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+      - SYS_CHROOT
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+volumes:
+  kali_captures:

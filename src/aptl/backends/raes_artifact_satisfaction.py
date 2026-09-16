@@ -45,6 +45,7 @@ from aptl.backends.raes_artifact_mechanisms import (
     select_route_over_mechanisms,
 )
 from aptl.backends.raes_substrate import realized_substrate_identity
+from aptl.core.deployment.observation import DeploymentObservationContext
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -194,7 +195,9 @@ def authored_source_requirement(source: object) -> ArtifactRequirement | None:
 
     from raes.artifact_requirements import ArtifactRequirement as _Requirement
 
-    authored = source.get("artifact_requirement") if isinstance(source, Mapping) else None
+    authored = (
+        source.get("artifact_requirement") if isinstance(source, Mapping) else None
+    )
     if authored is None:
         return None
     try:
@@ -223,6 +226,7 @@ def satisfactions_for_plan(
     manifest: BackendManifest,
     *,
     requirement_kind: str,
+    observation_context: DeploymentObservationContext | None = None,
 ) -> dict[str, dict[str, object]]:
     """Return the ``artifact_satisfaction`` payload for each realized address.
 
@@ -235,43 +239,67 @@ def satisfactions_for_plan(
 
     disclosures: dict[str, dict[str, object]] = {}
     for address, resource in getattr(plan, "resources", {}).items():
-        if getattr(resource, "resource_type", None) != "node":
-            continue
-        node_payload = getattr(resource, "payload", None)
-        contract = _authored_requirement(node_payload)
-        container = container_names.get(address)
-        if contract is None or not container:
-            continue
-        route = select_route(contract, manifest, requirement_kind=requirement_kind)
-        if route is None:
-            continue
-        # A dynamic-composition node's realized substrate is read back in the
-        # config-id domain (matching the availability facts); every other route
-        # reads the backing image's manifest digest.
-        if route_is_dynamic_composition(route):
-            realized = backend.container_image_config_id(container)
-        else:
-            realized = backend.container_image_digest(container)
-        if not realized:
-            continue
-        payload = satisfaction_payload(
-            contract,
+        payload = _resource_satisfaction(
+            resource,
+            container_names.get(address),
+            backend,
             manifest,
             requirement_kind=requirement_kind,
-            realized_digest=realized,
-            # The substrate identity is built from the digest the container is
-            # ACTUALLY running (``realized``), never by re-resolving the mutable
-            # tag: the realized container is the substrate, so the tag being moved
-            # or removed after a correct start can no longer produce a false
-            # mismatch (issue #876 cycle-5 review). The gate still checks this
-            # digest against the availability-verified set.
-            resolve_substrate=lambda node_payload=node_payload, realized=realized: (
-                _realized_node_substrate(node_payload, realized)
-            ),
+            observation_context=observation_context,
         )
         if payload is not None:
             disclosures[address] = payload
     return disclosures
+
+
+def _resource_satisfaction(
+    resource: object,
+    container: str | None,
+    backend: object,
+    manifest: BackendManifest,
+    *,
+    requirement_kind: str,
+    observation_context: DeploymentObservationContext | None,
+) -> dict[str, object] | None:
+    """Build one node disclosure only from complete admitted and realized facts."""
+
+    result = None
+    node_payload = getattr(resource, "payload", None)
+    contract = _authored_requirement(node_payload)
+    if getattr(resource, "resource_type", None) == "node" and contract and container:
+        route = select_route(contract, manifest, requirement_kind=requirement_kind)
+        if route is not None:
+            realized = _realized_digest(backend, container, route, observation_context)
+            if realized:
+                result = satisfaction_payload(
+                    contract,
+                    manifest,
+                    requirement_kind=requirement_kind,
+                    realized_digest=realized,
+                    resolve_substrate=lambda: _realized_node_substrate(
+                        node_payload, realized
+                    ),
+                )
+    return result
+
+
+def _realized_digest(
+    backend: object,
+    container: str,
+    route: ArtifactSatisfactionRoute,
+    observation_context: DeploymentObservationContext | None,
+) -> str | None:
+    """Read the route's exact realized image identity with completed fallback."""
+
+    if route_is_dynamic_composition(route):
+        realized = backend.container_image_config_id(container)
+        if realized is None and observation_context is not None:
+            realized = observation_context.completed_image_config_id(container)
+    else:
+        realized = backend.container_image_digest(container)
+        if realized is None and observation_context is not None:
+            realized = observation_context.completed_image_digest(container)
+    return realized
 
 
 def _materialized_payload(

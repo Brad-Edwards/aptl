@@ -36,20 +36,29 @@ roots").
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 
-from raes_backend_protocols.capabilities import ObservationCapabilities
-from raes_contracts.contracts import ExperimentCaptureRequirementModel, ExperimentCaptureSpecModel
+from raes_backend_protocols.capabilities import (
+    ObservationCapabilities,
+    ObservationCaptureOffer,
+)
+from raes_contracts.contracts import (
+    ExperimentCaptureRequirementModel,
+    ExperimentCaptureSpecModel,
+)
 
+from aptl.core.experiment._capture_matching import (
+    registration_covers,
+    window_kinds_by_ref,
+)
 from aptl.core.experiment.trial_plan import compute_source_set_digest
 
 #: Versioned identity of the registry declaration shape itself. A change to
 #: the fields a registration declares, or to how the observation projection or
 #: binding is computed, bumps this so a persisted plan records which registry
 #: shape admitted it.
-REGISTRY_SCHEMA_VERSION = "aptl-collector-registry/v1"
+REGISTRY_SCHEMA_VERSION = "aptl-collector-registry/v2"
 
 #: Fixed ``ObservationCapabilities.name`` for APTL's aggregate declaration.
 _OBSERVATION_NAME = "aptl-observation"
@@ -169,6 +178,9 @@ class CollectorRegistration:
     supports_loss_disclosure: bool
     visibility_class: CaptureVisibility
     limits: CaptureLimits
+    redaction_policies: frozenset[str] = frozenset()
+    retention_policies: frozenset[str] = frozenset()
+    capture_offer: ObservationCaptureOffer | None = None
 
     def __post_init__(self) -> None:
         """Validate the registration ID is a safe non-executable slug at construction."""
@@ -198,11 +210,18 @@ class CollectorRegistration:
             "sealing_modes": sorted(self.sealing_modes),
             "supports_chain_of_custody": self.supports_chain_of_custody,
             "supports_retention": self.supports_retention,
+            "redaction_policies": sorted(self.redaction_policies),
+            "retention_policies": sorted(self.retention_policies),
             "supports_loss_disclosure": self.supports_loss_disclosure,
             "visibility_class": self.visibility_class.value,
             "max_bytes": self.limits.max_bytes,
             "max_artifact_count": self.limits.max_artifact_count,
             "max_duration_s": self.limits.max_duration_s,
+            "capture_offer": (
+                self.capture_offer.to_payload()
+                if self.capture_offer is not None
+                else None
+            ),
         }
 
     def effective_config_digest(self) -> str:
@@ -253,6 +272,8 @@ class CaptureBinding:
     limits: CaptureLimits
     accepted_limitation: str | None = None
     comparability_disclosure_ref: str | None = None
+    redaction_policy: str | None = None
+    output_contract: str = "experiment-evidence-record-v1"
 
     def binding_projection(self) -> dict[str, object]:
         """Return the canonical-JSON-ready projection pinned into the trial plan.
@@ -279,10 +300,12 @@ class CaptureBinding:
             "channel_kind": self.channel_kind,
             "capture_kind": self.capture_kind,
             "capture_scope": self.capture_scope,
+            "output_contract": self.output_contract,
             "expected_media_types": sorted(self.expected_media_types),
             "required_artifact_roles": sorted(self.required_artifact_roles),
             "sensitivity": self.sensitivity,
             "redaction_required": self.redaction_required,
+            "redaction_policy": self.redaction_policy,
             "integrity_requirements": sorted(self.integrity_requirements),
             "retention_policy": self.retention_policy,
             "loss_disclosure_required": self.loss_disclosure_required,
@@ -293,63 +316,6 @@ class CaptureBinding:
             "accepted_limitation": self.accepted_limitation,
             "comparability_disclosure_ref": self.comparability_disclosure_ref,
         }
-
-
-def _window_kinds_by_ref(spec: ExperimentCaptureSpecModel) -> Mapping[str, str]:
-    """Return a map from each capture-window ID to its window kind for spec."""
-    return {window.window_id: window.window_kind for window in spec.capture_windows}
-
-
-def _windows_supported(
-    window_refs: Sequence[str],
-    window_kinds_by_ref: Mapping[str, str],
-    supported_window_kinds: frozenset[str],
-) -> bool:
-    """Return whether every referenced window resolves to a supported window kind.
-
-    A window ref that does not resolve to a declared spec window is treated as
-    unsupported (fail closed) rather than skipped.
-    """
-    for window_ref in window_refs:
-        kind = window_kinds_by_ref.get(window_ref)
-        if kind is None or kind not in supported_window_kinds:
-            return False
-    return True
-
-
-def _registration_covers(
-    registration: CollectorRegistration,
-    requirement: ExperimentCaptureRequirementModel,
-    *,
-    contract_version: str,
-    window_kinds_by_ref: Mapping[str, str],
-) -> bool:
-    """Return whether registration deterministically covers requirement on every axis.
-
-    Every authored requirement axis is checked (preflight "Registry/policy
-    validation"): contract version, capture kind/scope, window semantics, media
-    types, artifact roles, sensitivity, integrity, redaction, retention, and
-    loss disclosure. Subset axes require the requirement to be a SUBSET of what
-    the registration declares — a requirement asking for more than a
-    registration covers is not matched by it. The author's ``channel_ref`` is
-    NOT a match axis: it names an author-defined measurement channel APTL
-    cannot pre-enumerate; it is recorded on the binding for traceability
-    instead. Collected as one boolean list so this stays a single return.
-    """
-    checks = (
-        registration.contract_version == contract_version,
-        registration.capture_kind == requirement.capture_kind,
-        registration.capture_scope == requirement.capture_scope,
-        _windows_supported(requirement.window_refs, window_kinds_by_ref, registration.window_kinds),
-        frozenset(requirement.expected_media_types) <= registration.media_types,
-        frozenset(requirement.required_artifact_roles) <= registration.required_artifact_roles,
-        requirement.sensitivity in registration.supported_sensitivities,
-        frozenset(requirement.integrity_requirements) <= registration.integrity_modes,
-        registration.supports_redaction or requirement.redaction_policy is None,
-        registration.supports_retention or requirement.retention_policy is None,
-        registration.supports_loss_disclosure or not requirement.loss_disclosure_required,
-    )
-    return all(checks)
 
 
 @dataclass(frozen=True)
@@ -372,7 +338,12 @@ class CollectorRegistry:
 
     def _ordered(self) -> tuple[CollectorRegistration, ...]:
         """Return registrations in a deterministic (ID-sorted) order for selection."""
-        return tuple(sorted(self.registrations, key=lambda registration: registration.registration_id))
+        return tuple(
+            sorted(
+                self.registrations,
+                key=lambda registration: registration.registration_id,
+            )
+        )
 
     def match(
         self,
@@ -387,15 +358,28 @@ class CollectorRegistry:
         no trusted registration covers the requirement — the caller rejects
         admission; it is never a silent skip.
         """
-        window_kinds_by_ref = _window_kinds_by_ref(spec)
+        kinds_by_ref = window_kinds_by_ref(spec)
         for registration in self._ordered():
-            if _registration_covers(
+            if registration_covers(
                 registration,
                 requirement,
                 contract_version=spec.schema_version,
-                window_kinds_by_ref=window_kinds_by_ref,
+                kinds_by_ref=kinds_by_ref,
             ):
                 return _bind(spec, requirement, registration)
+        return None
+
+    def match_demand(self, demand: object) -> CollectorRegistration | None:
+        """Return the one exact registration admitted by RAES for a demand."""
+
+        from raes_processor.capture_admission import capture_admission_diagnostics
+
+        for registration in self._ordered():
+            if registration.capture_offer is None:
+                continue
+            candidate = CollectorRegistry((registration,)).observation_projection()
+            if not capture_admission_diagnostics((demand,), candidate):
+                return registration
         return None
 
     def observation_projection(self) -> ObservationCapabilities | None:
@@ -412,14 +396,31 @@ class CollectorRegistry:
             return None
         return ObservationCapabilities(
             name=_OBSERVATION_NAME,
-            supported_capture_kinds=frozenset(r.capture_kind for r in self.registrations),
-            supported_channel_kinds=frozenset(r.channel_kind for r in self.registrations),
+            supported_capture_kinds=frozenset(
+                r.capture_kind for r in self.registrations
+            ),
+            supported_channel_kinds=frozenset(
+                r.channel_kind for r in self.registrations
+            ),
             supported_evidence_contracts=OBSERVATION_EVIDENCE_CONTRACTS,
-            supported_media_types=frozenset().union(*(r.media_types for r in self.registrations)),
-            supported_sealing_modes=frozenset().union(*(r.sealing_modes for r in self.registrations)),
+            supported_media_types=frozenset().union(
+                *(r.media_types for r in self.registrations)
+            ),
+            supported_sealing_modes=frozenset().union(
+                *(r.sealing_modes for r in self.registrations)
+            ),
             supports_redaction=any(r.supports_redaction for r in self.registrations),
-            supports_loss_disclosure=any(r.supports_loss_disclosure for r in self.registrations),
-            supports_chain_of_custody=any(r.supports_chain_of_custody for r in self.registrations),
+            supports_loss_disclosure=any(
+                r.supports_loss_disclosure for r in self.registrations
+            ),
+            supports_chain_of_custody=any(
+                r.supports_chain_of_custody for r in self.registrations
+            ),
+            capture_offers=tuple(
+                registration.capture_offer
+                for registration in self._ordered()
+                if registration.capture_offer is not None
+            ),
         )
 
 
@@ -442,10 +443,12 @@ def _bind(
         channel_kind=registration.channel_kind,
         capture_kind=requirement.capture_kind,
         capture_scope=requirement.capture_scope,
+        output_contract=requirement.output_contract,
         expected_media_types=tuple(requirement.expected_media_types),
         required_artifact_roles=tuple(requirement.required_artifact_roles),
         sensitivity=requirement.sensitivity,
         redaction_required=requirement.redaction_policy is not None,
+        redaction_policy=requirement.redaction_policy,
         integrity_requirements=tuple(requirement.integrity_requirements),
         retention_policy=requirement.retention_policy,
         loss_disclosure_required=requirement.loss_disclosure_required,

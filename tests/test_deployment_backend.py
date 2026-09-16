@@ -126,6 +126,25 @@ class TestRunRaisesBackendTimeoutError:
                 backend._run_streaming(["docker", "logs", "x"], timeout=5)
 
 
+def test_container_file_read_rejects_symlink_created_by_docker_cp(
+    tmp_path, monkeypatch
+):
+    backend = DockerComposeBackend(project_dir=tmp_path)
+    host_file = tmp_path / "host-controlled"
+    host_file.write_bytes(b"must-not-be-read")
+
+    def fake_run(argv, **_kwargs):
+        Path(argv[-1]).symlink_to(host_file)
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(backend, "_run", fake_run)
+
+    assert (
+        backend.container_file_read("untrusted-container", "/payload", max_bytes=64)
+        is None
+    )
+
+
 # ---------------------------------------------------------------------------
 # DeploymentConfig model tests
 # ---------------------------------------------------------------------------
@@ -1475,7 +1494,9 @@ services:
         assert any(
             "label=com.docker.compose.project=test" in command for command in commands
         )
-        assert any("label=aptl.lifecycle.project=test" in command for command in commands)
+        assert any(
+            "label=aptl.lifecycle.project=test" in command for command in commands
+        )
         assert all(command[:3] == ["docker", "ps", "-a"] for command in commands)
         assert all(
             entry.kwargs["cwd"] == tmp_path / "aptl-workshop-main.h9Jare"
@@ -1583,7 +1604,9 @@ services:
     def test_status_fails_closed_when_project_inventory_times_out(self, tmp_path):
         backend = self._make_backend(tmp_path)
 
-        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("docker", 90)):
+        with patch(
+            "subprocess.run", side_effect=subprocess.TimeoutExpired("docker", 90)
+        ):
             status = backend.status()
 
         assert status.running is False
@@ -2009,7 +2032,9 @@ class TestDockerComposeBackendContainerInteraction:
         assert any(
             "label=com.docker.compose.project=test" in command for command in commands
         )
-        assert any("label=aptl.lifecycle.project=test" in command for command in commands)
+        assert any(
+            "label=aptl.lifecycle.project=test" in command for command in commands
+        )
         # Bounded execution: a stalled daemon must not hang snapshot capture.
         assert all(entry.kwargs["timeout"] == 90 for entry in mock_run.call_args_list)
         assert len(rows) == 1
@@ -2143,6 +2168,20 @@ class TestDockerComposeBackendContainerInteraction:
         assert interactive_cmd[:3] == ["docker", "exec", "-it"]
         assert interactive_cmd[-1] == "/bin/bash"
         assert "capture_output" not in mock_run.call_args_list[1][1]
+
+    def test_container_shell_refuses_direct_kali_tty_during_admitted_capture(
+        self, tmp_path
+    ):
+        backend = self._make_backend(tmp_path)
+        authority_dir = tmp_path / ".aptl/capture-authorities"
+        authority_dir.mkdir(parents=True)
+        (authority_dir / "run-1.json").write_text("{}")
+
+        with patch("subprocess.run") as mock_run:
+            rc = backend.container_shell("aptl-kali", shell="/bin/bash")
+
+        assert rc != 0
+        mock_run.assert_not_called()
 
     def test_container_shell_probe_falls_back_to_sh_on_127(self, tmp_path):
         backend = self._make_backend(tmp_path)

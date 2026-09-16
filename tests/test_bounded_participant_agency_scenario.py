@@ -11,7 +11,6 @@ from unittest.mock import MagicMock
 import pytest
 from raes import parse_sdl_file
 from raes.instantiate import instantiate_scenario
-from raes_backend_protocols.participant_runtime_base import BaseParticipantRuntime
 from raes_processor.compiler import compile_runtime_model
 from raes_contracts.runtime_state import OperationState
 from raes_runtime.control_plane import RuntimeControlPlane
@@ -20,7 +19,6 @@ from aptl.backends.raes import admit_raes_scenario, create_aptl_runtime_target
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.backends.raes_participant_actions import PARTICIPANT_ACTION_ADDRESS
 from aptl.backends.raes_runtime_model_artifact import compiled_runtime_model_bytes
-from aptl.backends.raes_participant_runtime import AptlParticipantRuntime
 from aptl.backends.raes_participant_realizations import (
     BPA_ACTION_REALIZATIONS,
     ParticipantRealizationReadinessError,
@@ -31,8 +29,8 @@ from aptl.core.scenario_bundle import ScenarioBundle, project_tree_bundle
 
 PROJECT_ROOT = Path(__file__).parents[1]
 SCENARIO = PROJECT_ROOT / "scenarios/bounded-participant-agency-techvault.sdl.yaml"
-SOURCE_SHA256 = "9683f2539bdefbd99635924d2a6fce27b144e12f382cd74d2f3e10d10ecb7616"
-COMPILED_SHA256 = "7a29b45d3949ccf083ea048261421096ab81d94b4524a3ac37426a8ed09998f7"
+SOURCE_SHA256 = "ba2a19ed242a4dbc552bf0980b8eed41cbb70e27c547eb66ae2fe7677c394e84"
+COMPILED_SHA256 = "b075847a79e1419b762725679d5376c6a8e7655d9cb414c83c2cdddec416383e"
 
 
 def _bundle() -> ScenarioBundle:
@@ -118,11 +116,9 @@ def test_selected_scenario_has_no_blocking_backend_diagnostics() -> None:
     assert containers["event-store"] == "aptl-event-store"
 
 
-def test_aptl_runtime_uses_raes_owned_participant_lifecycle() -> None:
-    assert issubclass(AptlParticipantRuntime, BaseParticipantRuntime)
+def test_backend_manifest_declares_supported_research_roles_and_features() -> None:
+    """Pin the advertised capability literal; lifecycle enforcement is tested elsewhere."""
 
-
-def test_backend_manifest_truthfully_declares_the_research_surface() -> None:
     target = create_aptl_runtime_target(
         project_dir=PROJECT_ROOT,
         config=AptlConfig(lab={"name": "test"}),

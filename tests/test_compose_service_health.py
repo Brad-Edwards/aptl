@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from aptl.core.deployment._compose_service_health import (
+    container_completed_successfully,
     container_health,
     container_running,
     container_settled,
@@ -18,7 +19,15 @@ from aptl.core.deployment._compose_service_health import (
 )
 
 
-def _info(running=True, health=None, platform="linux", *, status=None, exit_code=0, restart="unless-stopped"):
+def _info(
+    running=True,
+    health=None,
+    platform="linux",
+    *,
+    status=None,
+    exit_code=0,
+    restart="unless-stopped",
+):
     state = {"Running": running}
     if status is not None:
         state["Status"] = status
@@ -49,7 +58,12 @@ def test_container_health(info, expected):
 
 @pytest.mark.parametrize(
     "info,expected",
-    [({}, False), ({"State": "nope"}, False), (_info(running=False), False), (_info(), True)],
+    [
+        ({}, False),
+        ({"State": "nope"}, False),
+        (_info(running=False), False),
+        (_info(), True),
+    ],
 )
 def test_container_running(info, expected):
     assert container_running(info) is expected
@@ -70,10 +84,26 @@ def test_container_settled(info, expected):
     assert container_settled(info) is expected
 
 
+@pytest.mark.parametrize(
+    "info,expected",
+    [
+        (_info(running=False, status="exited", exit_code=0, restart="no"), True),
+        (_info(running=False, status="exited", exit_code=1, restart="no"), False),
+        (_info(running=True, status="running", restart="no"), False),
+        (_info(running=False, status="dead", exit_code=0, restart="no"), False),
+        ({}, False),
+    ],
+)
+def test_container_completed_successfully(info, expected):
+    assert container_completed_successfully(info) is expected
+
+
 class _FakeBackend:
     def __init__(self, states):
         # states: {name: info dict or list of info dicts polled in order}
-        self._states = {k: (v if isinstance(v, list) else [v]) for k, v in states.items()}
+        self._states = {
+            k: (v if isinstance(v, list) else [v]) for k, v in states.items()
+        }
         self._calls = {k: 0 for k in states}
 
     def container_inspect(self, name):
@@ -94,7 +124,9 @@ def test_unhealthy_container_reasons_enumerates_each_failure():
             # aptl-d absent -> never created
         }
     )
-    reasons = unhealthy_container_reasons(backend, ["aptl-a", "aptl-b", "aptl-c", "aptl-d"])
+    reasons = unhealthy_container_reasons(
+        backend, ["aptl-a", "aptl-b", "aptl-c", "aptl-d"]
+    )
     joined = " ".join(reasons)
     assert "aptl-a" not in joined
     assert "not running" in joined
@@ -118,9 +150,7 @@ def test_wait_fails_fast_on_missing_container():
             calls["n"] += 1
 
     sleep = _Sleep()
-    reasons = wait_for_realized_health(
-        _FakeBackend({}), ["aptl-missing"], sleep=sleep
-    )
+    reasons = wait_for_realized_health(_FakeBackend({}), ["aptl-missing"], sleep=sleep)
     assert reasons == ["container 'aptl-missing' was never created"]
     assert calls["n"] == 0  # never entered the poll loop
 
@@ -128,6 +158,56 @@ def test_wait_fails_fast_on_missing_container():
 def test_wait_returns_empty_once_all_settle():
     backend = _FakeBackend({"aptl-a": _info(health="healthy"), "aptl-b": _info()})
     assert wait_for_realized_health(backend, ["aptl-a", "aptl-b"]) == []
+
+
+def test_wait_requires_declared_one_shot_to_exit_zero():
+    backend = _FakeBackend(
+        {
+            "aptl-api": _info(health="healthy"),
+            "aptl-init": [
+                _info(running=True, status="running", restart="no"),
+                _info(running=True, status="running", restart="no"),
+                _info(running=False, status="exited", exit_code=0, restart="no"),
+            ],
+        }
+    )
+
+    reasons = wait_for_realized_health(
+        backend,
+        ["aptl-api"],
+        completed_container_names=["aptl-init"],
+        timeout=10,
+        interval=1,
+        time_source=iter([0.0, 1.0, 2.0, 3.0]).__next__,
+        sleep=lambda _: None,
+    )
+
+    assert reasons == []
+
+
+def test_wait_rejects_declared_one_shot_nonzero_exit():
+    backend = _FakeBackend(
+        {
+            "aptl-init": _info(
+                running=False,
+                status="exited",
+                exit_code=23,
+                restart="no",
+            )
+        }
+    )
+
+    reasons = wait_for_realized_health(
+        backend,
+        [],
+        completed_container_names=["aptl-init"],
+        timeout=0,
+        interval=1,
+        time_source=iter([0.0, 1.0]).__next__,
+        sleep=lambda _: None,
+    )
+
+    assert reasons == ["container 'aptl-init' exited with code 23"]
 
 
 def test_wait_times_out_with_reasons_when_never_healthy():
@@ -162,6 +242,7 @@ def test_an_exited_container_is_never_settled():
 
 def test_unhealthy_reasons_reports_a_stopped_container():
     """A stopped container is always reported as a health failure reason."""
+
     class _Backend:
         def container_inspect(self, name):
             if name == "aptl-stopped":

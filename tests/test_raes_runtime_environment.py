@@ -149,10 +149,25 @@ def test_restored_named_volumes_are_lowered(scenario_path):
     assert ("webapp_logs", "/var/log/gunicorn") in lowered["webapp"]
     assert ("kali_operations", "/home/kali/operations") in lowered["kali"]
     assert ("fileshare_data", "/srv/shares") in lowered["fileshare"]
-    assert sum(len(v) for v in lowered.values()) == 10
+    assert sum(len(v) for v in lowered.values()) == 8
     # No raw host or project bind smuggled in alongside them.
     for mounts in lowered.values():
         assert all(not source.startswith((".", "/")) for source, _ in mounts)
+
+    persistent = {
+        name: {
+            (consumer.node, consumer.mount_destination) for consumer in volume.consumers
+        }
+        for name, volume in scenario.persistent_volumes.items()
+    }
+    assert persistent["suricata_misp_rules"] == {
+        ("suricata", "/var/lib/suricata/rules/misp"),
+        ("misp-suricata-sync", "/var/lib/suricata/rules/misp"),
+    }
+    assert persistent["suricata_command_socket"] == {
+        ("suricata", "/var/run/suricata"),
+        ("misp-suricata-sync", "/var/run/suricata"),
+    }
 
 
 def test_values_come_from_the_project_credential_boundary(tmp_path, monkeypatch):
@@ -199,7 +214,9 @@ def test_authored_defaults_are_bound(scenario_path):
     assert defaults["DB_NAME"] == "techvault"
 
 
-def test_credentials_and_operator_overrides_beat_authored_defaults(tmp_path, monkeypatch):
+def test_credentials_and_operator_overrides_beat_authored_defaults(
+    tmp_path, monkeypatch
+):
     """Precedence is operator, then project credentials, then authored default."""
 
     from aptl.backends.raes_base_substrate import BaseContainerSpec
@@ -263,7 +280,9 @@ def test_a_real_operator_secret_is_still_authored_empty(scenario_path):
     assert "MISP_API_KEY" not in sync
 
 
-def test_range_credentials_are_classified_as_fixtures_not_operator_secrets(scenario_path):
+def test_range_credentials_are_classified_as_fixtures_not_operator_secrets(
+    scenario_path,
+):
     """The classification carries the distinction, so tooling can tell them apart."""
 
     scenario = parse_sdl_file(scenario_path)

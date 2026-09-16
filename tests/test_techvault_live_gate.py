@@ -1094,7 +1094,7 @@ def test_variation_passes_on_distinct_realizations(monkeypatch):
     assert check.passed
 
 
-def test_variation_accepts_core_otel_public_start_profile(tmp_path):
+def test_variation_rejects_scenario_owned_backend_otel_component(tmp_path):
     config = AptlConfig(
         lab={"name": "techvault"},
         containers={"enterprise": True, "wazuh": False, "victim": False, "kali": False},
@@ -1108,7 +1108,8 @@ def test_variation_accepts_core_otel_public_start_profile(tmp_path):
         project_dir=tmp_path, config=config, state=state
     )
 
-    assert check.passed
+    assert not check.passed
+    assert "second variation node failed to realize" in check.diagnostics
 
 
 def test_variation_fails_on_collapse(monkeypatch):
@@ -1476,6 +1477,34 @@ def _provenance_report(status=VerificationStatus.PASSED):
             ),
         ),
     )
+
+
+def test_failed_semantic_verification_surfaces_its_exact_diagnostic():
+    from aptl.validation.scenario_verification import VerificationCheck
+
+    scenario, backend = tlg._verification_identities(
+        SCENARIO, BUNDLE, "full-remote-control-plane", "docker-compose"
+    )
+    diagnostic = "techvault.detection-missed: expected correlated alert was absent"
+    report = VerificationReport(
+        status=VerificationStatus.FAILED,
+        scenario=scenario,
+        backend=backend,
+        checks=(
+            VerificationCheck(
+                "detection-traversal",
+                VerificationStatus.FAILED,
+                diagnostic=diagnostic,
+                category=CATEGORY_EVIDENCE_CAPTURE,
+            ),
+        ),
+    )
+
+    checks = tlg._map_verification_report(report)
+
+    assert len(checks) == 1
+    assert checks[0].status is VerificationStatus.FAILED
+    assert checks[0].diagnostics == (diagnostic,)
 
 
 def test_the_returned_report_attributes_the_verdict_to_the_plugin(monkeypatch):

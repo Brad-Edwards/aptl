@@ -92,11 +92,15 @@ from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
     from docker.client import DockerClient
+    from raes_contracts.contracts import ExperimentEvidenceRecordModel
 
     from aptl.backends._raes_scenario_queries import AdmittedStartSurface
+    from aptl.backends.raes_realization_model import AptlRealization
     from aptl.backends.raes import AcesStartOutcome
     from aptl.backends.raes_start_model import AcesRunTarget, AdmittedScenarioStart
     from aptl.core.deployment.backend import DeploymentBackend
+    from aptl.core.experiment.capture_plan import CapturePlan
+    from aptl.core.experiment.capture_registry import CaptureBinding
 
 log = get_logger("lab")
 
@@ -118,6 +122,12 @@ _STALE_NETWORK_RECOVERY_HINT = (
 )
 _WAZUH_MANAGER_SERVICE = "wazuh.manager"
 _WAZUH_INDEXER_SERVICE = "wazuh.indexer"
+_TRANSCRIPT_UNAVAILABLE = "aptl.scenario-evidence.required-transcript-unavailable"
+_TRANSCRIPT_FINALIZATION_FAILED = (
+    "aptl.scenario-evidence.required-transcript-finalization-failed"
+)
+_NATIVE_CAPTURE_FAILED = "aptl.scenario-evidence.required-native-capture-failed"
+_NATIVE_EVALUATION_FAILED = "aptl.scenario-evidence.required-native-evaluation-failed"
 
 
 def _looks_like_stale_realization_network_error(error: str) -> bool:
@@ -383,9 +393,6 @@ def start_lab(
         LabResult indicating success or failure.
     """
     profiles = config.containers.enabled_profiles()
-    # OTel stack (Collector + Tempo + Grafana) is core infrastructure
-    if "otel" not in profiles:
-        profiles = [*profiles, "otel"]
 
     if backend is None:
         resolved_dir = project_dir or Path(".")
@@ -453,18 +460,57 @@ def _stop_lab_owned(
                 )
     if not profiles:
         profiles = list(ALL_KNOWN_PROFILES)
-    # OTel stack (Collector + Tempo + Grafana) is core infrastructure the
-    # start path always includes (see start_lab above) even though it is not
-    # an aptl.json container toggle; stop must tear down what start brings up
-    # or its containers stay attached to the project's networks/volumes and
-    # every later cleanup step fails with "network has active endpoints".
+    # Include backend apparatus during recovery teardown even though ordinary
+    # scenario startup omits it. A prior explicitly admitted/operator run may
+    # have created it, and teardown must remain scenario-independent.
     if "otel" not in profiles:
         profiles = [*profiles, "otel"]
 
     if backend is None:
         backend = _get_backend(search_dir, config)
 
-    return backend.stop(profiles, remove_volumes=remove_volumes)
+    capture_failure = _finalize_required_transcript_capture(search_dir, backend)
+    stop_result = backend.stop(profiles, remove_volumes=remove_volumes)
+    if capture_failure is not None:
+        return capture_failure
+    return stop_result
+
+
+def _finalize_required_transcript_capture(
+    project_dir: Path, backend: object
+) -> LabResult | None:
+    """Finalize pending full-run transcripts before the sidecar is removed."""
+
+    from aptl.backends.raes_evidence_acquisition import (
+        finalize_active_transcript_authority,
+        load_active_transcript_authorities,
+    )
+    from aptl.core.evidence.outcomes import AcquisitionDisposition
+
+    result = None
+    failed = False
+    try:
+        active = load_active_transcript_authorities(project_dir)
+        if active:
+            if len(active) != 1:
+                raise ValueError("multiple pending transcript authorities")
+            result = finalize_active_transcript_authority(
+                project_dir=project_dir,
+                state=active[0],
+                backend=backend,
+            )
+    except Exception:
+        log.error("Required transcript finalization failed before teardown")
+        failed = True
+    failed = failed or bool(
+        result is not None
+        and result.disposition is not AcquisitionDisposition.SEALED_READY
+    )
+    return (
+        LabResult(success=False, error=_TRANSCRIPT_FINALIZATION_FAILED)
+        if failed
+        else None
+    )
 
 
 def _lifecycle_busy_result(action: str) -> LabResult:
@@ -864,6 +910,10 @@ class _LabStartContext(object):
     # use sites to keep the RAES import lazy.
     admitted_start: object = None
     admitted_surface: "AdmittedStartSurface | None" = None
+    # Required native evidence is acquired after service readiness and retained
+    # here so the run record can reference the exact persisted capture set.
+    native_evidence_acquisition: object = None
+    transcript_capture_authority: object = None
 
 
 # Ownership tuples are (address, generator, service_name, mount_destination,
@@ -1042,9 +1092,6 @@ def _step_resolve_host_ports(ctx: _LabStartContext) -> LabResult | None:
     active_profiles = None
     if ctx.config is not None:
         active_profiles = set(ctx.config.containers.enabled_profiles())
-        # The public start path always includes observability even though it is
-        # not an aptl.json container toggle.
-        active_profiles.add("otel")
     assert ctx.backend is not None
     existing_bindings = host_ports.project_port_bindings(ctx.backend)
     ctx.resolved_ports = host_ports.resolve_host_ports(
@@ -1226,11 +1273,16 @@ def _load_admitted_start_surface(
     """
 
     from raes import SDLError, SDLInstantiationError
+    from aptl.core.experiment.errors import AdmissionRejection
+    from aptl.backends.raes_diagnostics import render_raes_diagnostics
 
     from aptl.backends.raes import INSTANTIATION_FAILURE_MESSAGE
     from aptl.core.scenario_bundle import EnvPackError
 
     assert ctx.config is not None and ctx.backend is not None
+    admitted = None
+    surface = None
+    failure = None
     try:
         admitted, surface = admit_start_surface(
             ctx.project_dir,
@@ -1238,20 +1290,29 @@ def _load_admitted_start_surface(
             ctx.backend,
             scenario_path=ctx.scenario_path,
         )
+    except AdmissionRejection as exc:
+        failure = LabResult(
+            success=False,
+            error=render_raes_diagnostics(
+                list(exc.diagnostics), stage_label="Scenario evidence admission failed"
+            ),
+        )
     except SDLInstantiationError:
-        return LabResult(success=False, error=INSTANTIATION_FAILURE_MESSAGE)
+        failure = LabResult(success=False, error=INSTANTIATION_FAILURE_MESSAGE)
     except (EnvPackError, SDLError, OSError, TypeError, ValueError) as exc:
-        return LabResult(
+        failure = LabResult(
             success=False,
             error=(
                 "RAES scenario admission failed before artifact preparation: "
                 f"{redact(str(exc))}"
             ),
         )
-    ctx.admitted_start = admitted
-    ctx.admitted_surface = surface
-    ctx.stateful_artifact_ownership = surface.stateful_artifact_ownership
-    return None
+    if failure is None:
+        assert admitted is not None and surface is not None
+        ctx.admitted_start = admitted
+        ctx.admitted_surface = surface
+        ctx.stateful_artifact_ownership = surface.stateful_artifact_ownership
+    return failure
 
 
 def _ssh_key_step_failure(result: SSHKeyResult, what: str) -> LabResult | None:
@@ -2233,6 +2294,64 @@ def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
     return None
 
 
+def _step_activate_capture_apparatus(ctx: _LabStartContext) -> LabResult | None:
+    """Open the admitted full-run transcript window before any SSH probe."""
+
+    from aptl.backends.raes_evidence_acquisition import TRANSCRIPT_REGISTRATION
+
+    admitted = ctx.admitted_start
+    plan = getattr(admitted, "capture_plan", None)
+    bindings = tuple(plan.runtime_bindings()) if plan is not None else ()
+    transcript = tuple(
+        binding
+        for binding in bindings
+        if binding.registration_id == TRANSCRIPT_REGISTRATION
+    )
+    if not transcript:
+        return None
+    activate = getattr(ctx.backend, "activate_capture_apparatus", None)
+    authority = (
+        _activate_required_transcript(ctx, plan, transcript[0], activate)
+        if len(transcript) == 1 and callable(activate)
+        else None
+    )
+    failure = None
+    if authority is None:
+        failure = LabResult(success=False, error=_TRANSCRIPT_UNAVAILABLE)
+    else:
+        ctx.transcript_capture_authority = authority
+    return failure
+
+
+def _activate_required_transcript(
+    ctx: _LabStartContext,
+    plan: CapturePlan,
+    binding: CaptureBinding,
+    activate: Callable[..., object],
+) -> dict[str, object] | None:
+    """Persist and activate one complete admitted transcript authority."""
+
+    from aptl.backends.raes_evidence_acquisition import (
+        persist_active_transcript_authority,
+    )
+
+    if ctx.run_store is None or ctx.run_id is None:
+        return None
+    try:
+        persist_active_transcript_authority(
+            project_dir=ctx.project_dir,
+            plan=plan,
+            binding=binding,
+            run_store=ctx.run_store,
+            run_id=ctx.run_id,
+        )
+        authority = activate(plan_id=plan.plan_id, run_id=ctx.run_id)
+    except Exception:
+        log.error("Required transcript apparatus activation failed")
+        return None
+    return authority if isinstance(authority, dict) else None
+
+
 def _step_write_run_record(ctx: _LabStartContext) -> LabResult | None:
     """Write a RAES-aligned reproducibility record into the run archive (REP-001).
 
@@ -2464,7 +2583,7 @@ def _publish_run_provenance(
 # Evidence artifact subtrees scanned for the REP-001 record (GAP 3). Each
 # existing file under these directories is referenced by its relative path;
 # bytes are never inlined into the record.
-_EVIDENCE_KINDS = ("orchestration", "mcp-side", "kali-side")
+_EVIDENCE_KINDS = ("orchestration", "mcp-side", "kali-side", "evidence")
 
 
 def _collect_evidence_references(store: object, run_id: str) -> list[dict[str, str]]:
@@ -2720,6 +2839,117 @@ def _execute_seed_soc_script(ctx: _LabStartContext, seed_script: Path) -> None:
         )
 
 
+def _step_acquire_required_native_evidence(
+    ctx: _LabStartContext,
+) -> LabResult | None:
+    """Persist every admitted immediate native source or reject this start."""
+
+    from aptl.backends.raes_evidence_acquisition import (
+        NATIVE_TECHVAULT_REGISTRATIONS,
+        acquire_native_evidence,
+    )
+    from aptl.core.evidence.outcomes import AcquisitionDisposition
+
+    admitted = ctx.admitted_start
+    plan = getattr(admitted, "capture_plan", None)
+    bindings = tuple(plan.runtime_bindings()) if plan is not None else ()
+    if not any(
+        binding.registration_id in NATIVE_TECHVAULT_REGISTRATIONS
+        for binding in bindings
+    ):
+        return None
+
+    realization = getattr(admitted, "realization", None)
+    request = _native_evidence_request(ctx, plan, realization)
+    capture = None
+    if request is not None:
+        try:
+            capture = acquire_native_evidence(request)
+        except Exception:
+            log.error("Required native scenario evidence acquisition failed")
+    if capture is None:
+        failure = LabResult(success=False, error=_NATIVE_CAPTURE_FAILED)
+    else:
+        ctx.native_evidence_acquisition = capture
+        failure = (
+            _refresh_required_native_evidence(ctx, admitted, capture.records)
+            if capture.disposition is AcquisitionDisposition.SEALED_READY
+            else LabResult(success=False, error=_NATIVE_CAPTURE_FAILED)
+        )
+    return failure
+
+
+def _native_evidence_request(
+    ctx: _LabStartContext, plan: CapturePlan, realization: AptlRealization | None
+) -> object | None:
+    """Build a native acquisition request only from a complete admitted context."""
+
+    from aptl.backends.raes_evidence_acquisition import NativeEvidenceRequest
+
+    if (
+        ctx.backend is None
+        or ctx.env is None
+        or realization is None
+        or ctx.run_store is None
+        or ctx.run_id is None
+    ):
+        return None
+    try:
+        runtime_env = load_dotenv(ctx.project_dir / ".env")
+    except OSError:
+        runtime_env = ctx.raw_env
+    return NativeEvidenceRequest(
+        plan=plan,
+        backend=ctx.backend,
+        realization=realization,
+        project_dir=ctx.project_dir,
+        indexer_auth=(ctx.env.indexer_username, ctx.env.indexer_password),
+        thehive_api_key=runtime_env.get("THEHIVE_API_KEY", ""),
+        run_store=ctx.run_store,
+        run_id=ctx.run_id,
+    )
+
+
+def _refresh_required_native_evidence(
+    ctx: _LabStartContext,
+    admitted: object,
+    evidence_records: tuple[ExperimentEvidenceRecordModel, ...],
+) -> LabResult | None:
+    """Refresh RAES truth from sealed native records or fail the start."""
+
+    from raes_contracts.runtime_state import OperationState, RuntimeSnapshot
+
+    from aptl.backends.raes_evaluator import refresh_evidence_truth
+
+    target = getattr(admitted, "target", None)
+    execution_plan = getattr(admitted, "execution_plan", None)
+    final_snapshot = getattr(ctx.raes_outcome, "final_snapshot", None)
+    failure = None
+    if (
+        target is None
+        or execution_plan is None
+        or not isinstance(final_snapshot, RuntimeSnapshot)
+    ):
+        failure = LabResult(success=False, error=_NATIVE_EVALUATION_FAILED)
+    else:
+        try:
+            refresh = refresh_evidence_truth(
+                target=target,
+                execution_plan=execution_plan,
+                snapshot=final_snapshot,
+                evidence_records=evidence_records,
+            )
+        except Exception:
+            log.error("Required native scenario evidence evaluation failed")
+            failure = LabResult(success=False, error=_NATIVE_EVALUATION_FAILED)
+        else:
+            if refresh.status is OperationState.SUCCEEDED:
+                ctx.raes_outcome.final_snapshot = refresh.snapshot
+            else:
+                failure = LabResult(success=False, error=_NATIVE_EVALUATION_FAILED)
+    return failure
+
+
 def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
     """Refresh local MCP client env keys after SOC seeding."""
     # `.mcp.json` is the canonical config Claude Code, Cursor, and Cline
@@ -2905,10 +3135,12 @@ _LAB_START_STEPS = (
     _step_pull_images,
     _step_start_containers,
     _step_wait_for_services,
+    _step_activate_capture_apparatus,
     _step_test_ssh,
     _step_pin_terminal_host_keys,
     _step_build_mcps,
     _step_seed_soc,
+    _step_acquire_required_native_evidence,
     _step_sync_mcp_config,
     _step_attest_project_containers,
     _step_capture_snapshot,
@@ -2933,10 +3165,14 @@ _LAB_START_PROGRESS_MESSAGES = {
         "several minutes while images build."
     ),
     "_step_wait_for_services": "Waiting for Wazuh services to become ready.",
+    "_step_activate_capture_apparatus": ("Activating required Kali session capture."),
     "_step_test_ssh": "Testing SSH reachability.",
     "_step_pin_terminal_host_keys": "Pinning terminal SSH host keys.",
     "_step_build_mcps": "Building local MCP server artifacts.",
     "_step_seed_soc": "Seeding SOC tools.",
+    "_step_acquire_required_native_evidence": (
+        "Collecting required native scenario evidence."
+    ),
     "_step_sync_mcp_config": "Refreshing MCP client configuration.",
     "_step_attest_project_containers": "Verifying terminal container state.",
     "_step_capture_snapshot": "Capturing the terminal range snapshot.",

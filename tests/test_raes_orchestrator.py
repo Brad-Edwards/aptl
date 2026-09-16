@@ -23,7 +23,7 @@ _WORKFLOW_SCENARIO = dedent(
     name: orchestrator-test
     nodes:
       vm:
-        type: vm
+        type: compute
         os: linux
         resources: {ram: 1 gib, cpu: 1}
         conditions: {health: ops}
@@ -96,7 +96,9 @@ def test_start_registers_workflows_as_pending_with_pending_steps():
 
     assert isinstance(result, ApplyResult)
     assert result.success is True
-    assert result.snapshot.orchestration_results, "expected at least one workflow run recorded"
+    assert result.snapshot.orchestration_results, (
+        "expected at least one workflow run recorded"
+    )
 
     for payload in result.snapshot.orchestration_results.values():
         state = WorkflowExecutionState.from_payload(payload)
@@ -105,7 +107,10 @@ def test_start_registers_workflows_as_pending_with_pending_steps():
         assert state.workflow_status == WorkflowStatus.PENDING
         assert state.run_id
         assert state.steps, "workflow must report its observable steps"
-        assert all(step.lifecycle == WorkflowStepLifecycle.PENDING for step in state.steps.values())
+        assert all(
+            step.lifecycle == WorkflowStepLifecycle.PENDING
+            for step in state.steps.values()
+        )
     # No history events are invented for a not-yet-executed workflow.
     assert result.snapshot.orchestration_history == {}
 
@@ -127,7 +132,9 @@ def test_results_and_status_reflect_registered_workflows():
 
     assert orchestrator.results()
     assert orchestrator.history() == {}
-    assert orchestrator.status()["registered_workflows"] == sorted(orchestrator.results())
+    assert orchestrator.status()["registered_workflows"] == sorted(
+        orchestrator.results()
+    )
 
 
 def test_drive_workflows_reports_real_execution_state():
@@ -181,7 +188,9 @@ def test_drive_workflows_resolves_outcomes_from_evaluation_results():
     )
 
     assert diagnostics == []
-    state = WorkflowExecutionState.from_payload(next(iter(orchestrator.results().values())))
+    state = WorkflowExecutionState.from_payload(
+        next(iter(orchestrator.results().values()))
+    )
     assert state.workflow_status == WorkflowStatus.SUCCEEDED
 
 
@@ -224,8 +233,12 @@ def test_drive_workflows_persists_run_archive_artifacts(tmp_path):
 
     address = next(iter(orchestrator.results()))
     safe_address = address.replace("/", "_")
-    assert (tmp_path / "runs" / run_id / "orchestration" / safe_address / "result.json").is_file()
-    assert (tmp_path / "runs" / run_id / "orchestration" / safe_address / "history.jsonl").is_file()
+    assert (
+        tmp_path / "runs" / run_id / "orchestration" / safe_address / "result.json"
+    ).is_file()
+    assert (
+        tmp_path / "runs" / run_id / "orchestration" / safe_address / "history.jsonl"
+    ).is_file()
 
 
 def test_drive_workflows_reports_drive_failure():
@@ -263,7 +276,8 @@ def test_start_preserves_existing_provisioning_entries():
 
     assert "provision.node.vm" in result.snapshot.entries
     assert any(
-        entry.domain == RuntimeDomain.ORCHESTRATION for entry in result.snapshot.entries.values()
+        entry.domain == RuntimeDomain.ORCHESTRATION
+        for entry in result.snapshot.entries.values()
     )
 
 
@@ -308,7 +322,10 @@ def test_start_fails_closed_on_workflow_missing_result_contract():
     )
 
     assert result.success is False
-    assert any(d.code == "aptl.orchestrator.workflow-contract-missing" for d in result.diagnostics)
+    assert any(
+        d.code == "aptl.orchestrator.workflow-contract-missing"
+        for d in result.diagnostics
+    )
 
 
 def test_start_fails_closed_on_invalid_result_contract():
@@ -323,7 +340,10 @@ def test_start_fails_closed_on_invalid_result_contract():
     )
 
     assert result.success is False
-    assert any(d.code == "aptl.orchestrator.workflow-contract-invalid" for d in result.diagnostics)
+    assert any(
+        d.code == "aptl.orchestrator.workflow-contract-invalid"
+        for d in result.diagnostics
+    )
 
 
 def test_start_handles_delete_operation():

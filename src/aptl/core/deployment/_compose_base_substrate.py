@@ -25,7 +25,10 @@ from aptl.core.deployment._compose_realization_networks import (
     _match_managed_network,
 )
 from aptl.core.deployment.errors import BackendSeedError
-from aptl.core.deployment.realization import DeploymentNetworkAttachment
+from aptl.core.deployment.realization import (
+    DeploymentNetworkAttachment,
+    valid_environment_variable_name,
+)
 
 if TYPE_CHECKING:
     from aptl.backends.raes_base_substrate import BaseContainerSpec, InitRequirements
@@ -59,6 +62,8 @@ def _init_run_flags(init: "InitRequirements") -> list[str]:
     if init.seccomp_unconfined:
         flags += ["--security-opt", "seccomp:unconfined"]
     for env_name, env_value in init.env:
+        if not valid_environment_variable_name(env_name):
+            raise BackendSeedError("invalid base-container environment variable name")
         flags += ["-e", f"{env_name}={env_value}"]
     if init.stop_signal:
         flags += ["--stop-signal", init.stop_signal]
@@ -291,6 +296,10 @@ class ComposeBaseSubstrateMixin(object):
 
         if not spec.environment_names:
             return
+        if any(
+            not valid_environment_variable_name(name) for name in spec.environment_names
+        ):
+            raise BackendSeedError("invalid base-container environment variable name")
         # Values come from the project's own credential boundary first: APTL
         # keeps them in the generated `.env`, which is never exported into this
         # process. A real process-environment entry still wins, so an operator
@@ -303,12 +312,17 @@ class ComposeBaseSubstrateMixin(object):
             **dict(spec.environment_defaults),
             **self._project_dotenv(),
             **os.environ,
+            **getattr(self, "_image_free_generated_environment", {}).get(
+                spec.node_address, {}
+            ),
         }
         bindings = {
             name: available[name]
             for name in spec.environment_names
             if name in available
         }
+        if any("\n" in value or "\r" in value for value in bindings.values()):
+            raise BackendSeedError("invalid base-container environment value")
         if not bindings:
             return
         env_dir = self._project_dir / ".aptl" / "realization" / "env"

@@ -6,12 +6,22 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from aptl.runtime_authority import DeploymentDockerAuthorityAdmission
+from aptl.core.deployment._realization_primitives import (
+    DeploymentImageRealization,
+    DeploymentNetworkAttachment,
+    DeploymentNetworkRealization,
+    ImageRealizationMode as _ImageRealizationMode,
+    LOOPBACK_HOST_IP,
+    valid_environment_variable_name as _valid_environment_variable_name,
+)
 
 if TYPE_CHECKING:
     from raes.runtime_configuration import RuntimeConfiguration
 
+ImageRealizationMode = _ImageRealizationMode
+valid_environment_variable_name = _valid_environment_variable_name
 
-ImageRealizationMode = Literal["pull", "build"]
+
 StatefulConsumerAccessMode = Literal["read_only", "read_write"]
 GeneratedArtifactKind = Literal[
     "certificate_bundle", "rendered_config", "ssh_key_bundle"
@@ -24,64 +34,6 @@ VolumeAccessMode = Literal["read_write_once", "read_write_many", "read_only_many
 AclDirection = Literal["in", "out", "inout"]
 AclAction = Literal["allow", "deny"]
 AclProtocol = Literal["any", "tcp", "udp", "icmp"]
-
-# An SDL-declared host publish with no author-supplied host address binds
-# loopback. Defaulting to all interfaces would silently put a scenario-declared
-# port on the operator's LAN (ADR-034 Host Exposure Amendment); an author who
-# wants that must say so with an explicit host_ip.
-LOOPBACK_HOST_IP = "127.0.0.1"
-
-
-@dataclass(frozen=True)
-class DeploymentImageRealization(object):
-    """One image operation resolved from scenario-owned source metadata."""
-
-    address: str
-    service_name: str
-    source_name: str
-    source_version: str
-    image_ref: str
-    mode: ImageRealizationMode
-    policy_rule: str
-    dockerfile_path: str | None = None
-    context_path: str | None = None
-    provenance: dict[str, int] | None = None
-
-    def details(self) -> dict[str, object]:
-        details: dict[str, object] = {
-            "address": self.address,
-            "service_name": self.service_name,
-            "source_name": self.source_name,
-            "source_version": self.source_version,
-            "image_ref": self.image_ref,
-            "mode": self.mode,
-            "policy_rule": self.policy_rule,
-        }
-        if self.dockerfile_path is not None:
-            details["dockerfile_path"] = self.dockerfile_path
-        if self.context_path is not None:
-            details["context_path"] = self.context_path
-        if self.provenance is not None:
-            details["provenance"] = dict(self.provenance)
-        return details
-
-
-@dataclass(frozen=True)
-class DeploymentNetworkRealization(object):
-    """One scenario-declared network the deployment backend may materialize."""
-
-    name: str
-    cidr: str | None = None
-    gateway: str | None = None
-    internal: bool | None = None
-
-
-@dataclass(frozen=True)
-class DeploymentNetworkAttachment(object):
-    """One node-to-network attachment requested by the scenario."""
-
-    network: str
-    ipv4_address: str | None = None
 
 
 @dataclass(frozen=True)
@@ -377,6 +329,27 @@ class DeploymentGeneratedArtifactOutput(object):
 
 
 @dataclass(frozen=True)
+class DeploymentGeneratedArtifactEnvironmentConsumer(object):
+    """One declared generated-output to container-environment delivery."""
+
+    target_address: str
+    node_name: str
+    service_name: str
+    output_name: str
+    environment_variable: str
+    delivery_mode: str = "environment"
+
+    def details(self) -> dict[str, object]:
+        return {
+            "node": self.node_name,
+            "target_address": self.target_address,
+            "delivery_mode": self.delivery_mode,
+            "output": self.output_name,
+            "environment_variable": self.environment_variable,
+        }
+
+
+@dataclass(frozen=True)
 class DeploymentGeneratedArtifactRealization(object):
     """One RAES generated-artifact operation admitted for deployment."""
 
@@ -387,6 +360,9 @@ class DeploymentGeneratedArtifactRealization(object):
     provenance: str
     outputs: tuple[DeploymentGeneratedArtifactOutput, ...]
     consumers: tuple[DeploymentStatefulConsumer, ...]
+    environment_consumers: tuple[
+        DeploymentGeneratedArtifactEnvironmentConsumer, ...
+    ] = ()
     ordering_dependencies: tuple[str, ...] = ()
     refresh_dependencies: tuple[str, ...] = ()
 
@@ -399,6 +375,9 @@ class DeploymentGeneratedArtifactRealization(object):
             "provenance": self.provenance,
             "outputs": [output.details() for output in self.outputs],
             "consumers": [consumer.details() for consumer in self.consumers],
+            "environment_consumers": [
+                consumer.details() for consumer in self.environment_consumers
+            ],
             "ordering_dependencies": list(self.ordering_dependencies),
             "refresh_dependencies": list(self.refresh_dependencies),
         }
@@ -429,6 +408,30 @@ class DeploymentPersistentVolumeRealization(object):
 
 
 @dataclass(frozen=True)
+class DeploymentCaptureApparatus(object):
+    """One scope-admitted backend observer that deployment must realize."""
+
+    apparatus_id: str
+    service_name: str
+    container_name: str
+    target_refs: tuple[str, ...]
+    governing_scopes: tuple[str, ...]
+    environment_visible: bool
+    observer_effects: tuple[str, ...]
+
+    def details(self) -> dict[str, object]:
+        return {
+            "apparatus_id": self.apparatus_id,
+            "service_name": self.service_name,
+            "container_name": self.container_name,
+            "target_refs": list(self.target_refs),
+            "governing_scopes": list(self.governing_scopes),
+            "environment_visible": self.environment_visible,
+            "observer_effects": list(self.observer_effects),
+        }
+
+
+@dataclass(frozen=True)
 class DeploymentRealizationSpec(object):
     """Portable input for typed deployment backend realization."""
 
@@ -445,6 +448,7 @@ class DeploymentRealizationSpec(object):
     ] = ()
     generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
     persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()
+    capture_apparatus: tuple[DeploymentCaptureApparatus, ...] = ()
     # ADR-048 image-free materialization is no longer a whole-spec flag: routing
     # is derived per node at realize() time (``_needs_compose`` /
     # ``_image_free_node_addresses``) so a graph that mixes pinned artifacts,

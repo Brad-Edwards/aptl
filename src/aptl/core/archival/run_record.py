@@ -18,7 +18,7 @@ from raes_contracts.contracts import (
     ExperimentReferenceModel,
     ExperimentRunModel,
     ExperimentTaskReferenceModel,
-    validate_experiment_run_against_task,
+    validate_experiment_run_structure_against_task,
     validate_experiment_run_archival_datetimes,
     validate_experiment_run_time_model,
 )
@@ -133,7 +133,12 @@ def _run_cross_artifact_validators(
     for a governed scenario — the realized time model. Local validation may add
     archive-bounds/containment checks on top, but never restates these.
     """
-    validate_experiment_run_against_task(context.task, run)
+    # Composition has no immutable capture-spec / evidence-reader inputs.  RAES
+    # 4.1 deliberately separates this structural check from authoritative
+    # content-backed evidence satisfaction; callers must run the latter where
+    # those inputs are owned rather than pretending artifact references prove
+    # their contents here.
+    validate_experiment_run_structure_against_task(context.task, run)
     validate_experiment_run_archival_datetimes(run)
     if context.time_model_declaration is not None:
         validate_experiment_run_time_model(run, context.time_model_declaration)

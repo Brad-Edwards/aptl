@@ -9,7 +9,8 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _OWNERSHIP_NOTE = (
-    _REPO_ROOT / "docs/architecture/issue-589-scenario-pack-capture-ownership-preflight.md"
+    _REPO_ROOT
+    / "docs/architecture/issue-589-scenario-pack-capture-ownership-preflight.md"
 )
 _ASSET_OWNERSHIP_NOTE = (
     _REPO_ROOT
@@ -61,9 +62,9 @@ def _terminology_rows(note: str) -> dict[str, str]:
 
 
 def _asset_ownership_rows(note: str) -> dict[str, str]:
-    decision = note.split(
-        "## Ownership Decision And Source Inventory\n", maxsplit=1
-    )[1].split("## ", maxsplit=1)[0]
+    decision = note.split("## Ownership Decision And Source Inventory\n", maxsplit=1)[
+        1
+    ].split("## ", maxsplit=1)[0]
     table = next(
         block.splitlines()
         for block in decision.split("\n\n")
@@ -139,9 +140,7 @@ def test_capture_asset_placement_is_current_and_adapter_explicit() -> None:
         if "aptl-capture-client" in source
     )
     runtime_source, runtime = next(
-        (source, value)
-        for source, value in rows.items()
-        if "kali-capture/**" in source
+        (source, value) for source, value in rows.items() if "kali-capture/**" in source
     )
 
     assert "RAES-owned" in methodology
@@ -154,7 +153,7 @@ def test_capture_asset_placement_is_current_and_adapter_explicit() -> None:
     assert "there is no additional APTL asset to move" in " ".join(note.split())
 
 
-def test_pinned_techvault_pack_carries_capture_adapters_and_contract() -> None:
+def test_pinned_techvault_pack_leaves_session_capture_to_the_backend() -> None:
     pack_root = Path(
         str(resources.files("raes_env_packs") / "resources" / "packs" / "techvault")
     )
@@ -162,24 +161,10 @@ def test_pinned_techvault_pack_carries_capture_adapters_and_contract() -> None:
         (pack_root / "associated-artifacts.json").read_text(encoding="utf-8")
     )
     artifacts = manifest["artifacts"]
-    expected_adapters = {
-        "techvault-kali-capture-client": (
-            "raes-environment-pack:/assets/content/kali-capture-client"
-        ),
-        "techvault-kali-wrap-shell": (
-            "raes-environment-pack:/assets/content/kali-wrap-shell.sh"
-        ),
-    }
-
-    for artifact_id, expected_uri in expected_adapters.items():
-        artifact = artifacts[artifact_id]
-        assert artifact["uri"] == expected_uri
-        assert artifact["source"].startswith("aptl@")
-        assert (pack_root / expected_uri.removeprefix("raes-environment-pack:/")).is_file()
-
-    readme = (pack_root / "README.md").read_text(encoding="utf-8")
-    assert "## Capture consumer contract" in readme
-    assert "APTL_CAPTURE_CAPABILITY" in readme
+    assert "techvault-kali-capture-client" not in artifacts
+    assert "techvault-kali-wrap-shell" not in artifacts
+    assert not (pack_root / "assets/content/kali-capture-client").exists()
+    assert not (pack_root / "assets/content/kali-wrap-shell.sh").exists()
 
 
 def test_user_docs_cross_reference_env_pack_companion_repo() -> None:

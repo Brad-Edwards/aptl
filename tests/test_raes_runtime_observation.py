@@ -1838,6 +1838,72 @@ def test_content_sync_with_exact_installed_configuration_is_corroborated():
     assert _FORWARDING_PATH in observations[_ADDRESS].concerns
 
 
+def test_wazuh_apt_bootstrap_downloads_key_into_private_directory():
+    from aptl.core.deployment._forwarding_agent_realization import (
+        _WAZUH_BOOTSTRAP_DIR,
+        _WAZUH_KEY_DOWNLOAD,
+        _install_wazuh_agent,
+    )
+
+    class SuccessfulBackend:
+        def __init__(self):
+            self.commands = []
+
+        def container_exec(self, _name, command, *, timeout=None):
+            self.commands.append((command, timeout))
+            return SimpleNamespace(returncode=0, stdout="")
+
+        def container_exec_with_input(self, _name, command, _payload, *, timeout=None):
+            self.commands.append((command, timeout))
+            return SimpleNamespace(returncode=0, stdout="")
+
+    backend = SuccessfulBackend()
+
+    assert _install_wazuh_agent(backend, _CONTAINER, "wazuh-manager") is None
+
+    commands = [command for command, _timeout in backend.commands]
+    assert ["install", "-d", "-m", "0700", _WAZUH_BOOTSTRAP_DIR] in commands
+    curl = next(command for command in commands if command[0] == "curl")
+    assert curl[curl.index("-o") + 1] == _WAZUH_KEY_DOWNLOAD
+    gpg = next(command for command in commands if command[0] == "gpg")
+    assert gpg[-1] == _WAZUH_KEY_DOWNLOAD
+    assert all("/tmp/" not in argument for command in commands for argument in command)
+
+
+def test_wazuh_rpm_bootstrap_imports_key_without_temporary_file():
+    from aptl.core.deployment._forwarding_agent_realization import (
+        _install_wazuh_agent,
+    )
+
+    class SuccessfulDnfBackend:
+        def __init__(self):
+            self.commands = []
+
+        def container_exec(self, _name, command, *, timeout=None):
+            self.commands.append((command, timeout))
+            returncode = 1 if command == ["test", "-x", "/usr/bin/apt-get"] else 0
+            return SimpleNamespace(returncode=returncode, stdout="")
+
+        def container_exec_with_input(self, _name, command, _payload, *, timeout=None):
+            self.commands.append((command, timeout))
+            return SimpleNamespace(returncode=0, stdout="")
+
+    backend = SuccessfulDnfBackend()
+
+    assert _install_wazuh_agent(backend, _CONTAINER, "wazuh-manager") is None
+
+    commands = [command for command, _timeout in backend.commands]
+    assert [
+        "rpm",
+        "--import",
+        "https://packages.wazuh.com/key/GPG-KEY-WAZUH",
+    ] in commands
+    assert any(
+        command[:4] == ["env", "WAZUH_MANAGER=wazuh-manager", "dnf", "install"]
+        for command in commands
+    )
+
+
 def test_forwarding_agent_without_executable_is_dropped_and_rejected():
     runtime = _log_forwarder_runtime()
     backend = _configured_forwarding_backend(runtime, executable=False)

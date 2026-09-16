@@ -21,6 +21,8 @@ from raes.runtime_configuration import RuntimeConfiguration
 _MAX_WORKERS = 8
 _WAZUH_VERSION = "4.12.0-1"
 _WAZUH_CONFIG = "/var/ossec/etc/ossec.conf"
+_WAZUH_BOOTSTRAP_DIR = "/var/lib/aptl-bootstrap"
+_WAZUH_KEY_DOWNLOAD = f"{_WAZUH_BOOTSTRAP_DIR}/wazuh.gpg"
 _RSYSLOG_CONFIG = "/etc/rsyslog.d/60-aptl-forwarding.conf"
 _MISP_SYNC_CONFIG = "/etc/aptl/misp-suricata-sync.env"
 _SAFE_HOST = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$")
@@ -168,11 +170,12 @@ def _install_wazuh_agent(
                 "ca-certificates",
                 "procps",
             ],
+            ["install", "-d", "-m", "0700", _WAZUH_BOOTSTRAP_DIR],
             [
                 "curl",
                 "-fsSL",
                 "-o",
-                "/tmp/aptl-wazuh.gpg",
+                _WAZUH_KEY_DOWNLOAD,
                 "https://packages.wazuh.com/key/GPG-KEY-WAZUH",
             ],
             [
@@ -182,7 +185,7 @@ def _install_wazuh_agent(
                 "--dearmor",
                 "--output",
                 "/usr/share/keyrings/wazuh.gpg",
-                "/tmp/aptl-wazuh.gpg",
+                _WAZUH_KEY_DOWNLOAD,
             ],
         )
         if not all(

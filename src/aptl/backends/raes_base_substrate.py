@@ -74,9 +74,9 @@ class InitRequirements:
     cgroupfs_rw_mount: bool = True
     tmpfs: tuple[str, ...] = (
         "/run",
-        "/run/lock",
-        "/tmp",
-    )  # NOSONAR python:S5443 - tmpfs mount targets for the container's own init, not application file I/O into a shared host directory
+        "/run/lock",  # NOSONAR python:S5443 - container tmpfs mount target
+        "/tmp",  # NOSONAR python:S5443 - container tmpfs mount target
+    )
     seccomp_unconfined: bool = True
     # Docker's default AppArmor profile denies the mount namespace operations
     # systemd performs for hardened units such as Rocky Linux's rsyslog.service.

@@ -5,8 +5,8 @@
 # The frozen TechVault env-pack realizes parts of the SOC stack without the
 # image-specific runtime contract they need, so they boot broken:
 #
-#   - misp-redis runs with no password, but MISP connects with
-#     auth=redispassword -> Redis unreachable -> API-key auth fails.
+#   - misp-redis runs with no password, but MISP expects the canonical local
+#     lab credential -> Redis unreachable -> API-key auth fails.
 #   - MISP has no MYSQL_*/ADMIN_*/BASE_URL env and its lab cert is mounted at
 #     the wrong path -> no DB, no admin key, self-signed cert.
 #   - Shuffle and TheHive receive the generated SOC certificate bundle under
@@ -155,6 +155,37 @@ _capture_labels() {
 
 log() { echo "[envpack-soar-fixups] $*"; }
 
+_misp_redis_password() {
+    if [ -n "${MISP_REDIS_PASSWORD:-}" ]; then
+        printf '%s\n' "$MISP_REDIS_PASSWORD"
+        return 0
+    fi
+    python3 - "$PROJECT_DIR/docker-compose.yml" <<'PY'
+import shlex
+import sys
+from pathlib import Path
+
+import yaml
+
+try:
+    document = yaml.safe_load(Path(sys.argv[1]).read_text(encoding="utf-8")) or {}
+    command = document["services"]["misp-redis"]["command"]
+except (KeyError, OSError, TypeError, yaml.YAMLError):
+    raise SystemExit(1)
+
+parts = shlex.split(command) if isinstance(command, str) else command
+if not isinstance(parts, list) or parts.count("--requirepass") != 1:
+    raise SystemExit(1)
+index = parts.index("--requirepass")
+if index + 1 >= len(parts) or not isinstance(parts[index + 1], str):
+    raise SystemExit(1)
+password = parts[index + 1]
+if not password or len(password) > 256 or any(char.isspace() for char in password):
+    raise SystemExit(1)
+print(password)
+PY
+}
+
 verify_soc_tls() {
     local port="$1" path="$2"
     for _ in $(seq 1 120); do
@@ -172,6 +203,11 @@ verify_soc_tls() {
 # --- misp-redis: restore the password MISP expects --------------------------
 fix_misp_redis() {
     _present aptl-misp-redis || return 0
+    local password
+    if ! password="$(_misp_redis_password)"; then
+        log "ERROR: canonical MISP Redis credential is unavailable"
+        return 1
+    fi
     # If AUTH is already required, redis-cli ping without a password says NOAUTH.
     if docker exec aptl-misp-redis redis-cli ping 2>&1 | grep -qi 'NOAUTH'; then
         :
@@ -184,11 +220,11 @@ fix_misp_redis() {
         docker run -d --name aptl-misp-redis --restart unless-stopped \
             "${LBL_ARGS[@]+"${LBL_ARGS[@]}"}" \
             --network "$net" --network-alias aptl-misp-redis --network-alias misp-redis \
-            "$img" redis-server --requirepass redispassword >/dev/null
+            "$img" redis-server --requirepass "$password" >/dev/null
     fi
     for _ in $(seq 1 30); do
         if docker exec aptl-misp-redis redis-cli --no-auth-warning \
-            -a redispassword ping 2>/dev/null | grep -Fxq PONG; then
+            -a "$password" ping 2>/dev/null | grep -Fxq PONG; then
             return 0
         fi
         sleep 2

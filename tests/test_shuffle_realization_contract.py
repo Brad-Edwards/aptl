@@ -256,7 +256,7 @@ if [ "$1" = inspect ] && [ "$2" = aptl-cortex ]; then
 fi
 if [ "$1" = exec ] && [ "$2" = aptl-misp-redis ]; then
     case "$*" in
-        *" -a redispassword ping"*) printf 'PONG\n' ;;
+        *" -a unit-test-redis-fixture ping"*) printf 'PONG\n' ;;
         *) printf 'NOAUTH Authentication required.\n' ;;
     esac
 fi
@@ -272,6 +272,12 @@ exit 0
     cert_dir.mkdir(parents=True)
     (cert_dir / "server.pem").write_text("certificate", encoding="utf-8")
     (cert_dir / "server.key").write_text("key", encoding="utf-8")
+    (tmp_path / "docker-compose.yml").write_text(
+        "services:\n"
+        "  misp-redis:\n"
+        "    command: redis-server --requirepass unit-test-redis-fixture\n",
+        encoding="utf-8",
+    )
     env = {
         **os.environ,
         "PATH": f"{fake_bin}:{os.environ['PATH']}",
@@ -422,6 +428,8 @@ def test_soar_fixups_activate_the_generated_soc_tls_material() -> None:
     )
 
     assert "fix_shuffle_frontend_tls" in fixup
+    assert "_misp_redis_password" in fixup
+    assert "redispassword" not in fixup
     assert "/etc/nginx/fullchain.cert.pem:ro" in fixup
     assert "/etc/nginx/privkey.pem:ro" in fixup
     assert "fix_thehive_tls" in fixup

@@ -44,7 +44,13 @@ def test_pack_reference_resolves_full_runtime_through_same_bundle(tmp_path):
         resolve_profile_scenario(ROOT, config, bad, staging_root=tmp_path / "bad")
 
 
-def test_generated_full_profile_covers_all_real_mcp_and_browser_surfaces(tmp_path):
+@pytest.mark.parametrize("architecture", ["x86_64", "aarch64"])
+def test_generated_full_profile_covers_all_real_mcp_and_browser_surfaces(
+    tmp_path, monkeypatch, architecture
+):
+    # The payload target is Linux; its architecture is independent of the OS
+    # running this software-contract test (macOS spells aarch64 as arm64).
+    monkeypatch.setattr("platform.machine", lambda: architecture)
     from aptl.appliance.inputs import _write_full_profile
     from aptl.core.assets import materialize
     from aptl.validation.curated_live_proof import expected_bundle_matrix

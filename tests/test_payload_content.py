@@ -134,13 +134,17 @@ def test_wheel_closure_rejects_incompatible_python(tmp_path):
         validate_wheel_closure(tmp_path, requirement)
 
 
-def test_image_archive_validates_both_docker_and_oci_layer_graphs(tmp_path):
+@pytest.mark.parametrize("architecture", ["x86_64", "aarch64"])
+def test_image_archive_validates_both_docker_and_oci_layer_graphs(
+    tmp_path, monkeypatch, architecture
+):
     import hashlib
     import json
     import platform
 
     from aptl.appliance.payload_content import archive_files, docker_archive_images
 
+    monkeypatch.setattr(platform, "machine", lambda: architecture)
     digest = lambda value: hashlib.sha256(value).hexdigest()
     layer = b"canonical layer bytes"
     config = json.dumps(

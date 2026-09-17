@@ -15,6 +15,10 @@ _COMPOSE_PATH = Path(__file__).resolve().parent.parent / "generate-indexer-certs
 def no_native_ownership_fix_by_default(mocker):
     """Avoid probing the real Docker engine in unit tests."""
     mocker.patch("aptl.core.certs.hostenv.needs_host_ownership_fix", return_value=False)
+    # Default every test to a rootful daemon so the rootless `docker info` probe
+    # never issues a real command and existing call-count assertions hold; the
+    # rootless path is exercised explicitly where it is under test.
+    mocker.patch("aptl.core.certs._docker_is_rootless", return_value=False)
 
 
 @pytest.fixture
@@ -208,6 +212,62 @@ class TestEnsureSSLCerts:
         ]
         for issued in mock_run.call_args_list:
             assert issued[0][0][:2] != ["docker", "run"]
+
+    def test_rootless_generator_runs_as_container_root(
+        self, tmp_path, mocker, linux_native
+    ):
+        """Rootless Docker must run the generator as container-root (0:0).
+
+        Under rootless Docker container-root maps back to the invoking host
+        user, so 0:0 produces host-owned certs; a non-root --user would map to
+        an unrelated subuid and be denied writing the /certificates bind mount.
+        """
+        from aptl.core.certs import ensure_ssl_certs
+
+        mocker.patch("aptl.core.certs._docker_is_rootless", return_value=True)
+        (tmp_path / "config").mkdir()
+        certs_dir = tmp_path / "config" / "wazuh_indexer_ssl_certs"
+        mock_run = _successful_generator(mocker, certs_dir)
+
+        result = ensure_ssl_certs(tmp_path)
+
+        assert result.success is True
+        generator_cmd = mock_run.call_args_list[0][0][0]
+        assert generator_cmd[4:] == [
+            "-f",
+            "generate-indexer-certs.yml",
+            "run",
+            "--rm",
+            "--user",
+            "0:0",
+            "generator",
+        ]
+
+    def test_container_cert_user_selects_root_only_when_rootless(self):
+        """--user is host uid rootful, 0:0 rootless, and absent on Docker Desktop."""
+        from aptl.core.certs import _container_cert_user
+
+        assert _container_cert_user(None, True) is None
+        assert _container_cert_user(None, False) is None
+        assert _container_cert_user((1000, 1000), False) == (1000, 1000)
+        assert _container_cert_user((1000, 1000), True) == (0, 0)
+
+    def test_docker_is_rootless_reads_security_options(self, tmp_path, mocker):
+        """Rootless is read from docker info SecurityOptions; failures are False."""
+        mocker.stopall()  # exercise the real probe, not the autouse stub
+        from aptl.core.certs import _docker_is_rootless
+
+        def runner(out, rc=0):
+            return lambda cmd, *, timeout=None: MagicMock(
+                returncode=rc, stdout=out, stderr=""
+            )
+
+        assert (
+            _docker_is_rootless(runner("[name=seccomp name=rootless]"), tmp_path)
+            is True
+        )
+        assert _docker_is_rootless(runner("[name=seccomp]"), tmp_path) is False
+        assert _docker_is_rootless(runner("[name=rootless]", rc=1), tmp_path) is False
 
     def test_linux_native_precreates_output_dir(self, tmp_path, mocker, linux_native):
         """Precreating the bind mount avoids Docker making a root-owned dir."""

@@ -14,7 +14,7 @@
     "network_subnet": "172.20.0.0/24"
   },
   "api": {
-    "baseUrl": "https://localhost:9000",
+    "baseUrl": "https://localhost:${APTL_HP_THEHIVE_9000}",
     "auth": {
       "type": "apikey",
       "header": "Authorization",
@@ -29,7 +29,7 @@
   },
   "queries": {
     "list_cases": {
-      "url": "https://localhost:9000/api/v1/query",
+      "url": "https://localhost:${APTL_HP_THEHIVE_9000}/api/v1/query",
       "method": "POST",
       "auth": {
         "type": "apikey",
@@ -59,7 +59,7 @@
       "description": "List recent cases from TheHive. Returns case summaries with status, severity, and assignee."
     },
     "create_case": {
-      "url": "https://localhost:9000/api/v1/case",
+      "url": "https://localhost:${APTL_HP_THEHIVE_9000}/api/v1/case",
       "method": "POST",
       "auth": {
         "type": "apikey",
@@ -69,7 +69,7 @@
       "description": "Create a new incident case. Required: title, description, severity (1-4). Example: {\"body\": {\"title\": \"Suspicious Login Activity\", \"description\": \"Multiple failed logins from 172.20.4.30\", \"severity\": 2, \"tags\": [\"brute-force\", \"authentication\"]}}"
     },
     "add_observable": {
-      "url": "https://localhost:9000/api/v1/case/{caseId}/observable",
+      "url": "https://localhost:${APTL_HP_THEHIVE_9000}/api/v1/case/{caseId}/observable",
       "method": "POST",
       "auth": {
         "type": "apikey",
@@ -79,7 +79,7 @@
       "description": "Add an observable to a case. Required: dataType, data. Types: ip, domain, hash, filename, url, mail. Example: {\"params\": {\"caseId\": \"~123\"}, \"body\": {\"dataType\": \"ip\", \"data\": \"172.20.4.30\", \"message\": \"Attacker IP\"}}"
     },
     "update_case": {
-      "url": "https://localhost:9000/api/v1/case/{caseId}",
+      "url": "https://localhost:${APTL_HP_THEHIVE_9000}/api/v1/case/{caseId}",
       "method": "PATCH",
       "auth": {
         "type": "apikey",
@@ -89,7 +89,7 @@
       "description": "Update case status, severity, or add notes. Example: {\"params\": {\"caseId\": \"~123\"}, \"body\": {\"status\": \"InProgress\", \"customFields\": {\"investigation-notes\": {\"string\": \"Confirmed malicious activity\"}}}}"
     },
     "create_alert": {
-      "url": "https://localhost:9000/api/v1/alert",
+      "url": "https://localhost:${APTL_HP_THEHIVE_9000}/api/v1/alert",
       "method": "POST",
       "auth": {
         "type": "apikey",

@@ -1,9 +1,11 @@
-"""Declared runtime environment binding (ADR-050 parity restoration).
+"""Runtime environment binding and closed-scope preservation.
 
-The generic-materialization conversion dropped every environment variable the
-pre-refactor components required — `webapp` lost its entire database binding,
-`misp-suricata-sync` its MISP API wiring. The SDL now declares those variables,
-and this covers how they reach a node.
+The generic binding path remains available for scenarios that author runtime
+environment requirements.  TechVault 6.0.1 deliberately does not: its portable
+semantic state leaves backend mechanics out of the scenario and resolves the
+unspecified environment and mount scopes CLOSED.  APTL must preserve that
+absence rather than restoring old Docker Compose details behind the author's
+back.
 
 The security property under test is that a value never reaches process argv.
 Environment carries credentials; `-e NAME=value` would expose them to any local
@@ -61,14 +63,12 @@ def _spec(names: tuple[str, ...]) -> BaseContainerSpec:
     )
 
 
-def test_declared_environment_names_are_lowered(scenario_path):
-    """The webapp's restored database binding reaches the realization spec."""
+def test_closed_pack_environment_is_not_invented(scenario_path):
+    """An empty closed environment remains empty at the base-container seam."""
 
     names = _environment_names(_webapp_runtime(scenario_path))
 
-    assert "DB_HOST" in names
-    assert "DB_PASSWORD" in names
-    assert len(names) == 11
+    assert names == ()
 
 
 def test_secret_values_never_reach_process_argv(tmp_path, monkeypatch):
@@ -128,13 +128,8 @@ def test_no_environment_is_bound_when_nothing_is_set(tmp_path, monkeypatch):
     assert _append(_spec(("DB_HOST", "DB_PASSWORD")), tmp_path) == []
 
 
-def test_restored_named_volumes_are_lowered(scenario_path):
-    """The persistent state the refactor dropped is declared and lowered again.
-
-    Bind mounts of project keys and certificates are deliberately absent: they
-    are authored as content placements, which carry containment, symlink
-    rejection, and sensitivity handling that a raw bind does not.
-    """
+def test_closed_node_mounts_are_not_invented(scenario_path):
+    """Backend-neutral nodes gain no Docker mount details through APTL."""
 
     from aptl.backends.raes_base_substrate import _volume_mounts
 
@@ -145,15 +140,10 @@ def test_restored_named_volumes_are_lowered(scenario_path):
         if getattr(node, "runtime", None) and node.runtime.mounts
     }
 
-    assert ("db_data", "/var/lib/postgresql/data") in lowered["db"]
-    assert ("webapp_logs", "/var/log/gunicorn") in lowered["webapp"]
-    assert ("kali_operations", "/home/kali/operations") in lowered["kali"]
-    assert ("fileshare_data", "/srv/shares") in lowered["fileshare"]
-    assert sum(len(v) for v in lowered.values()) == 8
-    # No raw host or project bind smuggled in alongside them.
-    for mounts in lowered.values():
-        assert all(not source.startswith((".", "/")) for source, _ in mounts)
+    assert lowered == {}
 
+    # Explicit portable persistent-volume resources remain authored state; they
+    # are not node-local Docker mount selections and keep their exact consumers.
     persistent = {
         name: {
             (consumer.node, consumer.mount_destination) for consumer in volume.consumers
@@ -198,20 +188,14 @@ def test_process_environment_overrides_the_project_file(tmp_path, monkeypatch):
     assert Path(argv[1]).read_text(encoding="utf-8") == "DB_HOST=from-operator\n"
 
 
-def test_authored_defaults_are_bound(scenario_path):
-    """Values that were literals in Compose are authored, not lost.
-
-    Without an authored default they would have no source at all and be silently
-    omitted, because only genuine deployment credentials live in the generated
-    `.env`.
-    """
+def test_closed_pack_environment_has_no_backend_defaults(scenario_path):
+    """Old Compose literals are not smuggled into the backend-neutral pack."""
 
     from aptl.backends.raes_base_substrate import _environment_defaults
 
     defaults = dict(_environment_defaults(_webapp_runtime(scenario_path)))
 
-    assert defaults["DB_HOST"] == "172.20.2.11"
-    assert defaults["DB_NAME"] == "techvault"
+    assert defaults == {}
 
 
 def test_credentials_and_operator_overrides_beat_authored_defaults(
@@ -244,16 +228,8 @@ def test_credentials_and_operator_overrides_beat_authored_defaults(
     assert "DB_PORT=5432" in body
 
 
-def test_planted_range_credentials_are_authored_not_stripped(scenario_path):
-    """A range credential is scenario content and must be declared in the SDL.
-
-    The pre-refactor compose file carried `POSTGRES_PASSWORD=techvault_db_pass`
-    as a literal — a deliberately weak credential the attack path is meant to
-    find. Classifying it as an operator secret stripped the value and left the
-    database with no password at all, because nothing else supplies it.
-
-    `secret_fixture` is the honest classification: a secret that is a fixture.
-    """
+def test_closed_pack_credentials_are_not_reintroduced_as_environment(scenario_path):
+    """A planted secret elsewhere in the scenario does not open this scope."""
 
     from aptl.backends.raes_base_substrate import _environment_defaults
 
@@ -262,10 +238,8 @@ def test_planted_range_credentials_are_authored_not_stripped(scenario_path):
     db = dict(_environment_defaults(scenario.nodes["db"].runtime))
     webapp = dict(_environment_defaults(scenario.nodes["webapp"].runtime))
 
-    assert db["POSTGRES_PASSWORD"], "the range's database password is not authored"
-    assert webapp["DB_PASSWORD"] == db["POSTGRES_PASSWORD"], (
-        "webapp and db must agree on the planted credential"
-    )
+    assert db == {}
+    assert webapp == {}
 
 
 def test_a_real_operator_secret_is_still_authored_empty(scenario_path):
@@ -280,20 +254,12 @@ def test_a_real_operator_secret_is_still_authored_empty(scenario_path):
     assert "MISP_API_KEY" not in sync
 
 
-def test_range_credentials_are_classified_as_fixtures_not_operator_secrets(
+def test_closed_pack_environment_has_no_values_to_reclassify(
     scenario_path,
 ):
-    """The classification carries the distinction, so tooling can tell them apart."""
+    """APTL cannot reinterpret absent closed values as backend fixtures."""
 
     scenario = parse_sdl_file(scenario_path)
 
-    for node, name in (("db", "POSTGRES_PASSWORD"), ("webapp", "DB_PASSWORD")):
-        variable = next(
-            v for v in scenario.nodes[node].runtime.environment if v.name == name
-        )
-        classification = getattr(
-            variable.value_classification, "value", variable.value_classification
-        )
-        assert classification == "secret_fixture", (
-            f"{node}.{name} is planted range content, not a deployment secret"
-        )
+    assert scenario.nodes["db"].runtime.environment == []
+    assert scenario.nodes["webapp"].runtime.environment == []

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,7 +37,7 @@ from aptl.core.evidence.adapters.techvault_native_support import (
     inside_window,
     published_url,
     utc_iso_now,
-    webapp_address,
+    webapp_endpoint,
 )
 from aptl.utils.curl_safe import basic_auth_header, curl_json
 
@@ -94,7 +95,8 @@ class TechVaultNativeEvidenceOwner:
         self._now = selected_dependencies.now
         self._sleep = selected_dependencies.sleep
         self._cortex_url = published_url(realization, "cortex", 9001, "http")
-        self._thehive_url = published_url(realization, "thehive", 9000, "http")
+        self._thehive_url = published_url(realization, "thehive", 9000, "https")
+        self._thehive_ca_cert = str(project_dir / "config/soc_certs/lab-ca.pem")
         self._indexer_url = published_url(realization, "wazuh-indexer", 9200, "https")
         self._connector_key = generated_output(
             realization,
@@ -102,7 +104,9 @@ class TechVaultNativeEvidenceOwner:
             "techvault:cortex-service-credentials/v1",
             "connector-api-key",
         )
-        self._webapp_ip = webapp_address(realization)
+        endpoint = webapp_endpoint(realization)
+        self._webapp_ip = endpoint[0] if endpoint is not None else None
+        self._webapp_port = endpoint[1] if endpoint is not None else None
 
     def sources(self) -> dict[str, object]:
         """Return exact registration-id to source bindings."""
@@ -217,17 +221,31 @@ class TechVaultNativeEvidenceOwner:
             auth_header=auth,
             timeout=150,
         )
-        connector = self._request_json(
-            f"{thehive_url}/api/v1/status",
-            auth_header=f"Bearer {self._thehive_api_key}",
-            timeout=30,
-        )
+        connector = self._read_thehive_connector(thehive_url)
         finished_at = self._now()
         if not isinstance(report, Mapping) or not bounded(report):
             return None
         return self._project_cortex_result(
             analyzers, report, connector, started_at, finished_at
         )
+
+    def _read_thehive_connector(self, thehive_url: str) -> object:
+        """Poll the read-only connector status through its startup refresh race."""
+
+        connector: object = None
+        sleep = self._sleep or time.sleep
+        for attempt in range(30):
+            connector = self._request_json(
+                f"{thehive_url}/api/v1/status",
+                auth_header=f"Bearer {self._thehive_api_key}",
+                ca_cert_path=self._thehive_ca_cert,
+                timeout=30,
+            )
+            if connector_projection(connector) is not None:
+                break
+            if attempt < 29:
+                sleep(2.0)
+        return connector
 
     @staticmethod
     def _project_cortex_result(
@@ -305,7 +323,11 @@ class TechVaultNativeEvidenceOwner:
         if parsed is not None:
             digests, sids = parsed
             outcome = {
-                "image_ref": image_ref,
+                # A locally built backend image has a tag in the plan and an
+                # immutable image ID only after realization.  Report their
+                # observed digest binding without pretending the author pinned
+                # the local implementation in advance.
+                "image_ref": f"{image_ref.split('@', 1)[0]}@{image_digest}",
                 "image_digest": image_digest,
                 "content_identities": identities,
                 "realized_byte_digests": digests,
@@ -345,7 +367,7 @@ class TechVaultNativeEvidenceOwner:
         """Send one fixed participant-equivalent Kali login probe."""
 
         execute = getattr(self._backend, "container_exec_with_input", None)
-        if not self._webapp_ip or not callable(execute):
+        if not self._webapp_ip or self._webapp_port is None or not callable(execute):
             return None
         trigger_id = "aptl-probe-" + secrets.token_hex(8)
         triggered_at = self._now()
@@ -354,12 +376,14 @@ class TechVaultNativeEvidenceOwner:
             + trigger_id
             + "%27--&password=aptl-observation-probe"  # NOSONAR S2068: fixed probe
         )
-        endpoint = urlunsplit(("http", self._webapp_ip, "/login", "", ""))
+        endpoint = urlunsplit(
+            ("http", f"{self._webapp_ip}:{self._webapp_port}", "/login", "", "")
+        )
         result = execute(
             _KALI_CONTAINER,
             [
                 "curl",
-                "-fsS",
+                "-sS",
                 "-o",
                 "/dev/null",
                 "-X",

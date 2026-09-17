@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import shlex
 import tarfile
 import tempfile
@@ -29,8 +30,16 @@ from aptl.backends.raes_materializer import (
     EnsureDirectoryOp,
     EnsureUserOp,
     InstallDependencyManifestOp,
+    InstallSoftwareComponentOp,
     PlacePackArtifactOp,
     PlaceProjectContentOp,
+    ProvisionDomainAuthorityOp,
+    SetFilesystemMetadataOp,
+)
+from aptl.backends._raes_docker_observation_values import (
+    metadata_dimension_matches as _metadata_dimension_matches,
+    npm_entrypoint_paths as _npm_entrypoint_paths,
+    samba_domain_info as _samba_domain_info,
 )
 from aptl.backends.raes_package_managers import (
     install_argv,
@@ -105,7 +114,9 @@ class DockerMaterializationExecutor:
                 "refresh package index",
                 _PACKAGE_INDEX_REFRESH_RETRY_DELAYS_SECONDS,
             )
-        self._require_ok(node_address, install_argv(manager, packages), "install packages")
+        self._require_ok(
+            node_address, install_argv(manager, packages), "install packages"
+        )
 
     def ensure_group(self, node_address: str, name: str, gid: int | str | None) -> None:
         argv = ["groupadd", "-f"]
@@ -124,11 +135,36 @@ class DockerMaterializationExecutor:
         self._require_ok(node_address, ["mkdir", "-p", op.path], "ensure directory")
         if op.owner or op.group:
             owner_spec = op.owner + (f":{op.group}" if op.group else "")
-            self._require_ok(node_address, ["chown", owner_spec, op.path], "chown directory")
+            self._require_ok(
+                node_address, ["chown", owner_spec, op.path], "chown directory"
+            )
         if op.mode:
-            self._require_ok(node_address, ["chmod", op.mode, op.path], "chmod directory")
+            self._require_ok(
+                node_address, ["chmod", op.mode, op.path], "chmod directory"
+            )
 
-    def place_file(self, node_address: str, path: str, content: str, mode: str = "") -> None:
+    def set_filesystem_metadata(
+        self, node_address: str, op: SetFilesystemMetadataOp
+    ) -> None:
+        """Apply exact authored ownership and mode to an existing path."""
+
+        owner = op.owner or (str(op.uid) if op.uid is not None else "")
+        group = op.group or (str(op.gid) if op.gid is not None else "")
+        if owner or group:
+            owner_spec = owner + (f":{group}" if group else "")
+            self._require_ok(
+                node_address, ["chown", owner_spec, op.path], "chown filesystem entry"
+            )
+        if op.mode:
+            self._require_ok(
+                node_address,
+                ["chmod", _normalized_mode(op.mode), op.path],
+                "chmod filesystem entry",
+            )
+
+    def place_file(
+        self, node_address: str, path: str, content: str, mode: str = ""
+    ) -> None:
         # base64-encode the content so no authored value is interpreted by the
         # shell; the path is quoted. Creates parent dirs, then chmods if asked.
         encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
@@ -161,9 +197,7 @@ class DockerMaterializationExecutor:
         self._require_ok(node_address, ["mkdir", "-p", parent], "prep content dir")
         self._copy_in(container, str(source), op.dest_path, op.is_directory)
 
-    def place_pack_artifact(
-        self, node_address: str, op: PlacePackArtifactOp
-    ) -> None:
+    def place_pack_artifact(self, node_address: str, op: PlacePackArtifactOp) -> None:
         if self._scenario_root is None or self._copy_in is None:
             raise MaterializationCommandError(
                 f"pack content placement needs a staged pack root on {node_address}"
@@ -182,7 +216,9 @@ class DockerMaterializationExecutor:
             if op.is_directory:
                 staged = Path(staging) / "tree"
                 staged.mkdir()
-                with tarfile.open(fileobj=io.BytesIO(resolved.data), mode="r:*") as archive:
+                with tarfile.open(
+                    fileobj=io.BytesIO(resolved.data), mode="r:*"
+                ) as archive:
                     archive.extractall(staged, filter="data")
             else:
                 staged = Path(staging) / PurePosixPath(op.dest_path).name
@@ -199,8 +235,52 @@ class DockerMaterializationExecutor:
             "install dependency manifest",
         )
 
+    def install_software_component(
+        self, node_address: str, op: InstallSoftwareComponentOp
+    ) -> None:
+        """Install an exact npm lockfile and run its declared build script."""
+
+        if op.ecosystem != "npm":
+            raise MaterializationCommandError(
+                f"unsupported software component ecosystem on {node_address}"
+            )
+        directory = str(PurePosixPath(op.manifest_path).parent)
+        self._require_ok(
+            node_address,
+            ["npm", "--prefix", directory, "ci", "--include=dev"],
+            "install software component",
+        )
+        self._require_ok(
+            node_address,
+            ["npm", "--prefix", directory, "run", "build", "--if-present"],
+            "build software component",
+        )
+
+    def provision_domain_authority(
+        self, node_address: str, op: ProvisionDomainAuthorityOp
+    ) -> None:
+        """Bootstrap the selected Samba provider from authored domain facts."""
+
+        if not op.domain or not op.realm:
+            raise MaterializationCommandError(
+                f"incomplete domain authority parameters on {node_address}"
+            )
+        self._require_ok(
+            node_address,
+            ["aptl-provision-samba-domain", op.domain, op.realm],
+            "provision domain authority",
+        )
+        self._require_ok_with_retry(
+            node_address,
+            ["samba-tool", "domain", "info", "127.0.0.1"],
+            "wait for domain authority",
+            (0.25, 0.5, 1.0, 2.0, 4.0, 8.0),
+        )
+
     def enable_service_unit(self, node_address: str, unit_name: str) -> None:
-        self._require_ok(node_address, ["systemctl", "enable", unit_name], "enable unit")
+        self._require_ok(
+            node_address, ["systemctl", "enable", unit_name], "enable unit"
+        )
 
     def start_service_unit(self, node_address: str, unit_name: str) -> None:
         self._require_ok(node_address, ["systemctl", "start", unit_name], "start unit")
@@ -225,6 +305,30 @@ class DockerMaterializationExecutor:
     def observe_file(self, node_address: str, path: str) -> bool:
         return self._exec(node_address, ["test", "-e", path]).returncode == 0
 
+    def observe_filesystem_metadata(
+        self, node_address: str, op: SetFilesystemMetadataOp
+    ) -> bool:
+        """Read owner/group/id/mode with one bounded GNU stat invocation."""
+
+        outcome = self._exec(
+            node_address,
+            ["stat", "-c", "%U:%G:%u:%g:%a", op.path],
+        )
+        fields = outcome.stdout.strip().split(":") if outcome.returncode == 0 else []
+        if len(fields) != 5:
+            return False
+        owner, group, uid, gid, mode = fields
+        return all(
+            _metadata_dimension_matches(actual, expected)
+            for actual, expected in (
+                (owner, op.owner),
+                (group, op.group),
+                (uid, op.uid),
+                (gid, op.gid),
+                (mode.zfill(4), _normalized_mode(op.mode) if op.mode else ""),
+            )
+        )
+
     def observe_dependency_manifest_installed(
         self, node_address: str, op: InstallDependencyManifestOp
     ) -> bool:
@@ -234,7 +338,81 @@ class DockerMaterializationExecutor:
         # weaker check.
         if not op.name:
             return False
-        return self._exec(node_address, manifest_query_argv(op.ecosystem, op.name)).returncode == 0
+        return (
+            self._exec(
+                node_address, manifest_query_argv(op.ecosystem, op.name)
+            ).returncode
+            == 0
+        )
+
+    def observe_software_component(
+        self, node_address: str, op: InstallSoftwareComponentOp
+    ) -> bool:
+        """Read npm package identity and verify its main/bin output exists."""
+
+        package = self._observed_npm_package(node_address, op)
+        directory = str(PurePosixPath(op.manifest_path).parent)
+        outputs = _npm_entrypoint_paths(package or {})
+        return bool(
+            package
+            and package.get("name") == op.package_name
+            and package.get("version") == op.version
+            and outputs
+            and all(
+                self._exec(
+                    node_address, ["test", "-f", f"{directory}/{path}"]
+                ).returncode
+                == 0
+                for path in outputs
+            )
+        )
+
+    def _observed_npm_package(
+        self, node_address: str, op: InstallSoftwareComponentOp
+    ) -> dict[str, object] | None:
+        """Read the selected npm package metadata, failing closed on bad output."""
+
+        if op.ecosystem != "npm":
+            return None
+        directory = str(PurePosixPath(op.manifest_path).parent)
+        outcome = self._exec(
+            node_address,
+            [
+                "npm",
+                "--prefix",
+                directory,
+                "pkg",
+                "get",
+                "name",
+                "version",
+                "main",
+                "bin",
+            ],
+        )
+        package: object = None
+        if outcome.returncode == 0:
+            try:
+                package = json.loads(outcome.stdout)
+            except (TypeError, ValueError):
+                pass
+        return package if isinstance(package, dict) else None
+
+    def observe_domain_authority(
+        self, node_address: str, op: ProvisionDomainAuthorityOp
+    ) -> bool:
+        """Read Samba's served DNS and NetBIOS identities back exactly."""
+
+        outcome = self._exec(
+            node_address, ["samba-tool", "domain", "info", "127.0.0.1"]
+        )
+        if outcome.returncode != 0:
+            return False
+        observed = _samba_domain_info(outcome.stdout)
+        return (
+            observed.get("forest", "").casefold() == op.realm.casefold()
+            and observed.get("domain", "").casefold() == op.realm.casefold()
+            and observed.get("netbios domain", "").casefold() == op.domain.casefold()
+        )
 
     def observe_service_unit_enabled(self, node_address: str, unit_name: str) -> bool:
         outcome = self._exec(node_address, ["systemctl", "is-enabled", unit_name])
@@ -290,3 +468,10 @@ def _useradd_argv(op: EnsureUserOp) -> list[str]:
         argv += ["-d", op.home]
     argv.append(op.username)
     return argv
+
+
+def _normalized_mode(mode: str) -> str:
+    """Return an SDL octal mode in the four-digit form used by chmod/stat."""
+
+    value = mode[2:] if mode.startswith("0o") else mode
+    return value.zfill(4)

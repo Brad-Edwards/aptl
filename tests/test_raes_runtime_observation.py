@@ -11,6 +11,7 @@ disclosed as a commitment, never raw.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -41,6 +42,8 @@ from raes_contracts.apparatus import RealizationVerificationScope
 from raes_contracts.vocabulary import ObservationStrength
 
 from aptl.backends.raes_diagnostics import snapshot_after_apply
+from aptl.backends import _raes_operational_observation as operational_observation
+from aptl.backends._raes_observation_helpers import ObservedResource
 from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.backends.raes_observation import observe_realization
 from aptl.backends.raes_planning_compat import DAEMON_READBACK_RUNTIME_CONCERNS
@@ -445,7 +448,7 @@ def test_restart_policy_mismatch_is_rejected():
     assert _GATE_REJECT in codes
 
 
-def test_backend_restart_default_is_disclosed_as_open_realization():
+def test_backend_restart_default_is_not_reported_as_an_open_selection():
     runtime = _runtime()
     backend = _Backend({_CONTAINER: _inspect(restart="unless-stopped")})
 
@@ -458,12 +461,10 @@ def test_backend_restart_default_is_disclosed_as_open_realization():
 
     assert codes == []
     assert (
-        observations[_ADDRESS].concerns[CONCERN_PAYLOAD_PATH["runtime-restart-policy"]]
-        == "unless_stopped"
+        CONCERN_PAYLOAD_PATH["runtime-restart-policy"]
+        not in observations[_ADDRESS].concerns
     )
-    assert [item.provenance for item in provenance] == [
-        ExplicitnessProvenance.BACKEND_REALIZED
-    ]
+    assert provenance == ()
 
 
 def test_node_memory_limit_is_disclosed_from_daemon_state():
@@ -739,6 +740,47 @@ def test_missing_declared_directory_is_omitted_and_rejected():
 
     assert _FILESYSTEM_PATH not in observations[_ADDRESS].concerns
     assert _GATE_REJECT in codes
+
+
+def test_filesystem_metadata_is_read_back_and_classification_is_preserved():
+    runtime = _runtime(
+        filesystem_inventory=[
+            {
+                "path": "/root/root.txt",
+                "entry_type": "file",
+                "owner_user": "root",
+                "owner_group": "root",
+                "uid": 0,
+                "gid": 0,
+                "mode": "0600",
+                "size": 17,
+                "sensitivity": "operator_secret",
+            }
+        ]
+    )
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                ("test", "-f", "/root/root.txt"): (0, ""),
+                (
+                    "stat",
+                    "-c",
+                    "%U:%G:%u:%g:%a:%s",
+                    "/root/root.txt",
+                ): (0, "root:root:0:0:600:17\n"),
+            }
+        },
+    )
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-filesystem-inventory"
+    )
+
+    assert codes == []
+    observed = observations[_ADDRESS].concerns[_FILESYSTEM_PATH]
+    assert observed[0]["mode"] == "0600"
+    assert observed[0]["sensitivity"] == "operator_secret"
 
 
 def test_declared_systemd_unit_is_disclosed_after_guest_state_queries_match():
@@ -1468,10 +1510,11 @@ def test_unix_listener_absent_socket_is_omitted_and_rejected():
     assert _GATE_REJECT in codes
 
 
-def test_undeclared_network_listener_is_rejected():
-    # Cycle-7 review: a workload that opens a tcp/udp port the contract does not
-    # declare is excess exposure and must fail closed, not be omitted from
-    # attestation while the port stays reachable.
+def test_additional_implementation_listener_does_not_erase_declared_evidence():
+    # service_listeners names the endpoints the author requires; it is not an
+    # exhaustive kernel socket inventory.  An implementation-internal socket
+    # therefore cannot erase native evidence that the required listener exists.
+    # Host-published ports remain separately governed and excess-checked.
     runtime = _listener_runtime()  # declares only tcp 8080
     backend = _Backend(
         {_CONTAINER: _inspect()},
@@ -1480,8 +1523,8 @@ def test_undeclared_network_listener_is_rejected():
         ),
     )
     codes, _provenance, observations = _gate(runtime, backend, "service-listeners")
-    assert _LISTENERS_PATH not in observations[_ADDRESS].concerns
-    assert _GATE_REJECT in codes
+    assert codes == []
+    assert _LISTENERS_PATH in observations[_ADDRESS].concerns
 
 
 def test_docker_embedded_dns_resolver_is_baseline_not_excess():
@@ -1510,14 +1553,7 @@ def test_docker_embedded_dns_resolver_is_baseline_not_excess():
     assert _LISTENERS_PATH in observations[_ADDRESS].concerns
 
 
-def test_extra_socket_on_the_resolver_address_defeats_attribution():
-    """A workload cannot hide a listener behind the resolver's address.
-
-    Linux lets a container bind an unused port on 127.0.0.11, and the socket
-    table cannot distinguish that from Docker's own resolver socket. A second
-    socket of the same protocol makes neither attributable, so both stay subject
-    to excess detection and the gate rejects.
-    """
+def test_extra_socket_on_the_resolver_address_does_not_hide_required_listener():
     runtime = _listener_runtime()  # declares only tcp 8080
     backend = _Backend(
         {_CONTAINER: _inspect()},
@@ -1531,12 +1567,12 @@ def test_extra_socket_on_the_resolver_address_defeats_attribution():
         ),
     )
     codes, _provenance, observations = _gate(runtime, backend, "service-listeners")
-    assert _LISTENERS_PATH not in observations[_ADDRESS].concerns
-    assert _GATE_REJECT in codes
+    assert codes == []
+    assert _LISTENERS_PATH in observations[_ADDRESS].concerns
 
 
 def test_resolver_attribution_is_per_protocol():
-    """One tcp plus one udp is the resolver's shape and stays attributable."""
+    """Resolver socket multiplicity does not affect required endpoint proof."""
     runtime = _listener_runtime()  # declares only tcp 8080
     backend = _Backend(
         {_CONTAINER: _inspect()},
@@ -1549,19 +1585,12 @@ def test_resolver_attribution_is_per_protocol():
             ]
         ),
     )
-    # The duplicated udp pair is unattributable and undeclared, so the gate
-    # rejects even though the tcp resolver socket alone would have been baseline.
     codes, _provenance, observations = _gate(runtime, backend, "service-listeners")
-    assert _LISTENERS_PATH not in observations[_ADDRESS].concerns
-    assert _GATE_REJECT in codes
+    assert codes == []
+    assert _LISTENERS_PATH in observations[_ADDRESS].concerns
 
 
-def test_undeclared_listener_on_ordinary_loopback_is_still_rejected():
-    """The carve-out is the resolver address alone, not loopback in general.
-
-    A workload port on 127.0.0.1 is a real undeclared listener; exempting all of
-    loopback would hide it.
-    """
+def test_additional_loopback_listener_does_not_erase_required_listener():
     runtime = _listener_runtime()  # declares only tcp 8080
     backend = _Backend(
         {_CONTAINER: _inspect()},
@@ -1570,8 +1599,8 @@ def test_undeclared_listener_on_ordinary_loopback_is_still_rejected():
         ),
     )
     codes, _provenance, observations = _gate(runtime, backend, "service-listeners")
-    assert _LISTENERS_PATH not in observations[_ADDRESS].concerns
-    assert _GATE_REJECT in codes
+    assert codes == []
+    assert _LISTENERS_PATH in observations[_ADDRESS].concerns
 
 
 def test_declared_listener_on_the_resolver_address_is_still_corroborated():
@@ -1632,7 +1661,7 @@ def test_init_capability_baseline_matches_the_substrate_init_requirements():
 
 
 # --------------------------------------------------------------------------- #
-# forwarding-agents: corroborated against the realized mount footprint (#875)
+# forwarding-agents: exact in-world configuration evidence
 # --------------------------------------------------------------------------- #
 
 _FORWARDING_PATH = CONCERN_PAYLOAD_PATH["forwarding-agents"]
@@ -1727,6 +1756,37 @@ def _content_sync_runtime():
     )
 
 
+def _configured_forwarding_backend(runtime, *, digest_override=None, executable=True):
+    from aptl.core.deployment._forwarding_agent_realization import (
+        _MISP_SYNC_CONFIG,
+        _WAZUH_CONFIG,
+        _misp_sync_config,
+        _wazuh_config,
+    )
+
+    agent = runtime.forwarding_agents[0]
+    implementation = str(getattr(agent.implementation, "value", agent.implementation))
+    if implementation == "wazuh_agent":
+        payload = _wazuh_config(agent)
+        path = _WAZUH_CONFIG
+        binary = "/var/ossec/bin/wazuh-control"
+    else:
+        payload = _misp_sync_config(agent)
+        path = _MISP_SYNC_CONFIG
+        binary = "/usr/local/bin/aptl-misp-suricata-sync"
+    assert payload is not None
+    digest = digest_override or hashlib.sha256(payload.encode()).hexdigest()
+    return _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                ("test", "-x", binary): (0 if executable else 1, ""),
+                ("sha256sum", path): (0, f"{digest}  {path}\n"),
+            }
+        },
+    )
+
+
 def _forwarding_gate(runtime: RuntimeConfiguration, backend: _Backend):
     """Drive the disclosure gate for the configuration-scope forwarding concern.
 
@@ -1753,22 +1813,9 @@ def _forwarding_gate(runtime: RuntimeConfiguration, backend: _Backend):
     return [d.code for d in diagnostics], snapshot, observations
 
 
-def test_log_forwarder_with_realized_source_mount_is_corroborated():
+def test_log_forwarder_with_exact_installed_configuration_is_corroborated():
     runtime = _log_forwarder_runtime()
-    backend = _Backend(
-        {
-            _CONTAINER: _inspect(
-                mounts=[
-                    {
-                        "Type": "volume",
-                        "Source": "db_data",
-                        "Destination": "/logs",
-                        "RW": False,
-                    }
-                ]
-            )
-        }
-    )
+    backend = _configured_forwarding_backend(runtime)
     codes, snapshot, observations = _forwarding_gate(runtime, backend)
     assert codes == []
     assert _FORWARDING_PATH in observations[_ADDRESS].concerns
@@ -1783,60 +1830,97 @@ def test_log_forwarder_with_realized_source_mount_is_corroborated():
     )
 
 
-def test_content_sync_reload_socket_mount_is_corroborated():
+def test_content_sync_with_exact_installed_configuration_is_corroborated():
     runtime = _content_sync_runtime()
-    backend = _Backend(
-        {
-            _CONTAINER: _inspect(
-                mounts=[
-                    {
-                        "Type": "volume",
-                        "Source": "suricata_command_socket",
-                        "Destination": "/var/run/suricata",
-                        "RW": True,
-                    }
-                ]
-            )
-        }
-    )
+    backend = _configured_forwarding_backend(runtime)
     codes, _snapshot, observations = _forwarding_gate(runtime, backend)
     assert codes == []
     assert _FORWARDING_PATH in observations[_ADDRESS].concerns
 
 
-def test_forwarding_agent_without_realized_footprint_is_dropped_and_rejected():
-    # The declared tailed source has no covering mount on the realized container,
-    # so the agent is not corroborated: the concern is dropped and the EXACT
-    # requirement is rejected rather than handed a fabricated match.
-    runtime = _log_forwarder_runtime()
-    backend = _Backend({_CONTAINER: _inspect(mounts=[])})
-    codes, _snapshot, observations = _forwarding_gate(runtime, backend)
-    assert _FORWARDING_PATH not in observations[_ADDRESS].concerns
-    assert _GATE_REJECT in codes
-
-
-def test_log_forwarder_on_node_declaring_no_mounts_is_dropped_and_rejected():
-    # A sidecar that declares a tailed source but no mount to carry it cannot
-    # reach that path: nothing in the contract delivers the file and nothing in
-    # the container corroborates it. The concern is dropped and the requirement
-    # rejected, so an agent tailing a path that does not exist is never reported
-    # as realized SIEM coverage.
-    runtime = _runtime(
-        forwarding_agents=_log_forwarder_runtime().model_dump(mode="json")[
-            "forwarding_agents"
-        ]
+def test_wazuh_apt_bootstrap_downloads_key_into_private_directory():
+    from aptl.core.deployment._forwarding_agent_realization import (
+        _WAZUH_BOOTSTRAP_DIR,
+        _WAZUH_KEY_DOWNLOAD,
+        _install_wazuh_agent,
     )
-    assert not runtime.mounts
-    backend = _Backend({_CONTAINER: _inspect(mounts=[])})
+
+    class SuccessfulBackend:
+        def __init__(self):
+            self.commands = []
+
+        def container_exec(self, _name, command, *, timeout=None):
+            self.commands.append((command, timeout))
+            return SimpleNamespace(returncode=0, stdout="")
+
+        def container_exec_with_input(self, _name, command, _payload, *, timeout=None):
+            self.commands.append((command, timeout))
+            return SimpleNamespace(returncode=0, stdout="")
+
+    backend = SuccessfulBackend()
+
+    assert _install_wazuh_agent(backend, _CONTAINER, "wazuh-manager") is None
+
+    commands = [command for command, _timeout in backend.commands]
+    assert ["install", "-d", "-m", "0700", _WAZUH_BOOTSTRAP_DIR] in commands
+    curl = next(command for command in commands if command[0] == "curl")
+    assert curl[curl.index("-o") + 1] == _WAZUH_KEY_DOWNLOAD
+    gpg = next(command for command in commands if command[0] == "gpg")
+    assert gpg[-1] == _WAZUH_KEY_DOWNLOAD
+    assert all("/tmp/" not in argument for command in commands for argument in command)
+
+
+def test_wazuh_rpm_bootstrap_imports_key_without_temporary_file():
+    from aptl.core.deployment._forwarding_agent_realization import (
+        _install_wazuh_agent,
+    )
+
+    class SuccessfulDnfBackend:
+        def __init__(self):
+            self.commands = []
+
+        def container_exec(self, _name, command, *, timeout=None):
+            self.commands.append((command, timeout))
+            returncode = 1 if command == ["test", "-x", "/usr/bin/apt-get"] else 0
+            return SimpleNamespace(returncode=returncode, stdout="")
+
+        def container_exec_with_input(self, _name, command, _payload, *, timeout=None):
+            self.commands.append((command, timeout))
+            return SimpleNamespace(returncode=0, stdout="")
+
+    backend = SuccessfulDnfBackend()
+
+    assert _install_wazuh_agent(backend, _CONTAINER, "wazuh-manager") is None
+
+    commands = [command for command, _timeout in backend.commands]
+    assert [
+        "rpm",
+        "--import",
+        "https://packages.wazuh.com/key/GPG-KEY-WAZUH",
+    ] in commands
+    assert any(
+        command[:4] == ["env", "WAZUH_MANAGER=wazuh-manager", "dnf", "install"]
+        for command in commands
+    )
+
+
+def test_forwarding_agent_without_executable_is_dropped_and_rejected():
+    runtime = _log_forwarder_runtime()
+    backend = _configured_forwarding_backend(runtime, executable=False)
     codes, _snapshot, observations = _forwarding_gate(runtime, backend)
     assert _FORWARDING_PATH not in observations[_ADDRESS].concerns
     assert _GATE_REJECT in codes
 
 
-def test_forwarding_agent_without_observable_footprint_is_dropped():
-    # A configuration-scope agent whose only source is a network pull with no
-    # unix-socket reload channel declares no host-observable mount footprint, so
-    # it cannot be corroborated: honest absence, rejected not fabricated.
+def test_log_forwarder_with_different_configuration_is_dropped_and_rejected():
+    runtime = _log_forwarder_runtime()
+    backend = _configured_forwarding_backend(runtime, digest_override="0" * 64)
+    codes, _snapshot, observations = _forwarding_gate(runtime, backend)
+    assert _FORWARDING_PATH not in observations[_ADDRESS].concerns
+    assert _GATE_REJECT in codes
+
+
+def test_forwarding_agent_without_configuration_is_dropped():
     runtime = _runtime(
         forwarding_agents=[
             {
@@ -1869,9 +1953,7 @@ def test_forwarding_agent_without_observable_footprint_is_dropped():
             }
         ]
     )
-    # No suricata_command_socket mount is realized, so the reload channel's
-    # serving volume is absent from the container.
-    backend = _Backend({_CONTAINER: _inspect(mounts=[])})
+    backend = _Backend({_CONTAINER: _inspect()})
     codes, _snapshot, observations = _forwarding_gate(runtime, backend)
     assert _FORWARDING_PATH not in observations[_ADDRESS].concerns
     assert _GATE_REJECT in codes
@@ -1882,7 +1964,7 @@ def test_forwarding_agent_without_observable_footprint_is_dropped():
 # --------------------------------------------------------------------------- #
 
 
-def test_empty_runtime_reports_only_observed_backend_restart_default():
+def test_empty_runtime_reports_no_unsolicited_backend_runtime_defaults():
     runtime = _runtime()
     backend = _Backend({_CONTAINER: _inspect()})
     _plan_, observations = _observe(runtime, backend)
@@ -1890,5 +1972,79 @@ def test_empty_runtime_reports_only_observed_backend_restart_default():
     assert concerns == {
         ("node_kind",): "compute",
         ("os_family",): "linux",
-        CONCERN_PAYLOAD_PATH["runtime-restart-policy"]: "no",
     }
+
+
+def test_operational_observations_do_not_reemit_snapshot_disclosures(monkeypatch):
+    existing = SimpleNamespace(
+        address="provision.node.vm",
+        field_path="nodes.vm.runtime.packages",
+        domain="runtime-realization",
+        requirement_kind="runtime-packages",
+    )
+    newly_bound = SimpleNamespace(
+        address="provision.node.vm",
+        field_path="nodes.vm.realization.compute-substrate",
+        domain="provisioning",
+        requirement_kind="compute-substrate",
+    )
+    monkeypatch.setattr(
+        operational_observation, "_native_observations", lambda *_args: ()
+    )
+    monkeypatch.setattr(
+        operational_observation,
+        "compute_substrate_collection_addresses",
+        lambda **_kwargs: ("provision.node.vm",),
+    )
+    monkeypatch.setattr(
+        operational_observation,
+        "bind_compute_substrate_observations",
+        lambda **_kwargs: (existing, newly_bound),
+    )
+    monkeypatch.setattr(
+        operational_observation,
+        "bind_operating_system_observations",
+        lambda **kwargs: tuple(kwargs["previous"]),
+    )
+    monkeypatch.setattr(
+        operational_observation,
+        "_bind_runtime_observations",
+        lambda **kwargs: tuple(kwargs["previous"]),
+    )
+
+    result = operational_observation.operational_realization_observations(
+        plan=SimpleNamespace(operation_id="op-1", realization_envelope="env-1"),
+        observations={},
+        envelope=SimpleNamespace(identity="env-1"),
+        previous=(existing,),
+    )
+
+    assert result == (newly_bound,)
+
+
+def test_service_listener_readback_binds_daemon_observation_disclosure():
+    authority = SimpleNamespace(
+        address=_ADDRESS,
+        field_path="nodes.vm.runtime.service_listeners",
+        domain=REALIZATION_DOMAIN,
+        requirement_kind="service-listeners",
+    )
+    plan = SimpleNamespace(realization_authority=(authority,))
+    observations = {
+        _ADDRESS: ObservedResource(
+            realized=True,
+            concerns={CONCERN_PAYLOAD_PATH["service-listeners"]: []},
+        )
+    }
+
+    result = operational_observation._bind_runtime_observations(
+        plan=plan,
+        observations=observations,
+        previous=(),
+        concern_kinds=frozenset({"service-listeners"}),
+        observation_strength=ObservationStrength.DAEMON_OBSERVED,
+    )
+
+    assert len(result) == 1
+    assert result[0].requirement_kind == "service-listeners"
+    assert result[0].observation_strength is ObservationStrength.DAEMON_OBSERVED

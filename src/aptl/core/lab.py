@@ -9,6 +9,7 @@ startup.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -484,32 +485,52 @@ def _finalize_required_transcript_capture(
     from aptl.backends.raes_evidence_acquisition import (
         finalize_active_transcript_authority,
         load_active_transcript_authorities,
+        mark_transcript_finalization_failed,
     )
     from aptl.core.evidence.outcomes import AcquisitionDisposition
 
     result = None
-    failed = False
+    state = None
     try:
         active = load_active_transcript_authorities(project_dir)
         if active:
             if len(active) != 1:
                 raise ValueError("multiple pending transcript authorities")
+            state = active[0]
             result = finalize_active_transcript_authority(
                 project_dir=project_dir,
-                state=active[0],
+                state=state,
                 backend=backend,
+                expected_run_store_base=_expected_transcript_store(project_dir),
             )
     except Exception:
         log.error("Required transcript finalization failed before teardown")
-        failed = True
-    failed = failed or bool(
+        result = False
+    failed = result is False or bool(
         result is not None
         and result.disposition is not AcquisitionDisposition.SEALED_READY
     )
+    if failed and state is not None:
+        try:
+            mark_transcript_finalization_failed(project_dir=project_dir, state=state)
+        except Exception:
+            log.error("Required transcript finalization failure could not be recorded")
     return (
         LabResult(success=False, error=_TRANSCRIPT_FINALIZATION_FAILED)
         if failed
         else None
+    )
+
+
+def _expected_transcript_store(project_dir: Path) -> Path:
+    """Resolve the configured run store used to validate transcript output."""
+
+    config_path = find_config(project_dir)
+    config = load_config(config_path) if config_path is not None else AptlConfig()
+    config_root = config_path.parent if config_path is not None else project_dir
+    expected_store = Path(config.run_storage.local_path)
+    return (
+        expected_store if expected_store.is_absolute() else config_root / expected_store
     )
 
 
@@ -2332,6 +2353,7 @@ def _activate_required_transcript(
     """Persist and activate one complete admitted transcript authority."""
 
     from aptl.backends.raes_evidence_acquisition import (
+        mark_transcript_activation_failed,
         persist_active_transcript_authority,
     )
 
@@ -2348,8 +2370,18 @@ def _activate_required_transcript(
         authority = activate(plan_id=plan.plan_id, run_id=ctx.run_id)
     except Exception:
         log.error("Required transcript apparatus activation failed")
-        return None
-    return authority if isinstance(authority, dict) else None
+        authority = None
+    if isinstance(authority, dict):
+        return authority
+    try:
+        mark_transcript_activation_failed(
+            project_dir=ctx.project_dir,
+            plan_id=plan.plan_id,
+            run_id=ctx.run_id,
+        )
+    except Exception:
+        log.error("Required transcript activation failure could not be sealed")
+    return None
 
 
 def _step_write_run_record(ctx: _LabStartContext) -> LabResult | None:
@@ -2853,23 +2885,21 @@ def _step_acquire_required_native_evidence(
     admitted = ctx.admitted_start
     plan = getattr(admitted, "capture_plan", None)
     bindings = tuple(plan.runtime_bindings()) if plan is not None else ()
-    if not any(
-        binding.registration_id in NATIVE_TECHVAULT_REGISTRATIONS
-        for binding in bindings
-    ):
+    registration_ids = {binding.registration_id for binding in bindings}
+    if registration_ids.isdisjoint(NATIVE_TECHVAULT_REGISTRATIONS):
         return None
 
     realization = getattr(admitted, "realization", None)
     request = _native_evidence_request(ctx, plan, realization)
-    capture = None
-    if request is not None:
-        try:
-            capture = acquire_native_evidence(request)
-        except Exception:
-            log.error("Required native scenario evidence acquisition failed")
+    try:
+        capture = acquire_native_evidence(request) if request is not None else None
+    except Exception:
+        log.exception("Required native scenario evidence acquisition failed")
+        capture = None
     if capture is None:
         failure = LabResult(success=False, error=_NATIVE_CAPTURE_FAILED)
     else:
+        _log_native_evidence_reports(capture)
         ctx.native_evidence_acquisition = capture
         failure = (
             _refresh_required_native_evidence(ctx, admitted, capture.records)
@@ -2877,6 +2907,24 @@ def _step_acquire_required_native_evidence(
             else LabResult(success=False, error=_NATIVE_CAPTURE_FAILED)
         )
     return failure
+
+
+def _log_native_evidence_reports(capture: object) -> None:
+    """Log bounded collector statuses without exposing captured evidence."""
+
+    for report in getattr(capture, "reports", ()):
+        log_method = (
+            log.info if report.status.value in {"ok", "empty_ok"} else log.warning
+        )
+        diagnostic = (
+            f" ({report.diagnostic_code})" if report.diagnostic_code is not None else ""
+        )
+        log_method(
+            "Native evidence collector %s reported %s%s",
+            report.registration_id,
+            report.status.value,
+            diagnostic,
+        )
 
 
 def _native_evidence_request(
@@ -2960,7 +3008,7 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
     # `lab stop -v` + `lab start`.
     log.info("Step 14: Syncing MCP client config with seeded API keys...")
     try:
-        _sync_mcp_config_keys(ctx.project_dir)
+        _sync_mcp_config_keys(ctx.project_dir, ctx.resolved_ports)
     except Exception:
         # Exception text may include API key names — keep it in the log
         # only (existing redaction). Diagnostic stays narrow.
@@ -3329,13 +3377,81 @@ def _refresh_mcp_server_keys(
     return updated
 
 
-def _sync_mcp_config_keys(project_dir: Path) -> None:
-    """Create or update `.mcp.json` with dynamic API keys from `.env`.
+_APTL_HP_REF_RE = re.compile(r"\$\{(APTL_HP_[A-Z0-9_]+)\}")
+
+
+def _resolved_host_port_env(resolved_ports: list[object]) -> dict[str, str]:
+    """Map each resolved host port's ``APTL_HP_*`` var to its port value.
+
+    The MCP ``docker-lab-config.json`` files reference host ports as
+    ``${APTL_HP_...}`` and each server substitutes them from its environment
+    (``aptl-mcp-common`` loads ``.env`` and applies ``substituteEnvVars``).
+    Injecting the *resolved* (possibly remapped) values into each server's
+    ``.mcp.json`` env block is what lets host-run MCP servers reach a lab whose
+    ports were remapped to avoid a collision with another lab on the same host.
+    """
+    env: dict[str, str] = {}
+    for resolved in resolved_ports:
+        var = getattr(resolved, "env_var", None)
+        port = getattr(resolved, "resolved_port", None)
+        if isinstance(var, str) and var and isinstance(port, int):
+            env[var] = str(port)
+    return env
+
+
+def _server_config_port_refs(spec: dict[str, Any], project_dir: Path) -> set[str]:
+    """Return the ``APTL_HP_*`` vars a server's docker-lab-config.json references."""
+    args = spec.get("args")
+    entry = None
+    if isinstance(args, list):
+        entry = next(
+            (a for a in args if isinstance(a, str) and a.endswith("index.js")), None
+        )
+    if entry is None:
+        return set()
+    config_path = (
+        (project_dir / entry).resolve().parent.parent / "docker-lab-config.json"
+    )
+    try:
+        return set(_APTL_HP_REF_RE.findall(config_path.read_text(encoding="utf-8")))
+    except OSError:
+        return set()
+
+
+def _inject_mcp_server_ports(
+    cfg: dict[str, Any], project_dir: Path, port_env: dict[str, str]
+) -> list[str]:
+    """Inject resolved ``APTL_HP_*`` host ports into each server's env block.
+
+    Only the vars a server's own config references are written, so a remapped
+    lab's host-run MCP servers target the actual ports without hardcoding.
+    """
+    updated: list[str] = []
+    servers = cfg.get("mcpServers", {})
+    if not isinstance(servers, dict) or not port_env:
+        return updated
+    for server_name, spec in servers.items():
+        if not isinstance(spec, dict):
+            continue
+        refs = _server_config_port_refs(spec, project_dir)
+        spec_env = spec.setdefault("env", {}) if refs else None
+        if not isinstance(spec_env, dict):
+            continue
+        for var in sorted(refs):
+            if var in port_env and spec_env.get(var) != port_env[var]:
+                spec_env[var] = port_env[var]
+                updated.append(f"{server_name}.{var}")
+    return updated
+
+
+def _sync_mcp_config_keys(project_dir: Path, resolved_ports: list[object]) -> None:
+    """Create or update `.mcp.json` with dynamic API keys and resolved ports.
 
     A fresh lab copies the shipped example so its seven enabled custom MCPs
     are client-ready without a manual configuration step. Existing client
-    configuration is preserved: only the three known dynamic credential
-    entries are refreshed after seed-prime.
+    configuration is preserved: only the known dynamic credential entries are
+    refreshed after seed-prime, and each server's ``${APTL_HP_*}`` host ports
+    are injected with the run's resolved (possibly remapped) values.
     """
     import json
 
@@ -3360,6 +3476,9 @@ def _sync_mcp_config_keys(project_dir: Path) -> None:
 
     cfg = json.loads(source_path.read_text())
     updated = _refresh_mcp_server_keys(cfg, env_vals)
+    updated += _inject_mcp_server_ports(
+        cfg, project_dir, _resolved_host_port_env(resolved_ports)
+    )
 
     created = source_path == example_path
     if updated or created:

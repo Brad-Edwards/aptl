@@ -320,8 +320,9 @@ def _exact_correlated_pair(
         (left, right)
         for left in sensor
         for right in manager
-        if str(left.get("flow_id", ""))
-        and str(left.get("flow_id")) == str(_nested(right, "data", "flow_id"))
+        if _canonical_flow_id(left.get("flow_id"))
+        and _canonical_flow_id(left.get("flow_id"))
+        == _canonical_flow_id(_nested(right, "data", "flow_id"))
     ]
     return pairs[0] if len(pairs) == 1 else None
 
@@ -350,12 +351,14 @@ def _sqli_projection(
 ) -> dict[str, object]:
     """Project only the correlated fields required by the evidence contract."""
 
-    flow_id = event.get("flow_id", _nested(event, "data", "flow_id"))
+    flow_id = _canonical_flow_id(
+        event.get("flow_id", _nested(event, "data", "flow_id"))
+    )
     return {
         "source": source,
         "trigger_id": trigger["trigger_id"],
         "timestamp": event["timestamp"],
-        "flow_id": str(flow_id),
+        "flow_id": flow_id,
         "source_ip": trigger["source_ip"],
         "destination_ip": trigger["destination_ip"],
         "suricata_signature_id": SURICATA_SQLI_SID,
@@ -372,6 +375,16 @@ def _nested(value: Mapping[str, object], *keys: str) -> object:
             return None
         current = current.get(key)
     return current
+
+
+def _canonical_flow_id(value: object) -> str:
+    """Canonicalize Wazuh's lossless decimal rendering of an integer flow ID."""
+
+    text = str(value)
+    whole, separator, fraction = text.partition(".")
+    if separator and fraction and not fraction.strip("0"):
+        text = whole
+    return text if text.isdecimal() else ""
 
 
 def _suricata_sid(event: Mapping[str, object]) -> int | None:

@@ -203,7 +203,10 @@ def _ensure_generic_base_images(
     node's own start_base_container discover it missing one at a time.
     """
 
-    from aptl.backends.raes_base_substrate import base_container_spec
+    from aptl.backends.raes_base_substrate import (
+        NodePlanningOptions,
+        base_container_spec,
+    )
 
     failures: list[str] = []
     for image_ref in sorted(
@@ -213,6 +216,9 @@ def _ensure_generic_base_images(
                 os=node.os,
                 os_version=node.os_version,
                 runtime=node.runtime,
+                options=NodePlanningOptions(
+                    backend_base_image_ref=getattr(node, "backend_base_image_ref", None)
+                ),
             ).image_ref
             for node in nodes
         }

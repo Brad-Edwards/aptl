@@ -19,10 +19,16 @@ from aptl.core.experiment.capture_plan import (
 from aptl.core.experiment.errors import AdmissionRejection, diagnostic
 
 _TRANSCRIPT_DEMAND_ID = "redteam-session-transcript"
+_SQLI_DEMAND_ID = "suricata-login-sqli-alert"
 _KALI_CAPTURE_FOOTPRINT = (
     "/nodes/kali-capture",
     "/nodes/kali/runtime/interactive-session-ingress",
     "/persistent_volumes/kali_captures",
+)
+_TRAFFIC_MIRROR_FOOTPRINT = (
+    "/nodes/kali",
+    "/nodes/suricata/runtime/network_detection_engines",
+    "/nodes/webapp/runtime/applications",
 )
 
 
@@ -32,9 +38,9 @@ def _capture_apparatus(
 ) -> tuple[CaptureApparatus, ...]:
     """Admit only observers genuinely required by the compiled demands."""
 
-    apparatus: tuple[CaptureApparatus, ...] = ()
-    if _TRANSCRIPT_DEMAND_ID not in demand_ids:
-        return apparatus
+    apparatus: list[CaptureApparatus] = []
+    if not demand_ids.intersection({_TRANSCRIPT_DEMAND_ID, _SQLI_DEMAND_ID}):
+        return ()
     provenance = getattr(scenario, "instantiation_provenance", None)
     designation = getattr(scenario, "realization", None)
     if provenance is not None:
@@ -43,48 +49,103 @@ def _capture_apparatus(
         records = designation_records(designation)
     else:
         records = ()
+    if _TRANSCRIPT_DEMAND_ID in demand_ids:
+        resolutions = _require_open_footprint(
+            records,
+            _KALI_CAPTURE_FOOTPRINT,
+            demand_id=_TRANSCRIPT_DEMAND_ID,
+            message=(
+                "The required session transcript needs an added observer, "
+                "but its governing realization scope is closed."
+            ),
+        )
+        apparatus.append(
+            CaptureApparatus(
+                apparatus_id="aptl.apparatus.kali-session-capture",
+                service_name="kali-capture",
+                container_name="aptl-kali-capture",
+                purpose="complete-red-team-interactive-session-custody",
+                target_refs=("nodes.kali",),
+                governing_scopes=tuple(
+                    sorted(
+                        {
+                            resolution.governing_scope
+                            for resolution in resolutions
+                            if resolution.governing_scope
+                        }
+                    )
+                ),
+                environment_visible=True,
+                observer_effects=(
+                    "sidecar container visible on the shared Docker daemon",
+                    "PTY ingress is mediated by the capture broker",
+                    "Kali native SSH moves to loopback TCP/2222 while capture is active",
+                    "Kali authorizes its existing pivot key for the broker's loopback relay",
+                    "session bytes and custody metadata consume bounded storage",
+                ),
+            )
+        )
+    if _SQLI_DEMAND_ID in demand_ids:
+        resolutions = _require_open_footprint(
+            records,
+            _TRAFFIC_MIRROR_FOOTPRINT,
+            demand_id=_SQLI_DEMAND_ID,
+            message=(
+                "The required native IDS evidence needs a host-boundary frame "
+                "mirror, but its governing realization scope is closed."
+            ),
+        )
+        apparatus.append(
+            CaptureApparatus(
+                apparatus_id="aptl.apparatus.suricata-traffic-mirror",
+                service_name="backend-traffic-mirror",
+                container_name="",
+                purpose="native-suricata-visibility-of-kali-webapp-traffic",
+                target_refs=("nodes.kali", "nodes.suricata", "nodes.webapp"),
+                governing_scopes=tuple(
+                    sorted(
+                        {
+                            resolution.governing_scope
+                            for resolution in resolutions
+                            if resolution.governing_scope
+                        }
+                    )
+                ),
+                environment_visible=True,
+                observer_effects=(
+                    "webapp ingress and egress frames are copied to the existing Suricata interface",
+                    "participant delivery is not redirected, delayed, or modified",
+                    "host traffic-control state consumes bounded backend resources",
+                ),
+            )
+        )
+    return tuple(apparatus)
+
+
+def _require_open_footprint(
+    records: object,
+    pointers: tuple[str, ...],
+    *,
+    demand_id: str,
+    message: str,
+) -> tuple[object, ...]:
+    """Resolve an apparatus footprint and reject any closed governing scope."""
+
     resolutions = tuple(
         resolve_realization_designation(records, field_pointer=pointer)
-        for pointer in _KALI_CAPTURE_FOOTPRINT
+        for pointer in pointers
     )
     if any(resolution.closure is not Closure.OPEN_WORLD for resolution in resolutions):
         raise AdmissionRejection(
             (
                 diagnostic(
                     "aptl.capture-apparatus.closed-realization-scope",
-                    "evidence_requirements.redteam-session-transcript",
-                    "The required session transcript needs an added observer, "
-                    "but its governing realization scope is closed.",
+                    f"evidence_requirements.{demand_id}",
+                    message,
                 ),
             )
         )
-    apparatus = (
-        CaptureApparatus(
-            apparatus_id="aptl.apparatus.kali-session-capture",
-            service_name="kali-capture",
-            container_name="aptl-kali-capture",
-            purpose="complete-red-team-interactive-session-custody",
-            target_refs=("nodes.kali",),
-            governing_scopes=tuple(
-                sorted(
-                    {
-                        resolution.governing_scope
-                        for resolution in resolutions
-                        if resolution.governing_scope
-                    }
-                )
-            ),
-            environment_visible=True,
-            observer_effects=(
-                "sidecar container visible on the shared Docker daemon",
-                "PTY ingress is mediated by the capture broker",
-                "Kali native SSH moves to loopback TCP/2222 while capture is active",
-                "Kali authorizes its existing pivot key for the broker's loopback relay",
-                "session bytes and custody metadata consume bounded storage",
-            ),
-        ),
-    )
-    return apparatus
+    return resolutions
 
 
 def admit_sdl_evidence(

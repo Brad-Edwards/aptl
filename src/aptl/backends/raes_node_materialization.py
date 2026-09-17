@@ -26,7 +26,12 @@ _MAX_MATERIALIZATION_WORKERS = 8
 
 from raes.runtime_configuration import RuntimeConfiguration
 
-from aptl.backends.raes_base_substrate import BaseContainerSpec, VolumeMount, plan_node
+from aptl.backends.raes_base_substrate import (
+    BaseContainerSpec,
+    NodePlanningOptions,
+    VolumeMount,
+    plan_node,
+)
 from aptl.backends.raes_docker_materializer import DockerMaterializationExecutor
 from aptl.backends.raes_materializer import MaterializationOp
 from aptl.backends.raes_materializer_engine import materialize_node
@@ -61,6 +66,11 @@ class _MaterializableNode(Protocol):
     # ADR-051 route 3 (issue #876): carried onto the base spec so a route-3
     # node's substrate starts immutably from the verified config id.
     dynamic_composition: bool
+    backend_base_image_ref: str | None
+    backend_base_use_image_command: bool
+    backend_run_capabilities: tuple[str, ...]
+    backend_provider_kind: str
+    backend_provider_parameters: tuple[tuple[str, str], ...]
 
 
 def realize_node(
@@ -84,8 +94,19 @@ def realize_node(
         os_version=node.os_version,
         runtime=node.runtime,
         content=content,
-        dynamic_composition=node.dynamic_composition,
-        extra_volume_mounts=extra_volume_mounts,
+        options=NodePlanningOptions(
+            dynamic_composition=node.dynamic_composition,
+            extra_volume_mounts=extra_volume_mounts,
+            backend_base_image_ref=getattr(node, "backend_base_image_ref", None),
+            backend_base_use_image_command=getattr(
+                node, "backend_base_use_image_command", False
+            ),
+            backend_run_capabilities=getattr(node, "backend_run_capabilities", ()),
+            backend_provider_kind=getattr(node, "backend_provider_kind", ""),
+            backend_provider_parameters=getattr(
+                node, "backend_provider_parameters", ()
+            ),
+        ),
     )
     container = spec.container_name
 

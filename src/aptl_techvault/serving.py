@@ -17,7 +17,7 @@ from aptl.backends.pack_interaction import (
 __version__ = "0.1.0"
 
 _PACK_SET_DIGEST = (
-    "sha256:6300b3d539ab9c1e2287b9852e5408e1811516b818a7acf015f045cb3c9c5b89"
+    "sha256:edd3bb6252990aeaf506904767182d5a3ef2b3828a498fe64c897dccaf954934"
 )
 
 _GROUP_BY_COMPONENT = {
@@ -40,6 +40,7 @@ _GROUP_BY_COMPONENT = {
     "provision.node.shuffle-frontend": "soc",
     "provision.node.shuffle-opensearch": "soc",
     "provision.node.shuffle-orborus": "soc",
+    "provision.node.soc-workstation": "soc",
     # Enterprise workloads
     "provision.node.ad": "enterprise",
     "provision.node.db": "enterprise",

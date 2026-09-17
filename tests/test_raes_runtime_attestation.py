@@ -13,6 +13,11 @@ from aptl.backends.raes_runtime_attestation import (
 from aptl.validation._gate_checks import check_parse
 from tests.helpers import techvault_scenario_bundle
 
+_MISP_BACKEND_IMAGE = (
+    "ghcr.io/misp/misp-docker/misp-core@"
+    "sha256:0eaa4e423d5cd965b7b76aa5665e81d5c05a35bc46a4ffec2ca52e0cfe627e86"
+)
+
 
 class _Backend:
     def __init__(self, digest: str | None) -> None:
@@ -28,12 +33,11 @@ def _misp_node(tmp_path: Path):
     assert scenario is not None
     assert check.passed, check.diagnostics
     declared = scenario.nodes["misp"]
-    exact = declared.source.artifact_requirement.exact_artifact
     return bundle, SimpleNamespace(
         name="misp",
         container_name="aptl-misp",
         runtime=declared.runtime,
-        image=SimpleNamespace(image_ref=f"{exact.artifact_id}@{exact.digest}"),
+        image=SimpleNamespace(image_ref=_MISP_BACKEND_IMAGE),
     )
 
 

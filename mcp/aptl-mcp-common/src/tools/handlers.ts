@@ -197,7 +197,7 @@ const baseHandlers: Record<string, ToolHandler> = {
           text: JSON.stringify({
             target_ip: container.container_ip,
             ssh_user: container.ssh_user,
-            ssh_port: container.ssh_port,
+            ssh_port: Number(container.ssh_port),
             lab_name: labConfig.lab.name,
             lab_network: labConfig.lab.network_subnet,
             target_name: labConfig.server.targetName,

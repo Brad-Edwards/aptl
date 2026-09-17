@@ -765,6 +765,7 @@ src/aptl/appliance/bootstrap.py	optional-delivery	Keep sealed-seat boundary outs
 src/aptl/appliance/build.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/errors.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/input_images.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/input_profile.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/inputs.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/launch.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/manifest.py	optional-delivery	Keep sealed-seat boundary outside default install

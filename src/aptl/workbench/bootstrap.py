@@ -2,18 +2,26 @@
 
 from __future__ import annotations
 
+import ssl
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from fastapi import FastAPI
+from starlette.requests import Request
 
 from aptl.core.runstore import LocalRunStore
 from aptl.core.session import ScenarioSession
 from aptl.workbench.agent import ClaudeCodeManagedAgentAdapter
-from aptl.workbench.app import ParticipantAuthorizer, create_participant_workbench_app
+from aptl.workbench.app import (
+    BrowserPrincipal,
+    ParticipantAuthorizer,
+    create_participant_workbench_app,
+)
+from aptl.workbench.browser_gateway import BrowserGateway, BrowserRoute
 from aptl.workbench.credentials import EphemeralCredentialBroker
-from aptl.workbench.runtime import WorkbenchPaths, WorkbenchRuntime
+from aptl.workbench.guest_binding import GuestDispatchBinding
+from aptl.workbench.profiles import ProfileId, WorkbenchConfigurationError
+from aptl.workbench.runtime import GuestRuntimeBinding, WorkbenchPaths, WorkbenchRuntime
 
 
 @dataclass(frozen=True)
@@ -25,6 +33,15 @@ class LocalWorkbenchSettings:
     claude_executable: Path
     model: str
     node_executable: Path = Path("/usr/bin/node")
+
+
+@dataclass(frozen=True)
+class BrowserIngress:
+    """Trusted localhost virtual hosts and upstream TLS verification policy."""
+
+    routes: tuple[BrowserRoute, ...] = ()
+    port: int = 8080
+    tls_context: ssl.SSLContext | bool = True
 
 
 # Compatibility name for callers; the settings do not require an appliance.
@@ -39,10 +56,8 @@ def create_appliance_workbench_app(
     binding_path: Path | None = None,
     grant_id: str | None = None,
     aptl_executable: Path | None = None,
-    browser_routes: tuple = (),
-    browser_port: int = 8080,
-    browser_tls_context=True,
-):
+    browser: BrowserIngress = BrowserIngress(),
+) -> BrowserGateway:
     """Wire the concrete agent, credential, session, run-store, and HTTP layers."""
     if binding_path is None or grant_id is None or aptl_executable is None:
         from aptl.workbench.profiles import WorkbenchConfigurationError
@@ -57,9 +72,7 @@ def create_appliance_workbench_app(
         aptl_executable=aptl_executable,
         secret_source=secret_source,
         authorizer=authorizer,
-        browser_routes=browser_routes,
-        browser_port=browser_port,
-        browser_tls_context=browser_tls_context,
+        browser=browser,
     )
 
 
@@ -67,7 +80,7 @@ def render_guest_workbench_config(
     *,
     binding_path: Path,
     grant_id: str,
-    profile,
+    profile: ProfileId,
     run_id: str,
     executable: Path,
     output: Path,
@@ -122,7 +135,10 @@ def render_guest_workbench_config(
 class _BrowserProviderBroker(EphemeralCredentialBroker):
     """Browser agents receive only model auth; MCP service leases stay in relay."""
 
-    def prepare(self, profile, run_id, aliases):
+    def prepare(
+        self, profile: ProfileId, run_id: str, aliases: tuple[str, ...]
+    ) -> dict[str, str]:
+        """Lease only provider authentication to the browser agent."""
         return self.prepare_named(profile, run_id, ("ANTHROPIC_API_KEY",))
 
 
@@ -134,10 +150,8 @@ def create_local_workbench_app(
     aptl_executable: Path,
     secret_source: Mapping[str, str],
     authorizer: ParticipantAuthorizer,
-    browser_routes: tuple = (),
-    browser_port: int = 8080,
-    browser_tls_context=True,
-) -> FastAPI:
+    browser: BrowserIngress = BrowserIngress(),
+) -> BrowserGateway:
     """Assemble against an existing full lab without appliance release metadata.
 
     An appliance uses the same factory with an appliance-bound dispatcher; the
@@ -167,14 +181,16 @@ def create_local_workbench_app(
         ),
     )
 
-    def admit_run():
+    def admit_run() -> str:
+        """Revalidate the bound instance and run before agent execution."""
         current = read_private_binding(binding_path)
         if current.access != binding.access or current.run_id != binding.run_id:
             raise WorkbenchConfigurationError("workbench instance changed")
         gate.authorize()
         return current.run_id
 
-    def authorized(request):
+    def authorized(request: Request) -> BrowserPrincipal | None:
+        """Revalidate the browser identity and live guest grant."""
         principal = authorizer(request)
         current = read_private_binding(binding_path)
         grant = next(
@@ -212,16 +228,34 @@ def create_local_workbench_app(
         ),
         credential_broker=_BrowserProviderBroker(secret_source),
         model=settings.model,
-        admit_run=admit_run,
-        config_renderer=lambda profile, run_id: render_guest_workbench_config(
-            binding_path=binding_path,
-            grant_id=grant_id,
-            profile=profile,
-            run_id=run_id,
-            executable=aptl_executable,
-            output=state / "workbench" / "mcp-config",
+        guest_binding=GuestRuntimeBinding(
+            admit_run=admit_run,
+            config_renderer=lambda profile, run_id: render_guest_workbench_config(
+                binding_path=binding_path,
+                grant_id=grant_id,
+                profile=profile,
+                run_id=run_id,
+                executable=aptl_executable,
+                output=state / "workbench" / "mcp-config",
+            ),
         ),
     )
+    return _attach_browser_surfaces(
+        runtime, settings, binding_path, grant_id, binding, authorized, browser
+    )
+
+
+def _attach_browser_surfaces(
+    runtime: WorkbenchRuntime,
+    settings: LocalWorkbenchSettings,
+    binding_path: Path,
+    grant_id: str,
+    binding: GuestDispatchBinding,
+    authorized: ParticipantAuthorizer,
+    browser: BrowserIngress,
+) -> BrowserGateway:
+    """Require the enrolled profile's local browser services and packaged guide."""
+    state = settings.state_dir.resolve()
     from aptl.core.scenario_bundle import env_pack_bundle
     from aptl.workbench.browser_gateway import BrowserGateway
     from aptl.workbench.browser_mcp import attach_browser_mcp
@@ -229,7 +263,7 @@ def create_local_workbench_app(
     pack = env_pack_bundle(state / "workbench" / "packs")
     if pack.pack_identity != binding.access.scenario_pack:
         raise WorkbenchConfigurationError("workbench package identity changed")
-    if not 0 < browser_port <= 65535:
+    if not 0 < browser.port <= 65535:
         raise WorkbenchConfigurationError("invalid browser ingress port")
     selected = next(
         (grant for grant in binding.grants if grant.grant_id == grant_id), None
@@ -242,11 +276,11 @@ def create_local_workbench_app(
         "aptl-guide",
         "kali-desktop",
     }
-    if not required <= {route.bookmark_ref for route in browser_routes}:
+    if not required <= {route.bookmark_ref for route in browser.routes}:
         raise WorkbenchConfigurationError("browser service routes are incomplete")
     urls = {
-        route.bookmark_ref: f"http://{route.hostname}:{browser_port}/"
-        for route in browser_routes
+        route.bookmark_ref: f"http://{route.hostname}:{browser.port}/"  # NOSONAR - validated localhost traffic.
+        for route in browser.routes
     }
     app = create_participant_workbench_app(runtime, authorized, bookmark_urls=urls)
     attach_browser_mcp(
@@ -258,7 +292,7 @@ def create_local_workbench_app(
     )
     return BrowserGateway(
         app,
-        routes=browser_routes,
+        routes=browser.routes,
         authorizer=authorized,
-        tls_context=browser_tls_context,
+        tls_context=browser.tls_context,
     )

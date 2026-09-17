@@ -6,7 +6,7 @@ import os
 import sys
 
 from aptl.workbench.profiles import profile_for
-from aptl.workbench.relay import relay_mcp
+from aptl.workbench.relay import RelayLaunch, relay_mcp
 
 SERVER = r"""
 import json,signal,sys
@@ -42,14 +42,16 @@ def test_real_pipe_relay_admits_inventory_denies_blue_and_revokes_live_session(
                 await relay_mcp(
                     reader,
                     writer,
-                    argv=(
-                        sys.executable,
-                        "-c",
-                        "TOOLS=" + repr(selected.tool_names) + "\n" + SERVER,
+                    launch=RelayLaunch(
+                        argv=(
+                            sys.executable,
+                            "-c",
+                            "TOOLS=" + repr(selected.tool_names) + "\n" + SERVER,
+                        ),
+                        cwd=tmp_path,
+                        env={"PATH": os.defpath},
+                        server=selected,
                     ),
-                    cwd=tmp_path,
-                    env={"PATH": os.defpath},
-                    server=selected,
                     authorize=authorize,
                     cleanup_observer=cleanups.append,
                     poll_seconds=0.01,

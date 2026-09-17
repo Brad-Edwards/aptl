@@ -12,10 +12,11 @@ from aptl.backends.raes_base_substrate import NodePlanningOptions, base_containe
 from aptl.core.config import AptlConfig
 from aptl.core.deployment._compose_boundary import DEFAULT_BOUNDARY_HELPER_IMAGE
 from aptl.core.deployment._compose_content_realization import CONTENT_SEEDER_IMAGE
+from aptl.core.scenario_bundle import ScenarioBundle
 from aptl.validation.curated_live_proof import bundle_realization
 
 
-def canonical_image_references(project: Path, bundle) -> dict[str, str]:
+def canonical_image_references(project: Path, bundle: ScenarioBundle) -> dict[str, str]:
     """Read scenario references and authored child images from canonical sources."""
     realization = bundle_realization(project, AptlConfig(), bundle)
     references = {}
@@ -68,7 +69,14 @@ def canonical_image_references(project: Path, bundle) -> dict[str, str]:
     return references
 
 
-def validate_image_sources(project, bundle, images, roles, image_archive, image_files):
+def validate_image_sources(
+    project: Path,
+    bundle: ScenarioBundle,
+    images: dict[str, tuple[str, ...]],
+    roles: dict[str, str],
+    image_archive: Path,
+    image_files: dict[str, str],
+) -> None:
     """Bind each canonical tag or manifest reference to its locked config bytes."""
     for role, reference in canonical_image_references(project, bundle).items():
         identity = roles.get(role)

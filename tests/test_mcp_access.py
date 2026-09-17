@@ -58,10 +58,12 @@ def test_transport_grant_is_required_and_separate_from_discovery():
     record = access_record()
     admitted = authorize_server(record, grant(), "aptl-red")
     assert admitted.server_id == "aptl-red"
+    prepared_input_1 = grant()
     with pytest.raises(ValueError, match="authorized"):
-        authorize_server(record, grant(), "aptl-indexer")
+        authorize_server(record, prepared_input_1, "aptl-indexer")
+    prepared_input_2 = grant(owner_id="bob")
     with pytest.raises(ValueError, match="authorized"):
-        authorize_server(record, grant(owner_id="bob"), "aptl-red")
+        authorize_server(record, prepared_input_2, "aptl-red")
 
 
 @pytest.mark.parametrize(
@@ -75,8 +77,10 @@ def test_transport_grant_is_required_and_separate_from_discovery():
     ],
 )
 def test_stale_wrong_or_revoked_grant_cannot_launch(changes):
+    prepared_input_3 = access_record()
+    prepared_input_4 = grant(**changes)
     with pytest.raises(ValueError, match="authorized"):
-        authorize_server(access_record(), grant(**changes), "aptl-red")
+        authorize_server(prepared_input_3, prepared_input_4, "aptl-red")
 
 
 @pytest.mark.parametrize(
@@ -88,14 +92,16 @@ def test_stale_wrong_or_revoked_grant_cannot_launch(changes):
     ],
 )
 def test_discovery_must_be_fresh_and_ready(changes):
+    prepared_input_5 = access_record(
+        observed_at=datetime(2026, 1, 1, tzinfo=UTC)
+    ).model_copy(update=changes)
+    prepared_input_6 = datetime(2026, 1, 1, tzinfo=UTC)
     with pytest.raises(ValueError, match="current"):
         require_current_access(
-            access_record(observed_at=datetime(2026, 1, 1, tzinfo=UTC)).model_copy(
-                update=changes
-            ),
+            prepared_input_5,
             owner_id="alice",
             seat_id="seat-1",
-            now=datetime(2026, 1, 1, tzinfo=UTC),
+            now=prepared_input_6,
         )
 
 

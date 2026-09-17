@@ -14,7 +14,7 @@ from aptl.core._soc_ca_io import _atomic_write
 from aptl.core.config import load_config
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.scenario_bundle import env_pack_bundle
-from aptl.validation.curated_live_proof import expected_bundle_matrix
+from aptl.validation.curated_live_proof import ExpectedMatrix, expected_bundle_matrix
 from aptl.workbench.access import (
     CallerGrant,
     Identifier,
@@ -64,7 +64,8 @@ class TransportPreparation(BaseModel):
     appliance: ApplianceAccessPaths | None = None
 
 
-def verify_full_inventory(matrix, containers):
+def verify_full_inventory(matrix: ExpectedMatrix, containers: dict[str, str]) -> None:
+    """Require every expected service in the observed native inventory."""
     observed = set().union(
         *(set(normalized_identifier_aliases(name)) for name in containers)
     )
@@ -125,35 +126,7 @@ def prepare_guest_transport(
         observed_at=now,
         lifecycle_state="ready",
     )
-    grants = []
-    fingerprints = set()
-    for key in request.keys:
-        fingerprint = key_fingerprint(key.public_key)
-        if (
-            fingerprint in fingerprints
-            or key.expires_at.tzinfo is None
-            or not 0 < (key.expires_at - now).total_seconds() <= 86400
-        ):
-            raise WorkbenchConfigurationError(
-                "caller keys must be unique and expire within 24 hours"
-            )
-        fingerprints.add(fingerprint)
-        grants.append(
-            CallerGrant(
-                schema_version="aptl.mcp-grant/v1",
-                grant_id=key.grant_id,
-                owner_id=request.owner_id,
-                seat_id=request.seat_id,
-                instance_id=request.instance_id,
-                generation=request.generation,
-                public_key_fingerprint=fingerprint,
-                profile=key.profile,
-                expires_at=key.expires_at,
-                revoked=False,
-            )
-        )
-    if len({grant.grant_id for grant in grants}) != len(grants):
-        raise WorkbenchConfigurationError("grant IDs must be unique")
+    grants = _enrolled_grants(request, now)
     binding = GuestDispatchBinding(
         schema_version="aptl.mcp-dispatch/v1",
         access=record,
@@ -167,31 +140,7 @@ def prepare_guest_transport(
         appliance=request.appliance,
     )
     verify_guest_observation(record, observe_guest(binding), run_id=binding.run_id)
-    keys = "".join(
-        restricted_key(
-            public_key=key.public_key,
-            executable=request.aptl_executable,
-            binding=output / "binding.json",
-            grant_id=key.grant_id,
-        )
-        for key in request.keys
-    )
-    policy = sshd_policy(
-        port=request.guest_endpoint.port,
-        address=request.guest_endpoint.address,
-        username=request.username,
-        host_key=request.host_key,
-        authorized_keys=output / "authorized_keys",
-    )
-    output.mkdir(mode=0o700)
-    for name, content in {
-        "binding.json": binding.model_dump_json(),
-        "access.json": record.model_dump_json(),
-        "authorized_keys": keys,
-        "sshd_config": policy,
-        **{grant.grant_id + ".grant.json": grant.model_dump_json() for grant in grants},
-    }.items():
-        _atomic_write(output / name, (content + "\n").encode(), mode=0o600)
+    _write_transport_files(output, request, binding)
     return binding
 
 
@@ -221,6 +170,7 @@ def revoke_grant(binding_path: Path, grant_id: str) -> None:
 
 
 def _revoke_locked(binding_path: Path, grant_id: str) -> None:
+    """Persist grant revocation while holding the mutation lock."""
     binding = read_private_binding(binding_path)
     if grant_id not in {grant.grant_id for grant in binding.grants}:
         raise WorkbenchConfigurationError("unknown transport grant")
@@ -232,3 +182,71 @@ def _revoke_locked(binding_path: Path, grant_id: str) -> None:
     )
     updated = binding.model_copy(update={"grants": grants})
     _atomic_write(binding_path, (updated.model_dump_json() + "\n").encode(), mode=0o600)
+
+
+def _enrolled_grants(
+    request: TransportPreparation, now: datetime
+) -> tuple[CallerGrant, ...]:
+    """Require unique caller keys and grant IDs with bounded expiry."""
+    grants = []
+    fingerprints = set()
+    for key in request.keys:
+        fingerprint = key_fingerprint(key.public_key)
+        if (
+            fingerprint in fingerprints
+            or key.expires_at.tzinfo is None
+            or not 0 < (key.expires_at - now).total_seconds() <= 86400
+        ):
+            raise WorkbenchConfigurationError(
+                "caller keys must be unique and expire within 24 hours"
+            )
+        fingerprints.add(fingerprint)
+        grants.append(
+            CallerGrant(
+                schema_version="aptl.mcp-grant/v1",
+                grant_id=key.grant_id,
+                owner_id=request.owner_id,
+                seat_id=request.seat_id,
+                instance_id=request.instance_id,
+                generation=request.generation,
+                public_key_fingerprint=fingerprint,
+                profile=key.profile,
+                expires_at=key.expires_at,
+                revoked=False,
+            )
+        )
+    if len({grant.grant_id for grant in grants}) != len(grants):
+        raise WorkbenchConfigurationError("grant IDs must be unique")
+    return tuple(grants)
+
+
+def _write_transport_files(
+    output: Path, request: TransportPreparation, binding: GuestDispatchBinding
+) -> None:
+    """Publish private discovery and forced-key SSH policy for the admitted guest."""
+    record, grants = binding.access, binding.grants
+    keys = "".join(
+        restricted_key(
+            public_key=key.public_key,
+            executable=request.aptl_executable,
+            binding=output / "binding.json",
+            grant_id=key.grant_id,
+        )
+        for key in request.keys
+    )
+    policy = sshd_policy(
+        port=request.guest_endpoint.port,
+        address=request.guest_endpoint.address,
+        username=request.username,
+        host_key=request.host_key,
+        authorized_keys=output / "authorized_keys",
+    )
+    output.mkdir(mode=0o700)
+    for name, content in {
+        "binding.json": binding.model_dump_json(),
+        "access.json": record.model_dump_json(),
+        "authorized_keys": keys,
+        "sshd_config": policy,
+        **{grant.grant_id + ".grant.json": grant.model_dump_json() for grant in grants},
+    }.items():
+        _atomic_write(output / name, (content + "\n").encode(), mode=0o600)

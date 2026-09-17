@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -221,7 +221,8 @@ class ParticipantAssetLock(_StrictModel):
         return assets
 
     @model_validator(mode="after")
-    def versioned_kinds(self):
+    def versioned_kinds(self) -> Self:
+        """Admit asset kinds only in their declared lock schema version."""
         if self.schema_version.endswith("/v1") and any(
             asset.kind not in {"project-file", "mcp-artifact", "oci-image"}
             for asset in self.assets

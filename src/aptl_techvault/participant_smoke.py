@@ -82,7 +82,9 @@ def _kali_user(result: Mapping[str, object]) -> bool:
         if (
             isinstance(output, Mapping)
             and output.get("code") == 0
-            and re.search(r"\buid=[1-9][0-9]*\(kali\)", str(output.get("stdout", "")))
+            and re.search(
+                r"\buid=[1-9]\d*\(kali\)", str(output.get("stdout", "")), re.ASCII
+            )
         ):
             return True
     return False

@@ -60,8 +60,9 @@ def test_release_extension_requires_signed_inputs_and_retains_all_existing_artif
         canonical_inputs_digest="sha256:" + "a" * 64,
         host_mcp_contract="aptl.restricted-ssh-mcp/v1",
     )
+    prepared_input_1 = json.dumps(document)
     with pytest.raises(ValidationError):
-        ApplianceReleaseManifest.model_validate_json(json.dumps(document))
+        ApplianceReleaseManifest.model_validate_json(prepared_input_1)
     document["artifacts"].append(
         _artifact(
             "canonical-inputs", "canonical-inputs", "artifacts/inputs.json"
@@ -72,5 +73,6 @@ def test_release_extension_requires_signed_inputs_and_retains_all_existing_artif
     document["artifacts"] = [
         item for item in document["artifacts"] if item["kind"] != "machine-drill"
     ]
+    prepared_input_2 = json.dumps(document)
     with pytest.raises(ValidationError):
-        ApplianceReleaseManifest.model_validate_json(json.dumps(document))
+        ApplianceReleaseManifest.model_validate_json(prepared_input_2)

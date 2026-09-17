@@ -1,9 +1,10 @@
 """Derive native Kali MCP ingress from the admitted guest Docker runtime."""
 
 from ipaddress import ip_address
+from typing import Any
 
 
-def native_kali_ingress(inspected: dict, expected_id: str) -> dict[str, str]:
+def native_kali_ingress(inspected: dict[str, Any], expected_id: str) -> dict[str, str]:
     """Select the workload address; port 22 belongs to the capture broker.
 
     Native deployments have no legacy Compose SSH proxy. The actual workload

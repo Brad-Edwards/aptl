@@ -44,7 +44,9 @@ async function request(path, options = {}) {
 async function refresh() {
   const view = await request("/workbench");
   status.textContent = view.profile ? `Active profile: ${view.profile}` : "No active profile";
-  document.querySelectorAll("[data-profile]").forEach(button => { button.hidden = !view.allowed_profiles.includes(button.dataset.profile); });
+  document.querySelectorAll("[data-profile]").forEach(button => {
+    button.hidden = !view.allowed_profiles.includes(button.dataset.profile);
+  });
   bookmarks.replaceChildren(...view.bookmarks.map((bookmark) => {
     const link = document.createElement("a");
     link.href = bookmark.href;
@@ -127,18 +129,50 @@ def create_participant_workbench_app(
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
+        responses={401: {"description": "Participant session required"}},
     )
 
     bookmarks = {
         key: {**value, "href": (bookmark_urls or {}).get(key, value["href"])}
         for key, value in _BOOKMARKS.items()
     }
-    owner: list[str | None] = [None]
-    guard = RLock()
+    access = _WorkbenchAccess(runtime, authorizer)
+    _attach_views(app, runtime, access, bookmarks)
+    _attach_commands(app, runtime, access)
+    return app
 
-    def require_participant_session(request: Request) -> BrowserPrincipal:
-        """Reject requests that do not carry an admitted participant session."""
-        principal = authorizer(request)
+
+def _principal_bookmarks(principal: BrowserPrincipal) -> tuple[str, ...]:
+    """Collect the browser surfaces authorized for this participant."""
+    return tuple(
+        dict.fromkeys(
+            ref
+            for role in principal.profiles
+            for ref in profile_for(role).bookmark_refs
+        )
+    )
+
+
+def _require_profile(principal: BrowserPrincipal, profile: str) -> None:
+    """Reject profile selections outside the admitted participant roles."""
+    if profile not in principal.profiles:
+        raise HTTPException(status_code=403, detail="Profile is not authorized")
+
+
+class _WorkbenchAccess:
+    """Serialize profile changes and retain the current participant owner."""
+
+    def __init__(
+        self, runtime: WorkbenchRuntime, authorizer: ParticipantAuthorizer
+    ) -> None:
+        self.runtime = runtime
+        self.authorizer = authorizer
+        self.owner: str | None = None
+        self.guard = RLock()
+
+    def require_participant_session(self, request: Request) -> BrowserPrincipal:
+        """Require a named participant with at least one admitted role."""
+        principal = self.authorizer(request)
         if (
             not isinstance(principal, BrowserPrincipal)
             or not principal.caller_id
@@ -147,16 +181,25 @@ def create_participant_workbench_app(
             raise HTTPException(status_code=401, detail="Participant session required")
         return principal
 
-    def require_owner(principal: BrowserPrincipal) -> None:
-        if owner[0] is not None and owner[0] != principal.caller_id:
+    def require_owner(self, principal: BrowserPrincipal) -> None:
+        """Require the caller to own and retain access to the active profile."""
+        if self.owner is not None and self.owner != principal.caller_id:
             raise HTTPException(
                 status_code=403, detail="Profile belongs to another caller"
             )
-        launch = runtime.current_launch
+        launch = self.runtime.current_launch
         if launch is not None and launch.profile.value not in principal.profiles:
             raise HTTPException(status_code=403, detail="Profile is not authorized")
 
-    session = [Depends(require_participant_session)]
+
+def _attach_views(
+    app: FastAPI,
+    runtime: WorkbenchRuntime,
+    access: _WorkbenchAccess,
+    bookmarks: dict[str, dict[str, str]],
+) -> None:
+    """Mount the participant controls and authorized state projection."""
+    session = [Depends(access.require_participant_session)]
 
     @app.get("/", response_class=HTMLResponse, dependencies=session)
     def workbench_page() -> HTMLResponse:
@@ -173,12 +216,16 @@ def create_participant_workbench_app(
             },
         )
 
-    @app.get("/workbench", dependencies=session)
+    @app.get(
+        "/workbench",
+        dependencies=session,
+        responses={403: {"description": "Profile is not authorized"}},
+    )
     def workbench_view(
-        principal: BrowserPrincipal = Depends(require_participant_session),
+        principal: BrowserPrincipal = Depends(access.require_participant_session),
     ) -> dict[str, object]:
         """Return only the selected profile's participant-visible projection."""
-        require_owner(principal)
+        access.require_owner(principal)
         launch = runtime.current_launch
         if launch is None:
             refs = _principal_bookmarks(principal)
@@ -198,21 +245,32 @@ def create_participant_workbench_app(
             "mcp_servers": list(profile.server_ids),
         }
 
+
+def _attach_commands(
+    app: FastAPI, runtime: WorkbenchRuntime, access: _WorkbenchAccess
+) -> None:
+    """Mount owner-checked profile and agent operations under one lock."""
+    session = [Depends(access.require_participant_session)]
+
     @app.post(
         "/workbench/profiles/{profile}",
         dependencies=session,
-        responses={409: {"description": "Profile transition unavailable"}},
+        responses={
+            403: {"description": "Profile is not authorized"},
+            409: {"description": "Profile transition unavailable"},
+        },
     )
     def select_profile(
-        profile: str, principal: BrowserPrincipal = Depends(require_participant_session)
+        profile: str,
+        principal: BrowserPrincipal = Depends(access.require_participant_session),
     ) -> dict[str, str]:
         """Switch profiles without accepting credentials, commands, or endpoints."""
         _require_profile(principal, profile)
         try:
-            with guard:
-                require_owner(principal)
+            with access.guard:
+                access.require_owner(principal)
                 launch = runtime.switch(profile)
-                owner[0] = principal.caller_id
+                access.owner = principal.caller_id
         except (ValueError, WorkbenchStateError):
             raise HTTPException(
                 status_code=409, detail="Profile transition unavailable"
@@ -222,16 +280,19 @@ def create_participant_workbench_app(
     @app.post(
         "/workbench/messages",
         dependencies=session,
-        responses={409: {"description": "Agent request unavailable"}},
+        responses={
+            403: {"description": "Profile is not authorized"},
+            409: {"description": "Agent request unavailable"},
+        },
     )
     def send_message(
         message: ParticipantMessage,
-        principal: BrowserPrincipal = Depends(require_participant_session),
+        principal: BrowserPrincipal = Depends(access.require_participant_session),
     ) -> dict[str, str]:
         """Send one bounded prompt to the active selected profile."""
         try:
-            with guard:
-                require_owner(principal)
+            with access.guard:
+                access.require_owner(principal)
                 response = runtime.respond(message.message)
         except WorkbenchStateError:
             raise HTTPException(
@@ -242,36 +303,22 @@ def create_participant_workbench_app(
     @app.delete(
         "/workbench/profile",
         dependencies=session,
-        responses={409: {"description": "Profile teardown unavailable"}},
+        responses={
+            403: {"description": "Profile is not authorized"},
+            409: {"description": "Profile teardown unavailable"},
+        },
     )
     def close_profile(
-        principal: BrowserPrincipal = Depends(require_participant_session),
+        principal: BrowserPrincipal = Depends(access.require_participant_session),
     ) -> dict[str, str]:
         """Close the active profile and its local credential binding."""
         try:
-            with guard:
-                require_owner(principal)
+            with access.guard:
+                access.require_owner(principal)
                 runtime.close()
-                owner[0] = None
+                access.owner = None
         except WorkbenchStateError:
             raise HTTPException(
                 status_code=409, detail="Profile teardown unavailable"
             ) from None
         return {"status": "closed"}
-
-    return app
-
-
-def _principal_bookmarks(principal: BrowserPrincipal) -> tuple[str, ...]:
-    return tuple(
-        dict.fromkeys(
-            ref
-            for role in principal.profiles
-            for ref in profile_for(role).bookmark_refs
-        )
-    )
-
-
-def _require_profile(principal: BrowserPrincipal, profile: str) -> None:
-    if profile not in principal.profiles:
-        raise HTTPException(status_code=403, detail="Profile is not authorized")

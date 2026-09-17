@@ -281,22 +281,14 @@ def verify_offline_aptl_version(payload: bytes, expected_version: str) -> None:
         )
 
 
-def _verify_canonical_delivery(manifest, payloads, profile, readiness):
+def _verify_canonical_delivery(
+    manifest: ApplianceReleaseManifest,
+    payloads: dict[str, bytes],
+    profile: ParticipantProfileManifest,
+    readiness: ParticipantReadinessSuite,
+) -> None:
     """Bind the optional host transport to full packaged inputs in the payload."""
-    policy = ApplianceBoundaryPolicy.model_validate_json(payloads["boundary-policy"])
-    if policy.host_mcp_contract != manifest.delivery.host_mcp_contract:
-        raise ApplianceManifestError("host MCP policy differs from the signed delivery")
-    if manifest.delivery.host_mcp_contract:
-        clients = {
-            check.subject_id
-            for check in readiness.checks
-            if check.kind == "client-transport"
-            and check.operation_id == "authenticated-client-tool-call-and-revocation"
-        }
-        if clients != {"claude", "codex"}:
-            raise ApplianceManifestError(
-                "host MCP qualification requires both real clients"
-            )
+    _verify_transport_readiness(manifest, payloads, readiness)
     canonical = payloads.get("canonical-inputs")
     if canonical is None:
         return
@@ -312,19 +304,42 @@ def _verify_canonical_delivery(manifest, payloads, profile, readiness):
             or set(profile.capabilities.workbench_profiles) != {"red", "blue"}
         ):
             raise ValueError("canonical delivery identity differs")
-        with tarfile.open(
-            fileobj=io.BytesIO(payloads["offline-payload"]), mode="r:"
-        ) as archive:
-            members = [member for member in archive if member.name == "inputs.json"]
-            if (
-                len(members) != 1
-                or not members[0].isfile()
-                or members[0].size != len(canonical)
-            ):
-                raise ValueError(
-                    "canonical payload input record is missing or ambiguous"
-                )
-            if archive.extractfile(members[0]).read() != canonical:
-                raise ValueError("canonical payload input record differs")
+        _verify_embedded_inputs(payloads["offline-payload"], canonical)
     except (ValueError, KeyError, tarfile.TarError) as exc:
         raise ApplianceManifestError("canonical release evidence mismatch") from exc
+
+
+def _verify_transport_readiness(
+    manifest: ApplianceReleaseManifest,
+    payloads: dict[str, bytes],
+    readiness: ParticipantReadinessSuite,
+) -> None:
+    """Require policy agreement and real-client qualification for host MCP."""
+    policy = ApplianceBoundaryPolicy.model_validate_json(payloads["boundary-policy"])
+    if policy.host_mcp_contract != manifest.delivery.host_mcp_contract:
+        raise ApplianceManifestError("host MCP policy differs from the signed delivery")
+    if manifest.delivery.host_mcp_contract:
+        clients = {
+            check.subject_id
+            for check in readiness.checks
+            if check.kind == "client-transport"
+            and check.operation_id == "authenticated-client-tool-call-and-revocation"
+        }
+        if clients != {"claude", "codex"}:
+            raise ApplianceManifestError(
+                "host MCP qualification requires both real clients"
+            )
+
+
+def _verify_embedded_inputs(payload: bytes, canonical: bytes) -> None:
+    """Require one byte-identical canonical record in the signed payload."""
+    with tarfile.open(fileobj=io.BytesIO(payload), mode="r:") as archive:
+        members = [member for member in archive if member.name == "inputs.json"]
+        if (
+            len(members) != 1
+            or not members[0].isfile()
+            or members[0].size != len(canonical)
+        ):
+            raise ValueError("canonical payload input record is missing or ambiguous")
+        if archive.extractfile(members[0]).read() != canonical:
+            raise ValueError("canonical payload input record differs")

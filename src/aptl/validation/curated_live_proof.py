@@ -37,6 +37,7 @@ from aptl.backends.raes_profiles import (
     steady_state_service_aliases_for_profiles,
 )
 from aptl.backends.raes_realization import interpret_provisioning_plan
+from aptl.backends.raes_realization_model import AptlRealization
 from aptl.core.config import AptlConfig
 from aptl.core.deployment import get_backend
 from aptl.core.scenario_bundle import ScenarioBundle, project_tree_bundle
@@ -145,7 +146,9 @@ def expected_bundle_matrix(
     )
 
 
-def _pack_runtime_aliases(realization):
+def _pack_runtime_aliases(
+    realization: AptlRealization,
+) -> tuple[dict[str, frozenset[str]], dict[str, frozenset[str]]]:
     """Pack runtime nodes are authoritative; Compose catalog extras are not nodes."""
     services = {}
     for node in realization.nodes:
@@ -160,7 +163,9 @@ def _pack_runtime_aliases(realization):
     return services, networks
 
 
-def bundle_realization(project_dir: Path, config: AptlConfig, bundle: ScenarioBundle):
+def bundle_realization(
+    project_dir: Path, config: AptlConfig, bundle: ScenarioBundle
+) -> AptlRealization:
     """Reuse canonical admission for package input inventory without starting Docker."""
     scenario_path = bundle.sdl_path
     scenario = parse_sdl_file(scenario_path)

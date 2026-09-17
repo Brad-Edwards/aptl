@@ -6,9 +6,12 @@ import json
 import re
 import tomllib
 from pathlib import Path
+from typing import Any
 
 from aptl.workbench.access import CallerGrant, SeatAccessRecord, authorize_server
 from aptl.workbench.profiles import WorkbenchConfigurationError, profile_for
+
+MANAGED_CONFLICT = "managed client configuration conflict"
 
 _BEGIN = "# BEGIN APTL MANAGED MCP\n"
 _END = "# END APTL MANAGED MCP\n"
@@ -94,7 +97,8 @@ def client_entries(
     return entries
 
 
-def _unique_object(pairs: list[tuple[str, object]]) -> dict:
+def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, Any]:
+    """Reject duplicate JSON object keys before merging client configuration."""
     result = {}
     for key, value in pairs:
         if key in result:
@@ -103,14 +107,19 @@ def _unique_object(pairs: list[tuple[str, object]]) -> dict:
     return result
 
 
-def _check_ownership(servers: dict, entries: dict, previous: dict) -> None:
+def _check_ownership(
+    servers: dict[str, Any], entries: dict[str, Any], previous: dict[str, Any]
+) -> None:
+    """Reject edits to managed entries and collisions with manual entries."""
     if any(servers.get(name) != value for name, value in previous.items()):
-        raise WorkbenchConfigurationError("managed client configuration conflict")
+        raise WorkbenchConfigurationError(MANAGED_CONFLICT)
     if (entries.keys() & servers.keys()) - previous.keys():
         raise WorkbenchConfigurationError("manual client configuration conflict")
 
 
-def render_claude(existing: str, entries: dict, *, previous: dict | None = None) -> str:
+def render_claude(
+    existing: str, entries: dict[str, Any], *, previous: dict[str, Any] | None = None
+) -> str:
     """Preserve all manual values and refuse modified previously managed entries."""
     document = json.loads(existing or "{}", object_pairs_hook=_unique_object)
     if not isinstance(document, dict) or not isinstance(
@@ -126,7 +135,8 @@ def render_claude(existing: str, entries: dict, *, previous: dict | None = None)
     return json.dumps(document, indent=2, ensure_ascii=False) + "\n"
 
 
-def _toml_block(entries: dict) -> str:
+def _toml_block(entries: dict[str, Any]) -> str:
+    """Render the uniquely delimited managed MCP section."""
     lines = [_BEGIN.rstrip()]
     for name, value in sorted(entries.items()):
         lines.extend(
@@ -142,7 +152,9 @@ def _toml_block(entries: dict) -> str:
     return "\n".join(lines) + _END
 
 
-def render_codex(existing: str, entries: dict, *, previous: dict | None = None) -> str:
+def render_codex(
+    existing: str, entries: dict[str, Any], *, previous: dict[str, Any] | None = None
+) -> str:
     """Retain user TOML bytes; replace only the exact owned block at EOF."""
     document = tomllib.loads(existing)
     servers = document.get("mcp_servers", {})
@@ -157,10 +169,10 @@ def render_codex(existing: str, entries: dict, *, previous: dict | None = None) 
     if owned:
         block = _toml_block(owned)
         if not existing.endswith(block) or existing.count(_BEGIN) != 1:
-            raise WorkbenchConfigurationError("managed client configuration conflict")
+            raise WorkbenchConfigurationError(MANAGED_CONFLICT)
         existing = existing[: -len(block)]
     elif _BEGIN in existing or _END in existing:
-        raise WorkbenchConfigurationError("managed client configuration conflict")
+        raise WorkbenchConfigurationError(MANAGED_CONFLICT)
     result = (
         existing
         + ("\n" if existing and not existing.endswith("\n") else "")

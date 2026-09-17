@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
@@ -164,7 +164,8 @@ class ApplianceLaunchDescriptor(_StrictModel):
         return value
 
     @model_validator(mode="after")
-    def validate_access_extension(self):
+    def validate_access_extension(self) -> Self:
+        """Require full-profile evidence for the optional host transport contract."""
         if self.canonical_inputs_digest is not None:
             _validate_digest(self.canonical_inputs_digest)
         if self.host_mcp_contract and self.canonical_inputs_digest is None:

@@ -333,27 +333,37 @@ def resolve_profile_scenario(
 ) -> ScenarioBundle:
     """Resolve through the same package boundary as normal local startup."""
     if isinstance(reference, EnvPackScenarioReference):
-        if (
-            config.scenario.source != "env-pack"
-            or config.scenario.identity != reference.identity.pack_id
-        ):
-            raise ParticipantProfileError("participant scenario source mismatch")
-        bundle = env_pack_bundle(
-            staging_root or project_root / ".aptl" / "participant-packs",
-            reference.identity.pack_id,
-        )
-        if bundle.pack_identity != reference.identity:
-            raise ParticipantProfileError("participant pack identity mismatch")
-        payload = bundle.read_asset(reference.path)
-        if (
-            bundle.sdl_path != bundle.root / reference.path
-            or hashlib.sha256(payload).hexdigest() != reference.sha256
-        ):
-            raise ParticipantProfileError("participant scenario digest mismatch")
-        return bundle
+        return _resolve_pack_profile(project_root, config, reference, staging_root)
     payload = _read_reference(project_root, reference)
     catalog = load_scenario_catalog(project_root)
     entry = catalog.get(reference.catalog_id)
     if entry is None or entry.path != reference.path or not payload:
         raise ParticipantProfileError("participant scenario catalog reference mismatch")
     return project_tree_bundle(project_root, project_root / reference.path)
+
+
+def _resolve_pack_profile(
+    project_root: Path,
+    config: AptlConfig,
+    reference: EnvPackScenarioReference,
+    staging_root: Path | None,
+) -> ScenarioBundle:
+    """Bind the installed package identity and scenario digest to the profile."""
+    if (
+        config.scenario.source != "env-pack"
+        or config.scenario.identity != reference.identity.pack_id
+    ):
+        raise ParticipantProfileError("participant scenario source mismatch")
+    bundle = env_pack_bundle(
+        staging_root or project_root / ".aptl" / "participant-packs",
+        reference.identity.pack_id,
+    )
+    if bundle.pack_identity != reference.identity:
+        raise ParticipantProfileError("participant pack identity mismatch")
+    payload = bundle.read_asset(reference.path)
+    if (
+        bundle.sdl_path != bundle.root / reference.path
+        or hashlib.sha256(payload).hexdigest() != reference.sha256
+    ):
+        raise ParticipantProfileError("participant scenario digest mismatch")
+    return bundle

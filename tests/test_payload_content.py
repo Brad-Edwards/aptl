@@ -195,5 +195,6 @@ def test_image_archive_validates_both_docker_and_oci_layer_graphs(
         "sha256:" + digest(config): ("example:1",)
     }
     path = build(b"different validly hashed OCI layer")
+    prepared_input_1 = archive_files(path)
     with pytest.raises(ValueError, match="OCI image layers differ"):
-        docker_archive_images(path, archive_files(path))
+        docker_archive_images(path, prepared_input_1)

@@ -868,14 +868,15 @@ def test_appliance_factory_requires_enrolled_guest_binding(tmp_path: Path) -> No
     )
     from aptl.workbench.profiles import WorkbenchConfigurationError
 
+    prepared_input_1 = ApplianceWorkbenchSettings(
+        payload_root=tmp_path,
+        state_dir=tmp_path / "state",
+        claude_executable=_executable(tmp_path / "claude"),
+        model="test",
+    )
     with pytest.raises(WorkbenchConfigurationError, match="enrolled"):
         create_appliance_workbench_app(
-            ApplianceWorkbenchSettings(
-                payload_root=tmp_path,
-                state_dir=tmp_path / "state",
-                claude_executable=_executable(tmp_path / "claude"),
-                model="test",
-            ),
+            prepared_input_1,
             secret_source={},
             authorizer=lambda request: None,
         )

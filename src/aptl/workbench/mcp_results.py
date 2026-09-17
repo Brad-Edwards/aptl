@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any
 
 from aptl.utils.redaction import redact
 
@@ -21,12 +22,13 @@ _SESSION_TOOLS = frozenset(
 )
 
 
-def _session_row(value: dict) -> dict:
+def _session_row(value: dict[str, Any]) -> dict[str, Any]:
+    """Redact credentials while preserving validated terminal handle fields."""
     safe = redact(value)
     identifier = value.get("session_id")
     if (
         isinstance(identifier, str)
-        and re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9._-]{0,127}", identifier)
+        and re.fullmatch(r"\w[A-Za-z0-9._-]{0,127}", identifier, re.ASCII)
         and ".." not in identifier
     ):
         safe["session_id"] = identifier
@@ -35,7 +37,8 @@ def _session_row(value: dict) -> dict:
     return safe
 
 
-def _session_payload(value: dict, tool: str) -> dict:
+def _session_payload(value: dict[str, Any], tool: str) -> dict[str, Any]:
+    """Retain typed terminal session inventory after redaction."""
     safe = _session_row(value)
     if tool == "kali_list_sessions" and isinstance(value.get("sessions"), list):
         safe["sessions"] = [
@@ -47,7 +50,7 @@ def _session_payload(value: dict, tool: str) -> dict:
     return safe
 
 
-def redact_mcp_result(result: dict, server: str, tool: str) -> dict:
+def redact_mcp_result(result: dict[str, Any], server: str, tool: str) -> dict[str, Any]:
     """Keep only the red MCP's typed terminal handles, never API login sessions.
 
     Handles address sessions inside this caller's isolated MCP process. They

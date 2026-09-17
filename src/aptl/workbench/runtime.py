@@ -98,6 +98,14 @@ class _ActiveProfile:
     config_removed: bool = False
 
 
+@dataclass(frozen=True)
+class GuestRuntimeBinding:
+    """Trusted guest admission and matching configuration renderer."""
+
+    admit_run: Callable[[], str]
+    config_renderer: Callable[[ProfileId, str], Path]
+
+
 class WorkbenchRuntime:
     """Run one profile at a time and retain its existing scenario correlation."""
 
@@ -110,11 +118,10 @@ class WorkbenchRuntime:
         paths: WorkbenchPaths,
         credential_broker: SessionCredentialBroker,
         model: str,
-        admit_run: Callable[[], str] | None = None,
-        config_renderer: Callable[[ProfileId, str], Path] | None = None,
+        guest_binding: GuestRuntimeBinding | None = None,
     ) -> None:
-        self._admit_run = admit_run
-        self._config_renderer = config_renderer
+        self._admit_run = guest_binding.admit_run if guest_binding else None
+        self._config_renderer = guest_binding.config_renderer if guest_binding else None
         self._session_manager = session_manager
         self._adapter = adapter
         self._run_store = run_store

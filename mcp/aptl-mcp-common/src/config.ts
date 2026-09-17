@@ -2,7 +2,7 @@
 
 import { existsSync, readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
-import { isIP } from 'net';
+import { isIP } from 'node:net';
 import { expandTilde } from './utils.js';
 
 // Lab configuration matching actual docker-lab-config.json structure
@@ -232,14 +232,7 @@ export async function loadLabConfig(configPath: string): Promise<LabConfig> {
   if (config.containers && config.server.configKey) {
     const configKey = config.server.configKey;
     const container = config.containers[configKey];
-    const nativeKaliHost = process.env.APTL_MCP_KALI_HOST;
-    if (configKey === 'kali' && nativeKaliHost !== undefined) {
-      if (!isIP(nativeKaliHost)) throw new Error('Invalid native Kali ingress address');
-      // Native RAES has no Compose SSH proxy. Port 22 is the capture broker;
-      // the workload sshd is private on loopback 2222 behind that broker.
-      container.container_ip = nativeKaliHost;
-      container.ssh_port = 22;
-    }
+    applyNativeKaliIngress(config, configKey);
     if (container && container.ssh_key.startsWith('~')) {
       container.ssh_key = expandTilde(container.ssh_key);
     }
@@ -291,4 +284,16 @@ export function getTargetCredentials(config: LabConfig): { sshKey: string; usern
     port: Number(container.ssh_port),
     target: container.container_ip
   };
+}
+
+/** Bind the native Kali capture ingress supplied by guest admission. */
+function applyNativeKaliIngress(config: LabConfig, configKey: string): void {
+  const nativeKaliHost = process.env.APTL_MCP_KALI_HOST;
+  if (configKey !== 'kali' || nativeKaliHost === undefined) return;
+  if (!isIP(nativeKaliHost)) throw new Error('Invalid native Kali ingress address');
+  const container = config.containers?.[configKey];
+  if (!container) throw new Error('Native Kali container is not configured');
+  // Native RAES uses the capture broker on port 22; workload sshd stays private.
+  container.container_ip = nativeKaliHost;
+  container.ssh_port = 22;
 }

@@ -7,7 +7,7 @@ import os
 import stat
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -25,7 +25,8 @@ from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.session import ScenarioSession
 from aptl.utils.pathsafe import open_contained_nofollow
 from aptl.workbench.access import CallerGrant, SeatAccessRecord
-from aptl.workbench.profiles import WorkbenchConfigurationError
+from aptl.workbench.dispatch import DispatchSelector
+from aptl.workbench.profiles import ServerProfile, WorkbenchConfigurationError
 
 
 class ApplianceAccessPaths(BaseModel):
@@ -68,7 +69,8 @@ class GuestDispatchBinding(BaseModel):
     appliance: ApplianceAccessPaths | None = None
 
     @model_validator(mode="after")
-    def validate_delivery(self):
+    def validate_delivery(self) -> Self:
+        """Require appliance evidence and absolute management paths."""
         if (self.delivery == "appliance") != (self.appliance is not None):
             raise ValueError(
                 "appliance delivery requires verified launch and live boundary evidence"
@@ -92,6 +94,7 @@ def read_private_binding(path: Path) -> GuestDispatchBinding:
 
 
 def read_management_bytes(path: Path) -> bytes:
+    """Read bounded private management state through a no-follow descriptor."""
     if not path.is_absolute():
         raise WorkbenchConfigurationError("management path must be absolute")
     root = Path(path.anchor)
@@ -106,7 +109,7 @@ def read_management_bytes(path: Path) -> bytes:
 
 
 def verify_guest_observation(
-    record: SeatAccessRecord, observed: dict, *, run_id: str
+    record: SeatAccessRecord, observed: dict[str, Any], *, run_id: str
 ) -> None:
     """Compare current native identity and capture, not names or discovery alone."""
     expected = (
@@ -129,7 +132,7 @@ def verify_guest_observation(
         raise WorkbenchConfigurationError("guest runtime admission failed")
 
 
-def observe_guest(binding: GuestDispatchBinding) -> dict:
+def observe_guest(binding: GuestDispatchBinding) -> dict[str, Any]:
     """Use the deployment backend to prove ownership and required capture."""
     from aptl.core.lifecycle_guard import lifecycle_observation_lock
 
@@ -137,7 +140,8 @@ def observe_guest(binding: GuestDispatchBinding) -> dict:
         return _observe_stable_guest(binding)
 
 
-def _observe_stable_guest(binding: GuestDispatchBinding) -> dict:
+def _observe_stable_guest(binding: GuestDispatchBinding) -> dict[str, Any]:
+    """Observe receipt-bound inventory and required live capture authority."""
     project = binding.project_dir
     config = load_config(project / "aptl.json")
     if (
@@ -207,7 +211,9 @@ def observe_guest_containers(backend: DockerComposeBackend) -> dict[str, str]:
 class GuestAdmission:
     """One admitted connection, with persistent cleanup failure and a role lock."""
 
-    def __init__(self, path, grant_id, fingerprint, selector):
+    def __init__(
+        self, path: Path, grant_id: str, fingerprint: str, selector: DispatchSelector
+    ) -> None:
         import threading
 
         self.path = path
@@ -240,7 +246,8 @@ class GuestAdmission:
                     "signed release does not permit host MCP access"
                 )
 
-    def _server(self, binding):
+    def _server(self, binding: GuestDispatchBinding) -> ServerProfile:
+        """Resolve the current role and key-bound server authorization."""
         from datetime import UTC, datetime
 
         from aptl.workbench.access import authorize_server
@@ -258,7 +265,7 @@ class GuestAdmission:
         live = binding.access.model_copy(update={"observed_at": datetime.now(UTC)})
         return authorize_server(live, matches[0], self.selector.server_id)
 
-    def check_revocation(self):
+    def check_revocation(self) -> None:
         """Fast authority check independent of potentially slow Docker observations."""
         if self.taint.exists():
             raise WorkbenchConfigurationError("previous MCP cleanup was not proved")
@@ -269,7 +276,8 @@ class GuestAdmission:
             raise WorkbenchConfigurationError("guest role changed during connection")
         self._verify_appliance_observation()
 
-    def authorize(self):
+    def authorize(self) -> None:
+        """Revalidate the caller and guest deployment before each operation."""
         self.check_revocation()
         with self.guard:
             verify_guest_observation(
@@ -279,7 +287,8 @@ class GuestAdmission:
             )
         self.check_revocation()
 
-    def _verify_appliance_observation(self):
+    def _verify_appliance_observation(self) -> None:
+        """Verify fresh boundary evidence against the signed launch binding."""
         if self.verified_launch is None:
             return
         observed = ApplianceAccessObservation.model_validate_json(
@@ -331,7 +340,8 @@ class GuestAdmission:
         ):
             raise WorkbenchConfigurationError("appliance MCP endpoint mapping mismatch")
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
+        """Acquire the per-server connection lock and validate admission."""
         import fcntl
 
         # A role/server may own at most one MCP process. This bounds backend and
@@ -350,12 +360,14 @@ class GuestAdmission:
             raise
         return self
 
-    def __exit__(self, *_):
+    def __exit__(self, *_: object) -> None:
+        """Release the connection lock after relay cleanup."""
         if self.descriptor is not None:
             os.close(self.descriptor)
             self.descriptor = None
 
-    def cleanup(self, clean):
+    def cleanup(self, clean: bool) -> None:
+        """Persist a taint when remote session teardown cannot be proved."""
         if not clean:
             from aptl.core._soc_ca_io import _atomic_write
 
@@ -365,17 +377,42 @@ class GuestAdmission:
                 mode=0o600,
             )
 
-    def launch(self):
+    def launch(self) -> tuple[tuple[str, ...], Path, dict[str, str]]:
         """Construct minimal guest-only environment from the canonical lab sync."""
-        from aptl.core.lab import _server_config_port_refs
         from aptl.workbench.agent import _admitted_executable
-        from aptl.workbench.credentials import EphemeralCredentialBroker
 
         project = self.binding.project_dir.resolve(strict=True)
         artifact = (project / self.server.artifact_ref).resolve(strict=True)
         if not artifact.is_relative_to(project):
             raise WorkbenchConfigurationError("MCP artifact escaped guest payload")
         node = _admitted_executable(self.binding.node_executable)
+        env = self._service_environment(project, artifact)
+        backend = DockerComposeBackend(
+            project,
+            load_config(project / "aptl.json").deployment.project_name,
+            docker_socket_path=self.binding.docker_socket,
+        )
+        result = backend.bind_local_docker_socket()
+        if not result.success:
+            raise WorkbenchConfigurationError("guest Docker endpoint unavailable")
+        endpoint = getattr(backend, "_docker_socket_path", None)
+        if endpoint is not None:
+            env["DOCKER_HOST"] = "unix://" + str(endpoint)
+        if self.server.server_id == "aptl-red":
+            from aptl.core.mcp_ingress import native_kali_ingress
+
+            expected = self.binding.access.container_ids.get("aptl-kali", "")
+            env.update(
+                native_kali_ingress(backend.container_inspect("aptl-kali"), expected)
+            )
+        self.authorize()
+        return (str(node), str(artifact)), project, env
+
+    def _service_environment(self, project: Path, artifact: Path) -> dict[str, str]:
+        """Load private service leases and the canonical ports for one MCP."""
+        from aptl.core.lab import _server_config_port_refs
+        from aptl.workbench.credentials import EphemeralCredentialBroker
+
         with open_contained_nofollow(project, ".mcp.json") as handle:
             info = os.fstat(handle.fileno())
             if (
@@ -414,23 +451,4 @@ class GuestAdmission:
             )
             env.update(lease)
             broker.destroy_named(self.server.server_id, self.binding.run_id)
-        backend = DockerComposeBackend(
-            project,
-            load_config(project / "aptl.json").deployment.project_name,
-            docker_socket_path=self.binding.docker_socket,
-        )
-        result = backend.bind_local_docker_socket()
-        if not result.success:
-            raise WorkbenchConfigurationError("guest Docker endpoint unavailable")
-        endpoint = getattr(backend, "_docker_socket_path", None)
-        if endpoint is not None:
-            env["DOCKER_HOST"] = "unix://" + str(endpoint)
-        if self.server.server_id == "aptl-red":
-            from aptl.core.mcp_ingress import native_kali_ingress
-
-            expected = self.binding.access.container_ids.get("aptl-kali", "")
-            env.update(
-                native_kali_ingress(backend.container_inspect("aptl-kali"), expected)
-            )
-        self.authorize()
-        return (str(node), str(artifact)), project, env
+        return env

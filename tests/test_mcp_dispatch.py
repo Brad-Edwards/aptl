@@ -106,7 +106,8 @@ def test_sshd_disables_other_channels_and_binds_key_to_forced_dispatcher(tmp_pat
         grant_id="grant-1",
     )
     assert key.startswith('restrict,command="')
-    assert "mcp-access dispatch" in key and "--grant-id grant-1" in key
+    assert "mcp-access dispatch" in key
+    assert "--grant-id grant-1" in key
     assert "SSH_ORIGINAL_COMMAND" not in key
 
 

@@ -1,7 +1,7 @@
 """Runtime admission rejects a changed daemon, workload or capture authority."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -12,11 +12,11 @@ from tests.test_mcp_access import access_record
 def test_guest_inventory_uses_workspace_receipts_and_semantic_names(
     tmp_path, monkeypatch
 ):
-    from aptl.core.deployment.docker_compose import DockerComposeBackend
     from aptl.core.deployment._compose_resource_ownership import (
-        ResourceReceipt,
         OwnershipConflictError,
+        ResourceReceipt,
     )
+    from aptl.core.deployment.docker_compose import DockerComposeBackend
     from aptl.workbench.guest_binding import observe_guest_containers
 
     backend = DockerComposeBackend(
@@ -65,10 +65,10 @@ def test_guest_inventory_uses_workspace_receipts_and_semantic_names(
 
 @pytest.mark.skipif(sys.platform != "linux", reason="guest admission runs on Linux")
 def test_two_server_admissions_share_observation_lock(tmp_path, monkeypatch):
-    from concurrent.futures import ThreadPoolExecutor
     import threading
+    from concurrent.futures import ThreadPoolExecutor
 
-    from aptl.core.lifecycle_guard import lifecycle_mutation_lock, LifecycleBusyError
+    from aptl.core.lifecycle_guard import LifecycleBusyError, lifecycle_mutation_lock
     from aptl.workbench import guest_binding
     from aptl.workbench.dispatch import DispatchSelector
     from aptl.workbench.guest_binding import GuestAdmission, GuestDispatchBinding
@@ -225,9 +225,10 @@ def test_guest_endpoint_binding_uses_management_path_not_ambient_host(
 
 def test_transport_does_not_admit_a_start_or_reset_in_progress(tmp_path, monkeypatch):
     import threading
-    from aptl.core.lifecycle_guard import lifecycle_mutation_lock, LifecycleBusyError
-    from aptl.workbench.guest_binding import observe_guest
     from types import SimpleNamespace
+
+    from aptl.core.lifecycle_guard import LifecycleBusyError, lifecycle_mutation_lock
+    from aptl.workbench.guest_binding import observe_guest
 
     entered, release = threading.Event(), threading.Event()
 
@@ -240,8 +241,9 @@ def test_transport_does_not_admit_a_start_or_reset_in_progress(tmp_path, monkeyp
     worker.start()
     assert entered.wait(2)
     try:
+        prepared_input_1 = SimpleNamespace(project_dir=tmp_path)
         with pytest.raises(LifecycleBusyError):
-            observe_guest(SimpleNamespace(project_dir=tmp_path))
+            observe_guest(prepared_input_1)
     finally:
         release.set()
         worker.join(2)
@@ -252,9 +254,10 @@ def test_revocation_is_checked_while_runtime_observation_is_blocked(
 ):
     import threading
     from pathlib import Path
-    from aptl.workbench.guest_binding import GuestAdmission, GuestDispatchBinding
-    from aptl.workbench.dispatch import DispatchSelector
+
     from aptl.workbench import guest_binding
+    from aptl.workbench.dispatch import DispatchSelector
+    from aptl.workbench.guest_binding import GuestAdmission, GuestDispatchBinding
     from tests.test_mcp_access import access_record, grant
 
     caller = grant()

@@ -35,6 +35,7 @@ class SeatEndpoint(_PrivateRecord):
     @field_validator("address")
     @classmethod
     def loopback_only(cls, value: str) -> str:
+        """Normalize and require an address in the local loopback namespace."""
         address = ipaddress.ip_address(value)
         if not address.is_loopback:
             raise ValueError("seat endpoint must bind loopback")
@@ -63,11 +64,13 @@ class SeatAccessRecord(_PrivateRecord):
     @field_validator("guest_project")
     @classmethod
     def project_name(cls, value: str) -> str:
+        """Require a deployment project name admitted by the backend contract."""
         return validate_compose_project_name(value)
 
     @field_validator("container_ids")
     @classmethod
     def native_ids(cls, values: dict[str, str]) -> dict[str, str]:
+        """Require unique, full native IDs for every enrolled container."""
         if any(not re.fullmatch(r"[a-f0-9]{64}", value) for value in values.values()):
             raise ValueError("full native container IDs are required")
         if len(set(values.values())) != len(values):
@@ -77,6 +80,7 @@ class SeatAccessRecord(_PrivateRecord):
     @field_validator("observed_at")
     @classmethod
     def utc_observation(cls, value: datetime) -> datetime:
+        """Require an explicit UTC observation time."""
         if value.tzinfo is None or value.utcoffset().total_seconds() != 0:
             raise ValueError("observation must carry UTC timezone")
         return value
@@ -99,6 +103,7 @@ class CallerGrant(_PrivateRecord):
     @field_validator("expires_at")
     @classmethod
     def aware_expiry(cls, value: datetime) -> datetime:
+        """Require a timezone-aware grant expiry."""
         if value.tzinfo is None:
             raise ValueError("grant expiry requires timezone")
         return value

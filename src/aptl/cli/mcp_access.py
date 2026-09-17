@@ -11,6 +11,7 @@ from typing import Annotated
 
 import typer
 
+from aptl.workbench.dispatch import DispatchSelector
 from aptl.workbench.profiles import WorkbenchConfigurationError
 
 app = typer.Typer(help="Configure seat-scoped host MCP access.")
@@ -19,7 +20,7 @@ OptionText = Annotated[str, typer.Option()]
 
 
 @app.command()
-def configure(
+def configure(  # NOSONAR - Typer exposes one parameter per public CLI option.
     access_record: OptionPath,
     grant: OptionPath,
     host_public_key: OptionPath,
@@ -94,10 +95,11 @@ def configure(
 
 
 async def _stdio_dispatch(
-    binding: Path, grant_id: str, fingerprint: str, selector
+    binding: Path, grant_id: str, fingerprint: str, selector: DispatchSelector
 ) -> None:
+    """Attach admitted guest MCP traffic to the restricted SSH standard streams."""
     from aptl.workbench.guest_binding import GuestAdmission
-    from aptl.workbench.relay import relay_mcp
+    from aptl.workbench.relay import RelayLaunch, relay_mcp
 
     with GuestAdmission(binding, grant_id, fingerprint, selector) as admission:
         argv, cwd, env = admission.launch()
@@ -114,10 +116,7 @@ async def _stdio_dispatch(
             await relay_mcp(
                 reader,
                 writer,
-                argv=argv,
-                cwd=cwd,
-                env=env,
-                server=admission.server,
+                launch=RelayLaunch(argv, cwd, env, admission.server),
                 authorize=admission.authorize,
                 cleanup_observer=admission.cleanup,
                 check_revocation=admission.check_revocation,

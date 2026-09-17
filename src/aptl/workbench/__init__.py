@@ -43,7 +43,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name):
+def __getattr__(name: str) -> object:
     """Keep the optional browser stack out of ordinary CLI imports."""
     if name in {
         "ApplianceWorkbenchSettings",

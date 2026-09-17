@@ -8,13 +8,14 @@ import re
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from cryptography.hazmat.primitives.serialization import load_ssh_public_key
 
 from aptl.workbench.profiles import ServerProfile, WorkbenchConfigurationError
 
 _SELECTOR = re.compile(
-    r"aptl-mcp-v1 ([a-z0-9][a-z0-9._-]{0,63}) ([1-9][0-9]{0,9}) (aptl-[a-z]+)"
+    r"aptl-mcp-v1 ([a-z0-9][a-z0-9._-]{0,63}) ([1-9]\d{0,9}) (aptl-[a-z]+)", re.ASCII
 )
 
 
@@ -26,6 +27,7 @@ class DispatchSelector:
 
     @classmethod
     def parse(cls, command: str) -> DispatchSelector:
+        """Parse the bounded forced-command selector without shell interpretation."""
         match = _SELECTOR.fullmatch(command)
         if match is None:
             raise WorkbenchConfigurationError("invalid MCP transport selector")
@@ -35,12 +37,13 @@ class DispatchSelector:
 class ProtocolAdmission:
     """Allow only initialized calls to one canonical server's exact tool set."""
 
-    def __init__(self, server: ServerProfile):
+    def __init__(self, server: ServerProfile) -> None:
         self.server = server
         self.initialized = False
         self.inventory_admitted = False
 
-    def admit_inventory(self, result: dict) -> None:
+    def admit_inventory(self, result: dict[str, Any]) -> None:
+        """Require the backend to expose exactly the canonical tool inventory."""
         tools = result.get("tools")
         if not isinstance(tools, list) or any(
             not isinstance(tool, dict) for tool in tools
@@ -55,18 +58,9 @@ class ProtocolAdmission:
             raise WorkbenchConfigurationError("MCP tool inventory changed")
         self.inventory_admitted = True
 
-    def request(self, value: dict) -> None:
-        if not isinstance(value, dict) or value.get("jsonrpc") != "2.0":
-            raise WorkbenchConfigurationError("invalid MCP request")
-        method = value.get("method")
-        params = value.get("params", {})
-        if not isinstance(params, dict) or set(value) - {
-            "jsonrpc",
-            "id",
-            "method",
-            "params",
-        }:
-            raise WorkbenchConfigurationError("invalid MCP request")
+    def request(self, value: dict[str, Any]) -> None:
+        """Validate an initialized request against the admitted protocol surface."""
+        method, params = _request_fields(value)
         if method == "initialize":
             if self.initialized or "id" not in value:
                 raise WorkbenchConfigurationError("MCP already initialized")
@@ -86,7 +80,8 @@ class ProtocolAdmission:
         if not str(method).startswith("notifications/") and "id" not in value:
             raise WorkbenchConfigurationError("MCP request ID required")
 
-    def _tool_call(self, params: dict) -> None:
+    def _tool_call(self, params: dict[str, Any]) -> None:
+        """Restrict tool invocation to canonical names and supported arguments."""
         if (
             params.get("name") not in self.server.tool_names
             or not isinstance(params.get("arguments", {}), dict)
@@ -98,6 +93,7 @@ class ProtocolAdmission:
 def _policy_path(path: Path) -> str:
     # The policy is executed by sshd and /bin/sh, so keep its management paths
     # literal and narrowly representable. This is not a participant path API.
+    """Require literal absolute management paths safe for the SSH policy."""
     value = str(path)
     if not path.is_absolute() or not re.fullmatch(r"/[A-Za-z0-9/_.-]+", value):
         raise WorkbenchConfigurationError("invalid transport management path")
@@ -186,12 +182,13 @@ def key_fingerprint(public_key: str) -> str:
     try:
         load_ssh_public_key(public_key.encode("ascii"))
         digest = hashlib.sha256(base64.b64decode(fields[1], validate=True)).digest()
-    except (ValueError, UnicodeError) as exc:
+    except ValueError as exc:
         raise WorkbenchConfigurationError("invalid transport public key") from exc
     return "SHA256:" + base64.b64encode(digest).decode().rstrip("=")
 
 
 def normalize_public_key(public_key: str) -> str:
+    """Parse and normalize a public key without accepting key options."""
     value = public_key.strip()
     fields = value.split()
     if (
@@ -204,6 +201,22 @@ def normalize_public_key(public_key: str) -> str:
     key = " ".join(fields[:2])
     try:
         load_ssh_public_key(key.encode("ascii"))
-    except (ValueError, UnicodeError) as exc:
+    except ValueError as exc:
         raise WorkbenchConfigurationError("invalid transport public key") from exc
     return key
+
+
+def _request_fields(value: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """Validate the request envelope before advancing the admission state."""
+    if not isinstance(value, dict) or value.get("jsonrpc") != "2.0":
+        raise WorkbenchConfigurationError("invalid MCP request")
+    method = value.get("method")
+    params = value.get("params", {})
+    if not isinstance(params, dict) or set(value) - {
+        "jsonrpc",
+        "id",
+        "method",
+        "params",
+    }:
+        raise WorkbenchConfigurationError("invalid MCP request")
+    return method, params

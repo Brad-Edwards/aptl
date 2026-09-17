@@ -7,6 +7,7 @@ import json
 import os
 import stat
 from pathlib import Path
+from typing import Any
 
 from aptl.core._soc_ca_io import _atomic_write
 from aptl.utils.pathsafe import (
@@ -22,6 +23,7 @@ from aptl.workbench.profiles import WorkbenchConfigurationError
 
 
 def _read(root: Path, relative: str) -> str | None:
+    """Read bounded owner-controlled client data without following links."""
     try:
         with open_contained_nofollow(root, relative) as handle:
             info = os.fstat(handle.fileno())
@@ -45,6 +47,7 @@ def _read(root: Path, relative: str) -> str | None:
 
 
 def _private_directory(root: Path, name: str) -> None:
+    """Create or validate a private owner-only configuration directory."""
     path = root / name
     try:
         path.mkdir(mode=0o700)
@@ -60,10 +63,12 @@ def _private_directory(root: Path, name: str) -> None:
 
 
 def _digest(text: str | None) -> str:
+    """Hash a client document for publication conflict detection."""
     return hashlib.sha256((text or "").encode()).hexdigest()
 
 
-def _validate_identity(previous: dict, record: SeatAccessRecord) -> None:
+def _validate_identity(previous: dict[str, Any], record: SeatAccessRecord) -> None:
+    """Reject stale generations and changes to the managed seat identity."""
     old = previous["identity"]
     if (
         any(
@@ -79,12 +84,13 @@ def _validate_identity(previous: dict, record: SeatAccessRecord) -> None:
         )
 
 
-def _record_identity(record):
+def _record_identity(record: SeatAccessRecord) -> dict[str, Any]:
+    """Serialize stable seat identity independently of discovery freshness."""
     return record.model_dump(mode="json", exclude={"observed_at", "lifecycle_state"})
 
 
 def publish_client_config(
-    project: Path, client: str, record: SeatAccessRecord, entries: dict
+    project: Path, client: str, record: SeatAccessRecord, entries: dict[str, Any]
 ) -> Path:
     """Recover ownership after interruption, preserve manual data, reject races."""
     import fcntl
@@ -110,7 +116,16 @@ def publish_client_config(
         os.close(descriptor)
 
 
-def _publish(root, client, record, entries, target_rel, state_rel, pending_rel):
+def _publish(
+    root: Path,
+    client: str,
+    record: SeatAccessRecord,
+    entries: dict[str, Any],
+    target_rel: str,
+    state_rel: str,
+    pending_rel: str,
+) -> Path:
+    """Recover the journal and atomically publish a conflict-checked client file."""
     original = _read(root, target_rel)
     stored = _read(root, state_rel)
     previous = json.loads(stored) if stored is not None else None

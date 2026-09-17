@@ -590,3 +590,77 @@ def dockerfile_copies(dockerfile: Path) -> list[tuple[str, str]]:
         *sources, destination = operands
         pairs.extend((source, destination) for source in sources)
     return pairs
+
+
+# ---------------------------------------------------------------------------
+# Workspace-scoped backend resources (#1054)
+# ---------------------------------------------------------------------------
+
+
+def realized_container_name(backend, semantic_name: str) -> str:
+    """Return the external name this backend's workspace gives a container.
+
+    Backend resources carry workspace-scoped external names recorded in
+    ownership receipts, so concurrent labs cannot collide. ``container_exec``
+    and friends resolve a semantic name through those receipts themselves; a
+    test that shells out to ``docker`` has to ask what the container is really
+    called instead of assuming the name the scenario declared.
+    """
+
+    return backend._ensure_resource_ownership().container_name(semantic_name)
+
+
+def realized_project_name(backend) -> str:
+    """Return the workspace-scoped Compose project name a backend realizes under.
+
+    Networks are named ``<project>_<network>``, and the project itself carries
+    the workspace suffix, so a test that names a network directly has to build
+    it from this rather than from the project name it passed in.
+    """
+
+    return backend._ensure_resource_ownership().project_name
+
+
+def run_owned_container(backend, semantic_name: str, image_args: list[str]) -> str:
+    """Start a container this backend owns and return its native id.
+
+    A backend resolves a selector only through its own ownership receipts, so a
+    container started behind its back is invisible to it — correctly, because a
+    backend must not reach resources outside its workspace. A test that needs
+    the backend to observe a container it did not realize therefore has to give
+    it a real one: workspace-scoped name, workspace labels, recorded receipt.
+
+    ``image_args`` is everything from the image reference onward.
+    """
+
+    from aptl.core.deployment._compose_resource_ownership import ResourceReceipt
+
+    ownership = backend._ensure_resource_ownership()
+    attempt_id = backend._resource_attempt_id
+    external = ownership.container_name(semantic_name)
+    labels: list[str] = []
+    for label, value in ownership.labels(attempt_id=attempt_id).items():
+        labels.extend(("--label", f"{label}={value}"))
+    created = subprocess.run(
+        ["docker", "run", "-d", "--name", external, *labels, *image_args],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=120,
+    )
+    native_id = created.stdout.strip()
+    ownership.record(
+        ResourceReceipt(
+            kind="container",
+            native_id=native_id,
+            external_name=external,
+            semantic_name=semantic_name,
+            node_address=f"test.{semantic_name}",
+            workspace_id=ownership.workspace_id,
+            project_name=ownership.project_name,
+            daemon_id=backend._ownership_daemon_id(),
+            attempt_id=attempt_id,
+            managed_by="direct",
+        )
+    )
+    return native_id

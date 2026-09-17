@@ -222,6 +222,15 @@ class TestLabStart:
         """Return empty ownership inventories before the Compose result."""
 
         def run(command, **_kwargs):
+            if command[:3] == ["docker", "info", "--format"]:
+                return MagicMock(returncode=0, stdout="test-daemon\n", stderr="")
+            if command[:2] == ["docker", "inspect"]:
+                return MagicMock(returncode=1, stdout="", stderr="not found")
+            if command[:3] in (
+                ["docker", "network", "inspect"],
+                ["docker", "volume", "inspect"],
+            ):
+                return MagicMock(returncode=1, stdout="", stderr="not found")
             if "compose" in command and "up" in command:
                 return MagicMock(
                     returncode=compose_returncode,

@@ -378,7 +378,9 @@ class TestKillLabContainers:
 
         kill_lab_containers(project_dir=tmp_path)
 
-        first_cmd = mock_run.call_args_list[0][0][0]
+        first_cmd = next(
+            call.args[0] for call in mock_run.call_args_list if "kill" in call.args[0]
+        )
         for profile in ALL_KNOWN_PROFILES:
             assert profile in first_cmd
 
@@ -391,7 +393,7 @@ class TestKillLabContainers:
         success, error = kill_lab_containers(project_dir=tmp_path)
 
         assert success is False
-        assert "docker compose kill failed" in error
+        assert "ownership conflict" in error.lower()
 
     @patch("aptl.core.kill.subprocess.run")
     def test_uses_project_dir_as_cwd(self, mock_run, tmp_path):

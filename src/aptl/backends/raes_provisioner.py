@@ -63,10 +63,8 @@ if TYPE_CHECKING:
 
 log = get_logger("raes-provisioner")
 
-# Application-owned inventories can settle after Compose's health gate.  This
-# is an evidence-readiness budget, not a fixed delay: every pass re-runs native
-# readback and exits immediately when RAES's own authority gate clears.  The
-# bound never permits an absent or partial value to pass admission.
+# Application-owned inventories can settle after Compose's health gate. Retry
+# bounded native readback without admitting an absent or partial value.
 _REALIZATION_READBACK_TIMEOUT_SECONDS = 300.0
 _REALIZATION_READBACK_INTERVAL_SECONDS = 2.0
 
@@ -78,16 +76,11 @@ class AptlProvisioner(object):
     project_dir: Path
     config: AptlConfig
     deployment_backend: "DeploymentBackend"
-    # The scenario being realized, and the root every scenario-declared input is
-    # anchored to. Required: realization never falls back to ``project_dir`` (the
-    # engine checkout). For an in-tree scenario the bundle root *is* the project
-    # directory, which is what keeps an unmoved scenario unchanged (issue #874).
+    # The scenario and root anchoring every declared input. Realization never
+    # falls back to ``project_dir``; see issue #874.
     bundle: ScenarioBundle
-    # RAES's backend-call boundary replaces a failed apply's diagnostics with
-    # its snapshot-contract / SEM-218 gate output (the gate reads the
-    # never-realized snapshot, so every exact declaration looks unrealized).
-    # Keep the last failed apply's own report here so the handoff can
-    # re-attach the actionable failure (issue #677).
+    # RAES's backend-call boundary replaces failed-apply diagnostics with the
+    # snapshot gate output. Preserve the actionable report; see issue #677.
     last_failure_diagnostics: tuple[Diagnostic, ...] = ()
     # The trusted availability facts gathered before planning (ADR-051). They
     # carry the address-scoped immutable substrate config id each
@@ -103,6 +96,12 @@ class AptlProvisioner(object):
     _cached_realization: AptlRealization | None = field(
         default=None, init=False, repr=False
     )
+    _attempt_id: str | None = field(default=None, init=False, repr=False)
+
+    def bind_attempt_id(self, attempt_id: str | None) -> None:
+        """Bind the one already-resolved lab-start attempt to deployment."""
+
+        self._attempt_id = attempt_id
 
     def validate(self, plan: object) -> list[Diagnostic]:
         """Validate that the RAES provisioning plan is APTL-realizable."""
@@ -272,7 +271,7 @@ class AptlProvisioner(object):
     ):
         """Start the lowered deployment and verify every added observer."""
 
-        observation_context = DeploymentObservationContext()
+        observation_context = DeploymentObservationContext(attempt_id=self._attempt_id)
         result: ApplyResult | None = None
         try:
             start_result = self.deployment_backend.realize(

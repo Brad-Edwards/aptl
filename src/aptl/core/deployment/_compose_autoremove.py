@@ -147,7 +147,10 @@ class ComposeAutoremoveMixin:
     def _remove_completed_container(self, name: str) -> str | None:
         """Remove one exact container and verify that it is absent."""
 
-        result = self._run(["docker", "rm", name], timeout=_REMOVE_TIMEOUT)
+        result = self._run(
+            ["docker", "rm", self._resolve_owned_container_id(name)],
+            timeout=_REMOVE_TIMEOUT,
+        )
         failure = None
         if result.returncode != 0:
             failure = f"container {name!r} could not be auto-removed"

@@ -168,13 +168,10 @@ repos:
           - requirements/ci.txt
         files: ^(uv\.lock|pyproject\.toml)$
 
-  # Local hooks: a Python complexity gate, then the three test suites
-  # (which mirror the CI test jobs in .github/workflows/checks.yml). Each
-  # hook is gated by a `files:` regex so a commit that doesn't touch a
-  # given surface skips that hook; `pre-commit run --all-files` (and CI)
-  # still runs everything because every repo file matches at least one
-  # regex collectively. The complexity hook runs first so a god-method
-  # fails fast, before the slower test suites (fail_fast: true).
+  # Local hooks stay limited to fast static and prose hygiene. Full Python,
+  # MCP, web, and scenario suites run in CI rather than blocking every local
+  # commit. Each hook is gated by a `files:` regex so ordinary commits only
+  # run checks relevant to their changed surface.
   - repo: local
     hooks:
       - id: ruff-complexity
@@ -210,8 +207,7 @@ repos:
         # `noInlineConfig` meta-warnings — the gate's only rule is an error, so
         # nothing real is hidden. `pass_filenames: false`: always lints the full
         # configured globs (mcp/*/src + web/src), not just the changed files.
-        # Runs before the slower vitest hooks so a god-method fails fast
-        # (fail_fast: true). This hook is deliberately NOT in the CI `SKIP` list
+        # This hook is deliberately NOT in the CI `SKIP` list
         # (.github/workflows/checks.yml), so it gates in the required
         # "Pre-commit hooks" job exactly as it does locally.
         entry: eslint
@@ -239,61 +235,3 @@ repos:
         require_serial: true
         types_or: [markdown]
         exclude: ^(\.claude/|\.gc/|\.github/|changelog\.d/|CHANGELOG\.md|AGENTS\.md|CLAUDE\.md|node_modules/|\.tools/|\.vale/)
-
-      - id: pytest
-        name: Python tests (pytest)
-        # Prefer the repo's .venv (so contributors don't need to activate it
-        # before committing). Fall back to PATH for contributors using a
-        # different venv layout that they've already activated. Scenario SDL
-        # is included so an edit to it runs the fast RAES validation-gate
-        # logic tests (the slow full-scenario gate is the manual
-        # `raes-scenario-gate` hook below).
-        # -n auto parallelizes across cores via pytest-xdist (no coverage here,
-        # so xdist worker measurement is not a concern — that constraint only
-        # applies to the CI `coverage run` job).
-        entry: bash -c 'if [ -x .venv/bin/pytest ]; then exec .venv/bin/pytest tests/ -q -k "not integration" -n auto; else exec pytest tests/ -q -k "not integration" -n auto; fi'
-        language: system
-        pass_filenames: false
-        files: ^(src/.*\.py|tests/.*\.py|pyproject\.toml|scenarios/.*\.ya?ml)$
-
-      - id: raes-scenario-gate
-        name: RAES scenario validation gate (manual; techvault-operational)
-        # SCN-010E / #322. The static gate validates the authoritative
-        # techvault-operational SDL and spawns the `raes conformance backend`
-        # CLI, so it is a manual-stage hook rather than part of the per-commit
-        # path. Run it before pushing a scenario/manifest change:
-        #   pre-commit run raes-scenario-gate --hook-stage manual
-        # The advisory CI job `raes-scenario-gate` runs the same tests on PRs.
-        entry: bash -c 'if [ -x .venv/bin/pytest ]; then exec .venv/bin/pytest tests/test_techvault_static_gate.py -q -m integration; else exec pytest tests/test_techvault_static_gate.py -q -m integration; fi'
-        language: system
-        pass_filenames: false
-        stages: [manual]
-        files: ^(scenarios/.*\.ya?ml|src/aptl/validation/.*\.py|src/aptl/backends/raes.*\.py)$
-
-      - id: vitest-mcp-common
-        name: MCP TypeScript tests (aptl-mcp-common vitest)
-        entry: bash -c 'cd mcp/aptl-mcp-common && { [ -d node_modules ] || npm install --silent; } && npx vitest run'
-        language: system
-        pass_filenames: false
-        files: ^mcp/aptl-mcp-common/
-
-      - id: vitest-mcp-red
-        name: MCP TypeScript tests (mcp-red vitest)
-        # mcp-red consumes aptl-mcp-common via a `file:` dependency. npm
-        # copies the build artifact at install time, so any common change
-        # must propagate to mcp-red's node_modules before vitest runs.
-        # `npm install` (no package arg) re-resolves dependencies from
-        # this package.json, which honours the local `file:` entry — using
-        # `npm install <pkg>` would treat it as a registry package spec
-        # and could mutate the manifest/lockfile.
-        entry: bash -c 'cd mcp/aptl-mcp-common && { [ -d node_modules ] || npm install --silent; } && npm run build --silent && cd ../mcp-red && rm -rf node_modules/aptl-mcp-common && npm install --no-audit --no-fund --silent && npx vitest run'
-        language: system
-        pass_filenames: false
-        files: ^mcp/(aptl-mcp-common|mcp-red)/
-
-      - id: vitest-web
-        name: Web frontend tests (vitest)
-        entry: bash -c 'cd web && { [ -d node_modules ] || npm install --silent; } && npx svelte-kit sync && npx vitest run'
-        language: system
-        pass_filenames: false
-        files: ^web/

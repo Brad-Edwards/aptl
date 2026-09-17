@@ -7,10 +7,6 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol
 
-from aptl.core.deployment._compose_volume_cleanup import (
-    project_scoped_volume_names,
-    remove_leftover_project_volumes,
-)
 from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.lab_types import LabResult
@@ -58,6 +54,11 @@ class _ComposeStopBackend(Protocol):
 
         ...
 
+    def _remove_owned_volumes(self) -> list[str]:
+        """Remove only freshly verified receipt-owned volumes."""
+
+        ...
+
     def observe_project_runtime(self) -> ProjectRuntimePresence:
         """Return checked residual project container/network presence."""
 
@@ -73,7 +74,6 @@ def stop_compose_lab(
 ) -> LabResult:
     """Stop Compose services and clean project-scoped networks and volumes."""
 
-    volume_names, discovery_error = _volume_inventory(backend, remove_volumes, timeout)
     # Teardown is scenario-agnostic and resolves the running range by project
     # identity, not by a filesystem Compose model that may belong to a different
     # root than the scenario started from. ``docker compose -p <project> down``
@@ -84,21 +84,7 @@ def stop_compose_lab(
         profiles,
         None,
         remove_volumes,
-        volume_names,
-        discovery_error,
         timeout,
-    )
-
-
-def _volume_inventory(
-    backend: _ComposeStopBackend, remove_volumes: bool, timeout: int
-) -> tuple[set[str], str]:
-    """Discover project volumes only for destructive cleanup, by runtime label."""
-
-    return (
-        project_scoped_volume_names(backend.project_name, backend._run, timeout=timeout)
-        if remove_volumes
-        else (set(), "")
     )
 
 
@@ -107,8 +93,6 @@ def _run_stop(
     profiles: list[str],
     compose_files: tuple[Path, ...] | None,
     remove_volumes: bool,
-    volume_names: set[str],
-    discovery_error: str,
     timeout: int,
 ) -> LabResult:
     """Run bounded project cleanup and verify the runtime is absent."""
@@ -119,11 +103,7 @@ def _run_stop(
         cmd.append("-v")
     log.info("Stopping lab (remove_volumes=%s)", remove_volumes)
     compose_recovered = _run_compose_down(backend, cmd, timeout)
-    failures.extend(
-        _cleanup_failures(
-            backend, remove_volumes, volume_names, discovery_error, timeout
-        )
-    )
+    failures.extend(_cleanup_failures(backend, remove_volumes))
     failures.extend(_verification_failures(backend))
     return _cleanup_result(failures, compose_recovered=compose_recovered)
 
@@ -161,9 +141,6 @@ def _verification_failures(backend: _ComposeStopBackend) -> list[str]:
 def _cleanup_failures(
     backend: _ComposeStopBackend,
     remove_volumes: bool,
-    volume_names: set[str],
-    discovery_error: str,
-    timeout: int,
 ) -> list[str]:
     """Collect project cleanup failures after Compose stops.
 
@@ -175,14 +152,8 @@ def _cleanup_failures(
 
     failures = backend.remove_project_containers()
     failures += backend.remove_project_networks()
-    if not remove_volumes:
-        return failures
-    if discovery_error:
-        failures.append(discovery_error)
-    else:
-        failures.extend(
-            remove_leftover_project_volumes(volume_names, backend._run, timeout=timeout)
-        )
+    if remove_volumes:
+        failures.extend(backend._remove_owned_volumes())
     return failures
 
 

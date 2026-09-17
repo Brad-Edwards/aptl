@@ -32,6 +32,7 @@ def test_generated_compose_includes_isolated_backend_apparatus(engine, tmp_path)
     scenario = tmp_path / "pack"
     scenario.mkdir()
     backend = DockerComposeBackend(engine)
+    backend._docker_daemon_id = "test-daemon"
     spec = DeploymentRealizationSpec(profiles=("otel",), nodes=(), networks=())
     files = backend._realization_compose_files(None, spec, scenario, engine)
     assert files, "even an empty pack needs backend observability"
@@ -70,6 +71,7 @@ def test_reserved_ownership_collision_rejects_before_backend_mutation(
         yaml.safe_dump({section: {name: definition}})
     )
     backend = DockerComposeBackend(engine)
+    backend._docker_daemon_id = "test-daemon"
     monkeypatch.setattr(
         backend, "_run", lambda *args, **kwargs: pytest.fail("mutated colliding world")
     )
@@ -135,9 +137,15 @@ def test_direct_static_start_includes_backend_file(engine, tmp_path, monkeypatch
     (scenario / "docker-compose.yml").write_text("services: {}\n")
     commands = []
     backend = DockerComposeBackend(engine)
+    backend._docker_daemon_id = "test-daemon"
 
     def run(command, **kwargs):
         commands.append(command)
+        if command[:3] in (
+            ["docker", "network", "inspect"],
+            ["docker", "volume", "inspect"],
+        ):
+            return subprocess.CompletedProcess(command, 1, "", "missing")
         return subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(backend, "_run", run)
@@ -161,9 +169,15 @@ def test_image_free_path_starts_apparatus_before_materialization(
     scenario = tmp_path / "pack"
     scenario.mkdir()
     backend = DockerComposeBackend(engine)
+    backend._docker_daemon_id = "test-daemon"
     started = []
 
     def run(command, **kwargs):
+        if command[:3] in (
+            ["docker", "network", "inspect"],
+            ["docker", "volume", "inspect"],
+        ):
+            return subprocess.CompletedProcess(command, 1, "", "missing")
         if "up" in command:
             files = [
                 Path(command[i + 1]) for i, arg in enumerate(command) if arg == "-f"
@@ -199,8 +213,8 @@ def test_image_free_path_starts_apparatus_before_materialization(
     "kind,name",
     [
         ("container", "aptl-tempo"),
-        ("volume", "aptl_tempo_data"),
-        ("network", "aptl_aptl-observability"),
+        ("volume", "tempo_data"),
+        ("network", "aptl-observability"),
     ],
 )
 def test_foreign_native_resource_is_never_adopted(
@@ -211,6 +225,13 @@ def test_foreign_native_resource_is_never_adopted(
     scenario = tmp_path / "pack"
     scenario.mkdir()
     backend = DockerComposeBackend(engine)
+    ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+    backend._docker_daemon_id = "test-daemon"
+    name = (
+        ownership.container_name(name)
+        if kind == "container"
+        else f"{ownership.project_name}_{name}"
+    )
 
     def run(command, **kwargs):
         if "up" in command:

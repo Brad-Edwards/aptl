@@ -516,7 +516,7 @@ def test_substrate_identity_is_the_image_config_id():
     # the container readback; a registry RepoDigest (ambiguous, possibly a Docker
     # rather than OCI manifest) is deliberately not used.
     backend = _substrate_backend("sha256:configid")
-    assert backend.substrate_image_identity("debian:12-slim") == (
+    assert backend.substrate_image_identity("debian:13-slim") == (
         "sha256:configid",
         _CONFIG_MEDIA,
     )

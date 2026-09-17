@@ -342,7 +342,7 @@ def test_image_free_generated_environment_uses_the_declared_output(
         BaseContainerSpec(
             node_address="provision.node.kali",
             container_name="aptl-kali",
-            image_ref="debian:12-slim",
+            image_ref="debian:13-slim",
             runs_services=True,
             environment_names=("CORTEX_KEY",),
         ),
@@ -367,7 +367,7 @@ def test_base_environment_file_rejects_variable_name_injection(tmp_path: Path) -
     spec = BaseContainerSpec(
         node_address="provision.node.kali",
         container_name="aptl-kali",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
         environment_names=("SAFE\nINJECTED",),
         environment_defaults=(("SAFE\nINJECTED", "value"),),
@@ -388,7 +388,7 @@ def test_base_environment_file_rejects_value_line_injection(tmp_path: Path) -> N
     spec = BaseContainerSpec(
         node_address="provision.node.kali",
         container_name="aptl-kali",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
         environment_names=("SAFE",),
         environment_defaults=(("SAFE", "value\nINJECTED=1"),),

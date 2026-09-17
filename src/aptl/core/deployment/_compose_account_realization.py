@@ -9,9 +9,13 @@ non-secret state by read-after-write. A zero exit code alone is not success.
 Security posture (ADR-029 + ADR-046 addendum):
 
 * the whole batch is validated before the first mutation (fail closed);
-* credentials are generated inside the target boundary (``--random-password``)
-  and never read back, logged, or placed on argv/env — an already-existing
+* a ``strong`` account's credential is generated inside the target boundary
+  (``--random-password``) and never read back or logged, and an already-existing
   account is never re-created, so its provisioner-owned password is preserved;
+* a ``weak`` or ``medium`` account gets a backend-minted credential of the
+  declared class, proved by authenticating as that account and disclosed only to
+  the operator's range-private directory — the scenario declares that credential
+  as the surface an attacker is meant to find (issue #1006);
 * failures return a bounded :class:`LabResult` naming the placement address and
   a stable reason, never raw provider stdout/stderr.
 """
@@ -20,7 +24,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from aptl.core.deployment import _account_credentials as credentials
 from aptl.core.deployment import _account_provider as provider
+from aptl.core.deployment._compose_account_verification import (
+    ComposeAccountVerificationMixin,
+    _failure,
+    _parse_spns,
+    _rejected,
+)
 from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
     DeploymentNodeRealization,
@@ -28,7 +39,6 @@ from aptl.core.deployment.realization import (
 from aptl.core.lab_types import LabResult
 from aptl.core.services import wait_for_service
 from aptl.utils.logging import get_logger
-from aptl.utils.redaction import redact
 
 log = get_logger("deployment.account_realization")
 
@@ -42,7 +52,7 @@ _READINESS_INTERVAL = 5
 _ACCOUNT_CMD_TIMEOUT = 60
 
 
-class ComposeRealizationAccountMixin(object):
+class ComposeRealizationAccountMixin(ComposeAccountVerificationMixin):
     """Realize typed RAES account placements through Docker Compose."""
 
     def realize_accounts(
@@ -90,14 +100,33 @@ class ComposeRealizationAccountMixin(object):
         """Realize one validated batch against a single target container."""
 
         container = target.container_name
-        if not self._account_provider_ready(container, timeout=timeout):
-            return _failure(container, "account-provider-not-ready")
-        self._ensure_groups(container, target.accounts, timeout=timeout)
+        unprepared = self._prepare_account_target(target, timeout=timeout)
+        if unprepared is not None:
+            return unprepared
         for account in target.accounts:
             reason = self._reconcile_account(container, account, timeout=timeout)
             if reason is not None:
                 return _failure(account.address, reason)
         return self._verify_accounts(container, target.accounts, timeout=timeout)
+
+    def _prepare_account_target(
+        self,
+        target: provider.AccountTarget,
+        *,
+        timeout: int,
+    ) -> LabResult | None:
+        """Ready the target: provider up, policy permitting, groups present."""
+
+        container = target.container_name
+        if not self._account_provider_ready(container, timeout=timeout):
+            return _failure(container, "account-provider-not-ready")
+        reason = self._permit_declared_weak_credentials(
+            container, target.accounts, timeout=timeout
+        )
+        if reason is not None:
+            return _failure(container, reason)
+        self._ensure_groups(container, target.accounts, timeout=timeout)
+        return None
 
     def _account_provider_ready(self, container: str, *, timeout: int) -> bool:
         """Wait until the AD provider is up AND its baseline provisioner is done.
@@ -131,6 +160,31 @@ class ComposeRealizationAccountMixin(object):
         """Return True when a probe command returns a zero exit code."""
 
         return self.container_exec(container, cmd, timeout=timeout).returncode == 0
+
+    def _permit_declared_weak_credentials(
+        self,
+        container: str,
+        accounts: Sequence[DeploymentAccountRealization],
+        *,
+        timeout: int,
+    ) -> str | None:
+        """Relax the domain policy only when the batch declares a weak credential.
+
+        Samba's default policy can refuse the credentials a scenario declares as
+        its guessing surface, so without this the declared weak class cannot be
+        made true. It is applied once per target and only for a declared `weak`
+        account: medium credentials already satisfy the default policy, so a
+        medium or strong batch never weakens the domain (issue #1006).
+        """
+
+        if not any(account.password_strength == credentials.WEAK for account in accounts):
+            return None
+        applied = self.container_exec(
+            container, provider.samba_domain_relax_password_policy(), timeout=timeout
+        )
+        if applied.returncode != 0:
+            return "account-password-policy-not-applied"
+        return None
 
     def _ensure_groups(
         self,
@@ -167,6 +221,11 @@ class ComposeRealizationAccountMixin(object):
         """
 
         created, reason = self._ensure_user(container, account, timeout=timeout)
+        if reason is not None:
+            return reason
+        reason = self._apply_password(
+            container, account, created=created, timeout=timeout
+        )
         if reason is not None:
             return reason
         self._apply_mail(container, account, created=created, timeout=timeout)
@@ -212,6 +271,83 @@ class ComposeRealizationAccountMixin(object):
         if confirmed.returncode != 0:
             return False, "user-create-failed"
         return True, None
+
+    def _apply_password(
+        self,
+        container: str,
+        account: DeploymentAccountRealization,
+        *,
+        created: bool,
+        timeout: int,
+    ) -> str | None:
+        """Make the account's declared credential class true, or fail closed.
+
+        A ``strong`` account keeps the target-generated secret from create. A
+        ``weak`` or ``medium`` account is the scenario's declared credential
+        surface, so the backend mints a password of that class, sets it, and
+        proves it by authenticating as the account. An existing account is left
+        alone: its credential is already realized and re-minting would discard
+        a secret a participant may already hold.
+        """
+
+        strength = account.password_strength
+        if strength not in credentials.BACKEND_MINTED_STRENGTHS or not created:
+            return None
+        password = credentials.password_for_strength(strength)
+        unproven = self._set_and_prove_password(
+            container, account, password, timeout=timeout
+        )
+        if unproven is not None:
+            return unproven
+        return self._disclose_password(account, password, strength)
+
+    def _set_and_prove_password(
+        self,
+        container: str,
+        account: DeploymentAccountRealization,
+        password: str,
+        *,
+        timeout: int,
+    ) -> str | None:
+        """Set the minted password, then prove it authenticates as the account."""
+
+        applied = self.container_exec(
+            container,
+            provider.samba_user_setpassword(account.username, password),
+            timeout=timeout,
+        )
+        if applied.returncode != 0:
+            return "account-password-not-applied"
+        proof = self.container_exec(
+            container,
+            provider.samba_user_authenticate(account.username, password),
+            timeout=timeout,
+        )
+        if proof.returncode != 0:
+            # The directory accepted the write but the credential does not
+            # authenticate, so the declared account is not actually usable.
+            return "account-password-not-authenticable"
+        return None
+
+    def _disclose_password(
+        self,
+        account: DeploymentAccountRealization,
+        password: str,
+        strength: str,
+    ) -> str | None:
+        """Write the minted credential where only the operator can read it."""
+
+        try:
+            credentials.disclose_account_credential(
+                self.realization_root,
+                node=account.target_address,
+                username=account.username,
+                password=password,
+                strength=strength,
+            )
+        except (OSError, ValueError):
+            return "account-credential-not-disclosed"
+        return None
 
     def _apply_mail(
         self,
@@ -277,176 +413,3 @@ class ComposeRealizationAccountMixin(object):
                 provider.samba_spn_add(account.spn, account.username),
                 timeout=timeout,
             )
-
-    def _verify_accounts(
-        self,
-        container: str,
-        accounts: Sequence[DeploymentAccountRealization],
-        *,
-        timeout: int,
-    ) -> LabResult | None:
-        """Read-after-write: confirm declared non-secret state actually landed."""
-
-        for account in accounts:
-            reason = self._verify_account(container, account, timeout=timeout)
-            if reason is not None:
-                return _failure(account.address, reason)
-        return None
-
-    def _verify_account(
-        self,
-        container: str,
-        account: DeploymentAccountRealization,
-        *,
-        timeout: int,
-    ) -> str | None:
-        """Return a stable failure reason for one account, or None when verified.
-
-        Each aspect is verified by an exact, field-aware read; ``or`` short-circuits
-        so a later read only runs once the earlier ones pass.
-        """
-
-        shown = self.container_exec(
-            container, provider.samba_user_show(account.username), timeout=timeout
-        )
-        if shown.returncode != 0:
-            return "user-not-found-after-realize"
-        reason = _verify_attributes(shown.stdout or "", account)
-        reason = reason or self._verify_memberships(container, account, timeout=timeout)
-        return reason or self._verify_spn(container, account, timeout=timeout)
-
-    def _verify_memberships(
-        self,
-        container: str,
-        account: DeploymentAccountRealization,
-        *,
-        timeout: int,
-    ) -> str | None:
-        """Verify exact, case-insensitive membership in every declared group."""
-
-        member = provider.canonical_principal(account.username)
-        for group in account.groups:
-            members = self.container_exec(
-                container, provider.samba_group_listmembers(group), timeout=timeout
-            )
-            if members.returncode != 0 or member not in _parse_members(
-                members.stdout or ""
-            ):
-                return "declared-group-membership-missing"
-        return None
-
-    def _verify_spn(
-        self,
-        container: str,
-        account: DeploymentAccountRealization,
-        *,
-        timeout: int,
-    ) -> str | None:
-        """Verify the declared SPN is present by exact match (when one is declared)."""
-
-        if not account.spn:
-            return None
-        listed = self.container_exec(
-            container, provider.samba_spn_list(account.username), timeout=timeout
-        )
-        if listed.returncode != 0 or account.spn not in _parse_spns(
-            listed.stdout or ""
-        ):
-            return "declared-spn-not-set"
-        return None
-
-
-def _verify_attributes(
-    user_show_stdout: str,
-    account: DeploymentAccountRealization,
-) -> str | None:
-    """Verify the declared, explicitly-authored non-secret attributes from `user show`."""
-
-    if account.mail and _show_attr(user_show_stdout, "mail") != account.mail:
-        return "declared-mail-not-set"
-    if (
-        account.disabled is not None
-        and _parse_disabled(user_show_stdout) != account.disabled
-    ):
-        return "declared-disabled-state-not-set"
-    return None
-
-
-# ACCOUNTDISABLE bit in the AD userAccountControl attribute (512 = enabled
-# NORMAL_ACCOUNT, 514 = disabled). samba-tool has no direct enabled/disabled
-# read-out, so the verifier parses this value from `samba-tool user show`.
-_ACCOUNTDISABLE = 0x2
-
-
-def _parse_disabled(user_show_stdout: str) -> bool | None:
-    """Return the account's disabled state from `samba-tool user show`, or None."""
-
-    raw = _show_attr(user_show_stdout, "userAccountControl")
-    if raw is None:
-        return None
-    try:
-        return bool(int(raw) & _ACCOUNTDISABLE)
-    except ValueError:
-        return None
-
-
-def _show_attr(user_show_stdout: str, attr: str) -> str | None:
-    """Return the exact value of one attribute from `samba-tool user show`.
-
-    Parses the ``attr: value`` line and returns the value verbatim, so
-    verification compares an exact field rather than searching raw stdout (which
-    would let a superstring or an unrelated attribute falsely certify state).
-    """
-
-    for line in user_show_stdout.splitlines():
-        key, sep, value = line.partition(":")
-        if sep and key.strip().casefold() == attr.casefold():
-            return value.strip()
-    return None
-
-
-def _parse_members(listmembers_stdout: str) -> set[str]:
-    """Return the canonical membership set from `samba-tool group listmembers`.
-
-    Each output line is exactly one member's account name, so membership is an
-    exact per-line match (case-insensitive) — never a whitespace-token search,
-    which would let a requested ``Admin`` match a member ``Alice Admin``.
-    """
-
-    return {
-        line.strip().casefold()
-        for line in listmembers_stdout.splitlines()
-        if line.strip()
-    }
-
-
-def _parse_spns(spn_list_stdout: str) -> set[str]:
-    """Return the exact SPN set from `samba-tool spn list`.
-
-    SPN lines carry a ``service/host`` form; the DN/header lines do not contain
-    ``/``. Exact-matching each SPN keeps a declared ``MSSQLSvc/db:1433`` from being
-    certified by an unrelated ``MSSQLSvc/db:14330`` (Kerberos treats a superstring
-    as a different principal).
-    """
-
-    return {line.strip() for line in spn_list_stdout.splitlines() if "/" in line}
-
-
-def _rejected(error: provider.AccountPlanError) -> LabResult:
-    """Bounded fail-closed result for a batch-validation rejection."""
-
-    return LabResult(
-        success=False,
-        error=redact(
-            f"Account realization rejected at {error.address}: {error.reason}"
-        ),
-    )
-
-
-def _failure(address: str, reason: str) -> LabResult:
-    """Bounded fail-closed result naming the placement address and stable reason."""
-
-    return LabResult(
-        success=False,
-        error=redact(f"Account realization failed at {address}: {reason}"),
-    )

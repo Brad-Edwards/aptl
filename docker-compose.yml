@@ -344,7 +344,7 @@ services:
   # config here is live.
   misp-suricata-sync:
     profiles: ["soc"]
-    image: debian:12-slim
+    image: debian:13-slim
     container_name: aptl-misp-suricata-sync
     networks:
       aptl-security:
@@ -691,7 +691,7 @@ services:
   # live.
   webapp:
     profiles: ["enterprise"]
-    image: debian:12-slim
+    image: debian:13-slim
     container_name: aptl-webapp
     networks:
       aptl-dmz:
@@ -709,34 +709,6 @@ services:
   # generically (ADR-048), and an image-free node's declared docker-
   # compose.yml ipv4_address is reference data only, never actually applied
   # to the running container's network attachment.
-  webapp-proxy:
-    profiles: ["enterprise"]
-    build:
-      context: ./containers/kali-ssh-proxy
-      dockerfile: Dockerfile
-    container_name: aptl-webapp-proxy
-    restart: unless-stopped
-    environment:
-      - APTL_PROXY_LISTEN_PORT=8080
-      - APTL_PROXY_TARGET_HOST=aptl-webapp
-      - APTL_PROXY_TARGET_PORT=8080
-    ports:
-      - "${APTL_HP_WEBAPP_8080:-8080}:8080"
-    networks:
-      aptl-control:
-      aptl-dmz:
-    healthcheck:
-      test:
-        - CMD
-        - python3
-        - -c
-        - "import socket; s=socket.create_connection(('127.0.0.1', 8080), 2); s.close()"
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-
-  # Mail Server (docker-mailserver)
   mailserver:
     profiles: ["mail"]
     image: ghcr.io/docker-mailserver/docker-mailserver:latest
@@ -788,7 +760,7 @@ services:
   # has a declared service to scale to zero; no config here is live.
   dns:
     profiles: ["dns"]
-    image: debian:12-slim
+    image: debian:13-slim
     container_name: aptl-dns
     ports:
       - "${APTL_DNS_HOST_PORT:-5353}:53/tcp"
@@ -805,66 +777,25 @@ services:
   # ENTERPRISE INTERNAL (aptl-internal network: 172.20.2.0/24)
   # ==========================================================================
 
-  # Samba Active Directory Domain Controller
+  # Samba Active Directory Domain Controller.
+  #
+  # Realized generically from the admitted scenario (ADR-048 / issue #581) — a
+  # `runtime:` node, never Compose-started. TechVault declares the domain
+  # controller as in-world facts (identity authority, listeners, forwarding
+  # agents) and names no image, so APTL realizes it on the generic samba-ad
+  # substrate. This stub exists only so `--scale ad=0` has a declared service
+  # to scale to zero and so the container name is declared (issue #1006).
   ad:
     profiles: ["enterprise"]
-    build:
-      context: .
-      dockerfile: containers/ad/Dockerfile
+    image: debian:13-slim
     container_name: aptl-ad
-    hostname: dc.techvault.local
-    restart: unless-stopped
-    environment:
-      - SAMBA_DOMAIN=TECHVAULT
-      - SAMBA_REALM=TECHVAULT.LOCAL
-      - SAMBA_ADMIN_PASSWORD=Admin123!
-      - DNS_FORWARDER=172.20.1.22
-      - SIEM_IP=172.20.2.30  # wazuh.manager on aptl-internal
-      # In-process Wazuh agent (issue #248) — replaces wazuh-sidecar-ad.
-      # log.nmbd is intentionally absent: Samba in AD-DC mode does not
-      # run nmbd and never writes log.nmbd. The previous sidecar config
-      # included it and the agent emitted "Could not open file" on every
-      # restart.
-      - WAZUH_MANAGER=wazuh.manager
-      - AGENT_NAME=aptl-ad-agent
-      - LOG_PATHS=/var/log/samba/log.samba,/var/log/samba/log.smbd,/var/log/samba/log.winbindd
-      - LOG_FORMAT=syslog
-    volumes:
-      - ad_data:/var/lib/samba
-      - ad_logs:/var/log/samba
-    cap_add:
-      - SYS_ADMIN
-      - NET_ADMIN  # required so the in-process agent's `firewall-drop` AR can iptables on this container's namespace
-    healthcheck:
-      test: ["CMD-SHELL", "samba-tool domain info 127.0.0.1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 60s
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-    # No `depends_on: wazuh.manager` — the in-process bootstrap waits
-    # 180s for the manager port and then continues regardless, so the
-    # target can boot independently of the SOC profile. Targets and
-    # the manager live in different compose profiles; a hard dependency
-    # would make `aptl lab start --profile enterprise` fail when SOC
-    # is not selected.
     networks:
       aptl-internal:
         ipv4_address: 172.20.2.10
 
-  # Realized generically from scenarios/techvault-operational.sdl.yaml
-  # (ADR-048 / issue #581) — a `runtime:` node, never Compose-started. This
-  # stub exists only so `--scale db=0` (the mixed-realization exclusion)
-  # has a declared service to scale to zero; no config here is live.
-  # wazuh-sidecar-db's `db_data:/logs:ro` mount (below) is now stale — the
-  # realized db no longer writes to that volume — pending the same RAES
-  # gaps (aces#845/#847/#849) blocking wazuh-sidecar-db's own conversion.
   db:
     profiles: ["enterprise"]
-    image: debian:12-slim
+    image: debian:13-slim
     container_name: aptl-db
     networks:
       aptl-internal:
@@ -877,7 +808,7 @@ services:
   # live.
   fileshare:
     profiles: ["fileshare"]
-    image: debian:12-slim
+    image: debian:13-slim
     container_name: aptl-fileshare
     networks:
       aptl-internal:
@@ -886,81 +817,15 @@ services:
   # ==========================================================================
   # WAZUH AGENT SIDECARS
   #
-  # One sidecar per service container that does not host an in-process Wazuh
-  # agent. Each mounts the target's existing log volume read-only and ships
-  # log lines through to the manager. These exist so a fresh `aptl lab start`
-  # produces SIEM visibility into samba, BIND9, the webapp, postgres, and
-  # Suricata without modifying upstream container images.
+  # The log-shipping sidecars are gone (issue #1006). TechVault declares a
+  # forwarding agent on the node itself, and APTL realizes it in-node on the
+  # generic Wazuh agent substrates, so there is no separate sidecar service
+  # to mount another container's log volume.
   # ==========================================================================
 
-  # wazuh-sidecar-{fileshare,ad,dns,webapp} were removed in #248 — those
-  # four targets now run wazuh-agent in-process via supervisord. The two
-  # remaining sidecars below cover the carve-outs documented in ADR-020:
-  # `db` (postgres:16-alpine has no first-party Wazuh package; deferred)
-  # and `suricata` (deployment governed by ADR-019).
-
-  wazuh-sidecar-db:
-    profiles: ["soc"]
-    image: aptl-wazuh-sidecar:local
-    build:
-      context: .
-      dockerfile: containers/wazuh-sidecar/Dockerfile
-    container_name: aptl-wazuh-sidecar-db
-    hostname: wazuh-sidecar-db
-    restart: unless-stopped
-    environment:
-      - WAZUH_MANAGER=wazuh.manager
-      - AGENT_NAME=aptl-db-agent
-      - LOG_PATHS=/logs/pg_log/postgresql.log
-      - LOG_FORMAT=syslog
-    volumes:
-      - db_data:/logs:ro
-    depends_on:
-      wazuh.manager:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          memory: 256m
-    networks:
-      aptl-security:
-        ipv4_address: 172.20.0.35
-
-  wazuh-sidecar-suricata:
-    profiles: ["soc"]
-    image: aptl-wazuh-sidecar:local
-    build:
-      context: .
-      dockerfile: containers/wazuh-sidecar/Dockerfile
-    container_name: aptl-wazuh-sidecar-suricata
-    hostname: wazuh-sidecar-suricata
-    restart: unless-stopped
-    environment:
-      - WAZUH_MANAGER=wazuh.manager
-      - AGENT_NAME=aptl-suricata-agent
-      - LOG_PATHS=/logs/eve.json
-      - LOG_FORMAT=json
-    volumes:
-      - suricata_logs:/logs:ro
-    depends_on:
-      wazuh.manager:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          memory: 256m
-    networks:
-      aptl-security:
-        ipv4_address: 172.20.0.36
-
-  # Realized generically from scenarios/techvault-operational.sdl.yaml
-  # (ADR-048 / issue #581) — a `runtime:` node, never Compose-started. This
-  # stub exists only so `--scale victim=0` (the mixed-realization
-  # exclusion) has a declared service to scale to zero; no config here is
-  # live.
   victim:
     profiles: ["victim"]
-    image: debian:12-slim
+    image: debian:13-slim
     container_name: aptl-victim
     networks:
       aptl-internal:
@@ -973,7 +838,7 @@ services:
   # live.
   workstation:
     profiles: ["enterprise"]
-    image: debian:12-slim
+    image: debian:13-slim
     container_name: aptl-workstation
     networks:
       aptl-internal:
@@ -986,15 +851,15 @@ services:
   # Realized generically from scenarios/techvault-operational.sdl.yaml
   # (ADR-048 / issue #581) — a `runtime:` node, never Compose-started. This
   # stub exists only so `--scale kali=0` (the mixed-realization exclusion)
-  # has a declared service to scale to zero, and so kali-ssh-proxy /
-  # kali-capture (below, still Compose-managed) have a `kali:` service to
+  # has a declared service to scale to zero, and so kali-capture (still
+  # Compose-managed, in docker-compose.capture.yml) has a `kali:` service to
   # reference — `depends_on: kali: condition: service_healthy` and
   # `network_mode: container:aptl-kali` both resolve against the real,
   # generically-materialized container regardless of what's declared here.
   # No config on this stub is live.
   kali:
     profiles: ["kali"]
-    image: debian:12-slim
+    image: debian:13-slim
     container_name: aptl-kali
     networks:
       aptl-redteam:
@@ -1004,51 +869,10 @@ services:
       aptl-internal:
         ipv4_address: 172.20.2.35
 
-  # Host-side Kali SSH bridge for MCP clients.
-  #
-  # Docker Desktop, Colima, and WSL2 do not route Compose bridge IPs from the
-  # host. Publishing a port directly on a service attached only to
-  # internal:true networks is also not made reachable by those backends. Keep
-  # Kali isolated and put the host publication on this tiny proxy instead:
-  # host localhost:2023 -> proxy -> aptl-kali:22 on aptl-redteam.
-  kali-ssh-proxy:
-    profiles: ["kali"]
-    build:
-      context: ./containers/kali-ssh-proxy
-      dockerfile: Dockerfile
-    container_name: aptl-kali-ssh-proxy
-    restart: unless-stopped
-    environment:
-      - APTL_PROXY_TARGET_HOST=172.20.4.30
-      - APTL_PROXY_TARGET_PORT=22
-    ports:
-      # Default host port 2023 matches the MCP red config's pinned ssh_port
-      # (mcp/mcp-red/docker-lab-config.json). `aptl lab start` may remap it if
-      # 2023 is in use; the start summary then flags that the MCP client needs
-      # the reported port. The default parity is enforced by test_consistency.
-      - "127.0.0.1:${APTL_HP_KALI_SSH_PROXY_2023:-2023}:2023"
-    networks:
-      aptl-control:
-      aptl-redteam:
-    depends_on:
-      kali:
-        condition: service_healthy
-    healthcheck:
-      test:
-        - CMD
-        - python3
-        - -c
-        - "import socket; s=socket.create_connection(('127.0.0.1', 2023), 2); s.close()"
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-    deploy:
-      resources:
-        limits:
-          memory: 64m
-
-  # Reverse Engineering Container
+  # Reverse-engineering analysis workstation: defender tooling, not an attack
+  # target. Its SSH publication is a management surface, so it binds loopback
+  # only (ADR-034 Host Exposure Amendment); host-run mcp-reverse reaches it on
+  # localhost. It used to publish on all interfaces (issue #1006).
   reverse:
     profiles: ["reverse"]
     build:
@@ -1062,7 +886,7 @@ services:
       aptl-security:
         ipv4_address: 172.20.0.27
     ports:
-      - "${APTL_HP_REVERSE_22:-2027}:22"    # SSH access
+      - "127.0.0.1:${APTL_HP_REVERSE_22:-2027}:22"    # SSH access
     environment:
       - SIEM_IP=172.20.0.10  # wazuh.manager
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
@@ -1162,15 +986,6 @@ services:
 # ==========================================================================
 
 networks:
-  # Host-published control-plane proxy network. This network is intentionally
-  # not attached to Kali; it exists so loopback-only host publications work on
-  # Docker VM backends without adding an egress-capable interface to Kali.
-  aptl-control:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.5.0/24
-
   # Security / Management network - Wazuh, SOC tools
   aptl-security:
     driver: bridge
@@ -1263,9 +1078,9 @@ volumes:
   # fileshare_data/fileshare_logs, dns_logs, webapp_logs, victim_logs,
   # workstation_logs, and kali_operations were removed under #581: those
   # six nodes are realized generically (ADR-048) and no longer write to a
-  # Compose-managed volume. db_data stays — wazuh-sidecar-db (still
-  # Compose-managed, blocked on aces#845/#847/#849) mounts it read-only,
-  # even though the realized db no longer populates it.
+  # Compose-managed volume. db_data stays as the declared volume for the
+  # realized db node; the sidecar that used to mount it read-only is gone
+  # (issue #1006).
   ad_data:
   ad_logs:
   db_data:

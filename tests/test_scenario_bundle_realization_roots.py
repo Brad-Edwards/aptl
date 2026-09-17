@@ -336,7 +336,8 @@ def test_realize_threads_the_bundle_root_as_scenario_root(monkeypatch, tmp_path)
         provisioner, "_compose_validity_diagnostics", lambda profiles: []
     )
     monkeypatch.setattr(
-        "aptl.backends.raes_provisioner.observe_realization", lambda *a, **k: {}
+        "aptl.backends._raes_provisioner_start.observe_realization",
+        lambda *a, **k: {},
     )
     monkeypatch.setattr(
         provisioner,

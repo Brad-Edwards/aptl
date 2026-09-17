@@ -169,7 +169,7 @@ def test_offline_staged_direct_docker_runs_forbid_implicit_pulls(
     node = BaseContainerSpec(
         node_address="provision.node.victim",
         container_name="aptl-victim",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
     )
     with patch("subprocess.run", side_effect=fake_run):
@@ -194,9 +194,9 @@ def test_offline_staged_generic_base_requires_a_staged_image(
             stdout="",
             stderr="missing",
         )
-        failures = backend.ensure_generic_base_image("debian:12-slim")
+        failures = backend.ensure_generic_base_image("debian:13-slim")
 
-    assert failures == ["required staged generic base image is missing: debian:12-slim"]
+    assert failures == ["required staged generic base image is missing: debian:13-slim"]
     assert not any(
         call.args[0][:2] == ["docker", "build"] for call in run.call_args_list
     )

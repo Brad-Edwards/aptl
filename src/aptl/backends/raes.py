@@ -11,6 +11,10 @@ from raes_contracts.runtime_state import RuntimeSnapshot
 from raes_runtime.registry import RuntimeTarget
 from raes import SDLError, SDLInstantiationError, instantiate_scenario, parse_sdl_file
 from aptl.backends.raes_evidence import admit_sdl_evidence
+from aptl.backends.raes_operator_access import (
+    OperatorAccessDecision,
+    operator_access_decision,
+)
 from aptl.backends.raes_observability_scope import (
     ObservabilityScopeDecision,
     observability_scope_decision,
@@ -102,6 +106,7 @@ class RuntimeTargetOptions:
     artifact_availability: ArtifactAvailabilityContext | None = None
     capture_plan: CapturePlan | None = None
     observability_scope: ObservabilityScopeDecision | None = None
+    operator_access: OperatorAccessDecision | None = None
 
 
 def create_aptl_runtime_target(
@@ -134,6 +139,7 @@ def create_aptl_runtime_target(
         capture_plan=selected.capture_plan or empty_capture_plan(),
         observability_scope=selected.observability_scope
         or ObservabilityScopeDecision(),
+        operator_access=selected.operator_access or OperatorAccessDecision(),
     )
     orchestrator = AptlOrchestrator()
     action_specs = dict(DEFAULT_PARTICIPANT_ACTIONS)
@@ -294,6 +300,7 @@ def admit_raes_scenario(
             artifact_availability=availability,
             capture_plan=capture_plan,
             observability_scope=observability_scope_decision(scenario),
+            operator_access=operator_access_decision(scenario),
         ),
     )
     runtime_manager = RuntimeManager(target)

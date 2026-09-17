@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from aptl.core.deployment._compose_base_substrate import ComposeBaseSubstrateMixin
+from aptl.core.deployment._operator_access import ComposeOperatorAccessMixin
 from aptl.core.deployment._compose_autoremove import ComposeAutoremoveMixin
 from aptl.core.deployment._compose_owned_start import ComposeOwnedStartMixin
 from aptl.core.deployment._compose_direct_network import ComposeDirectNetworkMixin
@@ -68,6 +69,7 @@ class DockerComposeBackend(
     ComposeSeedAttributionMixin,
     ComposeSeedExecutionMixin,
     ComposeBaseSubstrateMixin,
+    ComposeOperatorAccessMixin,
     ComposeProjectCleanupMixin,
     ComposeImageFetchMixin,
 ):

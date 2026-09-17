@@ -388,6 +388,58 @@ def test_network_namespace_discovery_uses_full_receipted_native_ids(
     assert "--no-trunc" in network_list
 
 
+def test_container_namespace_discovery_uses_full_receipted_native_ids(
+    tmp_path: Path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl")
+    ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+    backend._docker_daemon_id = "daemon-a"
+    external_name = ownership.container_name("aptl-victim")
+    ownership.record(
+        ResourceReceipt(
+            kind="container",
+            native_id=_ID_A,
+            external_name=external_name,
+            semantic_name="aptl-victim",
+            node_address="victim",
+            workspace_id=ownership.workspace_id,
+            project_name=ownership.project_name,
+            daemon_id="daemon-a",
+            attempt_id="run-a",
+            managed_by="compose",
+        )
+    )
+
+    def fake_run(argv, **_kwargs):
+        if argv[:3] == ["docker", "ps", "-aq"]:
+            native_id = _ID_A if "--no-trunc" in argv else _ID_A[:12]
+            return subprocess.CompletedProcess(argv, 0, f"{native_id}\n", "")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    backend._run = MagicMock(side_effect=fake_run)
+    backend._raw_container_inspect = MagicMock(
+        return_value={
+            "Id": _ID_A,
+            "Name": f"/{external_name}",
+            "Config": {
+                "Labels": {
+                    "aptl.workspace.id": ownership.workspace_id,
+                    "aptl.lifecycle.project": ownership.project_name,
+                }
+            },
+        }
+    )
+
+    backend._verify_compose_namespace_is_owned(ownership, "daemon-a")
+
+    container_list = next(
+        call.args[0]
+        for call in backend._run.call_args_list
+        if call.args[0][:3] == ["docker", "ps", "-aq"]
+    )
+    assert "--no-trunc" in container_list
+
+
 def test_volume_cleanup_uses_receipt_and_never_prefix_discovery(tmp_path: Path) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl")
     ownership = backend._ensure_resource_ownership(attempt_id="run-a")

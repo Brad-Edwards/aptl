@@ -27,6 +27,7 @@ class ComposeReceiptCaptureMixin:
                 "docker",
                 "ps",
                 "-aq",
+                "--no-trunc",
                 "--filter",
                 f"label={_COMPOSE_PROJECT_LABEL}={self._project_name}",
             ],

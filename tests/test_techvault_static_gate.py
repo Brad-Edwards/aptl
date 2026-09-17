@@ -1091,7 +1091,14 @@ def test_account_provisioner_parity_fails_on_undisabled_account(
     assert any("disabled" in d.lower() for d in check.diagnostics)
 
 
-def test_account_provisioner_parity_fallback_fails_when_script_missing(tmp_path):
+def test_account_provisioner_parity_fails_without_an_admitted_realization(tmp_path):
+    """No realization means nothing to compare accounts against, so fail closed.
+
+    Parity used to fall back to scraping a checked-in ``provision-users.sh``
+    from the ``ad`` image. The pack no longer declares that image and nothing
+    builds it, so the admitted realization is the only authority left; absent
+    it, the gate must refuse rather than pass (issue #1006).
+    """
     scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
     assert parse_check.passed
     assert scenario is not None
@@ -1099,45 +1106,8 @@ def test_account_provisioner_parity_fallback_fails_when_script_missing(tmp_path)
     check = check_account_provisioner_parity(scenario=scenario, project_dir=tmp_path)
 
     assert not check.passed
-    assert any("provisioner script missing" in d.lower() for d in check.diagnostics)
-
-
-def test_provisioner_relaxes_password_policy_before_user_creation():
-    """Declared weak-password personas must actually provision at boot.
-
-    The Samba domain default password policy (complexity on, min length 7)
-    rejects deliberately-weak passwords (e.g. jessica.williams / password123)
-    at ``samba-tool user create``; the script's ``|| true`` masks the failure,
-    so the account silently never exists — a runtime honesty gap the static
-    parity gate cannot see. The provisioner must disable complexity BEFORE it
-    creates any user so every declared weak-password account is realized
-    (issue #689 account-realization honesty).
-    """
-    script = (PROJECT_ROOT / "containers" / "ad" / "provision-users.sh").read_text(
-        encoding="utf-8"
-    )
-    lines = script.splitlines()
-    complexity_off = next(
-        (
-            i
-            for i, line in enumerate(lines)
-            if "passwordsettings set --complexity=off" in line
-        ),
-        None,
-    )
-    first_user_create = next(
-        (i for i, line in enumerate(lines) if "samba-tool user create " in line),
-        None,
-    )
-
-    assert complexity_off is not None, (
-        "provisioner must disable password complexity so weak-password "
-        "personas can be created"
-    )
-    assert first_user_create is not None
-    assert complexity_off < first_user_create, (
-        "password complexity must be disabled BEFORE the first user is "
-        "created, or weak-password accounts silently fail to provision"
+    assert any(
+        "no admitted provisioning realization" in d.lower() for d in check.diagnostics
     )
 
 

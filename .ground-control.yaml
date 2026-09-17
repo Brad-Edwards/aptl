@@ -106,26 +106,24 @@ grc:
       name: Internal Zone (aptl-internal)
       description: Internal enterprise network — Active Directory, PostgreSQL, SMB fileshare, victim/workstation hosts.
       paths:
-        - containers/ad/**
         - containers/db/**
         - containers/fileshare/**
         - containers/victim/**
         - containers/workstation/**
         - containers/windows-victim/**
-      # ad / fileshare / victim / workstation Dockerfiles -> dockerfile.
+      # fileshare / victim / workstation Dockerfiles -> dockerfile.
       surfaces: [dockerfile]
     - key: security-zone
       name: Security/SOC Zone (aptl-security)
       description: Defensive stack — Wazuh, Suricata, MISP, TheHive, Cortex, Shuffle; zone isolation via multi-homing only (NET-005).
       paths:
-        - containers/wazuh-sidecar/**
         - containers/misp-suricata-sync/**
         - config/wazuh_cluster/**
         - config/cortex/**
         - config/thehive/**
         - config/wazuh_dashboard/**
         - config/wazuh_indexer/**
-      # wazuh-sidecar / misp-suricata-sync Dockerfiles -> dockerfile; config/* uncovered.
+      # misp-suricata-sync Dockerfile -> dockerfile; config/* uncovered.
       surfaces: [dockerfile]
     - key: observability-plane
       name: Observability Plane

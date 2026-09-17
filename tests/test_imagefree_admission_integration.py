@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 from raes import parse_sdl_file
@@ -25,6 +26,8 @@ from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.scenario_bundle import project_tree_bundle
 
 pytestmark = pytest.mark.integration
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _bundle(root):
@@ -135,18 +138,14 @@ nodes:
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
 def test_admit_and_realize_service_node_boots_a_real_service(tmp_path):
-    # Ensure the generic systemd base exists (built from the checked-in Dockerfile).
-    subprocess.run(
-        [
-            "docker",
-            "build",
-            "-t",
-            "aptl/generic-systemd-base:latest",
-            "containers/generic-systemd-base",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=600,
+    # A lab directory carries the container build contexts. The backend builds
+    # the generic base from the Dockerfile its own project dir ships, on every
+    # start, rather than trusting whatever `aptl/...:latest` happens to be local
+    # (issue #1006) — so stage the context this scenario materializes onto,
+    # exactly as a real lab directory holds it.
+    shutil.copytree(
+        _REPO_ROOT / "containers" / "generic-systemd-base",
+        tmp_path / "containers" / "generic-systemd-base",
     )
     sdl = tmp_path / "svc.sdl.yaml"
     sdl.write_text(_SERVICE_SDL, encoding="utf-8")

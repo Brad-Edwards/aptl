@@ -526,3 +526,67 @@ def techvault_scenario_bundle(staging_root: Path):
 def techvault_scenario_path(staging_root: Path) -> Path:
     """Staged SDL path of the default TechVault env-pack scenario (#875)."""
     return techvault_scenario_bundle(staging_root).sdl_path
+
+
+def docker_ps_inventory_row(
+    name: str,
+    image: str = "victim:latest",
+    container_id: str = "abc",
+    status: str = "Up 1 minute",
+    state: str = "running",
+    labels: str = "com.docker.compose.project=test",
+    ports: str = "",
+) -> str:
+    """Render one `docker ps --format '{{json .}}'` row.
+
+    The project inventory reads JSON rather than tab-delimited columns because
+    image labels are arbitrary text: Ubuntu 26.04 ships an
+    `org.opencontainers.image.description` containing newlines, which split one
+    container across several "rows" and made the inventory unparseable (issue
+    #1006).
+    """
+    return json.dumps(
+        {
+            "Names": name,
+            "Image": image,
+            "ID": container_id,
+            "Status": status,
+            "State": state,
+            "Labels": labels,
+            "Ports": ports,
+        }
+    )
+
+
+def dockerfile_copies(dockerfile: Path) -> list[tuple[str, str]]:
+    """Return the (source, destination) pairs a Dockerfile actually COPYs.
+
+    Tests that assert on Dockerfile content must look at instructions, not at
+    text: a comment mentioning a destination, or a source and destination that
+    appear in different instructions, satisfied the old independent-substring
+    checks while the real COPY was wrong (issue #1006). Comments are ignored,
+    line continuations are joined, and `--flag=value` options are skipped. A
+    multi-source COPY yields one pair per source.
+    """
+    logical: list[str] = []
+    pending = ""
+    for raw in dockerfile.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not pending and (not line or line.startswith("#")):
+            continue
+        if line.endswith("\\"):
+            pending += line[:-1] + " "
+            continue
+        logical.append(pending + line)
+        pending = ""
+    pairs: list[tuple[str, str]] = []
+    for instruction in logical:
+        words = instruction.split()
+        if not words or words[0].upper() != "COPY":
+            continue
+        operands = [word for word in words[1:] if not word.startswith("--")]
+        if len(operands) < 2:
+            continue
+        *sources, destination = operands
+        pairs.extend((source, destination) for source in sources)
+    return pairs

@@ -4,7 +4,7 @@ The reverse engineering container provides a platform for binary analysis and ma
 
 ## Container Configuration
 
-- **Base Image**: ubuntu:22.04
+- **Base Image**: ubuntu:26.04
 - **Tools**: radare2, binutils, yara, floss, capa, upx-ucl, osslsigncode
 - **User**: `labadmin` with sudo privileges
 - **SSH**: Key-based authentication only (port 22, mapped to host 2027)

@@ -43,7 +43,7 @@
       "asset_id": "compose-model",
       "kind": "project-file",
       "source": "docker-compose.yml",
-      "sha256": "cb5edbd6cae9c34ac61cf4e9d6d4550336eac5921e3f4c01ff8988320fc160e8"
+      "sha256": "92ca651a3970c3e457d8aca31cad9eca0a7908cd0ccb03a4213a22e3783ac9a5"
     },
     {
       "asset_id": "mcp-red-build",
@@ -105,13 +105,6 @@
       "source": "local://aptl-kali@sha256:871d2dbe51b579620c86de9f8fdd78002a073eae8b0471e0f5d11c83843d89f0",
       "sha256": "871d2dbe51b579620c86de9f8fdd78002a073eae8b0471e0f5d11c83843d89f0",
       "services": ["kali"]
-    },
-    {
-      "asset_id": "image-kali-ssh-proxy",
-      "kind": "oci-image",
-      "source": "local://aptl-kali-ssh-proxy@sha256:a2592cd742c4399c954e651784b455325f96f32cd4e0025453f64b8f9fa07016",
-      "sha256": "a2592cd742c4399c954e651784b455325f96f32cd4e0025453f64b8f9fa07016",
-      "services": ["kali-ssh-proxy"]
     },
     {
       "asset_id": "image-victim",

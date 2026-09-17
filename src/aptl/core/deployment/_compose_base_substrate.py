@@ -21,6 +21,9 @@ from aptl.core.env import load_dotenv
 import subprocess
 from typing import TYPE_CHECKING
 
+from aptl.core.deployment._compose_generic_base_images import (
+    ComposeGenericBaseImageMixin,
+)
 from aptl.core.deployment._compose_realization_networks import (
     _resolve_base_network_bindings,
 )
@@ -32,57 +35,6 @@ from aptl.core.deployment.realization import (
 
 if TYPE_CHECKING:
     from aptl.backends.raes_base_substrate import BaseContainerSpec, InitRequirements
-
-# Every OS-family/service-manager combination `base_image_for_os`
-# (src/aptl/backends/raes_materializer.py) can select for a runs_services
-# node, mapped to the checked-in Dockerfile that builds it. These are the
-# ONLY generic base images that need a local build: the non-service images
-# (debian:12-slim, rockylinux:9) are real registry images `docker run`
-# already pulls on demand. Never built anywhere in the codebase before
-# issue #581 surfaced it via a fresh-machine boot (a developer's existing
-# local image cache had silently masked the gap since ADR-048 shipped).
-_GENERIC_BASE_IMAGE_BUILDS: dict[str, tuple[str, str]] = {
-    "aptl/generic-systemd-base-debian:latest": (
-        "containers/generic-systemd-base-debian/Dockerfile",
-        "containers/generic-systemd-base-debian",
-    ),
-    "aptl/generic-systemd-base:latest": (
-        "containers/generic-systemd-base/Dockerfile",
-        "containers/generic-systemd-base",
-    ),
-    "aptl/generic-systemd-node22-base:latest": (
-        "containers/generic-systemd-node22-base/Dockerfile",
-        "containers/generic-systemd-node22-base",
-    ),
-    "aptl/generic-samba-ad-base:latest": (
-        "containers/generic-samba-ad-base/Dockerfile",
-        "containers/generic-samba-ad-base",
-    ),
-    "aptl/generic-wazuh-agent-base-debian:latest": (
-        "containers/generic-wazuh-agent-base-debian/Dockerfile",
-        ".",
-    ),
-    "aptl/generic-systemd-wazuh-agent-base-debian:latest": (
-        "containers/generic-systemd-wazuh-agent-base-debian/Dockerfile",
-        ".",
-    ),
-    "aptl/generic-systemd-wazuh-agent-base:latest": (
-        "containers/generic-systemd-wazuh-agent-base/Dockerfile",
-        ".",
-    ),
-    "aptl/generic-samba-ad-wazuh-agent-base:latest": (
-        "containers/generic-samba-ad-wazuh-agent-base/Dockerfile",
-        ".",
-    ),
-}
-
-_GENERIC_BASE_IMAGE_DEPENDENCIES: dict[str, str] = {
-    "aptl/generic-systemd-wazuh-agent-base-debian:latest": (
-        "aptl/generic-systemd-base-debian:latest"
-    ),
-    "aptl/generic-systemd-wazuh-agent-base:latest": "aptl/generic-systemd-base:latest",
-    "aptl/generic-samba-ad-wazuh-agent-base:latest": "aptl/generic-samba-ad-base:latest",
-}
 
 
 def _init_run_flags(init: "InitRequirements") -> list[str]:
@@ -135,56 +87,13 @@ def _base_process_args(spec: "BaseContainerSpec", run_image_ref: str) -> list[st
     return [run_image_ref, "sleep", "infinity"]
 
 
-class ComposeBaseSubstrateMixin(object):
+class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
     """Start a node's generic base container and copy content into it (ADR-048).
 
     Mixed into ``DockerComposeBackend``, which supplies the ``_run`` subprocess
     runner, the ``_project_name`` attribute, and (for image builds)
     ``_project_dir``.
     """
-
-    def ensure_generic_base_image(self, image_ref: str) -> list[str]:
-        """Build a locally-built generic base image if it is not already present.
-
-        A no-op for any image not in ``_GENERIC_BASE_IMAGE_BUILD_CONTEXTS``
-        (a real registry reference like ``debian:12-slim`` needs no local
-        build; ``docker run`` pulls it on demand).
-        """
-
-        build = _GENERIC_BASE_IMAGE_BUILDS.get(image_ref)
-        failures: list[str] = []
-        if build is None and not self._offline_staged:
-            return failures
-        dependency = _GENERIC_BASE_IMAGE_DEPENDENCIES.get(image_ref)
-        if dependency is not None:
-            failures.extend(self.ensure_generic_base_image(dependency))
-            if failures:
-                return failures
-        inspect_result = self._run(
-            ["docker", "image", "inspect", image_ref], timeout=30
-        )
-        if inspect_result.returncode != 0:
-            if self._offline_staged:
-                failures.append(
-                    f"required staged generic base image is missing: {image_ref}"
-                )
-            elif build is not None:
-                dockerfile, build_context = build
-                build_result = self._run(
-                    [
-                        "docker",
-                        "build",
-                        "-t",
-                        image_ref,
-                        "-f",
-                        str(self._project_dir / dockerfile),
-                        str(self._project_dir / build_context),
-                    ],
-                    timeout=600,
-                )
-                if build_result.returncode != 0:
-                    failures.append(f"failed to build generic base image {image_ref}")
-        return failures
 
     def _resolve_base_run_image(self, spec: "BaseContainerSpec") -> str:
         """Return the exact image reference a node's base container runs from.

@@ -89,9 +89,8 @@ def _prune_source_only_aliases(
 
     An alias derived from a service's *source* — its image repository or its
     build-context directory — records where the image came from, not which
-    service this is. Two services may share one build context (webapp-proxy and
-    kali-ssh-proxy both build ./containers/kali-ssh-proxy), so that directory
-    name is not evidence about either one.
+    service this is. Two services may share one build context, so that
+    directory name is not evidence about either one.
 
     When some service is actually *named* by that alias, its claim wins and the
     source-only claimants drop out. Without this, declaring a node named after

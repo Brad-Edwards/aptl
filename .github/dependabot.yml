@@ -66,7 +66,6 @@ updates:
   # without a matching entry here.
   - package-ecosystem: "docker"
     directories:
-      - "/containers/ad"
       - "/containers/appliance-egress-proxy"
       - "/containers/base"
       - "/containers/generic-systemd-base"
@@ -75,12 +74,11 @@ updates:
       - "/containers/generic-samba-ad-base"
       - "/containers/generic-wazuh-agent-base-debian"
       - "/containers/kali-capture"
-      - "/containers/kali-ssh-proxy"
       - "/containers/misp-suricata-sync"
       - "/containers/network-boundary-helper"
+      - "/containers/operator-access-proxy"
       - "/containers/reverse"
       - "/containers/suricata-wazuh-agent"
-      - "/containers/wazuh-sidecar"
       - "/web"
     target-branch: "dev"
     schedule:

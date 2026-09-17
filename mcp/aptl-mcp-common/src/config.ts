@@ -25,7 +25,10 @@ export interface LabConfig {
       container_ip: string;
       ssh_key: string;
       ssh_user: string;
-      ssh_port: number;
+      // May arrive as a string after `${APTL_HP_*}` env substitution (the host
+      // SSH port is resolved per lab at start and injected via `.mcp.json`);
+      // coerced to a number at every use site.
+      ssh_port: number | string;
       enabled: boolean;
       shell?: 'bash' | 'sh' | 'powershell' | 'cmd';
       /**
@@ -276,7 +279,7 @@ export function getTargetCredentials(config: LabConfig): { sshKey: string; usern
   return {
     sshKey: container.ssh_key,
     username: container.ssh_user,
-    port: container.ssh_port,
+    port: Number(container.ssh_port),
     target: container.container_ip
   };
 }

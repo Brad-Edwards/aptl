@@ -324,7 +324,11 @@ class TestKaliContainerLifecycle:
         )
         kali_mcp = mcp_config["containers"]["kali"]
         assert kali_mcp["container_ip"] == "localhost"
-        assert kali_mcp["ssh_port"] == 2023
+        # The red MCP resolves the kali SSH port from the same host-port var the
+        # kali-ssh-proxy publication uses, so a lab whose ports were remapped to
+        # avoid a collision still reaches Kali (issue #1045). The var's default
+        # (2023) matches the proxy's default 127.0.0.1:2023 asserted above.
+        assert kali_mcp["ssh_port"] == "${APTL_HP_KALI_SSH_PROXY_2023}"
 
 
 class TestCodeReferencesMatchCompose:

@@ -68,6 +68,8 @@ class RelayLaunch:
 
 
 class _Relay:
+    """Serialize MCP calls through a continuously authorized child process."""
+
     def __init__(
         self,
         child: asyncio.subprocess.Process,

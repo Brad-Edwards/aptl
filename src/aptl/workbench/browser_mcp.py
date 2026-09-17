@@ -36,6 +36,8 @@ button.onclick=()=>{button.disabled=true;
 
 
 class _SocketWriter:
+    """Adapt JSON-RPC frame writes to one browser websocket."""
+
     def __init__(self, socket: WebSocket) -> None:
         self.socket = socket
         self.pending = b""

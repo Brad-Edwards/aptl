@@ -23,6 +23,8 @@ Fingerprint = Annotated[str, Field(pattern=r"^SHA256:[A-Za-z0-9+/]{43}$")]
 
 
 class _PrivateRecord(BaseModel):
+    """Immutable management record that rejects unknown fields."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

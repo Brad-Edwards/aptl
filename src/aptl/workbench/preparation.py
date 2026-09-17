@@ -34,6 +34,8 @@ from aptl.workbench.profiles import WorkbenchConfigurationError
 
 
 class EnrolledKey(BaseModel):
+    """An operator-admitted public key and its expiring role assignment."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
     grant_id: Identifier
     public_key: str

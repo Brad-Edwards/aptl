@@ -21,6 +21,8 @@ _SELECTOR = re.compile(
 
 @dataclass(frozen=True)
 class DispatchSelector:
+    """The complete participant-controlled forced-command selector."""
+
     instance_id: str
     generation: int
     server_id: str

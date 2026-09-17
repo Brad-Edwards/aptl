@@ -13,10 +13,6 @@ from aptl.core.deployment._compose_node_generation import (
     _pinned_addresses_by_network,
 )
 from aptl.core.deployment._compose_realization_networks import (
-    _COMPOSE_NETWORK_LABEL,
-    _COMPOSE_PROJECT_LABEL,
-    _REALIZATION_NETWORK_LABEL,
-    _REALIZATION_NETWORK_LABEL_VALUE,
     _compose_network_key,
     _concrete_network_name,
     _container_network_ip,
@@ -350,7 +346,7 @@ class ComposeRealizationNetworkMixin:
         network already exists (issue #875).
         """
 
-        ownership = self._ensure_resource_ownership()
+        self._ensure_resource_ownership()
         attempt_id = self._resource_attempt_id
         outcome: LabResult
         if attempt_id is None:

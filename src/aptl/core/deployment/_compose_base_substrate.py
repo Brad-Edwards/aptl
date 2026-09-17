@@ -110,6 +110,31 @@ def _init_run_flags(init: "InitRequirements") -> list[str]:
     return flags
 
 
+def _base_network_flags(
+    network_bindings: tuple[tuple[str, DeploymentNetworkAttachment], ...] | None,
+) -> list[str]:
+    """Return detached-run or first-network creation flags."""
+
+    if network_bindings is None:
+        return ["-d"]
+    network, attachment = network_bindings[0]
+    return [
+        "--network",
+        network,
+        *(["--ip", attachment.ipv4_address] if attachment.ipv4_address else []),
+    ]
+
+
+def _base_process_args(spec: "BaseContainerSpec", run_image_ref: str) -> list[str]:
+    """Return the image and process arguments for one base container."""
+
+    if spec.init is not None:
+        return [*_init_run_flags(spec.init), run_image_ref]
+    if spec.use_image_command:
+        return [run_image_ref]
+    return [run_image_ref, "sleep", "infinity"]
+
+
 class ComposeBaseSubstrateMixin(object):
     """Start a node's generic base container and copy content into it (ADR-048).
 
@@ -270,26 +295,13 @@ class ComposeBaseSubstrateMixin(object):
             for label_name, label_value in sorted((ownership_labels or {}).items())
             for item in ("--label", f"{label_name}={label_value}")
         )
-        if network_bindings is None:
-            argv.insert(2, "-d")
-        if network_bindings is not None:
-            first_network, first_attachment = network_bindings[0]
-            argv += ["--network", first_network]
-            if first_attachment.ipv4_address:
-                argv += ["--ip", first_attachment.ipv4_address]
+        argv[2:2] = _base_network_flags(network_bindings)
         self._append_base_mounts(argv, spec)
         self._append_base_ports(argv, spec)
         self._append_base_environment(argv, spec)
         for capability in spec.backend_run_capabilities:
             argv += ["--cap-add", capability]
-        if spec.init is not None:
-            argv += _init_run_flags(spec.init)
-            # The base image's own CMD runs systemd as init.
-            argv.append(run_image_ref)
-        elif spec.use_image_command:
-            argv.append(run_image_ref)
-        else:
-            argv += [run_image_ref, "sleep", "infinity"]
+        argv += _base_process_args(spec, run_image_ref)
         return argv
 
     def _project_dotenv(self) -> dict[str, str]:

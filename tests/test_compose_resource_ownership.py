@@ -341,6 +341,53 @@ def test_network_creation_records_native_id_and_cleanup_uses_only_that_id(
     assert all("--filter" not in call.args[0] for call in backend._run.call_args_list)
 
 
+def test_network_namespace_discovery_uses_full_receipted_native_ids(
+    tmp_path: Path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl")
+    ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+    backend._docker_daemon_id = "daemon-a"
+    external_name = f"{ownership.project_name}_dmz"
+    ownership.record(
+        ResourceReceipt(
+            kind="network",
+            native_id=_ID_A,
+            external_name=external_name,
+            semantic_name="dmz",
+            node_address="dmz",
+            workspace_id=ownership.workspace_id,
+            project_name=ownership.project_name,
+            daemon_id="daemon-a",
+            attempt_id="run-a",
+            managed_by="direct",
+        )
+    )
+
+    def fake_run(argv, **_kwargs):
+        if argv[:3] == ["docker", "network", "ls"]:
+            native_id = _ID_A if "--no-trunc" in argv else _ID_A[:12]
+            return subprocess.CompletedProcess(argv, 0, f"{native_id}\n", "")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    backend._run = MagicMock(side_effect=fake_run)
+    backend.host_inspect_network = MagicMock(
+        return_value={
+            "id": _ID_A,
+            "name": external_name,
+            "labels": {"com.docker.compose.project": ownership.project_name},
+        }
+    )
+
+    backend._verify_compose_namespace_is_owned(ownership, "daemon-a")
+
+    network_list = next(
+        call.args[0]
+        for call in backend._run.call_args_list
+        if call.args[0][:3] == ["docker", "network", "ls"]
+    )
+    assert "--no-trunc" in network_list
+
+
 def test_volume_cleanup_uses_receipt_and_never_prefix_discovery(tmp_path: Path) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl")
     ownership = backend._ensure_resource_ownership(attempt_id="run-a")

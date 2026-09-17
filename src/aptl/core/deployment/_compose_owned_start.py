@@ -219,7 +219,7 @@ class ComposeOwnedStartMixin:
                 attempt_id=scope.attempt_id,
             )
         except OwnershipConflictError as exc:
-            log.error("Compose post-start ownership capture failed: %s", exc)
+            log.exception("Compose post-start ownership capture failed: %s", exc)
             self._remove_owned_attempt_containers(scope.attempt_id)
             return LabResult(
                 success=False,

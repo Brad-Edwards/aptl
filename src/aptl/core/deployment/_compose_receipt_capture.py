@@ -41,6 +41,7 @@ class ComposeReceiptCaptureMixin:
                 "docker",
                 "network",
                 "ls",
+                "--no-trunc",
                 "--filter",
                 f"label={_COMPOSE_PROJECT_LABEL}={self._project_name}",
                 "--format",
@@ -318,6 +319,9 @@ class ComposeReceiptCaptureMixin:
             raise OwnershipConflictError("Compose owner tuple is incomplete")
         semantic_name = semantic_by_service[str(service)]
         external_name = str(info.get("Name", "")).removeprefix("/")
+        node_address = (
+            labels.get("aptl.node.address") if isinstance(labels, dict) else None
+        )
         if external_name != ownership.container_name(semantic_name):
             raise OwnershipConflictError("Compose semantic binding changed")
         ownership.record(
@@ -326,7 +330,7 @@ class ComposeReceiptCaptureMixin:
                 native_id=native_id,
                 external_name=external_name,
                 semantic_name=semantic_name,
-                node_address=str(labels.get("aptl.node.address") or service),
+                node_address=str(node_address or service),
                 workspace_id=ownership.workspace_id,
                 project_name=ownership.project_name,
                 daemon_id=daemon_id,

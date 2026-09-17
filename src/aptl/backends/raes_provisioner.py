@@ -63,10 +63,8 @@ if TYPE_CHECKING:
 
 log = get_logger("raes-provisioner")
 
-# Application-owned inventories can settle after Compose's health gate.  This
-# is an evidence-readiness budget, not a fixed delay: every pass re-runs native
-# readback and exits immediately when RAES's own authority gate clears.  The
-# bound never permits an absent or partial value to pass admission.
+# Application-owned inventories can settle after Compose's health gate. Retry
+# bounded native readback without admitting an absent or partial value.
 _REALIZATION_READBACK_TIMEOUT_SECONDS = 300.0
 _REALIZATION_READBACK_INTERVAL_SECONDS = 2.0
 

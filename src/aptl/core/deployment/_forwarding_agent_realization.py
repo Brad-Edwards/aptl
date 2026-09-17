@@ -17,16 +17,16 @@ from typing import Protocol
 
 from raes.runtime_configuration import RuntimeConfiguration
 
-from aptl.core.deployment._wazuh_agent_realization import (
-    _WAZUH_BOOTSTRAP_DIR as _WAZUH_BOOTSTRAP_DIR,
-    _WAZUH_CONFIG as _WAZUH_CONFIG,
-    _WAZUH_KEY_DOWNLOAD as _WAZUH_KEY_DOWNLOAD,
-    install_wazuh_agent as _install_wazuh_agent,
-    realize_wazuh_agent as _realize_wazuh_agent,
-    wazuh_agent_configured as _wazuh_agent_configured,
-    wazuh_agent_running as _wazuh_agent_running,
-    wazuh_config as _wazuh_config,
-)
+from aptl.core.deployment import _wazuh_agent_realization
+
+_WAZUH_BOOTSTRAP_DIR = _wazuh_agent_realization._WAZUH_BOOTSTRAP_DIR
+_WAZUH_CONFIG = _wazuh_agent_realization._WAZUH_CONFIG
+_WAZUH_KEY_DOWNLOAD = _wazuh_agent_realization._WAZUH_KEY_DOWNLOAD
+_install_wazuh_agent = _wazuh_agent_realization.install_wazuh_agent
+_realize_wazuh_agent = _wazuh_agent_realization.realize_wazuh_agent
+_wazuh_agent_configured = _wazuh_agent_realization.wazuh_agent_configured
+_wazuh_agent_running = _wazuh_agent_realization.wazuh_agent_running
+_wazuh_config = _wazuh_agent_realization.wazuh_config
 
 _MAX_WORKERS = 8
 _RSYSLOG_CONFIG = "/etc/rsyslog.d/60-aptl-forwarding.conf"

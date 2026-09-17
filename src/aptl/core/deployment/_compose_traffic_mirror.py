@@ -29,14 +29,21 @@ class ComposeTrafficMirrorMixin:
         self, realization: DeploymentRealizationSpec
     ) -> LabResult | None:
         result = None
-        if traffic_mirror_requested(realization):
-            if not getattr(self, "supports_local_artifacts", True):
-                result = LabResult(success=False, error=_UNAVAILABLE)
-            elif _ensure_helper(self, DEFAULT_BOUNDARY_HELPER_IMAGE) is not None:
-                result = LabResult(success=False, error=_UNAVAILABLE)
-            elif self._run(self._tc_command("-V"), timeout=5).returncode != 0:
-                result = LabResult(success=False, error=_UNAVAILABLE)
+        if (
+            traffic_mirror_requested(realization)
+            and not self._traffic_mirror_available()
+        ):
+            result = LabResult(success=False, error=_UNAVAILABLE)
         return result
+
+    def _traffic_mirror_available(self) -> bool:
+        """Return whether the host can realize the admitted minimum mirror."""
+
+        return bool(
+            getattr(self, "supports_local_artifacts", True)
+            and _ensure_helper(self, DEFAULT_BOUNDARY_HELPER_IMAGE) is None
+            and self._run(self._tc_command("-V"), timeout=5).returncode == 0
+        )
 
     def _realize_traffic_mirrors(
         self, realization: DeploymentRealizationSpec

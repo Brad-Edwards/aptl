@@ -484,7 +484,6 @@ class AptlProvisioner(object):
 
     def _realize_plan(self, plan: ProvisioningPlan) -> AptlRealization:
         """Backward-compatible private route to the cached interpreter."""
-
         return self.realize_plan(plan)
 
     @staticmethod

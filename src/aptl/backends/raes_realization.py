@@ -19,29 +19,15 @@ from aptl.backends.raes_diagnostics import (
 )
 from aptl.backends.raes_dependency_closure import append_dependency_closure
 from aptl.backends.raes_acl_realization import realize_acls
-from raes.runtime_configuration import RuntimeConfiguration
 
 from aptl.backends._raes_realization_diagnostics import (
     _append_node_profile_diagnostic,
     _append_profile_diagnostics,
     _invalid_payload_diagnostics,
 )
-from aptl.backends._raes_node_realization import (
-    _container_name,
-    _node_os,
-    _node_os_version,
-    _node_runtime,
-    _realize_node,
-)
+from aptl.backends import _raes_node_realization
 from aptl.backends.pack_interaction import ResolvedPackBackendInteraction
 from aptl.backends.raes_pack_interaction import apply_pack_interaction
-from aptl.backends.raes_image_realization import (
-    node_source_is_dynamic_composition,
-    resolve_node_image,
-)
-from aptl.backends.raes_backend_implementation import (
-    select_backend_node_implementation,
-)
 from aptl.backends.raes_placement_realization import (
     placement_node_lookup as _node_lookup,
     realize_placements as _realize_placements,
@@ -49,7 +35,6 @@ from aptl.backends.raes_placement_realization import (
 from aptl.backends.raes_profiles import (
     ComposeProfileIndex,
     load_compose_profile_index,
-    node_aliases,
 )
 from aptl.backends.raes_realization_networks import (
     append_network_topology_diagnostics,
@@ -59,27 +44,25 @@ from aptl.backends.raes_realization_model import (
     AptlRealization,
     NetworkRealization,
     NodeRealization,
-    _single_or_none,
-)
-from aptl.backends._raes_conformance_probe import (
-    _conformance_probe_services,
-    _is_raes_conformance_probe_node,
 )
 from aptl.backends.raes_realization_values import (
     mapping as _mapping,
-    network_names as _network_names,
     optional_bool as _optional_bool,
     optional_string as _optional_string,
-    published_ports as _published_ports,
     resource_name as _resource_name,
-    service_ports as _service_ports,
-    static_address_assignments as _static_address_assignments,
-    static_addresses as _static_addresses,
 )
 from aptl.core.config import AptlConfig
 from aptl.core.deployment.realization import DeploymentGeneratedArtifactRealization
 from aptl.core.scenario_bundle import ScenarioBundle
 from aptl.utils.redaction import redact
+
+_realize_node = _raes_node_realization._realize_node
+# Compatibility exports used by focused node-realization tests and downstream
+# diagnostics. The implementation lives in the split node module.
+_container_name = _raes_node_realization._container_name
+_node_os = _raes_node_realization._node_os
+_node_os_version = _raes_node_realization._node_os_version
+_node_runtime = _raes_node_realization._node_runtime
 
 
 def interpret_provisioning_plan(

@@ -37,30 +37,78 @@ def realize_wazuh_agent(
 ) -> str | None:
     """Install and verify one Wazuh agent, returning a bounded failure."""
 
+    host = _manager_host(agent)
+    if host is None:
+        return "invalid manager target"
+    checks = (
+        lambda: _ensure_wazuh_installed(backend, container, host),
+        lambda: _write_wazuh_configuration(backend, container, agent),
+        lambda: _configured_reason(backend, container, agent),
+        lambda: _start_reason(backend, container),
+        lambda: _ready_reason(backend, container),
+    )
+    return next((reason for check in checks if (reason := check()) is not None), None)
+
+
+def _manager_host(agent: object) -> str | None:
+    """Return the validated manager host from the sole ship target."""
+
     target = _single_target(agent)
     host = str(getattr(target, "target_node_ref", "") or "") if target else ""
-    reason = "invalid manager target" if not _SAFE_HOST.fullmatch(host) else None
-    if reason is None and not _exec_ok(
-        backend, container, ["test", "-x", _WAZUH_CONTROL]
-    ):
-        reason = install_wazuh_agent(backend, container, host)
-    payload = wazuh_config(agent) if reason is None else None
-    if reason is None and (
-        payload is None
-        or not _write_file(
+    return host if _SAFE_HOST.fullmatch(host) else None
+
+
+def _ensure_wazuh_installed(
+    backend: WazuhAgentBackend, container: str, host: str
+) -> str | None:
+    """Install the agent only when its control executable is absent."""
+
+    present = _exec_ok(backend, container, ["test", "-x", _WAZUH_CONTROL])
+    return None if present else install_wazuh_agent(backend, container, host)
+
+
+def _write_wazuh_configuration(
+    backend: WazuhAgentBackend, container: str, agent: object
+) -> str | None:
+    """Write the exact rendered Wazuh configuration."""
+
+    payload = wazuh_config(agent)
+    written = bool(
+        payload is not None
+        and _write_file(
             backend, container, _WAZUH_CONFIG, payload, "0640", owner="root:wazuh"
         )
-    ):
-        reason = "could not write Wazuh configuration"
-    if reason is None and not wazuh_agent_configured(backend, container, agent):
-        reason = "Wazuh configuration did not verify"
-    if reason is None and not _exec_ok(
-        backend, container, [_WAZUH_CONTROL, "start"], timeout=120
-    ):
-        reason = "Wazuh agent did not start"
-    if reason is None and not wazuh_agent_running(backend, container):
-        reason = "Wazuh agent did not become ready"
-    return reason
+    )
+    return None if written else "could not write Wazuh configuration"
+
+
+def _configured_reason(
+    backend: WazuhAgentBackend, container: str, agent: object
+) -> str | None:
+    """Return a failure when exact configuration readback does not verify."""
+
+    return (
+        None
+        if wazuh_agent_configured(backend, container, agent)
+        else "Wazuh configuration did not verify"
+    )
+
+
+def _start_reason(backend: WazuhAgentBackend, container: str) -> str | None:
+    """Start the agent and return a bounded failure on non-zero exit."""
+
+    started = _exec_ok(backend, container, [_WAZUH_CONTROL, "start"], timeout=120)
+    return None if started else "Wazuh agent did not start"
+
+
+def _ready_reason(backend: WazuhAgentBackend, container: str) -> str | None:
+    """Return a failure unless both required Wazuh processes are running."""
+
+    return (
+        None
+        if wazuh_agent_running(backend, container)
+        else "Wazuh agent did not become ready"
+    )
 
 
 def wazuh_agent_running(backend: WazuhAgentBackend, container: str) -> bool:
@@ -298,18 +346,18 @@ def _wazuh_header(
     ]
 
 
-def _enrollment_lines(host: str, enrollment: object) -> tuple[str, ...]:
+def _enrollment_lines(host: str, enrollment: object) -> list[str]:
     """Return enrollment lines only when the author selected an enrollment port."""
 
     if enrollment is None:
-        return ()
-    return (
+        return []
+    return [
         "    <enrollment>",
         "      <enabled>yes</enabled>",
         f"      <manager_address>{escape(host)}</manager_address>",
         f"      <port>{int(enrollment)}</port>",
         "    </enrollment>",
-    )
+    ]
 
 
 def _source_lines(agent: object) -> list[str] | None:

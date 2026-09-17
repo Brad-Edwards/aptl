@@ -36,6 +36,11 @@ from aptl.backends.raes_materializer import (
     ProvisionDomainAuthorityOp,
     SetFilesystemMetadataOp,
 )
+from aptl.backends._raes_docker_observation_values import (
+    metadata_dimension_matches as _metadata_dimension_matches,
+    npm_entrypoint_paths as _npm_entrypoint_paths,
+    samba_domain_info as _samba_domain_info,
+)
 from aptl.backends.raes_package_managers import (
     install_argv,
     manifest_install_argv,
@@ -470,44 +475,3 @@ def _normalized_mode(mode: str) -> str:
 
     value = mode[2:] if mode.startswith("0o") else mode
     return value.zfill(4)
-
-
-def _metadata_dimension_matches(actual: str, expected: object) -> bool:
-    """Match one selected filesystem dimension, treating omission as open."""
-
-    return expected in ("", None) or actual == str(expected)
-
-
-def _npm_entrypoint_paths(package: dict[str, object]) -> tuple[str, ...]:
-    """Return safe relative main/bin paths declared by an npm package."""
-
-    candidates: list[object] = [package.get("main")]
-    package_bin = package.get("bin")
-    if isinstance(package_bin, dict):
-        candidates.extend(package_bin.values())
-    else:
-        candidates.append(package_bin)
-
-    paths: list[str] = []
-    for candidate in candidates:
-        if not isinstance(candidate, str) or not candidate.strip():
-            continue
-        normalized = candidate.removeprefix("./")
-        path = PurePosixPath(normalized)
-        if path.is_absolute() or ".." in path.parts:
-            continue
-        rendered = str(path)
-        if rendered not in paths:
-            paths.append(rendered)
-    return tuple(paths)
-
-
-def _samba_domain_info(output: str) -> dict[str, str]:
-    """Parse the bounded key/value surface emitted by ``samba-tool``."""
-
-    observed: dict[str, str] = {}
-    for line in output.splitlines():
-        key, separator, value = line.partition(":")
-        if separator:
-            observed[key.strip().casefold()] = value.strip()
-    return observed

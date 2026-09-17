@@ -16,7 +16,7 @@ from aptl.core.evidence.adapters.sources import (
     WindowedSource,
     _to_outcome,
 )
-from aptl.core.evidence.adapters.techvault_native import TechVaultNativeEvidenceOwner
+from aptl.core.evidence.adapters import techvault_native as _techvault_native
 from aptl.core.evidence.content_store import create_run_json_once
 from aptl.core.evidence.coordinator import AcquisitionResult, acquire_evidence
 from aptl.core.evidence.outcomes import AcquisitionDisposition, CollectorStatus
@@ -54,6 +54,10 @@ _ACTIVE_AUTHORITY_DIR = ".aptl/capture-authorities"
 _FINALIZED_AUTHORITY_DIR = ".aptl/capture-finalized"
 _FAILED_ACTIVATION_DIR = ".aptl/capture-activation-failed"
 _FAILED_FINALIZATION_DIR = ".aptl/capture-finalization-failed"
+
+# Compatibility seam used by tests and by the split immediate-acquisition
+# entry point; monkeypatching this owner remains supported.
+TechVaultNativeEvidenceOwner = _techvault_native.TechVaultNativeEvidenceOwner
 
 
 @dataclass(frozen=True)

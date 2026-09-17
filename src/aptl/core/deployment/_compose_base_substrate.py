@@ -25,10 +25,6 @@ from aptl.core.deployment._compose_realization_networks import (
     _resolve_base_network_bindings,
 )
 from aptl.core.deployment.errors import BackendSeedError
-from aptl.core.deployment._compose_resource_ownership import (
-    OwnershipConflictError,
-    ResourceReceipt,
-)
 from aptl.core.deployment.realization import (
     DeploymentNetworkAttachment,
     valid_environment_variable_name,
@@ -165,111 +161,6 @@ class ComposeBaseSubstrateMixin(object):
                     failures.append(f"failed to build generic base image {image_ref}")
         return failures
 
-    def start_base_container(self, spec: "BaseContainerSpec") -> None:
-        """Start a node's generic base container (ADR-048).
-
-        Runs the generic base image with the validated init requirements when the
-        node declares service units (host cgroup ns, cgroupfs rw, tmpfs,
-        capabilities, unconfined seccomp/AppArmor, systemd as PID 1). A node with no
-        service units runs the base with a keepalive so the materializer can exec
-        into it. Idempotent: any stale container of the same name is removed
-        first. Raises on failure so the materialization engine translates it into
-        the RAES `LabResult` envelope.
-        """
-
-        ownership = self._ensure_resource_ownership()
-        attempt_id = self._resource_attempt_id
-        assert attempt_id is not None
-        daemon_id = self._ownership_daemon_id()
-        external_name = ownership.container_name(spec.container_name)
-        network_bindings = getattr(self, "_base_networks_by_address", {}).get(
-            spec.node_address
-        )
-        run_image_ref = self._resolve_base_run_image(spec)
-        existing_id = self._owned_base_container_id(
-            spec,
-            external_name=external_name,
-            daemon_id=daemon_id,
-        )
-        if existing_id is not None and self._base_container_already_realized(
-            existing_id, run_image_ref
-        ):
-            # Idempotent: a node that already materialized correctly is left in
-            # place. `aptl lab start` retries a single SOC backend-start failure
-            # by re-running the whole admitted plan, which re-enters node
-            # materialization. Tearing the container down and recreating it would
-            # drop the project networks the post-start reconcile
-            # (_reconcile_realization_networks) attached -- the container is
-            # recreated on the default bridge -- and if that retry then fails or
-            # times out before its own reconcile runs, the node is left stranded
-            # on bridge with no scenario network (the attacker among them). The
-            # retry only fires after materialization already succeeded, so the
-            # existing container is known-good; the caller's remaining
-            # materialization ops run against it idempotently.
-            return
-        if existing_id is not None:
-            removed = self._run(["docker", "rm", "-f", existing_id], timeout=30)
-            if removed.returncode != 0:
-                raise BackendSeedError(
-                    f"failed to recover owned base container for node {spec.node_address}"
-                )
-        argv = self._base_container_create_command(
-            spec,
-            network_bindings,
-            run_image_ref,
-            external_name=external_name,
-            ownership_labels=ownership.labels(attempt_id=attempt_id),
-        )
-        result = self._run(argv, timeout=180)
-        self._complete_base_container_start(
-            spec,
-            network_bindings,
-            result,
-            external_name=external_name,
-            daemon_id=daemon_id,
-            attempt_id=attempt_id,
-        )
-
-    def _owned_base_container_id(
-        self,
-        spec: "BaseContainerSpec",
-        *,
-        external_name: str,
-        daemon_id: str,
-    ) -> str | None:
-        """Return the one active receipt-owned ID or reject a name collision."""
-
-        ownership = self._ensure_resource_ownership()
-        candidates = ownership.candidates(
-            spec.container_name,
-            kind="container",
-            daemon_id=daemon_id,
-        )
-        active = [
-            receipt
-            for receipt in candidates
-            if self._raw_container_inspect(receipt.native_id)
-        ]
-        if len(active) > 1:
-            raise BackendSeedError(
-                f"backend resource ownership conflict for node {spec.node_address}"
-            )
-        if active:
-            try:
-                return self._resolve_owned_container_id(active[0].native_id)
-            except OwnershipConflictError as exc:
-                raise BackendSeedError(
-                    f"backend resource ownership conflict for node {spec.node_address}"
-                ) from exc
-        # No receipt authorizes a pre-existing same-name object.  Inspecting the
-        # scoped name is discovery only; any hit is foreign/uncertain and blocks
-        # mutation rather than being adopted or removed.
-        if not candidates and self._raw_container_inspect(external_name):
-            raise BackendSeedError(
-                f"backend resource ownership conflict for node {spec.node_address}"
-            )
-        return None
-
     def _resolve_base_run_image(self, spec: "BaseContainerSpec") -> str:
         """Return the exact image reference a node's base container runs from.
 
@@ -374,8 +265,11 @@ class ComposeBaseSubstrateMixin(object):
             "--label",
             f"com.docker.compose.project={self._project_name}",
         ]
-        for label_name, label_value in sorted((ownership_labels or {}).items()):
-            argv.extend(("--label", f"{label_name}={label_value}"))
+        argv.extend(
+            item
+            for label_name, label_value in sorted((ownership_labels or {}).items())
+            for item in ("--label", f"{label_name}={label_value}")
+        )
         if network_bindings is None:
             argv.insert(2, "-d")
         if network_bindings is not None:
@@ -507,37 +401,13 @@ class ComposeBaseSubstrateMixin(object):
     ) -> None:
         """Attach remaining admitted networks, start, and clean failed creates."""
 
-        native_id = str(result.stdout or "").strip() if result.returncode == 0 else ""
-        if result.returncode == 0:
-            if (
-                not native_id
-                or external_name is None
-                or daemon_id is None
-                or attempt_id is None
-            ):
-                raise BackendSeedError(
-                    f"native identity unavailable for node {spec.node_address}"
-                )
-            try:
-                self._ensure_resource_ownership().record(
-                    ResourceReceipt(
-                        kind="container",
-                        native_id=native_id,
-                        external_name=external_name,
-                        semantic_name=spec.container_name,
-                        node_address=spec.node_address,
-                        workspace_id=self._resource_ownership.workspace_id,
-                        project_name=self._project_name,
-                        daemon_id=daemon_id,
-                        attempt_id=attempt_id,
-                        managed_by="direct",
-                    )
-                )
-            except OwnershipConflictError as exc:
-                self._run(["docker", "rm", "-f", native_id], timeout=30)
-                raise BackendSeedError(
-                    f"failed to record ownership for node {spec.node_address}"
-                ) from exc
+        native_id = self._record_started_base_container(
+            spec,
+            result,
+            external_name=external_name,
+            daemon_id=daemon_id,
+            attempt_id=attempt_id,
+        )
         if result.returncode == 0 and network_bindings is not None:
             result = self._attach_and_start_base_container(
                 native_id,

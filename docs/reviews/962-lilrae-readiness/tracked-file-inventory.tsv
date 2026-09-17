@@ -921,6 +921,7 @@ src/aptl/core/deployment/_compose_build_dedupe.py	core-candidate	Migrate only af
 src/aptl/core/deployment/_compose_child_lifecycle.py	backend-substrate	Post-baseline Compose child-lifecycle mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_content_mounts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_content_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_direct_network.py	backend-substrate	Post-baseline direct network ownership mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_image_fetch.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_image_free_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_image_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -930,6 +931,7 @@ src/aptl/core/deployment/_compose_model_realization.py	core-candidate	Migrate on
 src/aptl/core/deployment/_compose_network_conflicts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_network_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_node_generation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_owned_start.py	backend-substrate	Post-baseline owned Compose startup mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_port_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_port_readback.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_post_start.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -938,6 +940,8 @@ src/aptl/core/deployment/_compose_project_inventory.py	core-candidate	Migrate on
 src/aptl/core/deployment/_compose_queries.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_realization_networks.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_receipt_capture.py	backend-substrate	Post-baseline native resource receipt capture; retain with deployment authority
+src/aptl/core/deployment/_compose_resource_resolution.py	backend-substrate	Post-baseline native resource resolution mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_resource_ownership.py	backend-substrate	Post-baseline native resource ownership mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_runtime_inventory.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_runtime_observation.py	backend-substrate	Post-baseline native runtime observation mechanism; retain with deployment authority

@@ -7,11 +7,6 @@ from pathlib import Path
 import yaml
 
 from aptl.core.deployment._compose_node_generation import base_compose_file
-from aptl.core.deployment._compose_resource_ownership import (
-    OwnershipConflictError,
-    WorkspaceOwnership,
-    write_compose_ownership_override,
-)
 from aptl.core.deployment._compose_spawn_image_realization import (
     prepare_spawn_images,
 )
@@ -425,76 +420,6 @@ class ComposeRealizationImageMixin:
             newline="\n",
         )
         return override_path
-
-    def _start_with_compose_files(
-        self,
-        profiles: list[str],
-        *,
-        build: bool,
-        compose_files: tuple[Path, ...],
-        exclude_services: tuple[str, ...] = (),
-        only_services: tuple[str, ...] = (),
-        scenario_root: Path | None = None,
-    ) -> LabResult:
-        """Start lab services using a generated realization override."""
-
-        try:
-            attempt_id = (
-                self._resource_attempt_id or WorkspaceOwnership.new_attempt_id()
-            )
-            ownership = self._ensure_resource_ownership(attempt_id=attempt_id)
-            daemon_id = self._ownership_daemon_id()
-            ownership_override, semantic_by_service, expected = (
-                write_compose_ownership_override(
-                    ownership,
-                    attempt_id=attempt_id,
-                    compose_files=compose_files,
-                )
-            )
-            self._verify_compose_namespace_is_owned(
-                ownership, daemon_id, expected=expected
-            )
-        except OwnershipConflictError:
-            return LabResult(
-                success=False,
-                error="Backend resource ownership conflict before Compose mutation.",
-            )
-        scoped_files = (*compose_files, ownership_override)
-        cmd = self._build_command(
-            "up", profiles, compose_files=scoped_files, scenario_root=scenario_root
-        )
-        build = build and not self._offline_staged
-        if build:
-            cmd.append("--build")
-        if self._offline_staged:
-            cmd.extend(["--pull", "never"])
-        cmd.append("-d")
-        for service in exclude_services:
-            cmd += ["--scale", f"{service}=0"]
-        cmd.extend(only_services)
-        result = self._run(cmd)
-        if result.returncode != 0:
-            return LabResult(success=False, error=result.stderr)
-        try:
-            self._record_compose_container_receipts(
-                ownership,
-                daemon_id=daemon_id,
-                attempt_id=attempt_id,
-                semantic_by_service=semantic_by_service,
-            )
-            self._record_compose_network_receipts(
-                ownership, daemon_id=daemon_id, attempt_id=attempt_id
-            )
-            self._record_compose_volume_receipts(
-                ownership, daemon_id=daemon_id, attempt_id=attempt_id
-            )
-        except OwnershipConflictError:
-            self._remove_owned_attempt_containers(attempt_id)
-            return LabResult(
-                success=False,
-                error="Backend resource ownership could not be verified after Compose start.",
-            )
-        return LabResult(success=True, message="Lab started")
 
     def _start_realized_services(
         self,

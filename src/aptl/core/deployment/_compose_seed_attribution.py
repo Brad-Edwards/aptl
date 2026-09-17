@@ -16,6 +16,7 @@ from aptl.core.deployment._compose_seed_safety import redacted_stderr_hint
 from aptl.core.deployment._compose_resource_ownership import (
     OwnershipConflictError,
     ResourceReceipt,
+    WorkspaceOwnership,
 )
 from aptl.core.deployment.errors import BackendSeedError
 from aptl.utils.logging import get_logger
@@ -57,42 +58,56 @@ class ComposeSeedAttributionMixin:
         itself would have written. Labels are immutable after creation, so
         this must happen before the first seeding ``docker run``.
         """
+        ownership = self._ensure_resource_ownership()
+        attempt_id = self._resource_attempt_id
+        if attempt_id is None:
+            raise BackendSeedError("Backend attempt identity is unavailable")
         volume = f"{self._project_name}_{seed.volume_suffix}"
         inspect = self._run(
             ["docker", "volume", "inspect", volume, "--format", "{{json .Labels}}"],
             timeout=_SEED_TIMEOUT,
         )
         if inspect.returncode == 0:
-            try:
-                self._resolve_owned_volume_name(volume)
-            except OwnershipConflictError as exc:
-                raise BackendSeedError(
-                    f"Named volume '{seed.volume_suffix}' has no verified ownership receipt"
-                ) from exc
-            if self._content_volume_owned_by_project(
-                inspect.stdout, seed.volume_suffix
-            ):
-                return
-            # Labels are immutable after creation and the volume may hold
-            # runtime state, so an unattributed same-named volume is an
-            # explicit operator decision, not something to adopt silently:
-            # content observation would reject it late with a far less
-            # actionable failure.
-            log.error(
-                "Named volume %s exists without Compose project attribution. "
-                "Remove it with `docker volume rm %s` (seeded content is "
-                "recreated from checked-in sources) and rerun `aptl lab start`.",
-                volume,
-                volume,
+            self._verify_existing_seed_volume(seed, volume, inspect.stdout)
+        else:
+            self._create_seed_volume(
+                seed, volume, ownership=ownership, attempt_id=attempt_id
             )
+
+    def _verify_existing_seed_volume(
+        self, seed: NamedVolumeSeed, volume: str, raw_labels: str
+    ) -> None:
+        """Accept one existing seed volume only through its receipt and labels."""
+
+        try:
+            self._resolve_owned_volume_name(volume)
+        except OwnershipConflictError as exc:
             raise BackendSeedError(
-                f"Named volume '{seed.volume_suffix}' exists without Compose "
-                "project attribution"
-            )
-        ownership = self._ensure_resource_ownership()
-        attempt_id = self._resource_attempt_id
-        if attempt_id is None:
-            raise BackendSeedError("Backend attempt identity is unavailable")
+                f"Named volume '{seed.volume_suffix}' has no verified ownership receipt"
+            ) from exc
+        if self._content_volume_owned_by_project(raw_labels, seed.volume_suffix):
+            return
+        log.error(
+            "Named volume %s exists without Compose project attribution. "
+            "Remove it with `docker volume rm %s` (seeded content is "
+            "recreated from checked-in sources) and rerun `aptl lab start`.",
+            volume,
+            volume,
+        )
+        raise BackendSeedError(
+            f"Named volume '{seed.volume_suffix}' exists without Compose project attribution"
+        )
+
+    def _create_seed_volume(
+        self,
+        seed: NamedVolumeSeed,
+        volume: str,
+        *,
+        ownership: WorkspaceOwnership,
+        attempt_id: str,
+    ) -> None:
+        """Create, re-inspect, and receipt one missing seed volume."""
+
         command = [
             "docker",
             "volume",
@@ -120,12 +135,7 @@ class ComposeSeedAttributionMixin:
             raise BackendSeedError(
                 f"Creating named volume '{seed.volume_suffix}' returned no identity"
             )
-        try:
-            info = self._raw_volume_inspect(volume)
-        except OwnershipConflictError as exc:
-            raise BackendSeedError(
-                f"Named volume '{seed.volume_suffix}' ownership is uninspectable"
-            ) from exc
+        info = self._inspect_created_seed_volume(seed, volume)
         observed_labels = info.get("Labels") if isinstance(info, dict) else None
         expected_labels = {
             "com.docker.compose.project": self._project_name,
@@ -161,4 +171,16 @@ class ComposeSeedAttributionMixin:
         except OwnershipConflictError as exc:
             raise BackendSeedError(
                 f"Could not record ownership for named volume '{seed.volume_suffix}'"
+            ) from exc
+
+    def _inspect_created_seed_volume(
+        self, seed: NamedVolumeSeed, volume: str
+    ) -> dict[str, object]:
+        """Re-inspect a created volume without converting uncertainty to absence."""
+
+        try:
+            return self._raw_volume_inspect(volume)
+        except OwnershipConflictError as exc:
+            raise BackendSeedError(
+                f"Named volume '{seed.volume_suffix}' ownership is uninspectable"
             ) from exc

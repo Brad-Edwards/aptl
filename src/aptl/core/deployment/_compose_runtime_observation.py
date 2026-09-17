@@ -6,10 +6,7 @@ from collections.abc import Mapping, Sequence
 from aptl.core.deployment._compose_child_lifecycle import (
     ComposeSpawnedChildLifecycleMixin,
 )
-from aptl.core.deployment._compose_resource_ownership import (
-    OwnershipConflictError,
-    ResourceReceipt,
-)
+from aptl.core.deployment._compose_resource_ownership import OwnershipConflictError
 from aptl.core.deployment._compose_runtime_orchestration import (
     deployment_spawn_image_requirements,
     docker_authority_admissions,
@@ -343,38 +340,6 @@ class ComposeRuntimeOrchestrationObservationMixin(
                 requirement,
             )
         return failure, container_ids
-
-    def _record_isolated_child_receipts(
-        self,
-        container_ids: tuple[str, ...],
-        requirement: DeploymentSpawnImageRequirement,
-    ) -> None:
-        """Bind children from an attempt-dedicated daemon to native IDs."""
-
-        ownership = self._ensure_resource_ownership()
-        daemon_id = self._ownership_daemon_id()
-        attempt_id = self._resource_attempt_id
-        if attempt_id is None:
-            raise OwnershipConflictError("backend attempt identity is unavailable")
-        for native_id in container_ids:
-            info = self._raw_container_inspect(native_id)
-            external_name = str(info.get("Name", "")).removeprefix("/")
-            if info.get("Id") != native_id or not external_name:
-                raise OwnershipConflictError("spawned-child native identity changed")
-            ownership.record(
-                ResourceReceipt(
-                    kind="container",
-                    native_id=native_id,
-                    external_name=external_name,
-                    semantic_name=requirement.template_id,
-                    node_address=requirement.node_address,
-                    workspace_id=ownership.workspace_id,
-                    project_name=ownership.project_name,
-                    daemon_id=daemon_id,
-                    attempt_id=attempt_id,
-                    managed_by="child",
-                )
-            )
 
     def _verify_spawned_child(
         self,

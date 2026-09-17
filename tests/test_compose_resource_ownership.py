@@ -74,8 +74,9 @@ def test_receipts_are_immutable_and_bound_to_daemon_and_attempt(tmp_path: Path) 
     loaded = ownership.receipts("container")
 
     assert loaded == (receipt,)
+    conflicting = ResourceReceipt(**{**receipt.__dict__, "attempt_id": "run-b"})
     with pytest.raises(OwnershipConflictError, match="immutable ownership receipt"):
-        ownership.record(ResourceReceipt(**{**receipt.__dict__, "attempt_id": "run-b"}))
+        ownership.record(conflicting)
     with pytest.raises(OwnershipConflictError, match="daemon identity"):
         ownership.candidates("aptl-victim", kind="container", daemon_id="daemon-b")
 

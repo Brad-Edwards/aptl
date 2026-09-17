@@ -78,16 +78,11 @@ class AptlProvisioner(object):
     project_dir: Path
     config: AptlConfig
     deployment_backend: "DeploymentBackend"
-    # The scenario being realized, and the root every scenario-declared input is
-    # anchored to. Required: realization never falls back to ``project_dir`` (the
-    # engine checkout). For an in-tree scenario the bundle root *is* the project
-    # directory, which is what keeps an unmoved scenario unchanged (issue #874).
+    # The scenario and root anchoring every declared input. Realization never
+    # falls back to ``project_dir``; see issue #874.
     bundle: ScenarioBundle
-    # RAES's backend-call boundary replaces a failed apply's diagnostics with
-    # its snapshot-contract / SEM-218 gate output (the gate reads the
-    # never-realized snapshot, so every exact declaration looks unrealized).
-    # Keep the last failed apply's own report here so the handoff can
-    # re-attach the actionable failure (issue #677).
+    # RAES's backend-call boundary replaces failed-apply diagnostics with the
+    # snapshot gate output. Preserve the actionable report; see issue #677.
     last_failure_diagnostics: tuple[Diagnostic, ...] = ()
     # The trusted availability facts gathered before planning (ADR-051). They
     # carry the address-scoped immutable substrate config id each

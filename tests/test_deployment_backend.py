@@ -2943,6 +2943,41 @@ class TestSeedNamedVolumes:
         )
         assert commands.index(create) < seed_index
 
+    def test_first_seed_scopes_project_before_computing_volume_name(self, tmp_path):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        backend._docker_daemon_id = "test-daemon"
+        created_name = ""
+        created_labels = {}
+
+        def run(cmd, **_kwargs):
+            nonlocal created_name, created_labels
+            if cmd[:3] == ["docker", "volume", "create"]:
+                created_name = cmd[-1]
+                created_labels = {
+                    cmd[index + 1].partition("=")[0]: cmd[index + 1].partition("=")[2]
+                    for index, value in enumerate(cmd)
+                    if value == "--label"
+                }
+                return MagicMock(returncode=0, stdout=f"{created_name}\n", stderr="")
+            if cmd[:3] == ["docker", "volume", "inspect"]:
+                if not created_name:
+                    return MagicMock(returncode=1, stdout="", stderr="not found")
+                return MagicMock(
+                    returncode=0,
+                    stdout=json.dumps(
+                        [{"Name": created_name, "Labels": created_labels}]
+                    ),
+                    stderr="",
+                )
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=run):
+            backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+
+        assert backend.project_name.startswith("test-w")
+        assert created_name == f"{backend.project_name}_suricata_config_seed"
+        assert created_name != "test_suricata_config_seed"
+
     def test_seed_refuses_create_race_without_deleting_foreign_volume(self, tmp_path):
         from aptl.core.deployment.errors import BackendSeedError
 
@@ -2975,9 +3010,10 @@ class TestSeedNamedVolumes:
                 )
             return MagicMock(returncode=0, stdout="", stderr="")
 
+        seeds = [self._config_seed()]
         with patch("subprocess.run", side_effect=run) as mock_run:
             with pytest.raises(BackendSeedError, match="could not be verified"):
-                backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+                backend.seed_named_volumes(seeds, seeder_image="img:1")
 
         commands = [call.args[0] for call in mock_run.call_args_list]
         assert not any(cmd[:3] == ["docker", "volume", "rm"] for cmd in commands)

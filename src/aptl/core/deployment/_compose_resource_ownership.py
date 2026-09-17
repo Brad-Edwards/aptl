@@ -31,6 +31,9 @@ _RECEIPT_ROOT = ".aptl/lifecycle/resource-receipts-v1"
 _WORKSPACE_ID = re.compile(r"^[0-9a-f]{32}$")
 _SAFE_VALUE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:@/+\-=]{0,254}$")
 _KINDS = frozenset({"container", "network", "volume"})
+_WORKSPACE_UNAVAILABLE = "workspace ownership state is unavailable"
+_RECEIPT_MALFORMED = "ownership receipt inventory is malformed"
+_OVERRIDE_UNAVAILABLE = "Compose ownership override is unavailable"
 
 
 class _ComposeLoader(yaml.SafeLoader):
@@ -119,13 +122,9 @@ class WorkspaceOwnership:
             if exc.reason == REASON_NOT_FOUND:
                 payload = _create_workspace_state(root)
             else:
-                raise OwnershipConflictError(
-                    "workspace ownership state is unavailable"
-                ) from exc
+                raise OwnershipConflictError(_WORKSPACE_UNAVAILABLE) from exc
         except OSError as exc:
-            raise OwnershipConflictError(
-                "workspace ownership state is unavailable"
-            ) from exc
+            raise OwnershipConflictError(_WORKSPACE_UNAVAILABLE) from exc
         workspace_id = _decode_workspace_state(payload)
         suffix = f"-w{workspace_id[:12]}"
         effective = validate_compose_project_name(
@@ -203,21 +202,19 @@ class WorkspaceOwnership:
         receipts: list[ResourceReceipt] = []
         for name in names:
             if not name.endswith(".json"):
-                raise OwnershipConflictError("ownership receipt inventory is malformed")
+                raise OwnershipConflictError(_RECEIPT_MALFORMED)
             try:
                 payload = read_contained_nofollow(self.root, f"{relative_dir}/{name}")
                 receipt = _decode_receipt(payload)
             except (OSError, ValueError, TypeError, PathContainmentError) as exc:
-                raise OwnershipConflictError(
-                    "ownership receipt inventory is malformed"
-                ) from exc
+                raise OwnershipConflictError(_RECEIPT_MALFORMED) from exc
             if (
                 receipt.kind != kind
                 or receipt.workspace_id != self.workspace_id
                 or receipt.project_name != self.project_name
                 or self._receipt_path(kind, receipt.native_id).name != name
             ):
-                raise OwnershipConflictError("ownership receipt inventory is malformed")
+                raise OwnershipConflictError(_RECEIPT_MALFORMED)
             receipts.append(receipt)
         return tuple(receipts)
 
@@ -266,6 +263,40 @@ def write_compose_ownership_override(
         networks.setdefault("default", {})
 
     labels = ownership.labels(attempt_id=attempt_id)
+    overrides, semantic_by_service, external_by_semantic = _service_overrides(
+        ownership, services, labels
+    )
+    _scope_container_network_modes(services, overrides, external_by_semantic)
+    network_overrides, expected_networks = _resource_overrides(
+        ownership, networks, labels=labels
+    )
+    volume_overrides, expected_volumes = _resource_overrides(
+        ownership, volumes, labels=labels
+    )
+    document: dict[str, object] = {
+        "services": overrides,
+        **({"networks": network_overrides} if network_overrides else {}),
+        **({"volumes": volume_overrides} if volume_overrides else {}),
+    }
+    payload = yaml.safe_dump(document, sort_keys=True).encode("utf-8")
+    digest = hashlib.sha256(attempt_id.encode("utf-8")).hexdigest()[:16]
+    relative = Path(".aptl/lifecycle/compose-ownership") / f"{digest}.yml"
+    _write_override_payload(ownership.root, relative, payload)
+    expected = {
+        "container": tuple(sorted(external_by_semantic.values())),
+        "network": tuple(sorted(expected_networks)),
+        "volume": tuple(sorted(expected_volumes)),
+    }
+    return ownership.root / relative, semantic_by_service, expected
+
+
+def _service_overrides(
+    ownership: WorkspaceOwnership,
+    services: dict[str, dict[str, object]],
+    labels: dict[str, str],
+) -> tuple[dict[str, dict[str, object]], dict[str, str], dict[str, str]]:
+    """Build scoped service overrides and both semantic lookup maps."""
+
     overrides: dict[str, dict[str, object]] = {}
     semantic_by_service: dict[str, str] = {}
     external_by_semantic: dict[str, str] = {}
@@ -283,53 +314,41 @@ def write_compose_ownership_override(
             "container_name": external_name,
             "labels": labels,
         }
+    return overrides, semantic_by_service, external_by_semantic
 
-    # Compose's container network-mode target is an implementation name.  Keep
-    # the authored node/hostname unchanged while translating this backend-only
-    # reference to the same workspace-scoped external name.
+
+def _scope_container_network_modes(
+    services: dict[str, dict[str, object]],
+    overrides: dict[str, dict[str, object]],
+    external_by_semantic: dict[str, str],
+) -> None:
+    """Translate ``network_mode: container:`` targets to scoped names."""
+
     for service_name, raw_service in services.items():
         network_mode = raw_service.get("network_mode")
-        if isinstance(network_mode, str) and network_mode.startswith("container:"):
-            target = network_mode.partition(":")[2]
-            scoped = external_by_semantic.get(target)
-            if scoped is not None:
-                overrides[service_name]["network_mode"] = f"container:{scoped}"
+        if not isinstance(network_mode, str) or not network_mode.startswith(
+            "container:"
+        ):
+            continue
+        scoped = external_by_semantic.get(network_mode.partition(":")[2])
+        if scoped is not None:
+            overrides[service_name]["network_mode"] = f"container:{scoped}"
 
-    network_overrides, expected_networks = _resource_overrides(
-        ownership, networks, labels=labels
-    )
-    volume_overrides, expected_volumes = _resource_overrides(
-        ownership, volumes, labels=labels
-    )
-    document: dict[str, object] = {"services": overrides}
-    if network_overrides:
-        document["networks"] = network_overrides
-    if volume_overrides:
-        document["volumes"] = volume_overrides
-    payload = yaml.safe_dump(document, sort_keys=True).encode("utf-8")
-    digest = hashlib.sha256(attempt_id.encode("utf-8")).hexdigest()[:16]
-    relative = Path(".aptl/lifecycle/compose-ownership") / f"{digest}.yml"
+
+def _write_override_payload(root: Path, relative: Path, payload: bytes) -> None:
+    """Create one immutable override, accepting a byte-identical retry."""
+
     try:
-        create_exclusive_nofollow(ownership.root, relative, payload)
+        create_exclusive_nofollow(root, relative, payload)
     except FileExistsError:
         try:
-            existing = read_contained_nofollow(ownership.root, relative)
+            existing = read_contained_nofollow(root, relative)
         except (OSError, PathContainmentError) as exc:
-            raise OwnershipConflictError(
-                "Compose ownership override is unavailable"
-            ) from exc
+            raise OwnershipConflictError(_OVERRIDE_UNAVAILABLE) from exc
         if existing != payload:
             raise OwnershipConflictError("Compose ownership override conflicts")
     except (OSError, PathContainmentError) as exc:
-        raise OwnershipConflictError(
-            "Compose ownership override is unavailable"
-        ) from exc
-    expected = {
-        "container": tuple(sorted(external_by_semantic.values())),
-        "network": tuple(sorted(expected_networks)),
-        "volume": tuple(sorted(expected_volumes)),
-    }
-    return ownership.root / relative, semantic_by_service, expected
+        raise OwnershipConflictError(_OVERRIDE_UNAVAILABLE) from exc
 
 
 def _resource_overrides(
@@ -407,6 +426,8 @@ def _merge_compose_section(
 
 
 def _create_workspace_state(root: Path) -> bytes:
+    """Create the stable workspace identity or read a concurrent winner."""
+
     payload = _canonical_json({"schema": 1, "workspace_id": uuid4().hex})
     try:
         create_exclusive_nofollow(root, _WORKSPACE_STATE, payload)
@@ -415,16 +436,14 @@ def _create_workspace_state(root: Path) -> bytes:
         try:
             return read_contained_nofollow(root, _WORKSPACE_STATE)
         except (OSError, PathContainmentError) as exc:
-            raise OwnershipConflictError(
-                "workspace ownership state is unavailable"
-            ) from exc
+            raise OwnershipConflictError(_WORKSPACE_UNAVAILABLE) from exc
     except (OSError, PathContainmentError) as exc:
-        raise OwnershipConflictError(
-            "workspace ownership state is unavailable"
-        ) from exc
+        raise OwnershipConflictError(_WORKSPACE_UNAVAILABLE) from exc
 
 
 def _decode_workspace_state(payload: bytes) -> str:
+    """Decode and strictly validate one workspace identity document."""
+
     try:
         raw = json.loads(payload)
         workspace_id = raw["workspace_id"]
@@ -440,6 +459,8 @@ def _decode_workspace_state(payload: bytes) -> str:
 
 
 def _decode_receipt(payload: bytes) -> ResourceReceipt:
+    """Decode one strict immutable resource receipt."""
+
     raw = json.loads(payload)
     if not isinstance(raw, dict) or raw.pop("schema", None) != 1:
         raise ValueError("invalid receipt schema")
@@ -447,10 +468,14 @@ def _decode_receipt(payload: bytes) -> ResourceReceipt:
 
 
 def _receipt_bytes(receipt: ResourceReceipt) -> bytes:
+    """Encode one receipt in canonical durable form."""
+
     return _canonical_json({"schema": 1, **asdict(receipt)})
 
 
 def _canonical_json(payload: dict[str, object]) -> bytes:
+    """Encode deterministic newline-terminated JSON."""
+
     return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode(
         "utf-8"
     )

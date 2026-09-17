@@ -30,7 +30,6 @@ from aptl.core.deployment._compose_realization_networks import (
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment._compose_resource_ownership import (
     OwnershipConflictError,
-    ResourceReceipt,
 )
 from aptl.core.deployment.realization import (
     DeploymentNetworkAttachment,
@@ -144,38 +143,37 @@ class ComposeRealizationNetworkMixin:
     ) -> list[str]:
         """Return fail-closed errors for an existing realized network."""
 
+        failures: list[str] = []
         try:
             self._resolve_owned_network_id(network_name)
         except OwnershipConflictError:
-            return [
+            failures = [
                 f"Existing network {network_name} has no verified APTL ownership receipt."
             ]
-
-        compose_key = _compose_network_key(network.name)
-        if not compose_key:
-            return ["Invalid network realization name."]
-        details = self.host_inspect_network(network_name)
-        if not details:
-            return [
+        compose_key = _compose_network_key(network.name) if not failures else None
+        if not failures and not compose_key:
+            failures = ["Invalid network realization name."]
+        details = self.host_inspect_network(network_name) if not failures else {}
+        if not failures and not details:
+            failures = [
                 f"Existing network {network_name} was not inspectable "
                 f"for realized network {network.name}."
             ]
-
-        labels = details.get("labels")
-        if not isinstance(labels, dict):
-            labels = {}
-        mismatches = _network_policy_mismatches(
-            details,
-            labels,
-            network,
-            project_name=self._project_name,
-            compose_key=compose_key,
-        )
-        return [
-            f"Existing network {network_name} does not match realized "
-            f"network {network.name}: {mismatch}."
-            for mismatch in mismatches
-        ]
+        if not failures:
+            labels = details.get("labels")
+            labels = labels if isinstance(labels, dict) else {}
+            failures = [
+                f"Existing network {network_name} does not match realized "
+                f"network {network.name}: {mismatch}."
+                for mismatch in _network_policy_mismatches(
+                    details,
+                    labels,
+                    network,
+                    project_name=self._project_name,
+                    compose_key=str(compose_key),
+                )
+            ]
+        return failures
 
     def _reconcile_realization_networks(
         self,
@@ -354,78 +352,16 @@ class ComposeRealizationNetworkMixin:
 
         ownership = self._ensure_resource_ownership()
         attempt_id = self._resource_attempt_id
+        outcome: LabResult
         if attempt_id is None:
-            return LabResult(
+            outcome = LabResult(
                 success=False, error="Backend attempt identity is unavailable."
             )
-        concrete_name = _concrete_network_name(network.name, self._project_name)
-        compose_key = _compose_network_key(network.name)
-        if not concrete_name or not compose_key:
-            return LabResult(success=False, error="Invalid network realization name.")
-        cmd = [
-            "docker",
-            "network",
-            "create",
-            "--driver",
-            "bridge",
-            "--label",
-            f"{_COMPOSE_PROJECT_LABEL}={self._project_name}",
-            "--label",
-            f"{_COMPOSE_NETWORK_LABEL}={compose_key}",
-            "--label",
-            f"{_REALIZATION_NETWORK_LABEL}={_REALIZATION_NETWORK_LABEL_VALUE}",
-        ]
-        for label, value in ownership.labels(attempt_id=attempt_id).items():
-            cmd.extend(["--label", f"{label}={value}"])
-        if network.internal is True:
-            cmd.append("--internal")
-        if network.cidr:
-            cmd.extend(["--subnet", network.cidr])
-        if network.gateway:
-            cmd.extend(["--gateway", network.gateway])
-        if ip_range:
-            cmd.extend(["--ip-range", ip_range])
-        cmd.append(concrete_name)
-        result = self._run(cmd, timeout=_REALIZATION_TIMEOUT)
-        if result.returncode != 0:
-            return LabResult(
-                success=False,
-                error=(
-                    f"Failed to create realized network {network.name}: "
-                    f"{result.stderr.strip()}"
-                ),
+        else:
+            outcome = self._create_attempt_network(
+                network, attempt_id=attempt_id, ip_range=ip_range
             )
-        native_id = result.stdout.strip()
-        if not native_id:
-            return LabResult(
-                success=False,
-                error=f"Docker did not return an identity for realized network {network.name}.",
-            )
-        try:
-            ownership.record(
-                ResourceReceipt(
-                    kind="network",
-                    native_id=native_id,
-                    external_name=concrete_name,
-                    semantic_name=network.name,
-                    node_address=network.name,
-                    workspace_id=ownership.workspace_id,
-                    project_name=ownership.project_name,
-                    daemon_id=self._ownership_daemon_id(),
-                    attempt_id=attempt_id,
-                    managed_by="direct",
-                )
-            )
-        except OwnershipConflictError:
-            self._run(
-                ["docker", "network", "rm", native_id],
-                timeout=_REALIZATION_TIMEOUT,
-            )
-            return LabResult(
-                success=False,
-                error=f"Could not record ownership for realized network {network.name}.",
-            )
-        return LabResult(success=True, message=concrete_name)
+        return outcome
 
     def connect_container_network(
         self,

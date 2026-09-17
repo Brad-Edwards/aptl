@@ -1,5 +1,5 @@
 # Scope-admitted Kali SSH/PTY capture broker.
-FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
+FROM debian:13-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
 
 ENV DEBIAN_FRONTEND=noninteractive
 

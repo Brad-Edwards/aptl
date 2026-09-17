@@ -9,9 +9,13 @@ non-secret state by read-after-write. A zero exit code alone is not success.
 Security posture (ADR-029 + ADR-046 addendum):
 
 * the whole batch is validated before the first mutation (fail closed);
-* credentials are generated inside the target boundary (``--random-password``)
-  and never read back, logged, or placed on argv/env — an already-existing
+* a ``strong`` account's credential is generated inside the target boundary
+  (``--random-password``) and never read back or logged, and an already-existing
   account is never re-created, so its provisioner-owned password is preserved;
+* a ``weak`` or ``medium`` account gets a backend-minted credential of the
+  declared class, proved by authenticating as that account and disclosed only to
+  the operator's range-private directory — the scenario declares that credential
+  as the surface an attacker is meant to find (issue #1006);
 * failures return a bounded :class:`LabResult` naming the placement address and
   a stable reason, never raw provider stdout/stderr.
 """
@@ -20,6 +24,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from aptl.core.deployment import _account_credentials as credentials
 from aptl.core.deployment import _account_provider as provider
 from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
@@ -92,6 +97,11 @@ class ComposeRealizationAccountMixin(object):
         container = target.container_name
         if not self._account_provider_ready(container, timeout=timeout):
             return _failure(container, "account-provider-not-ready")
+        reason = self._permit_declared_weak_credentials(
+            container, target.accounts, timeout=timeout
+        )
+        if reason is not None:
+            return _failure(container, reason)
         self._ensure_groups(container, target.accounts, timeout=timeout)
         for account in target.accounts:
             reason = self._reconcile_account(container, account, timeout=timeout)
@@ -132,6 +142,31 @@ class ComposeRealizationAccountMixin(object):
 
         return self.container_exec(container, cmd, timeout=timeout).returncode == 0
 
+    def _permit_declared_weak_credentials(
+        self,
+        container: str,
+        accounts: Sequence[DeploymentAccountRealization],
+        *,
+        timeout: int,
+    ) -> str | None:
+        """Relax the domain policy only when the batch declares a weak credential.
+
+        Samba's default policy can refuse the credentials a scenario declares as
+        its guessing surface, so without this the declared weak class cannot be
+        made true. It is applied once per target and only for a declared `weak`
+        account: medium credentials already satisfy the default policy, so a
+        medium or strong batch never weakens the domain (issue #1006).
+        """
+
+        if not any(account.password_strength == credentials.WEAK for account in accounts):
+            return None
+        applied = self.container_exec(
+            container, provider.samba_domain_relax_password_policy(), timeout=timeout
+        )
+        if applied.returncode != 0:
+            return "account-password-policy-not-applied"
+        return None
+
     def _ensure_groups(
         self,
         container: str,
@@ -167,6 +202,11 @@ class ComposeRealizationAccountMixin(object):
         """
 
         created, reason = self._ensure_user(container, account, timeout=timeout)
+        if reason is not None:
+            return reason
+        reason = self._apply_password(
+            container, account, created=created, timeout=timeout
+        )
         if reason is not None:
             return reason
         self._apply_mail(container, account, created=created, timeout=timeout)
@@ -212,6 +252,56 @@ class ComposeRealizationAccountMixin(object):
         if confirmed.returncode != 0:
             return False, "user-create-failed"
         return True, None
+
+    def _apply_password(
+        self,
+        container: str,
+        account: DeploymentAccountRealization,
+        *,
+        created: bool,
+        timeout: int,
+    ) -> str | None:
+        """Make the account's declared credential class true, or fail closed.
+
+        A ``strong`` account keeps the target-generated secret from create. A
+        ``weak`` or ``medium`` account is the scenario's declared credential
+        surface, so the backend mints a password of that class, sets it, and
+        proves it by authenticating as the account. An existing account is left
+        alone: its credential is already realized and re-minting would discard
+        a secret a participant may already hold.
+        """
+
+        strength = account.password_strength
+        if strength not in credentials.BACKEND_MINTED_STRENGTHS or not created:
+            return None
+        password = credentials.password_for_strength(strength)
+        applied = self.container_exec(
+            container,
+            provider.samba_user_setpassword(account.username, password),
+            timeout=timeout,
+        )
+        if applied.returncode != 0:
+            return "account-password-not-applied"
+        proof = self.container_exec(
+            container,
+            provider.samba_user_authenticate(account.username, password),
+            timeout=timeout,
+        )
+        if proof.returncode != 0:
+            # The directory accepted the write but the credential does not
+            # authenticate, so the declared account is not actually usable.
+            return "account-password-not-authenticable"
+        try:
+            credentials.disclose_account_credential(
+                self.realization_root,
+                node=account.target_address,
+                username=account.username,
+                password=password,
+                strength=strength,
+            )
+        except (OSError, ValueError):
+            return "account-credential-not-disclosed"
+        return None
 
     def _apply_mail(
         self,

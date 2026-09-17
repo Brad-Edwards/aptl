@@ -3761,6 +3761,9 @@ def test_provisioner_records_supported_placement_realizations(tmp_path):
         "spn": "",
         "mail": "operator@techvault.local",
         "disabled": False,
+        # The authored credential class is reported back with the placement, so
+        # the runtime sees which class the backend realized (issue #1006).
+        "password_strength": "weak",
     }
 
     # Real lowering, not counting: the typed backend spec actually passed

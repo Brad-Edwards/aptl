@@ -696,6 +696,76 @@ def test_declared_package_is_disclosed_only_after_guest_query_matches():
     assert _PACKAGES_PATH in observations[_ADDRESS].concerns
 
 
+def test_declared_package_corroborates_through_its_installed_provider():
+    """A distribution may ship a declared name as a virtual package.
+
+    `dnsutils` is `bind9-dnsutils` from Debian trixie on: `apt-get install
+    dnsutils` installs the provider, so the declared software is present while
+    `dpkg-query dnsutils` reports it absent. The readback resolves the name to
+    the installed package that provides it rather than calling the declaration
+    unrealized (issue #1006).
+    """
+    runtime = _runtime(packages=[{"manager": "apt", "name": "dnsutils", "version": "*"}])
+    direct = (
+        "dpkg-query",
+        "-W",
+        "-f=${Package}\\t${Version}\\t${Architecture}\\n",
+        "dnsutils",
+    )
+    provides = (
+        "dpkg-query",
+        "-W",
+        "-f=${Package}\\t${Version}\\t${Architecture}\\t${Provides}\\n",
+    )
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                direct: (1, ""),
+                provides: (
+                    0,
+                    "bind9-dnsutils\t1:9.20.26-1~deb13u1\tamd64\tdnsutils\n"
+                    "curl\t8.14.1-2\tamd64\t\n",
+                ),
+            }
+        },
+    )
+
+    codes, _provenance, observations = _gate(runtime, backend, "runtime-packages")
+
+    assert codes == []
+    assert _PACKAGES_PATH in observations[_ADDRESS].concerns
+
+
+def test_declared_package_with_no_provider_is_still_rejected():
+    """Resolving through providers must not become 'assume it is there'."""
+    runtime = _runtime(packages=[{"manager": "apt", "name": "dnsutils", "version": "*"}])
+    direct = (
+        "dpkg-query",
+        "-W",
+        "-f=${Package}\\t${Version}\\t${Architecture}\\n",
+        "dnsutils",
+    )
+    provides = (
+        "dpkg-query",
+        "-W",
+        "-f=${Package}\\t${Version}\\t${Architecture}\\t${Provides}\\n",
+    )
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                direct: (1, ""),
+                provides: (0, "curl\t8.14.1-2\tamd64\t\n"),
+            }
+        },
+    )
+
+    codes, _provenance, observations = _gate(runtime, backend, "runtime-packages")
+
+    assert _PACKAGES_PATH not in observations[_ADDRESS].concerns
+
+
 def test_missing_declared_package_is_omitted_and_rejected():
     runtime = _runtime(packages=[{"manager": "apt", "name": "curl", "version": "*"}])
     backend = _Backend({_CONTAINER: _inspect()})
@@ -1836,6 +1906,30 @@ def test_content_sync_with_exact_installed_configuration_is_corroborated():
     codes, _snapshot, observations = _forwarding_gate(runtime, backend)
     assert codes == []
     assert _FORWARDING_PATH in observations[_ADDRESS].concerns
+
+
+def test_wazuh_agent_enrolls_under_the_declared_agent_name():
+    """The scenario names the agent; the manager must see that name.
+
+    Without ``<agent_name>`` the agent registers under its container hostname,
+    so the SIEM lists an opaque container id and the declared forwarding agent
+    is not identifiable in the collected data (issue #1006).
+    """
+    from aptl.core.deployment._forwarding_agent_realization import _wazuh_config
+
+    runtime = _log_forwarder_runtime()
+    agent = runtime.forwarding_agents[0]
+    agent_name = str(getattr(agent, "name", "") or agent.forwarding_agent_id)
+    assert agent_name
+
+    payload = _wazuh_config(agent)
+
+    assert payload is not None
+    assert f"<agent_name>{agent_name}</agent_name>" in payload
+    # The enrollment identity belongs inside the enrollment block, which is
+    # what the agent reads when it registers.
+    enrollment = payload.split("<enrollment>", 1)[1].split("</enrollment>", 1)[0]
+    assert f"<agent_name>{agent_name}</agent_name>" in enrollment
 
 
 def test_wazuh_apt_bootstrap_downloads_key_into_private_directory():

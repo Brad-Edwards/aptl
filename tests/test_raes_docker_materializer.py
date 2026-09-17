@@ -63,8 +63,8 @@ class TestBaseSubstrate:
     def test_ensure_base_substrate_starts_the_base_container(self):
         started: list[tuple[str, str]] = []
         ex = _executor(_FakeExec(), started=started)
-        ex.ensure_base_substrate("techvault.wazuh-manager", "debian:12-slim")
-        assert started == [("techvault.wazuh-manager", "debian:12-slim")]
+        ex.ensure_base_substrate("techvault.wazuh-manager", "debian:13-slim")
+        assert started == [("techvault.wazuh-manager", "debian:13-slim")]
 
 
 class TestPackages:

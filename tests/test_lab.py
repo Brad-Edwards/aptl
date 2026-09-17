@@ -12,6 +12,8 @@ from uuid import uuid4
 
 import pytest
 
+from tests.helpers import docker_ps_inventory_row
+
 
 def _env_key(*parts: str) -> str:
     """Build env names for generated test values."""
@@ -684,8 +686,11 @@ class TestLabStatus:
         mock_subprocess.return_value = MagicMock(
             returncode=0,
             stdout=(
-                "aptl-victim\tvictim:latest\tabc\tUp 1 minute (healthy)\t"
-                "running\tcom.docker.compose.project=aptl\t"
+                docker_ps_inventory_row(
+                    "aptl-victim",
+                    status="Up 1 minute (healthy)",
+                    labels="com.docker.compose.project=aptl",
+                )
             ),
             stderr="",
         )
@@ -711,11 +716,20 @@ class TestLabStatus:
         """lab_status should handle one TSV record per project container."""
         from aptl.core.lab import lab_status
 
-        rows = (
-            "aptl-victim\tvictim:latest\taaa\tUp 1 minute\trunning\t"
-            "com.docker.compose.project=aptl\t\n"
-            "aptl-kali\tkali:latest\tbbb\tUp 1 minute\trunning\t"
-            "aptl.lifecycle.project=aptl\t"
+        rows = "\n".join(
+            (
+                docker_ps_inventory_row(
+                    "aptl-victim",
+                    container_id="aaa",
+                    labels="com.docker.compose.project=aptl",
+                ),
+                docker_ps_inventory_row(
+                    "aptl-kali",
+                    image="kali:latest",
+                    container_id="bbb",
+                    labels="aptl.lifecycle.project=aptl",
+                ),
+            )
         )
         mock_subprocess.return_value = MagicMock(returncode=0, stdout=rows, stderr="")
 

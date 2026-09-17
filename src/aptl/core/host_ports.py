@@ -319,7 +319,31 @@ def published_port_specs(
         compose = _load_compose(project_dir, filename)
         if compose is not None:
             specs.extend(parse_published_ports(compose, active_profiles))
+    specs.extend(_operator_access_port_specs(active_profiles))
     return specs
+
+
+def _operator_access_port_specs(active_profiles: set[str] | None) -> list[PortSpec]:
+    """Host publications of the backend's operator interactive-access relays.
+
+    They are not Compose services, but they publish host ports like any other,
+    so they go through the same collision-safe remap and the same `APTL_HP_*`
+    injection host-run MCP clients read (issue #1006).
+    """
+    from aptl.core.deployment._operator_access import OPERATOR_ACCESS_ENDPOINTS
+
+    return [
+        PortSpec(
+            service=endpoint.relay_container,
+            env_var=endpoint.env_var,
+            default_port=endpoint.default_port,
+            container_port=endpoint.listen_port,
+            proto="tcp",
+            host_ip="127.0.0.1",
+        )
+        for endpoint in OPERATOR_ACCESS_ENDPOINTS.values()
+        if active_profiles is None or endpoint.profile in active_profiles
+    ]
 
 
 def _load_compose(

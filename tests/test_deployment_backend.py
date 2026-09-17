@@ -41,6 +41,7 @@ from aptl.core.deployment.errors import (
     BackendTimeoutError,
 )
 from aptl.core.lab import LabResult, LabStatus
+from tests.helpers import docker_ps_inventory_row
 
 # SSHComposeBackend validates the *local* ssh identity path with
 # Path.is_absolute(), which is platform-specific: a POSIX "/home/..." path is
@@ -1552,8 +1553,7 @@ services:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout=(
-                    "aptl-victim\tvictim:latest\tabc\tUp 1 minute\trunning\t"
-                    "com.docker.compose.project=test\t"
+                    "{\"Names\": \"aptl-victim\", \"Image\": \"victim:latest\", \"ID\": \"abc\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"com.docker.compose.project=test\", \"Ports\": \"\"}"
                 ),
                 stderr="",
             )
@@ -1569,8 +1569,7 @@ services:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout=(
-                    "aptl-victim\tvictim:latest\tabc\tUp 1 minute\trunning\t"
-                    "com.docker.compose.project=test\t"
+                    "{\"Names\": \"aptl-victim\", \"Image\": \"victim:latest\", \"ID\": \"abc\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"com.docker.compose.project=test\", \"Ports\": \"\"}"
                 ),
                 stderr="",
             )
@@ -1593,11 +1592,11 @@ services:
 
     def test_status_parses_multiple_project_rows(self, tmp_path):
         backend = self._make_backend(tmp_path)
-        rows = (
-            "aptl-victim\tvictim:latest\taaa\tUp 1 minute\trunning\t"
-            "com.docker.compose.project=test\t\n"
-            "aptl-kali\tkali:latest\tbbb\tUp 1 minute\trunning\t"
-            "aptl.lifecycle.project=test\t"
+        rows = "\n".join(
+            (
+                "{\"Names\": \"aptl-victim\", \"Image\": \"victim:latest\", \"ID\": \"aaa\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"com.docker.compose.project=test\", \"Ports\": \"\"}",
+                "{\"Names\": \"aptl-kali\", \"Image\": \"kali:latest\", \"ID\": \"bbb\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"aptl.lifecycle.project=test\", \"Ports\": \"\"}",
+            )
         )
 
         with patch("subprocess.run") as mock_run:
@@ -1644,13 +1643,18 @@ services:
     def test_status_unions_project_labels_and_includes_every_state(self, tmp_path):
         backend = self._make_backend(tmp_path)
         compose_rows = (
-            "aptl-compose\tcompose:latest\taaa\tUp 1 minute\trunning\t"
-            "com.docker.compose.project=test\t\n"
+            docker_ps_inventory_row(
+                "aptl-compose", image="compose:latest", container_id="aaa"
+            )
+            + "\n"
         )
-        lifecycle_rows = (
-            compose_rows
-            + "direct-node\tdebian:stable\tbbb\tExited (23) 2 seconds ago\texited\t"
-            "aptl.lifecycle.project=test\t"
+        lifecycle_rows = compose_rows + docker_ps_inventory_row(
+            "direct-node",
+            image="debian:stable",
+            container_id="bbb",
+            status="Exited (23) 2 seconds ago",
+            state="exited",
+            labels="aptl.lifecycle.project=test",
         )
 
         def _inventory(args, **_kwargs):
@@ -2123,11 +2127,14 @@ class TestDockerComposeBackendContainerInteraction:
             versions = backend.host_versions()
         assert versions == {"docker": "", "compose": ""}
 
-    def test_host_list_lab_containers_parses_tsv(self, tmp_path):
+    def test_host_list_lab_containers_parses_inventory_rows(self, tmp_path):
         backend = self._make_backend(tmp_path)
-        line = (
-            "aptl-victim\taptl/victim:latest\tabc\tUp 5m (healthy)\t"
-            "running\tservice=victim\t0.0.0.0:2022->22/tcp"
+        line = docker_ps_inventory_row(
+            "aptl-victim",
+            image="aptl/victim:latest",
+            status="Up 5m (healthy)",
+            labels="service=victim",
+            ports="0.0.0.0:2022->22/tcp",
         )
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout=line, stderr="")
@@ -2155,11 +2162,35 @@ class TestDockerComposeBackendContainerInteraction:
         assert row["labels"] == {"service": "victim"}
         assert row["ports"] == ["0.0.0.0:2022->22/tcp"]
 
-    def test_host_list_lab_containers_rejects_short_lines(self, tmp_path):
+    def test_inventory_survives_image_labels_containing_newlines(self, tmp_path):
+        """Image labels are arbitrary text and some contain newlines.
+
+        Ubuntu 26.04 ships an `org.opencontainers.image.description` spanning
+        several lines. Read as tab-delimited rows, that one container split into
+        several malformed "rows" and the whole inventory was rejected — the lab
+        realized correctly and then failed at terminal attestation (issue #1006).
+        """
+        backend = self._make_backend(tmp_path)
+        labels = (
+            "org.opencontainers.image.description=Ubuntu is a Debian-based Linux "
+            "operating system.\nIt is the number one platform for containers.,"
+            "com.docker.compose.project=test"
+        )
+        line = docker_ps_inventory_row("aptl-ad", image="ubuntu:26.04", labels=labels)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=line, stderr="")
+            rows = backend.host_list_lab_containers()
+
+        assert len(rows) == 1
+        assert rows[0]["name"] == "aptl-ad"
+        assert rows[0]["labels"]["com.docker.compose.project"] == "test"
+
+    def test_host_list_lab_containers_rejects_malformed_rows(self, tmp_path):
         backend = self._make_backend(tmp_path)
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
-                returncode=0, stdout="too\tfew", stderr=""
+                returncode=0, stdout="not-json", stderr=""
             )
             with pytest.raises(BackendObservationError, match="parse"):
                 backend.host_list_lab_containers()
@@ -2637,8 +2668,9 @@ class TestLabBackwardCompat:
         mock_subprocess.return_value = MagicMock(
             returncode=0,
             stdout=(
-                "aptl-victim\tvictim:latest\tabc\tUp 1 minute\trunning\t"
-                "com.docker.compose.project=aptl\t"
+                docker_ps_inventory_row(
+                    "aptl-victim", labels="com.docker.compose.project=aptl"
+                )
             ),
             stderr="",
         )
@@ -3731,14 +3763,25 @@ class _FakeAd:
 
     Records every command in order so tests can assert sequencing (groups
     before members, existence-check before create, verify after mutation) and
-    convergent-upsert behavior. It does not model passwords — that a secret is
-    never disclosed is proven structurally: an already-existing user is never
-    re-created, so its provisioner-owned password is untouched.
+    convergent-upsert behavior. It models passwords only as far as the declared
+    credential class requires (issue #1006): a set password is remembered, and
+    authenticating as the account succeeds only with that exact secret.
     """
 
-    def __init__(self, *, ready=True, provisioned=True, users=None, groups=None):
+    def __init__(
+        self,
+        *,
+        ready=True,
+        provisioned=True,
+        users=None,
+        groups=None,
+        authentication_works=True,
+    ):
         self.ready = ready
         self.provisioned = provisioned
+        self.authentication_works = authentication_works
+        self.passwords: dict[str, str] = {}
+        self.policy_relaxed = False
         self.users = {
             u: {"mail": "", "disabled": False, "spns": set(), "groups": set()}
             for u in (users or [])
@@ -3768,10 +3811,22 @@ class _FakeAd:
     def _dispatch(self, cmd):
         if cmd[0] == "test" and cmd[1] == "-f":
             return self._ok(cmd) if self.provisioned else self._fail(cmd)
+        if cmd[0] == "smbclient":
+            principal = cmd[cmd.index("-U") + 1]
+            user, _, password = principal.partition("%")
+            authenticated = (
+                self.authentication_works and self.passwords.get(user) == password
+            )
+            return self._ok(cmd) if authenticated else self._fail(cmd)
+        if cmd[1:4] == ["domain", "passwordsettings", "set"]:
+            self.policy_relaxed = True
+            return self._ok(cmd)
         if cmd[1:] == ["domain", "info", "127.0.0.1"]:
             return self._ok(cmd) if self.ready else self._fail(cmd)
         if cmd[1] == "group":
             return self._dispatch_group(cmd)
+        if cmd[1:3] == ["user", "setpassword"]:
+            return self._set_password(cmd)
         if cmd[1] in ("user", "spn"):
             return self._dispatch_user(cmd)
         return self._fail(cmd)
@@ -3794,6 +3849,18 @@ class _FakeAd:
             )
             return self._ok(cmd, stdout=members)
         return self._fail(cmd)
+
+    def _set_password(self, cmd):
+        if cmd[3] not in self.users:
+            return self._fail(cmd)
+        secret = next(
+            (a.split("=", 1)[1] for a in cmd if a.startswith("--newpassword=")), ""
+        )
+        # A real directory refuses a weak secret until the policy allows it.
+        if not self.policy_relaxed and len(secret) < 8:
+            return self._fail(cmd)
+        self.passwords[cmd[3]] = secret
+        return self._ok(cmd)
 
     def _dispatch_user(self, cmd):
         verb = tuple(cmd[1:3])
@@ -3860,6 +3927,7 @@ def _acct(
     spn="",
     mail="",
     disabled=None,
+    password_strength="strong",
 ):
     from aptl.core.deployment.realization import DeploymentAccountRealization
 
@@ -3871,6 +3939,7 @@ def _acct(
         spn=spn,
         mail=mail,
         disabled=disabled,
+        password_strength=password_strength,
     )
 
 
@@ -4244,24 +4313,140 @@ class TestRealizeAccounts:
 
 
 class TestAccountProvisionerOrderingContract:
-    """Issue #577: the AD readiness gate depends on setup-ad.sh's ordering.
+    """Issue #577: the AD readiness gate depends on the substrate's ordering.
 
     ``_account_provider_ready`` waits for ``/var/lib/samba/private/.provisioned``
-    as the provisioner-complete signal. That is only correct if the AD entrypoint
-    writes that marker AFTER running its baseline account provisioner. Lock that
-    container contract here so a future entrypoint change that reorders them (and
-    would reopen the clean-start create race) fails a fast unit test rather than
-    only a full lab boot.
+    as the domain-provisioned signal. That is only correct if the substrate
+    writes that marker AFTER the domain is actually provisioned — accounts are
+    created against a live DC, so a marker written early reopens the clean-start
+    create race. Lock that container contract here so a future change to the
+    script fails a fast unit test rather than only a full lab boot.
+
+    The script moved with the image: the pack stopped declaring an ``ad`` image,
+    so the domain is provisioned by the generic samba-ad substrate rather than
+    by a scenario-specific entrypoint (issue #1006).
     """
 
-    def test_setup_ad_writes_provisioned_marker_after_provision_users(self):
+    def test_provision_domain_writes_marker_after_provisioning_the_domain(self):
         repo_root = Path(__file__).resolve().parents[1]
-        setup = (repo_root / "containers/ad/setup-ad.sh").read_text(encoding="utf-8")
-        marker_write = setup.index('touch "$PROVISIONED_MARKER"')
-        provision_call = setup.index("/opt/provision-users.sh")
+        script = (
+            repo_root / "containers/generic-samba-ad-base/provision-domain.sh"
+        ).read_text(encoding="utf-8")
+        marker_write = script.index('touch "$provisioned_marker"')
+        provision_call = script.index("samba-tool domain provision")
         assert provision_call < marker_write
         # And the marker the backend probes matches the one the script writes.
-        assert 'PROVISIONED_MARKER="/var/lib/samba/private/.provisioned"' in setup
+        assert 'provisioned_marker="$private_root/.provisioned"' in script
+        assert 'private_root=/var/lib/samba/private' in script
+
+
+class TestDeclaredCredentialClassIsRealized:
+    """Issue #1006: a declared weak account must actually hold a weak credential.
+
+    TechVault declares seven weak and four medium accounts. Creating all of them
+    with ``--random-password`` deletes the credential-guessing surface the attack
+    path depends on, while every gate still reports success.
+    """
+
+    def _backend(self, tmp_path):
+        return DockerComposeBackend(project_dir=tmp_path, project_name="test")
+
+    def _realize(self, tmp_path, ad, accounts):
+        backend = self._backend(tmp_path)
+        with patch.object(backend, "container_exec", ad):
+            return backend.realize_accounts(accounts, (_ad_node(),))
+
+    def test_weak_account_gets_a_weak_credential_that_authenticates(self, tmp_path):
+        ad = _FakeAd()
+        account = _acct("michael.thompson", password_strength="weak")
+
+        result = self._realize(tmp_path, ad, (account,))
+
+        assert result is None
+        set_calls = ad.cmds("samba-tool", "user", "setpassword")
+        assert len(set_calls) == 1
+        secret = set_calls[0][4].split("=", 1)[1]
+        # The realized secret is the declared class, and it authenticates.
+        assert len(secret) <= 12
+        assert ad.passwords["michael.thompson"] == secret
+        assert ad.cmds("smbclient")
+
+    def test_realized_credential_is_disclosed_to_the_operator(self, tmp_path):
+        ad = _FakeAd()
+        account = _acct("michael.thompson", password_strength="weak")
+
+        assert self._realize(tmp_path, ad, (account,)) is None
+
+        disclosed = (
+            tmp_path
+            / ".aptl/realization/account-credentials/scenario.node.ad/michael.thompson"
+        )
+        assert disclosed.exists()
+        strength, secret = disclosed.read_text(encoding="utf-8").split()
+        assert strength == "weak"
+        assert ad.passwords["michael.thompson"] == secret
+
+    def test_strong_account_keeps_its_target_generated_secret(self, tmp_path):
+        ad = _FakeAd()
+        account = _acct("sarah.mitchell", password_strength="strong")
+
+        assert self._realize(tmp_path, ad, (account,)) is None
+
+        # Nothing sets a password, so the create-time random secret stands and
+        # no secret is ever disclosed for a strong account.
+        assert ad.cmds("samba-tool", "user", "setpassword") == []
+        assert not (tmp_path / ".aptl/realization/account-credentials").exists()
+
+    def test_policy_is_relaxed_only_when_a_weak_class_is_declared(self, tmp_path):
+        strong_only = _FakeAd()
+        assert (
+            self._realize(
+                tmp_path, strong_only, (_acct("sarah", password_strength="strong"),)
+            )
+            is None
+        )
+        assert strong_only.policy_relaxed is False
+
+        weak = _FakeAd()
+        assert (
+            self._realize(
+                tmp_path / "second", weak, (_acct("mike", password_strength="weak"),)
+            )
+            is None
+        )
+        assert weak.policy_relaxed is True
+
+    def test_medium_only_batch_leaves_the_domain_policy_alone(self, tmp_path):
+        """Medium credentials satisfy the default policy; weakening it is unwarranted."""
+        ad = _FakeAd()
+        account = _acct("lisa.chang", password_strength="medium")
+
+        assert self._realize(tmp_path, ad, (account,)) is None
+
+        assert ad.policy_relaxed is False
+        assert ad.cmds("samba-tool", "domain", "passwordsettings") == []
+        assert ad.passwords["lisa.chang"]
+
+    def test_credential_that_does_not_authenticate_fails_closed(self, tmp_path):
+        """A directory write that accepts the secret is not proof of a usable account."""
+        ad = _FakeAd(authentication_works=False)
+        account = _acct("michael.thompson", password_strength="weak")
+
+        result = self._realize(tmp_path, ad, (account,))
+
+        assert result is not None
+        assert result.success is False
+        assert "account-password-not-authenticable" in (result.error or "")
+        assert "internal detail leak" not in (result.error or "")
+
+    def test_existing_account_keeps_the_credential_it_already_has(self, tmp_path):
+        """Re-minting would invalidate a secret a participant may already hold."""
+        ad = _FakeAd(users=["michael.thompson"])
+        account = _acct("michael.thompson", password_strength="weak")
+
+        assert self._realize(tmp_path, ad, (account,)) is None
+
+        assert ad.cmds("samba-tool", "user", "setpassword") == []
 
 
 class TestComposeRealizeAccountsStep:

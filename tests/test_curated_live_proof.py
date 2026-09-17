@@ -69,7 +69,6 @@ VARIANTS = (
         extra_services=frozenset(
             {
                 "webapp",
-                "webapp-proxy",
                 "db",
                 "ad",
                 "workstation",
@@ -78,9 +77,7 @@ VARIANTS = (
                 "wazuh.dashboard",
             }
         ),
-        expected_networks=frozenset(
-            {"aptl-security", "aptl-dmz", "aptl-internal", "aptl-control"}
-        ),
+        expected_networks=frozenset({"aptl-security", "aptl-dmz", "aptl-internal"}),
     ),
     _Variant(
         catalog_id="techvault-attacker-target",
@@ -90,7 +87,6 @@ VARIANTS = (
         extra_services=frozenset(
             {
                 "kali",
-                "kali-ssh-proxy",
                 "victim",
                 "wazuh.manager",
                 "wazuh.indexer",
@@ -103,7 +99,6 @@ VARIANTS = (
                 "aptl-dmz",
                 "aptl-internal",
                 "aptl-redteam",
-                "aptl-control",
             }
         ),
     ),

@@ -37,11 +37,18 @@ if TYPE_CHECKING:
 # (src/aptl/backends/raes_materializer.py) can select for a runs_services
 # node, mapped to the checked-in Dockerfile that builds it. These are the
 # ONLY generic base images that need a local build: the non-service images
-# (debian:12-slim, rockylinux:9) are real registry images `docker run`
+# (debian:13-slim, rockylinux:9) are real registry images `docker run`
 # already pulls on demand. Never built anywhere in the codebase before
 # issue #581 surfaced it via a fresh-machine boot (a developer's existing
 # local image cache had silently masked the gap since ADR-048 shipped).
 _GENERIC_BASE_IMAGE_BUILDS: dict[str, tuple[str, str]] = {
+    # Backend apparatus relay for declared operator interactive access (issue
+    # #1006). Not a scenario substrate, but built the same way and on the same
+    # freshness terms: from its current Dockerfile on every start.
+    "aptl/operator-access-proxy:latest": (
+        "containers/operator-access-proxy/Dockerfile",
+        ".",
+    ),
     "aptl/generic-systemd-base-debian:latest": (
         "containers/generic-systemd-base-debian/Dockerfile",
         "containers/generic-systemd-base-debian",
@@ -144,11 +151,23 @@ class ComposeBaseSubstrateMixin(object):
     """
 
     def ensure_generic_base_image(self, image_ref: str) -> list[str]:
-        """Build a locally-built generic base image if it is not already present.
+        """Build a locally-built generic base image from its current Dockerfile.
 
         A no-op for any image not in ``_GENERIC_BASE_IMAGE_BUILD_CONTEXTS``
-        (a real registry reference like ``debian:12-slim`` needs no local
+        (a real registry reference like ``debian:13-slim`` needs no local
         build; ``docker run`` pulls it on demand).
+
+        The build runs on every start rather than only when the tag is absent:
+        ``aptl/...:latest`` being present says nothing about whether it was
+        built from the Dockerfile this release ships. Skipping on presence
+        pinned every existing install to whatever substrate it first built, so
+        an advanced base image, a new package, or a security fix in a layer
+        never reached anyone who had already started a lab (issue #1006).
+        Docker's layer cache makes the unchanged case a fast no-op, and a
+        changed Dockerfile is what actually triggers work.
+
+        Offline staged mode still refuses to build: there the staged image is
+        the authority and a missing one is an error, not something to rebuild.
         """
 
         build = _GENERIC_BASE_IMAGE_BUILDS.get(image_ref)
@@ -160,30 +179,31 @@ class ComposeBaseSubstrateMixin(object):
             failures.extend(self.ensure_generic_base_image(dependency))
             if failures:
                 return failures
-        inspect_result = self._run(
-            ["docker", "image", "inspect", image_ref], timeout=30
-        )
-        if inspect_result.returncode != 0:
-            if self._offline_staged:
+        if self._offline_staged:
+            inspect_result = self._run(
+                ["docker", "image", "inspect", image_ref], timeout=30
+            )
+            if inspect_result.returncode != 0:
                 failures.append(
                     f"required staged generic base image is missing: {image_ref}"
                 )
-            elif build is not None:
-                dockerfile, build_context = build
-                build_result = self._run(
-                    [
-                        "docker",
-                        "build",
-                        "-t",
-                        image_ref,
-                        "-f",
-                        str(self._project_dir / dockerfile),
-                        str(self._project_dir / build_context),
-                    ],
-                    timeout=600,
-                )
-                if build_result.returncode != 0:
-                    failures.append(f"failed to build generic base image {image_ref}")
+            return failures
+        if build is not None:
+            dockerfile, build_context = build
+            build_result = self._run(
+                [
+                    "docker",
+                    "build",
+                    "-t",
+                    image_ref,
+                    "-f",
+                    str(self._project_dir / dockerfile),
+                    str(self._project_dir / build_context),
+                ],
+                timeout=600,
+            )
+            if build_result.returncode != 0:
+                failures.append(f"failed to build generic base image {image_ref}")
         return failures
 
     def _resolve_base_run_image(self, spec: "BaseContainerSpec") -> str:

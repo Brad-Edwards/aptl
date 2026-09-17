@@ -35,6 +35,8 @@ from aptl.backends.raes_manifest import (
     create_aptl_realization_envelope,
 )
 from aptl.backends.raes_observability_scope import ObservabilityScopeDecision
+from aptl.backends.raes_operator_access import OperatorAccessDecision
+from aptl.core.deployment._operator_access import operator_access_details
 from aptl.backends.raes_observation import (
     observation_evidence,
     observe_realization,
@@ -92,6 +94,12 @@ class AptlProvisioner(object):
     observability_scope: ObservabilityScopeDecision = field(
         default_factory=ObservabilityScopeDecision
     )
+    # Declared operator interactive access, admitted from the scenario before
+    # planning. RAES carries it in the participant model, not the provisioning
+    # plan, so it reaches the deployment through here (issue #1006).
+    operator_access: OperatorAccessDecision = field(
+        default_factory=OperatorAccessDecision
+    )
     _cached_plan: object | None = field(default=None, init=False, repr=False)
     _cached_realization: AptlRealization | None = field(
         default=None, init=False, repr=False
@@ -115,7 +123,26 @@ class AptlProvisioner(object):
                 )
             ]
 
-        return list(self.realize_plan(plan).diagnostics)
+        return [
+            *self.realize_plan(plan).diagnostics,
+            *self._unrealizable_operator_access_diagnostics(),
+        ]
+
+    def _unrealizable_operator_access_diagnostics(self) -> list[Diagnostic]:
+        """Refuse declared interactive access this backend cannot make reachable."""
+
+        return [
+            diagnostic(
+                "aptl.provisioner.operator-access-unrealizable",
+                PROVISIONING_ADDRESS,
+                (
+                    f"Declared interactive access {access.agent}/{access.access_id} "
+                    f"({access.channel} to {access.target_node}) has no backend "
+                    "apparatus that can make it reachable."
+                ),
+            )
+            for access in self.operator_access.unrealizable
+        ]
 
     def apply(self, plan: object, snapshot: object) -> ApplyResult:
         """Apply a RAES provisioning plan via APTL's deployment backend."""
@@ -417,6 +444,9 @@ class AptlProvisioner(object):
                         ),
                     },
                     "capture_apparatus": list(apparatus_observations),
+                    "operator_access": operator_access_details(
+                        self.operator_access.accesses
+                    ),
                 },
                 realization,
             ),

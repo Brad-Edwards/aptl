@@ -124,6 +124,7 @@ _STALE_NETWORK_RECOVERY_HINT = (
 _WAZUH_MANAGER_SERVICE = "wazuh.manager"
 _WAZUH_INDEXER_SERVICE = "wazuh.indexer"
 _TRANSCRIPT_UNAVAILABLE = "aptl.scenario-evidence.required-transcript-unavailable"
+_OPERATOR_ACCESS_UNAVAILABLE = "aptl.operator-access.unreachable"
 _TRANSCRIPT_FINALIZATION_FAILED = (
     "aptl.scenario-evidence.required-transcript-finalization-failed"
 )
@@ -2344,6 +2345,48 @@ def _step_activate_capture_apparatus(ctx: _LabStartContext) -> LabResult | None:
     return failure
 
 
+def _step_activate_operator_access(ctx: _LabStartContext) -> LabResult | None:
+    """Publish and prove every admitted operator interactive access.
+
+    The scenario declares how its operators reach nodes interactively
+    (`agents.*.interactive_access`). This runs after capture activation because
+    Kali's declared SSH access terminates at the session-capture broker, which
+    only serves once activated for this run (issue #1006).
+    """
+
+    admitted = ctx.admitted_start
+    provisioner = getattr(getattr(admitted, "target", None), "provisioner", None)
+    decision = getattr(provisioner, "operator_access", None)
+    accesses = tuple(getattr(decision, "accesses", ()) or ())
+    if not accesses:
+        return None
+    activate = getattr(ctx.backend, "activate_operator_access", None)
+    if not callable(activate):
+        return LabResult(success=False, error=_OPERATOR_ACCESS_UNAVAILABLE)
+    public_key_path = (
+        ctx.ssh_key_path.with_name(ctx.ssh_key_path.name + ".pub")
+        if ctx.ssh_key_path is not None
+        else None
+    )
+    try:
+        public_key = (
+            public_key_path.read_text(encoding="utf-8")
+            if public_key_path is not None and public_key_path.is_file()
+            else None
+        )
+    except OSError:
+        public_key = None
+    failures = activate(accesses, operator_public_key=public_key)
+    if failures:
+        for failure in failures:
+            log.error("Operator access failed: %s", failure)
+        return LabResult(
+            success=False,
+            error=f"{_OPERATOR_ACCESS_UNAVAILABLE}: {'; '.join(failures)}",
+        )
+    return None
+
+
 def _activate_required_transcript(
     ctx: _LabStartContext,
     plan: CapturePlan,
@@ -3184,6 +3227,7 @@ _LAB_START_STEPS = (
     _step_start_containers,
     _step_wait_for_services,
     _step_activate_capture_apparatus,
+    _step_activate_operator_access,
     _step_test_ssh,
     _step_pin_terminal_host_keys,
     _step_build_mcps,
@@ -3214,6 +3258,7 @@ _LAB_START_PROGRESS_MESSAGES = {
     ),
     "_step_wait_for_services": "Waiting for Wazuh services to become ready.",
     "_step_activate_capture_apparatus": ("Activating required Kali session capture."),
+    "_step_activate_operator_access": "Publishing declared operator SSH access.",
     "_step_test_ssh": "Testing SSH reachability.",
     "_step_pin_terminal_host_keys": "Pinning terminal SSH host keys.",
     "_step_build_mcps": "Building local MCP server artifacts.",
@@ -3410,8 +3455,8 @@ def _server_config_port_refs(spec: dict[str, Any], project_dir: Path) -> set[str
     if entry is None:
         return set()
     config_path = (
-        (project_dir / entry).resolve().parent.parent / "docker-lab-config.json"
-    )
+        project_dir / entry
+    ).resolve().parent.parent / "docker-lab-config.json"
     try:
         return set(_APTL_HP_REF_RE.findall(config_path.read_text(encoding="utf-8")))
     except OSError:

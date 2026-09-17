@@ -1,15 +1,19 @@
 # APTL backend substrate for an authored Active Directory identity authority.
 # Domain identity and accounts are supplied later from the admitted plan; this
 # image contains no scenario-specific realm, users, groups, or credentials.
-FROM ubuntu:22.04@sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982
+FROM ubuntu:26.04@sha256:513c074113a871b51a8d16ab445c88779d6452d937a164fb5cc479f32668a41d
 
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         krb5-user \
         ldb-tools \
         samba \
+        samba-ad-dc \
+        samba-ad-provision \
         samba-dsdb-modules \
         samba-vfs-modules \
+        smbclient \
+        python3-samba \
         tini \
         winbind \
     && apt-get clean \

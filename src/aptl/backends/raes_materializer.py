@@ -31,7 +31,7 @@ from raes.runtime_filesystem import RuntimeFilesystemEntryType
 # image (ADR-048). The package family (from the declared package manager) picks a
 # base whose package manager matches: apt -> Debian, dnf/yum -> RHEL.
 _NON_SERVICE_BASE_IMAGE: dict[tuple[str, str], str] = {
-    ("linux", "debian"): "debian:12-slim",
+    ("linux", "debian"): "debian:13-slim",
     ("linux", "rhel"): "rockylinux:9",
 }
 

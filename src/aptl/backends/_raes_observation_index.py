@@ -10,7 +10,7 @@ from raes.runtime_configuration import RuntimeConfiguration
 from raes_contracts.planning import ProvisioningPlan
 from raes_contracts.realization_authority import RealizationAuthorityMode
 
-from aptl.backends._raes_observation_helpers import realized_network_names
+from aptl.backends._raes_network_observation import realized_network_names
 from aptl.backends.raes_realization_model import (
     AptlRealization,
     ParticipantDatasetRealization,

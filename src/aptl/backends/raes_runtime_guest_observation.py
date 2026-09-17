@@ -327,14 +327,23 @@ def _filesystem_metadata_matches(
     declared_mode = str(getattr(entry, "mode", ""))
     if declared_mode.startswith("0o"):
         declared_mode = declared_mode[2:]
-    return bool(
-        (not entry.owner_user or owner == entry.owner_user)
-        and (not entry.owner_group or group == entry.owner_group)
-        and (entry.uid is None or uid == str(entry.uid))
-        and (entry.gid is None or gid == str(entry.gid))
-        and (not entry.mode or mode.zfill(4) == declared_mode.zfill(4))
-        and (entry.size is None or size == str(entry.size))
+    return all(
+        _selected_dimension_matches(actual, expected)
+        for actual, expected in (
+            (owner, entry.owner_user),
+            (group, entry.owner_group),
+            (uid, entry.uid),
+            (gid, entry.gid),
+            (mode.zfill(4), declared_mode.zfill(4) if entry.mode else ""),
+            (size, entry.size),
+        )
     )
+
+
+def _selected_dimension_matches(actual: str, expected: object) -> bool:
+    """Compare one selected guest metadata dimension."""
+
+    return expected in ("", None) or actual == str(expected)
 
 
 def _filesystem_shape_supported(entry: object) -> bool:

@@ -26,7 +26,13 @@ from aptl.backends._raes_realization_diagnostics import (
     _append_profile_diagnostics,
     _invalid_payload_diagnostics,
 )
-from aptl.backends.raes_base_substrate import base_container_spec
+from aptl.backends._raes_node_realization import (
+    _container_name,
+    _node_os,
+    _node_os_version,
+    _node_runtime,
+    _realize_node,
+)
 from aptl.backends.pack_interaction import ResolvedPackBackendInteraction
 from aptl.backends.raes_pack_interaction import apply_pack_interaction
 from aptl.backends.raes_image_realization import (
@@ -308,143 +314,6 @@ def _empty_realization(diagnostics: list[Diagnostic]) -> AptlRealization:
     )
 
 
-def _realize_node(
-    plan: ProvisioningPlan,
-    resource: PlannedResource,
-    payload: Mapping[str, Any],
-    profile_index: ComposeProfileIndex,
-    component_root: Path,
-    config: AptlConfig,
-    diagnostics: list[Diagnostic],
-) -> NodeRealization:
-    """Realize a node resource into APTL profile and runtime details.
-
-    ``component_root`` is the engine checkout a ``materialization-specification``
-    node's build context is resolved against (ADR-051), not the scenario bundle.
-    """
-
-    aliases = node_aliases(resource.address, payload)
-    backend_services = profile_index.service_names_for_aliases(aliases)
-    node_name = resource.address.rsplit(".", 1)[-1]
-    # Project-tree scenarios retain their static Compose membership. A pack
-    # has no static Compose model, so this remains empty until the exact
-    # pack/backend interaction is resolved after all nodes have been lowered.
-    profiles = profile_index.profiles_for_aliases(
-        aliases
-    ) | profile_index.profiles_for_services(set(backend_services))
-    if not profiles and _is_raes_conformance_probe_node(resource, payload):
-        backend_services = _conformance_probe_services(profile_index, config)
-        profiles = profile_index.profiles_for_services(set(backend_services))
-    spec = _mapping(payload.get("spec"))
-    node_spec = _mapping(spec.get("node")) if spec else None
-    infra_spec = _mapping(spec.get("infrastructure")) if spec else None
-    if not backend_services:
-        # Env-pack path (issue #875): with no static compose to index, the
-        # node's own identity is its Compose service name. In-tree scenarios
-        # ship a compose file, so this fallback never fires there.
-        backend_services = frozenset({node_name})
-    service_name = _single_or_none(tuple(sorted(backend_services)))
-    node_os = _node_os(node_spec)
-    node_os_version = _node_os_version(node_spec)
-    node_runtime = _node_runtime(node_spec)
-    authored_image = resolve_node_image(
-        resource=resource,
-        payload=payload,
-        project_dir=component_root,
-        service_name=service_name,
-        diagnostics=diagnostics,
-    )
-    node_services = _service_ports(node_spec)
-    backend_implementation = None
-    if authored_image is None and not node_source_is_dynamic_composition(
-        payload, resource.address
-    ):
-        backend_implementation = select_backend_node_implementation(
-            plan=plan,
-            resource=resource,
-            runtime=node_runtime,
-            service_name=service_name,
-            services=node_services,
-            component_root=component_root,
-            diagnostics=diagnostics,
-        )
-    if backend_implementation is not None:
-        node_runtime = backend_implementation.runtime
-    container_name = _resolved_container_name(
-        resource,
-        profile_index,
-        backend_services,
-        node_name,
-        node_os=node_os,
-        node_os_version=node_os_version,
-        node_runtime=node_runtime,
-    )
-    return NodeRealization(
-        address=resource.address,
-        name=_resource_name(resource.address, payload),
-        aliases=tuple(sorted(aliases)),
-        profiles=tuple(sorted(profiles)),
-        backend_services=tuple(sorted(backend_services)),
-        container_name=container_name,
-        services=node_services,
-        networks=tuple(sorted(_network_names(infra_spec))),
-        static_addresses=tuple(sorted(_static_addresses(infra_spec))),
-        static_address_assignments=_static_address_assignments(infra_spec),
-        published_ports=_runtime_published_ports(node_runtime),
-        image=(
-            authored_image
-            if authored_image is not None
-            else (
-                backend_implementation.image
-                if backend_implementation is not None
-                else None
-            )
-        ),
-        ordering_dependencies=resource.ordering_dependencies,
-        os=node_os,
-        os_version=node_os_version,
-        runtime=node_runtime,
-        dynamic_composition=node_source_is_dynamic_composition(
-            payload, resource.address
-        ),
-        backend_selected_concerns=(
-            backend_implementation.selected_concerns
-            if backend_implementation is not None
-            else ()
-        ),
-        backend_base_image_ref=(
-            backend_implementation.base_image_ref
-            if backend_implementation is not None
-            else None
-        ),
-        backend_base_use_image_command=(
-            backend_implementation.base_use_image_command
-            if backend_implementation is not None
-            else False
-        ),
-        backend_run_capabilities=(
-            backend_implementation.base_run_capabilities
-            if backend_implementation is not None
-            else ()
-        ),
-        backend_provider_kind=(
-            backend_implementation.provider_kind
-            if backend_implementation is not None
-            else ""
-        ),
-        backend_provider_parameters=(
-            backend_implementation.provider_parameters
-            if backend_implementation is not None
-            else ()
-        ),
-        backend_generated_artifacts=(
-            backend_implementation.generated_artifacts
-            if backend_implementation is not None
-            else ()
-        ),
-    )
-
-
 def _merge_backend_generated_artifacts(
     authored: list[DeploymentGeneratedArtifactRealization],
     nodes: list[NodeRealization],
@@ -455,9 +324,7 @@ def _merge_backend_generated_artifacts(
     merged = list(authored)
     by_name = {artifact.name: artifact for artifact in authored}
     for candidate in (
-        artifact
-        for node in nodes
-        for artifact in node.backend_generated_artifacts
+        artifact for node in nodes for artifact in node.backend_generated_artifacts
     ):
         existing = by_name.get(candidate.name)
         if existing is None:
@@ -493,97 +360,6 @@ def _same_generated_artifact_contract(
         and left.ordering_dependencies == right.ordering_dependencies
         and left.refresh_dependencies == right.refresh_dependencies
     )
-
-
-def _runtime_published_ports(
-    runtime: RuntimeConfiguration | None,
-) -> tuple[object, ...]:
-    """Extract published ports after backend-open runtime selection."""
-
-    if runtime is None:
-        return ()
-    return _published_ports(
-        {"runtime": runtime.model_dump(mode="python", by_alias=True)}
-    )
-
-
-def _resolved_container_name(
-    resource: PlannedResource,
-    profile_index: ComposeProfileIndex,
-    backend_services: frozenset[str],
-    node_name: str,
-    *,
-    node_os: str,
-    node_os_version: str,
-    node_runtime: RuntimeConfiguration | None,
-) -> str:
-    """Return the container name the node realizes to.
-
-    Preference order: the static compose service's own container name; then the
-    ``base_container_spec`` name derived from the node's declared runtime; and
-    finally APTL's ``aptl-<node>`` convention.
-    """
-
-    container_name = _container_name(profile_index, backend_services)
-    if container_name is None and node_runtime is not None and node_os:
-        container_name = base_container_spec(
-            resource.address,
-            os=node_os,
-            os_version=node_os_version,
-            runtime=node_runtime,
-        ).container_name
-    if container_name is None:
-        # Env-pack image node (issue #875): no static compose service to read a
-        # container name from, so use APTL's ``aptl-<node>`` convention (the
-        # same one base_container_spec applies to image-free nodes). A node
-        # whose own id already carries the prefix is not doubled.
-        container_name = (
-            node_name if node_name.startswith("aptl-") else f"aptl-{node_name}"
-        )
-    return container_name
-
-
-def _node_os(node_spec: Mapping[str, Any] | None) -> str:
-    """Return the node's declared OS family, or empty when undeclared."""
-
-    return str(node_spec.get("os") or "") if node_spec else ""
-
-
-def _node_os_version(node_spec: Mapping[str, Any] | None) -> str:
-    """Return the node's declared OS version, or empty when undeclared."""
-
-    return str(node_spec.get("os_version") or "") if node_spec else ""
-
-
-def _node_runtime(node_spec: Mapping[str, Any] | None) -> RuntimeConfiguration | None:
-    """Reconstruct the typed RAES RuntimeConfiguration from a node payload.
-
-    Best-effort: a node with no declared runtime returns None. A malformed
-    runtime block returns None rather than aborting the whole realization; the
-    materializer/manifest gates surface the missing desired state downstream.
-    """
-
-    raw = node_spec.get("runtime") if node_spec else None
-    if not isinstance(raw, Mapping):
-        return None
-    try:
-        return RuntimeConfiguration.model_validate(dict(raw))
-    except (ValueError, TypeError):
-        return None
-
-
-def _container_name(
-    profile_index: ComposeProfileIndex,
-    service_names: frozenset[str],
-) -> str | None:
-    """Return the concrete container name for an unambiguous service binding."""
-
-    if len(service_names) != 1:
-        return None
-    service = profile_index.services.get(next(iter(service_names)))
-    if service is None:
-        return None
-    return service.container_name or service.name
 
 
 def _realize_network(

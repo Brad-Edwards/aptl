@@ -9,6 +9,12 @@ from raes_contracts.diagnostics import Diagnostic
 from raes_contracts.planning import PlannedResource
 
 from aptl.backends.raes_diagnostics import diagnostic
+from aptl.backends._raes_stateful_values import (
+    choice as _choice,
+    only as _only,
+    resource_name as _resource_name,
+    text as _text,
+)
 from aptl.backends.raes_realization_model import NodeRealization
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactEnvironmentConsumer,
@@ -471,32 +477,3 @@ def _append_invalid(
             "Stateful resource payload is incomplete or unsupported by APTL.",
         )
     )
-
-
-def _resource_name(resource: PlannedResource) -> str:
-    """Return the authored resource name or its address suffix."""
-
-    return _text(resource.payload.get("name")) or resource.address.rsplit(".", 1)[-1]
-
-
-def _choice(
-    mapping: Mapping[str, object],
-    key: str,
-    allowed: frozenset[str],
-) -> str | None:
-    """Return a non-empty string only when it belongs to the allowed vocabulary."""
-
-    value = _text(mapping.get(key))
-    return value if value in allowed else None
-
-
-def _text(value: object) -> str | None:
-    """Return a non-empty string value without altering authored whitespace."""
-
-    return value if isinstance(value, str) and value.strip() else None
-
-
-def _only(values: tuple[str, ...]) -> str | None:
-    """Return the sole tuple member, rejecting absent or ambiguous bindings."""
-
-    return values[0] if len(values) == 1 else None

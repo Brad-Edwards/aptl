@@ -9,9 +9,6 @@ from typing import TYPE_CHECKING, Any
 
 from raes_contracts.realization_observation import ObservedOperatingSystemIdentity
 
-from aptl.core.deployment._compose_realization_networks import (
-    _match_managed_network,
-)
 from aptl.core.deployment._compose_service_health import (
     container_completed_successfully,
     container_health,
@@ -478,27 +475,3 @@ def _parse_samba_domain_info(text: str) -> dict[str, str]:
         "netbios_domain": fields.get("netbios_domain", "").upper(),
         "dc_name": fields.get("dc_name", ""),
     }
-
-
-def realized_network_names(
-    backend: "DeploymentBackend",
-    project_name: str,
-) -> set[str]:
-    """Return only the current Compose project's realized Docker networks."""
-
-    try:
-        names = backend.host_list_lab_networks(project_name)
-    except (BackendTimeoutError, OSError) as exc:
-        log.warning("could not list realized networks (%s)", type(exc).__name__)
-        return set()
-    return set(names) if isinstance(names, list | tuple | set) else set()
-
-
-def network_realized(
-    network_name: str,
-    realized: set[str],
-    project_name: str,
-) -> bool:
-    """Return whether a managed scenario network exists in provider readback."""
-
-    return _match_managed_network(network_name, realized, project_name) is not None

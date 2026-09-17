@@ -1591,3 +1591,12 @@ src/aptl/core/deployment/_compose_traffic_mirror.py	backend-observability	Retain
 src/aptl/core/deployment/_forwarding_agent_realization.py	backend-observability	Retain semantic forwarding-agent realization and native readback
 tests/test_application_provider_realization.py	tests-follow-owner	Retain semantic application-provider realization coverage with the backend owner
 tests/test_traffic_mirror.py	tests-follow-owner	Retain admitted traffic-mirror realization and reporting coverage with the backend owner
+src/aptl/backends/_raes_backend_implementation_catalog.py	backend-owned-runtime	Retain immutable backend implementation profiles selected only under open authority
+src/aptl/backends/_raes_backend_implementation_types.py	backend-owned-runtime	Retain typed backend implementation profile and substrate selections
+src/aptl/backends/_raes_native_evidence_acquisition.py	backend-observability	Retain admitted native evidence request orchestration and acquisition
+src/aptl/backends/_raes_network_observation.py	backend-owned-runtime	Retain provider readback for realized scenario networks
+src/aptl/backends/_raes_node_realization.py	backend-owned-runtime	Retain node lowering and admitted backend implementation accounting
+src/aptl/backends/_raes_provisioning_helpers.py	backend-owned-runtime	Retain provisioning readback, availability, and compose validation helpers
+src/aptl/backends/_raes_runtime_environment_observation.py	backend-owned-runtime	Retain protected runtime environment disclosure from provider readback
+src/aptl/backends/_raes_stateful_values.py	backend-owned-runtime	Retain authored value readers used by stateful realization
+src/aptl/core/deployment/_wazuh_agent_realization.py	backend-observability	Retain declared Wazuh forwarding-agent realization and exact native readback

@@ -28,36 +28,37 @@ class ComposeTrafficMirrorMixin:
     def _traffic_mirror_preflight(
         self, realization: DeploymentRealizationSpec
     ) -> LabResult | None:
-        if not traffic_mirror_requested(realization):
-            return None
-        if not getattr(self, "supports_local_artifacts", True):
-            return LabResult(success=False, error=_UNAVAILABLE)
-        helper = _ensure_helper(self, DEFAULT_BOUNDARY_HELPER_IMAGE)
-        if helper is not None:
-            return LabResult(success=False, error=_UNAVAILABLE)
-        probe = self._run(self._tc_command("-V"), timeout=5)
-        return (
-            None
-            if probe.returncode == 0
-            else LabResult(success=False, error=_UNAVAILABLE)
-        )
+        result = None
+        if traffic_mirror_requested(realization):
+            if not getattr(self, "supports_local_artifacts", True):
+                result = LabResult(success=False, error=_UNAVAILABLE)
+            elif _ensure_helper(self, DEFAULT_BOUNDARY_HELPER_IMAGE) is not None:
+                result = LabResult(success=False, error=_UNAVAILABLE)
+            elif self._run(self._tc_command("-V"), timeout=5).returncode != 0:
+                result = LabResult(success=False, error=_UNAVAILABLE)
+        return result
 
     def _realize_traffic_mirrors(
         self, realization: DeploymentRealizationSpec
     ) -> list[str]:
-        if not traffic_mirror_requested(realization):
-            return []
-        binding = self._traffic_mirror_binding(realization)
-        if binding is None:
-            return [_UNAVAILABLE]
-        source, sensor, _network = binding
+        failures: list[str] = []
+        if traffic_mirror_requested(realization):
+            binding = self._traffic_mirror_binding(realization)
+            if binding is None or not self._configure_traffic_mirror(*binding[:2]):
+                failures.append(_UNAVAILABLE)
+        return failures
+
+    def _configure_traffic_mirror(self, source: str, sensor: str) -> bool:
+        """Install and verify both frame-copy directions."""
+
         qdisc = self._run(
             self._tc_command("qdisc", "replace", "dev", source, "clsact"),
             timeout=10,
         )
-        if qdisc.returncode != 0:
-            return [_UNAVAILABLE]
+        active = qdisc.returncode == 0
         for direction in ("ingress", "egress"):
+            if not active:
+                break
             # A retry may find our reserved preference pointing at a veth that
             # Compose has already replaced. tc cannot replace a matchall action
             # in place, so remove only APTL's preference and add the current
@@ -96,8 +97,8 @@ class ComposeTrafficMirrorMixin:
                 timeout=10,
             )
             if added.returncode != 0:
-                return [_UNAVAILABLE]
-        return [] if self._traffic_mirror_active(source, sensor) else [_UNAVAILABLE]
+                active = False
+        return active and self._traffic_mirror_active(source, sensor)
 
     def _observe_traffic_mirror(
         self, realization: DeploymentRealizationSpec, item: object
@@ -122,7 +123,8 @@ class ComposeTrafficMirrorMixin:
             "implementation_privileges": ["CAP_NET_ADMIN"],
         }
 
-    def _tc_command(self, *args: str) -> list[str]:
+    @staticmethod
+    def _tc_command(*args: str) -> list[str]:
         """Run tc in the fixed, capability-minimal host-network helper."""
 
         return [
@@ -150,92 +152,53 @@ class ComposeTrafficMirrorMixin:
             for node in realization.nodes
             if node.name in {"kali", "suricata", "webapp"} and node.container_name
         }
-        if set(nodes) != {"kali", "suricata", "webapp"}:
-            return None
-        inspected = {
-            name: self.container_inspect(node.container_name)
-            for name, node in nodes.items()
-        }
-        networks = {
-            name: set(
-                ((value.get("NetworkSettings") or {}).get("Networks") or {}).keys()
-            )
-            for name, value in inspected.items()
-            if isinstance(value, Mapping)
-        }
-        if len(networks) != 3:
-            return None
-        shared = set.intersection(*(networks[name] for name in sorted(networks)))
-        if not shared:
-            return None
-        network = sorted(shared)[0]
-        source = self._host_veth(
-            nodes["webapp"].container_name, inspected["webapp"], network
-        )
-        sensor = self._host_veth(
-            nodes["suricata"].container_name, inspected["suricata"], network
-        )
-        if source is None or sensor is None or source == sensor:
-            return None
-        return source, sensor, network
+        binding = None
+        if set(nodes) == {"kali", "suricata", "webapp"}:
+            inspected = {
+                name: self.container_inspect(node.container_name)
+                for name, node in nodes.items()
+            }
+            network = _shared_network(inspected)
+            if network is not None:
+                source = self._host_veth(
+                    nodes["webapp"].container_name, inspected["webapp"], network
+                )
+                sensor = self._host_veth(
+                    nodes["suricata"].container_name,
+                    inspected["suricata"],
+                    network,
+                )
+                if source is not None and sensor is not None and source != sensor:
+                    binding = (source, sensor, network)
+        return binding
 
     def _host_veth(
         self, container_name: str, inspected: Mapping[str, object], network: str
     ) -> str | None:
-        network_settings = inspected.get("NetworkSettings")
-        attachments = (
-            network_settings.get("Networks")
-            if isinstance(network_settings, Mapping)
-            else None
-        )
-        attachment = (
-            attachments.get(network) if isinstance(attachments, Mapping) else None
-        )
-        mac = attachment.get("MacAddress") if isinstance(attachment, Mapping) else None
-        if not isinstance(mac, str) or not mac:
-            return None
-        inside = self.container_exec(
-            container_name,
-            [
-                "sh",
-                "-c",
-                "for p in /sys/class/net/*; do "
-                "IFS= read -r mac < \"$p/address\"; "
-                "IFS= read -r peer < \"$p/iflink\"; "
-                "printf '%s %s\\n' \"$mac\" \"$peer\"; done",
-            ],
-            timeout=10,
-        )
-        host = self._run(["ip", "-j", "link", "show"], timeout=10)
-        if inside.returncode != 0 or host.returncode != 0:
-            return None
-        try:
-            peers = [
-                int(line.rsplit(" ", 1)[1])
-                for line in inside.stdout.splitlines()
-                if line.rsplit(" ", 1)[0].lower() == mac.lower()
-            ]
-            names = [
-                item.get("ifname")
-                for item in json.loads(host.stdout)
-                if item.get("ifindex") in peers
-            ]
-        except (IndexError, TypeError, ValueError, json.JSONDecodeError):
-            return None
-        return (
-            names[0]
-            if len(names) == 1
-            and isinstance(names[0], str)
-            and _SAFE_INTERFACE.fullmatch(names[0])
-            else None
-        )
+        mac = _network_mac(inspected, network)
+        result = None
+        if mac is not None:
+            inside = self.container_exec(
+                container_name,
+                [
+                    "sh",
+                    "-c",
+                    "for p in /sys/class/net/*; do "
+                    'IFS= read -r mac < "$p/address"; '
+                    'IFS= read -r peer < "$p/iflink"; '
+                    'printf \'%s %s\\n\' "$mac" "$peer"; done',
+                ],
+                timeout=10,
+            )
+            host = self._run(["ip", "-j", "link", "show"], timeout=10)
+            if inside.returncode == 0 and host.returncode == 0:
+                result = _matching_host_interface(mac, inside.stdout, host.stdout)
+        return result
 
     def _traffic_mirror_active(self, source: str, sensor: str) -> bool:
         for direction in ("ingress", "egress"):
             observed = self._run(
-                self._tc_command(
-                    "filter", "show", "dev", source, direction
-                ),
+                self._tc_command("filter", "show", "dev", source, direction),
                 timeout=10,
             )
             output = observed.stdout or ""
@@ -246,6 +209,54 @@ class ComposeTrafficMirrorMixin:
             ):
                 return False
         return True
+
+
+def _shared_network(inspected: Mapping[str, object]) -> str | None:
+    """Return the deterministic network shared by all three participants."""
+
+    networks = {
+        name: set(((value.get("NetworkSettings") or {}).get("Networks") or {}).keys())
+        for name, value in inspected.items()
+        if isinstance(value, Mapping)
+    }
+    shared = set.intersection(*networks.values()) if len(networks) == 3 else set()
+    return min(shared) if shared else None
+
+
+def _network_mac(inspected: Mapping[str, object], network: str) -> str | None:
+    """Return a validated container MAC for one network attachment."""
+
+    settings = inspected.get("NetworkSettings")
+    attachments = settings.get("Networks") if isinstance(settings, Mapping) else None
+    attachment = attachments.get(network) if isinstance(attachments, Mapping) else None
+    mac = attachment.get("MacAddress") if isinstance(attachment, Mapping) else None
+    return mac if isinstance(mac, str) and mac else None
+
+
+def _matching_host_interface(mac: str, inside: str, host: str) -> str | None:
+    """Map one container interface MAC to its unique safe host-veth name."""
+
+    name = None
+    try:
+        peers = {
+            int(line.rsplit(" ", 1)[1])
+            for line in inside.splitlines()
+            if line.rsplit(" ", 1)[0].lower() == mac.lower()
+        }
+        names = [
+            item.get("ifname")
+            for item in json.loads(host)
+            if item.get("ifindex") in peers
+        ]
+        if (
+            len(names) == 1
+            and isinstance(names[0], str)
+            and _SAFE_INTERFACE.fullmatch(names[0])
+        ):
+            name = names[0]
+    except (IndexError, TypeError, ValueError):
+        pass
+    return name
 
 
 __all__ = ("ComposeTrafficMirrorMixin", "TRAFFIC_MIRROR_APPARATUS_ID")

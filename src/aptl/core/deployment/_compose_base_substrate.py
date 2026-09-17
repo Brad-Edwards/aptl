@@ -22,7 +22,7 @@ import subprocess
 from typing import TYPE_CHECKING
 
 from aptl.core.deployment._compose_realization_networks import (
-    _match_managed_network,
+    _resolve_base_network_bindings,
 )
 from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.deployment.realization import (
@@ -480,25 +480,9 @@ class ComposeBaseSubstrateMixin(object):
             self._base_networks_by_address = {}
             return
         managed = set(self.host_list_lab_networks(self._project_name))
-        bindings: dict[str, tuple[tuple[str, DeploymentNetworkAttachment], ...]] = {}
-        for node in nodes:
-            attachments = getattr(node, "network_attachments", ())
-            resolved: list[tuple[str, DeploymentNetworkAttachment]] = []
-            for attachment in attachments:
-                concrete = _match_managed_network(
-                    attachment.network,
-                    managed,
-                    self._project_name,
-                )
-                if concrete is None:
-                    raise BackendSeedError(
-                        "image-free node network binding was not observed"
-                    )
-                resolved.append((concrete, attachment))
-            if resolved:
-                bindings[getattr(node, "address")] = tuple(resolved)
-            elif getattr(self, "_appliance_boundary", None) is not None:
-                raise BackendSeedError(
-                    "appliance image-free node has no admitted network"
-                )
-        self._base_networks_by_address = bindings
+        self._base_networks_by_address = _resolve_base_network_bindings(
+            nodes,
+            managed,
+            self._project_name,
+            appliance_boundary=getattr(self, "_appliance_boundary", None) is not None,
+        )

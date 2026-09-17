@@ -13,16 +13,22 @@ import hashlib
 import re
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
-from html import escape
 from typing import Protocol
 
 from raes.runtime_configuration import RuntimeConfiguration
 
+from aptl.core.deployment._wazuh_agent_realization import (
+    _WAZUH_BOOTSTRAP_DIR as _WAZUH_BOOTSTRAP_DIR,
+    _WAZUH_CONFIG as _WAZUH_CONFIG,
+    _WAZUH_KEY_DOWNLOAD as _WAZUH_KEY_DOWNLOAD,
+    install_wazuh_agent as _install_wazuh_agent,
+    realize_wazuh_agent as _realize_wazuh_agent,
+    wazuh_agent_configured as _wazuh_agent_configured,
+    wazuh_agent_running as _wazuh_agent_running,
+    wazuh_config as _wazuh_config,
+)
+
 _MAX_WORKERS = 8
-_WAZUH_VERSION = "4.12.0-1"
-_WAZUH_CONFIG = "/var/ossec/etc/ossec.conf"
-_WAZUH_BOOTSTRAP_DIR = "/var/lib/aptl-bootstrap"
-_WAZUH_KEY_DOWNLOAD = f"{_WAZUH_BOOTSTRAP_DIR}/wazuh.gpg"
 _RSYSLOG_CONFIG = "/etc/rsyslog.d/60-aptl-forwarding.conf"
 _MISP_SYNC_CONFIG = "/etc/aptl/misp-suricata-sync.env"
 _SAFE_HOST = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$")
@@ -109,186 +115,47 @@ def _realize_node_agents(
     return None
 
 
-def _realize_wazuh_agent(
-    backend: ForwardingAgentBackend, container: str, agent: object
-) -> str | None:
-    target = _single_target(agent)
-    host = str(getattr(target, "target_node_ref", "") or "") if target else ""
-    if not _SAFE_HOST.fullmatch(host):
-        return "invalid manager target"
-    if not _exec_ok(backend, container, ["test", "-x", "/var/ossec/bin/wazuh-control"]):
-        reason = _install_wazuh_agent(backend, container, host)
-        if reason is not None:
-            return reason
-    payload = _wazuh_config(agent)
-    if payload is None or not _write_file(
-        backend, container, _WAZUH_CONFIG, payload, "0640", owner="root:wazuh"
-    ):
-        return "could not write Wazuh configuration"
-    if not _agent_configured(backend, container, agent):
-        return "Wazuh configuration did not verify"
-    if not _exec_ok(
-        backend, container, ["/var/ossec/bin/wazuh-control", "start"], timeout=120
-    ):
-        return "Wazuh agent did not start"
-    return (
-        None
-        if _wazuh_agent_running(backend, container)
-        else "Wazuh agent did not become ready"
-    )
-
-
-def _wazuh_agent_running(backend: ForwardingAgentBackend, container: str) -> bool:
-    """Read back the two processes required for declared log delivery."""
-
-    status = backend.container_exec(
-        container, ["/var/ossec/bin/wazuh-control", "status"], timeout=30
-    )
-    output = str(getattr(status, "stdout", "") or "")
-    return bool(
-        getattr(status, "returncode", 1) == 0
-        and "wazuh-agentd is running" in output
-        and "wazuh-logcollector is running" in output
-    )
-
-
-def _install_wazuh_agent(
-    backend: ForwardingAgentBackend, container: str, manager: str
-) -> str | None:
-    if _exec_ok(backend, container, ["test", "-x", "/usr/bin/apt-get"]):
-        commands = (
-            ["apt-get", "update"],
-            [
-                "env",
-                "DEBIAN_FRONTEND=noninteractive",
-                "apt-get",
-                "install",
-                "-y",
-                "--no-install-recommends",
-                "curl",
-                "gnupg",
-                "ca-certificates",
-                "procps",
-            ],
-            ["install", "-d", "-m", "0700", _WAZUH_BOOTSTRAP_DIR],
-            [
-                "curl",
-                "-fsSL",
-                "-o",
-                _WAZUH_KEY_DOWNLOAD,
-                "https://packages.wazuh.com/key/GPG-KEY-WAZUH",
-            ],
-            [
-                "gpg",
-                "--batch",
-                "--yes",
-                "--dearmor",
-                "--output",
-                "/usr/share/keyrings/wazuh.gpg",
-                _WAZUH_KEY_DOWNLOAD,
-            ],
-        )
-        if not all(
-            _exec_ok(backend, container, command, timeout=600) for command in commands
-        ):
-            return "Wazuh apt prerequisites failed"
-        repository = (
-            "deb [signed-by=/usr/share/keyrings/wazuh.gpg] "
-            "https://packages.wazuh.com/4.x/apt/ stable main\n"
-        )
-        if not _write_file(
-            backend,
-            container,
-            "/etc/apt/sources.list.d/wazuh.list",
-            repository,
-            "0644",
-        ):
-            return "Wazuh apt repository configuration failed"
-        install = (
-            ["apt-get", "update"],
-            [
-                "env",
-                f"WAZUH_MANAGER={manager}",
-                "DEBIAN_FRONTEND=noninteractive",
-                "apt-get",
-                "install",
-                "-y",
-                f"wazuh-agent={_WAZUH_VERSION}",
-            ],
-        )
-    elif _exec_ok(backend, container, ["test", "-x", "/usr/bin/dnf"]):
-        if not _exec_ok(
-            backend,
-            container,
-            ["dnf", "install", "-y", "curl", "ca-certificates", "procps-ng"],
-            timeout=600,
-        ):
-            return "Wazuh rpm prerequisites failed"
-        if not _exec_ok(
-            backend,
-            container,
-            ["rpm", "--import", "https://packages.wazuh.com/key/GPG-KEY-WAZUH"],
-            timeout=120,
-        ):
-            return "Wazuh rpm key import failed"
-        repository = """[wazuh]
-gpgcheck=1
-gpgkey=https://packages.wazuh.com/key/GPG-KEY-WAZUH
-enabled=1
-name=EL-$releasever - Wazuh
-baseurl=https://packages.wazuh.com/4.x/yum/
-protect=1
-"""
-        if not _write_file(
-            backend, container, "/etc/yum.repos.d/wazuh.repo", repository, "0644"
-        ):
-            return "Wazuh rpm repository configuration failed"
-        install = (
-            [
-                "env",
-                f"WAZUH_MANAGER={manager}",
-                "dnf",
-                "install",
-                "-y",
-                f"wazuh-agent-{_WAZUH_VERSION}",
-            ],
-        )
-    else:
-        return "no supported package manager"
-    if not all(
-        _exec_ok(backend, container, command, timeout=600) for command in install
-    ):
-        return "Wazuh agent package installation failed"
-    return None
-
-
 def _realize_rsyslog(
     backend: ForwardingAgentBackend, container: str, agent: object
 ) -> str | None:
-    if not _exec_ok(backend, container, ["test", "-x", "/usr/sbin/rsyslogd"]):
-        if _exec_ok(backend, container, ["test", "-x", "/usr/bin/apt-get"]):
-            command = ["apt-get", "install", "-y", "rsyslog"]
-        elif _exec_ok(backend, container, ["test", "-x", "/usr/bin/dnf"]):
-            command = ["dnf", "install", "-y", "rsyslog"]
-        else:
-            return "no supported rsyslog package manager"
-        if not _exec_ok(backend, container, command, timeout=600):
-            return "rsyslog package installation failed"
-    payload = _rsyslog_config(agent)
-    if payload is None or not _write_file(
-        backend, container, _RSYSLOG_CONFIG, payload, "0644"
+    """Install and verify one declared rsyslog forwarding agent."""
+
+    reason = _install_rsyslog(backend, container)
+    payload = _rsyslog_config(agent) if reason is None else None
+    if reason is None and (
+        payload is None
+        or not _write_file(backend, container, _RSYSLOG_CONFIG, payload, "0644")
     ):
-        return "could not write rsyslog configuration"
+        reason = "could not write rsyslog configuration"
+    if reason is None and not _agent_configured(backend, container, agent):
+        reason = "rsyslog configuration did not verify"
+    return reason
+
+
+def _install_rsyslog(backend: ForwardingAgentBackend, container: str) -> str | None:
+    """Install rsyslog when absent using the available package manager."""
+
+    if _exec_ok(backend, container, ["test", "-x", "/usr/sbin/rsyslogd"]):
+        return None
+    command = None
+    if _exec_ok(backend, container, ["test", "-x", "/usr/bin/apt-get"]):
+        command = ["apt-get", "install", "-y", "rsyslog"]
+    elif _exec_ok(backend, container, ["test", "-x", "/usr/bin/dnf"]):
+        command = ["dnf", "install", "-y", "rsyslog"]
+    if command is None:
+        return "no supported rsyslog package manager"
     return (
         None
-        if _agent_configured(backend, container, agent)
-        else "rsyslog configuration did not verify"
+        if _exec_ok(backend, container, command, timeout=600)
+        else "rsyslog package installation failed"
     )
 
 
 def _realize_misp_sync(
     backend: ForwardingAgentBackend, container: str, agent: object
 ) -> str | None:
+    """Write and verify the declared MISP-to-Suricata sync configuration."""
+
     payload = _misp_sync_config(agent)
     if payload is None or not _write_file(
         backend, container, _MISP_SYNC_CONFIG, payload, "0600"
@@ -304,21 +171,24 @@ def _realize_misp_sync(
 def _agent_configured(
     backend: ForwardingAgentBackend, container: str, agent: object
 ) -> bool:
+    """Return whether one agent's executable and exact config are present."""
+
     implementation = _value(getattr(agent, "implementation", ""))
     if implementation == "wazuh_agent":
-        executable = "/var/ossec/bin/wazuh-control"
-        path = _WAZUH_CONFIG
-        payload = _wazuh_config(agent)
-    elif implementation == "rsyslog":
-        executable = "/usr/sbin/rsyslogd"
-        path = _RSYSLOG_CONFIG
-        payload = _rsyslog_config(agent)
-    elif implementation == "misp_suricata_sync":
-        executable = "/usr/local/bin/aptl-misp-suricata-sync"
-        path = _MISP_SYNC_CONFIG
-        payload = _misp_sync_config(agent)
-    else:
+        return _wazuh_agent_configured(backend, container, agent)
+    configurations = {
+        "rsyslog": ("/usr/sbin/rsyslogd", _RSYSLOG_CONFIG, _rsyslog_config),
+        "misp_suricata_sync": (
+            "/usr/local/bin/aptl-misp-suricata-sync",
+            _MISP_SYNC_CONFIG,
+            _misp_sync_config,
+        ),
+    }
+    selected = configurations.get(implementation)
+    if selected is None:
         return False
+    executable, path, render = selected
+    payload = render(agent)
     return bool(
         payload is not None
         and _exec_ok(backend, container, ["test", "-x", executable])
@@ -326,89 +196,9 @@ def _agent_configured(
     )
 
 
-def _wazuh_config(agent: object) -> str | None:
-    target = _single_target(agent)
-    if target is None:
-        return None
-    host = str(getattr(target, "target_node_ref", "") or "")
-    if not _SAFE_HOST.fullmatch(host):
-        return None
-    ingestion = getattr(target, "ingestion_port", None)
-    protocol = _value(getattr(target, "protocol", "tcp")) or "tcp"
-    enrollment = getattr(target, "enrollment_port", None)
-    if ingestion is None:
-        return None
-    name = str(getattr(agent, "name", "") or getattr(agent, "forwarding_agent_id", ""))
-    crypto = _value(getattr(getattr(agent, "buffer_policy", None), "crypto", "aes"))
-    lines = [
-        "<ossec_config>",
-        "  <client>",
-        "    <server>",
-        f"      <address>{escape(host)}</address>",
-        f"      <port>{int(ingestion)}</port>",
-        f"      <protocol>{escape(protocol)}</protocol>",
-        "    </server>",
-        f"    <config-profile>{escape(name)}</config-profile>",
-        "    <notify_time>10</notify_time>",
-        "    <time-reconnect>60</time-reconnect>",
-        # The manager's first shared-config acknowledgement is not a semantic
-        # change to this backend-owned config.  Letting it auto-restart here can
-        # strand a container without an init supervisor in wazuh-control's
-        # minute-per-process stale-PID shutdown loop.
-        "    <auto_restart>no</auto_restart>",
-        f"    <crypto_method>{escape(crypto or 'aes')}</crypto_method>",
-    ]
-    if enrollment is not None:
-        lines.extend(
-            (
-                "    <enrollment>",
-                "      <enabled>yes</enabled>",
-                f"      <manager_address>{escape(host)}</manager_address>",
-                f"      <port>{int(enrollment)}</port>",
-                "    </enrollment>",
-            )
-        )
-    lines.extend(
-        (
-            "  </client>",
-            "  <client_buffer>",
-            "    <disabled>no</disabled>",
-            "    <queue_size>5000</queue_size>",
-            "    <events_per_second>500</events_per_second>",
-            "  </client_buffer>",
-        )
-    )
-    for source in getattr(agent, "sources", ()):
-        location = str(getattr(source, "location", "") or "")
-        if not location.startswith("/"):
-            return None
-        lines.extend(
-            (
-                "  <localfile>",
-                f"    <log_format>{escape(_wazuh_log_format(source.parse_format))}</log_format>",
-                f"    <location>{escape(location)}</location>",
-                "  </localfile>",
-            )
-        )
-    lines.extend(
-        (
-            "  <logging>",
-            "    <log_format>plain</log_format>",
-            "  </logging>",
-            "</ossec_config>",
-        )
-    )
-    return "\n".join(lines) + "\n"
-
-
-def _wazuh_log_format(value: object) -> str:
-    """Map portable source formats onto Wazuh logcollector formats."""
-
-    selected = _value(value)
-    return "json" if selected == "eve_json" else selected
-
-
 def _rsyslog_config(agent: object) -> str | None:
+    """Render the exact rsyslog forwarding directive for one target."""
+
     target = _single_target(agent)
     if target is None:
         return None
@@ -430,6 +220,8 @@ def _rsyslog_config(agent: object) -> str | None:
 
 
 def _misp_sync_config(agent: object) -> str | None:
+    """Render sorted MISP sync environment settings from portable semantics."""
+
     sources = tuple(getattr(agent, "sources", ()))
     transforms = tuple(getattr(agent, "transforms", ()))
     source = sources[0] if len(sources) == 1 else None
@@ -455,6 +247,8 @@ def _misp_sync_config(agent: object) -> str | None:
 
 
 def _single_target(agent: object) -> object | None:
+    """Return the sole ship target, rejecting ambiguous target sets."""
+
     targets = tuple(getattr(agent, "ship_targets", ()))
     return targets[0] if len(targets) == 1 else None
 
@@ -468,6 +262,8 @@ def _write_file(
     *,
     owner: str = "root:root",
 ) -> bool:
+    """Write one root-owned configuration file and apply exact metadata."""
+
     parent = path.rpartition("/")[0] or "/"
     if not _exec_ok(backend, container, ["mkdir", "-p", parent]):
         return False
@@ -484,6 +280,8 @@ def _write_file(
 def _file_digest_matches(
     backend: ForwardingAgentBackend, container: str, path: str, payload: str
 ) -> bool:
+    """Compare the native file digest with the exact rendered payload."""
+
     expected = hashlib.sha256(payload.encode()).hexdigest()
     result = backend.container_exec(container, ["sha256sum", path], timeout=30)
     stdout = str(getattr(result, "stdout", "") or "")
@@ -500,6 +298,8 @@ def _exec_ok(
     *,
     timeout: int = 30,
 ) -> bool:
+    """Run one bounded container command and require a zero exit status."""
+
     return (
         getattr(
             backend.container_exec(container, command, timeout=timeout), "returncode", 1
@@ -509,6 +309,8 @@ def _exec_ok(
 
 
 def _value(value: object) -> str:
+    """Read enum-like values without coupling to their concrete enum type."""
+
     return str(getattr(value, "value", value) or "")
 
 

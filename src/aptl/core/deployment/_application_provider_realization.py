@@ -64,6 +64,8 @@ def realize_application_providers(
 def _await_listener(
     backend: ApplicationProviderBackend, container: str, port: int
 ) -> bool:
+    """Wait briefly for the selected application provider to bind its port."""
+
     for _attempt in range(50):
         if _listener_ready(backend, container, port):
             return True
@@ -74,6 +76,8 @@ def _await_listener(
 def _listener_ready(
     backend: ApplicationProviderBackend, container: str, port: int
 ) -> bool:
+    """Return whether native listener readback sees the provider's TCP port."""
+
     observed = backend.observe_container_listeners(container)
     return bool(
         observed is not None

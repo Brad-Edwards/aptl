@@ -64,56 +64,27 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
         """
 
         result: LabResult | None = None
-        network_failures = self._reconcile_realization_networks(realization)
-        if network_failures:
-            result = LabResult(
-                success=False,
-                error="; ".join(network_failures[:5]),
-            )
-        if result is None:
-            health_failures = self._await_realized_service_health(realization)
-            if health_failures:
-                result = LabResult(
-                    success=False,
-                    error="; ".join(health_failures[:5]),
+        steps = (
+            lambda: _failure_result(self._reconcile_realization_networks(realization)),
+            lambda: _failure_result(self._await_realized_service_health(realization)),
+            lambda: _failure_result(self._realize_traffic_mirrors(realization)),
+            lambda: _failure_result(
+                realize_application_providers(self, realization.nodes)
+            ),
+            lambda: _failure_result(realize_forwarding_agents(self, realization.nodes)),
+            lambda: self._verify_stateful_authenticated_readiness(realization),
+            lambda: self._verify_runtime_orchestration(realization),
+            lambda: self._realize_accounts_step(realization),
+            lambda: _failure_result(
+                self._retire_completed_autoremove_nodes(
+                    realization, observation_context
                 )
-        if result is None:
-            mirror_failures = self._realize_traffic_mirrors(realization)
-            if mirror_failures:
-                result = LabResult(
-                    success=False,
-                    error="; ".join(mirror_failures[:5]),
-                )
-        if result is None:
-            provider_failures = realize_application_providers(self, realization.nodes)
-            if provider_failures:
-                result = LabResult(
-                    success=False,
-                    error="; ".join(provider_failures[:5]),
-                )
-        if result is None:
-            forwarding_failures = realize_forwarding_agents(self, realization.nodes)
-            if forwarding_failures:
-                result = LabResult(
-                    success=False,
-                    error="; ".join(forwarding_failures[:5]),
-                )
-        if result is None:
-            result = self._verify_stateful_authenticated_readiness(realization)
-        if result is None:
-            result = self._verify_runtime_orchestration(realization)
-        if result is None:
-            result = self._realize_accounts_step(realization)
-        if result is None:
-            retirement_failures = self._retire_completed_autoremove_nodes(
-                realization,
-                observation_context,
-            )
-            if retirement_failures:
-                result = LabResult(
-                    success=False,
-                    error="; ".join(retirement_failures[:5]),
-                )
+            ),
+        )
+        for step in steps:
+            result = step()
+            if result is not None:
+                break
         return result or LabResult(success=True, message="Lab realized")
 
     def _await_realized_service_health(
@@ -164,3 +135,9 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
                 success=False,
                 error=f"Account realization timed out: {exc}",
             )
+
+
+def _failure_result(failures: list[str]) -> LabResult | None:
+    """Convert bounded step failures into the common post-start result."""
+
+    return LabResult(success=False, error="; ".join(failures[:5])) if failures else None

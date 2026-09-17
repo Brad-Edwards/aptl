@@ -308,13 +308,7 @@ def _adjust_requirement(
     )
     if delegated:
         requirement = replace(requirement, explicitness=None, delegated=True)
-    exact = bool(
-        not requirement.delegated
-        and requirement.explicitness is ExplicitnessClass.OPEN
-        and requirement.requirement_kind
-        in _TECHVAULT_MINIMUM_INTRUSION_EXACT_CONCERNS
-        and (scenario is None or _authored_concern(scenario, requirement))
-    )
+    exact = _requires_exact_native_evidence(requirement, scenario)
     if exact:
         requirement = replace(
             requirement,
@@ -336,6 +330,20 @@ def _adjust_requirement(
             required_observation_strength=ObservationStrength.DAEMON_OBSERVED,
         )
     return requirement, adjusted, delegated, exact
+
+
+def _requires_exact_native_evidence(
+    requirement: object, scenario: object | None
+) -> bool:
+    """Return whether minimum intrusion closes an authored open concern."""
+
+    authored = scenario is None or _authored_concern(scenario, requirement)
+    return bool(
+        not requirement.delegated
+        and requirement.explicitness is ExplicitnessClass.OPEN
+        and requirement.requirement_kind in _TECHVAULT_MINIMUM_INTRUSION_EXACT_CONCERNS
+        and authored
+    )
 
 
 def _adjust_authority(

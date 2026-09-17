@@ -489,7 +489,6 @@ def _finalize_required_transcript_capture(
     from aptl.core.evidence.outcomes import AcquisitionDisposition
 
     result = None
-    failed = False
     state = None
     try:
         active = load_active_transcript_authorities(project_dir)
@@ -497,22 +496,16 @@ def _finalize_required_transcript_capture(
             if len(active) != 1:
                 raise ValueError("multiple pending transcript authorities")
             state = active[0]
-            config_path = find_config(project_dir)
-            config = load_config(config_path) if config_path is not None else AptlConfig()
-            config_root = config_path.parent if config_path is not None else project_dir
-            expected_store = Path(config.run_storage.local_path)
-            if not expected_store.is_absolute():
-                expected_store = config_root / expected_store
             result = finalize_active_transcript_authority(
                 project_dir=project_dir,
                 state=state,
                 backend=backend,
-                expected_run_store_base=expected_store,
+                expected_run_store_base=_expected_transcript_store(project_dir),
             )
     except Exception:
         log.error("Required transcript finalization failed before teardown")
-        failed = True
-    failed = failed or bool(
+        result = False
+    failed = result is False or bool(
         result is not None
         and result.disposition is not AcquisitionDisposition.SEALED_READY
     )
@@ -525,6 +518,18 @@ def _finalize_required_transcript_capture(
         LabResult(success=False, error=_TRANSCRIPT_FINALIZATION_FAILED)
         if failed
         else None
+    )
+
+
+def _expected_transcript_store(project_dir: Path) -> Path:
+    """Resolve the configured run store used to validate transcript output."""
+
+    config_path = find_config(project_dir)
+    config = load_config(config_path) if config_path is not None else AptlConfig()
+    config_root = config_path.parent if config_path is not None else project_dir
+    expected_store = Path(config.run_storage.local_path)
+    return (
+        expected_store if expected_store.is_absolute() else config_root / expected_store
     )
 
 
@@ -2879,39 +2884,21 @@ def _step_acquire_required_native_evidence(
     admitted = ctx.admitted_start
     plan = getattr(admitted, "capture_plan", None)
     bindings = tuple(plan.runtime_bindings()) if plan is not None else ()
-    if not any(
-        binding.registration_id in NATIVE_TECHVAULT_REGISTRATIONS
-        for binding in bindings
-    ):
+    registration_ids = {binding.registration_id for binding in bindings}
+    if registration_ids.isdisjoint(NATIVE_TECHVAULT_REGISTRATIONS):
         return None
 
     realization = getattr(admitted, "realization", None)
     request = _native_evidence_request(ctx, plan, realization)
-    capture = None
-    if request is not None:
-        try:
-            capture = acquire_native_evidence(request)
-        except Exception:
-            log.exception("Required native scenario evidence acquisition failed")
+    try:
+        capture = acquire_native_evidence(request) if request is not None else None
+    except Exception:
+        log.exception("Required native scenario evidence acquisition failed")
+        capture = None
     if capture is None:
         failure = LabResult(success=False, error=_NATIVE_CAPTURE_FAILED)
     else:
-        for report in getattr(capture, "reports", ()):
-            log_method = (
-                log.info
-                if report.status.value in {"ok", "empty_ok"}
-                else log.warning
-            )
-            log_method(
-                "Native evidence collector %s reported %s%s",
-                report.registration_id,
-                report.status.value,
-                (
-                    f" ({report.diagnostic_code})"
-                    if report.diagnostic_code is not None
-                    else ""
-                ),
-            )
+        _log_native_evidence_reports(capture)
         ctx.native_evidence_acquisition = capture
         failure = (
             _refresh_required_native_evidence(ctx, admitted, capture.records)
@@ -2919,6 +2906,24 @@ def _step_acquire_required_native_evidence(
             else LabResult(success=False, error=_NATIVE_CAPTURE_FAILED)
         )
     return failure
+
+
+def _log_native_evidence_reports(capture: object) -> None:
+    """Log bounded collector statuses without exposing captured evidence."""
+
+    for report in getattr(capture, "reports", ()):
+        log_method = (
+            log.info if report.status.value in {"ok", "empty_ok"} else log.warning
+        )
+        diagnostic = (
+            f" ({report.diagnostic_code})" if report.diagnostic_code is not None else ""
+        )
+        log_method(
+            "Native evidence collector %s reported %s%s",
+            report.registration_id,
+            report.status.value,
+            diagnostic,
+        )
 
 
 def _native_evidence_request(

@@ -136,33 +136,38 @@ def capture_compose_file(
 def capture_declaration_error(realization: DeploymentRealizationSpec) -> str | None:
     """Return a bounded error unless the immutable request is exactly supported."""
 
-    error = None
     ids = [item.apparatus_id for item in realization.capture_apparatus]
     if len(ids) != len(set(ids)):
         return "aptl.capture-apparatus.unsupported-set"
-    for item in realization.capture_apparatus:
-        supported = False
-        if item.apparatus_id == KALI_CAPTURE_APPARATUS_ID:
-            supported = (
-                item.apparatus_id == KALI_CAPTURE_APPARATUS_ID
-                and item.service_name == KALI_CAPTURE_SERVICE
-                and item.container_name == KALI_CAPTURE_CONTAINER
-                and bool(item.governing_scopes)
-                and item.environment_visible
-            )
-        elif item.apparatus_id == TRAFFIC_MIRROR_APPARATUS_ID:
-            supported = (
-                item.service_name == TRAFFIC_MIRROR_SERVICE
-                and not item.container_name
-                and set(item.target_refs)
-                == {"nodes.kali", "nodes.suricata", "nodes.webapp"}
-                and bool(item.governing_scopes)
-                and item.environment_visible
-            )
-        if not supported:
-            error = "aptl.capture-apparatus.unsupported-declaration"
-            break
-    return error
+    supported = all(
+        _capture_apparatus_supported(item) for item in realization.capture_apparatus
+    )
+    return None if supported else "aptl.capture-apparatus.unsupported-declaration"
+
+
+def _capture_apparatus_supported(item: object) -> bool:
+    """Return whether one immutable capture apparatus request is supported."""
+
+    apparatus_id = getattr(item, "apparatus_id", "")
+    common = bool(
+        getattr(item, "governing_scopes", ())
+        and getattr(item, "environment_visible", False)
+    )
+    if apparatus_id == KALI_CAPTURE_APPARATUS_ID:
+        return bool(
+            common
+            and getattr(item, "service_name", "") == KALI_CAPTURE_SERVICE
+            and getattr(item, "container_name", "") == KALI_CAPTURE_CONTAINER
+        )
+    if apparatus_id == TRAFFIC_MIRROR_APPARATUS_ID:
+        return bool(
+            common
+            and getattr(item, "service_name", "") == TRAFFIC_MIRROR_SERVICE
+            and not getattr(item, "container_name", "")
+            and set(getattr(item, "target_refs", ()))
+            == {"nodes.kali", "nodes.suricata", "nodes.webapp"}
+        )
+    return False
 
 
 __all__ = (

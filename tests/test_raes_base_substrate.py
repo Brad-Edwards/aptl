@@ -19,6 +19,7 @@ from raes.runtime_configuration import (
 )
 
 from aptl.backends.raes_base_substrate import (
+    NodePlanningOptions,
     UnauthorizedCapabilityError,
     base_container_spec,
     plan_node,
@@ -225,9 +226,13 @@ class TestBaseContainerSpec:
             os="linux",
             os_version="",
             runtime=runtime,
-            extra_volume_mounts=(
-                VolumeMount(
-                    target="/var/log/postgresql", source="db_logs", read_only=False
+            options=NodePlanningOptions(
+                extra_volume_mounts=(
+                    VolumeMount(
+                        target="/var/log/postgresql",
+                        source="db_logs",
+                        read_only=False,
+                    ),
                 ),
             ),
         )
@@ -262,7 +267,7 @@ class TestPlanNode:
             os="linux",
             os_version="",
             runtime=_runtime_with_service(),
-            backend_base_image_ref=selected,
+            options=NodePlanningOptions(backend_base_image_ref=selected),
         )
 
         assert spec.image_ref == selected
@@ -274,9 +279,11 @@ class TestPlanNode:
             os="linux",
             os_version="",
             runtime=RuntimeConfiguration(),
-            backend_base_image_ref="aptl/generic-samba-ad-base:latest",
-            backend_base_use_image_command=True,
-            backend_run_capabilities=("SYS_ADMIN",),
+            options=NodePlanningOptions(
+                backend_base_image_ref="aptl/generic-samba-ad-base:latest",
+                backend_base_use_image_command=True,
+                backend_run_capabilities=("SYS_ADMIN",),
+            ),
         )
 
         assert spec.use_image_command is True

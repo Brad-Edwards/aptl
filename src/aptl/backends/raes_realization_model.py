@@ -70,9 +70,7 @@ class NodeRealization(object):
     # Generated prerequisites selected under the same OPEN authority as this
     # node's backend runtime additions. They are promoted into the realization's
     # top-level artifact collection so deployment and reporting see them.
-    backend_generated_artifacts: tuple[
-        DeploymentGeneratedArtifactRealization, ...
-    ] = ()
+    backend_generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
 
     def service_names(self) -> tuple[str, ...]:
         """Return the declared service names, for profile/alias matching."""
@@ -80,6 +78,8 @@ class NodeRealization(object):
         return tuple(sorted({s.name for s in self.services if s.name}))
 
     def details(self) -> dict[str, object]:
+        """Return the bounded, non-secret realization report for this node."""
+
         details: dict[str, object] = {
             "address": self.address,
             "name": self.name,
@@ -97,37 +97,46 @@ class NodeRealization(object):
             "published_ports": [binding.details() for binding in self.published_ports],
             "ordering_dependencies": list(self.ordering_dependencies),
         }
-        if self.os:
-            details["os"] = self.os
-        if self.os_version:
-            details["os_version"] = self.os_version
-        if self.runtime is not None:
-            details["runtime"] = {
-                "packages": len(self.runtime.packages),
-                "software_components": len(self.runtime.software_components),
-                "local_users": (
-                    len(self.runtime.local_identity.users)
-                    if self.runtime.local_identity is not None
-                    else 0
-                ),
-                "service_units": len(self.runtime.service_manager_units),
-            }
-        if self.image is not None:
-            details["image"] = self.image.details()
-        if self.dynamic_composition:
-            details["dynamic_composition"] = True
-        if self.backend_selected_concerns:
-            details["backend_selected_concerns"] = list(self.backend_selected_concerns)
-        if self.backend_base_image_ref is not None:
-            details["backend_base_image_ref"] = self.backend_base_image_ref
-        if self.backend_run_capabilities:
-            details["backend_run_capabilities"] = list(self.backend_run_capabilities)
-        if self.backend_provider_kind:
-            details["backend_provider"] = {
-                "kind": self.backend_provider_kind,
-                "parameters": dict(self.backend_provider_parameters),
-            }
+        details.update(_optional_node_details(self))
         return details
+
+
+def _optional_node_details(node: NodeRealization) -> dict[str, object]:
+    """Collect populated optional report fields without exposing credentials."""
+
+    optional: dict[str, object] = {}
+    runtime = node.runtime
+    if runtime is not None:
+        local_identity = runtime.local_identity
+        optional["runtime"] = {
+            "packages": len(runtime.packages),
+            "software_components": len(runtime.software_components),
+            "local_users": len(local_identity.users) if local_identity else 0,
+            "service_units": len(runtime.service_manager_units),
+        }
+    candidates = (
+        ("os", node.os),
+        ("os_version", node.os_version),
+        ("image", node.image.details() if node.image is not None else None),
+        ("dynamic_composition", True if node.dynamic_composition else None),
+        (
+            "backend_selected_concerns",
+            list(node.backend_selected_concerns) or None,
+        ),
+        ("backend_base_image_ref", node.backend_base_image_ref),
+        ("backend_run_capabilities", list(node.backend_run_capabilities) or None),
+        (
+            "backend_provider",
+            {
+                "kind": node.backend_provider_kind,
+                "parameters": dict(node.backend_provider_parameters),
+            }
+            if node.backend_provider_kind
+            else None,
+        ),
+    )
+    optional.update((key, value) for key, value in candidates if value is not None)
+    return optional
 
 
 @dataclass(frozen=True)

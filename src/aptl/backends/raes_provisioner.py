@@ -25,7 +25,11 @@ from aptl.backends.raes_diagnostics import (
     realized_changed_addresses,
     snapshot_after_apply,
 )
-from aptl.backends.raes_artifact_mechanisms import dynamic_composition_provenance_ref
+from aptl.backends._raes_provisioning_helpers import (
+    availability_substrate_digests,
+    compose_validity_diagnostics,
+    retryable_readback_gaps as _retryable_readback_gaps,
+)
 from aptl.backends.raes_manifest import (
     create_aptl_manifest,
     create_aptl_realization_envelope,
@@ -40,10 +44,7 @@ from aptl.backends.raes_realization import (
     AptlRealization,
     interpret_provisioning_plan,
 )
-from aptl.backends.raes_profiles import (
-    load_compose_profile_index,
-    select_backend_profiles,
-)
+from aptl.backends.raes_profiles import select_backend_profiles
 from aptl.core.config import AptlConfig
 from aptl.core.experiment.capture_plan import CapturePlan, empty_capture_plan
 from aptl.core.deployment.realization import (
@@ -52,7 +53,6 @@ from aptl.core.deployment.realization import (
 )
 from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.utils.logging import get_logger
-from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
     from raes_contracts.contracts import ArtifactAvailabilityContext
@@ -69,71 +69,6 @@ log = get_logger("raes-provisioner")
 # bound never permits an absent or partial value to pass admission.
 _REALIZATION_READBACK_TIMEOUT_SECONDS = 300.0
 _REALIZATION_READBACK_INTERVAL_SECONDS = 2.0
-_ASYNC_READBACK_CONCERNS = frozenset(
-    {
-        "forwarding-agents",
-        "generated-artifact",
-        "runtime-app-authorizations",
-        "runtime-applications",
-        "runtime-database-services",
-        "runtime-datastore-services",
-        "runtime-dns-services",
-        "runtime-file-services",
-        "runtime-filesystem-inventory",
-        "runtime-identity-authorities",
-        "runtime-local-identity",
-        "runtime-network-detection-engines",
-        "runtime-platform-applications",
-        "runtime-security-monitoring-managers",
-        "runtime-service-manager-units",
-        "service-listeners",
-    }
-)
-
-
-def _retryable_readback_gaps(
-    plan: ProvisioningPlan,
-    snapshot: RuntimeSnapshot,
-    diagnostics: list[Diagnostic],
-) -> bool:
-    """Return whether every authority failure can be transient native readback.
-
-    An existing node can become observable after its container healthcheck has
-    passed: service-managed units, application APIs, generated files, and
-    listeners finish asynchronously.  Their first read can therefore be absent
-    or incomplete.  Retrying never accepts that intermediate value: RAES runs
-    the exact gate after every read and the apply fails unless a later read is
-    exact before the deadline.  A missing node, unsupported resource type, or
-    closed-scope materialization remains terminal immediately.
-    """
-
-    if not diagnostics:
-        return False
-    for diagnostic in diagnostics:
-        authorities = [
-            authority
-            for authority in plan.realization_authority
-            if authority.address == diagnostic.address
-            and f"'{authority.requirement_kind}'" in diagnostic.message
-        ]
-        if len(authorities) != 1:
-            return False
-        authority = authorities[0]
-        if authority.requirement_kind not in _ASYNC_READBACK_CONCERNS:
-            return False
-        if str(getattr(authority.mode, "value", authority.mode)) == "closed":
-            return False
-        resource = plan.resources.get(authority.address)
-        entry = snapshot.entries.get(authority.address)
-        resource_type = getattr(resource, "resource_type", "")
-        if entry is None:
-            if resource_type != "generated-artifact":
-                return False
-            continue
-        if resource_type in {"node", "generated-artifact"}:
-            continue
-        return False
-    return True
 
 
 @dataclass
@@ -338,6 +273,7 @@ class AptlProvisioner(object):
         """Start the lowered deployment and verify every added observer."""
 
         observation_context = DeploymentObservationContext()
+        result: ApplyResult | None = None
         try:
             start_result = self.deployment_backend.realize(
                 deployment_spec,
@@ -358,10 +294,11 @@ class AptlProvisioner(object):
                     str(exc),
                 )
             )
-            return self._failed_apply(
+            result = self._failed_apply(
                 snapshot, diagnostics, selected_profiles, realization
             )
-        if not start_result.success:
+            start_result = None
+        if result is None and start_result is not None and not start_result.success:
             diagnostics.append(
                 diagnostic(
                     "aptl.provisioner.backend-start-failed",
@@ -369,13 +306,15 @@ class AptlProvisioner(object):
                     start_result.error or "APTL deployment backend failed.",
                 )
             )
-            return self._failed_apply(
+            result = self._failed_apply(
                 snapshot, diagnostics, selected_profiles, realization
             )
-        apparatus_observations = capture_apparatus_observations(
-            self.deployment_backend, deployment_spec
+        apparatus_observations = (
+            capture_apparatus_observations(self.deployment_backend, deployment_spec)
+            if result is None
+            else None
         )
-        if apparatus_observations is None:
+        if result is None and apparatus_observations is None:
             diagnostics.append(
                 diagnostic(
                     "aptl.capture-apparatus.realization-unverified",
@@ -383,10 +322,10 @@ class AptlProvisioner(object):
                     "Required capture apparatus could not be verified after realization.",
                 )
             )
-            return self._failed_apply(
+            result = self._failed_apply(
                 snapshot, diagnostics, selected_profiles, realization
             )
-        return observation_context, apparatus_observations
+        return result or (observation_context, apparatus_observations or ())
 
     def _successful_apply(
         self,
@@ -492,35 +431,9 @@ class AptlProvisioner(object):
         )
 
     def _availability_substrate_digests(self) -> dict[str, str]:
-        """Return the address-scoped substrate config id availability verified.
+        """Return address-scoped immutable substrate ids verified by availability."""
 
-        For each dynamic-composition node the availability pass resolved the
-        generic substrate's immutable config id once and recorded it as a
-        verified integrity ref paired with the dynamic-composition provenance
-        ref. Threading that exact id into realization means the base container
-        starts the bytes availability verified, never a second resolution of the
-        mutable tag (issue #876 cycle-6 review). Empty when no node authored a
-        dynamic-composition source.
-        """
-
-        availability = self.artifact_availability
-        if availability is None:
-            return {}
-        provenance = dynamic_composition_provenance_ref()
-        digests: dict[str, str] = {}
-        for requirement in getattr(availability, "requirements", ()):
-            if provenance not in getattr(requirement, "verified_provenance_refs", ()):
-                continue
-            # A dynamic-composition node authors an open source with no exact or
-            # materialized artifact, so its verified integrity set is EXACTLY the
-            # one substrate digest. Require that: a multi-valued or empty set is
-            # ambiguous, and taking one arbitrarily could start an unrelated
-            # artifact, so it yields no verified digest and the start fails closed
-            # (issue #876 cycle-7 review).
-            refs = getattr(requirement, "verified_integrity_refs", ())
-            if len(refs) == 1:
-                digests[requirement.address] = refs[0]
-        return digests
+        return availability_substrate_digests(self.artifact_availability)
 
     def _with_artifact_satisfactions(
         self,
@@ -552,31 +465,7 @@ class AptlProvisioner(object):
         time. Catch that here so ``aptl lab start`` fails fast with an APTL
         diagnostic instead of a raw Compose "undefined service" error.
         """
-        try:
-            profile_index = load_compose_profile_index(self.bundle.root)
-        except (OSError, ValueError) as exc:
-            return [
-                diagnostic(
-                    "aptl.provisioner.compose-profile-index-failed",
-                    PROVISIONING_ADDRESS,
-                    redact(str(exc)),
-                )
-            ]
-        gaps = profile_index.cross_profile_dependency_gaps(set(selected_profiles))
-        return [
-            diagnostic(
-                "aptl.provisioner.compose-project-invalid",
-                PROVISIONING_ADDRESS,
-                (
-                    "Selected APTL compose profiles form an invalid project: "
-                    f"service '{service_name}' depends on "
-                    f"{', '.join(dependencies)}, which the profile selection "
-                    "excludes. Declare the dependency's node or enable its "
-                    "profile."
-                ),
-            )
-            for service_name, dependencies in sorted(gaps.items())
-        ]
+        return compose_validity_diagnostics(self.bundle.root, selected_profiles)
 
     def realize_plan(self, plan: ProvisioningPlan) -> AptlRealization:
         """Interpret one plan once, reusing its exact serving interaction."""

@@ -246,17 +246,13 @@ def _implementation_observed(
 
     expected = _expected_image_digest(node)
     if expected is not None:
-        actual = backend.container_image_digest(node.container_name or "")
-        if actual is None and observation_context is not None:
-            actual = observation_context.completed_image_digest(
-                node.container_name or ""
-            )
-        return actual == expected
+        return _container_digest_observed(backend, node, expected, observation_context)
     image = getattr(node, "image", None)
-    if (
+    backend_build = bool(
         getattr(image, "mode", None) == "build"
         and getattr(image, "policy_rule", None) == "backend-open-profile"
-    ):
+    )
+    if backend_build:
         selected = backend.substrate_image_identity(image.image_ref)
         actual = backend.container_image_config_id(node.container_name or "")
         return bool(selected is not None and actual == selected[0])
@@ -264,6 +260,21 @@ def _implementation_observed(
     # content is the implementation authority, so at least one targeted content
     # placement must have passed its own native type/digest observation.
     return bool(node.image is None and content_verified)
+
+
+def _container_digest_observed(
+    backend: DeploymentBackend,
+    node: NodeRealization,
+    expected: str,
+    observation_context: DeploymentObservationContext | None,
+) -> bool:
+    """Verify a running or completed container against its admitted digest."""
+
+    container_name = node.container_name or ""
+    actual = backend.container_image_digest(container_name)
+    if actual is None and observation_context is not None:
+        actual = observation_context.completed_image_digest(container_name)
+    return actual == expected
 
 
 def observe_techvault_attested_concerns(

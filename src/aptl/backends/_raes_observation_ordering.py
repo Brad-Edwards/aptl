@@ -88,9 +88,7 @@ def align_techvault_identity_collection_observations(
         # RAES evaluates realization against the submitted operation payload,
         # not the typed resource view.  The latter is exactly where runtime
         # model normalization changed these identity-collection orders.
-        declared = _pointer_value(
-            declared_operation.payload, authority.payload_pointer
-        )
+        declared = _pointer_value(declared_operation.payload, authority.payload_pointer)
         if declared is _MISSING:
             continue
         recursive = authority.constraint_document is not None
@@ -118,6 +116,8 @@ def align_techvault_identity_collection_observations(
 
 
 def _identified_release(identity: PackIdentity | None) -> bool:
+    """Return whether the bundle is the exact release needing order alignment."""
+
     return bool(
         identity is not None
         and identity.pack_id == TECHVAULT_PACK_ID
@@ -131,57 +131,83 @@ def _pointer_value(document: object, pointer: str) -> object:
 
     if pointer == "":
         return document
-    if not pointer.startswith("/"):
-        return _MISSING
-    current = document
+    current = document if pointer.startswith("/") else _MISSING
     for raw_token in pointer[1:].split("/"):
+        if current is _MISSING:
+            break
         token = raw_token.replace("~1", "/").replace("~0", "~")
-        if isinstance(current, Mapping):
-            if token not in current:
-                return _MISSING
-            current = current[token]
-        elif isinstance(current, list):
-            try:
-                index = int(token)
-                current = current[index]
-            except (ValueError, IndexError):
-                return _MISSING
-        else:
-            return _MISSING
+        current = _pointer_step(current, token)
     return current
+
+
+def _pointer_step(current: object, token: str) -> object:
+    """Resolve one decoded JSON-pointer token or return the missing sentinel."""
+
+    if isinstance(current, Mapping):
+        return current.get(token, _MISSING)
+    if isinstance(current, list):
+        try:
+            return current[int(token)]
+        except (ValueError, IndexError):
+            pass
+    return _MISSING
 
 
 def _align_equivalent_value(declared: object, observed: object) -> object:
     """Return ``observed`` in declared collection order, or ``_MISSING``."""
 
     if isinstance(declared, Mapping) and isinstance(observed, Mapping):
-        if set(declared) != set(observed):
-            return _MISSING
-        result: dict[object, object] = {}
-        for key, declared_value in declared.items():
-            aligned = _align_equivalent_value(declared_value, observed[key])
-            if aligned is _MISSING:
-                return _MISSING
-            result[key] = aligned
-        return result
+        return _align_mapping(declared, observed)
     if isinstance(declared, list) and isinstance(observed, list):
-        if len(declared) != len(observed):
+        return _align_list(declared, observed)
+    return (
+        observed
+        if type(declared) is type(observed) and declared == observed
+        else _MISSING
+    )
+
+
+def _align_mapping(
+    declared: Mapping[object, object], observed: Mapping[object, object]
+) -> object:
+    """Align recursively equivalent mappings while preserving declared key order."""
+
+    if set(declared) != set(observed):
+        return _MISSING
+    result = {
+        key: _align_equivalent_value(value, observed[key])
+        for key, value in declared.items()
+    }
+    return _MISSING if _MISSING in result.values() else result
+
+
+def _align_list(declared: list[object], observed: list[object]) -> object:
+    """Align an identity collection by recursively matching every member."""
+
+    if len(declared) != len(observed):
+        return _MISSING
+    unused = list(observed)
+    result = []
+    for declared_item in declared:
+        match = _matching_item(declared_item, unused)
+        if match is None:
             return _MISSING
-        unused = list(observed)
-        result = []
-        for declared_item in declared:
-            for index, observed_item in enumerate(unused):
-                aligned = _align_equivalent_value(declared_item, observed_item)
-                if aligned is not _MISSING:
-                    result.append(aligned)
-                    unused.pop(index)
-                    break
-            else:
-                return _MISSING
-        return result
-    if type(declared) is type(observed) and declared == observed:
-        return observed
-    return _MISSING
+        index, aligned = match
+        result.append(aligned)
+        unused.pop(index)
+    return result
+
+
+def _matching_item(
+    declared: object, candidates: list[object]
+) -> tuple[int, object] | None:
+    """Return the first recursively equivalent candidate and its index."""
+
+    for index, candidate in enumerate(candidates):
+        aligned = _align_equivalent_value(declared, candidate)
+        if aligned is not _MISSING:
+            return index, aligned
+    return None
 
 
 __all__ = ("align_techvault_identity_collection_observations",)

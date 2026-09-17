@@ -40,7 +40,6 @@ from aptl.backends._raes_transcript_parsing import (
 )
 
 if TYPE_CHECKING:
-    from aptl.backends.raes_realization_model import AptlRealization
     from aptl.core.experiment.capture_plan import CapturePlan
 
 
@@ -221,8 +220,7 @@ def _failed_transcript_marker_exists(
         return False
     failed = json.loads(read_contained_nofollow(project_dir, relative))
     if not isinstance(failed, dict) or any(
-        failed.get(key) != authority.get(key)
-        for key in ("run_id", "capture_plan_id")
+        failed.get(key) != authority.get(key) for key in ("run_id", "capture_plan_id")
     ):
         raise ValueError(mismatch_error)
     return True
@@ -248,9 +246,7 @@ def load_active_transcript_authorities(
         )
         if not isinstance(value, dict):
             raise ValueError("active transcript authority is not an object")
-        if _contained_entry_exists(
-            project_dir, f"{_FINALIZED_AUTHORITY_DIR}/{name}"
-        ):
+        if _contained_entry_exists(project_dir, f"{_FINALIZED_AUTHORITY_DIR}/{name}"):
             continue
         terminal_failures = (
             (
@@ -482,59 +478,10 @@ def finalize_active_transcript_authority(
     return result
 
 
-@dataclass(frozen=True)
-class NativeEvidenceRequest:
-    """All authority and runtime inputs for immediate native acquisition."""
-
-    plan: CapturePlan
-    backend: object
-    realization: AptlRealization
-    project_dir: Path
-    indexer_auth: tuple[str, str]
-    thehive_api_key: str
-    run_store: LocalRunStore
-    run_id: str
-    clock: ClockProvider | None = None
-
-
-def acquire_native_evidence(request: NativeEvidenceRequest) -> AcquisitionResult:
-    """Collect every immediate native binding or return a failed disposition.
-
-    The full-run Kali transcript is deliberately excluded here. Its admitted
-    sidecar remains active until teardown and is finalized by the stop path.
-    """
-
-    if not isinstance(request.run_store, LocalRunStore):
-        raise TypeError("native evidence requires a local run store")
-    bindings = _native_bindings(request.plan)
-    _persist_capture_plan(request.plan, request.run_store, request.run_id)
-    owner = TechVaultNativeEvidenceOwner(
-        backend=request.backend,
-        realization=request.realization,
-        project_dir=request.project_dir,
-        indexer_auth=request.indexer_auth,
-        thehive_api_key=request.thehive_api_key,
-    )
-    sources = owner.sources()
-    collectors = {
-        binding.registration_id: _OnDemandNativeCollector(
-            binding.registration_id,
-            sources[binding.registration_id],  # type: ignore[arg-type]
-        )
-        for binding in bindings
-        if binding.registration_id in sources
-    }
-    return acquire_evidence(
-        bindings=bindings,
-        collectors=collectors,
-        run_store=request.run_store,
-        scope=RunScope(
-            run_id=request.run_id,
-            planned_trial_id=request.plan.plan_id,
-            attempt_id="provisioning",
-        ),
-        clock=request.clock or SystemClockProvider(),
-    )
+from aptl.backends._raes_native_evidence_acquisition import (
+    NativeEvidenceRequest,
+    acquire_native_evidence,
+)
 
 
 __all__ = (

@@ -313,12 +313,15 @@ class DockerMaterializationExecutor:
         if len(fields) != 5:
             return False
         owner, group, uid, gid, mode = fields
-        return bool(
-            (not op.owner or owner == op.owner)
-            and (not op.group or group == op.group)
-            and (op.uid is None or uid == str(op.uid))
-            and (op.gid is None or gid == str(op.gid))
-            and (not op.mode or mode.zfill(4) == _normalized_mode(op.mode))
+        return all(
+            _metadata_dimension_matches(actual, expected)
+            for actual, expected in (
+                (owner, op.owner),
+                (group, op.group),
+                (uid, op.uid),
+                (gid, op.gid),
+                (mode.zfill(4), _normalized_mode(op.mode) if op.mode else ""),
+            )
         )
 
     def observe_dependency_manifest_installed(
@@ -342,8 +345,30 @@ class DockerMaterializationExecutor:
     ) -> bool:
         """Read npm package identity and verify its main/bin output exists."""
 
+        package = self._observed_npm_package(node_address, op)
+        directory = str(PurePosixPath(op.manifest_path).parent)
+        outputs = _npm_entrypoint_paths(package or {})
+        return bool(
+            package
+            and package.get("name") == op.package_name
+            and package.get("version") == op.version
+            and outputs
+            and all(
+                self._exec(
+                    node_address, ["test", "-f", f"{directory}/{path}"]
+                ).returncode
+                == 0
+                for path in outputs
+            )
+        )
+
+    def _observed_npm_package(
+        self, node_address: str, op: InstallSoftwareComponentOp
+    ) -> dict[str, object] | None:
+        """Read the selected npm package metadata, failing closed on bad output."""
+
         if op.ecosystem != "npm":
-            return False
+            return None
         directory = str(PurePosixPath(op.manifest_path).parent)
         outcome = self._exec(
             node_address,
@@ -359,25 +384,13 @@ class DockerMaterializationExecutor:
                 "bin",
             ],
         )
-        if outcome.returncode != 0:
-            return False
-        try:
-            package = json.loads(outcome.stdout)
-        except (TypeError, ValueError):
-            return False
-        if not isinstance(package, dict):
-            return False
-        if (
-            package.get("name") != op.package_name
-            or package.get("version") != op.version
-        ):
-            return False
-        outputs = _npm_entrypoint_paths(package)
-        return bool(outputs) and all(
-            self._exec(node_address, ["test", "-f", f"{directory}/{path}"]).returncode
-            == 0
-            for path in outputs
-        )
+        package: object = None
+        if outcome.returncode == 0:
+            try:
+                package = json.loads(outcome.stdout)
+            except (TypeError, ValueError):
+                pass
+        return package if isinstance(package, dict) else None
 
     def observe_domain_authority(
         self, node_address: str, op: ProvisionDomainAuthorityOp
@@ -457,6 +470,12 @@ def _normalized_mode(mode: str) -> str:
 
     value = mode[2:] if mode.startswith("0o") else mode
     return value.zfill(4)
+
+
+def _metadata_dimension_matches(actual: str, expected: object) -> bool:
+    """Match one selected filesystem dimension, treating omission as open."""
+
+    return expected in ("", None) or actual == str(expected)
 
 
 def _npm_entrypoint_paths(package: dict[str, object]) -> tuple[str, ...]:

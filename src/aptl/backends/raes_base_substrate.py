@@ -145,6 +145,19 @@ class BaseContainerSpec:
     backend_run_capabilities: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class NodePlanningOptions:
+    """Optional backend choices carried together across node planning."""
+
+    dynamic_composition: bool = False
+    extra_volume_mounts: tuple[VolumeMount, ...] = ()
+    backend_base_image_ref: str | None = None
+    backend_base_use_image_command: bool = False
+    backend_run_capabilities: tuple[str, ...] = ()
+    backend_provider_kind: str = ""
+    backend_provider_parameters: tuple[tuple[str, str], ...] = ()
+
+
 def _container_name(node_address: str) -> str:
     """Derive the project-scoped container name from a node's address.
 
@@ -163,11 +176,7 @@ def base_container_spec(
     os: str,
     os_version: str,
     runtime: RuntimeConfiguration | None,
-    dynamic_composition: bool = False,
-    extra_volume_mounts: tuple[VolumeMount, ...] = (),
-    backend_base_image_ref: str | None = None,
-    backend_base_use_image_command: bool = False,
-    backend_run_capabilities: tuple[str, ...] = (),
+    options: NodePlanningOptions = NodePlanningOptions(),
 ) -> BaseContainerSpec:
     """Return the generic base-container decision for one node.
 
@@ -182,7 +191,7 @@ def base_container_spec(
     """
 
     unauthorized_backend_capabilities = sorted(
-        set(backend_run_capabilities) - _ALLOWED_BACKEND_RUN_CAPABILITIES
+        set(options.backend_run_capabilities) - _ALLOWED_BACKEND_RUN_CAPABILITIES
     )
     if unauthorized_backend_capabilities:
         raise UnauthorizedCapabilityError(
@@ -194,7 +203,7 @@ def base_container_spec(
         node_address=node_address,
         container_name=_container_name(node_address),
         image_ref=(
-            backend_base_image_ref
+            options.backend_base_image_ref
             or base_image_for_os(
                 os,
                 os_version,
@@ -205,12 +214,12 @@ def base_container_spec(
         runs_services=runs_services,
         init=_init_requirements(runtime) if runs_services else None,
         published_ports=_published_ports(runtime),
-        volume_mounts=_volume_mounts(runtime) + tuple(extra_volume_mounts),
+        volume_mounts=_volume_mounts(runtime) + options.extra_volume_mounts,
         environment_names=_environment_names(runtime),
         environment_defaults=_environment_defaults(runtime),
-        dynamic_composition=dynamic_composition,
-        use_image_command=backend_base_use_image_command,
-        backend_run_capabilities=backend_run_capabilities,
+        dynamic_composition=options.dynamic_composition,
+        use_image_command=options.backend_base_use_image_command,
+        backend_run_capabilities=options.backend_run_capabilities,
     )
 
 
@@ -342,13 +351,7 @@ def plan_node(
     os_version: str,
     runtime: RuntimeConfiguration | None,
     content: tuple[MaterializationOp, ...] = (),
-    dynamic_composition: bool = False,
-    extra_volume_mounts: tuple[VolumeMount, ...] = (),
-    backend_base_image_ref: str | None = None,
-    backend_base_use_image_command: bool = False,
-    backend_run_capabilities: tuple[str, ...] = (),
-    backend_provider_kind: str = "",
-    backend_provider_parameters: tuple[tuple[str, str], ...] = (),
+    options: NodePlanningOptions = NodePlanningOptions(),
 ) -> tuple[BaseContainerSpec, tuple[MaterializationOp, ...]]:
     """Plan one node: its generic base container plus its materialization ops.
 
@@ -365,19 +368,15 @@ def plan_node(
         os=os,
         os_version=os_version,
         runtime=runtime,
-        dynamic_composition=dynamic_composition,
-        extra_volume_mounts=extra_volume_mounts,
-        backend_base_image_ref=backend_base_image_ref,
-        backend_base_use_image_command=backend_base_use_image_command,
-        backend_run_capabilities=backend_run_capabilities,
+        options=options,
     )
     ops = plan_node_materialization(
         os=os,
         os_version=os_version,
         runtime=runtime,
         content=content,
-        backend_base_image_ref=backend_base_image_ref,
-        backend_provider_kind=backend_provider_kind,
-        backend_provider_parameters=backend_provider_parameters,
+        backend_base_image_ref=options.backend_base_image_ref,
+        backend_provider_kind=options.backend_provider_kind,
+        backend_provider_parameters=options.backend_provider_parameters,
     )
     return spec, ops

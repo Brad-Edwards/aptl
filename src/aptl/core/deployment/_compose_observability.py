@@ -199,8 +199,11 @@ class ComposeObservabilityMixin:
         volumes/networks with a warning. Inventory every reserved namespace
         before the first up; an inventory failure is not proof of absence.
         """
+        ownership = self._ensure_resource_ownership()
         names_by_kind = {
-            "container": OBSERVABILITY_SERVICES,
+            "container": {
+                ownership.container_name(name) for name in OBSERVABILITY_SERVICES
+            },
             "network": {f"{self._project_name}_{OBSERVABILITY_NETWORK}"},
             "volume": {
                 f"{self._project_name}_{name}" for name in OBSERVABILITY_VOLUMES

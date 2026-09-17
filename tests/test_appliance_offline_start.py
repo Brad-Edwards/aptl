@@ -51,6 +51,9 @@ def test_offline_staged_realization_inspects_images_and_forbids_pull_or_build(
 ) -> None:
     (tmp_path / "docker-compose.yml").write_text("services: {}\n")
     backend = DockerComposeBackend(tmp_path, offline_staged=True)
+    backend._docker_daemon_id = "test-daemon"
+    backend._verify_compose_namespace_is_owned = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+    backend._record_compose_network_receipts = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
     commands: list[list[str]] = []
 
     def fake_run(command, **kwargs):
@@ -77,6 +80,7 @@ def test_offline_staged_realization_fails_before_start_when_image_is_missing(
 ) -> None:
     (tmp_path / "docker-compose.yml").write_text("services: {}\n")
     backend = DockerComposeBackend(tmp_path, offline_staged=True)
+    backend._docker_daemon_id = "test-daemon"
     commands: list[list[str]] = []
 
     def fake_run(command, **kwargs):
@@ -148,12 +152,14 @@ def test_offline_staged_direct_docker_runs_forbid_implicit_pulls(
     source.mkdir()
     (source / "input").write_text("data")
     backend = DockerComposeBackend(tmp_path, offline_staged=True)
+    backend._docker_daemon_id = "test-daemon"
     commands: list[list[str]] = []
 
     def fake_run(command, **kwargs):
         del kwargs
         commands.append(command)
-        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+        stdout = "a" * 64 if command[:2] == ["docker", "run"] else ""
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
 
     seed = NamedVolumeSeed(
         volume_suffix="seed",

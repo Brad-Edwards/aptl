@@ -250,6 +250,7 @@ def _cortex_credentials_spec() -> DeploymentRealizationSpec:
 
 def test_cortex_credentials_are_generated_distinctly_and_reused(tmp_path: Path) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    backend._docker_daemon_id = "test-daemon"
     artifact = _cortex_credentials_spec().generated_artifacts[0]
 
     assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
@@ -444,14 +445,16 @@ def _certificate_outputs() -> tuple[DeploymentGeneratedArtifactOutput, ...]:
 
 
 def _effective_payload(
-    tmp_path: Path, spec: DeploymentRealizationSpec
+    tmp_path: Path,
+    spec: DeploymentRealizationSpec,
+    project_name: str = "aptl-test",
 ) -> dict[str, object]:
-    payload = stateful_override_payload(tmp_path, "aptl-test", spec)
+    payload = stateful_override_payload(tmp_path, project_name, spec)
     volumes = payload.get("volumes", {})
     assert isinstance(volumes, dict)
     for name, definition in volumes.items():
         assert isinstance(definition, dict)
-        definition["name"] = f"aptl-test_{name}"
+        definition["name"] = f"{project_name}_{name}"
     return payload
 
 
@@ -810,6 +813,7 @@ def test_generated_compose_model_is_validated_before_up(
     tmp_path: Path, monkeypatch
 ) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    backend._docker_daemon_id = "test-daemon"
     commands: list[list[str]] = []
     monkeypatch.setattr(
         backend,
@@ -827,12 +831,19 @@ def test_generated_compose_model_is_validated_before_up(
 
     def run(cmd, **kwargs):
         commands.append(cmd)
+        if cmd[:3] in (
+            ["docker", "network", "inspect"],
+            ["docker", "volume", "inspect"],
+        ):
+            return MagicMock(returncode=1, stdout="", stderr="missing")
         return MagicMock(
             returncode=0,
             stdout=(
                 "2.24.4"
                 if "version" in cmd
-                else json.dumps(_effective_payload(tmp_path, spec))
+                else json.dumps(
+                    _effective_payload(tmp_path, spec, backend.project_name)
+                )
                 if "config" in cmd
                 else ""
             ),

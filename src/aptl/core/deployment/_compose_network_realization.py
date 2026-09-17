@@ -28,6 +28,10 @@ from aptl.core.deployment._compose_realization_networks import (
     _resolve_realization_network_attachments,
 )
 from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.deployment._compose_resource_ownership import (
+    OwnershipConflictError,
+    ResourceReceipt,
+)
 from aptl.core.deployment.realization import (
     DeploymentNetworkAttachment,
     DeploymentNetworkRealization,
@@ -139,6 +143,13 @@ class ComposeRealizationNetworkMixin:
         network: DeploymentNetworkRealization,
     ) -> list[str]:
         """Return fail-closed errors for an existing realized network."""
+
+        try:
+            self._resolve_owned_network_id(network_name)
+        except OwnershipConflictError:
+            return [
+                f"Existing network {network_name} has no verified APTL ownership receipt."
+            ]
 
         compose_key = _compose_network_key(network.name)
         if not compose_key:
@@ -341,6 +352,12 @@ class ComposeRealizationNetworkMixin:
         network already exists (issue #875).
         """
 
+        ownership = self._ensure_resource_ownership()
+        attempt_id = self._resource_attempt_id
+        if attempt_id is None:
+            return LabResult(
+                success=False, error="Backend attempt identity is unavailable."
+            )
         concrete_name = _concrete_network_name(network.name, self._project_name)
         compose_key = _compose_network_key(network.name)
         if not concrete_name or not compose_key:
@@ -358,6 +375,8 @@ class ComposeRealizationNetworkMixin:
             "--label",
             f"{_REALIZATION_NETWORK_LABEL}={_REALIZATION_NETWORK_LABEL_VALUE}",
         ]
+        for label, value in ownership.labels(attempt_id=attempt_id).items():
+            cmd.extend(["--label", f"{label}={value}"])
         if network.internal is True:
             cmd.append("--internal")
         if network.cidr:
@@ -376,6 +395,36 @@ class ComposeRealizationNetworkMixin:
                     f"{result.stderr.strip()}"
                 ),
             )
+        native_id = result.stdout.strip()
+        if not native_id:
+            return LabResult(
+                success=False,
+                error=f"Docker did not return an identity for realized network {network.name}.",
+            )
+        try:
+            ownership.record(
+                ResourceReceipt(
+                    kind="network",
+                    native_id=native_id,
+                    external_name=concrete_name,
+                    semantic_name=network.name,
+                    node_address=network.name,
+                    workspace_id=ownership.workspace_id,
+                    project_name=ownership.project_name,
+                    daemon_id=self._ownership_daemon_id(),
+                    attempt_id=attempt_id,
+                    managed_by="direct",
+                )
+            )
+        except OwnershipConflictError:
+            self._run(
+                ["docker", "network", "rm", native_id],
+                timeout=_REALIZATION_TIMEOUT,
+            )
+            return LabResult(
+                success=False,
+                error=f"Could not record ownership for realized network {network.name}.",
+            )
         return LabResult(success=True, message=concrete_name)
 
     def connect_container_network(
@@ -388,12 +437,14 @@ class ComposeRealizationNetworkMixin:
     ) -> LabResult:
         """Connect one container to one Docker network."""
 
+        native_id = self._resolve_owned_container_id(container_name)
+        network_id = self._resolve_owned_network_id(network_name)
         cmd = ["docker", "network", "connect"]
         if ipv4_address:
             cmd.extend(["--ip", ipv4_address])
         for alias in dict.fromkeys(alias for alias in aliases if alias):
             cmd.extend(["--alias", alias])
-        cmd.extend([network_name, container_name])
+        cmd.extend([network_id, native_id])
         result = self._run(cmd, timeout=_REALIZATION_TIMEOUT)
         if result.returncode != 0:
             return LabResult(
@@ -412,8 +463,19 @@ class ComposeRealizationNetworkMixin:
     ) -> LabResult:
         """Disconnect one container from one Docker network."""
 
+        network_id = (
+            _DEFAULT_BRIDGE_NETWORK
+            if network_name == _DEFAULT_BRIDGE_NETWORK
+            else self._resolve_owned_network_id(network_name)
+        )
         result = self._run(
-            ["docker", "network", "disconnect", network_name, container_name],
+            [
+                "docker",
+                "network",
+                "disconnect",
+                network_id,
+                self._resolve_owned_container_id(container_name),
+            ],
             timeout=_REALIZATION_TIMEOUT,
         )
         if result.returncode != 0:
@@ -427,38 +489,21 @@ class ComposeRealizationNetworkMixin:
         return LabResult(success=True, message="disconnected")
 
     def remove_project_networks(self) -> list[str]:
-        """Remove leftover project-scoped realization networks."""
+        """Remove only freshly verified receipt-owned networks."""
 
         failures: list[str] = []
         try:
-            result = self._run(
-                [
-                    "docker",
-                    "network",
-                    "ls",
-                    "--filter",
-                    f"label={_COMPOSE_PROJECT_LABEL}={self._project_name}",
-                    "--format",
-                    "{{.Name}}",
-                ],
-                timeout=_REALIZATION_TIMEOUT,
-            )
-        except (BackendTimeoutError, OSError):
-            return ["Failed to list project networks for cleanup"]
-        if result.returncode != 0:
-            return ["Failed to list project networks for cleanup"]
-        network_names = [
-            line.strip() for line in result.stdout.splitlines() if line.strip()
-        ]
-        for network_name in network_names:
-            try:
+            ownership = self._ensure_resource_ownership()
+            for receipt in ownership.receipts("network"):
+                if not self.host_inspect_network(receipt.native_id):
+                    continue
+                network_id = self._resolve_owned_network_id(receipt.native_id)
                 result = self._run(
-                    ["docker", "network", "rm", network_name],
+                    ["docker", "network", "rm", network_id],
                     timeout=_REALIZATION_TIMEOUT,
                 )
-            except (BackendTimeoutError, OSError):
-                failures.append("Failed to remove a project network")
-                continue
-            if result.returncode != 0:
-                failures.append("Failed to remove a project network")
+                if result.returncode != 0:
+                    failures.append("Failed to remove a receipt-owned network")
+        except (BackendTimeoutError, OwnershipConflictError, OSError):
+            failures.append("Failed to establish network cleanup authority")
         return failures

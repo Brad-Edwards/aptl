@@ -328,11 +328,21 @@ class ComposeRuntimeOrchestrationRouteMixin:
 
         try:
             required = realization_has_docker_authority(realization)
-            deployment_spawn_image_requirements(realization)
+            spawn_requirements = deployment_spawn_image_requirements(realization)
         except ValueError as exc:
             return LabResult(success=False, error=str(exc))
         if not required:
             return None
+        if spawn_requirements and not getattr(
+            self, "_attempt_isolated_docker_daemon", False
+        ):
+            return LabResult(
+                success=False,
+                error=(
+                    "Backend resource ownership conflict: runtime-spawned "
+                    "children require an attempt-isolated Docker daemon."
+                ),
+            )
         endpoint = (
             self.revalidate_local_docker_socket()
             if getattr(self, "_docker_socket_identity", None) is not None

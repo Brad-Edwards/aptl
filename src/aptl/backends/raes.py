@@ -461,6 +461,8 @@ def _apply_execution_plan(
     planning, provider-policy, and workflow failures are not.
     """
 
+    if isinstance(target.provisioner, AptlProvisioner):
+        target.provisioner.bind_attempt_id(run_id)
     manager = RuntimeManager(target, initial_snapshot=execution_plan.base_snapshot)
     apply_result = manager.apply(execution_plan)
     snapshot = apply_result.snapshot

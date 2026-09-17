@@ -103,6 +103,12 @@ class AptlProvisioner(object):
     _cached_realization: AptlRealization | None = field(
         default=None, init=False, repr=False
     )
+    _attempt_id: str | None = field(default=None, init=False, repr=False)
+
+    def bind_attempt_id(self, attempt_id: str | None) -> None:
+        """Bind the one already-resolved lab-start attempt to deployment."""
+
+        self._attempt_id = attempt_id
 
     def validate(self, plan: object) -> list[Diagnostic]:
         """Validate that the RAES provisioning plan is APTL-realizable."""
@@ -272,7 +278,7 @@ class AptlProvisioner(object):
     ):
         """Start the lowered deployment and verify every added observer."""
 
-        observation_context = DeploymentObservationContext()
+        observation_context = DeploymentObservationContext(attempt_id=self._attempt_id)
         result: ApplyResult | None = None
         try:
             start_result = self.deployment_backend.realize(

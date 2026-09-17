@@ -3,6 +3,7 @@
 Query, realization, and cleanup helpers live in focused sibling modules.
 """
 
+import json
 import os
 import subprocess
 from collections.abc import Sequence
@@ -21,6 +22,12 @@ from aptl.core.deployment._compose_project_inventory import (
     ComposeProjectInventoryMixin,
 )
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
+from aptl.core.deployment._compose_resource_ownership import (
+    OwnershipConflictError,
+    ResourceReceipt,
+    WorkspaceOwnership,
+    write_compose_ownership_override,
+)
 from aptl.core.deployment._compose_realization import ComposeRealizationMixin
 from aptl.core.deployment._compose_runtime_inventory import (
     ComposeRuntimeInventoryMixin,
@@ -77,7 +84,10 @@ class DockerComposeBackend(
         offline_staged: bool = False,
     ) -> None:
         self._project_dir = project_dir
-        self._project_name = validate_compose_project_name(project_name)
+        self._logical_project_name = validate_compose_project_name(project_name)
+        self._project_name = self._logical_project_name
+        self._resource_ownership: WorkspaceOwnership | None = None
+        self._resource_attempt_id: str | None = None
         self._offline_staged = offline_staged
         self._appliance_boundary: (
             tuple[
@@ -106,6 +116,209 @@ class DockerComposeBackend(
     @property
     def project_name(self) -> str:
         return self._project_name
+
+    @property
+    def logical_project_name(self) -> str:
+        """Return the user-facing project identity before provider scoping."""
+
+        return self._logical_project_name
+
+    def _ensure_resource_ownership(
+        self, *, attempt_id: str | None = None
+    ) -> WorkspaceOwnership:
+        """Load the durable workspace scope before backend mutation."""
+
+        ownership = self._resource_ownership
+        if ownership is None:
+            ownership = WorkspaceOwnership.ensure(
+                self._project_dir, self._logical_project_name
+            )
+            self._resource_ownership = ownership
+            self._project_name = ownership.project_name
+        if attempt_id is not None:
+            # Validation is shared with label generation.
+            ownership.labels(attempt_id=attempt_id)
+            self._resource_attempt_id = attempt_id
+        elif self._resource_attempt_id is None:
+            self._resource_attempt_id = ownership.new_attempt_id()
+        return ownership
+
+    def _ownership_daemon_id(self) -> str:
+        """Return the selected daemon identity or fail before resource access."""
+
+        daemon_id = self._docker_daemon_id or self._current_docker_daemon_id()
+        if not daemon_id:
+            raise OwnershipConflictError("backend daemon identity is unavailable")
+        self._docker_daemon_id = daemon_id
+        return daemon_id
+
+    def _resolve_owned_container_id(self, selector: str) -> str:
+        """Resolve one semantic selector to a freshly verified native ID."""
+
+        ownership = self._ensure_resource_ownership()
+        candidates = ownership.candidates(
+            selector,
+            kind="container",
+            daemon_id=self._ownership_daemon_id(),
+        )
+        if not candidates:
+            raise OwnershipConflictError("container ownership is unrecorded")
+        verified: list[str] = []
+        for receipt in candidates:
+            info = self._raw_container_inspect(receipt.native_id)
+            if not info:
+                continue
+            if info.get("Id") != receipt.native_id:
+                raise OwnershipConflictError("container native identity changed")
+            config = info.get("Config")
+            labels = config.get("Labels") if isinstance(config, dict) else None
+            isolated_child = bool(
+                receipt.managed_by == "child"
+                and getattr(self, "_attempt_isolated_docker_daemon", False)
+            )
+            if not isolated_child and (
+                not isinstance(labels, dict)
+                or labels.get("aptl.workspace.id") != ownership.workspace_id
+                or labels.get("aptl.lifecycle.project") != ownership.project_name
+            ):
+                raise OwnershipConflictError("container ownership labels changed")
+            observed_name = str(info.get("Name", "")).removeprefix("/")
+            if observed_name != receipt.external_name:
+                raise OwnershipConflictError("container semantic binding changed")
+            verified.append(receipt.native_id)
+        if len(verified) != 1:
+            raise OwnershipConflictError("container ownership is absent or ambiguous")
+        return verified[0]
+
+    def _resolve_owned_network_id(self, selector: str) -> str:
+        """Resolve one recorded network to its freshly verified Docker ID."""
+
+        ownership = self._ensure_resource_ownership()
+        candidates = ownership.candidates(
+            selector, kind="network", daemon_id=self._ownership_daemon_id()
+        )
+        verified: list[str] = []
+        for receipt in candidates:
+            info = self.host_inspect_network(receipt.native_id)
+            labels = info.get("labels") if isinstance(info, dict) else None
+            if not info:
+                continue
+            if (
+                info.get("id") != receipt.native_id
+                or info.get("name") != receipt.external_name
+                or not isinstance(labels, dict)
+                or labels.get("com.docker.compose.project") != ownership.project_name
+            ):
+                raise OwnershipConflictError("network ownership binding changed")
+            verified.append(receipt.native_id)
+        if len(verified) != 1:
+            raise OwnershipConflictError("network ownership is absent or ambiguous")
+        return verified[0]
+
+    def _resolve_owned_volume_name(self, selector: str) -> str:
+        """Resolve one recorded volume to its freshly verified Docker name."""
+
+        ownership = self._ensure_resource_ownership()
+        candidates = ownership.candidates(
+            selector, kind="volume", daemon_id=self._ownership_daemon_id()
+        )
+        verified: list[str] = []
+        for receipt in candidates:
+            info = self._raw_volume_inspect(receipt.native_id)
+            if not info:
+                continue
+            labels = info.get("Labels") if isinstance(info, dict) else None
+            if (
+                not isinstance(info, dict)
+                or info.get("Name") != receipt.native_id
+                or info.get("Name") != receipt.external_name
+                or not isinstance(labels, dict)
+                or labels.get("com.docker.compose.project") != ownership.project_name
+            ):
+                raise OwnershipConflictError("volume ownership binding changed")
+            verified.append(receipt.native_id)
+        if len(verified) != 1:
+            raise OwnershipConflictError("volume ownership is absent or ambiguous")
+        return verified[0]
+
+    def _raw_volume_inspect(self, name: str) -> dict[str, Any]:
+        """Inspect one Docker volume name without treating labels as authority."""
+
+        result = self._run(
+            ["docker", "volume", "inspect", name], timeout=_DOCKER_TIMEOUT
+        )
+        if result.returncode != 0:
+            return {}
+        try:
+            payload = json.loads(result.stdout)
+        except (TypeError, ValueError) as exc:
+            raise OwnershipConflictError("volume ownership is uninspectable") from exc
+        info = payload[0] if isinstance(payload, list) and payload else None
+        if not isinstance(info, dict):
+            raise OwnershipConflictError("volume ownership is uninspectable")
+        return info
+
+    def _remove_owned_containers(self, managed_by: str) -> list[str]:
+        """Remove recorded containers by verified native ID, never by label query."""
+
+        try:
+            ownership = self._ensure_resource_ownership()
+            receipts = tuple(
+                receipt
+                for receipt in ownership.receipts("container")
+                if receipt.managed_by == managed_by
+            )
+            failures: list[str] = []
+            for receipt in receipts:
+                info = self._raw_container_inspect(receipt.native_id)
+                if not info:
+                    continue
+                native_id = self._resolve_owned_container_id(receipt.native_id)
+                result = self._run(["docker", "rm", "-f", native_id], timeout=60)
+                if result.returncode != 0:
+                    failures.append("failed to remove receipt-owned container")
+            return failures
+        except (OwnershipConflictError, OSError):
+            return ["failed to establish container cleanup authority"]
+
+    def _remove_owned_volumes(self) -> list[str]:
+        """Remove only receipt-owned volumes that still verify on this daemon."""
+
+        try:
+            ownership = self._ensure_resource_ownership()
+            failures: list[str] = []
+            for receipt in ownership.receipts("volume"):
+                probe = self._run(
+                    ["docker", "volume", "inspect", receipt.native_id],
+                    timeout=_DOCKER_TIMEOUT,
+                )
+                if probe.returncode != 0:
+                    continue
+                volume = self._resolve_owned_volume_name(receipt.native_id)
+                result = self._run(
+                    ["docker", "volume", "rm", volume], timeout=_DOCKER_TIMEOUT
+                )
+                if result.returncode != 0:
+                    failures.append("failed to remove receipt-owned volume")
+            return failures
+        except (OwnershipConflictError, BackendTimeoutError, OSError):
+            return ["failed to establish volume cleanup authority"]
+
+    def _prepare_owned_cleanup(self) -> None:
+        """Verify cleanup authority, allowing a provably empty new namespace."""
+
+        ownership = self._ensure_resource_ownership()
+        daemon_id = self._docker_daemon_id or self._current_docker_daemon_id()
+        if daemon_id:
+            self._docker_daemon_id = daemon_id
+            self._verify_compose_namespace_is_owned(ownership, daemon_id)
+            return
+        if (
+            self._scoped_compose_container_ids()
+            or self._scoped_compose_network_ids()
+            or self._scoped_compose_volume_names()
+        ):
+            raise OwnershipConflictError("backend daemon identity is unavailable")
 
     @property
     def realization_root(self) -> Path:
@@ -297,6 +510,17 @@ class DockerComposeBackend(
             LabResult indicating success or failure.
         """
         root = scenario_root if scenario_root is not None else self._project_dir
+        try:
+            attempt_id = (
+                self._resource_attempt_id or WorkspaceOwnership.new_attempt_id()
+            )
+            ownership = self._ensure_resource_ownership(attempt_id=attempt_id)
+            daemon_id = self._ownership_daemon_id()
+        except OwnershipConflictError:
+            return LabResult(
+                success=False,
+                error="Backend resource ownership conflict before Compose mutation.",
+            )
         failure = self._start_preflight(profiles, root)
         if failure is not None:
             return failure
@@ -308,6 +532,28 @@ class DockerComposeBackend(
             compose_files = self._with_observability_files(
                 compose_files or (root / "docker-compose.yml",), profiles
             )
+        try:
+            ownership_override, semantic_by_service, expected = (
+                write_compose_ownership_override(
+                    ownership,
+                    attempt_id=attempt_id,
+                    compose_files=tuple(
+                        compose_files or (root / "docker-compose.yml",)
+                    ),
+                )
+            )
+            self._verify_compose_namespace_is_owned(
+                ownership, daemon_id, expected=expected
+            )
+        except OwnershipConflictError:
+            return LabResult(
+                success=False,
+                error="Backend resource ownership conflict before Compose mutation.",
+            )
+        compose_files = (
+            *tuple(compose_files or (root / "docker-compose.yml",)),
+            ownership_override,
+        )
         cmd = self._build_command(
             "up", profiles, compose_files=compose_files, scenario_root=scenario_root
         )
@@ -330,6 +576,26 @@ class DockerComposeBackend(
         if result.returncode != 0:
             log.error("Lab start failed: %s", result.stderr)
             return LabResult(success=False, error=result.stderr)
+
+        try:
+            self._record_compose_container_receipts(
+                ownership,
+                daemon_id=daemon_id,
+                attempt_id=attempt_id,
+                semantic_by_service=semantic_by_service,
+            )
+            self._record_compose_network_receipts(
+                ownership, daemon_id=daemon_id, attempt_id=attempt_id
+            )
+            self._record_compose_volume_receipts(
+                ownership, daemon_id=daemon_id, attempt_id=attempt_id
+            )
+        except OwnershipConflictError:
+            self._remove_owned_attempt_containers(attempt_id)
+            return LabResult(
+                success=False,
+                error="Backend resource ownership could not be verified after Compose start.",
+            )
 
         log.info("Lab started successfully")
         return LabResult(success=True, message="Lab started")
@@ -357,7 +623,355 @@ class DockerComposeBackend(
 
         root = scenario_root if scenario_root is not None else self._project_dir
         override = write_duplicate_build_override(root) if build else None
-        return (root / "docker-compose.yml", override) if override is not None else None
+        files = (root / "docker-compose.yml",)
+        return (*files, override) if override is not None else files
+
+    def _scoped_compose_container_ids(self) -> tuple[str, ...]:
+        """Discover candidate container IDs inside the effective namespace."""
+
+        result = self._run(
+            [
+                "docker",
+                "ps",
+                "-aq",
+                "--filter",
+                f"label=com.docker.compose.project={self._project_name}",
+            ],
+            timeout=_DOCKER_TIMEOUT,
+        )
+        if result.returncode != 0:
+            raise OwnershipConflictError("Compose resource discovery failed")
+        return tuple(
+            dict.fromkeys(
+                line.strip() for line in result.stdout.splitlines() if line.strip()
+            )
+        )
+
+    def _scoped_compose_network_ids(self) -> tuple[str, ...]:
+        """Discover candidate network IDs inside the effective namespace."""
+
+        result = self._run(
+            [
+                "docker",
+                "network",
+                "ls",
+                "--filter",
+                f"label=com.docker.compose.project={self._project_name}",
+                "--format",
+                "{{.ID}}",
+            ],
+            timeout=_DOCKER_TIMEOUT,
+        )
+        if result.returncode != 0:
+            raise OwnershipConflictError("Compose network discovery failed")
+        return tuple(
+            dict.fromkeys(
+                line.strip() for line in result.stdout.splitlines() if line.strip()
+            )
+        )
+
+    def _scoped_compose_volume_names(self) -> tuple[str, ...]:
+        """Discover candidate volume native names inside the effective namespace."""
+
+        result = self._run(
+            [
+                "docker",
+                "volume",
+                "ls",
+                "--filter",
+                f"label=com.docker.compose.project={self._project_name}",
+                "--format",
+                "{{.Name}}",
+            ],
+            timeout=_DOCKER_TIMEOUT,
+        )
+        if result.returncode != 0:
+            raise OwnershipConflictError("Compose volume discovery failed")
+        return tuple(
+            dict.fromkeys(
+                line.strip() for line in result.stdout.splitlines() if line.strip()
+            )
+        )
+
+    def _verify_compose_namespace_is_owned(
+        self,
+        ownership: WorkspaceOwnership,
+        daemon_id: str,
+        *,
+        expected: dict[str, tuple[str, ...]] | None = None,
+    ) -> None:
+        """Reject pre-existing namespace objects without immutable receipts."""
+
+        for native_id in self._scoped_compose_container_ids():
+            candidates = ownership.candidates(
+                native_id,
+                kind="container",
+                daemon_id=daemon_id,
+            )
+            if len(candidates) != 1:
+                raise OwnershipConflictError("Compose namespace contains foreign state")
+            self._resolve_owned_container_id(native_id)
+        for native_id in self._scoped_compose_network_ids():
+            candidates = ownership.candidates(
+                native_id, kind="network", daemon_id=daemon_id
+            )
+            if len(candidates) != 1:
+                raise OwnershipConflictError("Compose namespace contains foreign state")
+            self._resolve_owned_network_id(native_id)
+        for native_name in self._scoped_compose_volume_names():
+            candidates = ownership.candidates(
+                native_name, kind="volume", daemon_id=daemon_id
+            )
+            if len(candidates) != 1:
+                raise OwnershipConflictError("Compose namespace contains foreign state")
+            self._resolve_owned_volume_name(native_name)
+        if expected is not None:
+            self._verify_expected_compose_resources(
+                ownership, daemon_id=daemon_id, expected=expected
+            )
+
+    def _verify_expected_compose_resources(
+        self,
+        ownership: WorkspaceOwnership,
+        *,
+        daemon_id: str,
+        expected: dict[str, tuple[str, ...]],
+    ) -> None:
+        """Reject exact-name collisions even when a foreign object has no labels."""
+
+        for external_name in expected.get("container", ()):
+            info = self._raw_container_inspect(external_name)
+            if not info:
+                continue
+            native_id = str(info.get("Id", ""))
+            if (
+                not native_id
+                or len(
+                    ownership.candidates(
+                        native_id, kind="container", daemon_id=daemon_id
+                    )
+                )
+                != 1
+            ):
+                raise OwnershipConflictError("Compose container name is foreign")
+            self._resolve_owned_container_id(native_id)
+        for external_name in expected.get("network", ()):
+            info = self.host_inspect_network(external_name)
+            if not info:
+                continue
+            native_id = str(info.get("id", ""))
+            if (
+                not native_id
+                or len(
+                    ownership.candidates(native_id, kind="network", daemon_id=daemon_id)
+                )
+                != 1
+            ):
+                raise OwnershipConflictError("Compose network name is foreign")
+            self._resolve_owned_network_id(native_id)
+        for external_name in expected.get("volume", ()):
+            if not self._raw_volume_inspect(external_name):
+                continue
+            if (
+                len(
+                    ownership.candidates(
+                        external_name, kind="volume", daemon_id=daemon_id
+                    )
+                )
+                != 1
+            ):
+                raise OwnershipConflictError("Compose volume name is foreign")
+            self._resolve_owned_volume_name(external_name)
+
+    def _record_compose_container_receipts(
+        self,
+        ownership: WorkspaceOwnership,
+        *,
+        daemon_id: str,
+        attempt_id: str,
+        semantic_by_service: dict[str, str],
+    ) -> None:
+        """Capture native IDs and complete owner tuples after Compose creation."""
+
+        for native_id in self._scoped_compose_container_ids():
+            existing = ownership.candidates(
+                native_id, kind="container", daemon_id=daemon_id
+            )
+            if existing:
+                if len(existing) != 1:
+                    raise OwnershipConflictError("Compose owner tuple is ambiguous")
+                self._resolve_owned_container_id(native_id)
+                continue
+            info = self._raw_container_inspect(native_id)
+            config = info.get("Config") if isinstance(info, dict) else None
+            labels = config.get("Labels") if isinstance(config, dict) else None
+            service = (
+                labels.get("com.docker.compose.service")
+                if isinstance(labels, dict)
+                else None
+            )
+            expected = ownership.labels(attempt_id=attempt_id)
+            if (
+                info.get("Id") != native_id
+                or not isinstance(labels, dict)
+                or any(labels.get(name) != value for name, value in expected.items())
+                or labels.get("com.docker.compose.project") != ownership.project_name
+                or service not in semantic_by_service
+            ):
+                raise OwnershipConflictError("Compose owner tuple is incomplete")
+            semantic_name = semantic_by_service[str(service)]
+            external_name = str(info.get("Name", "")).removeprefix("/")
+            if external_name != ownership.container_name(semantic_name):
+                raise OwnershipConflictError("Compose semantic binding changed")
+            ownership.record(
+                ResourceReceipt(
+                    kind="container",
+                    native_id=native_id,
+                    external_name=external_name,
+                    semantic_name=semantic_name,
+                    node_address=str(labels.get("aptl.node.address") or service),
+                    workspace_id=ownership.workspace_id,
+                    project_name=ownership.project_name,
+                    daemon_id=daemon_id,
+                    attempt_id=attempt_id,
+                    managed_by="compose",
+                )
+            )
+
+    def _record_compose_network_receipts(
+        self,
+        ownership: WorkspaceOwnership,
+        *,
+        daemon_id: str,
+        attempt_id: str,
+    ) -> None:
+        """Capture Compose-created network IDs after an empty/owned preflight."""
+
+        for native_id in self._scoped_compose_network_ids():
+            existing = ownership.candidates(
+                native_id, kind="network", daemon_id=daemon_id
+            )
+            if existing:
+                if len(existing) != 1:
+                    raise OwnershipConflictError("Compose owner tuple is ambiguous")
+                self._resolve_owned_network_id(native_id)
+                continue
+            info = self.host_inspect_network(native_id)
+            labels = info.get("labels") if isinstance(info, dict) else None
+            expected_labels = ownership.labels(attempt_id=attempt_id)
+            semantic_name = (
+                labels.get("com.docker.compose.network")
+                if isinstance(labels, dict)
+                else None
+            )
+            external_name = info.get("name") if isinstance(info, dict) else None
+            if (
+                info.get("id") != native_id
+                or not isinstance(labels, dict)
+                or labels.get("com.docker.compose.project") != ownership.project_name
+                or any(
+                    labels.get(label) != value
+                    for label, value in expected_labels.items()
+                )
+                or not isinstance(semantic_name, str)
+                or not semantic_name
+                or not isinstance(external_name, str)
+                or not external_name
+            ):
+                raise OwnershipConflictError(
+                    "Compose network owner tuple is incomplete"
+                )
+            ownership.record(
+                ResourceReceipt(
+                    kind="network",
+                    native_id=native_id,
+                    external_name=external_name,
+                    semantic_name=semantic_name,
+                    node_address=semantic_name,
+                    workspace_id=ownership.workspace_id,
+                    project_name=ownership.project_name,
+                    daemon_id=daemon_id,
+                    attempt_id=attempt_id,
+                    managed_by="compose",
+                )
+            )
+
+    def _record_compose_volume_receipts(
+        self,
+        ownership: WorkspaceOwnership,
+        *,
+        daemon_id: str,
+        attempt_id: str,
+    ) -> None:
+        """Capture Compose-created volume names after an empty/owned preflight."""
+
+        for native_name in self._scoped_compose_volume_names():
+            existing = ownership.candidates(
+                native_name, kind="volume", daemon_id=daemon_id
+            )
+            if existing:
+                if len(existing) != 1:
+                    raise OwnershipConflictError("Compose owner tuple is ambiguous")
+                self._resolve_owned_volume_name(native_name)
+                continue
+            result = self._run(
+                ["docker", "volume", "inspect", native_name],
+                timeout=_DOCKER_TIMEOUT,
+            )
+            try:
+                payload = json.loads(result.stdout) if result.returncode == 0 else None
+            except (TypeError, ValueError) as exc:
+                raise OwnershipConflictError(
+                    "Compose volume owner tuple is unreadable"
+                ) from exc
+            info = payload[0] if isinstance(payload, list) and payload else None
+            labels = info.get("Labels") if isinstance(info, dict) else None
+            expected_labels = ownership.labels(attempt_id=attempt_id)
+            semantic_name = (
+                labels.get("com.docker.compose.volume")
+                if isinstance(labels, dict)
+                else None
+            )
+            if (
+                not isinstance(info, dict)
+                or info.get("Name") != native_name
+                or not isinstance(labels, dict)
+                or labels.get("com.docker.compose.project") != ownership.project_name
+                or any(
+                    labels.get(label) != value
+                    for label, value in expected_labels.items()
+                )
+                or not isinstance(semantic_name, str)
+                or not semantic_name
+            ):
+                raise OwnershipConflictError("Compose volume owner tuple is incomplete")
+            ownership.record(
+                ResourceReceipt(
+                    kind="volume",
+                    native_id=native_name,
+                    external_name=native_name,
+                    semantic_name=semantic_name,
+                    node_address=semantic_name,
+                    workspace_id=ownership.workspace_id,
+                    project_name=ownership.project_name,
+                    daemon_id=daemon_id,
+                    attempt_id=attempt_id,
+                    managed_by="compose",
+                )
+            )
+
+    def _remove_owned_attempt_containers(self, attempt_id: str) -> None:
+        """Best-effort rollback of only IDs recorded for the failed attempt."""
+
+        ownership = self._ensure_resource_ownership()
+        for receipt in ownership.receipts("container"):
+            if receipt.attempt_id != attempt_id:
+                continue
+            try:
+                native_id = self._resolve_owned_container_id(receipt.native_id)
+                self._run(["docker", "rm", "-f", native_id], timeout=60)
+            except (OwnershipConflictError, OSError):
+                continue
 
     def stop(self, profiles: list[str], *, remove_volumes: bool = False) -> LabResult:
         """Stop lab services via docker compose down.
@@ -369,6 +983,13 @@ class DockerComposeBackend(
         Returns:
             LabResult indicating success or failure.
         """
+        try:
+            self._prepare_owned_cleanup()
+        except (BackendTimeoutError, OwnershipConflictError, OSError):
+            return LabResult(
+                success=False,
+                error="Backend resource ownership conflict before Compose cleanup.",
+            )
         return stop_compose_lab(
             self,
             profiles,
@@ -396,4 +1017,11 @@ class DockerComposeBackend(
         Returns:
             Tuple of (success, error_message).
         """
+        try:
+            self._prepare_owned_cleanup()
+        except (BackendTimeoutError, OwnershipConflictError, OSError):
+            return (
+                False,
+                "Backend resource ownership conflict before emergency cleanup.",
+            )
         return kill_compose_lab(self, profiles, timeout=_DOCKER_TIMEOUT)

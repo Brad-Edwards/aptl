@@ -41,6 +41,7 @@ from aptl.runtime_authority import (
     DeploymentSpawnImageRequirement,
 )
 
+
 @pytest.fixture(autouse=True)
 def _isolate_docker_endpoint_env(monkeypatch):
     """Keep endpoint-binding tests independent of the runner's ambient env.
@@ -738,6 +739,25 @@ def test_authority_holder_without_compose_image_is_rejected_before_realization(
     assert result.error == (
         "Docker control authority requires a Compose image for provision.node.orborus."
     )
+
+
+def test_spawned_child_contract_requires_attempt_isolated_daemon_before_mutation(
+    tmp_path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path)
+    backend.bind_local_docker_socket = MagicMock(return_value=LabResult(success=True))
+    backend._run = MagicMock()
+
+    result = backend._runtime_orchestration_preflight(_spec())
+
+    assert result is not None
+    assert result.success is False
+    assert result.error == (
+        "Backend resource ownership conflict: runtime-spawned children require "
+        "an attempt-isolated Docker daemon."
+    )
+    backend.bind_local_docker_socket.assert_not_called()
+    backend._run.assert_not_called()
 
 
 def test_effective_compose_rejects_duplicate_or_endpoint_redirects() -> None:

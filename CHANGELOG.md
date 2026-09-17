@@ -9,6 +9,19 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [5.5.0](https://github.com/Brad-Edwards/aptl/compare/v5.4.0...v5.5.0) (2026-09-17)
+
+
+### Features
+
+* enforce scope-aware TechVault evidence capture ([#1046](https://github.com/Brad-Edwards/aptl/issues/1046)) ([042be31](https://github.com/Brad-Edwards/aptl/commit/042be3176a63fda24eef9e8267e6fce5212eb6c0))
+* **mcp:** resolve MCP client host ports from the lab's remapped publications ([#1047](https://github.com/Brad-Edwards/aptl/issues/1047)) ([eb618a9](https://github.com/Brad-Edwards/aptl/commit/eb618a940aa242c29ffe5fa6c80d21ce268cc9c4))
+
+
+### Bug Fixes
+
+* **certs:** run the Wazuh cert generator as container-root under rootless Docker ([#1044](https://github.com/Brad-Edwards/aptl/issues/1044)) ([6b65e71](https://github.com/Brad-Edwards/aptl/commit/6b65e71421a032c9512ff195dd3aaa7c85f838e1))
+
 ## [5.4.0](https://github.com/Brad-Edwards/aptl/compare/v5.3.1...v5.4.0) (2026-09-16)
 
 

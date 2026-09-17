@@ -1,26 +1,51 @@
-"""Regression checks for contributor-facing pre-commit behavior."""
+"""Keep local commits fast while retaining substantive CI checks."""
 
 import re
 from pathlib import Path
 
 import pytest
-import yaml
 
+import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# The commit path is fast hygiene, secrets, supply-chain export freshness, the
-# complexity gates and prose lint. Test suites run in CI
-# (`.github/workflows/checks.yml`), so committing does not pay for them twice.
-_TEST_SUITE_HOOKS = frozenset(
-    {
-        "pytest",
-        "vitest-mcp-common",
-        "vitest-mcp-red",
-        "vitest-web",
-        "raes-scenario-gate",
+
+def _hooks(path: str = ".pre-commit-config.yaml") -> dict:
+    config = yaml.safe_load((PROJECT_ROOT / path).read_text(encoding="utf-8"))
+    return {hook["id"]: hook for repo in config["repos"] for hook in repo["hooks"]}
+
+
+def test_local_commit_runs_only_secrets_and_fast_hygiene() -> None:
+    hooks = _hooks(".pre-commit-config.yaml")
+    assert set(hooks) == {
+        "trailing-whitespace",
+        "end-of-file-fixer",
+        "check-yaml",
+        "check-json",
+        "check-added-large-files",
+        "check-merge-conflict",
+        "detect-private-key",
     }
-)
+    assert all(hook.get("pass_filenames", True) for hook in hooks.values())
+
+
+def test_ci_retains_dependency_and_complexity_checks() -> None:
+    hooks = _hooks(".pre-commit-ci.yaml")
+    assert {"uv-lock", "uv-export", "ruff-complexity", "ts-complexity"} <= hooks.keys()
+    workflow = yaml.safe_load(
+        (PROJECT_ROOT / ".github/workflows/checks.yml").read_text()
+    )
+    jobs = workflow["jobs"]
+    assert {"python-tests", "mcp-tests", "web-tests", "docs"} <= jobs.keys()
+    commands = [step.get("run", "") for step in jobs["pre-commit"]["steps"]]
+    assert any(
+        "--config .pre-commit-ci.yaml --all-files" in command for command in commands
+    )
+    assert not any(
+        "SKIP" in step.get("env", {}) for step in jobs["pre-commit"]["steps"]
+    )
+
+
 _REQUIRED_HOOKS = frozenset(
     {
         "trailing-whitespace",
@@ -29,38 +54,9 @@ _REQUIRED_HOOKS = frozenset(
         "check-json",
         "check-added-large-files",
         "check-merge-conflict",
-        # Secrets stay on the commit path: a committed key is not something CI
-        # can take back.
         "detect-private-key",
-        # Hash-pinned requirement exports must not drift from uv.lock.
-        "uv-lock",
-        "uv-export",
     }
 )
-
-
-def _hooks() -> dict[str, dict]:
-    config = yaml.safe_load(
-        (PROJECT_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
-    )
-    return {hook["id"]: hook for repo in config["repos"] for hook in repo["hooks"]}
-
-
-def test_vale_bootstrap_runs_serially() -> None:
-    """A fresh Vale install must not race across pre-commit file batches."""
-    assert _hooks()["vale-prose-lint"].get("require_serial") is True
-
-
-def test_commit_path_keeps_hygiene_and_secret_checks() -> None:
-    missing = _REQUIRED_HOOKS - set(_hooks())
-    assert not missing, f"commit-path hooks are missing: {sorted(missing)}"
-
-
-def test_commit_path_runs_no_test_suite() -> None:
-    """Test suites belong to CI, not to every commit."""
-    present = _TEST_SUITE_HOOKS & set(_hooks())
-    assert not present, f"test suites back on the commit path: {sorted(present)}"
-
 
 # Ordinary source files the safety hooks must never exclude. A hook can keep its
 # id while a blanket `exclude` or a `stages` restriction takes it off the commit

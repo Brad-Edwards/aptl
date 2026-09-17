@@ -118,7 +118,7 @@ class EgressAuthority(_StrictModel):
 class GuestPublication(_StrictModel):
     """One loopback-only guest endpoint projected to the physical host."""
 
-    audience: Literal["participant", "recovery"]
+    audience: Literal["participant", "recovery", "host-mcp"]
     address: str
     port: int = Field(ge=1, le=65535)
     protocol: Transport
@@ -172,10 +172,18 @@ class ApplianceBoundaryPolicy(_StrictModel):
     egress_authorities: list[EgressAuthority] = Field(default_factory=list)
     egress_proxy_limits: EgressProxyLimits
     guest_publications: list[GuestPublication] = Field(default_factory=list)
+    host_mcp_contract: Literal["aptl.restricted-ssh-mcp/v1"] | None = None
     docker_authority: DockerAuthorityPolicy
 
     @model_validator(mode="after")
     def validate_unique_entries(self) -> ApplianceBoundaryPolicy:
+        mcp = [item for item in self.guest_publications if item.audience == "host-mcp"]
+        if bool(mcp) != (self.host_mcp_contract is not None) or len(mcp) > 1:
+            raise ValueError(
+                "host MCP requires one explicit supported transport publication"
+            )
+        if mcp and mcp[0].protocol != "tcp":
+            raise ValueError("restricted SSH MCP requires TCP")
         crossings = [
             (item.source, item.destination, item.protocol, tuple(item.ports))
             for item in self.fixed_crossings

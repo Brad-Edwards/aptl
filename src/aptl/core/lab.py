@@ -3054,6 +3054,8 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 14: Syncing MCP client config with seeded API keys...")
     try:
         _sync_mcp_config_keys(ctx.project_dir, ctx.resolved_ports)
+        if ctx.admitted_start is not None and ctx.backend is not None:
+            _sync_native_mcp_ingress(ctx.project_dir, ctx.backend, ctx.run_id)
     except Exception:
         # Exception text may include API key names — keep it in the log
         # only (existing redaction). Diagnostic stays narrow.
@@ -3489,6 +3491,40 @@ def _inject_mcp_server_ports(
                 spec_env[var] = port_env[var]
                 updated.append(f"{server_name}.{var}")
     return updated
+
+
+def _sync_native_mcp_ingress(
+    project_dir: Path, backend: object, run_id: str | None
+) -> None:
+    """Connect native Kali clients to captured ingress in the same host/guest."""
+    import json
+
+    from aptl.core.mcp_ingress import native_kali_ingress
+    from aptl.workbench.profiles import profile_for
+
+    path = project_dir / ".mcp.json"
+    if not path.exists():
+        return
+    cfg = json.loads(path.read_text())
+    server = cfg.get("mcpServers", {}).get("aptl-red")
+    if not isinstance(server, dict):
+        return
+    if not run_id:
+        raise ValueError("native MCP run identity is unavailable")
+    observed = backend.container_inspect("aptl-kali")
+    server.setdefault("env", {}).update(
+        native_kali_ingress(observed, observed.get("Id", ""))
+    )
+    for role in ("red", "blue"):
+        for item in profile_for(role).servers:
+            managed = cfg["mcpServers"].get(item.server_id)
+            if isinstance(managed, dict):
+                managed.setdefault("env", {}).update(
+                    APTL_MCP_ADMITTED_RUN_ID=run_id,
+                    APTL_STATE_DIR=str(project_dir / ".aptl"),
+                )
+    path.write_text(json.dumps(cfg, indent=2) + "\n")
+    path.chmod(0o600)
 
 
 def _sync_mcp_config_keys(project_dir: Path, resolved_ports: list[object]) -> None:

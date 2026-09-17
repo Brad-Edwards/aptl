@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import ipaddress
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -24,10 +25,25 @@ class _StrictObservation(BaseModel):
 class BoundaryEndpoint(_StrictObservation):
     """One physical-host endpoint attributed to an approved audience."""
 
-    audience: Literal["participant", "recovery"]
+    audience: Literal["participant", "recovery", "host-mcp"]
     address: str
     port: int = Field(ge=1, le=65535)
     protocol: Literal["tcp", "udp"]
+
+    guest_address: str | None = None
+    guest_port: int | None = Field(default=None, ge=1, le=65535)
+
+    @model_validator(mode="after")
+    def validate_mapping(self) -> Self:
+        """Require a complete guest endpoint for mapped host listeners."""
+        if (self.guest_address is None) != (self.guest_port is None):
+            raise ValueError("guest mapping requires both address and port")
+        for address in (self.address, self.guest_address):
+            if address is not None and not ipaddress.ip_address(address).is_loopback:
+                raise ValueError("boundary endpoints must bind loopback")
+        if self.audience == "host-mcp" and self.guest_port is None:
+            raise ValueError("host MCP requires an explicit guest endpoint mapping")
+        return self
 
 
 class HostBoundaryObservation(_StrictObservation):
@@ -66,6 +82,7 @@ class BoundaryProbeObservation(_StrictObservation):
 
     @model_validator(mode="after")
     def validate_transport_port(self) -> BoundaryProbeObservation:
+        """Require ports only for TCP and UDP boundary probes."""
         if (self.protocol in {"tcp", "udp"}) != (self.port is not None):
             raise ValueError("probe port must match its transport")
         return self
@@ -139,30 +156,32 @@ def _append_host_findings(
 ) -> None:
     """Compare fresh outer-host evidence with the signed binding."""
 
-    if host.observation_id != binding.host_observation_id:
-        findings.append("boundary.host-observation-identity-mismatch")
-    if host.policy_digest != binding.policy_digest:
-        findings.append("boundary.host-policy-digest-mismatch")
-    if host.payload_digest != binding.payload_digest:
-        findings.append("boundary.host-payload-digest-mismatch")
-    if host.boot_id != binding.boot_id:
-        findings.append("boundary.host-boot-identity-mismatch")
+    if policy.host_mcp_contract is not None:
+        from aptl.appliance.seat.observation import observation_id_for
+
+        if host.observation_id != observation_id_for(host):
+            findings.append("boundary.host-observation-content-mismatch")
+    comparisons = (
+        (
+            host.observation_id != binding.host_observation_id,
+            "boundary.host-observation-identity-mismatch",
+        ),
+        (
+            host.policy_digest != binding.policy_digest,
+            "boundary.host-policy-digest-mismatch",
+        ),
+        (
+            host.payload_digest != binding.payload_digest,
+            "boundary.host-payload-digest-mismatch",
+        ),
+        (host.boot_id != binding.boot_id, "boundary.host-boot-identity-mismatch"),
+    )
+    findings.extend(reason for mismatch, reason in comparisons if mismatch)
     if not host.complete:
         findings.append("boundary.host-observation-incomplete")
     if not host.forbidden_reachability_passed:
         findings.append("boundary.host-forbidden-reachability")
-    expected = {
-        (item.audience, item.address, item.port, item.protocol)
-        for item in policy.guest_publications
-    }
-    observed = {
-        (item.audience, item.address, item.port, item.protocol)
-        for item in host.listeners
-    }
-    if observed - expected:
-        findings.append("boundary.host-listener-unapproved")
-    if expected - observed:
-        findings.append("boundary.host-listener-missing")
+    _append_host_listener_findings(policy, host, findings)
 
 
 def _append_guest_findings(
@@ -337,3 +356,26 @@ def _inventory(
         "findings": list(findings),
         "passed": not findings,
     }
+
+
+def _append_host_listener_findings(
+    policy: ApplianceBoundaryPolicy, host: HostBoundaryObservation, findings: list[str]
+) -> None:
+    """Compare mapped listener endpoints with the signed guest publications."""
+    expected = {
+        (item.audience, item.address, item.port, item.protocol)
+        for item in policy.guest_publications
+    }
+    observed = {
+        (
+            item.audience,
+            item.guest_address or item.address,
+            item.guest_port or item.port,
+            item.protocol,
+        )
+        for item in host.listeners
+    }
+    if observed - expected:
+        findings.append("boundary.host-listener-unapproved")
+    if expected - observed:
+        findings.append("boundary.host-listener-missing")

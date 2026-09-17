@@ -144,6 +144,7 @@ nav:
     - Red Team Taxonomy: red-team-taxonomy.md
     - Guided Purple Participant Profile: reference/participant-profile.md
     - Disposable Appliance Release: reference/appliance-release.md
+    - Host MCP access: reference/host-mcp-access.md
     - Appliance Seat Launcher: reference/appliance-seat-launcher.md
     - TechVault Scenario Overview: reference/techvault-scenario-overview.md
     - TechVault Company Profile: reference/techvault-company-profile.md
@@ -215,6 +216,7 @@ nav:
     - ADR-056 Scenario-Led Capability Qualification: adrs/adr-056-scenario-led-capability-qualification.md
     - ADR-057 Agent Execution Compartments: adrs/adr-057-agent-execution-compartments.md
     - ADR-058 Adoption and Security Release Gates: adrs/adr-058-adoption-and-security-release-gates.md
+    - ADR-059 Canonical TechVault Delivery and Host MCP Access: adrs/adr-059-canonical-techvault-delivery-and-host-mcp-access.md
 
 extra:
   social:

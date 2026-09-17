@@ -14,7 +14,7 @@ controls, and recovery UI are implemented by [`aptl seat`](appliance-seat-launch
 An appliance release is admitted only when all of these statements are true:
 
 - the source tag is exactly `v<aptl-version>` and names a full source commit;
-- all nine required artifacts have their byte size and SHA-256 digest bound
+- all nine required artifacts and the optional canonical-inputs artifact have their byte size and SHA-256 digest bound
   into a canonical RFC 8785 manifest;
 - the manifest has a valid Ed25519 signature from the configured release trust
   anchor;
@@ -37,23 +37,39 @@ machine identities, or per-instance credentials.
 The release host needs Python 3.11 or later, `qemu-img`, and libguestfs tools
 providing `virt-customize` and `virt-sysprep`. The pinned Ubuntu base image must
 already contain systemd, Python with pip, and Docker Engine. The supported
-participant profile requires at least 8 vCPUs, 16 GiB RAM, 100 GiB available
+participant profile requires at least 8 vCPUs, 32 GiB RAM, 250 GiB available
 disk, and hardware virtualization.
 
 Network access is permitted while a release engineer resolves and stages
-version-pinned inputs. The subsequent payload assembly and golden-image build
+version-pinned inputs, including the canonical npm builds. The subsequent payload assembly and golden-image build
 are deliberately offline: they contain no checkout, dependency resolution,
 image pull, image build, or package-repository step.
 
 ## Stage the offline payload
 
-Create a closed staging directory with exactly these entries:
+Run `aptl appliance assemble-inputs` from the installed APTL wheel, using a
+pre-acquired platform-specific hashed wheelhouse, Docker-save image archive,
+and a JSON map of canonical image roles to `sha256:` image config IDs. The
+command materializes wheel assets, builds the frontend and every MCP from npm
+locks, writes the full-TechVault profile, and validates the nested input closure.
+It does not build a VM or qualify an offline boot.
+
+```bash
+aptl appliance assemble-inputs --staging-dir build/offline-staging \
+  --wheelhouse build/wheelhouse --image-archive build/oci-images.tar \
+  --image-roles build/image-roles.json
+aptl appliance validate-inputs --staging-dir build/offline-staging
+```
+
+The canonical staging directory contains exactly these entries:
 
 | Entry | Purpose |
 | --- | --- |
+| `inputs.json` | Full pack identity, platform, image roles and v2 content lock |
+| `requirements.txt` | Hash-pinned APTL `[web]` and transitive wheel closure |
 | `wheelhouse/` | The `aptl_labs-*.whl` wheel and all locked Python wheels |
-| `project.tar` | Checkout-free project assets from the exact source commit |
-| `oci-images.tar` | All digest-pinned container images in the APP-2 asset lock |
+| `project.tar` | Immutable wheel assets plus built frontend/MCP runtime dependencies and full profile |
+| `oci-images.tar` | Complete scenario, helper and child image IDs with verified configs and layers |
 | `appliance-release.env` | Non-secret scenario and exact `APTL_APPLIANCE_VERSION` lines |
 | `aptl-appliance-first-boot` | First-boot script from `appliance/guest/` |
 | `aptl-appliance-first-boot.service` | Corresponding systemd unit |
@@ -226,3 +242,22 @@ Retain the tagged source identity, canonical manifest, detached signature,
 `SHA256SUMS`, clean-golden inventory, APP-2 qualification, and two-machine drill
 with the release. These records connect the version and checksums to readiness
 and rollback evidence.
+
+## Canonical inputs and host access
+
+Canonical inputs bind every wheel and every project/build file by SHA-256. The
+validator checks wheel tags, transitive dependencies including extras, package
+identity, required builds, exact image roles, Docker/OCI layer graphs and the
+immutable assets inside the delivered APTL wheel. Validation runs on the declared
+Python/architecture target. It is a software input check, not offline-boot proof.
+Historical six-entry guided payload fixtures remain readable; new full-TechVault
+assembly requires the two additional entries above.
+
+A host-MCP-enabled release also carries a `canonical-inputs` artifact equal to
+the payload's `inputs.json`, a matching `canonical_inputs_digest`, and
+`host_mcp_contract: aptl.restricted-ssh-mcp/v1` in delivery metadata. The signed
+boundary policy must declare that same contract and exactly one host-MCP guest
+publication. Launch descriptors preserve those identities. The original nine
+artifacts, release and qualification signatures, offline qualification and
+independent-machine drills remain mandatory. #1022 supplies actual VM builds,
+boot and key wiring, port mappings, concurrent seats and publication.

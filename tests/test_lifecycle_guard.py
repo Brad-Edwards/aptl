@@ -31,6 +31,45 @@ def _enter_lifecycle_lock(project_dir: Path) -> None:
         pass
 
 
+def _hold_observation_lock_in_child(project_dir, ready, release):
+    from aptl.core.lifecycle_guard import lifecycle_observation_lock
+
+    with lifecycle_observation_lock(Path(project_dir)):
+        ready.set()
+        release.wait(timeout=15)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="guest observation requires POSIX")
+def test_observation_locks_share_across_processes_and_exclude_mutation(tmp_path):
+    from aptl.core.lifecycle_guard import (
+        lifecycle_observation_lock,
+        lifecycle_mutation_lock,
+    )
+    from aptl.core.lifecycle_policy import LifecycleBusyError
+
+    context = multiprocessing.get_context("spawn")
+    ready, release = context.Event(), context.Event()
+    child = context.Process(
+        target=_hold_observation_lock_in_child, args=(str(tmp_path), ready, release)
+    )
+    child.start()
+    try:
+        with lifecycle_observation_lock(tmp_path):
+            assert ready.wait(timeout=5), "independent readers must share the lock"
+        with pytest.raises(LifecycleBusyError):
+            with lifecycle_mutation_lock(tmp_path):
+                pass
+    finally:
+        release.set()
+        child.join(timeout=5)
+        if child.is_alive():
+            child.terminate()
+            child.join(timeout=5)
+    assert child.exitcode == 0
+    with lifecycle_mutation_lock(tmp_path):
+        pass
+
+
 def test_lifecycle_mutation_lock_is_reentrant_per_thread(tmp_path: Path) -> None:
     from aptl.core.lifecycle_guard import lifecycle_mutation_lock
 

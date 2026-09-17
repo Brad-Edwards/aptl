@@ -39,6 +39,7 @@ prose must not accidentally rename them.
 
 | Surface | Files | Disposition |
 | --- | --- | --- |
+| Canonical participant delivery and host access | `docs/adrs/adr-059-canonical-techvault-delivery-and-host-mcp-access.md`, `docs/reference/participant-profile.md` | Keep the TechVault pack identity distinct from the APTL-owned delivery, transport and qualification contracts. |
 | Current user and authoring guidance | `README.md`, `docs/index.md`, `docs/reference/techvault-scenario-overview.md`, `docs/sdl/index.md`, `docs/sdl/techvault-curated-variants.md`, `docs/testing/smoke-test-plan.md` | Treat `docs/sdl/index.md` as the exemplar: companion authoring and format links are separate from the APTL-owned operator catalog and runtime section. Qualify nearby catalog prose as APTL startup selection when context is not explicit. |
 | Accepted realization and pack-boundary decisions | `docs/adrs/adr-012-opentelemetry-integration.md`, `docs/adrs/adr-035-raes-sdl-adoption.md`, `docs/adrs/adr-046-dynamic-raes-scenario-realization.md`, `docs/adrs/adr-053-pack-backend-deployment-serving-interaction-seam.md` | Preserve decision history. Add current clarification around historical names instead of mechanically rewriting accepted records. |
 | Proposed product and release decisions | `docs/adrs/adr-054-lilrae-core-and-experience-ownership.md`, `docs/adrs/adr-058-adoption-and-security-release-gates.md` | Keep TechVault pack-specific and APTL runtime-specific concerns distinct. Replace ambiguous ownership by unnamed "catalogs" only when editing current prose. |

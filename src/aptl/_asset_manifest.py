@@ -40,6 +40,8 @@ ASSET_ROOTS: tuple[str, ...] = (
     ".env.example",
     ".mcp.json.example",
     "pyproject.toml",
+    "uv.lock",
+    "requirements",
     "README.md",
     "hatch_build.py",
     "src",

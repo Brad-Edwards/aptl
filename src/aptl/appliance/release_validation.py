@@ -65,9 +65,9 @@ def compute_payload_digest(artifacts: tuple[ArtifactReference, ...]) -> str:
             "size_bytes": artifact.size_bytes,
         }
         for artifact in sorted(artifacts, key=lambda item: item.artifact_id)
-        if artifact.kind in _PAYLOAD_KINDS
+        if artifact.kind in _PAYLOAD_KINDS | {"canonical-inputs"}
     ]
-    if {item["kind"] for item in projection} != _PAYLOAD_KINDS:
+    if not _PAYLOAD_KINDS <= {item["kind"] for item in projection}:
         raise ApplianceManifestError("payload artifact set is incomplete")
     return f"sha256:{hashlib.sha256(rfc8785.dumps(projection)).hexdigest()}"
 
@@ -247,6 +247,7 @@ def verify_release_evidence(
         raise ApplianceManifestError(
             "participant qualification evidence does not match the release"
         )
+    _verify_canonical_delivery(manifest, payloads, profile, readiness)
     if drill != manifest.qualification:
         raise ApplianceManifestError("machine drill evidence does not match manifest")
 
@@ -278,3 +279,67 @@ def verify_offline_aptl_version(payload: bytes, expected_version: str) -> None:
         raise ApplianceManifestError(
             "offline payload APTL version does not match the release"
         )
+
+
+def _verify_canonical_delivery(
+    manifest: ApplianceReleaseManifest,
+    payloads: dict[str, bytes],
+    profile: ParticipantProfileManifest,
+    readiness: ParticipantReadinessSuite,
+) -> None:
+    """Bind the optional host transport to full packaged inputs in the payload."""
+    _verify_transport_readiness(manifest, payloads, readiness)
+    canonical = payloads.get("canonical-inputs")
+    if canonical is None:
+        return
+    from aptl.appliance.inputs import CanonicalInputs
+    from aptl.validation.participant_profile_models import EnvPackScenarioReference
+
+    try:
+        inputs = CanonicalInputs.model_validate_json(canonical)
+        if (
+            inputs.aptl_version != manifest.source.aptl_version
+            or not isinstance(profile.scenario, EnvPackScenarioReference)
+            or profile.scenario.identity != inputs.scenario_pack
+            or set(profile.capabilities.workbench_profiles) != {"red", "blue"}
+        ):
+            raise ValueError("canonical delivery identity differs")
+        _verify_embedded_inputs(payloads["offline-payload"], canonical)
+    except (ValueError, KeyError, tarfile.TarError) as exc:
+        raise ApplianceManifestError("canonical release evidence mismatch") from exc
+
+
+def _verify_transport_readiness(
+    manifest: ApplianceReleaseManifest,
+    payloads: dict[str, bytes],
+    readiness: ParticipantReadinessSuite,
+) -> None:
+    """Require policy agreement and real-client qualification for host MCP."""
+    policy = ApplianceBoundaryPolicy.model_validate_json(payloads["boundary-policy"])
+    if policy.host_mcp_contract != manifest.delivery.host_mcp_contract:
+        raise ApplianceManifestError("host MCP policy differs from the signed delivery")
+    if manifest.delivery.host_mcp_contract:
+        clients = {
+            check.subject_id
+            for check in readiness.checks
+            if check.kind == "client-transport"
+            and check.operation_id == "authenticated-client-tool-call-and-revocation"
+        }
+        if clients != {"claude", "codex"}:
+            raise ApplianceManifestError(
+                "host MCP qualification requires both real clients"
+            )
+
+
+def _verify_embedded_inputs(payload: bytes, canonical: bytes) -> None:
+    """Require one byte-identical canonical record in the signed payload."""
+    with tarfile.open(fileobj=io.BytesIO(payload), mode="r:") as archive:
+        members = [member for member in archive if member.name == "inputs.json"]
+        if (
+            len(members) != 1
+            or not members[0].isfile()
+            or members[0].size != len(canonical)
+        ):
+            raise ValueError("canonical payload input record is missing or ambiguous")
+        if archive.extractfile(members[0]).read() != canonical:
+            raise ValueError("canonical payload input record differs")

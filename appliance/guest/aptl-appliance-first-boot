@@ -5,6 +5,7 @@ umask 077
 
 . /etc/aptl/appliance-release.env
 : "${APTL_APPLIANCE_SCENARIO:?missing staged appliance scenario identity}"
+test "$APTL_APPLIANCE_SCENARIO" = techvault
 
 aptl appliance bootstrap-overlay --state-dir /var/lib/aptl/overlay
 images_loaded=/var/lib/aptl/overlay/images-loaded
@@ -17,7 +18,6 @@ if test ! -f "$images_loaded"; then
 fi
 exec aptl lab start \
     --project-dir /opt/aptl/project \
-    --scenario "$APTL_APPLIANCE_SCENARIO" \
     --offline-staged \
     --appliance-launch-descriptor /run/aptl-launch/appliance-launch.json \
     --appliance-release-public-key /run/aptl-launch/release-public.pem \

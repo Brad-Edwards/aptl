@@ -80,3 +80,4 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [056](adr-056-scenario-led-capability-qualification.md) | Scenario-Led Capability Qualification | proposed | 2026-09-05 |
 | [057](adr-057-agent-execution-compartments.md) | Agent Execution Compartments | proposed | 2026-09-05 |
 | [058](adr-058-adoption-and-security-release-gates.md) | Adoption and Security Release Gates | proposed | 2026-09-05 |
+| [059](adr-059-canonical-techvault-delivery-and-host-mcp-access.md) | Canonical TechVault Delivery and Host MCP Access | accepted | 2026-09-17 |

@@ -111,6 +111,7 @@ class ComposeProjectInventoryMixin(object):
                     "docker",
                     "ps",
                     "-a",
+                    "--no-trunc",
                     "--filter",
                     f"label={label}={self._project_name}",
                     "--format",

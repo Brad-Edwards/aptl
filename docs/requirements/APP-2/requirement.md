@@ -44,3 +44,4 @@ Issue #820 defines the reusable bounded workshop/classroom profile and qualifica
 - TESTS → TEST `tests/test_full_techvault_inputs.py` (Canonical pack, runtime inventory and readiness coverage)
 - TESTS → TEST `tests/test_mcp_transport_processes.py` (Real MCP process, role and browser transport integration)
 - TESTS → TEST `tests/test_mcp_payload_processes.py` (Every MCP initializes from the extracted runtime payload)
+- TESTS → TEST `tests/test_mcp_guest_management.py` (Private enrollment, inventory rejection and guest-only launch credentials)

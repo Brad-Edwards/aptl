@@ -49,3 +49,89 @@ def test_gateway_preserves_root_paths_and_denies_other_role():
         upstream.shutdown()
         thread.join()
         upstream.server_close()
+
+
+def test_gateway_websocket_relays_both_frame_types_and_closes_revoked_session():
+    import pytest
+    from starlette.websockets import WebSocketDisconnect
+    from websockets.sync.server import serve
+
+    from aptl.workbench.app import BrowserPrincipal
+    from aptl.workbench.browser_gateway import BrowserGateway, BrowserRoute
+
+    def echo(socket):
+        for message in socket:
+            socket.send(message)
+
+    with serve(echo, "127.0.0.1", 0) as upstream:
+        thread = threading.Thread(target=upstream.serve_forever, daemon=True)
+        thread.start()
+        principal = [BrowserPrincipal("alice", ("blue",))]
+        port = upstream.socket.getsockname()[1]
+        route = BrowserRoute(
+            bookmark_ref="soc-thehive",
+            hostname="thehive.seat.localhost",
+            upstream=f"http://127.0.0.1:{port}",
+        )
+        gateway = BrowserGateway(
+            FastAPI(), routes=(route,), authorizer=lambda _: principal[0]
+        )
+        try:
+            with TestClient(gateway) as client:
+                with client.websocket_connect(
+                    "ws://thehive.seat.localhost/events?seat=1"
+                ) as socket:
+                    socket.send_text("text frame")
+                    assert socket.receive_text() == "text frame"
+                    socket.send_bytes(b"binary frame")
+                    assert socket.receive_bytes() == b"binary frame"
+                    principal[0] = None
+                    with pytest.raises(WebSocketDisconnect):
+                        socket.receive_text()
+                principal[0] = BrowserPrincipal("alice", ("red",))
+                denied = client.websocket_connect("ws://thehive.seat.localhost/events")
+                with pytest.raises(WebSocketDisconnect):
+                    denied.__enter__()
+        finally:
+            upstream.shutdown()
+            thread.join(timeout=5)
+
+
+def test_gateway_rewrites_local_redirects_and_strips_workbench_cookie():
+    from starlette.requests import Request
+
+    from aptl.workbench.browser_gateway import BrowserGateway, BrowserRoute
+
+    route = BrowserRoute(
+        bookmark_ref="soc-thehive",
+        hostname="thehive.seat.localhost",
+        upstream="http://127.0.0.1:9000",
+    )
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "scheme": "http",
+            "path": "/",
+            "query_string": b"",
+            "server": ("thehive.seat.localhost", 8080),
+            "headers": [
+                (b"host", b"thehive.seat.localhost:8080"),
+                (b"cookie", b"aptl_participant=private-session; service=retained"),
+                (b"x-aptl-owner", b"untrusted"),
+                (b"x-forwarded-host", b"foreign"),
+            ],
+        }
+    )
+    assert BrowserGateway._headers(request) == [("cookie", "service=retained")]
+    assert (
+        BrowserGateway._response_header(
+            "Location", route.upstream + "/login", request, route
+        )
+        == "http://thehive.seat.localhost:8080/login"
+    )
+    cookie = BrowserGateway._response_header(
+        "Set-Cookie", "service=value; Domain=internal.local; HttpOnly", request, route
+    )
+    assert "Domain" not in cookie
+    assert "HttpOnly" in cookie

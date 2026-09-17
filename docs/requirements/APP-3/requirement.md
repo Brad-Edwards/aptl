@@ -39,3 +39,4 @@ Issue #823 supplies the release artifact consumed by the host launcher in issue 
 - IMPLEMENTS → CODE_FILE `src/aptl/appliance/input_images.py` (Required OCI configuration and layer identities)
 - TESTS → TEST `tests/test_payload_content.py` (Missing and altered offline input rejection)
 - TESTS → TEST `tests/test_mcp_appliance_admission.py` (Signed launch and fresh boundary binding admission)
+- TESTS → TEST `tests/test_canonical_input_roundtrip.py` (Closed input staging and immutable packaged-byte tamper rejection)

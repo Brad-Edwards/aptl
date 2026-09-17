@@ -1284,6 +1284,7 @@ tests/test_boundary_compiler.py	tests-follow-owner	Retain meaningful boundary an
 tests/test_bounded_participant_agency_scenario.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_bounded_participant_runtime.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_browser_gateway.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
+tests/test_canonical_input_roundtrip.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/test_capture_apparatus.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_capture_registry.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_certs.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1397,6 +1398,7 @@ tests/test_mcp_build_script.py	backend-owned-runtime	Constrain the temporary pla
 tests/test_mcp_config_example.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_mcp_dispatch.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/test_mcp_guest_binding.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
+tests/test_mcp_guest_management.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/test_mcp_native_ingress.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/test_mcp_payload_processes.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/test_mcp_protocol.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

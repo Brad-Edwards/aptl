@@ -355,7 +355,13 @@ jobs:
           sudo apt-get install -y openssh-server
           pip install --require-hashes -r requirements/dev.txt
           pip install -e . --no-deps --no-build-isolation
-          python -m pytest tests/test_mcp_transport_processes.py tests/test_mcp_payload_processes.py -q -m integration
+          coverage run --data-file=.coverage.transport -m pytest tests/test_mcp_transport_processes.py tests/test_mcp_payload_processes.py -q -m integration
+          coverage xml --data-file=.coverage.transport -o coverage/transport.xml
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: python-transport-coverage
+          path: coverage/transport.xml
+          retention-days: 7
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mcp-coverage
@@ -632,6 +638,10 @@ jobs:
         with:
           name: python-coverage
           path: .
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-transport-coverage
+          path: coverage/
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: mcp-coverage

@@ -14,6 +14,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.websockets import WebSocket
 from websockets.asyncio.client import ClientConnection, connect
+from websockets.exceptions import WebSocketException
 
 from aptl.workbench.app import BrowserPrincipal, ParticipantAuthorizer
 from aptl.workbench.profiles import profile_for
@@ -295,7 +296,7 @@ class BrowserGateway:
             async with connect(
                 target,
                 additional_headers=headers,
-                subprotocols=scope.get("subprotocols", []),
+                subprotocols=scope.get("subprotocols") or None,
                 proxy=None,
                 max_size=1024**2,
                 max_queue=8,
@@ -304,7 +305,7 @@ class BrowserGateway:
                 await socket.accept(subprotocol=upstream.subprotocol)
 
                 await self._bridge(socket, upstream, request, route)
-        except (OSError, RuntimeError):
+        except (OSError, RuntimeError, WebSocketException):
             await socket.close(code=1011)
 
     async def _inbound(

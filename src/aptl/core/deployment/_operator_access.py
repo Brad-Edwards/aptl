@@ -20,40 +20,35 @@ side. A relay that starts but reaches nothing fails the realization.
 
 from __future__ import annotations
 
-import os
 import re
-import socket
-import time
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from aptl.core.deployment._compose_resource_ownership import (
     OwnershipConflictError,
     ResourceReceipt,
 )
+from aptl.core.deployment._operator_access_endpoints import (
+    OPERATOR_ACCESS_ENDPOINTS,
+    OPERATOR_ACCESS_IMAGE,
+    OperatorAccessEndpoint,
+    _SSH_TARGET_PORT,
+    resolved_host_port,
+)
+from aptl.core.deployment._operator_access_proof import (
+    OPERATOR_ACCESS_APPARATUS_ID,
+    _LOOPBACK,
+    _log_published_access,
+    _prove_endpoints,
+)
 from aptl.core.deployment.errors import BackendTimeoutError
-from aptl.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from aptl.core.deployment._compose_resource_ownership import WorkspaceOwnership
     from aptl.core.deployment.realization import DeploymentOperatorAccess
 
-log = get_logger("deployment.operator_access")
-
-OPERATOR_ACCESS_IMAGE = "aptl/operator-access-proxy:latest"
 OPERATOR_ACCESS_NETWORK_SUFFIX = "aptl-operator-access"
-OPERATOR_ACCESS_APPARATUS_ID = "aptl.apparatus.operator-interactive-access"
-SSH_CHANNEL = "ssh"
-_SSH_TARGET_PORT = 22
-_LOOPBACK = "127.0.0.1"
-_BANNER_PREFIX = b"SSH-2.0-"
-# The relay is up within seconds, but the far side is an sshd that may still be
-# settling behind the capture broker when the relay first answers. Bounded,
-# generous relative to the observed few-second settle.
-_READY_TIMEOUT_SECONDS = 120
-_READY_INTERVAL_SECONDS = 2
-_BANNER_READ_TIMEOUT_SECONDS = 5
+
 _PUBLIC_KEY_RE = re.compile(
     r"(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp\d+) [A-Za-z0-9+/=]+( [^\n]*)?"
 )
@@ -67,70 +62,6 @@ _AUTHORIZE_SCRIPT = (
     'grep -qxF -- "$2" "$keys" || printf "%s\\n" "$2" >> "$keys"; '
     'chown "$1":"$(id -gn "$1")" "$keys"; chmod 0600 "$keys"'
 )
-
-
-@dataclass(frozen=True)
-class OperatorAccessEndpoint(object):
-    """The backend's apparatus for one declarable interactive-access target.
-
-    ``env_var`` / ``default_port`` are the host publication, resolved through
-    the same remap path as every other published APTL port, so a lab whose
-    default port is taken still reaches its target and host-run MCP clients are
-    pointed at the resolved port.
-    """
-
-    target_node: str
-    target_container: str
-    relay_container: str
-    listen_port: int
-    env_var: str
-    default_port: int
-    profile: str
-    # The declared local identity the operator logs in as, when the scenario
-    # declares the access but provisions no key for it. The backend installs the
-    # operator's public key for exactly that identity. None when the scenario
-    # already delivers the authorized key (Kali's arrives with its SSH bundle).
-    authorized_user: str | None = None
-
-
-# The backend's apparatus catalog: which declared targets it can make reachable,
-# and where. A declared access to a target absent here is refused at admission
-# rather than realized as an unreachable node. `APTL_HP_KALI_SSH_PROXY_2023` keeps
-# the name host-run MCP clients (mcp-red) already resolve.
-OPERATOR_ACCESS_ENDPOINTS: dict[str, OperatorAccessEndpoint] = {
-    "kali": OperatorAccessEndpoint(
-        target_node="kali",
-        target_container="aptl-kali",
-        relay_container="aptl-operator-ssh-kali",
-        listen_port=2023,
-        env_var="APTL_HP_KALI_SSH_PROXY_2023",
-        default_port=2023,
-        profile="kali",
-    ),
-    "soc-workstation": OperatorAccessEndpoint(
-        target_node="soc-workstation",
-        target_container="aptl-soc-workstation",
-        relay_container="aptl-operator-ssh-soc-workstation",
-        listen_port=2024,
-        env_var="APTL_HP_SOC_WORKSTATION_SSH_2024",
-        default_port=2024,
-        profile="soc",
-        authorized_user="analyst",
-    ),
-}
-
-
-def realizable_access(target_node: str, channel: str) -> bool:
-    """Return whether the backend has apparatus for this declared access."""
-
-    return channel == SSH_CHANNEL and target_node in OPERATOR_ACCESS_ENDPOINTS
-
-
-def resolved_host_port(endpoint: OperatorAccessEndpoint) -> int:
-    """Return the host port the lab's port resolution selected for an endpoint."""
-
-    raw = os.environ.get(endpoint.env_var, "")
-    return int(raw) if raw.isdigit() else endpoint.default_port
 
 
 class ComposeOperatorAccessMixin(object):
@@ -394,22 +325,6 @@ class ComposeOperatorAccessMixin(object):
         return name, min(networks)
 
 
-def _log_published_access(
-    accesses: Sequence["DeploymentOperatorAccess"],
-) -> None:
-    """Record where each proven access is reachable from the operator's host."""
-
-    for access in accesses:
-        endpoint = OPERATOR_ACCESS_ENDPOINTS[access.target_node]
-        log.info(
-            "Operator access %s (%s to %s) published on 127.0.0.1:%d",
-            access.access_id,
-            access.channel,
-            access.target_node,
-            resolved_host_port(endpoint),
-        )
-
-
 def _relay_run_command(
     endpoint: OperatorAccessEndpoint,
     access: "DeploymentOperatorAccess",
@@ -456,74 +371,3 @@ def _relay_run_command(
         ]
     )
     return command
-
-
-def _prove_endpoints(
-    endpoints: Iterable[OperatorAccessEndpoint],
-    *,
-    timeout: float | None = None,
-    interval: float | None = None,
-) -> list[str]:
-    """Require an SSH identification banner through every published endpoint."""
-
-    timeout = _READY_TIMEOUT_SECONDS if timeout is None else timeout
-    interval = _READY_INTERVAL_SECONDS if interval is None else interval
-
-    pending = {endpoint.relay_container: endpoint for endpoint in endpoints}
-    deadline = time.monotonic() + timeout
-    while pending:
-        for name, endpoint in list(pending.items()):
-            if ssh_banner_reachable(_LOOPBACK, resolved_host_port(endpoint)):
-                del pending[name]
-        if not pending or time.monotonic() >= deadline:
-            break
-        time.sleep(interval)
-    return [
-        f"operator access through {endpoint.relay_container} "
-        f"(127.0.0.1:{resolved_host_port(endpoint)}) did not reach an SSH server "
-        f"within {int(timeout)}s"
-        for endpoint in pending.values()
-    ]
-
-
-def ssh_banner_reachable(host: str, port: int) -> bool:
-    """Return whether an SSH server identifies itself at host:port."""
-
-    try:
-        with socket.create_connection(
-            (host, port), timeout=_BANNER_READ_TIMEOUT_SECONDS
-        ) as conn:
-            conn.settimeout(_BANNER_READ_TIMEOUT_SECONDS)
-            return conn.recv(len(_BANNER_PREFIX)).startswith(_BANNER_PREFIX)
-    except OSError:
-        return False
-
-
-def operator_access_details(
-    accesses: Sequence["DeploymentOperatorAccess"],
-) -> list[dict[str, object]]:
-    """Report each admitted access and the endpoint planned for it.
-
-    Apply details are written before lab start publishes and proves the relays,
-    so this says what was admitted and where it will be published — not that it
-    is reachable. Reachability is proven by `activate_operator_access`, and a
-    failure there fails the start.
-    """
-
-    details: list[dict[str, object]] = []
-    for access in accesses:
-        endpoint = OPERATOR_ACCESS_ENDPOINTS.get(access.target_node)
-        if endpoint is None:
-            continue
-        details.append(
-            {
-                **access.details(),
-                "state": "admitted",
-                "apparatus_id": OPERATOR_ACCESS_APPARATUS_ID,
-                "relay_container": endpoint.relay_container,
-                "planned_host_ip": _LOOPBACK,
-                "planned_host_port": resolved_host_port(endpoint),
-                "environment_visible": True,
-            }
-        )
-    return details

@@ -21,14 +21,17 @@ import pytest
 
 from aptl.backends.raes_operator_access import operator_access_decision
 from aptl.core.deployment import _operator_access as access_mod
+from aptl.core.deployment import _operator_access_proof as proof_mod
 from aptl.core.deployment._compose_resource_ownership import (
     OwnershipConflictError,
     WorkspaceOwnership,
 )
-from aptl.core.deployment._operator_access import (
+from aptl.core.deployment._operator_access import ComposeOperatorAccessMixin
+from aptl.core.deployment._operator_access_endpoints import (
     OPERATOR_ACCESS_ENDPOINTS,
     OPERATOR_ACCESS_IMAGE,
-    ComposeOperatorAccessMixin,
+)
+from aptl.core.deployment._operator_access_proof import (
     operator_access_details,
     ssh_banner_reachable,
 )
@@ -360,7 +363,7 @@ def test_unreachable_endpoint_fails_the_realization(monkeypatch):
     """A relay that starts but reaches no SSH server is not realized access."""
     monkeypatch.setenv("APTL_HP_KALI_SSH_PROXY_2023", str(_free_port()))
 
-    failures = access_mod._prove_endpoints(
+    failures = proof_mod._prove_endpoints(
         [OPERATOR_ACCESS_ENDPOINTS["kali"]], timeout=0, interval=0
     )
 
@@ -537,8 +540,8 @@ def test_proof_failure_is_what_activation_returns(monkeypatch, tmp_path):
 def test_real_proof_runs_when_nothing_answers(monkeypatch, tmp_path):
     """With the real proof in place, an endpoint nothing serves fails activation."""
     monkeypatch.setenv("APTL_HP_KALI_SSH_PROXY_2023", str(_free_port()))
-    monkeypatch.setattr(access_mod, "_READY_TIMEOUT_SECONDS", 0)
-    monkeypatch.setattr(access_mod, "_READY_INTERVAL_SECONDS", 0)
+    monkeypatch.setattr(proof_mod, "_READY_TIMEOUT_SECONDS", 0)
+    monkeypatch.setattr(proof_mod, "_READY_INTERVAL_SECONDS", 0)
     backend = _Backend(tmp_path)
 
     failures = backend.activate_operator_access((_KALI,))

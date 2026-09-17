@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from aptl.core.deployment._operator_access import realizable_access
+from aptl.core.deployment._operator_access_endpoints import realizable_access
 from aptl.core.deployment.realization import DeploymentOperatorAccess
 
 

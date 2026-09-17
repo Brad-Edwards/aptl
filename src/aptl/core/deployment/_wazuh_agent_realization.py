@@ -9,7 +9,6 @@ from typing import Protocol
 
 from aptl.core.deployment._wazuh_agent_configuration import (
     _single_target,
-    _value,
     wazuh_config,
 )
 

@@ -2693,7 +2693,7 @@ class TestResolveHostPortsStep:
             "aptl.core.host_ports.resolve_host_ports", return_value=resolution
         )
         bindings = mocker.patch(
-            "aptl.core.host_ports.project_port_bindings", return_value={}
+            "aptl.core._port_bindings.project_port_bindings", return_value={}
         )
         ctx = self._ctx(tmp_path, raw_env={"APTL_DNS_HOST_PORT": "9"})
 
@@ -2731,7 +2731,7 @@ class TestResolveHostPortsStep:
             remapped=True,
         )
         mocker.patch("aptl.core.host_ports.resolve_host_ports", return_value=[remapped])
-        mocker.patch("aptl.core.host_ports.project_port_bindings", return_value={})
+        mocker.patch("aptl.core._port_bindings.project_port_bindings", return_value={})
         progress = MagicMock()
 
         _step_resolve_host_ports(self._ctx(tmp_path, progress=progress))

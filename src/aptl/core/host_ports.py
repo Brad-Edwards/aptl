@@ -29,15 +29,10 @@ import re
 import socket
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
-
 import yaml
 
-from aptl.core._port_bindings import PortBindingKey, project_port_bindings
+from aptl.core._port_bindings import PortBindingKey
 from aptl.utils.logging import get_logger
-
-if TYPE_CHECKING:
-    from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("host_ports")
 
@@ -246,7 +241,9 @@ def _operator_access_port_specs(active_profiles: set[str] | None) -> list[PortSp
     so they go through the same collision-safe remap and the same `APTL_HP_*`
     injection host-run MCP clients read (issue #1006).
     """
-    from aptl.core.deployment._operator_access import OPERATOR_ACCESS_ENDPOINTS
+    from aptl.core.deployment._operator_access_endpoints import (
+        OPERATOR_ACCESS_ENDPOINTS,
+    )
 
     return [
         PortSpec(

@@ -1109,13 +1109,13 @@ def _step_resolve_host_ports(ctx: _LabStartContext) -> LabResult | None:
     operator pinned in ``.env`` / the environment are honoured as-is; Linux
     hosts with nothing on the defaults see no change.
     """
-    from aptl.core import host_ports
+    from aptl.core import _port_bindings as port_bindings, host_ports
 
     active_profiles = None
     if ctx.config is not None:
         active_profiles = set(ctx.config.containers.enabled_profiles())
     assert ctx.backend is not None
-    existing_bindings = host_ports.project_port_bindings(ctx.backend)
+    existing_bindings = port_bindings.project_port_bindings(ctx.backend)
     ctx.resolved_ports = host_ports.resolve_host_ports(
         ctx.project_dir,
         reserved_env=set(ctx.raw_env),

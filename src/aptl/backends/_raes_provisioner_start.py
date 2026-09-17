@@ -43,7 +43,7 @@ from aptl.backends.raes_observation import (
     operational_realization_observations,
 )
 from aptl.backends.raes_realization import AptlRealization
-from aptl.core.deployment._operator_access import operator_access_details
+from aptl.core.deployment._operator_access_proof import operator_access_details
 from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.utils.logging import get_logger

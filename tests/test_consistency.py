@@ -167,8 +167,8 @@ class TestComposeConsistency:
         assert "/seed/suricata.yaml" in entrypoint
         assert "exec /docker-entrypoint.sh" in entrypoint
 
-    def test_suricata_live_capture_disables_container_checksum_validation(self):
-        """Container offload artifacts must not prevent HTTP rule inspection."""
+    def test_legacy_suricata_config_disables_container_checksum_validation(self):
+        """The in-tree legacy scenario keeps its live-capture checksum policy."""
 
         config = yaml.safe_load(
             (PROJECT_ROOT / "config/suricata/suricata.yaml").read_text(
@@ -178,14 +178,8 @@ class TestComposeConsistency:
 
         assert config["pcap"] == [{"interface": "any", "checksum-checks": False}]
 
-        fixup = (PROJECT_ROOT / "scripts/envpack-suricata-fixups.sh").read_text(
-            encoding="utf-8"
-        )
         seed = (PROJECT_ROOT / "scripts/seed-prime.sh").read_text(encoding="utf-8")
-        assert "CONFIG_CHANGED=1" in fixup
-        assert 'docker restart "$SURICATA_CTR"' in fixup
-        assert "suricatasc -c ruleset-stats" in fixup
-        assert "refusing to report a ready lab" in seed
+        assert "envpack-suricata-fixups" not in seed
 
     def test_otel_collector_healthcheck_uses_image_binary(self):
         """The OTEL collector image is distroless, so the healthcheck cannot

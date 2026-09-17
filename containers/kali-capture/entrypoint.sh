@@ -6,6 +6,9 @@ install -d -m 0700 \
     /run/aptl-capture/sessions \
     /run/aptl-inner \
     /var/log/aptl/captures
+# Debian's OpenSSH privilege-separation directory lives on the read-only
+# container's ephemeral /run tmpfs, so recreate it on every start.
+install -d -m 0755 /run/sshd
 chown kali:kali \
     /run/aptl-capture \
     /run/aptl-capture/sessions \

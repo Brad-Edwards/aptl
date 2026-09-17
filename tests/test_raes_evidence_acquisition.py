@@ -476,11 +476,54 @@ def test_lab_start_rejects_unactivatable_required_transcript(tmp_path, monkeypat
         "persist_active_transcript_authority",
         lambda **_kwargs: None,
     )
+    failed = []
+    monkeypatch.setattr(
+        acquisition,
+        "mark_transcript_activation_failed",
+        lambda **kwargs: failed.append(kwargs),
+    )
 
     result = _step_activate_capture_apparatus(context)
 
     assert result is not None
     assert result.error == "aptl.scenario-evidence.required-transcript-unavailable"
+    assert failed == [
+        {
+            "project_dir": tmp_path,
+            "plan_id": "capture-plan-test",
+            "run_id": "run-1",
+        }
+    ]
+
+
+def test_failed_transcript_activation_is_auditable_but_not_pending(tmp_path):
+    from aptl.backends.raes_evidence_acquisition import (
+        load_active_transcript_authorities,
+        mark_transcript_activation_failed,
+        persist_active_transcript_authority,
+    )
+
+    binding = _binding("aptl.collector.redteam-session-transcript", "transcript")
+    plan = SimpleNamespace(plan_id="capture-plan-test", canonical_bytes=b"{}")
+    # Matches the repository default (run_storage.local_path = "./runs").
+    store = LocalRunStore(tmp_path / "runs")
+    persist_active_transcript_authority(
+        project_dir=tmp_path,
+        plan=plan,
+        binding=binding,
+        run_store=store,
+        run_id="run-1",
+    )
+
+    mark_transcript_activation_failed(
+        project_dir=tmp_path,
+        plan_id="capture-plan-test",
+        run_id="run-1",
+    )
+
+    assert load_active_transcript_authorities(tmp_path) == ()
+    assert (tmp_path / ".aptl/capture-authorities/run-1.json").is_file()
+    assert (tmp_path / ".aptl/capture-activation-failed/run-1.json").is_file()
 
 
 def test_active_transcript_authority_is_contained_create_once(tmp_path):
@@ -516,6 +559,32 @@ def test_active_transcript_authority_is_contained_create_once(tmp_path):
     assert active[0]["run_id"] == "run-1"
     assert active[0]["binding"]["registration_id"] == binding.registration_id
     assert Path(active[0]["run_store_base"]) == store.base_dir
+
+
+def test_failed_transcript_finalization_is_terminal_and_auditable(tmp_path):
+    from aptl.backends.raes_evidence_acquisition import (
+        load_active_transcript_authorities,
+        mark_transcript_finalization_failed,
+        persist_active_transcript_authority,
+    )
+
+    binding = _binding("aptl.collector.redteam-session-transcript", "transcript")
+    plan = SimpleNamespace(plan_id="capture-plan-test", canonical_bytes=b"{}")
+    store = LocalRunStore(tmp_path / "runs")
+    persist_active_transcript_authority(
+        project_dir=tmp_path,
+        plan=plan,
+        binding=binding,
+        run_store=store,
+        run_id="run-1",
+    )
+    state = load_active_transcript_authorities(tmp_path)[0]
+
+    mark_transcript_finalization_failed(project_dir=tmp_path, state=state)
+
+    assert load_active_transcript_authorities(tmp_path) == ()
+    assert (tmp_path / ".aptl/capture-authorities/run-1.json").is_file()
+    assert (tmp_path / ".aptl/capture-finalization-failed/run-1.json").is_file()
 
 
 def test_active_transcript_authority_rejects_conflicting_binding(tmp_path):
@@ -595,7 +664,8 @@ def test_finalize_transcript_quiesces_broker_persists_evidence_and_marks_complet
         plan_id="capture-plan-test",
         canonical_bytes=b"{}",
     )
-    store = LocalRunStore(tmp_path / ".aptl/runs")
+    # Matches the repository default (run_storage.local_path = "./runs").
+    store = LocalRunStore(tmp_path / "runs")
     persist_active_transcript_authority(
         project_dir=tmp_path,
         plan=plan,
@@ -652,6 +722,7 @@ def test_finalize_transcript_quiesces_broker_persists_evidence_and_marks_complet
         project_dir=tmp_path,
         state=state,
         backend=backend,
+        expected_run_store_base=store.base_dir,
         clock=_SequenceClock("2026-09-14T10:00:03Z"),
     )
 
@@ -705,6 +776,7 @@ def test_finalize_transcript_rejects_mismatched_broker_authority_and_uses_host_c
             quiesce_capture_apparatus=lambda: True,
             export_capture_apparatus=lambda **_kwargs: exported,
         ),
+        expected_run_store_base=store.base_dir,
         clock=clock,
     )
 

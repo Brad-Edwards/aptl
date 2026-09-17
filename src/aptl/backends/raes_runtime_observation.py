@@ -15,13 +15,15 @@ from typing import TYPE_CHECKING, Any
 from raes.runtime_configuration import RuntimeConfiguration
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 
-from aptl.backends._runtime_concern_disclosure import _PROTECTED, _disclose, _record
+from aptl.backends._runtime_concern_disclosure import _disclose, _record
+from aptl.backends._raes_runtime_environment_observation import (
+    observe_environment as _observe_environment,
+)
 from aptl.backends._runtime_concern_excess import (
     _INIT_CAPABILITY_BASELINE,
     _normalized_capabilities,
 )
 from aptl.backends._runtime_mount_observation import (
-    _observe_forwarding_agents,
     _observe_mounts,
 )
 from aptl.backends._raes_runtime_network_observation import (
@@ -39,6 +41,9 @@ from aptl.backends.raes_runtime_guest_observation import (
     observe_service_manager_units,
 )
 from aptl.utils.logging import get_logger
+from aptl.core.deployment._forwarding_agent_realization import (
+    forwarding_agents_configured,
+)
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
@@ -122,7 +127,10 @@ def _record_container_policy(
 ) -> None:
     """Record policy controlled directly by the container daemon."""
 
-    if runtime_declared:
+    policy = runtime.operational_policy
+    restart = policy.restart if policy is not None else None
+    restart_value = str(getattr(restart, "value", restart) or "")
+    if runtime_declared and restart_value not in {"", "unknown"}:
         _record(concerns, _RESTART_POLICY_PATH, lambda: _observe_restart_policy(info))
     _record(
         concerns,
@@ -222,7 +230,25 @@ def _record_daemon_inventory(
     _record(
         concerns,
         _FORWARDING_AGENTS_PATH,
-        lambda: _observe_forwarding_agents(info, runtime),
+        lambda: _observe_forwarding_agents(backend, container_name, runtime),
+    )
+
+
+def _observe_forwarding_agents(
+    backend: "DeploymentBackend",
+    container_name: str,
+    runtime: RuntimeConfiguration,
+) -> object | None:
+    """Disclose agents only after their in-world configuration verifies."""
+
+    if not forwarding_agents_configured(backend, container_name, runtime):
+        return None
+    return _disclose(
+        "forwarding-agents",
+        [
+            agent.model_dump(mode="json", by_alias=True)
+            for agent in runtime.forwarding_agents
+        ],
     )
 
 
@@ -281,7 +307,7 @@ def _container_config(info: Mapping[str, Any]) -> Mapping[str, Any]:
 
 
 def _observe_restart_policy(info: Mapping[str, Any]) -> object | None:
-    """Return the daemon's effective restart policy, including APTL defaults."""
+    """Return the daemon's effective explicitly selected restart policy."""
 
     policy = _host_config(info).get("RestartPolicy")
     name = policy.get("Name") if isinstance(policy, Mapping) else None
@@ -415,60 +441,6 @@ def _local_control_mount_matches(mount: object, source: str, access: str) -> boo
 # --------------------------------------------------------------------------- #
 # runtime-environment
 # --------------------------------------------------------------------------- #
-
-
-def _observe_environment(
-    info: Mapping[str, Any],
-    runtime: RuntimeConfiguration,
-) -> object | None:
-    """Disclose declared env variables carrying their realized container values."""
-
-    declared = runtime.environment
-    if not declared:
-        return None
-    realized = _container_environment(info)
-    records = [
-        record
-        for variable in declared
-        if (record := _realized_environment_record(variable, realized)) is not None
-    ]
-    return _disclose("runtime-environment", records) if records else None
-
-
-def _realized_environment_record(
-    variable: object, realized: Mapping[str, str]
-) -> dict[str, object] | None:
-    """Project one declared variable through its realized value boundary."""
-
-    name = getattr(variable, "name", "")
-    record = None
-    if name:
-        candidate = variable.model_dump(mode="json", by_alias=True)
-        classification = candidate.get("value_classification")
-        declared_value = candidate.get("value")
-        if classification not in _PROTECTED and not declared_value:
-            realized_value = realized.get(name)
-            if realized_value:
-                candidate["value"] = realized_value
-            record = candidate
-        elif name in realized:
-            candidate["value"] = "" if classification in _PROTECTED else realized[name]
-            record = candidate
-    return record
-
-
-def _container_environment(info: Mapping[str, Any]) -> dict[str, str]:
-    """Parse the realized container's ``Config.Env`` into a name -> value map."""
-
-    config = info.get("Config") if isinstance(info, Mapping) else None
-    entries = config.get("Env") if isinstance(config, Mapping) else None
-    realized: dict[str, str] = {}
-    if isinstance(entries, list):
-        for entry in entries:
-            if isinstance(entry, str) and "=" in entry:
-                name, _, value = entry.partition("=")
-                realized[name] = value
-    return realized
 
 
 # --------------------------------------------------------------------------- #

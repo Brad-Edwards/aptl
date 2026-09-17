@@ -66,25 +66,45 @@ def test_sdl_capture_plan_uses_public_demands_without_synthesizing_capture_spec(
     assert plan.plan_id.startswith("capture-plan-")
     assert plan.plan_digest.startswith("sha256:")
     assert b"ExperimentCaptureSpecModel" not in plan.canonical_bytes
+    assert {binding.selected_output_contract for binding in plan.bindings} == {
+        "experiment-evidence-record-v1"
+    }
+    assert {binding.output_contract for binding in plan.runtime_bindings()} == {
+        "experiment-evidence-record-v1"
+    }
+    assert b'"selected_output_contract":"experiment-evidence-record-v1"' in (
+        plan.canonical_bytes
+    )
 
 
-def test_transcript_demand_admits_only_the_required_kali_capture_apparatus(scenario):
+def test_demands_admit_only_the_two_required_minimum_apparatus(scenario):
     from aptl.backends.raes_evidence import admit_sdl_evidence
 
     plan = admit_sdl_evidence(scenario)
 
     assert [item.apparatus_id for item in plan.apparatus] == [
-        "aptl.apparatus.kali-session-capture"
+        "aptl.apparatus.kali-session-capture",
+        "aptl.apparatus.suricata-traffic-mirror",
     ]
     assert plan.apparatus[0].governing_scopes == ("#/",)
     assert plan.apparatus[0].service_name == "kali-capture"
     assert plan.apparatus[0].environment_visible is True
+    assert plan.apparatus[1].governing_scopes == ("#/",)
+    assert plan.apparatus[1].service_name == "backend-traffic-mirror"
+    assert plan.apparatus[1].container_name == ""
+    assert plan.apparatus[1].target_refs == (
+        "nodes.kali",
+        "nodes.suricata",
+        "nodes.webapp",
+    )
     assert b"aptl.apparatus.kali-session-capture" in plan.canonical_bytes
+    assert b"aptl.apparatus.suricata-traffic-mirror" in plan.canonical_bytes
 
 
 def test_closed_scope_rejects_required_kali_capture_addition(scenario):
     from aptl.backends.raes_evidence import admit_sdl_evidence
 
+    del scenario.evidence_requirements["suricata-login-sqli-alert"]
     scenario.realization = RealizationDesignation(default="closed")
 
     with pytest.raises(AdmissionRejection) as excinfo:
@@ -95,10 +115,25 @@ def test_closed_scope_rejects_required_kali_capture_addition(scenario):
     }
 
 
-def test_native_only_demands_add_no_observability_apparatus(scenario):
+def test_closed_scope_rejects_required_traffic_mirror_addition(scenario):
     from aptl.backends.raes_evidence import admit_sdl_evidence
 
     del scenario.evidence_requirements["redteam-session-transcript"]
+    scenario.realization = RealizationDesignation(default="closed")
+
+    with pytest.raises(AdmissionRejection) as excinfo:
+        admit_sdl_evidence(scenario)
+
+    assert {diagnostic.code for diagnostic in excinfo.value.diagnostics} == {
+        "aptl.capture-apparatus.closed-realization-scope"
+    }
+
+
+def test_demands_with_native_visibility_add_no_observability_apparatus(scenario):
+    from aptl.backends.raes_evidence import admit_sdl_evidence
+
+    del scenario.evidence_requirements["redteam-session-transcript"]
+    del scenario.evidence_requirements["suricata-login-sqli-alert"]
     plan = admit_sdl_evidence(scenario)
 
     assert plan.apparatus == ()
@@ -163,7 +198,11 @@ def test_capture_rejection_precedes_artifact_probe(scenario, tmp_path, monkeypat
 
     config = AptlConfig()
     backend = MagicMock()
-    parameters = {"flag_ad_user": "flag-user", "flag_ad_root": "flag-root"}
+    parameters = {
+        f"flag_{host}_{level}": f"{host}-{level}"
+        for host in ("victim", "workstation", "webapp", "fileshare", "ad")
+        for level in ("user", "root")
+    }
     with pytest.raises(AdmissionRejection):
         raes.admit_raes_scenario(tmp_path, config, backend, parameters=parameters)
 

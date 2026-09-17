@@ -23,7 +23,10 @@ from aptl.backends.raes_materializer import (
     EnsureDirectoryOp,
     EnsureUserOp,
     InstallDependencyManifestOp,
+    InstallSoftwareComponentOp,
     PlacePackArtifactOp,
+    ProvisionDomainAuthorityOp,
+    SetFilesystemMetadataOp,
 )
 
 
@@ -67,7 +70,9 @@ class TestBaseSubstrate:
 class TestPackages:
     def test_install_runs_generic_manager_command_in_the_node_container(self):
         fake = _FakeExec()
-        _executor(fake).install_packages("techvault.wazuh-manager", "apt", ("wazuh-manager",))
+        _executor(fake).install_packages(
+            "techvault.wazuh-manager", "apt", ("wazuh-manager",)
+        )
         container, argv = fake.calls[-1]
         assert container == "aptl-wazuh-manager"
         assert "apt-get" in argv
@@ -123,14 +128,18 @@ class TestPackageIndexRefreshRetry:
 
         fake = _FakeExec(responder)
         sleeps: list[float] = []
-        _executor(fake, sleep=sleeps.append).install_packages("n.node", "apt", ("curl",))
+        _executor(fake, sleep=sleeps.append).install_packages(
+            "n.node", "apt", ("curl",)
+        )
 
         assert calls["update"] == 3
         assert sleeps == [1.0, 2.0]
         assert any("install" in argv for argv in fake.argvs())
 
     def test_refresh_exhausts_all_retries_then_raises(self):
-        fake = _FakeExec(lambda c, a: (100, "W: GPG error") if "update" in a else (0, ""))
+        fake = _FakeExec(
+            lambda c, a: (100, "W: GPG error") if "update" in a else (0, "")
+        )
         sleeps: list[float] = []
         executor = _executor(fake, sleep=sleeps.append)
 
@@ -164,7 +173,9 @@ class TestIdentity:
         fake = _FakeExec(lambda c, a: (1, "") if a[0] == "id" else (0, ""))
         _executor(fake).ensure_user(
             "n.node",
-            EnsureUserOp(username="wazuh", shell="/bin/bash", supplemental_groups=("wazuh",)),
+            EnsureUserOp(
+                username="wazuh", shell="/bin/bash", supplemental_groups=("wazuh",)
+            ),
         )
         useradd = next(argv for argv in fake.argvs() if argv[0] == "useradd")
         assert useradd[-1] == "wazuh"
@@ -184,7 +195,10 @@ class TestFilesystem:
     def test_ensure_directory_mkdirs_then_chowns_and_chmods(self):
         fake = _FakeExec()
         _executor(fake).ensure_directory(
-            "n.node", EnsureDirectoryOp(path="/var/log/named", owner="bind", group="bind", mode="0755")
+            "n.node",
+            EnsureDirectoryOp(
+                path="/var/log/named", owner="bind", group="bind", mode="0755"
+            ),
         )
         argvs = fake.argvs()
         assert ["mkdir", "-p", "/var/log/named"] in argvs
@@ -210,12 +224,43 @@ class TestFilesystem:
         assert present.observe_directory("n.node", "/var/log/named") is True
         assert absent.observe_directory("n.node", "/var/log/named") is False
 
+    def test_set_metadata_uses_discrete_chown_and_chmod_argv(self):
+        fake = _FakeExec()
+        op = SetFilesystemMetadataOp(
+            path="/root/root.txt", owner="root", group="root", mode="0o600"
+        )
+
+        _executor(fake).set_filesystem_metadata("n.node", op)
+
+        assert fake.argvs() == [
+            ["chown", "root:root", "/root/root.txt"],
+            ["chmod", "0600", "/root/root.txt"],
+        ]
+
+    def test_observe_metadata_requires_every_selected_dimension(self):
+        def responder(container, argv):
+            if argv[0] == "stat":
+                return 0, "root:root:0:0:600\n"
+            return 1, ""
+
+        op = SetFilesystemMetadataOp(
+            path="/root/root.txt",
+            owner="root",
+            group="root",
+            uid=0,
+            gid=0,
+            mode="0600",
+        )
+
+        assert _executor(_FakeExec(responder)).observe_filesystem_metadata("n.node", op)
+
 
 class TestDependencyManifest:
     def test_install_runs_ecosystem_install_against_the_manifest_directory(self):
         fake = _FakeExec()
         _executor(fake).install_dependency_manifest(
-            "n.node", InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml")
+            "n.node",
+            InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml"),
         )
         argv = fake.calls[-1][1]
         assert argv == ["pip", "install", "--break-system-packages", "/app"]
@@ -231,7 +276,9 @@ class TestDependencyManifest:
         fake = _FakeExec(lambda c, a: (0, ""))
         observed = _executor(fake).observe_dependency_manifest_installed(
             "n.node",
-            InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"),
+            InstallDependencyManifestOp(
+                ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"
+            ),
         )
         assert observed is True
         assert fake.calls[-1][1] == ["pip", "show", "aptl-labs"]
@@ -240,14 +287,103 @@ class TestDependencyManifest:
         fake = _FakeExec(lambda c, a: (1, ""))
         observed = _executor(fake).observe_dependency_manifest_installed(
             "n.node",
-            InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"),
+            InstallDependencyManifestOp(
+                ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"
+            ),
         )
         assert observed is False
+
+
+class TestSoftwareComponent:
+    def test_npm_component_uses_exact_lockfile_then_builds(self):
+        fake = _FakeExec()
+        op = InstallSoftwareComponentOp(
+            ecosystem="npm",
+            manifest_path="/opt/mcp/common/package-lock.json",
+            package_name="aptl-mcp-common",
+            version="0.1.0",
+        )
+
+        _executor(fake).install_software_component("n.node", op)
+
+        assert fake.argvs() == [
+            ["npm", "--prefix", "/opt/mcp/common", "ci", "--include=dev"],
+            ["npm", "--prefix", "/opt/mcp/common", "run", "build", "--if-present"],
+        ]
+
+    def test_observation_requires_exact_identity_and_declared_output(self):
+        package = (
+            '{"name":"aptl-mcp-common","version":"0.1.0","main":"./build/index.js"}'
+        )
+
+        def responder(container, argv):
+            if argv[:4] == ["npm", "--prefix", "/opt/mcp/common", "pkg"]:
+                return 0, package
+            if argv == ["test", "-f", "/opt/mcp/common/build/index.js"]:
+                return 0, ""
+            return 1, ""
+
+        observed = _executor(_FakeExec(responder)).observe_software_component(
+            "n.node",
+            InstallSoftwareComponentOp(
+                ecosystem="npm",
+                manifest_path="/opt/mcp/common/package-lock.json",
+                package_name="aptl-mcp-common",
+                version="0.1.0",
+            ),
+        )
+
+        assert observed is True
+
+    def test_observation_rejects_unsafe_or_missing_outputs(self):
+        package = '{"name":"aptl-mcp-common","version":"0.1.0","main":"../host-file"}'
+        fake = _FakeExec(lambda container, argv: (0, package))
+
+        observed = _executor(fake).observe_software_component(
+            "n.node",
+            InstallSoftwareComponentOp(
+                ecosystem="npm",
+                manifest_path="/opt/mcp/common/package-lock.json",
+                package_name="aptl-mcp-common",
+                version="0.1.0",
+            ),
+        )
+
+        assert observed is False
+        assert not any(argv[:2] == ["test", "-f"] for argv in fake.argvs())
+
+
+class TestDomainAuthority:
+    def test_provider_bootstrap_uses_discrete_authored_arguments(self):
+        fake = _FakeExec()
+        op = ProvisionDomainAuthorityOp(domain="EXAMPLE", realm="EXAMPLE.TEST")
+
+        _executor(fake).provision_domain_authority("n.ad", op)
+
+        assert [
+            "aptl-provision-samba-domain",
+            "EXAMPLE",
+            "EXAMPLE.TEST",
+        ] in fake.argvs()
+
+    def test_observation_requires_exact_served_domain_identity(self):
+        output = (
+            "Forest : example.test\nDomain : example.test\nNetbios domain : EXAMPLE\n"
+        )
+        fake = _FakeExec(lambda container, argv: (0, output))
+
+        observed = _executor(fake).observe_domain_authority(
+            "n.ad",
+            ProvisionDomainAuthorityOp(domain="EXAMPLE", realm="EXAMPLE.TEST"),
+        )
+
+        assert observed is True
 
     def test_observe_installed_fails_closed_without_a_declared_name(self):
         fake = _FakeExec(lambda c, a: (0, ""))
         observed = _executor(fake).observe_dependency_manifest_installed(
-            "n.node", InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml")
+            "n.node",
+            InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml"),
         )
         assert observed is False
 

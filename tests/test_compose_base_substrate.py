@@ -71,7 +71,9 @@ class TestEnsureGenericBaseImage:
             "-t",
             "aptl/generic-systemd-base-debian:latest",
         ]
-        assert argv[4] == str(tmp_path / "containers" / "generic-systemd-base-debian")
+        assert argv[-1] == str(
+            tmp_path / "containers" / "generic-systemd-base-debian"
+        )
 
     def test_no_op_when_the_image_already_exists(self, tmp_path):
         backend = _backend(tmp_path)
@@ -114,6 +116,54 @@ class TestEnsureGenericBaseImage:
 
         assert failures
         assert "aptl/generic-systemd-base-debian:latest" in failures[0]
+
+    def test_builds_backend_selected_node22_systemd_base(self, tmp_path):
+        backend = _backend(tmp_path)
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "image", "inspect"]:
+                return MagicMock(returncode=1, stdout="", stderr="No such image")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            failures = backend.ensure_generic_base_image(
+                "aptl/generic-systemd-node22-base:latest"
+            )
+
+        assert failures == []
+        build_call = next(
+            call
+            for call in mock_run.call_args_list
+            if call.args[0][:2] == ["docker", "build"]
+        )
+        assert build_call.args[0][-1] == str(
+            tmp_path / "containers" / "generic-systemd-node22-base"
+        )
+
+    def test_builds_backend_selected_samba_provider_base(self, tmp_path):
+        backend = _backend(tmp_path)
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "image", "inspect"]:
+                return MagicMock(returncode=1, stdout="", stderr="No such image")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            failures = backend.ensure_generic_base_image(
+                "aptl/generic-samba-ad-base:latest"
+            )
+
+        assert failures == []
+        build_call = next(
+            call
+            for call in mock_run.call_args_list
+            if call.args[0][:2] == ["docker", "build"]
+        )
+        assert build_call.args[0][-1] == str(
+            tmp_path / "containers" / "generic-samba-ad-base"
+        )
 
 
 def test_start_base_container_carries_the_compose_project_ownership_label(tmp_path):
@@ -161,6 +211,30 @@ def test_start_base_container_keeps_the_aptl_lifecycle_labels(tmp_path):
     assert "aptl.node.address=provision.node.victim" in argv
 
 
+def test_start_base_container_can_retain_the_provider_image_command(tmp_path):
+    backend = _backend(tmp_path)
+    spec = BaseContainerSpec(
+        node_address="provision.node.ad",
+        container_name="aptl-ad",
+        image_ref="aptl/generic-samba-ad-base:latest",
+        runs_services=False,
+        use_image_command=True,
+        backend_run_capabilities=("SYS_ADMIN",),
+    )
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        backend.start_base_container(spec)
+
+    run_call = next(
+        c for c in mock_run.call_args_list if c.args[0][:2] == ["docker", "run"]
+    )
+    argv = run_call.args[0]
+    image_index = argv.index("aptl/generic-samba-ad-base:latest")
+    assert argv[image_index:] == ["aptl/generic-samba-ad-base:latest"]
+    assert argv[image_index - 2 : image_index] == ["--cap-add", "SYS_ADMIN"]
+
+
 def test_start_base_container_with_init_still_carries_the_label(tmp_path):
     backend = _backend(tmp_path)
     spec = BaseContainerSpec(
@@ -180,6 +254,8 @@ def test_start_base_container_with_init_still_carries_the_label(tmp_path):
     )
     argv = run_call.args[0]
     assert "com.docker.compose.project=test-proj" in argv
+    assert "seccomp:unconfined" in argv
+    assert "apparmor:unconfined" in argv
 
 
 def test_declared_network_is_attached_before_image_free_node_starts(tmp_path):

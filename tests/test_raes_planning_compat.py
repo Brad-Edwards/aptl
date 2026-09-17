@@ -227,6 +227,79 @@ def test_techvault_shim_keeps_explicit_empty_open_concern(tmp_path: Path) -> Non
     assert adjusted.realization_requirements == (processes,)
 
 
+def test_techvault_shim_selects_exact_minimum_intrusion_for_broken_open_relation(
+    tmp_path: Path,
+) -> None:
+    """The backend may realize an open concern exactly, without additions."""
+
+    field_path = "nodes.vm.runtime.forwarding_agents"
+    forwarding = _requirement("forwarding-agents", field_path=field_path)
+    scenario = SimpleNamespace(
+        explicitness={field_path: object()},
+        nodes={"vm": SimpleNamespace(source=None, runtime=None)},
+    )
+
+    adjusted = apply_techvault_observation_strength_compatibility(
+        _model(forwarding),
+        _bundle(tmp_path),
+        scenario=scenario,
+    )
+
+    requirement = adjusted.realization_requirements[0]
+    authority = adjusted.realization_authority[0]
+    assert requirement.explicitness is ExplicitnessClass.EXACT
+    assert requirement.constraint_document is None
+    assert requirement.constraint_binding is None
+    assert authority.mode is RealizationAuthorityMode.EXACT
+
+
+def test_techvault_shim_keeps_concerns_selected_by_a_backend_profile(
+    tmp_path: Path,
+) -> None:
+    """Semantic implementation mechanics retain their open plan authority."""
+
+    scenario = parse_sdl(
+        dedent(
+            """
+            name: techvault
+            realization: {default: open}
+            nodes:
+              vm:
+                type: compute
+                os: linux
+                runtime:
+                  software_components:
+                    - component_id: shuffle-frontend
+                      name: Shuffle frontend
+                      version: unversioned
+            """
+        )
+    )
+    environment = _requirement(
+        "runtime-environment", field_path="nodes.vm.runtime.environment"
+    )
+    published_ports = _requirement(
+        "published-ports",
+        field_path="nodes.vm.runtime.network.published_ports",
+    )
+    processes = _requirement(
+        "runtime-processes", field_path="nodes.vm.runtime.processes"
+    )
+
+    adjusted = apply_techvault_observation_strength_compatibility(
+        _model(environment, published_ports, processes),
+        _bundle(tmp_path),
+        scenario=scenario,
+    )
+
+    requirements = {
+        item.requirement_kind: item for item in adjusted.realization_requirements
+    }
+    assert requirements["runtime-environment"].delegated is False
+    assert requirements["published-ports"].delegated is False
+    assert requirements["runtime-processes"].delegated is True
+
+
 def test_techvault_shim_keeps_backend_defaults_only_for_image_nodes(
     tmp_path: Path,
 ) -> None:

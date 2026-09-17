@@ -22,7 +22,7 @@ import subprocess
 from typing import TYPE_CHECKING
 
 from aptl.core.deployment._compose_realization_networks import (
-    _match_managed_network,
+    _resolve_base_network_bindings,
 )
 from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.deployment.realization import (
@@ -41,9 +41,47 @@ if TYPE_CHECKING:
 # already pulls on demand. Never built anywhere in the codebase before
 # issue #581 surfaced it via a fresh-machine boot (a developer's existing
 # local image cache had silently masked the gap since ADR-048 shipped).
-_GENERIC_BASE_IMAGE_BUILD_CONTEXTS: dict[str, str] = {
-    "aptl/generic-systemd-base-debian:latest": "containers/generic-systemd-base-debian",
-    "aptl/generic-systemd-base:latest": "containers/generic-systemd-base",
+_GENERIC_BASE_IMAGE_BUILDS: dict[str, tuple[str, str]] = {
+    "aptl/generic-systemd-base-debian:latest": (
+        "containers/generic-systemd-base-debian/Dockerfile",
+        "containers/generic-systemd-base-debian",
+    ),
+    "aptl/generic-systemd-base:latest": (
+        "containers/generic-systemd-base/Dockerfile",
+        "containers/generic-systemd-base",
+    ),
+    "aptl/generic-systemd-node22-base:latest": (
+        "containers/generic-systemd-node22-base/Dockerfile",
+        "containers/generic-systemd-node22-base",
+    ),
+    "aptl/generic-samba-ad-base:latest": (
+        "containers/generic-samba-ad-base/Dockerfile",
+        "containers/generic-samba-ad-base",
+    ),
+    "aptl/generic-wazuh-agent-base-debian:latest": (
+        "containers/generic-wazuh-agent-base-debian/Dockerfile",
+        ".",
+    ),
+    "aptl/generic-systemd-wazuh-agent-base-debian:latest": (
+        "containers/generic-systemd-wazuh-agent-base-debian/Dockerfile",
+        ".",
+    ),
+    "aptl/generic-systemd-wazuh-agent-base:latest": (
+        "containers/generic-systemd-wazuh-agent-base/Dockerfile",
+        ".",
+    ),
+    "aptl/generic-samba-ad-wazuh-agent-base:latest": (
+        "containers/generic-samba-ad-wazuh-agent-base/Dockerfile",
+        ".",
+    ),
+}
+
+_GENERIC_BASE_IMAGE_DEPENDENCIES: dict[str, str] = {
+    "aptl/generic-systemd-wazuh-agent-base-debian:latest": (
+        "aptl/generic-systemd-base-debian:latest"
+    ),
+    "aptl/generic-systemd-wazuh-agent-base:latest": "aptl/generic-systemd-base:latest",
+    "aptl/generic-samba-ad-wazuh-agent-base:latest": "aptl/generic-samba-ad-base:latest",
 }
 
 
@@ -61,6 +99,8 @@ def _init_run_flags(init: "InitRequirements") -> list[str]:
         flags += ["--cap-add", capability]
     if init.seccomp_unconfined:
         flags += ["--security-opt", "seccomp:unconfined"]
+    if init.apparmor_unconfined:
+        flags += ["--security-opt", "apparmor:unconfined"]
     for env_name, env_value in init.env:
         if not valid_environment_variable_name(env_name):
             raise BackendSeedError("invalid base-container environment variable name")
@@ -86,10 +126,15 @@ class ComposeBaseSubstrateMixin(object):
         build; ``docker run`` pulls it on demand).
         """
 
-        build_context = _GENERIC_BASE_IMAGE_BUILD_CONTEXTS.get(image_ref)
+        build = _GENERIC_BASE_IMAGE_BUILDS.get(image_ref)
         failures: list[str] = []
-        if build_context is None and not self._offline_staged:
+        if build is None and not self._offline_staged:
             return failures
+        dependency = _GENERIC_BASE_IMAGE_DEPENDENCIES.get(image_ref)
+        if dependency is not None:
+            failures.extend(self.ensure_generic_base_image(dependency))
+            if failures:
+                return failures
         inspect_result = self._run(
             ["docker", "image", "inspect", image_ref], timeout=30
         )
@@ -98,13 +143,16 @@ class ComposeBaseSubstrateMixin(object):
                 failures.append(
                     f"required staged generic base image is missing: {image_ref}"
                 )
-            elif build_context is not None:
+            elif build is not None:
+                dockerfile, build_context = build
                 build_result = self._run(
                     [
                         "docker",
                         "build",
                         "-t",
                         image_ref,
+                        "-f",
+                        str(self._project_dir / dockerfile),
                         str(self._project_dir / build_context),
                     ],
                     timeout=600,
@@ -118,7 +166,7 @@ class ComposeBaseSubstrateMixin(object):
 
         Runs the generic base image with the validated init requirements when the
         node declares service units (host cgroup ns, cgroupfs rw, tmpfs,
-        capabilities, unconfined seccomp, systemd as PID 1). A node with no
+        capabilities, unconfined seccomp/AppArmor, systemd as PID 1). A node with no
         service units runs the base with a keepalive so the materializer can exec
         into it. Idempotent: any stale container of the same name is removed
         first. Raises on failure so the materialization engine translates it into
@@ -254,9 +302,13 @@ class ComposeBaseSubstrateMixin(object):
         self._append_base_mounts(argv, spec)
         self._append_base_ports(argv, spec)
         self._append_base_environment(argv, spec)
+        for capability in spec.backend_run_capabilities:
+            argv += ["--cap-add", capability]
         if spec.init is not None:
             argv += _init_run_flags(spec.init)
             # The base image's own CMD runs systemd as init.
+            argv.append(run_image_ref)
+        elif spec.use_image_command:
             argv.append(run_image_ref)
         else:
             argv += [run_image_ref, "sleep", "infinity"]
@@ -428,25 +480,9 @@ class ComposeBaseSubstrateMixin(object):
             self._base_networks_by_address = {}
             return
         managed = set(self.host_list_lab_networks(self._project_name))
-        bindings: dict[str, tuple[tuple[str, DeploymentNetworkAttachment], ...]] = {}
-        for node in nodes:
-            attachments = getattr(node, "network_attachments", ())
-            resolved: list[tuple[str, DeploymentNetworkAttachment]] = []
-            for attachment in attachments:
-                concrete = _match_managed_network(
-                    attachment.network,
-                    managed,
-                    self._project_name,
-                )
-                if concrete is None:
-                    raise BackendSeedError(
-                        "image-free node network binding was not observed"
-                    )
-                resolved.append((concrete, attachment))
-            if resolved:
-                bindings[getattr(node, "address")] = tuple(resolved)
-            elif getattr(self, "_appliance_boundary", None) is not None:
-                raise BackendSeedError(
-                    "appliance image-free node has no admitted network"
-                )
-        self._base_networks_by_address = bindings
+        self._base_networks_by_address = _resolve_base_network_bindings(
+            nodes,
+            managed,
+            self._project_name,
+            appliance_boundary=getattr(self, "_appliance_boundary", None) is not None,
+        )

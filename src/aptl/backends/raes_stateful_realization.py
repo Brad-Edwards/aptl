@@ -9,6 +9,12 @@ from raes_contracts.diagnostics import Diagnostic
 from raes_contracts.planning import PlannedResource
 
 from aptl.backends.raes_diagnostics import diagnostic
+from aptl.backends._raes_stateful_values import (
+    choice as _choice,
+    only as _only,
+    resource_name as _resource_name,
+    text as _text,
+)
 from aptl.backends.raes_realization_model import NodeRealization
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactEnvironmentConsumer,
@@ -368,6 +374,7 @@ def _consumer(
     node_name = _text(raw.get("node"))
     mount_destination = _text(raw.get("mount_destination"))
     access_mode = _choice(raw, "access_mode", _CONSUMER_ACCESS_MODES)
+    delivery_mode = _text(raw.get("delivery_mode", "mount"))
     node = nodes.get(target_address or "")
     service_name = _only(node.backend_services) if node is not None else None
     if node is None:
@@ -386,7 +393,12 @@ def _consumer(
                 "Stateful resource consumer does not resolve to one backend service.",
             )
         )
-    elif node_name is None or mount_destination is None or access_mode is None:
+    elif (
+        node_name is None
+        or mount_destination is None
+        or access_mode is None
+        or delivery_mode != "mount"
+    ):
         _append_invalid(resource, diagnostics)
     else:
         selected = _selected_outputs(raw.get("selected_outputs"))
@@ -399,6 +411,7 @@ def _consumer(
                 service_name=service_name,
                 mount_destination=mount_destination,
                 access_mode=cast(StatefulConsumerAccessMode, access_mode),
+                delivery_mode=delivery_mode,
                 selected_outputs=selected,
             )
     return None
@@ -464,32 +477,3 @@ def _append_invalid(
             "Stateful resource payload is incomplete or unsupported by APTL.",
         )
     )
-
-
-def _resource_name(resource: PlannedResource) -> str:
-    """Return the authored resource name or its address suffix."""
-
-    return _text(resource.payload.get("name")) or resource.address.rsplit(".", 1)[-1]
-
-
-def _choice(
-    mapping: Mapping[str, object],
-    key: str,
-    allowed: frozenset[str],
-) -> str | None:
-    """Return a non-empty string only when it belongs to the allowed vocabulary."""
-
-    value = _text(mapping.get(key))
-    return value if value in allowed else None
-
-
-def _text(value: object) -> str | None:
-    """Return a non-empty string value without altering authored whitespace."""
-
-    return value if isinstance(value, str) and value.strip() else None
-
-
-def _only(values: tuple[str, ...]) -> str | None:
-    """Return the sole tuple member, rejecting absent or ambiguous bindings."""
-
-    return values[0] if len(values) == 1 else None

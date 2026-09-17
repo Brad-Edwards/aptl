@@ -1014,6 +1014,11 @@ class TestCurlTLSWiring:
             "super-secret-XYZ-123" in v for v in sidecars.values()
         ), sidecars
 
+    def test_bodyless_get_does_not_claim_an_empty_json_entity(self, monkeypatch):
+        cap, _ = self._run(monkeypatch)
+        assert "Accept: application/json" in cap["cmd"]
+        assert "Content-Type: application/json" not in cap["cmd"]
+
 
 # ---------------------------------------------------------------------------
 # Sync loop

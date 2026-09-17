@@ -395,11 +395,34 @@ def refresh_evidence_truth(
             ),
         )
     evaluator.bind_evidence_records(evidence_records)
-    control_plane = RuntimeControlPlane(target, initial_snapshot=snapshot)
+    # The planner-produced evaluation operations are immutable CREATEs. The
+    # provisioning run already applied them once before native evidence was
+    # available, so replaying them against that registered evaluation state is
+    # an invalid create-over-existing transition in RAES 5. Rebuild only the
+    # evaluation domain from the same observed provisioning snapshot; the new
+    # control plane then remains the sole writer of the refreshed truth.
+    refresh_snapshot = _without_evaluation_state(snapshot)
+    control_plane = RuntimeControlPlane(target, initial_snapshot=refresh_snapshot)
     try:
         return _run_evidence_refresh(control_plane, execution_plan, evidence_records)
     finally:
         control_plane.close()
+
+
+def _without_evaluation_state(snapshot: RuntimeSnapshot) -> RuntimeSnapshot:
+    """Retain realized runtime state while clearing the phase being replayed."""
+
+    entries = {
+        address: entry
+        for address, entry in snapshot.entries.items()
+        if entry.domain != RuntimeDomain.EVALUATION
+    }
+    return snapshot.with_entries(
+        entries,
+        evaluation_results={},
+        evaluation_history={},
+        proposition_truth_results={},
+    )
 
 
 def _run_evidence_refresh(

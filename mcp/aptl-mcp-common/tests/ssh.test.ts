@@ -1509,6 +1509,23 @@ describe('#304: PersistentSession.close() awaits remote stream-close', () => {
     }
   });
 
+  it('restricted transport rejects teardown without a remote close acknowledgement', async () => {
+    vi.stubEnv('APTL_MCP_REQUIRE_REMOTE_CLOSE', '1');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const session = new PersistentSession('strict-close', 'h', 'u', 'interactive', mockClient);
+      const initialized = session.initialize();
+      await vi.advanceTimersByTimeAsync(1000);
+      await initialized;
+      const outcome = session.close().then(() => 'accepted', () => 'rejected');
+      await vi.advanceTimersByTimeAsync(3001);
+      expect(await outcome).toBe('rejected');
+    } finally {
+      vi.unstubAllEnvs();
+      errorSpy.mockRestore();
+    }
+  });
+
   it("in-flight and queued command rejections happen BEFORE close()'s remote-await resolves", async () => {
     const session = new PersistentSession('aw-3', 'h', 'u', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
     const initP = session.initialize();

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import asdict
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from aptl.appliance.build import (
     build_golden_image,
     create_disposable_overlay,
 )
+from aptl.appliance.launch import prepare_launch_descriptor
 from aptl.appliance.manifest import (
     ApplianceManifestError,
     ApplianceReleaseInspection,
@@ -27,7 +29,6 @@ from aptl.appliance.manifest import (
     seal_release_directory,
     verify_release_directory,
 )
-from aptl.appliance.launch import prepare_launch_descriptor
 from aptl.appliance.offline import OfflinePayloadError, build_offline_payload
 
 app = typer.Typer(help="Build and verify signed disposable appliance releases.")
@@ -327,3 +328,50 @@ def bootstrap_overlay(
     except ApplianceBootstrapError as exc:
         _fail(str(exc), exc)
     _emit({"initialized": True, "instance_id": identity.instance_id})
+
+
+@app.command("assemble-inputs")
+def assemble_inputs(
+    staging_dir: Path = typer.Option(...),
+    wheelhouse: Path = typer.Option(...),
+    image_archive: Path = typer.Option(...),
+    image_roles: Path = typer.Option(...),
+) -> None:
+    """Build canonical package inputs for an image builder, without a VM."""
+    from aptl.appliance.inputs import stage_canonical_inputs
+    from aptl.utils.deterministic_archive import hash_file_nofollow
+
+    try:
+        inputs = stage_canonical_inputs(
+            staging=staging_dir,
+            wheelhouse=wheelhouse,
+            image_archive=image_archive,
+            image_roles=json.loads(image_roles.read_text()),
+        )
+    except (ValueError, OSError, subprocess.SubprocessError) as exc:
+        _fail("canonical input assembly failed", exc)
+    _emit(
+        {
+            "schema_version": inputs.schema_version,
+            "qualification": "inputs-only",
+            "sha256": hash_file_nofollow(staging_dir / "inputs.json")[0],
+        }
+    )
+
+
+@app.command("validate-inputs")
+def validate_inputs(staging_dir: Path = typer.Option(...)) -> None:
+    """Verify nested content, locked wheels and built outputs on the target."""
+    from aptl.appliance.inputs import validate_canonical_inputs
+
+    try:
+        inputs = validate_canonical_inputs(staging_dir)
+    except (ValueError, OSError, KeyError) as exc:
+        _fail("canonical input validation failed", exc)
+    _emit(
+        {
+            "valid": True,
+            "qualification": inputs.qualification,
+            "scenario_pack": inputs.scenario_pack.pack_id,
+        }
+    )

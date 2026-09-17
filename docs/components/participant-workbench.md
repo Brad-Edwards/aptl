@@ -1,93 +1,59 @@
-# Participant Workbench
+# Participant workbench
 
-The participant workbench is the guest-side profile boundary for the
-browser, installed coding-agent adapter, and APTL MCP servers. It is used only
-inside the sealed appliance defined by [ADR-049](../adrs/adr-049-sealed-disposable-lab-appliance.md).
-It is not a developer-host launch mode, an operator console, or a replacement
-for the appliance's network enforcement.
+The optional workbench uses the same packaged **full TechVault** deployment as
+normal local `aptl lab start`. It requires neither a VM nor appliance metadata
+for local use. [ADR-059](../adrs/adr-059-canonical-techvault-delivery-and-host-mcp-access.md)
+extends ADR-049 with authenticated host CLI access; appliance delivery retains
+its signed boundary and qualification gates.
 
-## Profiles
-
-The workbench accepts only three closed profiles:
-
-| Profile | MCP servers | Browser references |
+| Role | MCP servers | Browser surfaces |
 | --- | --- | --- |
-| `red` | `aptl-red` | APTL guide and Kali desktop |
-| `guided-blue` | `aptl-indexer`, `aptl-wazuh` | APTL guide and Wazuh |
-| `blue` | `aptl-indexer`, `aptl-wazuh`, `aptl-network`, `aptl-threatintel`, `aptl-casemgmt`, `aptl-soar` | APTL guide, Wazuh, TheHive, MISP, and Shuffle |
+| `red` | `aptl-red` | Packaged guide and captured Kali command terminal |
+| `blue` | `aptl-indexer`, `aptl-wazuh`, `aptl-network`, `aptl-threatintel`, `aptl-casemgmt`, `aptl-soar` | Guide, Wazuh, TheHive, MISP, Shuffle |
 
-A profile is a launch compartment, not a UI visibility toggle. A purple
-exercise stops the preceding agent/MCP runtime, destroys its session-local
-credentials and generated configuration, and then launches the next profile.
-It must never keep both capability sets in one process environment or config
-directory.
+`guided-blue` remains available for the historical guided fixture. It is not
+the full-TechVault delivery profile. The Kali surface is a command terminal
+through the admitted red MCP, not a graphical remote desktop.
 
-The runtime verifies the exact `tools/list` inventory immediately after each
-profile launch. The red profile is limited to `kali_info`, `kali_run_command`,
-`kali_interactive_session`, `kali_background_session`, `kali_session_command`,
-`kali_list_sessions`, `kali_close_session`, `kali_get_session_output`, and
-`kali_close_all_sessions`. The guided-blue variation admits only the published
-indexer and Wazuh inventories for the bounded profile in issue #820. The full
-blue profile adds network, threat-intelligence, case-management, and SOAR. An
-added, removed, or cross-profile tool fails the launch rather than being
-hidden from the user interface.
+## Assembly and authorization
 
-## Launch contract
+`create_local_workbench_app` consumes an enrolled `GuestDispatchBinding`, the
+`LocalWorkbenchSettings` project/state paths, a fixed APTL executable, and a trusted browser
+session verifier. The verifier returns `BrowserPrincipal(caller_id, profiles)`;
+a boolean is rejected. Its caller and single role must match the enrolled,
+unexpired grant. Every request checks live deployment identity, required
+capture, revocation and, for appliances, fresh signed-boundary evidence.
+`create_appliance_workbench_app` uses this same assembly and requires a binding.
+Neither factory mounts the operator API or accepts participant-supplied
+commands, service URLs, Docker endpoints, credentials or launch paths.
 
-`aptl.workbench` renders a private, standard Claude Code `.mcp.json` for the
-selected profile. Each stdio entry uses the fixed Node executable, an absolute
-released MCP artifact, the canonical guest `APTL_STATE_DIR`, and only that
-server's `${CREDENTIAL_ALIAS}` placeholders. The client expands those
-placeholders from a management-only lease; credential values, model
-authentication, participant-supplied URLs, command strings, Docker targets,
-and operator configuration never enter the file.
+The guide comes from the installed pack. The Kali WebSocket uses the same
+restricted MCP dispatcher as host clients. Blue browser services use explicit
+`BrowserRoute` mappings: one dedicated `*.localhost` virtual host per service,
+a fixed guest loopback upstream, and a role check before proxying HTTP or
+WebSockets. The gateway retains service root paths, bounds connections and
+messages, and removes the participant session cookie before proxying. Supply
+a trusted TLS context for guest HTTPS services; the default verifies certificates.
+The outer launcher owns browser session establishment, listener allocation,
+DNS/Host routing and TLS termination.
 
-The production adapter supports the installed Claude Code CLI. It validates
-the executable's ownership and mode, performs a real MCP initialize plus
-`tools/list` probe for every configured server, and invokes one non-persistent
-request with fixed no-shell arguments. Bare mode, strict MCP config, disabled
-built-in tools, disabled slash commands and browser integration, an exact MCP
-tool allowlist, bounded input/output/time, and process-group timeout cleanup
-keep the agent inside the selected MCP surface. Participant messages are sent
-on stdin, never in process arguments.
+The optional browser agent adapter is Claude Code. The management-side broker
+supplies only its configured provider key; guest MCP service credentials never
+enter the agent environment. Users of the **host** Claude Code or Codex CLI keep
+provider authentication in their own host account. Browser agent use is not
+required for the guide, terminal or service browser routes.
 
-Every workbench MCP child receives `APTL_MCP_DISABLE_DOTENV=1`.
-`aptl-mcp-common` therefore uses only the selected child environment instead
-of searching the payload hierarchy for a developer `.env`. Normal
-developer-local MCP launches retain their existing dotenv behavior.
+## MCP authority and capture
 
-The workbench browser app is intentionally a separate FastAPI assembly. It
-requires an appliance-provided participant session authorizer on every route
-and offers profile selection, fixed same-origin bookmarks, bounded agent
-messages, and profile close. Its CSP admits only its hash-pinned script and
-same-origin connections. It does not mount the existing operator API,
-terminal, lifecycle, Docker, kill, configuration-mutation, or raw-evidence
-routes.
+Generated browser agent configs invoke the fixed APTL dispatcher. Host client
+configs invoke pinned OpenSSH. Both reach the same exact role/tool admission,
+minimal guest-only service credential environment and bounded process lifetime.
+Tools are verified against the canonical inventory before the initialization
+reply. Client allowlists and hidden UI buttons do not substitute for this gate.
 
-Agent-turn records contain the profile, existing scenario trace ID, sizes, and
-request/response hashes, not prompt or response content. MCP processes read
-the same `trace-context.json` through `APTL_STATE_DIR`, preserving the existing
-OTel, MCP-side PTY, and red activity-capture correlation paths.
-
-## ADR-049 reconciliation
-
-| Control | This component changes or proves | Canonical incumbent | Evidence in this change | Remaining appliance proof |
-| --- | --- | --- | --- | --- |
-| APP-004 participant/operator separation | A dedicated participant FastAPI route assembly with authentication on status, selection, messaging, and teardown; no operator, Docker, terminal, kill, config, or raw-evidence routes | ADR-039/040 request/session patterns and the existing management-only operator API | Unit/framework integration in `tests/test_participant_workbench.py` | #822/#824 listener, Host, origin, CSRF, and live participant-to-operator denial |
-| APP-005 agent, MCP, and credential placement | Standard strict MCP config; real inventory probe; minimal configured credential binding; dotenv suppression; fixed bounded Claude Code invocation with built-in tools disabled | Released MCP artifacts, `.mcp.json.example`, `loadLabConfig()`, `createMCPServer()`, shared placeholder checks | Python unit/process integration plus `aptl-mcp-common` vitest | #823 guest-management process identity/package; #822 egress and off-Kali reachability proof |
-| APP-008 evidence and capture boundary | Agent lifecycle hashes use `RunStorageBackend`; every MCP child receives the active `ScenarioSession` state path and therefore the existing trace context | `ScenarioSession`, `RunStorageBackend`, MCP `runs.ts`, telemetry, ADR-041/042 capture layout | Unit/process integration in the workbench tests | #823 management-owned mounts and #822/#824 live capture/export/no-host-sync proof |
-
-APP-003, APP-006, APP-007, APP-009, and APP-010 are consumed constraints, not
-proof claims from this component. APP-001 and APP-002 are also payload/seat
-proofs owned by the appliance build and host contract. Issue #821 must remain
-open until #822, #823, and #824 supply the live/static evidence named above.
-
-## Delivery responsibilities
-
-The workbench is a runnable guest component, not the whole appliance. The
-appliance payload/build (#823), internal zones and egress rules (#822), and
-host kiosk/reset lifecycle (#824) supply its deployment boundary. Those layers
-must deny cross-profile filesystem/process and network visibility, prove the
-agent and MCP processes are off the physical host and Kali, and keep
-model/service credentials out of participant and Kali compartments before the
-combined delivery is called supported.
+An admitted run ID is passed to common MCP capture even when normal lab startup
+has no scenario-UI trace file. Agent records store correlation IDs, sizes and
+hashes. The relay preserves canonical redaction and requires remote SSH closure;
+unproved cleanup taints that instance generation and blocks further admission.
+See [host MCP access](../reference/host-mcp-access.md) for enrollment, revocation,
+client file ownership, wire limits and the downstream seat contract.

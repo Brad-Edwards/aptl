@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 
 from aptl.validation.participant_mcp_smoke import McpSmokeOperation
@@ -72,9 +73,21 @@ def _has_alert_hit(value: object) -> bool:
 def _kali_user(result: Mapping[str, object]) -> bool:
     """Whether the shell answered as the scenario's unprivileged attacker user."""
 
-    return result.get("isError") is not True and any(
-        "uid=1000(kali)" in text for text in _text_content(result)
-    )
+    if result.get("isError") is True:
+        return False
+    for payload in _decoded_text_payloads(result):
+        if not isinstance(payload, Mapping) or payload.get("success") is not True:
+            continue
+        output = payload.get("output")
+        if (
+            isinstance(output, Mapping)
+            and output.get("code") == 0
+            and re.search(
+                r"\buid=[1-9]\d*\(kali\)", str(output.get("stdout", "")), re.ASCII
+            )
+        ):
+            return True
+    return False
 
 
 def _attack_completed(result: Mapping[str, object]) -> bool:
@@ -137,3 +150,51 @@ PARTICIPANT_SMOKE_OPERATIONS = (
 )
 
 __all__ = ["PARTICIPANT_SMOKE_OPERATIONS"]
+
+
+def _successful_json(result: Mapping[str, object]) -> bool:
+    """Require a backend JSON result, allowing a legitimately empty dataset."""
+    payloads = _decoded_text_payloads(result)
+    return (
+        result.get("isError") is not True
+        and bool(payloads)
+        and all(isinstance(value, (dict, list)) for value in payloads)
+        and all(
+            not isinstance(value, dict)
+            or (value.get("success") is not False and not value.get("error"))
+            for value in payloads
+        )
+    )
+
+
+FULL_TECHVAULT_SMOKE_OPERATIONS = (
+    *PARTICIPANT_SMOKE_OPERATIONS,
+    McpSmokeOperation(
+        "mcp.blue.network-investigation",
+        "aptl-network",
+        "network_query_ids_alerts",
+        {},
+        _successful_json,
+    ),
+    McpSmokeOperation(
+        "mcp.blue.case-investigation",
+        "aptl-casemgmt",
+        "cases_list_cases",
+        {},
+        _successful_json,
+    ),
+    McpSmokeOperation(
+        "mcp.blue.threat-investigation",
+        "aptl-threatintel",
+        "threatintel_search_iocs",
+        {},
+        _successful_json,
+    ),
+    McpSmokeOperation(
+        "mcp.blue.workflow-investigation",
+        "aptl-soar",
+        "soar_list_workflows",
+        {},
+        _successful_json,
+    ),
+)

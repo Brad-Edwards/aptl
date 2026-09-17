@@ -104,7 +104,7 @@ end-to-end loop. Summary for agents working in this repo:
    `aptl lab stop -v && aptl lab start` on a fresh machine.
 3. **Implement.** Make the code change.
 4. **Verify locally.** Run `pre-commit run --all-files` (lint +
-   format + the gated test suites) before declaring done. Run the
+   format and secret checks; CI runs the substantive test suites) before declaring done. Run the
    relevant test command directly (`pytest`, `npx vitest run`, etc.)
    when iterating.
 5. **Create traceability.** Create `IMPLEMENTS` and `TESTS`

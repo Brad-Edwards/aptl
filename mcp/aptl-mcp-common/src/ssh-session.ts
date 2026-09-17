@@ -526,7 +526,7 @@ export class PersistentSession extends EventEmitter {
     // fires close during this await; we cover the timeout case explicitly
     // below. The closedEmitted latch keeps emission single-shot regardless
     // of which path wins.
-    await new Promise<void>((res) => {
+    const remoteCloseObserved = await new Promise<boolean>((res) => {
       let settled = false;
       const settle = (timedOut: boolean): void => {
         if (settled) return;
@@ -538,11 +538,15 @@ export class PersistentSession extends EventEmitter {
           );
         }
         clearTimeout(timer);
-        res();
+        res(!timedOut);
       };
       const timer = setTimeout(() => settle(true), TIMEOUTS.REMOTE_CLOSE_AWAIT);
       this.remoteClosed.then(() => settle(false));
     });
+
+    if (!remoteCloseObserved && process.env.APTL_MCP_REQUIRE_REMOTE_CLOSE === '1') {
+      throw new SSHError('Remote session teardown was not acknowledged');
+    }
 
     // Now safe to signal 'closed' to the manager. If stream.on('close')
     // already ran cleanup() during the await, emitClosedIfVerified() is a

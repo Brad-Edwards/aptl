@@ -28,6 +28,7 @@ _ALLOWED_TOP_LEVEL = frozenset(
         "aptl-appliance-first-boot.service",
     }
 )
+_CANONICAL_TOP_LEVEL = _ALLOWED_TOP_LEVEL | {"inputs.json", "requirements.txt"}
 _SCENARIO_RE = re.compile(r"^[a-z0-9][a-z0-9.-]*$")
 _INVALID_RELEASE_ENV = "invalid non-secret appliance release environment"
 
@@ -51,7 +52,7 @@ def _validate_staged_paths(staging: Path) -> list[Path]:
     if staging.is_symlink() or not staging.is_dir():
         raise OfflinePayloadError("offline payload staging directory is invalid")
     entries = {path.name for path in staging.iterdir()}
-    if entries != _ALLOWED_TOP_LEVEL:
+    if entries not in (_ALLOWED_TOP_LEVEL, _CANONICAL_TOP_LEVEL):
         raise OfflinePayloadError("offline payload contains unexpected top-level files")
     paths = sorted(
         staging.rglob("*"),
@@ -115,8 +116,19 @@ def _validate_staging(staging: Path) -> list[Path]:
     for required in ("project.tar", "oci-images.tar"):
         if (staging / required).stat().st_size <= 0:
             raise OfflinePayloadError(f"offline payload {required} is empty")
-    _scenario, version = _release_environment(staging)
+    scenario, version = _release_environment(staging)
     _validate_wheelhouse(staging, version)
+    if scenario == "techvault" or (staging / "inputs.json").exists():
+        from aptl.appliance.inputs import validate_canonical_inputs
+
+        try:
+            inputs = validate_canonical_inputs(staging)
+            if inputs.aptl_version != version or scenario != "techvault":
+                raise ValueError("canonical payload release identity mismatch")
+        except (ValueError, OSError, KeyError) as exc:
+            raise OfflinePayloadError(
+                "canonical payload input validation failed"
+            ) from exc
     return paths
 
 

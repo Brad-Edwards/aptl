@@ -9,8 +9,16 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from aptl.core.deployment._compose_base_substrate import ComposeBaseSubstrateMixin
+from aptl.core.appliance_boundary import (
+    ApplianceBoundaryBinding,
+    ApplianceBoundaryPolicy,
+)
+from aptl.core.config import validate_compose_project_name
 from aptl.core.deployment._compose_autoremove import ComposeAutoremoveMixin
+from aptl.core.deployment._compose_base_substrate import ComposeBaseSubstrateMixin
+from aptl.core.deployment._compose_boundary import (
+    DEFAULT_BOUNDARY_HELPER_IMAGE,
+)
 from aptl.core.deployment._compose_build_dedupe import (
     write_duplicate_build_override,
 )
@@ -31,14 +39,6 @@ from aptl.core.deployment._compose_seed_attribution import (
 from aptl.core.deployment._compose_seed_execution import ComposeSeedExecutionMixin
 from aptl.core.deployment._compose_stop import stop_compose_lab
 from aptl.core.deployment._docker_endpoint_binding import DockerEndpointBindingMixin
-from aptl.core.deployment._compose_boundary import (
-    DEFAULT_BOUNDARY_HELPER_IMAGE,
-)
-from aptl.core.appliance_boundary import (
-    ApplianceBoundaryBinding,
-    ApplianceBoundaryPolicy,
-)
-from aptl.core.config import validate_compose_project_name
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult, LabStatus
@@ -75,7 +75,11 @@ class DockerComposeBackend(
         project_name: str = "aptl",
         *,
         offline_staged: bool = False,
+        docker_socket_path: Path | None = None,
     ) -> None:
+        if docker_socket_path is not None and not docker_socket_path.is_absolute():
+            raise ValueError("managed Docker socket must be absolute")
+        self._configured_docker_socket_path = docker_socket_path
         self._project_dir = project_dir
         self._project_name = validate_compose_project_name(project_name)
         self._offline_staged = offline_staged

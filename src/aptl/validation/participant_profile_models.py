@@ -7,9 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from aptl.core.config import AptlConfig
+from aptl.core.scenario_bundle import PackIdentity, ScenarioBundle
 from aptl.validation.curated_live_proof import ExpectedMatrix
 from aptl.workbench.profiles import ProfileId, WorkbenchProfile
 
@@ -63,6 +64,18 @@ class ScenarioReference(ArtifactReference):
         return value
 
 
+class EnvPackScenarioReference(ArtifactReference):
+    """Validated package identity plus a bundle-relative SDL digest."""
+
+    source: Literal["env-pack"]
+    identity: PackIdentity
+
+    @property
+    def catalog_id(self) -> str:
+        """Stable selector for evidence consumers shared with legacy profiles."""
+        return self.identity.pack_id
+
+
 class ParticipantCapabilities(_StrictModel):
     """Workbench compartments admitted in sequence by the guided workflow."""
 
@@ -113,7 +126,9 @@ class ProfileBudgets(_StrictModel):
 class ReleaseEvidenceContract(_StrictModel):
     """Profile evidence that the appliance release in issue 823 consumes."""
 
-    asset_lock_schema: Literal["aptl.participant-asset-lock/v1"]
+    asset_lock_schema: Literal[
+        "aptl.participant-asset-lock/v1", "aptl.participant-asset-lock/v2"
+    ]
     qualification_report_schema: Literal["aptl.participant-qualification/v1"]
     asset_lock_ref: str
     asset_lock_sha256: str
@@ -143,7 +158,14 @@ class AssetLockEntry(_StrictModel):
     """One staged input identity required by the participant profile."""
 
     asset_id: str
-    kind: Literal["project-file", "mcp-artifact", "oci-image"]
+    kind: Literal[
+        "project-file",
+        "mcp-artifact",
+        "oci-image",
+        "image-id",
+        "python-wheel",
+        "input-file",
+    ]
     source: str = Field(min_length=1)
     sha256: str
     services: tuple[str, ...] = ()
@@ -179,7 +201,9 @@ class AssetLockEntry(_StrictModel):
 class ParticipantAssetLock(_StrictModel):
     """Content-addressed closure staged before participant delivery."""
 
-    schema_version: Literal["aptl.participant-asset-lock/v1"]
+    schema_version: Literal[
+        "aptl.participant-asset-lock/v1", "aptl.participant-asset-lock/v2"
+    ]
     profile_id: str
     profile_version: int = Field(ge=1)
     assets: tuple[AssetLockEntry, ...]
@@ -196,6 +220,15 @@ class ParticipantAssetLock(_StrictModel):
             raise ValueError("asset lock ids must be non-empty and unique")
         return assets
 
+    @model_validator(mode="after")
+    def versioned_kinds(self):
+        if self.schema_version.endswith("/v1") and any(
+            asset.kind not in {"project-file", "mcp-artifact", "oci-image"}
+            for asset in self.assets
+        ):
+            raise ValueError("extended input kinds require asset-lock v2")
+        return self
+
 
 class ParticipantProfileManifest(_StrictModel):
     """The immutable release-level profile binding."""
@@ -204,7 +237,7 @@ class ParticipantProfileManifest(_StrictModel):
     profile_id: str
     version: int = Field(ge=1)
     narrative: ArtifactReference
-    scenario: ScenarioReference
+    scenario: ScenarioReference | EnvPackScenarioReference
     config: ArtifactReference
     readiness: ArtifactReference
     capabilities: ParticipantCapabilities
@@ -264,6 +297,7 @@ class ReadinessCheck(_StrictModel):
         "evidence",
         "offline-assets",
         "resource-budget",
+        "client-transport",
     ]
     subject_id: str
     operation_id: str
@@ -304,6 +338,7 @@ class ResolvedParticipantProfile:
     asset_lock: ParticipantAssetLock
     workbench_profiles: tuple[WorkbenchProfile, ...]
     expected_matrix: ExpectedMatrix
+    scenario_bundle: ScenarioBundle
 
     @property
     def mcp_server_ids(self) -> tuple[str, ...]:

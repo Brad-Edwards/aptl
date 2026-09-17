@@ -16,8 +16,7 @@ _PROJECT_OWNERSHIP_LABELS = (
 )
 _MAX_INVENTORY_ERROR_LENGTH = 512
 _PROJECT_INVENTORY_FORMAT = (
-    "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.State}}\t"
-    "{{.Labels}}\t{{.Ports}}"
+    "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.State}}\t{{.Labels}}\t{{.Ports}}"
 )
 
 
@@ -103,6 +102,7 @@ class ComposeProjectInventoryMixin(object):
                     "docker",
                     "ps",
                     "-a",
+                    "--no-trunc",
                     "--filter",
                     f"label={label}={self._project_name}",
                     "--format",

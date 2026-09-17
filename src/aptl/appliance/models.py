@@ -22,6 +22,7 @@ _COMMIT_RE = re.compile(r"^[a-f0-9]{40}(?:[a-f0-9]{24})?$")
 _IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
 
 ArtifactKind = Literal[
+    "canonical-inputs",
     "golden-disk",
     "offline-payload",
     "participant-profile",
@@ -241,6 +242,8 @@ class DeliveryParity(_StrictModel):
 
     participant_ui_digest: str
     participant_routes_digest: str
+    canonical_inputs_digest: str | None = None
+    host_mcp_contract: Literal["aptl.restricted-ssh-mcp/v1"] | None = None
     adapters: tuple[DeliveryAdapter, ...]
 
     @field_validator("participant_ui_digest", "participant_routes_digest")
@@ -250,6 +253,10 @@ class DeliveryParity(_StrictModel):
 
     @model_validator(mode="after")
     def validate_adapter_parity(self) -> DeliveryParity:
+        if self.canonical_inputs_digest is not None:
+            _validate_digest(self.canonical_inputs_digest)
+        if self.host_mcp_contract and not self.canonical_inputs_digest:
+            raise ValueError("host MCP requires canonical packaged inputs")
         ids = [adapter.adapter_id for adapter in self.adapters]
         kinds = {adapter.kind for adapter in self.adapters}
         if len(ids) != len(set(ids)):
@@ -382,11 +389,18 @@ class ApplianceReleaseManifest(_StrictModel):
             raise ValueError("artifact ids must be unique")
         if len(paths) != len(set(paths)):
             raise ValueError("artifact paths must be unique")
-        if set(kinds) != _REQUIRED_ARTIFACT_KINDS or len(kinds) != len(
-            _REQUIRED_ARTIFACT_KINDS
+        if (
+            not _REQUIRED_ARTIFACT_KINDS <= set(kinds)
+            or set(kinds) - _REQUIRED_ARTIFACT_KINDS - {"canonical-inputs"}
+            or len(kinds) != len(set(kinds))
         ):
             raise ValueError("manifest does not contain the required artifact kinds")
         by_kind = {artifact.kind: artifact for artifact in self.artifacts}
+        canonical = by_kind.get("canonical-inputs")
+        if (
+            canonical.sha256 if canonical else None
+        ) != self.delivery.canonical_inputs_digest:
+            raise ValueError("canonical input digest does not match release artifact")
         comparisons = (
             (
                 by_kind["participant-profile"].sha256,

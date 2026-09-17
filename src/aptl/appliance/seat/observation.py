@@ -9,7 +9,10 @@ from dataclasses import dataclass
 
 import rfc8785
 
-from aptl.core.appliance_boundary import ApplianceBoundaryBinding, ApplianceBoundaryPolicy
+from aptl.core.appliance_boundary import (
+    ApplianceBoundaryBinding,
+    ApplianceBoundaryPolicy,
+)
 from aptl.core.appliance_boundary_inventory import (
     BoundaryEndpoint,
     HostBoundaryObservation,
@@ -98,12 +101,27 @@ def _collect_listeners_via_ss() -> tuple[BoundaryEndpoint, ...]:
 def map_publications_to_listeners(
     policy: ApplianceBoundaryPolicy,
     observed: Iterable[BoundaryEndpoint],
+    *,
+    mappings: tuple[BoundaryEndpoint, ...] = (),
 ) -> tuple[BoundaryEndpoint, ...]:
     """Attach signed publication audiences to observed loopback listeners."""
 
     by_port = {(item.address, item.port, item.protocol) for item in observed}
     mapped: list[BoundaryEndpoint] = []
+    if mappings:
+        allowed = {
+            (p.audience, p.address, p.port, p.protocol)
+            for p in policy.guest_publications
+        }
+        if any(
+            (m.audience, m.guest_address, m.guest_port, m.protocol) not in allowed
+            for m in mappings
+        ):
+            raise ValueError("outer mapping names an unsigned guest publication")
+        return tuple(m for m in mappings if (m.address, m.port, m.protocol) in by_port)
     for publication in policy.guest_publications:
+        if publication.audience == "host-mcp":
+            raise ValueError("host MCP requires an explicit outer mapping")
         key = (publication.address, publication.port, publication.protocol)
         if key in by_port:
             mapped.append(
@@ -151,29 +169,8 @@ def host_boundary_findings(
 ) -> tuple[str, ...]:
     """Return host-only boundary finding codes."""
 
+    from aptl.core.appliance_boundary_inventory import _append_host_findings
+
     findings: list[str] = []
-    if host.observation_id != binding.host_observation_id:
-        findings.append("boundary.host-observation-identity-mismatch")
-    if host.policy_digest != binding.policy_digest:
-        findings.append("boundary.host-policy-digest-mismatch")
-    if host.payload_digest != binding.payload_digest:
-        findings.append("boundary.host-payload-digest-mismatch")
-    if host.boot_id != binding.boot_id:
-        findings.append("boundary.host-boot-identity-mismatch")
-    if not host.complete:
-        findings.append("boundary.host-observation-incomplete")
-    if not host.forbidden_reachability_passed:
-        findings.append("boundary.host-forbidden-reachability")
-    expected = {
-        (item.audience, item.address, item.port, item.protocol)
-        for item in policy.guest_publications
-    }
-    observed = {
-        (item.audience, item.address, item.port, item.protocol)
-        for item in host.listeners
-    }
-    if observed - expected:
-        findings.append("boundary.host-listener-unapproved")
-    if expected - observed:
-        findings.append("boundary.host-listener-missing")
+    _append_host_findings(policy, binding, host, findings)
     return tuple(findings)

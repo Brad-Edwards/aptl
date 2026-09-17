@@ -13,7 +13,6 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
-from fastapi.testclient import TestClient
 
 from aptl.workbench.agent import (
     AgentExecutionError,
@@ -23,6 +22,7 @@ from aptl.workbench.agent import (
     _admitted_executable,
     probe_mcp_server,
 )
+from aptl.workbench.codex_agent import CodexManagedAgentAdapter
 from aptl.workbench.credentials import (
     EphemeralCredentialBroker,
     WorkbenchCredentialError,
@@ -31,7 +31,6 @@ from aptl.workbench.participant_source_binding import (
     ProcessEnvironmentCredentialResolver,
     evidence_from_error,
 )
-from aptl.workbench.codex_agent import CodexManagedAgentAdapter
 from aptl.workbench.profiles import ProfileId, profile_for, render_profile_config
 from aptl.workbench.runtime import DecisionAgentLaunch, ProfileLaunch
 
@@ -807,9 +806,7 @@ def test_bounded_runner_kills_a_descendant_that_outlives_sigterm(
 
     try:
         _terminate_process_group(process)
-        assert _poll_until_absent(grandchild), (
-            "the descendant outlived teardown"
-        )
+        assert _poll_until_absent(grandchild), "the descendant outlived teardown"
     finally:
         with contextlib.suppress(OSError):
             os.kill(grandchild, signal.SIGKILL)
@@ -864,30 +861,24 @@ def test_bounded_runner_escalates_even_when_the_child_exits_promptly() -> None:
     ]
 
 
-def test_appliance_factory_wires_the_production_workbench_without_operator_routes(
-    tmp_path: Path,
-) -> None:
+def test_appliance_factory_requires_enrolled_guest_binding(tmp_path: Path) -> None:
     from aptl.workbench.bootstrap import (
         ApplianceWorkbenchSettings,
         create_appliance_workbench_app,
     )
+    from aptl.workbench.profiles import WorkbenchConfigurationError
 
-    app = create_appliance_workbench_app(
-        ApplianceWorkbenchSettings(
-            payload_root=tmp_path / "payload",
-            state_dir=tmp_path / "state",
-            claude_executable=_executable(tmp_path / "claude"),
-            node_executable=Path(sys.executable),
-            model="claude-sonnet-4-5-20250929",
-        ),
-        secret_source={"ANTHROPIC_API_KEY": "model-secret"},
-        authorizer=lambda request: request.headers.get("X-Seat") == "seat",
-    )
-    client = TestClient(app)
-
-    assert client.get("/").status_code == 401
-    assert client.get("/", headers={"X-Seat": "seat"}).status_code == 200
-    assert client.get("/api/lab/status", headers={"X-Seat": "seat"}).status_code == 404
+    with pytest.raises(WorkbenchConfigurationError, match="enrolled"):
+        create_appliance_workbench_app(
+            ApplianceWorkbenchSettings(
+                payload_root=tmp_path,
+                state_dir=tmp_path / "state",
+                claude_executable=_executable(tmp_path / "claude"),
+                model="test",
+            ),
+            secret_source={},
+            authorizer=lambda request: None,
+        )
 
 
 class _Invocation:

@@ -49,11 +49,12 @@ for line in sys.stdin:
         tool = message["params"]["name"]
         arguments = message["params"]["arguments"]
         if tool == "kali_run_command" and arguments["command"] == "id":
-            text = (
+            identity = (
                 "uid=0(root) gid=0(root)"
                 if FAIL_RED
                 else "uid=1000(kali) gid=1000(kali)"
             )
+            text = json.dumps({"success": True, "output": {"stdout": identity, "code": 0}})
         elif tool == "kali_run_command":
             text = json.dumps({
                 "success": True,

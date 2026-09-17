@@ -15,19 +15,26 @@ from pathlib import Path
 from pydantic import BaseModel, ValidationError
 
 from aptl.core.config import AptlConfig, load_config
+from aptl.core.scenario_bundle import (
+    ScenarioBundle,
+    env_pack_bundle,
+    project_tree_bundle,
+)
 from aptl.core.scenario_catalog import load_scenario_catalog
 from aptl.utils.pathsafe import PathContainmentError, read_contained_nofollow
 from aptl.validation.curated_live_proof import (
     ExpectedMatrix,
-    expected_reduced_matrix,
+    expected_bundle_matrix,
 )
 from aptl.validation.participant_profile_models import (
     ArtifactReference,
+    EnvPackScenarioReference,
     ParticipantAssetLock,
     ParticipantNarrative,
     ParticipantProfileManifest,
     ParticipantReadinessSuite,
     ResolvedParticipantProfile,
+    ScenarioReference,
 )
 from aptl.workbench.profiles import (
     WorkbenchConfigurationError,
@@ -84,7 +91,7 @@ def _load_model(
 def _validate_profile_links(
     project_root: Path,
     manifest: ParticipantProfileManifest,
-) -> tuple[AptlConfig, Path, ParticipantNarrative, ParticipantReadinessSuite]:
+) -> tuple[AptlConfig, ScenarioBundle, ParticipantNarrative, ParticipantReadinessSuite]:
     """Resolve and cross-bind all immutable profile input references."""
 
     narrative = _load_model(
@@ -100,23 +107,8 @@ def _validate_profile_links(
     assert isinstance(narrative, ParticipantNarrative)
     assert isinstance(readiness, ParticipantReadinessSuite)
     _read_reference(project_root, manifest.config)
-    scenario_bytes = _read_reference(project_root, manifest.scenario)
-
-    config_path = project_root / manifest.config.path
-    try:
-        config = load_config(config_path)
-        catalog = load_scenario_catalog(project_root)
-    except ValueError as exc:
-        raise ParticipantProfileError("invalid participant profile reference") from exc
-
-    entry = catalog.get(manifest.scenario.catalog_id)
-    if entry is None or entry.path != manifest.scenario.path:
-        raise ParticipantProfileError("participant scenario catalog reference mismatch")
-    scenario_path = project_root / manifest.scenario.path
-    # Keep the exact no-follow bytes alive through the catalog check above.  The
-    # planner reopens the canonical contained path through the RAES authority.
-    if not scenario_bytes:
-        raise ParticipantProfileError("participant scenario is empty")
+    config = load_config(project_root / manifest.config.path)
+    bundle = resolve_profile_scenario(project_root, config, manifest.scenario)
     if (
         narrative.narrative_id != manifest.profile_id
         or narrative.version != manifest.version
@@ -126,7 +118,7 @@ def _validate_profile_links(
         raise ParticipantProfileError("participant profile input identity mismatch")
     return (
         config,
-        scenario_path,
+        bundle,
         narrative,
         readiness,
     )
@@ -177,6 +169,11 @@ def _load_asset_lock(
                 project_root,
                 ArtifactReference(path=asset.source, sha256=asset.sha256),
             )
+        elif asset.kind == "image-id":
+            if asset.source != f"sha256:{asset.sha256}":
+                raise ParticipantProfileError(
+                    "participant image config identity mismatch"
+                )
         elif not asset.source.endswith(f"@sha256:{asset.sha256}"):
             raise ParticipantProfileError("participant OCI asset identity mismatch")
     return lock
@@ -197,7 +194,11 @@ def _validate_asset_lock_coverage(
     }
     required_references = (
         manifest.narrative,
-        manifest.scenario,
+        *(
+            ()
+            if isinstance(manifest.scenario, EnvPackScenarioReference)
+            else (manifest.scenario,)
+        ),
         manifest.config,
         manifest.readiness,
     )
@@ -219,7 +220,7 @@ def _validate_asset_lock_coverage(
     image_services = [
         service
         for asset in lock.assets
-        if asset.kind == "oci-image"
+        if asset.kind in {"oci-image", "image-id"}
         for service in asset.services
     ]
     if len(image_services) != len(set(image_services)) or set(image_services) != set(
@@ -229,7 +230,8 @@ def _validate_asset_lock_coverage(
             "participant asset lock does not match the derived service surface"
         )
     if any(
-        bool(asset.services) != (asset.kind == "oci-image") for asset in lock.assets
+        bool(asset.services) != (asset.kind in {"oci-image", "image-id"})
+        for asset in lock.assets
     ):
         raise ParticipantProfileError("participant asset service binding is invalid")
 
@@ -277,7 +279,7 @@ def load_participant_profile(
         label="profile",
     )
     assert isinstance(manifest, ParticipantProfileManifest)
-    config, scenario_path, narrative, readiness = _validate_profile_links(
+    config, bundle, narrative, readiness = _validate_profile_links(
         project_root, manifest
     )
     _validate_narrative_readiness(narrative, readiness)
@@ -293,10 +295,10 @@ def load_participant_profile(
     _validate_workbench_readiness(readiness, workbench_profiles)
     asset_lock = _load_asset_lock(project_root, manifest)
     try:
-        expected_matrix = expected_reduced_matrix(
+        expected_matrix = expected_bundle_matrix(
             project_root,
             config,
-            scenario_path,
+            bundle,
         )
     except (OSError, TypeError, ValueError) as exc:
         raise ParticipantProfileError(
@@ -312,10 +314,46 @@ def load_participant_profile(
         manifest=manifest,
         manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
         config=config,
-        scenario_path=scenario_path,
+        scenario_path=bundle.sdl_path,
+        scenario_bundle=bundle,
         narrative=narrative,
         readiness=readiness,
         asset_lock=asset_lock,
         workbench_profiles=workbench_profiles,
         expected_matrix=expected_matrix,
     )
+
+
+def resolve_profile_scenario(
+    project_root: Path,
+    config: AptlConfig,
+    reference: ScenarioReference | EnvPackScenarioReference,
+    *,
+    staging_root: Path | None = None,
+) -> ScenarioBundle:
+    """Resolve through the same package boundary as normal local startup."""
+    if isinstance(reference, EnvPackScenarioReference):
+        if (
+            config.scenario.source != "env-pack"
+            or config.scenario.identity != reference.identity.pack_id
+        ):
+            raise ParticipantProfileError("participant scenario source mismatch")
+        bundle = env_pack_bundle(
+            staging_root or project_root / ".aptl" / "participant-packs",
+            reference.identity.pack_id,
+        )
+        if bundle.pack_identity != reference.identity:
+            raise ParticipantProfileError("participant pack identity mismatch")
+        payload = bundle.read_asset(reference.path)
+        if (
+            bundle.sdl_path != bundle.root / reference.path
+            or hashlib.sha256(payload).hexdigest() != reference.sha256
+        ):
+            raise ParticipantProfileError("participant scenario digest mismatch")
+        return bundle
+    payload = _read_reference(project_root, reference)
+    catalog = load_scenario_catalog(project_root)
+    entry = catalog.get(reference.catalog_id)
+    if entry is None or entry.path != reference.path or not payload:
+        raise ParticipantProfileError("participant scenario catalog reference mismatch")
+    return project_tree_bundle(project_root, project_root / reference.path)

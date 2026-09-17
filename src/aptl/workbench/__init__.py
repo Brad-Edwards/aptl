@@ -5,10 +5,6 @@ from aptl.workbench.agent import (
     BoundedProcessRunner,
     ClaudeCodeManagedAgentAdapter,
 )
-from aptl.workbench.bootstrap import (
-    ApplianceWorkbenchSettings,
-    create_appliance_workbench_app,
-)
 from aptl.workbench.credentials import (
     EphemeralCredentialBroker,
     WorkbenchCredentialError,
@@ -45,3 +41,17 @@ __all__ = [
     "render_profile_config",
     "verify_profile_tool_inventory",
 ]
+
+
+def __getattr__(name):
+    """Keep the optional browser stack out of ordinary CLI imports."""
+    if name in {
+        "ApplianceWorkbenchSettings",
+        "LocalWorkbenchSettings",
+        "create_appliance_workbench_app",
+        "create_local_workbench_app",
+    }:
+        from aptl.workbench import bootstrap
+
+        return getattr(bootstrap, name)
+    raise AttributeError(name)

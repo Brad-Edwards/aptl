@@ -68,11 +68,17 @@ npm install
 
 ## Verification
 
-The full repository gate is:
+The local hygiene check is:
 
 ```shell
 pre-commit run --all-files
 ```
+
+Local commit hooks run secret detection and fast file hygiene only. Full Python,
+MCP and web suites, dependency-lock freshness, complexity and prose checks run in
+CI/CD. Run the tests relevant to a change while developing. To reproduce the
+CI-only hook checks explicitly, use
+`pre-commit run --config .pre-commit-ci.yaml --all-files`.
 
 Useful narrower checks:
 

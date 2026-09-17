@@ -9,15 +9,15 @@ from pydantic import Field, field_validator, model_validator
 from aptl.appliance.models import (
     _IMAGE_DIGEST_RE,
     _REQUIRED_ARTIFACT_KINDS,
-    _StrictModel,
-    _validate_digest,
-    _validate_identifier,
-    _validate_relative_path,
     ApplianceGuest,
     ArtifactKind,
     DeliveryParity,
     HostPrerequisites,
     ReleaseSource,
+    _StrictModel,
+    _validate_digest,
+    _validate_identifier,
+    _validate_relative_path,
 )
 
 
@@ -103,8 +103,10 @@ class ApplianceReleaseTemplate(_StrictModel):
         kinds = [artifact.kind for artifact in self.artifacts]
         if len(ids) != len(set(ids)) or len(paths) != len(set(paths)):
             raise ValueError("staged artifact ids and paths must be unique")
-        if set(kinds) != _REQUIRED_ARTIFACT_KINDS or len(kinds) != len(
-            _REQUIRED_ARTIFACT_KINDS
+        if (
+            not _REQUIRED_ARTIFACT_KINDS <= set(kinds)
+            or set(kinds) - _REQUIRED_ARTIFACT_KINDS - {"canonical-inputs"}
+            or len(kinds) != len(set(kinds))
         ):
             raise ValueError("template does not contain the required artifact kinds")
         if self.guest.architecture != self.host_prerequisites.architecture:
@@ -127,6 +129,8 @@ class ApplianceLaunchDescriptor(_StrictModel):
     boundary_helper_image: str
     egress_proxy_image: str
     participant_routes_digest: str
+    canonical_inputs_digest: str | None = None
+    host_mcp_contract: Literal["aptl.restricted-ssh-mcp/v1"] | None = None
     host_observation_id: str
 
     @field_validator("release_dir", "boundary_policy_path")
@@ -158,3 +162,11 @@ class ApplianceLaunchDescriptor(_StrictModel):
         if not _IMAGE_DIGEST_RE.fullmatch(value):
             raise ValueError("launch helper images must use immutable digests")
         return value
+
+    @model_validator(mode="after")
+    def validate_access_extension(self):
+        if self.canonical_inputs_digest is not None:
+            _validate_digest(self.canonical_inputs_digest)
+        if self.host_mcp_contract and self.canonical_inputs_digest is None:
+            raise ValueError("host MCP requires a canonical input digest")
+        return self

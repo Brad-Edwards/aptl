@@ -23,4 +23,4 @@ done
 
 test ! -e /opt/aptl/project/.env
 test -r /opt/aptl/offline/oci-images.tar
-test -r /opt/aptl/project/participant-profiles/guided-purple-v1/profile.json
+test -r /opt/aptl/project/participant-profiles/techvault-full-v1/profile.json

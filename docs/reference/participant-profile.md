@@ -1,4 +1,31 @@
-# Guided Purple Participant Profile
+# Participant Profiles
+
+## Canonical full TechVault
+
+Normal local use and optional workbench/appliance delivery share the installed
+TechVault environment pack. `aptl appliance assemble-inputs` generates
+`participant-profiles/techvault-full-v1/profile.json` from that exact pack
+identity and the freshly built MCP artifacts. It selects `red` and `blue`, all
+seven participant MCP servers, and the six registered browser surfaces.
+
+The scenario reference uses `source: env-pack`, the full `PackIdentity`, and
+the SDL content digest. Its runtime matrix comes from the admitted pack's
+realization, including its exact workloads and networks. It does not add
+legacy Compose-only services. Kali access reaches the capture broker at the
+live workload address; the private inner sshd remains behind that broker.
+
+The generated asset lock uses `aptl.participant-asset-lock/v2`, adding image
+config identities, Python wheels, and input files to the existing artifact
+kinds. Version 1 locks retain their original allowed kinds. Readiness includes
+real MCP operations, authorized browser operations, capture, resource and
+offline checks, plus separate `client-transport` checks for Claude Code and
+Codex. Input validation does not satisfy signed machine qualification or
+prove an offline VM boot; those remain downstream release requirements.
+
+See [canonical input assembly](appliance-release.md) and
+[host MCP access](host-mcp-access.md) for the delivery contracts.
+
+## Guided Purple fixture
 
 `guided-purple` version 1 is APTL's bounded workshop and classroom profile. It
 freezes one attack-detect-investigate-purple narrative without creating an
@@ -113,7 +140,7 @@ report.
 
 ## Full research stack
 
-`techvault-operational` remains the full developer and research scenario. It
-adds the enterprise, Suricata, MISP, TheHive, Cortex, Shuffle, and other
-systems and needs more than 20 GiB of Docker memory. Its readiness or resource
-results are not evidence for `guided-purple`.
+The packaged full TechVault scenario includes the enterprise, Suricata, MISP,
+TheHive, Cortex, Shuffle, and other systems. Its generated delivery profile
+declares a 32 GiB memory minimum. Its readiness or resource results are not
+evidence for `guided-purple`.

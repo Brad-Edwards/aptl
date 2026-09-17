@@ -3402,15 +3402,16 @@ def _resolved_host_port_env(resolved_ports: list[object]) -> dict[str, str]:
 def _server_config_port_refs(spec: dict[str, Any], project_dir: Path) -> set[str]:
     """Return the ``APTL_HP_*`` vars a server's docker-lab-config.json references."""
     args = spec.get("args")
-    if not isinstance(args, list):
-        return set()
-    entry = next(
-        (a for a in args if isinstance(a, str) and a.endswith("index.js")), None
-    )
+    entry = None
+    if isinstance(args, list):
+        entry = next(
+            (a for a in args if isinstance(a, str) and a.endswith("index.js")), None
+        )
     if entry is None:
         return set()
-    server_dir = (project_dir / entry).resolve().parent.parent
-    config_path = server_dir / "docker-lab-config.json"
+    config_path = (
+        (project_dir / entry).resolve().parent.parent / "docker-lab-config.json"
+    )
     try:
         return set(_APTL_HP_REF_RE.findall(config_path.read_text(encoding="utf-8")))
     except OSError:

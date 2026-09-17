@@ -289,6 +289,7 @@ docs/architecture/issue-913-shuffle-post-realization-mutation-preflight.md	docs-
 docs/architecture/issue-934-rename-boundary-preflight.md	architecture-history	Binding #934 rename-boundary inventory and retirement guardrails
 docs/architecture/issue-949-orborus-control-authority-preflight.md	architecture-history	Post-baseline architecture guidance; retain with its owning issue
 docs/architecture/issue-951-fresh-env-pack-start-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-964-backend-resource-ownership-preflight.md	architecture-history	Post-baseline backend ownership guidance; retain with its owning issue
 docs/architecture/networking.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/obs-002-correlation-identity-clock-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/rep-003-run-scoped-provenance-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
@@ -920,6 +921,7 @@ src/aptl/core/deployment/_compose_build_dedupe.py	core-candidate	Migrate only af
 src/aptl/core/deployment/_compose_child_lifecycle.py	backend-substrate	Post-baseline Compose child-lifecycle mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_content_mounts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_content_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_direct_network.py	backend-substrate	Post-baseline direct network ownership mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_image_fetch.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_image_free_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_image_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -929,6 +931,7 @@ src/aptl/core/deployment/_compose_model_realization.py	core-candidate	Migrate on
 src/aptl/core/deployment/_compose_network_conflicts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_network_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_node_generation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_owned_start.py	backend-substrate	Post-baseline owned Compose startup mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_port_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_port_readback.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_post_start.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -937,6 +940,9 @@ src/aptl/core/deployment/_compose_project_inventory.py	core-candidate	Migrate on
 src/aptl/core/deployment/_compose_queries.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_realization_networks.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_receipt_capture.py	backend-substrate	Post-baseline native resource receipt capture; retain with deployment authority
+src/aptl/core/deployment/_compose_resource_resolution.py	backend-substrate	Post-baseline native resource resolution mechanism; retain with deployment authority
+src/aptl/core/deployment/_compose_resource_ownership.py	backend-substrate	Post-baseline native resource ownership mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_runtime_inventory.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_runtime_observation.py	backend-substrate	Post-baseline native runtime observation mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_runtime_orchestration.py	backend-substrate	Post-baseline Compose runtime-orchestration mechanism; retain with deployment authority
@@ -1213,6 +1219,7 @@ tests/test_compose_base_substrate.py	tests-follow-owner	Retain meaningful bounda
 tests/test_compose_boundary_realization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_compose_platform_boundary.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_compose_port_realization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_compose_resource_ownership.py	tests-follow-owner	Retain backend ownership and cross-workspace isolation tests with deployment authority
 tests/test_compose_service_health.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_compose_volume_cleanup.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_config.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

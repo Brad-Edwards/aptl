@@ -230,7 +230,7 @@ class ComposeQueryMixin(object):
             if isinstance(config, dict) and config.get("Subnet")
         ]
         return {
-            "name": name,
+            "name": str(payload.get("Name", name)),
             "id": network_id,
             "driver": str(payload.get("Driver", "")),
             "bridge": bridge,
@@ -263,12 +263,13 @@ class ComposeQueryMixin(object):
         follow: bool = False,
         tail: int | None = None,
     ) -> int:
+        native_id = self._resolve_owned_container_id(name)
         cmd = ["docker", "logs"]
         if follow:
             cmd.append("-f")
         if tail is not None:
             cmd.extend(["--tail", str(tail)])
-        cmd.append(name)
+        cmd.append(native_id)
         return self._run_streaming(cmd)
 
     def container_logs_capture(
@@ -279,12 +280,13 @@ class ComposeQueryMixin(object):
         until: str | None = None,
         timeout: int | None = None,
     ) -> subprocess.CompletedProcess:
+        native_id = self._resolve_owned_container_id(name)
         cmd = ["docker", "logs"]
         if since is not None:
             cmd.extend(["--since", since])
         if until is not None:
             cmd.extend(["--until", until])
-        cmd.append(name)
+        cmd.append(native_id)
         return self._run(cmd, timeout=timeout)
 
     def container_shell(self, name: str, *, shell: str | None = None) -> int:
@@ -293,11 +295,12 @@ class ComposeQueryMixin(object):
                 "Direct Kali container TTY refused while admitted session capture is active"
             )
             return 1
+        native_id = self._resolve_owned_container_id(name)
         chosen = shell
         if chosen is None:
             # Probe non-interactively for bash before launching the TTY,
             # then run exactly one interactive shell. See ADR-023.
-            probe = self._run(["docker", "exec", name, "/bin/bash", "-c", "true"])
+            probe = self._run(["docker", "exec", native_id, "/bin/bash", "-c", "true"])
             chosen, should_run = _select_shell(probe.returncode)
             if not should_run:
                 log.warning(
@@ -309,7 +312,7 @@ class ComposeQueryMixin(object):
                 return probe.returncode
             if chosen == "/bin/sh":
                 log.info("bash unavailable in %s; using /bin/sh", name)
-        return self._run_streaming(["docker", "exec", "-it", name, chosen])
+        return self._run_streaming(["docker", "exec", "-it", native_id, chosen])
 
     def container_exec(
         self,
@@ -318,7 +321,7 @@ class ComposeQueryMixin(object):
         *,
         timeout: int | None = None,
     ) -> subprocess.CompletedProcess:
-        argv = ["docker", "exec", name, *cmd]
+        argv = ["docker", "exec", self._resolve_owned_container_id(name), *cmd]
         return self._run(argv, timeout=timeout)
 
     def container_exec_detached(
@@ -330,7 +333,13 @@ class ComposeQueryMixin(object):
     ) -> subprocess.CompletedProcess:
         """Start one provider-owned process without changing PID 1."""
 
-        argv = ["docker", "exec", "--detach", name, *cmd]
+        argv = [
+            "docker",
+            "exec",
+            "--detach",
+            self._resolve_owned_container_id(name),
+            *cmd,
+        ]
         return self._run(argv, timeout=timeout)
 
     def container_exec_with_input(
@@ -351,7 +360,13 @@ class ComposeQueryMixin(object):
         exec: the SSH backend inherits it unchanged over ``DOCKER_HOST``.
         """
 
-        argv = ["docker", "exec", "-i", name, *cmd]
+        argv = [
+            "docker",
+            "exec",
+            "-i",
+            self._resolve_owned_container_id(name),
+            *cmd,
+        ]
         return self._run_with_input(argv, payload, timeout=timeout)
 
     def container_restart(self, name: str, *, timeout: int | None = None) -> None:
@@ -361,7 +376,7 @@ class ComposeQueryMixin(object):
         return through a log at warning level so the caller can proceed
         with a retry regardless.
         """
-        argv = ["docker", "restart", name]
+        argv = ["docker", "restart", self._resolve_owned_container_id(name)]
         result = self._run(argv, timeout=timeout or _HOST_INVENTORY_TIMEOUT)
         if result.returncode != 0:
             log.warning(
@@ -384,13 +399,20 @@ class ComposeQueryMixin(object):
         return labels.get("com.docker.compose.project") == self._project_name
 
     def container_inspect(self, name: str) -> dict[str, Any]:
+        return self._raw_container_inspect(self._resolve_owned_container_id(name))
+
+    def _raw_container_inspect(self, name: str) -> dict[str, Any]:
+        """Inspect one already-authorized native ID without re-resolving a name."""
+
         result = self._run(
             ["docker", "inspect", name],
             timeout=_HOST_INVENTORY_TIMEOUT,
         )
         if result.returncode != 0:
             log.debug(
-                "container_inspect failed for %s: %s", name, result.stderr.strip()
+                "container_inspect failed for native id %s: %s",
+                name[:12],
+                result.stderr.strip(),
             )
             return {}
         return _decode_first_object(result.stdout)
@@ -415,7 +437,12 @@ class ComposeQueryMixin(object):
         with tempfile.TemporaryDirectory(prefix="aptl-container-read-") as work:
             destination = Path(work) / "payload"
             result = self._run(
-                ["docker", "cp", f"{name}:{source}", str(destination)],
+                [
+                    "docker",
+                    "cp",
+                    f"{self._resolve_owned_container_id(name)}:{source}",
+                    str(destination),
+                ],
                 timeout=_HOST_INVENTORY_TIMEOUT,
             )
             if result.returncode != 0:

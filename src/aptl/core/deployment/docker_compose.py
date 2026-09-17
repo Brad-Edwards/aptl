@@ -11,8 +11,11 @@ from typing import Any
 
 from aptl.core.deployment._compose_base_substrate import ComposeBaseSubstrateMixin
 from aptl.core.deployment._compose_autoremove import ComposeAutoremoveMixin
-from aptl.core.deployment._compose_build_dedupe import (
-    write_duplicate_build_override,
+from aptl.core.deployment._compose_owned_start import ComposeOwnedStartMixin
+from aptl.core.deployment._compose_direct_network import ComposeDirectNetworkMixin
+from aptl.core.deployment._compose_receipt_capture import ComposeReceiptCaptureMixin
+from aptl.core.deployment._compose_resource_resolution import (
+    ComposeResourceResolutionMixin,
 )
 from aptl.core.deployment._compose_image_fetch import ComposeImageFetchMixin
 from aptl.core.deployment._compose_lifecycle import kill_compose_lab
@@ -21,6 +24,10 @@ from aptl.core.deployment._compose_project_inventory import (
     ComposeProjectInventoryMixin,
 )
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
+from aptl.core.deployment._compose_resource_ownership import (
+    OwnershipConflictError,
+    WorkspaceOwnership,
+)
 from aptl.core.deployment._compose_realization import ComposeRealizationMixin
 from aptl.core.deployment._compose_runtime_inventory import (
     ComposeRuntimeInventoryMixin,
@@ -40,7 +47,6 @@ from aptl.core.appliance_boundary import (
 )
 from aptl.core.config import validate_compose_project_name
 from aptl.core.deployment.errors import BackendTimeoutError
-from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.utils.logging import get_logger
 
@@ -49,6 +55,10 @@ _DOCKER_TIMEOUT = 30
 
 
 class DockerComposeBackend(
+    ComposeOwnedStartMixin,
+    ComposeDirectNetworkMixin,
+    ComposeReceiptCaptureMixin,
+    ComposeResourceResolutionMixin,
     DockerEndpointBindingMixin,
     ComposeAutoremoveMixin,
     ComposeRuntimeInventoryMixin,
@@ -77,7 +87,10 @@ class DockerComposeBackend(
         offline_staged: bool = False,
     ) -> None:
         self._project_dir = project_dir
-        self._project_name = validate_compose_project_name(project_name)
+        self._logical_project_name = validate_compose_project_name(project_name)
+        self._project_name = self._logical_project_name
+        self._resource_ownership: WorkspaceOwnership | None = None
+        self._resource_attempt_id: str | None = None
         self._offline_staged = offline_staged
         self._appliance_boundary: (
             tuple[
@@ -106,6 +119,12 @@ class DockerComposeBackend(
     @property
     def project_name(self) -> str:
         return self._project_name
+
+    @property
+    def logical_project_name(self) -> str:
+        """Return the user-facing project identity before provider scoping."""
+
+        return self._logical_project_name
 
     @property
     def realization_root(self) -> Path:
@@ -264,101 +283,6 @@ class DockerComposeBackend(
                 f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
             ) from exc
 
-    def start(
-        self,
-        profiles: list[str],
-        *,
-        build: bool = True,
-        exclude_services: tuple[str, ...] = (),
-        only_services: tuple[str, ...] = (),
-        scenario_root: Path | None = None,
-    ) -> LabResult:
-        """Start lab services via docker compose up.
-
-        Args:
-            profiles: List of profile names to activate.
-            build: If True, rebuild images before starting.
-            exclude_services: Compose service names to scale to zero (ADR-048
-                mixed realization): everything else in the active profiles
-                starts normally, but a node the generic materializer already
-                realized directly must not also start as a Compose container.
-            only_services: When non-empty, bring up only these Compose services
-                (and their ``depends_on`` closure), leaving the rest of the
-                active profiles unstarted. Used by the ADR-088 phased startup
-                (issue #889) to bring the materialization target service up and
-                prove its initial state before the general workload — which
-                consumes that state — is admitted. Do not race a materializer
-                against an unrestricted ``compose up``.
-            scenario_root: Bundle root the scenario's Compose model and build
-                contexts resolve against (issue #874). ``None`` is the legacy
-                direct path over the engine's own in-tree compose.
-
-        Returns:
-            LabResult indicating success or failure.
-        """
-        root = scenario_root if scenario_root is not None else self._project_dir
-        failure = self._start_preflight(profiles, root)
-        if failure is not None:
-            return failure
-        build = build and not self._offline_staged
-        compose_files = self._start_compose_files(
-            build=build, scenario_root=scenario_root
-        )
-        if "otel" in profiles:
-            compose_files = self._with_observability_files(
-                compose_files or (root / "docker-compose.yml",), profiles
-            )
-        cmd = self._build_command(
-            "up", profiles, compose_files=compose_files, scenario_root=scenario_root
-        )
-        if build:
-            cmd.append("--build")
-        if self._offline_staged:
-            cmd.extend(["--pull", "never"])
-        cmd.append("-d")
-        for service in exclude_services:
-            cmd += ["--scale", f"{service}=0"]
-        # Positional service names must follow the options: `compose up -d <svc>`
-        # starts only the named services plus their depends_on closure.
-        cmd.extend(only_services)
-
-        log.info("Starting lab with profiles: %s", profiles)
-        log.debug("Command: %s", " ".join(cmd))
-
-        result = self._run(cmd)
-
-        if result.returncode != 0:
-            log.error("Lab start failed: %s", result.stderr)
-            return LabResult(success=False, error=result.stderr)
-
-        log.info("Lab started successfully")
-        return LabResult(success=True, message="Lab started")
-
-    def _start_preflight(self, profiles: list[str], root: Path) -> LabResult | None:
-        """Run observability configuration and ownership checks before start."""
-
-        failure = self._observability_preflight(
-            DeploymentRealizationSpec(profiles=tuple(profiles), nodes=(), networks=()),
-            root,
-        )
-        if failure is None and "otel" in profiles:
-            failure = self._observability_ownership_check()
-        return failure
-
-    def _start_compose_files(
-        self, *, build: bool, scenario_root: Path | None = None
-    ) -> tuple[Path, ...] | None:
-        """Return Compose files for startup, adding build dedupe when needed.
-
-        The base ``docker-compose.yml`` and the build-dedupe override are
-        scenario-declared inputs; they resolve against ``scenario_root`` (the
-        bundle root) when realizing a scenario, else the engine's own tree.
-        """
-
-        root = scenario_root if scenario_root is not None else self._project_dir
-        override = write_duplicate_build_override(root) if build else None
-        return (root / "docker-compose.yml", override) if override is not None else None
-
     def stop(self, profiles: list[str], *, remove_volumes: bool = False) -> LabResult:
         """Stop lab services via docker compose down.
 
@@ -369,6 +293,13 @@ class DockerComposeBackend(
         Returns:
             LabResult indicating success or failure.
         """
+        try:
+            self._prepare_owned_cleanup()
+        except (BackendTimeoutError, OwnershipConflictError, OSError):
+            return LabResult(
+                success=False,
+                error="Backend resource ownership conflict before Compose cleanup.",
+            )
         return stop_compose_lab(
             self,
             profiles,
@@ -396,4 +327,11 @@ class DockerComposeBackend(
         Returns:
             Tuple of (success, error_message).
         """
+        try:
+            self._prepare_owned_cleanup()
+        except (BackendTimeoutError, OwnershipConflictError, OSError):
+            return (
+                False,
+                "Backend resource ownership conflict before emergency cleanup.",
+            )
         return kill_compose_lab(self, profiles, timeout=_DOCKER_TIMEOUT)

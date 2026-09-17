@@ -10,6 +10,7 @@ import json
 import platform
 import shutil
 import tarfile
+import tempfile
 import zipfile
 
 import pytest
@@ -118,6 +119,12 @@ def test_canonical_staging_roundtrip_binds_acquired_bytes_and_rejects_tampering(
     monkeypatch.setattr(
         input_images, "canonical_image_references", lambda *a: references
     )
+    # Linux TMPDIR may be a link too; macOS uses /var -> /private/var by default.
+    work_root = tmp_path / "work-root"
+    work_root.mkdir()
+    work_alias = tmp_path / "work-alias"
+    work_alias.symlink_to(work_root, target_is_directory=True)
+    monkeypatch.setattr(tempfile, "tempdir", str(work_alias))
     staging = tmp_path / "staged"
     admitted = inputs.stage_canonical_inputs(
         staging=staging, wheelhouse=wheelhouse, image_archive=archive, image_roles=roles

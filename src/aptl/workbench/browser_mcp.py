@@ -16,6 +16,8 @@ from aptl.workbench.dispatch import DispatchSelector
 from aptl.workbench.guest_binding import GuestAdmission, read_private_binding
 from aptl.workbench.relay import RelayLaunch, relay_mcp
 
+_SESSION_REQUIRED = "Participant session required"
+
 _TERMINAL = """<!doctype html><html lang="en"><meta charset="utf-8"><title>Kali terminal</title>
 <h1>Kali terminal</h1><p>Commands run in this seat's captured Kali session.</p>
 <label for="command">Command</label><input id="command" maxlength="16000"><button id="send" disabled>Run</button>
@@ -66,10 +68,14 @@ def attach_browser_mcp(
         """Require the browser session to match the enrolled grant."""
         value = authorizer(request)
         if not isinstance(value, BrowserPrincipal) or value.caller_id != grant_id:
-            raise HTTPException(401, "Participant session required")
+            raise HTTPException(401, _SESSION_REQUIRED)
         return value
 
-    @app.get("/guide/", response_class=HTMLResponse)
+    @app.get(
+        "/guide/",
+        response_class=HTMLResponse,
+        responses={401: {"description": _SESSION_REQUIRED}},
+    )
     def guide_page(request: Request) -> HTMLResponse:
         """Serve the packaged participant guide as escaped text."""
         principal(request)
@@ -83,7 +89,10 @@ def attach_browser_mcp(
     @app.get(
         "/desktop/kali/",
         response_class=HTMLResponse,
-        responses={403: {"description": "Red role required"}},
+        responses={
+            401: {"description": _SESSION_REQUIRED},
+            403: {"description": "Red role required"},
+        },
     )
     def terminal_page(request: Request) -> HTMLResponse:
         """Serve the red-role terminal with a hash-bound script policy."""

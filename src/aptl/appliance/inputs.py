@@ -190,7 +190,7 @@ def stage_canonical_inputs(
         raise ValueError("provide exactly the scenario, helper and child image closure")
     staging.mkdir(mode=0o700, parents=True)
     with tempfile.TemporaryDirectory(prefix="aptl-input-build-") as work:
-        work = Path(work)
+        work = Path(work).resolve(strict=True)
         project = work / "project"
         materialize(project)
         bundle = env_pack_bundle(work / "packs")

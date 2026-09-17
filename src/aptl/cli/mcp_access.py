@@ -20,8 +20,8 @@ OptionText = Annotated[str, typer.Option()]
 
 
 @app.command()
-def configure(  # NOSONAR - Typer exposes one parameter per public CLI option.
-    access_record: OptionPath,
+def configure(
+    access_record: OptionPath,  # NOSONAR - Typer requires one parameter per CLI option.
     grant: OptionPath,
     host_public_key: OptionPath,
     expected_host_key: OptionText,

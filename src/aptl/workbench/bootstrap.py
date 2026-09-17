@@ -157,7 +157,6 @@ def create_local_workbench_app(
     An appliance uses the same factory with an appliance-bound dispatcher; the
     dispatcher then adds signed-launch and continuously refreshed boundary gates.
     """
-    from aptl.workbench.app import BrowserPrincipal
     from aptl.workbench.dispatch import DispatchSelector
     from aptl.workbench.guest_binding import GuestAdmission, read_private_binding
     from aptl.workbench.profiles import WorkbenchConfigurationError, profile_for

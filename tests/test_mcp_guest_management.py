@@ -31,6 +31,14 @@ def test_guest_enrollment_publishes_private_forced_keys_and_rejects_bad_inventor
     tmp_path, monkeypatch
 ):
     record = access_record(container_ids={"aptl-kali": "a" * 64})
+    original_read_text = Path.read_text
+
+    def read_text(path, *args, **kwargs):
+        if str(path) == "/proc/sys/kernel/random/boot_id":
+            return record.guest_boot_id
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_text)
     run_id = "c" * 32
     public = (
         Ed25519PrivateKey.generate()

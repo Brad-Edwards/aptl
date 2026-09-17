@@ -21,6 +21,8 @@ class CompletedContainerReceipt:
 class DeploymentObservationContext:
     """Evidence produced and consumed within one exact backend apply."""
 
+    attempt_id: str | None = None
+
     completed_autoremove: dict[str, CompletedContainerReceipt] = field(
         default_factory=dict,
         repr=False,

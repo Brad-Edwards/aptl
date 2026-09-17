@@ -26,6 +26,7 @@ from aptl.workbench.guest_binding import (
     ApplianceAccessPaths,
     GuestDispatchBinding,
     observe_guest,
+    observe_guest_containers,
     read_private_binding,
     verify_guest_observation,
 )
@@ -100,12 +101,7 @@ def prepare_guest_transport(
     )
     if not backend.bind_local_docker_socket().success:
         raise WorkbenchConfigurationError("guest Docker binding failed")
-    rows = backend.host_list_lab_containers()
-    containers = {
-        row["name"]: backend.container_inspect(row["id"])["Id"]
-        for row in rows
-        if row.get("state") == "running"
-    }
+    containers = observe_guest_containers(backend)
     bundle = env_pack_bundle(project / ".aptl" / "transport-pack")
     verify_full_inventory(expected_bundle_matrix(project, config, bundle), containers)
     authorities = load_active_transcript_authorities(project)
@@ -120,7 +116,7 @@ def prepare_guest_transport(
         generation=request.generation,
         guest_boot_id=Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
         guest_daemon_id=backend._docker_daemon_id,
-        guest_project=config.deployment.project_name,
+        guest_project=backend.project_name,
         container_ids=containers,
         scenario_pack=bundle.pack_identity,
         guest_endpoint=request.guest_endpoint,

@@ -142,7 +142,6 @@ def _observe_stable_guest(binding: GuestDispatchBinding) -> dict:
     config = load_config(project / "aptl.json")
     if (
         config.deployment.provider != "docker-compose"
-        or config.deployment.project_name != binding.access.guest_project
         or config.scenario.source != "env-pack"
         or config.scenario.identity != "techvault"
     ):
@@ -154,21 +153,9 @@ def _observe_stable_guest(binding: GuestDispatchBinding) -> dict:
     )
     if not backend.bind_local_docker_socket().success:
         raise WorkbenchConfigurationError("guest daemon binding failed")
-    containers = {}
-    inventory = backend.host_list_lab_containers()
-    for row in inventory:
-        if row.get("state") != "running":
-            continue
-        name, native_id = row["name"], row["id"]
-        observed = backend.container_inspect(native_id)
-        labels = observed.get("Config", {}).get("Labels") or {}
-        owned = any(
-            labels.get(label) == binding.access.guest_project
-            for label in ("com.docker.compose.project", "aptl.lifecycle.project")
-        )
-        if not owned or observed.get("State", {}).get("Running") is not True:
-            raise WorkbenchConfigurationError("guest container ownership mismatch")
-        containers[name] = observed.get("Id")
+    containers = observe_guest_containers(backend)
+    if backend.project_name != binding.access.guest_project:
+        raise WorkbenchConfigurationError("guest project identity changed")
     session = ScenarioSession(project / ".aptl").get_active()
     authorities = load_active_transcript_authorities(project)
     if not any(authority.get("run_id") == binding.run_id for authority in authorities):
@@ -181,13 +168,40 @@ def _observe_stable_guest(binding: GuestDispatchBinding) -> dict:
     return {
         "boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
         "daemon_id": backend._docker_daemon_id,
-        "project": config.deployment.project_name,
+        "project": backend.project_name,
         "containers": containers,
         "run_id": (session.run_id or session.trace_id)
         if session is not None
         else binding.run_id,
         "capture": capture,
     }
+
+
+def observe_guest_containers(backend: DockerComposeBackend) -> dict[str, str]:
+    """Bind semantic inventory to receipt-verified workspace resource IDs."""
+    ownership = backend._ensure_resource_ownership()
+    containers = {}
+    for row in backend.host_list_lab_containers():
+        if row.get("state") != "running":
+            continue
+        native_id = row["id"]
+        receipts = ownership.candidates(
+            native_id, kind="container", daemon_id=backend._docker_daemon_id
+        )
+        if len(receipts) != 1:
+            raise WorkbenchConfigurationError("guest container receipt is ambiguous")
+        # The backend revalidates the receipt's native ID, external name and
+        # workspace labels before returning this inspect result.
+        observed = backend.container_inspect(native_id)
+        name = receipts[0].semantic_name
+        if (
+            name in containers
+            or observed.get("Id") != native_id
+            or observed.get("State", {}).get("Running") is not True
+        ):
+            raise WorkbenchConfigurationError("guest container identity mismatch")
+        containers[name] = native_id
+    return containers
 
 
 class GuestAdmission:
@@ -402,7 +416,7 @@ class GuestAdmission:
             broker.destroy_named(self.server.server_id, self.binding.run_id)
         backend = DockerComposeBackend(
             project,
-            self.binding.access.guest_project,
+            load_config(project / "aptl.json").deployment.project_name,
             docker_socket_path=self.binding.docker_socket,
         )
         result = backend.bind_local_docker_socket()

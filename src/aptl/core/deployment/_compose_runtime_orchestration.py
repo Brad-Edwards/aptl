@@ -326,19 +326,30 @@ class ComposeRuntimeOrchestrationRouteMixin:
     ) -> LabResult | None:
         """Validate child closure and bind the exact local control endpoint."""
 
+        outcome: LabResult | None = None
         try:
             required = realization_has_docker_authority(realization)
-            deployment_spawn_image_requirements(realization)
+            spawn_requirements = deployment_spawn_image_requirements(realization)
         except ValueError as exc:
-            return LabResult(success=False, error=str(exc))
-        if not required:
-            return None
-        endpoint = (
-            self.revalidate_local_docker_socket()
-            if getattr(self, "_docker_socket_identity", None) is not None
-            else self.bind_local_docker_socket()
-        )
-        return None if endpoint.success else endpoint
+            outcome = LabResult(success=False, error=str(exc))
+        else:
+            isolated = getattr(self, "_attempt_isolated_docker_daemon", False)
+            if required and spawn_requirements and not isolated:
+                outcome = LabResult(
+                    success=False,
+                    error=(
+                        "Backend resource ownership conflict: runtime-spawned "
+                        "children require an attempt-isolated Docker daemon."
+                    ),
+                )
+            elif required:
+                endpoint = (
+                    self.revalidate_local_docker_socket()
+                    if getattr(self, "_docker_socket_identity", None) is not None
+                    else self.bind_local_docker_socket()
+                )
+                outcome = None if endpoint.success else endpoint
+        return outcome
 
     def _runtime_orchestration_preflight(
         self,

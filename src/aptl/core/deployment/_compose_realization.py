@@ -137,6 +137,11 @@ class ComposeRealizationMixin(
         """
 
         observation_context = observation_context or DeploymentObservationContext()
+        attempt_id = observation_context.attempt_id or self._resource_attempt_id
+        ownership = self._ensure_resource_ownership()
+        self._ensure_resource_ownership(
+            attempt_id=attempt_id or ownership.new_attempt_id()
+        )
         failure = self._realization_preflight(
             realization, scenario_root, substrate_digests
         )

@@ -102,6 +102,7 @@ def test_completed_autoremove_container_is_removed_and_receipted(tmp_path):
             "container_file_read",
             return_value=b'ID="debian"\nVERSION_ID="12"\n',
         ),
+        patch.object(backend, "_resolve_owned_container_id", return_value=_CONTAINER),
         patch.object(backend, "_run", side_effect=remove),
     ):
         failures = backend._retire_completed_autoremove_nodes(_spec(), context)
@@ -130,6 +131,7 @@ def test_autoremove_failure_is_fail_closed_and_has_no_receipt(tmp_path):
             "container_file_read",
             return_value=b'ID="debian"\nVERSION_ID="12"\n',
         ),
+        patch.object(backend, "_resolve_owned_container_id", return_value=_CONTAINER),
         patch.object(
             backend,
             "_run",

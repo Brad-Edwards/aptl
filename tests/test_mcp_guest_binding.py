@@ -9,6 +9,60 @@ from aptl.workbench.guest_binding import verify_guest_observation
 from tests.test_mcp_access import access_record
 
 
+def test_guest_inventory_uses_workspace_receipts_and_semantic_names(
+    tmp_path, monkeypatch
+):
+    from aptl.core.deployment.docker_compose import DockerComposeBackend
+    from aptl.core.deployment._compose_resource_ownership import (
+        ResourceReceipt,
+        OwnershipConflictError,
+    )
+    from aptl.workbench.guest_binding import observe_guest_containers
+
+    backend = DockerComposeBackend(
+        tmp_path, "aptl", docker_socket_path=tmp_path / "unused.sock"
+    )
+    backend._docker_daemon_id = "daemon-test"
+    ownership = backend._ensure_resource_ownership()
+    native_id = "a" * 64
+    ownership.record(
+        ResourceReceipt(
+            kind="container",
+            native_id=native_id,
+            external_name=ownership.container_name("aptl-kali"),
+            semantic_name="aptl-kali",
+            node_address="provision.node.kali",
+            workspace_id=ownership.workspace_id,
+            project_name=ownership.project_name,
+            daemon_id="daemon-test",
+            attempt_id="run-test",
+        )
+    )
+    info = {
+        "Id": native_id,
+        "Name": "/" + ownership.container_name("aptl-kali"),
+        "State": {"Running": True},
+        "Config": {"Labels": ownership.labels(attempt_id="run-test")},
+    }
+    monkeypatch.setattr(
+        backend,
+        "host_list_lab_containers",
+        lambda: [
+            {
+                "id": native_id,
+                "name": ownership.container_name("aptl-kali"),
+                "state": "running",
+            }
+        ],
+    )
+    monkeypatch.setattr(backend, "_raw_container_inspect", lambda _: info)
+    assert backend.project_name != "aptl"
+    assert observe_guest_containers(backend) == {"aptl-kali": native_id}
+    info["Config"]["Labels"]["aptl.workspace.id"] = "foreign-workspace"
+    with pytest.raises(OwnershipConflictError):
+        observe_guest_containers(backend)
+
+
 @pytest.mark.skipif(sys.platform != "linux", reason="guest admission runs on Linux")
 def test_two_server_admissions_share_observation_lock(tmp_path, monkeypatch):
     from concurrent.futures import ThreadPoolExecutor

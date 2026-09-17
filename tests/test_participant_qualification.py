@@ -651,6 +651,10 @@ def test_process_absence_keeps_polling_through_an_inconclusive_eperm(
         raise next(answers)
 
     monkeypatch.setattr(env.os, "kill", _probe)
+    # Keep this polling test independent of the real process table. A real
+    # ps timeout can call the globally patched os.kill and consume answers
+    # intended for the qualification probe.
+    monkeypatch.setattr(env, "_process_is_zombie", lambda _pid: False)
 
     assert env.wait_until_process_absent(4321) is True
 
@@ -671,6 +675,7 @@ def test_process_absence_fails_closed_when_the_pid_stays_unsignalable(
         raise PermissionError(1, "Operation not permitted")
 
     monkeypatch.setattr(env.os, "kill", _probe)
+    monkeypatch.setattr(env, "_process_is_zombie", lambda _pid: False)
     monkeypatch.setattr(env, "_PROCESS_ABSENT_TIMEOUT_SECONDS", 0.2)
 
     assert env.wait_until_process_absent(4321) is False

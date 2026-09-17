@@ -20,15 +20,27 @@ updates:
   # The `pip` ecosystem did exactly that, because it reads the flat exports and
   # never touches the lock — every Python bump it opened was born failing.
   #
+  # `exclude-paths` is what actually holds the lock as the source of truth.
+  # Switching the ecosystem to `uv` was not enough on its own: the exports are
+  # uv-generated requirements files, so the `uv` updater picked them up as
+  # manifests in their own right and went on editing them instead of the lock —
+  # the same born-failing PRs under a new ecosystem name (#1028, #1030, #1031,
+  # #1050, #1051). Hiding the exports leaves `pyproject.toml` and `uv.lock` as
+  # the only things Dependabot can update.
+  #
   # Reading the lock also means Dependabot sees the constraint graph the exports
-  # flatten away, so it stops proposing bumps that cannot resolve (z3-solver
-  # below is the worked example).
+  # flatten away, so it stops proposing bumps that cannot resolve. z3-solver
+  # below is the worked example; #1031 (pydantic-core, pinned exactly by
+  # pydantic) and #1050 (chardet, capped below 6.0 by cyclonedx-bom) are two
+  # more that only looked upgradable through a flattened export.
   #
   # Note the remaining manual step: Dependabot updates `uv.lock` but does not
   # re-run the exports, so run `pre-commit run --all-files` on the branch and
   # commit the regenerated `requirements/*.txt` before merging.
   - package-ecosystem: "uv"
     directory: "/"
+    exclude-paths:
+      - "requirements/**"
     target-branch: "dev"
     schedule:
       interval: "weekly"

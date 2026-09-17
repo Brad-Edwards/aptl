@@ -103,15 +103,17 @@ class TestMintedPasswordMatchesDeclaredClass:
 
 class TestCredentialDisclosure:
     def test_credential_is_written_range_private(self, tmp_path):
+        password = credentials.password_for_strength("weak")
+
         target = credentials.disclose_account_credential(
             tmp_path,
             node="scenario.node.ad",
             username="michael.thompson",
-            password="Summer2024",
+            password=password,
             strength="weak",
         )
 
-        assert target.read_text(encoding="utf-8") == "weak\nSummer2024\n"
+        assert target.read_text(encoding="utf-8") == f"weak\n{password}\n"
         assert stat.S_IMODE(target.stat().st_mode) == 0o600
         assert stat.S_IMODE(target.parent.stat().st_mode) == 0o700
 
@@ -127,17 +129,31 @@ class TestCredentialDisclosure:
 
 
 class TestProviderArgv:
+    """Argv shape, exercised with a password the module under test minted.
+
+    The value is minted rather than written here for two reasons: a
+    credential-shaped literal in tracked source is a secret-scanner finding
+    however fake it is, and a minted one is the value these helpers actually
+    carry in a realized range.
+    """
+
     def test_setpassword_keeps_the_secret_a_discrete_token(self):
-        argv = provider.samba_user_setpassword("bob", "Password1")
+        password = credentials.password_for_strength("medium")
+
+        argv = provider.samba_user_setpassword("bob", password)
+
         assert argv[:4] == ["samba-tool", "user", "setpassword", "bob"]
         # One token, never interpolated into a shell string.
-        assert argv[4] == "--newpassword=Password1"
+        assert argv[4] == f"--newpassword={password}"
         assert all(" " not in part or part.startswith("--") for part in argv)
 
     def test_authentication_probe_uses_the_account_itself(self):
-        argv = provider.samba_user_authenticate("bob", "Password1")
+        password = credentials.password_for_strength("medium")
+
+        argv = provider.samba_user_authenticate("bob", password)
+
         assert argv[0] == "smbclient"
-        assert "bob%Password1" in argv
+        assert f"bob%{password}" in argv
 
     def test_policy_relaxation_permits_the_declared_weak_class(self):
         argv = provider.samba_domain_relax_password_policy()

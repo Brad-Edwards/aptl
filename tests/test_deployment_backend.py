@@ -1878,6 +1878,23 @@ class TestDockerComposeBackendContainerInteraction:
             backend.container_exec("aptl-victim", ["true"], timeout=5)
         assert mock_run.call_args[1]["timeout"] == 5
 
+    def test_container_exec_detached_uses_docker_detach(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.container_exec_detached(
+                "aptl-webapp", ["gunicorn", "app:app"], timeout=5
+            )
+        assert mock_run.call_args[0][0] == [
+            "docker",
+            "exec",
+            "--detach",
+            "aptl-webapp",
+            "gunicorn",
+            "app:app",
+        ]
+        assert mock_run.call_args[1]["timeout"] == 5
+
     # container_restart ----------------------------------------------------
 
     def test_container_restart_issues_docker_restart(self, tmp_path):

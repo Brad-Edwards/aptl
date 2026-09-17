@@ -111,6 +111,16 @@ class ContainerOpsBackend(Protocol):
         """
         ...
 
+    def container_exec_detached(
+        self,
+        name: str,
+        cmd: list[str],
+        *,
+        timeout: int | None = None,
+    ) -> subprocess.CompletedProcess:
+        """Start a detached non-interactive process inside a container."""
+        ...
+
     def container_inspect(self, name: str) -> dict[str, Any]:
         """Return parsed ``docker inspect`` output for a single container.
 

@@ -16,14 +16,12 @@ from aptl.core.evidence.adapters.sources import (
     WindowedSource,
     _to_outcome,
 )
-from aptl.core.evidence.adapters.techvault_native import TechVaultNativeEvidenceOwner
+from aptl.core.evidence.adapters import techvault_native as _techvault_native
 from aptl.core.evidence.content_store import create_run_json_once
 from aptl.core.evidence.coordinator import AcquisitionResult, acquire_evidence
 from aptl.core.evidence.outcomes import AcquisitionDisposition, CollectorStatus
 from aptl.core.evidence.protocol import CollectorContext, CollectorOutcome, RunScope
-from aptl.core.experiment.capture_registry import (
-    CaptureBinding,
-)
+from aptl.core.experiment.capture_registry import CaptureBinding
 from aptl.core.runstore import LocalRunStore
 from aptl.utils.pathsafe import (
     REASON_NOT_FOUND,
@@ -40,7 +38,6 @@ from aptl.backends._raes_transcript_parsing import (
 )
 
 if TYPE_CHECKING:
-    from aptl.backends.raes_realization_model import AptlRealization
     from aptl.core.experiment.capture_plan import CapturePlan
 
 
@@ -53,6 +50,10 @@ NATIVE_TECHVAULT_REGISTRATIONS = frozenset(
 )
 _ACTIVE_AUTHORITY_DIR = ".aptl/capture-authorities"
 _FINALIZED_AUTHORITY_DIR = ".aptl/capture-finalized"
+_FAILED_ACTIVATION_DIR = ".aptl/capture-activation-failed"
+_FAILED_FINALIZATION_DIR = ".aptl/capture-finalization-failed"
+
+TechVaultNativeEvidenceOwner = _techvault_native.TechVaultNativeEvidenceOwner
 
 
 @dataclass(frozen=True)
@@ -193,6 +194,38 @@ def persist_active_transcript_authority(
             raise ValueError("active transcript authority conflict") from None
 
 
+def _contained_entry_exists(project_dir: Path, relative: str) -> bool:
+    """Return whether a contained marker exists, propagating unsafe failures."""
+
+    try:
+        read_contained_nofollow(project_dir, relative)
+    except PathContainmentError as exc:
+        if exc.reason == REASON_NOT_FOUND:
+            return False
+        raise
+    return True
+
+
+def _failed_transcript_marker_exists(
+    project_dir: Path,
+    directory: str,
+    name: str,
+    authority: Mapping[str, object],
+    mismatch_error: str,
+) -> bool:
+    """Validate and report one terminal failure marker for an authority."""
+
+    relative = f"{directory}/{name}"
+    if not _contained_entry_exists(project_dir, relative):
+        return False
+    failed = json.loads(read_contained_nofollow(project_dir, relative))
+    if not isinstance(failed, dict) or any(
+        failed.get(key) != authority.get(key) for key in ("run_id", "capture_plan_id")
+    ):
+        raise ValueError(mismatch_error)
+    return True
+
+
 def load_active_transcript_authorities(
     project_dir: Path,
 ) -> tuple[dict[str, object], ...]:
@@ -213,15 +246,87 @@ def load_active_transcript_authorities(
         )
         if not isinstance(value, dict):
             raise ValueError("active transcript authority is not an object")
-        try:
-            read_contained_nofollow(project_dir, f"{_FINALIZED_AUTHORITY_DIR}/{name}")
-        except PathContainmentError as exc:
-            if exc.reason != REASON_NOT_FOUND:
-                raise
-        else:
+        if _contained_entry_exists(project_dir, f"{_FINALIZED_AUTHORITY_DIR}/{name}"):
+            continue
+        terminal_failures = (
+            (
+                _FAILED_ACTIVATION_DIR,
+                "failed transcript activation marker mismatch",
+            ),
+            (
+                _FAILED_FINALIZATION_DIR,
+                "failed transcript finalization marker mismatch",
+            ),
+        )
+        if any(
+            _failed_transcript_marker_exists(
+                project_dir, directory, name, value, mismatch_error
+            )
+            for directory, mismatch_error in terminal_failures
+        ):
             continue
         authorities.append(value)
     return tuple(authorities)
+
+
+def mark_transcript_activation_failed(
+    *, project_dir: Path, plan_id: str, run_id: str
+) -> None:
+    """Retain an auditable terminal marker for an unactivated startup run."""
+
+    name = f"{run_id}.json"
+    state = json.loads(
+        read_contained_nofollow(project_dir, f"{_ACTIVE_AUTHORITY_DIR}/{name}")
+    )
+    if (
+        not isinstance(state, dict)
+        or state.get("run_id") != run_id
+        or state.get("capture_plan_id") != plan_id
+    ):
+        raise ValueError("failed transcript activation identity mismatch")
+    payload = {
+        "schema_version": "aptl-transcript-activation-failed/v1",
+        "run_id": run_id,
+        "capture_plan_id": plan_id,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    relative = f"{_FAILED_ACTIVATION_DIR}/{name}"
+    try:
+        create_exclusive_nofollow(project_dir, relative, encoded)
+    except FileExistsError:
+        if read_contained_nofollow(project_dir, relative) != encoded:
+            raise ValueError("failed transcript activation marker conflict") from None
+
+
+def mark_transcript_finalization_failed(
+    *, project_dir: Path, state: Mapping[str, object]
+) -> None:
+    """Retain an auditable terminal marker when teardown cannot seal capture."""
+
+    run_id = str(state["run_id"])
+    plan_id = str(state["capture_plan_id"])
+    name = f"{run_id}.json"
+    active = json.loads(
+        read_contained_nofollow(project_dir, f"{_ACTIVE_AUTHORITY_DIR}/{name}")
+    )
+    if (
+        not isinstance(active, dict)
+        or active.get("run_id") != run_id
+        or active.get("capture_plan_id") != plan_id
+    ):
+        raise ValueError("failed transcript finalization identity mismatch")
+    payload = {
+        "schema_version": "aptl-transcript-finalization-failed/v1",
+        "run_id": run_id,
+        "capture_plan_id": plan_id,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    relative = f"{_FAILED_FINALIZATION_DIR}/{name}"
+    try:
+        create_exclusive_nofollow(project_dir, relative, encoded)
+    except FileExistsError:
+        if read_contained_nofollow(project_dir, relative) != encoded:
+            raise ValueError("failed transcript finalization marker conflict") from None
 
 
 def _mark_transcript_finalized(
@@ -336,14 +441,14 @@ def finalize_active_transcript_authority(
     project_dir: Path,
     state: Mapping[str, object],
     backend: object,
+    expected_run_store_base: Path,
     clock: ClockProvider | None = None,
 ) -> AcquisitionResult:
     """Quiesce, validate, and persist one restart-safe full-run transcript."""
 
-    root = project_dir.resolve()
     store_base = Path(str(state["run_store_base"])).resolve()
-    if not store_base.is_relative_to(root / ".aptl"):
-        raise ValueError("transcript run store escapes project state")
+    if store_base != expected_run_store_base.resolve():
+        raise ValueError("transcript run store does not match configured run storage")
     binding = _binding_from_projection(state["binding"])
     plan_id = str(state["capture_plan_id"])
     run_id = str(state["run_id"])
@@ -373,59 +478,10 @@ def finalize_active_transcript_authority(
     return result
 
 
-@dataclass(frozen=True)
-class NativeEvidenceRequest:
-    """All authority and runtime inputs for immediate native acquisition."""
-
-    plan: CapturePlan
-    backend: object
-    realization: AptlRealization
-    project_dir: Path
-    indexer_auth: tuple[str, str]
-    thehive_api_key: str
-    run_store: LocalRunStore
-    run_id: str
-    clock: ClockProvider | None = None
-
-
-def acquire_native_evidence(request: NativeEvidenceRequest) -> AcquisitionResult:
-    """Collect every immediate native binding or return a failed disposition.
-
-    The full-run Kali transcript is deliberately excluded here. Its admitted
-    sidecar remains active until teardown and is finalized by the stop path.
-    """
-
-    if not isinstance(request.run_store, LocalRunStore):
-        raise TypeError("native evidence requires a local run store")
-    bindings = _native_bindings(request.plan)
-    _persist_capture_plan(request.plan, request.run_store, request.run_id)
-    owner = TechVaultNativeEvidenceOwner(
-        backend=request.backend,
-        realization=request.realization,
-        project_dir=request.project_dir,
-        indexer_auth=request.indexer_auth,
-        thehive_api_key=request.thehive_api_key,
-    )
-    sources = owner.sources()
-    collectors = {
-        binding.registration_id: _OnDemandNativeCollector(
-            binding.registration_id,
-            sources[binding.registration_id],  # type: ignore[arg-type]
-        )
-        for binding in bindings
-        if binding.registration_id in sources
-    }
-    return acquire_evidence(
-        bindings=bindings,
-        collectors=collectors,
-        run_store=request.run_store,
-        scope=RunScope(
-            run_id=request.run_id,
-            planned_trial_id=request.plan.plan_id,
-            attempt_id="provisioning",
-        ),
-        clock=request.clock or SystemClockProvider(),
-    )
+from aptl.backends._raes_native_evidence_acquisition import (
+    NativeEvidenceRequest,
+    acquire_native_evidence,
+)
 
 
 __all__ = (
@@ -435,5 +491,7 @@ __all__ = (
     "acquire_native_evidence",
     "finalize_active_transcript_authority",
     "load_active_transcript_authorities",
+    "mark_transcript_activation_failed",
+    "mark_transcript_finalization_failed",
     "persist_active_transcript_authority",
 )

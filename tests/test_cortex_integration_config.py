@@ -30,16 +30,6 @@ def _compose():
         return yaml.safe_load(fh)
 
 
-def _fixture_key() -> str:
-    lines = THEHIVE_CORTEX_ENV_PATH.read_text(encoding="utf-8").splitlines()
-    values = [line.split("=", maxsplit=1)[1] for line in lines if line.startswith("TH_CORTEX_KEYS=")]
-    assert len(values) == 1
-    assert values[0]
-    assert values[0].isalnum()
-    assert values[0].islower()
-    return values[0]
-
-
 def test_cortex_uses_supported_elasticsearch_uri_setting():
     text = CORTEX_CONF_PATH.read_text(encoding="utf-8")
 
@@ -105,14 +95,13 @@ def test_cortex_bundles_an_executable_offline_observable_analyzer(tmp_path):
     assert output["operations"] == []
 
 
-def test_envpack_fixup_activates_and_verifies_cortex_analyzers():
+def test_envpack_fixup_preserves_the_released_cortex_realization():
     text = SOAR_FIXUP_SCRIPT.read_text(encoding="utf-8")
     key_script = CORTEX_APIKEY_SCRIPT.read_text(encoding="utf-8")
 
-    assert "fix_cortex_analyzers" in text
-    assert ':/opt/aptl/cortex-analyzers:ro' in text
-    assert ':/etc/cortex/application.conf:ro' in text
-    assert "APTL_Observable" in key_script
+    assert "fix_cortex_analyzers" not in text
+    assert "/opt/aptl/cortex-analyzers" not in text
+    assert "TechVaultScenarioContext_1_0" in key_script
     assert "/api/analyzer" in key_script
 
 
@@ -159,24 +148,31 @@ def test_cortex_compose_precreates_key_auth_index_mapping():
     assert "lacks the required Cortex mapping" in text
 
 
-def test_cortex_seed_script_matches_thehive_fixture_key():
-    fixture_key = _fixture_key()
+def test_cortex_seed_script_uses_the_realized_thehive_connector_key():
     text = CORTEX_APIKEY_SCRIPT.read_text(encoding="utf-8")
 
-    assert f'CORTEX_API_KEY="${{CORTEX_API_KEY:-{fixture_key}}}"' in text
+    assert "cortex-service-credentials/cortex/initializer-api-key" in text
+    assert "cortex-service-credentials/cortex/connector-api-key" in text
+    assert 'IFS= read -r CORTEX_ADMIN_KEY < "$CORTEX_INITIALIZER_KEY_FILE"' in text
+    assert 'IFS= read -r CORTEX_API_KEY < "$CORTEX_CONNECTOR_KEY_FILE"' in text
+    assert '"roles": ["read", "analyze"]' in text
     assert '"roles": ["read", "analyze", "orgadmin"]' in text
     # The env-pack host-publishes no Cortex port, so the seed reaches the API
     # through the container rather than a host localhost:9001 binding.
     assert 'docker exec "$CORTEX_CONTAINER" curl' in text
-    # cortex_6 is ADR-088 initial service state materialized on thehive-es
-    # (#889); the seed must never create, modify, or delete the owner-protected
-    # declared index, so it no longer runs the cortex-index-init mapping script.
+    # The released pack leaves Cortex's native schema under Cortex ownership.
+    # Initialization must use Cortex's API rather than mutate Elasticsearch.
     assert "cortex-index-init.sh" not in text
+    assert "/api/maintenance/migrate" in text
+    assert "Cortex owns its native index mapping" in text
+    assert "curl -X PUT" not in text
+    assert "curl -X DELETE" not in text
     assert "/api/organization" in text
     assert "/api/user" in text
+    assert "/api/analyzerdefinition/scan" in text
     assert "/api/analyzerdefinition" in text
     assert "/api/organization/analyzer/${ANALYZER_DEFINITION_ID}" in text
-    assert 'ANALYZER_NAME="APTL_Observable"' in text
+    assert 'ANALYZER_NAME="TechVaultScenarioContext"' in text
 
 
 def test_prime_seed_provisions_and_persists_cortex_key():

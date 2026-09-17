@@ -46,12 +46,8 @@ log = get_logger("curl_safe")
 
 DEFAULT_TIMEOUT_SECONDS = 30
 
-_JSON_HEADERS = (
-    "-H",
-    "Content-Type: application/json",
-    "-H",
-    "Accept: application/json",
-)
+_JSON_ACCEPT_HEADER = ("-H", "Accept: application/json")
+_JSON_CONTENT_TYPE_HEADER = ("-H", "Content-Type: application/json")
 
 #: curl result codes that mean no HTTP response arrived, by portable meaning.
 #: Only the numeric code is classified; curl's TLS-library-specific stderr is
@@ -103,7 +99,7 @@ def curl_json(
     if method:
         cmd += ["-X", method]
     cmd.append(url)
-    cmd += _JSON_HEADERS
+    cmd += _json_headers(body)
 
     parsed: Any | None = None
     with _secret_file_args(auth_header, body) as secret_args:
@@ -177,7 +173,7 @@ def curl_request(
     if method:
         cmd += ["-X", method]
     cmd.append(url)
-    cmd += _JSON_HEADERS
+    cmd += _json_headers(body)
 
     with _secret_file_args(auth_header, body) as secret_args:
         try:
@@ -206,6 +202,21 @@ def _tls_args(insecure: bool, ca_cert_path: str | None) -> list[str]:
     if ca_cert_path:
         return ["--cacert", ca_cert_path]
     return []
+
+
+def _json_headers(body: dict | list | None) -> list[str]:
+    """Request JSON and describe JSON content only when content exists.
+
+    Some APIs, including Cortex, interpret a JSON content type on a bodyless
+    GET as a promise of a JSON entity and reject the empty body. ``Accept`` is
+    valid on every request; ``Content-Type`` is valid only when this helper is
+    also sending ``body``.
+    """
+
+    headers = [*_JSON_ACCEPT_HEADER]
+    if body is not None:
+        headers += _JSON_CONTENT_TYPE_HEADER
+    return headers
 
 
 @contextmanager

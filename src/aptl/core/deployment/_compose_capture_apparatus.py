@@ -19,6 +19,8 @@ from aptl.core.deployment._compose_capture_config import (
     KALI_CAPTURE_VOLUME,
     KALI_CONTAINER,
     KALI_TRANSCRIPT_REGISTRATION,
+    KALI_CAPTURE_APPARATUS_ID,
+    TRAFFIC_MIRROR_APPARATUS_ID,
     capture_compose_file,
     capture_credential_paths as _capture_credential_paths,
     capture_declaration_error as _capture_declaration_error,
@@ -28,6 +30,20 @@ from aptl.core.lab_types import LabResult
 
 _SAFE_ID = re.compile(r"^\w[\w.-]*$", flags=re.ASCII)
 _TARGET_INGRESS_UNAVAILABLE = "aptl.capture-apparatus.target-ingress-unavailable"
+
+
+def _canonical_capabilities(values: object) -> set[str]:
+    """Normalize Docker/Compose capability spellings to Linux ``CAP_*`` form."""
+
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+        return set()
+    return {
+        value if value.startswith("CAP_") else f"CAP_{value}"
+        for value in values
+        if isinstance(value, str) and value
+    }
+
+
 _BROKER_PATH = "/usr/local/bin/broker.py"
 _KALI_INGRESS_RELOCATION = """
 set -eu
@@ -299,12 +315,18 @@ class ComposeCaptureApparatusMixin:
     ) -> tuple[dict[str, object], ...] | None:
         """Return native, bounded facts for every admitted apparatus resource."""
 
-        result: tuple[dict[str, object], ...] | None = ()
-        if _capture_requested(realization):
-            item = realization.capture_apparatus[0]
-            observation = self._capture_apparatus_observation(item)
-            result = (observation,) if observation is not None else None
-        return result
+        observations: list[dict[str, object]] = []
+        for item in realization.capture_apparatus:
+            if item.apparatus_id == KALI_CAPTURE_APPARATUS_ID:
+                observation = self._capture_apparatus_observation(item)
+            elif item.apparatus_id == TRAFFIC_MIRROR_APPARATUS_ID:
+                observation = self._observe_traffic_mirror(realization, item)
+            else:
+                observation = None
+            if observation is None:
+                return None
+            observations.append(observation)
+        return tuple(observations)
 
     def _capture_apparatus_observation(self, item: object) -> dict[str, object] | None:
         """Read and validate one exact capture sidecar from daemon state."""
@@ -340,7 +362,7 @@ class ComposeCaptureApparatusMixin:
             "participant_ingress": "sidecar-owned-ssh-pty-broker",
             "participant_ingress_state": "dormant-awaiting-run-binding",
             "inner_kali_ssh": "tcp://127.0.0.1:2222",
-            "linux_capabilities": sorted(host.get("CapAdd") or ()),
+            "linux_capabilities": sorted(_canonical_capabilities(host.get("CapAdd"))),
         }
 
     def _capture_runtime_valid(
@@ -362,12 +384,12 @@ class ComposeCaptureApparatusMixin:
             else set()
         )
         expected_add = {
-            "CHOWN",
-            "DAC_OVERRIDE",
-            "NET_BIND_SERVICE",
-            "SETGID",
-            "SETUID",
-            "SYS_CHROOT",
+            "CAP_CHOWN",
+            "CAP_DAC_OVERRIDE",
+            "CAP_NET_BIND_SERVICE",
+            "CAP_SETGID",
+            "CAP_SETUID",
+            "CAP_SYS_CHROOT",
         }
         checks = (
             labels.get("com.docker.compose.project") == self._project_name,
@@ -378,7 +400,7 @@ class ComposeCaptureApparatusMixin:
             not observed.get("NetworkSettings", {}).get("Ports"),
             host.get("ReadonlyRootfs") is True,
             set(host.get("CapDrop") or ()) == {"ALL"},
-            set(host.get("CapAdd") or ()) == expected_add,
+            _canonical_capabilities(host.get("CapAdd")) == expected_add,
         )
         return all(checks)
 

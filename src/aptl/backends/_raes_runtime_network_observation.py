@@ -11,7 +11,6 @@ from aptl.backends._runtime_concern_disclosure import _disclose
 from aptl.backends._runtime_concern_excess import (
     _INIT_CAPABILITY_BASELINE,
     _capabilities_corroborate,
-    _has_undeclared_network_listeners,
     _has_undeclared_ports,
     _normalized_capabilities,
     _port_entry_matches,
@@ -110,9 +109,7 @@ def observe_service_listeners(
 
     declared = runtime.service_listeners
     observed = backend.observe_container_listeners(container_name) if declared else None
-    if observed is None or _has_undeclared_network_listeners(
-        observed.sockets, declared
-    ):
+    if observed is None:
         return None
     disclosed = [
         listener.model_dump(mode="json", by_alias=True)

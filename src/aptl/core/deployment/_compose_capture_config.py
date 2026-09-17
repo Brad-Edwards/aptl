@@ -17,6 +17,8 @@ KALI_CAPTURE_CONTAINER = "aptl-kali-capture"
 KALI_CAPTURE_VOLUME = "kali_captures"
 KALI_CONTAINER = "aptl-kali"
 KALI_TRANSCRIPT_REGISTRATION = "aptl.collector.redteam-session-transcript"
+TRAFFIC_MIRROR_APPARATUS_ID = "aptl.apparatus.suricata-traffic-mirror"
+TRAFFIC_MIRROR_SERVICE = "backend-traffic-mirror"
 
 _CAPTURE_BIND_TARGETS = {
     "/run/aptl-source/inner_key": "kali-pivot-private-key",
@@ -25,9 +27,21 @@ _CAPTURE_BIND_TARGETS = {
 
 
 def capture_requested(realization: DeploymentRealizationSpec) -> bool:
-    """Return whether admission selected any capture apparatus."""
+    """Return whether admission selected the Kali capture sidecar."""
 
-    return bool(realization.capture_apparatus)
+    return any(
+        item.apparatus_id == KALI_CAPTURE_APPARATUS_ID
+        for item in realization.capture_apparatus
+    )
+
+
+def traffic_mirror_requested(realization: DeploymentRealizationSpec) -> bool:
+    """Return whether admission selected the host-boundary traffic mirror."""
+
+    return any(
+        item.apparatus_id == TRAFFIC_MIRROR_APPARATUS_ID
+        for item in realization.capture_apparatus
+    )
 
 
 def capture_credential_paths(
@@ -122,22 +136,38 @@ def capture_compose_file(
 def capture_declaration_error(realization: DeploymentRealizationSpec) -> str | None:
     """Return a bounded error unless the immutable request is exactly supported."""
 
-    error = None
-    if capture_requested(realization):
-        if len(realization.capture_apparatus) != 1:
-            error = "aptl.capture-apparatus.unsupported-set"
-        else:
-            item = realization.capture_apparatus[0]
-            supported = (
-                item.apparatus_id == KALI_CAPTURE_APPARATUS_ID
-                and item.service_name == KALI_CAPTURE_SERVICE
-                and item.container_name == KALI_CAPTURE_CONTAINER
-                and bool(item.governing_scopes)
-                and item.environment_visible
-            )
-            if not supported:
-                error = "aptl.capture-apparatus.unsupported-declaration"
-    return error
+    ids = [item.apparatus_id for item in realization.capture_apparatus]
+    if len(ids) != len(set(ids)):
+        return "aptl.capture-apparatus.unsupported-set"
+    supported = all(
+        _capture_apparatus_supported(item) for item in realization.capture_apparatus
+    )
+    return None if supported else "aptl.capture-apparatus.unsupported-declaration"
+
+
+def _capture_apparatus_supported(item: object) -> bool:
+    """Return whether one immutable capture apparatus request is supported."""
+
+    apparatus_id = getattr(item, "apparatus_id", "")
+    common = bool(
+        getattr(item, "governing_scopes", ())
+        and getattr(item, "environment_visible", False)
+    )
+    if apparatus_id == KALI_CAPTURE_APPARATUS_ID:
+        return bool(
+            common
+            and getattr(item, "service_name", "") == KALI_CAPTURE_SERVICE
+            and getattr(item, "container_name", "") == KALI_CAPTURE_CONTAINER
+        )
+    if apparatus_id == TRAFFIC_MIRROR_APPARATUS_ID:
+        return bool(
+            common
+            and getattr(item, "service_name", "") == TRAFFIC_MIRROR_SERVICE
+            and not getattr(item, "container_name", "")
+            and set(getattr(item, "target_refs", ()))
+            == {"nodes.kali", "nodes.suricata", "nodes.webapp"}
+        )
+    return False
 
 
 __all__ = (
@@ -148,8 +178,11 @@ __all__ = (
     "KALI_CAPTURE_VOLUME",
     "KALI_CONTAINER",
     "KALI_TRANSCRIPT_REGISTRATION",
+    "TRAFFIC_MIRROR_APPARATUS_ID",
+    "TRAFFIC_MIRROR_SERVICE",
     "capture_compose_file",
     "capture_credential_paths",
     "capture_declaration_error",
     "capture_requested",
+    "traffic_mirror_requested",
 )

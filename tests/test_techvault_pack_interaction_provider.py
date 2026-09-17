@@ -14,7 +14,7 @@ from aptl_techvault.serving import TechVaultPackInteraction
 PACK = PackIdentity(
     pack_id="techvault",
     pack_version="0.1.0",
-    set_digest="sha256:6300b3d539ab9c1e2287b9852e5408e1811516b818a7acf015f045cb3c9c5b89",
+    set_digest="sha256:edd3bb6252990aeaf506904767182d5a3ef2b3828a498fe64c897dccaf954934",
 )
 BACKEND = BackendIdentity("aptl", "0.1.0", "full-remote-control-plane")
 
@@ -32,6 +32,7 @@ def test_provider_returns_a_total_mapping_for_an_admitted_subset() -> None:
     provider = TechVaultPackInteraction()
     context = _context(
         "provision.node.misp",
+        "provision.node.soc-workstation",
         "provision.node.victim",
         "provision.node.webapp",
     )
@@ -43,6 +44,7 @@ def test_provider_returns_a_total_mapping_for_an_admitted_subset() -> None:
         for membership in result.memberships
     } == {
         "provision.node.misp": ("soc",),
+        "provision.node.soc-workstation": ("soc",),
         "provision.node.victim": ("victim",),
         "provision.node.webapp": ("enterprise",),
     }

@@ -49,9 +49,8 @@ _TRANSCRIPT_SCOPE = (
     "ordered in time."
 )
 _SURICATA_READINESS_SCOPE = (
-    "Exact image and content identities and realized-byte digests, native "
-    "Suricata configuration result, selected source paths, and active local SIDs "
-    "and count."
+    "Exact content identities and realized-byte digests, Suricata configuration "
+    "result, selected source paths, and active local SIDs and count."
 )
 _SQLI_SCOPE = (
     "A fresh Kali-to-webapp POST /login containing UNION SELECT must yield "

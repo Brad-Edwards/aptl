@@ -424,12 +424,15 @@ def _expected_certificate_mounts(
     """
 
     expected: dict[str, set[tuple[str, str]]] = {}
+    non_compose = _non_compose_consumer_addresses(realization)
     for artifact in realization.generated_artifacts:
         if artifact.generator != "certificate_bundle":
             continue
         source = artifact_source_path(scenario_root, artifact)
         by_name = {output.name: output for output in artifact.outputs}
         for consumer in artifact.consumers:
+            if consumer.target_address in non_compose:
+                continue
             expected.setdefault(consumer.service_name, set()).update(
                 {
                     (

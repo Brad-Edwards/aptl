@@ -131,6 +131,13 @@ class DeploymentNodeRealization(object):
     # (never a pull, never a moved tag) when the node authored an open
     # dynamic-composition source.
     dynamic_composition: bool = False
+    # Backend-owned base selected under open compute-substrate authority for an
+    # otherwise image-free materialized node.
+    backend_base_image_ref: str | None = None
+    backend_base_use_image_command: bool = False
+    backend_run_capabilities: tuple[str, ...] = ()
+    backend_provider_kind: str = ""
+    backend_provider_parameters: tuple[tuple[str, str], ...] = ()
     # Deployment-serving membership is resolved once by the pack/backend
     # interaction seam and copied through the DTO. Renderers never rediscover it
     # from component names.
@@ -291,6 +298,7 @@ class DeploymentStatefulConsumer(object):
     service_name: str
     mount_destination: str
     access_mode: StatefulConsumerAccessMode
+    delivery_mode: str = "mount"
     selected_outputs: tuple[str, ...] = ()
 
     def details(self) -> dict[str, object]:
@@ -300,6 +308,7 @@ class DeploymentStatefulConsumer(object):
             "service_name": self.service_name,
             "mount_destination": self.mount_destination,
             "access_mode": self.access_mode,
+            "delivery_mode": self.delivery_mode,
             "selected_outputs": list(self.selected_outputs),
         }
 

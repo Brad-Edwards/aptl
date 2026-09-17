@@ -18,7 +18,7 @@ from aptl.core.experiment.capture_registry import (
     CaptureVisibility,
     CollectorRegistry,
 )
-from aptl.core.experiment.errors import AdmissionRejection
+from aptl.core.experiment.errors import AdmissionRejection, diagnostic
 
 _CAPTURE_PLAN_SCHEMA = "aptl-capture-plan/v1"
 
@@ -66,6 +66,7 @@ class AdmittedCaptureDemand:
     effective_config_digest: str
     visibility_class: CaptureVisibility
     limits: CaptureLimits
+    selected_output_contract: str
 
     def projection(self) -> dict[str, object]:
         return {
@@ -78,6 +79,7 @@ class AdmittedCaptureDemand:
             "contract_version": self.contract_version,
             "effective_config_digest": self.effective_config_digest,
             "visibility_class": self.visibility_class.value,
+            "selected_output_contract": self.selected_output_contract,
             "limits": {
                 "max_bytes": self.limits.max_bytes,
                 "max_artifact_count": self.limits.max_artifact_count,
@@ -106,7 +108,7 @@ class AdmittedCaptureDemand:
             channel_kind=demand.channel_kinds[0],
             capture_kind=demand.capture_kind,
             capture_scope="scenario",
-            output_contract=demand.output_contract,
+            output_contract=self.selected_output_contract,
             expected_media_types=demand.media_types,
             required_artifact_roles=demand.artifact_roles,
             sensitivity=demand.sensitivity,
@@ -156,6 +158,16 @@ def admit_capture_demands(
         if registration is None:
             diagnostics.extend(capture_admission_diagnostics((demand,), observation))
             continue
+        offer = registration.capture_offer
+        if offer is None or not offer.output_contract:
+            diagnostics.append(
+                diagnostic(
+                    "aptl.capture-admission.output-contract-unavailable",
+                    demand.address,
+                    "The selected collector does not declare a persistable output contract.",
+                )
+            )
+            continue
         admitted.append(
             AdmittedCaptureDemand(
                 demand=demand,
@@ -165,6 +177,7 @@ def admit_capture_demands(
                 effective_config_digest=registration.effective_config_digest(),
                 visibility_class=registration.visibility_class,
                 limits=registration.limits,
+                selected_output_contract=offer.output_contract,
             )
         )
     if diagnostics:

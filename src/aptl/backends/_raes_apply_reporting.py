@@ -7,9 +7,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from raes_contracts.planning import RuntimeDomain
 from raes_contracts.realization_structure import validate_realization_value
-from raes_contracts.runtime_state import RuntimeSnapshot, SnapshotEntry
+from raes_contracts.runtime_state import RuntimeSnapshot
 
 from aptl.backends.raes_artifact_mechanisms import SOURCE_ARTIFACT_REQUIREMENT_KIND
 from aptl.backends.raes_artifact_satisfaction import satisfactions_for_plan
@@ -105,31 +104,14 @@ def capture_apparatus_observations(
             result = tuple(
                 {
                     **item,
-                    "runtime_address": "apparatus.capture.kali-session-capture",
+                    "runtime_address": (
+                        "apparatus.capture."
+                        + str(item.get("apparatus_id", "unknown")).rsplit(".", 1)[-1]
+                    ),
                 }
                 for item in observed
             )
     return result
-
-
-def with_capture_apparatus_entries(
-    snapshot: RuntimeSnapshot,
-    observations: tuple[dict[str, object], ...],
-) -> RuntimeSnapshot:
-    """Report every actual observability addition in portable runtime state."""
-
-    if not observations:
-        return snapshot
-    entries = dict(snapshot.entries)
-    for observation in observations:
-        address = str(observation["runtime_address"])
-        entries[address] = SnapshotEntry(
-            address=address,
-            domain=RuntimeDomain.PROVISIONING,
-            resource_type="capture-apparatus",
-            payload=dict(observation),
-        )
-    return snapshot.with_entries(entries)
 
 
 def with_artifact_satisfactions(
@@ -187,5 +169,4 @@ __all__ = (
     "bounded_apply_details",
     "capture_apparatus_observations",
     "with_artifact_satisfactions",
-    "with_capture_apparatus_entries",
 )

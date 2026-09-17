@@ -31,6 +31,12 @@ from tests.helpers import techvault_scenario_bundle
 
 pytestmark = pytest.mark.integration
 
+_TECHVAULT_FLAG_PARAMETERS = {
+    f"flag_{host}_{level}": f"{host}-{level}"
+    for host in ("victim", "workstation", "webapp", "fileshare", "ad")
+    for level in ("user", "root")
+}
+
 
 def _docker_available() -> bool:
     if shutil.which("docker") is None:
@@ -55,7 +61,10 @@ def test_dns_node_boots_image_free_and_resolves(tmp_path):
         create_aptl_runtime_target(
             project_dir=repo, config=cfg, backend=be, bundle=bundle
         )
-    ).plan(parse_sdl_file(bundle.sdl_path))
+    ).plan(
+        parse_sdl_file(bundle.sdl_path),
+        parameters=_TECHVAULT_FLAG_PARAMETERS,
+    )
     real = interpret_provisioning_plan(
         plan=plan.provisioning, config=cfg, bundle=bundle, component_root=repo
     )

@@ -51,7 +51,7 @@ MANAGEMENT_SURFACES = [
     ("aptl-otel-collector", 4317),
     ("aptl-otel-collector", 4318),
     ("aptl-tempo", 3200),
-    ("kali-ssh-proxy", 2023),
+    ("aptl-grafana-otel", 3100),
     # mailserver holds fixture credentials (a known lab password), so its
     # SMTP/IMAP host publishes must NOT be reachable on 0.0.0.0 where an
     # exposed host becomes an open, known-cred relay (issue #668). The in-range
@@ -61,12 +61,19 @@ MANAGEMENT_SURFACES = [
     ("mailserver", 143),
     ("mailserver", 587),
     ("mailserver", 993),
+    # The web API and UI are the operator's own control plane (ADR-039).
+    ("aptl-web-api", 8400),
+    ("aptl-web-ui", 3000),
+    # The reverse-engineering workstation is defender tooling, not a target.
+    ("reverse", 2027),
 ]
 
 # Deliberate victim / attack-surface targets that MUST remain reachable on all
 # interfaces (NOT loopback-bound). Encodes the other half of the policy.
 TARGET_SURFACES = [
-    ("webapp-proxy", 8080),
+    # webapp's host publication is gone with its proxy (issue #1006): TechVault
+    # declares no such node, nothing started it, and the attack path reaches the
+    # portal inside the range. dns is the remaining declared public surface.
     ("dns", 5353),
 ]
 
@@ -141,3 +148,26 @@ def test_victim_target_stays_publicly_reachable(compose, service, host_port):
             f"prefix, or an explicit all-interfaces bind); a specific host IP "
             f"would break red-team reachability, got {entry!r}"
         )
+
+
+def test_every_published_port_is_classified(compose):
+    """A host publication nobody classified is one nobody checked.
+
+    The management and target lists were hand-maintained, so the web API, web
+    UI and reverse workstation publications were never checked — and reverse
+    was published on all interfaces (issue #1006). Every host-published port
+    must now appear in exactly one list.
+    """
+    classified = set(MANAGEMENT_SURFACES) | set(TARGET_SURFACES)
+    unclassified = sorted(
+        (service, host_port)
+        for service, definition in compose["services"].items()
+        for entry in definition.get("ports", []) or []
+        for _host_ip, host_port, _proto in [_parse_port(entry)]
+        if host_port is not None and (service, host_port) not in classified
+    )
+    assert not unclassified, (
+        f"host-published ports with no exposure classification: {unclassified}; "
+        "add each to MANAGEMENT_SURFACES or TARGET_SURFACES"
+    )
+    assert not set(MANAGEMENT_SURFACES) & set(TARGET_SURFACES)

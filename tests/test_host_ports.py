@@ -13,7 +13,7 @@ import socket
 
 import pytest
 
-from aptl.core import host_ports
+from aptl.core import _port_bindings as port_bindings, host_ports
 
 
 # --------------------------------------------------------------------------- #
@@ -289,7 +289,7 @@ def test_project_port_bindings_deduplicates_address_families(mocker):
         }
     }
 
-    result = host_ports.project_port_bindings(backend)
+    result = port_bindings.project_port_bindings(backend)
 
     assert result == {
         ("dns", 53, "tcp"): 20000,
@@ -301,7 +301,7 @@ def test_project_port_bindings_returns_empty_when_list_fails(mocker):
     backend = mocker.MagicMock()
     backend.container_list.side_effect = OSError("daemon unavailable")
 
-    assert host_ports.project_port_bindings(backend) == {}
+    assert port_bindings.project_port_bindings(backend) == {}
 
 
 def test_project_port_bindings_ignores_malformed_runtime_state(mocker):
@@ -343,6 +343,6 @@ def test_project_port_bindings_ignores_malformed_runtime_state(mocker):
 
     backend.container_inspect.side_effect = inspect
 
-    assert host_ports.project_port_bindings(backend) == {
+    assert port_bindings.project_port_bindings(backend) == {
         ("dns", 54, "tcp"): 20002,
     }

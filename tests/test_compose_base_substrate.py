@@ -77,7 +77,14 @@ class TestEnsureGenericBaseImage:
         ]
         assert argv[-1] == str(tmp_path / "containers" / "generic-systemd-base-debian")
 
-    def test_no_op_when_the_image_already_exists(self, tmp_path):
+    def test_rebuilds_even_when_the_tag_already_exists(self, tmp_path):
+        """Presence of `aptl/...:latest` is not evidence of freshness.
+
+        Skipping the build when the tag existed pinned every install to the
+        substrate it first built, so an advanced base image or a patched layer
+        never reached a machine that had already started a lab. Docker's layer
+        cache keeps the unchanged case cheap (issue #1006).
+        """
         backend = _backend(tmp_path)
 
         with patch("subprocess.run") as mock_run:
@@ -89,17 +96,17 @@ class TestEnsureGenericBaseImage:
             )
 
         assert failures == []
-        assert not any(
+        assert any(
             c.args[0][:2] == ["docker", "build"] for c in mock_run.call_args_list
         )
 
     def test_no_op_for_a_real_registry_image(self, tmp_path):
-        # debian:12-slim / rockylinux:9 are real registry references; `docker
+        # debian:13-slim / rockylinux:9 are real registry references; `docker
         # run` pulls them on demand, so this must never attempt to build them.
         backend = _backend(tmp_path)
 
         with patch("subprocess.run") as mock_run:
-            failures = backend.ensure_generic_base_image("debian:12-slim")
+            failures = backend.ensure_generic_base_image("debian:13-slim")
 
         assert failures == []
         mock_run.assert_not_called()
@@ -175,7 +182,7 @@ def test_start_base_container_carries_the_compose_project_ownership_label(tmp_pa
     spec = BaseContainerSpec(
         node_address="provision.node.victim",
         container_name="aptl-victim",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
     )
 
@@ -201,7 +208,7 @@ def test_start_base_container_keeps_the_aptl_lifecycle_labels(tmp_path):
     spec = BaseContainerSpec(
         node_address="provision.node.victim",
         container_name="aptl-victim",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
     )
 
@@ -291,7 +298,7 @@ def test_declared_network_is_attached_before_image_free_node_starts(tmp_path):
     spec = BaseContainerSpec(
         node_address=node.address,
         container_name="aptl-kali",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
     )
 
@@ -335,7 +342,7 @@ def test_materialization_is_idempotent_for_an_already_running_node(tmp_path):
     spec = BaseContainerSpec(
         node_address="provision.node.kali",
         container_name="aptl-kali",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
     )
     ownership = backend._ensure_resource_ownership(attempt_id="run-a")
@@ -359,7 +366,7 @@ def test_materialization_is_idempotent_for_an_already_running_node(tmp_path):
             "Name": f"/{external}",
             "State": {"Running": True},
             "Config": {
-                "Image": "debian:12-slim",
+                "Image": "debian:13-slim",
                 "Labels": {
                     "aptl.workspace.id": ownership.workspace_id,
                     "aptl.lifecycle.project": ownership.project_name,
@@ -393,7 +400,7 @@ def test_materialization_recreates_a_stopped_or_wrong_image_node(tmp_path):
     spec = BaseContainerSpec(
         node_address="provision.node.kali",
         container_name="aptl-kali",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
     )
     # Present but not running -> must recreate.
@@ -418,7 +425,7 @@ def test_materialization_recreates_a_stopped_or_wrong_image_node(tmp_path):
             "Name": f"/{external}",
             "State": {"Running": False},
             "Config": {
-                "Image": "debian:12-slim",
+                "Image": "debian:13-slim",
                 "Labels": {
                     "aptl.workspace.id": ownership.workspace_id,
                     "aptl.lifecycle.project": ownership.project_name,
@@ -449,7 +456,7 @@ def test_foreign_same_name_container_is_neither_adopted_nor_removed(tmp_path):
     spec = BaseContainerSpec(
         node_address="provision.node.victim",
         container_name="aptl-victim",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
     )
     backend._raw_container_inspect = MagicMock(
@@ -458,7 +465,7 @@ def test_foreign_same_name_container_is_neither_adopted_nor_removed(tmp_path):
             "Name": f"/{external}",
             "State": {"Running": True},
             "Config": {
-                "Image": "debian:12-slim",
+                "Image": "debian:13-slim",
                 "Labels": {"aptl.workspace.id": "foreign-workspace"},
             },
         }
@@ -479,7 +486,7 @@ def test_base_container_records_native_id_and_uses_scoped_external_name(tmp_path
     spec = BaseContainerSpec(
         node_address="provision.node.victim",
         container_name="aptl-victim",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
     )
     backend._raw_container_inspect = MagicMock(return_value={})
@@ -537,7 +544,7 @@ class TestStartBaseContainerVolumesAndPorts:
         spec = BaseContainerSpec(
             node_address="provision.node.misp-suricata-sync",
             container_name="aptl-misp-suricata-sync",
-            image_ref="debian:12-slim",
+            image_ref="debian:13-slim",
             runs_services=False,
             volume_mounts=(
                 VolumeMount(
@@ -567,7 +574,7 @@ class TestStartBaseContainerVolumesAndPorts:
         spec = BaseContainerSpec(
             node_address="provision.node.misp-suricata-sync",
             container_name="aptl-misp-suricata-sync",
-            image_ref="debian:12-slim",
+            image_ref="debian:13-slim",
             runs_services=False,
             volume_mounts=(
                 VolumeMount(
@@ -598,7 +605,7 @@ class TestStartBaseContainerVolumesAndPorts:
         spec = BaseContainerSpec(
             node_address="provision.node.webapp",
             container_name="aptl-webapp",
-            image_ref="debian:12-slim",
+            image_ref="debian:13-slim",
             runs_services=False,
             published_ports=(PublishedPort(container_port=8080),),
         )
@@ -621,7 +628,7 @@ class TestStartBaseContainerVolumesAndPorts:
         spec = BaseContainerSpec(
             node_address="provision.node.dns",
             container_name="aptl-dns",
-            image_ref="debian:12-slim",
+            image_ref="debian:13-slim",
             runs_services=False,
             published_ports=(
                 PublishedPort(
@@ -660,7 +667,7 @@ class TestDynamicCompositionImmutableStart:
         base = dict(
             node_address="provision.node.web",
             container_name="aptl-web",
-            image_ref="debian:12-slim",
+            image_ref="debian:13-slim",
             runs_services=False,
             dynamic_composition=True,
         )
@@ -691,7 +698,7 @@ class TestDynamicCompositionImmutableStart:
         # declared tag never appears as the image argument.
         assert "--pull=never" in argv
         assert argv[-3:] == [_CONFIG_ID, "sleep", "infinity"]
-        assert "debian:12-slim" not in argv
+        assert "debian:13-slim" not in argv
         # The mutable tag is never resolved at start: no `docker image inspect`.
         assert not any(
             c.args[0][:4] == ["docker", "image", "inspect", "--format"]
@@ -784,7 +791,7 @@ class TestDynamicCompositionImmutableStart:
         )
         argv = run_call.args[0]
         assert "--pull=never" not in argv
-        assert argv[-3:] == ["debian:12-slim", "sleep", "infinity"]
+        assert argv[-3:] == ["debian:13-slim", "sleep", "infinity"]
 
 
 class TestRemoveGenericMaterializerContainers:

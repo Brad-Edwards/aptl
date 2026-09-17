@@ -505,24 +505,48 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: ad
-            dockerfile: containers/ad/Dockerfile
-            context: .
           - name: base-rocky
             dockerfile: containers/base/Dockerfile.rocky
             context: ./containers
           - name: base-ubuntu
             dockerfile: containers/base/Dockerfile.ubuntu
             context: ./containers
+          - name: appliance-egress-proxy
+            dockerfile: containers/appliance-egress-proxy/Dockerfile
+            context: .
+          - name: generic-samba-ad-base
+            dockerfile: containers/generic-samba-ad-base/Dockerfile
+            context: ./containers/generic-samba-ad-base
+          - name: generic-systemd-base
+            dockerfile: containers/generic-systemd-base/Dockerfile
+            context: ./containers/generic-systemd-base
+          - name: generic-systemd-base-debian
+            dockerfile: containers/generic-systemd-base-debian/Dockerfile
+            context: ./containers/generic-systemd-base-debian
+          - name: generic-systemd-node22-base
+            dockerfile: containers/generic-systemd-node22-base/Dockerfile
+            context: ./containers/generic-systemd-node22-base
+          - name: generic-wazuh-agent-base-debian
+            dockerfile: containers/generic-wazuh-agent-base-debian/Dockerfile
+            context: .
+          - name: kali-capture
+            dockerfile: containers/kali-capture/Dockerfile
+            context: .
+          - name: network-boundary-helper
+            dockerfile: containers/network-boundary-helper/Dockerfile
+            context: .
+          - name: operator-access-proxy
+            dockerfile: containers/operator-access-proxy/Dockerfile
+            context: .
+          - name: suricata-wazuh-agent
+            dockerfile: containers/suricata-wazuh-agent/Dockerfile
+            context: .
           - name: misp-suricata-sync
             dockerfile: containers/misp-suricata-sync/Dockerfile
             context: .
           - name: reverse
             dockerfile: containers/reverse/Dockerfile
             context: ./containers
-          - name: wazuh-sidecar
-            dockerfile: containers/wazuh-sidecar/Dockerfile
-            context: .
           - name: web
             dockerfile: web/Dockerfile
             context: web

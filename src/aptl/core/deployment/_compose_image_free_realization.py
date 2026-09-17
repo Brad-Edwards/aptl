@@ -82,7 +82,7 @@ def _image_free_node_addresses(
     start, not a bare-OS node to stub.
 
     Keying on ``runtime`` alone silently scaled those services to zero and started
-    a ``debian:12-slim`` ``sleep infinity`` substrate in their place, so declaring
+    a ``debian:13-slim`` ``sleep infinity`` substrate in their place, so declaring
     a node's security tooling turned the actual tool off. The image check is the
     same one the realization-time materializable test applies
     (``_is_materializable_node``); the two must agree, or a node is realized one

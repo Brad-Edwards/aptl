@@ -7,9 +7,12 @@ Pure functions — no I/O. Three responsibilities:
 * build the ``samba-tool`` argv lists the Compose account mixin runs through
   ``container_exec``.
 
-A credential never appears in any argv this module builds: user creation uses
-``samba-tool user create <name> --random-password`` so the secret is generated
-inside the target boundary and never disclosed. Identity values (username,
+User creation uses ``samba-tool user create <name> --random-password`` so the
+secret is generated inside the target boundary. The one exception is
+``samba_user_setpassword``: a scenario that declares a ``weak`` or ``medium``
+account is declaring a credential an attacker is meant to obtain, so the
+backend mints one of that class and sets it explicitly (issue #1006). It
+travels as a discrete argv token inside the target, never through a shell. Identity values (username,
 group, mail, SPN) travel as discrete argv tokens, never interpolated into a
 shell string; the validation below additionally rejects control characters and
 leading dashes so an untrusted value cannot become an option or shell syntax
@@ -270,10 +273,11 @@ def dedupe_groups(
 # --random-password.
 
 
-# The AD entrypoint (containers/ad/setup-ad.sh) writes this marker AFTER its
-# baseline account provisioner (provision-users.sh) finishes, and it persists on
-# the ad_data volume. It is the samba-ad provider's explicit "baseline
-# provisioning complete" signal — the generic AD-DC marker, not a scenario branch.
+# The samba-ad substrate's provisioning script
+# (containers/generic-samba-ad-base/provision-domain.sh) writes this marker
+# AFTER `samba-tool domain provision` finishes, and it persists on the ad_data
+# volume. It is the samba-ad provider's explicit "baseline provisioning
+# complete" signal — the generic AD-DC marker, not a scenario branch.
 _SAMBA_PROVISIONED_MARKER = "/var/lib/samba/private/.provisioned"
 
 
@@ -331,6 +335,58 @@ def samba_user_create(user: str, *, mail: str = "") -> list[str]:
     cmd = ["samba-tool", "user", "create", user, "--random-password"]
     if mail:
         cmd.append(f"--mail-address={mail}")
+    return cmd
+
+
+def samba_domain_relax_password_policy() -> list[str]:
+    """Argv to let the domain hold the weak credentials the scenario declares.
+
+    Samba's default domain policy (complexity on, minimum length 7) refuses the
+    weak passwords a scenario declares as its credential-guessing surface, so
+    `samba-tool user setpassword` fails and the declared account is realized
+    with something stronger than declared. Relaxing the policy is backend
+    apparatus that exists to make the authored environment true; it is scoped to
+    the range's own throwaway domain (issue #1006).
+    """
+
+    return [
+        "samba-tool",
+        "domain",
+        "passwordsettings",
+        "set",
+        "--complexity=off",
+        "--min-pwd-length=1",
+        "--min-pwd-age=0",
+        "--history-length=0",
+    ]
+
+
+def samba_user_setpassword(user: str, password: str) -> list[str]:
+    """Argv to set one account's password to a backend-minted fixture secret.
+
+    The secret is a discrete argv token inside the target container, never
+    interpolated into a shell string. This is the deliberate exception to the
+    module's no-credential-in-argv rule: a declared weak or medium password is
+    scenario content meant to be discovered inside the range, and the provider
+    offers no stdin path for it. Strong accounts keep their target-generated
+    secret and never pass through here.
+    """
+
+    return ["samba-tool", "user", "setpassword", user, f"--newpassword={password}"]
+
+
+def samba_user_authenticate(user: str, password: str, realm: str = "") -> list[str]:
+    """Argv proving the realized credential actually authenticates.
+
+    A zero exit from `setpassword` says the directory accepted the write, not
+    that the account is usable with that credential. This is the
+    read-after-write for a credential: list shares as the user itself.
+    """
+
+    principal = f"{user}%{password}"
+    cmd = ["smbclient", "-L", "localhost", "-U", principal]
+    if realm:
+        cmd.extend(["-W", realm])
     return cmd
 
 

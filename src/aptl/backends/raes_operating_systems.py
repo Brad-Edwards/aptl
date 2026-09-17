@@ -15,7 +15,7 @@ from raes_contracts.realization_observation import ObservedOperatingSystemIdenti
 APTL_OPERATING_SYSTEMS = (
     OperatingSystemCompatibility("linux", "debian", frozenset({"11", "12", "13"})),
     OperatingSystemCompatibility(
-        "linux", "ubuntu", frozenset({"20.04", "22.04", "24.04"})
+        "linux", "ubuntu", frozenset({"20.04", "22.04", "24.04", "26.04"})
     ),
     OperatingSystemCompatibility("linux", "rocky-linux", frozenset({"8", "9"})),
     OperatingSystemCompatibility(
@@ -24,7 +24,7 @@ APTL_OPERATING_SYSTEMS = (
     OperatingSystemCompatibility(
         "linux",
         "x-aptl:alpine",
-        frozenset({"3.18", "3.19", "3.20", "3.21", "3.22"}),
+        frozenset({"3.18", "3.19", "3.20", "3.21", "3.22", "3.24"}),
     ),
     OperatingSystemCompatibility(
         "linux", "x-aptl:amazon-linux", frozenset({"2", "2023"})

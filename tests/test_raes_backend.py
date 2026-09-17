@@ -3761,6 +3761,9 @@ def test_provisioner_records_supported_placement_realizations(tmp_path):
         "spn": "",
         "mail": "operator@techvault.local",
         "disabled": False,
+        # The authored credential class is reported back with the placement, so
+        # the runtime sees which class the backend realized (issue #1006).
+        "password_strength": "weak",
     }
 
     # Real lowering, not counting: the typed backend spec actually passed
@@ -4317,7 +4320,9 @@ def test_readback_retry_accepts_only_async_native_evidence():
     from raes_contracts.diagnostics import Diagnostic, Severity
     from raes_contracts.runtime_state import SnapshotEntry
 
-    from aptl.backends.raes_provisioner import _retryable_readback_gaps
+    from aptl.backends._raes_provisioning_helpers import (
+        retryable_readback_gaps as _retryable_readback_gaps,
+    )
 
     plan = _execution_plan_with_realization_requirements().provisioning
     node_type = next(

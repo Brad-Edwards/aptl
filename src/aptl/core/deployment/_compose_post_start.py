@@ -14,6 +14,9 @@ from aptl.core.deployment._compose_service_health import (
     runtime_expects_completion,
     wait_for_realized_health,
 )
+from aptl.core.deployment._declared_listener_readiness import (
+    await_declared_listeners,
+)
 from aptl.core.deployment._compose_runtime_observation import (
     ComposeRuntimeOrchestrationObservationMixin,
 )
@@ -41,9 +44,10 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
         """Return the final result after start, network, health, and accounts.
 
         Ordering is load-bearing: networks are reconciled, then services must be
-        observed healthy, then accounts are realized. Account realization execs
-        into the running node containers (``container_exec``), so it cannot run
-        until those containers are up and healthy — the health wait gates it.
+        observed healthy and listening on what the scenario declares, then
+        accounts are realized. Account realization execs into the running node
+        containers (``container_exec``), so it cannot run until those containers
+        are up — the health and listener waits gate it.
         """
 
         if not start_result.success:
@@ -72,6 +76,12 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
                 realize_application_providers(self, realization.nodes)
             ),
             lambda: _failure_result(realize_forwarding_agents(self, realization.nodes)),
+            # After providers: an application provider starts the process that
+            # binds its declared listener, so waiting any earlier waits for a
+            # service nothing has started yet.
+            lambda: _failure_result(
+                await_declared_listeners(self, tuple(realization.nodes))
+            ),
             lambda: self._verify_stateful_authenticated_readiness(realization),
             lambda: self._verify_runtime_orchestration(realization),
             lambda: self._realize_accounts_step(realization),

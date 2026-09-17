@@ -14,6 +14,7 @@ from aptl.core.appliance_boundary import (
     ApplianceBoundaryPolicy,
 )
 from aptl.core.config import validate_compose_project_name
+from aptl.core.deployment._operator_access import ComposeOperatorAccessMixin
 from aptl.core.deployment._compose_autoremove import ComposeAutoremoveMixin
 from aptl.core.deployment._compose_base_substrate import ComposeBaseSubstrateMixin
 from aptl.core.deployment._compose_boundary import DEFAULT_BOUNDARY_HELPER_IMAGE
@@ -66,6 +67,7 @@ class DockerComposeBackend(
     ComposeSeedAttributionMixin,
     ComposeSeedExecutionMixin,
     ComposeBaseSubstrateMixin,
+    ComposeOperatorAccessMixin,
     ComposeProjectCleanupMixin,
     ComposeImageFetchMixin,
 ):

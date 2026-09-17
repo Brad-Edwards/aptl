@@ -127,10 +127,6 @@ containers/_wazuh-agent/install.sh	split-pack-delivery	Inventory exact content o
 containers/_wazuh-agent/ossec.conf.template	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/_wazuh-agent/wazuh-agent.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/_wazuh-agent/wazuh.repo	backend-substrate	Retain pinned backend repository input for RHEL-family agent installation
-containers/ad/Dockerfile	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
-containers/ad/provision-users.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
-containers/ad/setup-ad.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
-containers/ad/supervisord.conf	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/appliance-egress-proxy/Dockerfile	backend-substrate	Qualify exact host/runtime security and package independently of TechVault
 containers/appliance-egress-proxy/proxy.py	backend-substrate	Qualify exact host/runtime security and package independently of TechVault
 containers/base/Dockerfile.rocky	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
@@ -159,8 +155,6 @@ containers/kali-capture/broker.py	backend-substrate	Post-baseline capture appara
 containers/kali-capture/entrypoint.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/kali-capture/sshd_config	backend-substrate	Post-baseline capture apparatus; retain with evidence custody authority
 containers/kali-capture/writer.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
-containers/kali-ssh-proxy/Dockerfile	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
-containers/kali-ssh-proxy/proxy.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/kali/audit/aptl.rules	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/kali/scripts/aptl-capture-client	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/kali/scripts/aptl-wrap-shell.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
@@ -169,6 +163,8 @@ containers/keys/authorized_keys	split-pack-delivery	Inventory exact content owne
 containers/mailserver/setup.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/misp-suricata-sync/Dockerfile	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/network-boundary-helper/Dockerfile	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/operator-access-proxy/Dockerfile	backend-substrate	Retain backend relay for declared operator interactive access
+containers/operator-access-proxy/proxy.py	backend-substrate	Retain backend relay for declared operator interactive access
 containers/network-boundary-helper/helper.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/reverse/Dockerfile	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/reverse/README.md	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
@@ -180,7 +176,6 @@ containers/reverse/rebuild_container.sh	split-pack-delivery	Inventory exact cont
 containers/reverse/reverse-tools-install.service	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/reverse/setup-reverse-tools.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/suricata-wazuh-agent/Dockerfile	backend-substrate	Retain locally composed Suricata forwarding substrate selected under open authority
-containers/wazuh-sidecar/Dockerfile	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/webapp/app/app.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/webapp/app/static/style.css	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/webapp/app/templates/admin.html	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
@@ -960,6 +955,7 @@ src/aptl/core/deployment/_account_provider.py	core-candidate	Migrate only after 
 src/aptl/core/deployment/_application_provider_realization.py	backend-substrate	Retain semantic application-provider startup and native readiness verification
 src/aptl/core/deployment/_compose_account_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_autoremove.py	backend-substrate	Retain exact one-shot container lifecycle realization with deployment authority
+src/aptl/core/deployment/_account_credentials.py	backend-substrate	Retain declared-credential-class realization and operator disclosure
 src/aptl/core/deployment/_compose_base_substrate.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_boundary.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_boundary_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -984,6 +980,8 @@ src/aptl/core/deployment/_compose_owned_start.py	backend-substrate	Post-baseline
 src/aptl/core/deployment/_compose_port_readback.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_port_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_post_start.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_declared_listener_readiness.py	backend-substrate	Retain declared-listener readiness gating before realization observation
+src/aptl/core/deployment/_operator_access.py	backend-substrate	Retain declared operator interactive-access relays and reachability proof
 src/aptl/core/deployment/_compose_project_cleanup.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_project_inventory.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_queries.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1240,6 +1238,7 @@ tests/fixtures/redaction_parity_corpus.json	tests-follow-owner	Retain meaningful
 tests/fixtures/workbench_mcp_server.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/helpers.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_account_provider.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_account_credentials.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_adr_049_appliance_contract.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_api_auth.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_api_bff.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1321,6 +1320,8 @@ tests/test_credentials_fuzz.py	tests-follow-owner	Retain meaningful boundary and
 tests/test_curated_live_proof.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_curl_safe.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_deployment_backend.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_declared_listener_readiness.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_operator_access.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_deployment_stateful_realization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_detection.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_deterministic_archive.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1648,3 +1649,15 @@ web/tests/setup.ts	tests-follow-owner	Retain meaningful boundary and parity test
 web/tsconfig.json	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
 web/vite.config.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
 web/vitest.config.ts	optional-operator-ui	Preserve authenticated local UI; project acquired pack data
+docs/architecture/issue-1006-container-base-images-preflight.md	architecture-history	Preserve base-image migration boundaries and SSH policy rationale
+src/aptl/backends/raes_operator_access.py	backend-substrate	Retain admission of declared operator interactive access
+tests/test_container_ssh_policy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+containers/_wazuh-agent/install-active-response.sh	backend-substrate	Retain the shared required active-response placement for every agent image
+containers/base/sshd/00-aptl-hardening.conf	backend-substrate	Retain the APTL SSH policy drop-in shared by the Ubuntu substrates
+src/aptl/core/deployment/_compose_account_verification.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_generic_base_images.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/_port_bindings.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_provisioner_start.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_wazuh_agent_configuration.py	backend-observability	Retain declared Wazuh forwarding-agent configuration rendering
+src/aptl/core/deployment/_operator_access_endpoints.py	backend-substrate	Retain the catalog of operator interactive-access targets the backend can realize
+src/aptl/core/deployment/_operator_access_proof.py	backend-substrate	Retain operator interactive-access reachability proof and admitted-endpoint reporting

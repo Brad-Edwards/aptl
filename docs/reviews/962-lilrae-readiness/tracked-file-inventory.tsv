@@ -1614,3 +1614,8 @@ src/aptl/backends/_raes_provisioning_helpers.py	backend-owned-runtime	Retain pro
 src/aptl/backends/_raes_runtime_environment_observation.py	backend-owned-runtime	Retain protected runtime environment disclosure from provider readback
 src/aptl/backends/_raes_stateful_values.py	backend-owned-runtime	Retain authored value readers used by stateful realization
 src/aptl/core/deployment/_wazuh_agent_realization.py	backend-observability	Retain declared Wazuh forwarding-agent realization and exact native readback
+src/aptl/core/deployment/_compose_account_verification.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_generic_base_images.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/_port_bindings.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_provisioner_start.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_wazuh_agent_configuration.py	backend-observability	Retain declared Wazuh forwarding-agent configuration rendering

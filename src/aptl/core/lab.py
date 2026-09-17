@@ -2363,28 +2363,30 @@ def _step_activate_operator_access(ctx: _LabStartContext) -> LabResult | None:
     activate = getattr(ctx.backend, "activate_operator_access", None)
     if not callable(activate):
         return LabResult(success=False, error=_OPERATOR_ACCESS_UNAVAILABLE)
-    public_key_path = (
-        ctx.ssh_key_path.with_name(ctx.ssh_key_path.name + ".pub")
-        if ctx.ssh_key_path is not None
-        else None
-    )
-    try:
-        public_key = (
-            public_key_path.read_text(encoding="utf-8")
-            if public_key_path is not None and public_key_path.is_file()
-            else None
-        )
-    except OSError:
-        public_key = None
-    failures = activate(accesses, operator_public_key=public_key)
-    if failures:
-        for failure in failures:
-            log.error("Operator access failed: %s", failure)
-        return LabResult(
+    failures = activate(accesses, operator_public_key=_operator_public_key(ctx))
+    for failure in failures:
+        log.error("Operator access failed: %s", failure)
+    return (
+        LabResult(
             success=False,
             error=f"{_OPERATOR_ACCESS_UNAVAILABLE}: {'; '.join(failures)}",
         )
-    return None
+        if failures
+        else None
+    )
+
+
+def _operator_public_key(ctx: _LabStartContext) -> str | None:
+    """Read the operator's public key from beside the lab's private key."""
+
+    if ctx.ssh_key_path is None:
+        return None
+    public_key_path = ctx.ssh_key_path.with_name(ctx.ssh_key_path.name + ".pub")
+    try:
+        return public_key_path.read_text(encoding="utf-8")
+    except OSError:
+        # Absent or unreadable: the access is refused downstream, not guessed at.
+        return None
 
 
 def _activate_required_transcript(

@@ -4320,7 +4320,9 @@ def test_readback_retry_accepts_only_async_native_evidence():
     from raes_contracts.diagnostics import Diagnostic, Severity
     from raes_contracts.runtime_state import SnapshotEntry
 
-    from aptl.backends.raes_provisioner import _retryable_readback_gaps
+    from aptl.backends._raes_provisioning_helpers import (
+        retryable_readback_gaps as _retryable_readback_gaps,
+    )
 
     plan = _execution_plan_with_realization_requirements().provisioning
     node_type = next(

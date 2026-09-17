@@ -85,16 +85,22 @@ def _declared_ports(node: "DeploymentNodeRealization") -> set[int]:
     return ports
 
 
-def _missing_ports(backend: object, container: str, ports: set[int]) -> set[int]:
-    """Return declared ports not currently bound inside the container."""
+def _observe_listeners(backend: object, container: str) -> object | None:
+    """Read the container's bound sockets, or None when they cannot be read."""
 
     observer = getattr(backend, "observe_container_listeners", None)
     if not callable(observer):
-        return set(ports)
+        return None
     try:
-        listeners = observer(container)
+        return observer(container)
     except (BackendTimeoutError, OSError):
-        return set(ports)
+        return None
+
+
+def _missing_ports(backend: object, container: str, ports: set[int]) -> set[int]:
+    """Return declared ports not currently bound inside the container."""
+
+    listeners = _observe_listeners(backend, container)
     if listeners is None:
         return set(ports)
     bound = {

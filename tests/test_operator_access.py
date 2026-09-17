@@ -258,7 +258,8 @@ def test_target_not_on_any_network_fails_closed(monkeypatch, tmp_path):
 
     failures = backend.activate_operator_access((_KALI,))
 
-    assert failures and "kali is not running on a network" in failures[0]
+    assert failures
+    assert "kali is not running on a network" in failures[0]
 
 
 def test_relay_that_cannot_join_its_target_fails_closed(monkeypatch, tmp_path):
@@ -267,7 +268,8 @@ def test_relay_that_cannot_join_its_target_fails_closed(monkeypatch, tmp_path):
 
     failures = backend.activate_operator_access((_KALI,))
 
-    assert failures and "could not join" in failures[0]
+    assert failures
+    assert "could not join" in failures[0]
 
 
 _SOC = DeploymentOperatorAccess(
@@ -323,7 +325,8 @@ def test_missing_operator_key_fails_closed(monkeypatch, tmp_path):
 
     failures = backend.activate_operator_access((_SOC,), operator_public_key=None)
 
-    assert failures and "no valid operator public key" in failures[0]
+    assert failures
+    assert "no valid operator public key" in failures[0]
     assert not [c for c in backend.commands if c[:3] == ["docker", "run", "-d"]]
 
 
@@ -335,7 +338,8 @@ def test_malformed_operator_key_is_refused(monkeypatch, tmp_path):
         (_SOC,), operator_public_key="ssh-ed25519 AAAA$(reboot)"
     )
 
-    assert failures and "no valid operator public key" in failures[0]
+    assert failures
+    assert "no valid operator public key" in failures[0]
 
 
 def test_authorization_that_fails_in_the_target_fails_closed(monkeypatch, tmp_path):
@@ -348,7 +352,8 @@ def test_authorization_that_fails_in_the_target_fails_closed(monkeypatch, tmp_pa
         (_SOC,), operator_public_key=_OPERATOR_KEY
     )
 
-    assert failures and "could not authorize analyst" in failures[0]
+    assert failures
+    assert "could not authorize analyst" in failures[0]
 
 
 def test_unreachable_endpoint_fails_the_realization(monkeypatch):

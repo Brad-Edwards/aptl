@@ -36,6 +36,7 @@ from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.utils.logging import get_logger
 
 if TYPE_CHECKING:
+    from aptl.core.deployment._compose_resource_ownership import WorkspaceOwnership
     from aptl.core.deployment.realization import DeploymentOperatorAccess
 
 log = get_logger("deployment.operator_access")
@@ -157,6 +158,22 @@ class ComposeOperatorAccessMixin(object):
         accesses = tuple(accesses)
         if not accesses:
             return []
+        failures = self._start_declared_relays(accesses, operator_public_key)
+        if not failures:
+            failures = _prove_endpoints(
+                OPERATOR_ACCESS_ENDPOINTS[access.target_node] for access in accesses
+            )
+        if not failures:
+            _log_published_access(accesses)
+        return failures
+
+    def _start_declared_relays(
+        self,
+        accesses: Sequence["DeploymentOperatorAccess"],
+        operator_public_key: str | None,
+    ) -> list[str]:
+        """Build the access network and one authorized relay per access."""
+
         try:
             self._ensure_resource_ownership()
             self._ownership_daemon_id()
@@ -171,21 +188,6 @@ class ComposeOperatorAccessMixin(object):
                 self._authorize_operator(access, operator_public_key)
                 or self._start_operator_relay(access, network)
             )
-        if failures:
-            return failures
-        failures = _prove_endpoints(
-            OPERATOR_ACCESS_ENDPOINTS[access.target_node] for access in accesses
-        )
-        if not failures:
-            for access in accesses:
-                endpoint = OPERATOR_ACCESS_ENDPOINTS[access.target_node]
-                log.info(
-                    "Operator access %s (%s to %s) published on 127.0.0.1:%d",
-                    access.access_id,
-                    access.channel,
-                    access.target_node,
-                    resolved_host_port(endpoint),
-                )
         return failures
 
     def _authorize_operator(
@@ -216,12 +218,15 @@ class ComposeOperatorAccessMixin(object):
             )
         except (BackendTimeoutError, OwnershipConflictError, OSError):
             installed = None
-        if installed is None or installed.returncode != 0:
-            return [
+        authorized = installed is not None and installed.returncode == 0
+        return (
+            []
+            if authorized
+            else [
                 f"operator access {access.access_id}: could not authorize "
                 f"{user} on {endpoint.target_node}"
             ]
-        return []
+        )
 
     def _ensure_operator_access_network(self) -> tuple[str | None, list[str]]:
         """Reuse or create the receipt-owned, non-internal access network."""
@@ -231,7 +236,13 @@ class ComposeOperatorAccessMixin(object):
             self._resolve_owned_network_id(OPERATOR_ACCESS_NETWORK_SUFFIX)
             return external, []
         except OwnershipConflictError:
-            pass
+            return self._create_operator_access_network(external)
+
+    def _create_operator_access_network(
+        self, external: str
+    ) -> tuple[str | None, list[str]]:
+        """Create the access network and record the receipt that owns it."""
+
         ownership = self._ensure_resource_ownership()
         attempt_id = self._resource_attempt_id
         command = [
@@ -307,6 +318,29 @@ class ComposeOperatorAccessMixin(object):
         native_id = str(started.stdout or "").strip()
         if started.returncode != 0 or not native_id:
             return [f"operator access {access.access_id}: relay did not start"]
+        return self._own_and_connect_relay(
+            access,
+            endpoint,
+            ownership=ownership,
+            attempt_id=attempt_id,
+            external=external,
+            native_id=native_id,
+            target_network=target_network,
+        )
+
+    def _own_and_connect_relay(
+        self,
+        access: "DeploymentOperatorAccess",
+        endpoint: OperatorAccessEndpoint,
+        *,
+        ownership: "WorkspaceOwnership",
+        attempt_id: str,
+        external: str,
+        native_id: str,
+        target_network: str,
+    ) -> list[str]:
+        """Record the relay's receipt, then join it to the target's network."""
+
         try:
             ownership.record(
                 ResourceReceipt(
@@ -357,7 +391,23 @@ class ComposeOperatorAccessMixin(object):
         networks = settings.get("Networks") if isinstance(settings, dict) else None
         if not name or not isinstance(networks, dict) or not networks:
             return None
-        return name, sorted(networks)[0]
+        return name, min(networks)
+
+
+def _log_published_access(
+    accesses: Sequence["DeploymentOperatorAccess"],
+) -> None:
+    """Record where each proven access is reachable from the operator's host."""
+
+    for access in accesses:
+        endpoint = OPERATOR_ACCESS_ENDPOINTS[access.target_node]
+        log.info(
+            "Operator access %s (%s to %s) published on 127.0.0.1:%d",
+            access.access_id,
+            access.channel,
+            access.target_node,
+            resolved_host_port(endpoint),
+        )
 
 
 def _relay_run_command(

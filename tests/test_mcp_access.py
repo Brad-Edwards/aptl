@@ -82,15 +82,20 @@ def test_stale_wrong_or_revoked_grant_cannot_launch(changes):
 @pytest.mark.parametrize(
     "changes",
     [
-        {"observed_at": datetime.now(UTC) - timedelta(minutes=10)},
-        {"observed_at": datetime.now(UTC) + timedelta(minutes=1)},
+        {"observed_at": datetime(2026, 1, 1, tzinfo=UTC) - timedelta(minutes=10)},
+        {"observed_at": datetime(2026, 1, 1, tzinfo=UTC) + timedelta(minutes=1)},
         {"lifecycle_state": "tainted"},
     ],
 )
 def test_discovery_must_be_fresh_and_ready(changes):
     with pytest.raises(ValueError, match="current"):
         require_current_access(
-            access_record(**changes), owner_id="alice", seat_id="seat-1"
+            access_record(observed_at=datetime(2026, 1, 1, tzinfo=UTC)).model_copy(
+                update=changes
+            ),
+            owner_id="alice",
+            seat_id="seat-1",
+            now=datetime(2026, 1, 1, tzinfo=UTC),
         )
 
 

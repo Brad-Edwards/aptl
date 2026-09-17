@@ -1,6 +1,6 @@
 # Reverse engineering container built on shared Ubuntu 22.04 base
 # Build context must be ./containers/ so both base/ and reverse/ are accessible
-FROM ubuntu:22.04@sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982
+FROM ubuntu:26.04@sha256:cd21a4f68a617580279d4b091cb18e3af9fa8a87500665f0ae5f7f757d17d367
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive

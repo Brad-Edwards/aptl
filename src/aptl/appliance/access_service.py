@@ -80,6 +80,8 @@ def _write_runtime_observation(
     uid: int,
     gid: int,
 ) -> None:
+    """Persist a private host/guest boundary observation for the dispatcher."""
+
     observation = ApplianceAccessObservation(
         schema_version="aptl.mcp-boundary-observation/v1",
         observed_at=datetime.now(UTC),

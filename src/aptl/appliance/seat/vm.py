@@ -15,8 +15,10 @@ from typing import Protocol
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 
-QEMU_SLIRP_SUBNET = "10.0.2.0/24"  # Intentional RFC 1918 guest-only network.
-DEFAULT_QEMU_GUEST_ADDRESS = "10.0.2.15"  # Fixed address inside that private subnet.
+# Intentional RFC 1918 guest-only network.
+QEMU_SLIRP_SUBNET = "10.0.2.0/24"
+# Fixed address inside that private subnet.
+DEFAULT_QEMU_GUEST_ADDRESS = "10.0.2.15"
 
 
 class VmProcess(Protocol):

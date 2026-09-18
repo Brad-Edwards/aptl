@@ -521,13 +521,18 @@ def _start_with_selected_mappings(
 ) -> SeatRecord:
     """Retry the same start with allocator-selected outer mappings."""
 
+    selected_options: StartSeatOptions = replace(
+        options,
+        mappings=selected,
+        reserve_outer_mappings=False,
+    )
     return start_seat(
         seat_root,
         seat_id=seat_id,
         release_dir=release_dir,
         release_public_key=release_public_key,
         qualification_public_key=qualification_public_key,
-        options=replace(options, mappings=selected, reserve_outer_mappings=False),
+        options=selected_options,
     )
 
 

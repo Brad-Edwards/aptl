@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from typing import TypeGuard
 
 from aptl.core.deployment._runtime_materialization_types import (
     RuntimeMaterializationIssue,
@@ -77,7 +78,7 @@ def _compose_authority_field(field: str) -> str:
     return _RUNTIME_COMPOSE_FIELDS.get(field, f"compose.services[].{field}")
 
 
-def _is_sequence(value: object) -> bool:
+def _is_sequence(value: object) -> TypeGuard[Sequence[object]]:
     """Whether a value is a non-text sequence."""
 
     return isinstance(value, Sequence) and not isinstance(value, (str, bytes))
@@ -115,6 +116,27 @@ def _contains_expected(actual: object, expected: object) -> bool:
     return actual == expected
 
 
+def _undeclared_mapping_mount(
+    item: Mapping[object, object],
+    *,
+    allow_docker_socket: bool,
+) -> bool:
+    """Whether one mapping-form mount adds undeclared authority."""
+
+    kind = str(item.get("type") or "")
+    source = str(item.get("source") or "")
+    target = str(item.get("target") or "")
+    admitted_socket = (
+        allow_docker_socket
+        and source == _DOCKER_SOCKET
+        and target == _DOCKER_SOCKET
+        and item.get("read_only") is not True
+    )
+    return not admitted_socket and (
+        kind in {"bind", "tmpfs"} or source == _DOCKER_SOCKET
+    )
+
+
 def _undeclared_mount_item(
     item: object,
     expected_items: Sequence[object],
@@ -126,17 +148,9 @@ def _undeclared_mount_item(
     if any(_contains_expected(item, candidate) for candidate in expected_items):
         return False
     if isinstance(item, Mapping):
-        kind = str(item.get("type") or "")
-        source = str(item.get("source") or "")
-        target = str(item.get("target") or "")
-        admitted_socket = (
-            allow_docker_socket
-            and source == _DOCKER_SOCKET
-            and target == _DOCKER_SOCKET
-            and item.get("read_only") is not True
-        )
-        return not admitted_socket and (
-            kind in {"bind", "tmpfs"} or source == _DOCKER_SOCKET
+        return _undeclared_mapping_mount(
+            item,
+            allow_docker_socket=allow_docker_socket,
         )
     source = item.split(":", 1)[0] if isinstance(item, str) else ""
     return source.startswith(("/", "."))

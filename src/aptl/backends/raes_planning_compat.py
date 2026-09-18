@@ -489,8 +489,6 @@ def plan_aptl_scenario(
         if selected.snapshot is None
         else manager.plan(scenario, selected.snapshot, **plan_options)
     )
-
-
 __all__ = [
     "AptlRuntimeManager",
     "AptlPlanningOptions",

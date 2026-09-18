@@ -13,8 +13,9 @@ from aptl.core.lab_types import LabResult
 class SSHRuntimeAuthorityMixin:
     """Bind policy to one exact empty remote Docker target."""
 
+    @staticmethod
     def _runtime_materialization_profile(
-        self, realization: object
+        realization: object,
     ) -> RuntimeMaterializationProfile:
         """Return the only containment envelope this provider has proved."""
 

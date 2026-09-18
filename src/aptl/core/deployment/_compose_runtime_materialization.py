@@ -55,15 +55,17 @@ class ComposeRuntimeMaterializationMixin:
         )
         return failure or LabResult(success=True)
 
+    @staticmethod
     def _runtime_materialization_profile(
-        self, realization: DeploymentRealizationSpec
+        realization: DeploymentRealizationSpec,
     ) -> RuntimeMaterializationProfile:
         """Return the backend envelope proven before deployment mutation."""
 
         del realization
         return SHARED_DOCKER_PROFILE
 
-    def _qualify_runtime_materialization_target(self) -> LabResult | None:
+    @staticmethod
+    def _qualify_runtime_materialization_target() -> LabResult | None:
         """Perform backend-specific read-only containment qualification."""
 
         return None

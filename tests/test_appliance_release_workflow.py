@@ -130,6 +130,9 @@ def test_qualification_venv_installs_the_locked_runtime_closure() -> None:
     local_install = 'pip" install --no-deps .'
     assert qualifier.index(ci_install) < qualifier.index(runtime_install)
     assert qualifier.index(runtime_install) < qualifier.index(local_install)
+    assert 'release_dir="$seat_root/launch/release"' in qualifier
+    assert '"$seat_root/release"' not in qualifier
+    assert '"$work/seat-1/release"' not in qualifier
 
 
 def test_resource_sampler_handles_seats_before_their_pid_files_exist() -> None:

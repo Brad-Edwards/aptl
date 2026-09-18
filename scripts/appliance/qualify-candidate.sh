@@ -103,18 +103,19 @@ cold_started=$(date +%s)
 for index in $(seq 1 "$APTL_QUALIFICATION_SEATS"); do
     seat_id="seat-${index}"
     seat_root="$work/$seat_id"
+    release_dir="$seat_root/launch/release"
     project="$work/client-$seat_id"
-    install -d -m 0700 "$seat_root" "$project"
-    cp -al "$work/candidate" "$seat_root/release"
+    install -d -m 0700 "$seat_root/launch" "$project"
+    cp -al "$work/candidate" "$release_dir"
     seat_roots+=("$seat_root")
     participant_port=$((13000 + index))
     recovery_port=$((14000 + index))
     mcp_port=$((15000 + index))
     "$work/venv/bin/aptl" seat start \
         --seat-root "$seat_root" --seat-id "$seat_id" \
-        --release-dir "$seat_root/release" \
-        --release-public-key "$seat_root/release/candidate-public.pem" \
-        --qualification-public-key "$seat_root/release/candidate-public.pem" \
+        --release-dir "$release_dir" \
+        --release-public-key "$release_dir/candidate-public.pem" \
+        --qualification-public-key "$release_dir/candidate-public.pem" \
         --mapping "participant,tcp,127.0.0.1,$participant_port,127.0.0.1,3000" \
         --mapping "recovery,tcp,127.0.0.1,$recovery_port,127.0.0.1,8400" \
         --mapping "host-mcp,tcp,127.0.0.1,$mcp_port,127.0.0.1,2222" \
@@ -163,6 +164,7 @@ reset_started=$(date +%s)
 for index in $(seq 1 "$APTL_QUALIFICATION_SEATS"); do
     seat_id="seat-${index}"
     seat_root="$work/$seat_id"
+    release_dir="$seat_root/launch/release"
     project="$work/client-$seat_id"
     for client in claude codex; do
         if test "$client" = claude; then
@@ -196,9 +198,9 @@ for index in $(seq 1 "$APTL_QUALIFICATION_SEATS"); do
     done
     "$work/venv/bin/aptl" seat reset \
         --seat-root "$seat_root" --seat-id "$seat_id" \
-        --release-dir "$seat_root/release" \
-        --release-public-key "$seat_root/release/candidate-public.pem" \
-        --qualification-public-key "$seat_root/release/candidate-public.pem"
+        --release-dir "$release_dir" \
+        --release-public-key "$release_dir/candidate-public.pem" \
+        --qualification-public-key "$release_dir/candidate-public.pem"
 done
 clean_reset_seconds=$(($(date +%s) - reset_started))
 
@@ -217,9 +219,9 @@ done
 warm_started=$(date +%s)
 "$work/venv/bin/aptl" seat start \
     --seat-root "$work/seat-1" --seat-id seat-1 \
-    --release-dir "$work/seat-1/release" \
-    --release-public-key "$work/seat-1/release/candidate-public.pem" \
-    --qualification-public-key "$work/seat-1/release/candidate-public.pem" \
+    --release-dir "$work/seat-1/launch/release" \
+    --release-public-key "$work/seat-1/launch/release/candidate-public.pem" \
+    --qualification-public-key "$work/seat-1/launch/release/candidate-public.pem" \
     --mapping "participant,tcp,127.0.0.1,13001,127.0.0.1,3000" \
     --mapping "recovery,tcp,127.0.0.1,14001,127.0.0.1,8400" \
     --mapping "host-mcp,tcp,127.0.0.1,15001,127.0.0.1,2222" \
@@ -234,9 +236,9 @@ warm_start_seconds=$(($(date +%s) - warm_started))
 second_reset_started=$(date +%s)
 "$work/venv/bin/aptl" seat reset \
     --seat-root "$work/seat-1" --seat-id seat-1 \
-    --release-dir "$work/seat-1/release" \
-    --release-public-key "$work/seat-1/release/candidate-public.pem" \
-    --qualification-public-key "$work/seat-1/release/candidate-public.pem"
+    --release-dir "$work/seat-1/launch/release" \
+    --release-public-key "$work/seat-1/launch/release/candidate-public.pem" \
+    --qualification-public-key "$work/seat-1/launch/release/candidate-public.pem"
 clean_reset_seconds=$((clean_reset_seconds + $(date +%s) - second_reset_started))
 
 : >"$work/resource-sampling.stop"

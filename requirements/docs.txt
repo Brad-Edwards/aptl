@@ -629,6 +629,7 @@ packaging==26.3 \
     --hash=sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79 \
     --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
     # via
+    #   aptl-labs
     #   hatchling
     #   mkdocs
     #   raes
@@ -780,9 +781,9 @@ pyjwt==2.13.0 \
     --hash=sha256:41571c89ca91598c79e8ef18a2d07367d4810fbbd6f637794879baf1b7703423 \
     --hash=sha256:66adcc2aff09b3f1bbd95fc1e1577df8ac8723c978552fd43304c8a290ac5728
     # via mcp
-pymdown-extensions==11.0.1 \
-    --hash=sha256:db3943a62bab7e03af1364f0c4083e64b91fb097675a4b6cceccfbe9a77e5eb2 \
-    --hash=sha256:dd2905ae6fc5b75582fafb139a1266ffc754705efa902aa50067fa7ff4f94ec0
+pymdown-extensions==11.0.2 \
+    --hash=sha256:259910762019732caa1dfd76f3faa62c59f191d46573e80bcb1d13c0f675bbe5 \
+    --hash=sha256:9506fcbe66fa355a775b768084334238dd6805020ac4b92bea0c0dda6f8f223d
     # via mkdocs-material
 python-dateutil==2.9.0.post0 \
     --hash=sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3 \
@@ -875,15 +876,15 @@ pyyaml-env-tag==1.1 \
     --hash=sha256:17109e1a528561e32f026364712fee1264bc2ea6715120891174ed1b980d2e04 \
     --hash=sha256:2eb38b75a2d21ee0475d6d97ec19c63287a7e140231e4214969d0eac923cd7ff
     # via mkdocs
-raes==4.1.0 \
-    --hash=sha256:25ef831a62b8138c9a7bf556ca1eacf88de80aca28908981b9e85931c042a8c9 \
-    --hash=sha256:283f4b1a57cadd9cc7e0bda0a6b468ea784c4f060ebb7829052e861c85d58d09
+raes==5.0.0 \
+    --hash=sha256:4baa4f7addb1c6ed624ee6eeed961e41937a10512dccad86f8345f94d2389840 \
+    --hash=sha256:6e36a11dcc05ba1dc4024b8ce927ddb68721b3658730517c9211fd7d7e88489f
     # via
     #   aptl-labs
     #   raes-env-packs
-raes-env-packs==6.0.0 \
-    --hash=sha256:0a0bf52b3fa72e362743231676cb260a77c628021b821030a366f88991a7b62a \
-    --hash=sha256:1b0acb58b5708fc79e7a30761b98bd7e4a962835ee7456035739e6ec5b9f06b4
+raes-env-packs==6.0.1 \
+    --hash=sha256:17dd038296d913a08c6936ab2ea9ff357506eb3ca100fb6e2552b4feaedb10b8 \
+    --hash=sha256:d9be57c5b2e1c2b37a1ed251396a67f38c80387fe523dd8f8bee6f74444e3233
     # via aptl-labs
 referencing==0.37.0 \
     --hash=sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231 \
@@ -1103,16 +1104,16 @@ typing-extensions==4.16.0 \
     #   referencing
     #   starlette
     #   typing-inspection
-typing-inspection==0.4.2 \
-    --hash=sha256:4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7 \
-    --hash=sha256:ba561c48a67c5958007083d386c3295464928b01faa735ab8547c5692e87f464
+typing-inspection==0.4.4 \
+    --hash=sha256:547274fa6b0a561ccf549cc9524b999a578e737d015d8709d021f9d0d13bea47 \
+    --hash=sha256:65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147
     # via
     #   fastapi
     #   mcp
     #   pydantic
-tzdata==2026.3 ; sys_platform == 'win32' \
-    --hash=sha256:4a1518b8993086a7982523e071643f3c0e5f213e75b21318e78bcabfff9d1415 \
-    --hash=sha256:dc096730c87af6cab1b171c9d532be840741ff5d459015e7f6947bd7d7e54931
+tzdata==2026.4 ; sys_platform == 'win32' \
+    --hash=sha256:c2169a8b0a7a5e9674da5a135ccdfb2b3e671b333ed9fed17b41f73c34476e81 \
+    --hash=sha256:f1b8bd365d8d210c55353f4d7f8d6d8561c0ba50d704b700d195a9424bba0d79
     # via mkdocs-git-revision-date-localized-plugin
 univers==32.0.1 \
     --hash=sha256:50a574ff2321e31e1eba7aa586bf63a9558d91c69c70316bf26c75e1b122499b \

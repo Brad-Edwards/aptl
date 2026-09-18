@@ -11,7 +11,41 @@ test "$(id -u)" -eq 0
 test -f "$payload_archive"
 test ! -e "$payload_dir"
 install -d -m 0700 "$payload_dir"
-tar --extract --file "$payload_archive" --directory "$payload_dir" --no-same-owner
+# Bootstrap cannot import APTL yet. Admit a regular-file-only archive namespace
+# before installing anything; the signed release verifier authenticates bytes.
+python3 - "$payload_archive" "$payload_dir" <<'PYTHON'
+import pathlib
+import shutil
+import sys
+import tarfile
+
+root = pathlib.Path(sys.argv[2])
+with tarfile.open(sys.argv[1], 'r:') as archive:
+    members = archive.getmembers()
+    seen, files = set(), set()
+    if len(members) > 500000 or sum(item.size for item in members) > 500 * 1024**3:
+        raise SystemExit('payload limits exceeded')
+    for item in members:
+        name = item.name.rstrip('/')
+        path = pathlib.PurePosixPath(name)
+        if (not name or path.is_absolute() or '\\' in name or '\0' in name
+                or any(part in {'', '.', '..'} for part in name.split('/'))
+                or name in seen or not (item.isfile() or item.isdir())):
+            raise SystemExit('unsafe payload member')
+        seen.add(name)
+        if item.isfile():
+            files.add(name)
+    if any(parent.as_posix() in files for name in seen for parent in pathlib.PurePosixPath(name).parents):
+        raise SystemExit('payload file used as a directory')
+    for item in members:
+        target = root / item.name
+        target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if item.isdir():
+            target.mkdir(exist_ok=True, mode=0o700)
+        else:
+            with target.open('xb') as output, archive.extractfile(item) as source:
+                shutil.copyfileobj(source, output, 1024 * 1024)
+PYTHON
 
 test -d "$payload_dir/wheelhouse"
 test -f "$payload_dir/project.tar"
@@ -20,16 +54,16 @@ test -f "$payload_dir/appliance-release.env"
 test -f "$payload_dir/aptl-appliance-first-boot"
 test -f "$payload_dir/aptl-appliance-first-boot.service"
 
-. "$payload_dir/appliance-release.env"
-: "${APTL_APPLIANCE_VERSION:?missing staged APTL version}"
-python3 -m pip install --no-index \
+python3 -m pip install --no-index --only-binary=:all: --require-hashes \
     --find-links "$payload_dir/wheelhouse" \
-    "aptl-labs==$APTL_APPLIANCE_VERSION"
+    -r "$payload_dir/requirements.txt"
+aptl appliance validate-inputs --staging-dir "$payload_dir"
 
 install -d -m 0755 /opt/aptl/project
 tar --extract --file "$payload_dir/project.tar" \
     --directory /opt/aptl/project --no-same-owner
 install -d -m 0755 /opt/aptl/offline
+install -m 0444 "$payload_dir/inputs.json" /opt/aptl/offline/inputs.json
 install -m 0444 "$payload_dir/oci-images.tar" \
     /opt/aptl/offline/oci-images.tar
 

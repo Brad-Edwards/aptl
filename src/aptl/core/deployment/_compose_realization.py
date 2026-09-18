@@ -12,6 +12,7 @@ from aptl.core.deployment._compose_observability import ComposeObservabilityMixi
 from aptl.core.deployment._compose_capture_apparatus import (
     ComposeCaptureApparatusMixin,
 )
+from aptl.core.deployment._compose_traffic_mirror import ComposeTrafficMirrorMixin
 from aptl.core.deployment._compose_content_realization import (
     ComposeRealizationContentMixin,
 )
@@ -75,6 +76,7 @@ __all__ = [
 
 
 class ComposeRealizationMixin(
+    ComposeTrafficMirrorMixin,
     ComposeCaptureApparatusMixin,
     ComposeObservabilityMixin,
     ComposeRuntimeOrchestrationRouteMixin,
@@ -135,6 +137,11 @@ class ComposeRealizationMixin(
         """
 
         observation_context = observation_context or DeploymentObservationContext()
+        attempt_id = observation_context.attempt_id or self._resource_attempt_id
+        ownership = self._ensure_resource_ownership()
+        self._ensure_resource_ownership(
+            attempt_id=attempt_id or ownership.new_attempt_id()
+        )
         failure = self._realization_preflight(
             realization, scenario_root, substrate_digests
         )
@@ -160,6 +167,8 @@ class ComposeRealizationMixin(
         """Run ordered backend preflights before any scenario mutation."""
 
         failure = self._capture_apparatus_preflight(realization, scenario_root)
+        if failure is None:
+            failure = self._traffic_mirror_preflight(realization)
         if failure is None:
             failure = self._observability_preflight(realization, scenario_root)
         if failure is None:

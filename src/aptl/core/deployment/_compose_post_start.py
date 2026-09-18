@@ -14,6 +14,9 @@ from aptl.core.deployment._compose_service_health import (
     runtime_expects_completion,
     wait_for_realized_health,
 )
+from aptl.core.deployment._declared_listener_readiness import (
+    await_declared_listeners,
+)
 from aptl.core.deployment._compose_runtime_observation import (
     ComposeRuntimeOrchestrationObservationMixin,
 )
@@ -21,6 +24,12 @@ from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.lab_types import LabResult
+from aptl.core.deployment._forwarding_agent_realization import (
+    realize_forwarding_agents,
+)
+from aptl.core.deployment._application_provider_realization import (
+    realize_application_providers,
+)
 
 
 class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMixin):
@@ -35,9 +44,10 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
         """Return the final result after start, network, health, and accounts.
 
         Ordering is load-bearing: networks are reconciled, then services must be
-        observed healthy, then accounts are realized. Account realization execs
-        into the running node containers (``container_exec``), so it cannot run
-        until those containers are up and healthy — the health wait gates it.
+        observed healthy and listening on what the scenario declares, then
+        accounts are realized. Account realization execs into the running node
+        containers (``container_exec``), so it cannot run until those containers
+        are up — the health and listener waits gate it.
         """
 
         if not start_result.success:
@@ -58,35 +68,33 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
         """
 
         result: LabResult | None = None
-        network_failures = self._reconcile_realization_networks(realization)
-        if network_failures:
-            result = LabResult(
-                success=False,
-                error="; ".join(network_failures[:5]),
-            )
-        if result is None:
-            health_failures = self._await_realized_service_health(realization)
-            if health_failures:
-                result = LabResult(
-                    success=False,
-                    error="; ".join(health_failures[:5]),
+        steps = (
+            lambda: _failure_result(self._reconcile_realization_networks(realization)),
+            lambda: _failure_result(self._await_realized_service_health(realization)),
+            lambda: _failure_result(self._realize_traffic_mirrors(realization)),
+            lambda: _failure_result(
+                realize_application_providers(self, realization.nodes)
+            ),
+            lambda: _failure_result(realize_forwarding_agents(self, realization.nodes)),
+            # After providers: an application provider starts the process that
+            # binds its declared listener, so waiting any earlier waits for a
+            # service nothing has started yet.
+            lambda: _failure_result(
+                await_declared_listeners(self, tuple(realization.nodes))
+            ),
+            lambda: self._verify_stateful_authenticated_readiness(realization),
+            lambda: self._verify_runtime_orchestration(realization),
+            lambda: self._realize_accounts_step(realization),
+            lambda: _failure_result(
+                self._retire_completed_autoremove_nodes(
+                    realization, observation_context
                 )
-        if result is None:
-            result = self._verify_stateful_authenticated_readiness(realization)
-        if result is None:
-            result = self._verify_runtime_orchestration(realization)
-        if result is None:
-            result = self._realize_accounts_step(realization)
-        if result is None:
-            retirement_failures = self._retire_completed_autoremove_nodes(
-                realization,
-                observation_context,
-            )
-            if retirement_failures:
-                result = LabResult(
-                    success=False,
-                    error="; ".join(retirement_failures[:5]),
-                )
+            ),
+        )
+        for step in steps:
+            result = step()
+            if result is not None:
+                break
         return result or LabResult(success=True, message="Lab realized")
 
     def _await_realized_service_health(
@@ -137,3 +145,9 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
                 success=False,
                 error=f"Account realization timed out: {exc}",
             )
+
+
+def _failure_result(failures: list[str]) -> LabResult | None:
+    """Convert bounded step failures into the common post-start result."""
+
+    return LabResult(success=False, error="; ".join(failures[:5])) if failures else None

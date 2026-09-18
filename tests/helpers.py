@@ -526,3 +526,141 @@ def techvault_scenario_bundle(staging_root: Path):
 def techvault_scenario_path(staging_root: Path) -> Path:
     """Staged SDL path of the default TechVault env-pack scenario (#875)."""
     return techvault_scenario_bundle(staging_root).sdl_path
+
+
+def docker_ps_inventory_row(
+    name: str,
+    image: str = "victim:latest",
+    container_id: str = "abc",
+    status: str = "Up 1 minute",
+    state: str = "running",
+    labels: str = "com.docker.compose.project=test",
+    ports: str = "",
+) -> str:
+    """Render one `docker ps --format '{{json .}}'` row.
+
+    The project inventory reads JSON rather than tab-delimited columns because
+    image labels are arbitrary text: Ubuntu 26.04 ships an
+    `org.opencontainers.image.description` containing newlines, which split one
+    container across several "rows" and made the inventory unparseable (issue
+    #1006).
+    """
+    return json.dumps(
+        {
+            "Names": name,
+            "Image": image,
+            "ID": container_id,
+            "Status": status,
+            "State": state,
+            "Labels": labels,
+            "Ports": ports,
+        }
+    )
+
+
+def dockerfile_copies(dockerfile: Path) -> list[tuple[str, str]]:
+    """Return the (source, destination) pairs a Dockerfile actually COPYs.
+
+    Tests that assert on Dockerfile content must look at instructions, not at
+    text: a comment mentioning a destination, or a source and destination that
+    appear in different instructions, satisfied the old independent-substring
+    checks while the real COPY was wrong (issue #1006). Comments are ignored,
+    line continuations are joined, and `--flag=value` options are skipped. A
+    multi-source COPY yields one pair per source.
+    """
+    logical: list[str] = []
+    pending = ""
+    for raw in dockerfile.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not pending and (not line or line.startswith("#")):
+            continue
+        if line.endswith("\\"):
+            pending += line[:-1] + " "
+            continue
+        logical.append(pending + line)
+        pending = ""
+    pairs: list[tuple[str, str]] = []
+    for instruction in logical:
+        words = instruction.split()
+        if not words or words[0].upper() != "COPY":
+            continue
+        operands = [word for word in words[1:] if not word.startswith("--")]
+        if len(operands) < 2:
+            continue
+        *sources, destination = operands
+        pairs.extend((source, destination) for source in sources)
+    return pairs
+
+
+# ---------------------------------------------------------------------------
+# Workspace-scoped backend resources (#1054)
+# ---------------------------------------------------------------------------
+
+
+def realized_container_name(backend, semantic_name: str) -> str:
+    """Return the external name this backend's workspace gives a container.
+
+    Backend resources carry workspace-scoped external names recorded in
+    ownership receipts, so concurrent labs cannot collide. ``container_exec``
+    and friends resolve a semantic name through those receipts themselves; a
+    test that shells out to ``docker`` has to ask what the container is really
+    called instead of assuming the name the scenario declared.
+    """
+
+    return backend._ensure_resource_ownership().container_name(semantic_name)
+
+
+def realized_project_name(backend) -> str:
+    """Return the workspace-scoped Compose project name a backend realizes under.
+
+    Networks are named ``<project>_<network>``, and the project itself carries
+    the workspace suffix, so a test that names a network directly has to build
+    it from this rather than from the project name it passed in.
+    """
+
+    return backend._ensure_resource_ownership().project_name
+
+
+def run_owned_container(backend, semantic_name: str, image_args: list[str]) -> str:
+    """Start a container this backend owns and return its native id.
+
+    A backend resolves a selector only through its own ownership receipts, so a
+    container started behind its back is invisible to it — correctly, because a
+    backend must not reach resources outside its workspace. A test that needs
+    the backend to observe a container it did not realize therefore has to give
+    it a real one: workspace-scoped name, workspace labels, recorded receipt.
+
+    ``image_args`` is everything from the image reference onward.
+    """
+
+    from aptl.core.deployment._compose_resource_ownership import ResourceReceipt
+
+    ownership = backend._ensure_resource_ownership()
+    attempt_id = backend._resource_attempt_id
+    external = ownership.container_name(semantic_name)
+    labels: list[str] = []
+    for label, value in ownership.labels(attempt_id=attempt_id).items():
+        labels.extend(("--label", f"{label}={value}"))
+    created = subprocess.run(
+        ["docker", "run", "-d", "--name", external, *labels, *image_args],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=120,
+    )
+    native_id = created.stdout.strip()
+    ownership.record(
+        ResourceReceipt(
+            kind="container",
+            native_id=native_id,
+            external_name=external,
+            semantic_name=semantic_name,
+            node_address=f"test.{semantic_name}",
+            workspace_id=ownership.workspace_id,
+            project_name=ownership.project_name,
+            daemon_id=backend._ownership_daemon_id(),
+            attempt_id=attempt_id,
+            managed_by="direct",
+        )
+    )
+    return native_id

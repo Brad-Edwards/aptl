@@ -23,6 +23,7 @@ from raes_contracts.vocabulary import RealizationVerificationScope
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 
 from aptl.backends._raes_observation_helpers import ObservedResource
+from aptl.backends.raes_planning_compat import DAEMON_READBACK_RUNTIME_CONCERNS
 
 _GUEST_RUNTIME_CONCERNS = frozenset(
     {
@@ -42,7 +43,13 @@ def operational_realization_observations(
     envelope: BackendRealizationEnvelopeModel,
     previous: tuple[RealizationObservationDisclosure, ...] = (),
 ) -> tuple[RealizationObservationDisclosure, ...]:
-    """Bind native substrate and guest OS reads to this exact apply operation."""
+    """Return newly bound native observations for this exact apply operation.
+
+    ``previous`` is already present in the returned snapshot. RAES appends this
+    tuple to that snapshot during finalization, so returning a retained prior
+    disclosure here would duplicate its concern identity and invalidate the
+    entire apply result.
+    """
 
     if plan.operation_id is None or plan.realization_envelope != envelope.identity:
         return ()
@@ -60,11 +67,28 @@ def operational_realization_observations(
         envelope=envelope,
         previous=substrate,
     )
-    return _bind_guest_runtime_observations(
+    bound = _bind_runtime_observations(
         plan=plan,
         observations=observations,
         previous=bound,
+        concern_kinds=DAEMON_READBACK_RUNTIME_CONCERNS | {"forwarding-agents"},
+        observation_strength=ObservationStrength.DAEMON_OBSERVED,
     )
+    bound = _bind_runtime_observations(
+        plan=plan,
+        observations=observations,
+        previous=bound,
+        concern_kinds=_GUEST_RUNTIME_CONCERNS,
+        observation_strength=ObservationStrength.GUEST_OBSERVED,
+    )
+    existing = {_disclosure_key(item) for item in previous}
+    return tuple(item for item in bound if _disclosure_key(item) not in existing)
+
+
+def _disclosure_key(item: RealizationObservationDisclosure) -> tuple[str, ...]:
+    """Return the RuntimeSnapshot uniqueness key for one disclosure."""
+
+    return (item.address, item.field_path, item.domain, item.requirement_kind)
 
 
 def _native_observations(
@@ -149,18 +173,20 @@ def _operating_system_observation(
     )
 
 
-def _bind_guest_runtime_observations(
+def _bind_runtime_observations(
     *,
     plan: ProvisioningPlan,
     observations: Mapping[str, ObservedResource],
     previous: tuple[RealizationObservationDisclosure, ...],
+    concern_kinds: frozenset[str],
+    observation_strength: ObservationStrength,
 ) -> tuple[RealizationObservationDisclosure, ...]:
-    """Disclose only runtime concerns actually read back from the guest."""
+    """Disclose only runtime concerns actually returned by a native reader."""
 
     authorities = tuple(
         authority
         for authority in plan.realization_authority
-        if authority.requirement_kind in _GUEST_RUNTIME_CONCERNS
+        if authority.requirement_kind in concern_kinds
     )
     replaced = {
         (
@@ -194,7 +220,7 @@ def _bind_guest_runtime_observations(
                     domain=authority.domain,
                     requirement_kind=authority.requirement_kind,
                     verification_scope=RealizationVerificationScope.CONFIGURATION,
-                    observation_strength=ObservationStrength.GUEST_OBSERVED,
+                    observation_strength=observation_strength,
                 )
             )
     return (*retained, *disclosed)

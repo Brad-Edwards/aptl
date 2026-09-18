@@ -11,6 +11,8 @@ from __future__ import annotations
 import hashlib
 from types import SimpleNamespace
 
+from aptl.backends import _raes_observation_ordering as observation_ordering
+
 from raes_contracts.planning import (
     ChangeAction,
     PlannedResource,
@@ -39,6 +41,94 @@ from aptl.core.deployment._compose_realization_networks import _concrete_network
 from aptl.core.deployment.errors import BackendTimeoutError
 
 _PROJECT = "aptl"
+
+
+def test_techvault_order_alignment_only_reorders_equivalent_collections():
+    declared = {
+        "members": [
+            {"id": "first", "groups": ["red", "blue"]},
+            {"id": "second", "groups": ["green"]},
+        ]
+    }
+    observed = {
+        "members": [
+            {"id": "second", "groups": ["green"]},
+            {"id": "first", "groups": ["blue", "red"]},
+        ]
+    }
+
+    assert observation_ordering._align_equivalent_value(declared, observed) == declared
+
+    observed["members"][1]["groups"] = ["blue", "wrong"]
+    assert (
+        observation_ordering._align_equivalent_value(declared, observed)
+        is observation_ordering._MISSING
+    )
+
+
+def test_techvault_order_alignment_uses_declared_operation_not_typed_resource():
+    from dataclasses import replace
+
+    from aptl.backends._raes_observation_helpers import ObservedResource
+    from aptl.backends.raes_runtime_attestation import (
+        TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST,
+    )
+    from aptl.core.scenario_bundle import PackIdentity
+
+    authored = [
+        {"path": "/first", "entry_type": "directory"},
+        {"path": "/second", "entry_type": "directory"},
+    ]
+    normalized = list(reversed(authored))
+    address = "provision.node.vm"
+    pointer = "/spec/node/runtime/filesystem_inventory"
+    path = ("spec", "node", "runtime", "filesystem_inventory")
+    resource_payload = {
+        "spec": {"node": {"runtime": {"filesystem_inventory": normalized}}}
+    }
+    operation_payload = {
+        "spec": {"node": {"runtime": {"filesystem_inventory": authored}}}
+    }
+    resource = PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="node",
+        payload=resource_payload,
+    )
+    operation = ProvisionOp(
+        action=ChangeAction.CREATE,
+        address=address,
+        resource_type="node",
+        payload=operation_payload,
+    )
+    authority = SimpleNamespace(
+        address=address,
+        requirement_kind="runtime-filesystem-inventory",
+        payload_pointer=pointer,
+        constraint_document=object(),
+    )
+    plan = replace(
+        ProvisioningPlan(resources={address: resource}, operations=[operation]),
+        realization_authority=(authority,),
+    )
+
+    result = observation_ordering.align_techvault_identity_collection_observations(
+        plan=plan,
+        observations={
+            address: ObservedResource(
+                realized=True,
+                concerns={path: normalized},
+            )
+        },
+        pack_identity=PackIdentity(
+            pack_id="techvault",
+            pack_version="0.1.0",
+            set_digest=TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST,
+        ),
+    )
+
+    observed = result[address].concerns[path]
+    assert [item["path"] for item in observed] == ["/first", "/second"]
 
 
 class _Backend:
@@ -307,6 +397,24 @@ def test_guest_os_readback_uses_retained_filesystem_after_one_shot_exit():
     assert identity.family == "linux"
     assert identity.distribution == "debian"
     assert identity.version == "12"
+
+
+def test_guest_os_readback_normalizes_supported_product_release_lines():
+    from aptl.backends.raes_operating_systems import parse_os_release
+
+    identities = [
+        parse_os_release('ID="almalinux"\nVERSION_ID="9.8"\n'),
+        parse_os_release('ID="alpine"\nVERSION_ID="3.21.7"\n'),
+        parse_os_release('ID="rocky"\nVERSION_ID="9.3"\n'),
+        parse_os_release('ID="debian"\nVERSION_ID="13"\n'),
+    ]
+
+    assert [(item.distribution, item.version) for item in identities if item] == [
+        ("x-aptl:almalinux", "9"),
+        ("x-aptl:alpine", "3.21"),
+        ("rocky-linux", "9"),
+        ("debian", "13"),
+    ]
 
 
 _DECLARED_TOPOLOGY = {
@@ -757,6 +865,7 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
                 "target_address": "provision.node.wazuh-indexer",
                 "mount_destination": "/usr/share/wazuh-indexer/certs",
                 "access_mode": "read_only",
+                "delivery_mode": "mount",
             }
         ],
         "environment_consumers": [],

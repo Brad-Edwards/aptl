@@ -965,14 +965,11 @@ class TestDefaultTargets:
             ), f"docker-compose.yml has no '{needle}' declaration"
 
     def test_default_targets_count_pins_audit_surface(self) -> None:
-        # Pin the size so accidental additions or removals fail loudly.
-        # Combined with ``test_targets_are_real_compose_services`` and
-        # ``test_every_default_target_has_net_admin``, this gives full
-        # drift protection on the AR-capable agent set without coupling
-        # to another test module.
+        # The audit surface remains the in-process-agent set. The audit does
+        # not grant missing capabilities; inability to inspect is a reported
+        # AUDIT_FAILED outcome.
         from aptl.core.continuity import default_targets
 
-        assert len(default_targets()) == 4
         assert set(default_targets()) == {
             "aptl-webapp",
             "aptl-fileshare",
@@ -980,52 +977,25 @@ class TestDefaultTargets:
             "aptl-dns",
         }
 
-    def test_every_default_target_has_net_admin(self, tmp_path) -> None:
-        # Drift guard: if anyone removes NET_ADMIN from one of the default
-        # targets, this test fails before the audit silently breaks in
-        # production. webapp/fileshare/dns are realized generically from
-        # the SDL (issue #581) — never Compose-started — so their
-        # capability grant lives in runtime.linux_capabilities.add, not
-        # compose cap_add; ad is still Compose-managed, so its grant is
-        # still checked there.
+    def test_closed_capability_scopes_are_not_default_targets(self, tmp_path) -> None:
+        """No closed TechVault node is silently made audit-capable."""
+
         from raes import parse_sdl_file
 
         from aptl.core.continuity import default_targets
 
         from tests.helpers import techvault_scenario_path
 
-        compose_text = (PROJECT_ROOT / "docker-compose.yml").read_text()
         scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
+        closed_nodes = {"webapp", "fileshare", "ad", "dns"}
 
-        for target in default_targets():
-            node_name = target.removeprefix("aptl-")
-            node = scenario.nodes.get(node_name)
-            if node is not None and node.runtime is not None:
-                caps = node.runtime.linux_capabilities
-                assert caps is not None
-                assert "CAP_NET_ADMIN" in caps.add, (
-                    f"{target}'s SDL node must declare "
-                    "runtime.linux_capabilities.add: [CAP_NET_ADMIN]; iptables "
-                    "audit will fail there otherwise. Either add the "
-                    "capability or remove the target from default_targets()."
-                )
-                continue
-            # Locate the per-service block by container_name and walk
-            # forward until the next service to find that target's
-            # cap_add list.
-            anchor = f"container_name: {target}\n"
-            idx = compose_text.find(anchor)
-            assert idx >= 0, f"no compose entry for {target}"
-            # Slice from this anchor to the next "container_name:" or
-            # the end of the file — that's roughly this service's body.
-            tail = compose_text[idx:]
-            next_anchor = tail.find("\n    container_name: ", 1)
-            block = tail[:next_anchor] if next_anchor > 0 else tail
-            assert "NET_ADMIN" in block, (
-                f"{target} compose block lacks NET_ADMIN; iptables audit"
-                " will fail there. Either add the cap or remove the"
-                " target from default_targets()."
-            )
+        assert {
+            target.removeprefix("aptl-") for target in default_targets()
+        } == closed_nodes
+        assert all(
+            scenario.nodes[name].runtime.linux_capabilities is None
+            for name in closed_nodes
+        )
 
 
 # Reused live-lab target. ``aptl-webapp`` is in IN_PROCESS_TARGETS

@@ -182,8 +182,16 @@ class ComposeRealizationImageMixin:
         disclosure rather than an assumed match.
         """
 
+        resolver = getattr(self, "_resolve_owned_container_id", None)
+        native_id = resolver(container_name) if callable(resolver) else container_name
         container = self._run(
-            ["docker", "inspect", "--format", "{{.Image}}", container_name],
+            [
+                "docker",
+                "inspect",
+                "--format",
+                "{{.Image}}",
+                native_id,
+            ],
             timeout=_IMAGE_REALIZATION_TIMEOUT,
         )
         if container.returncode != 0:
@@ -221,8 +229,16 @@ class ComposeRealizationImageMixin:
         refused disclosure, not an assumed match).
         """
 
+        resolver = getattr(self, "_resolve_owned_container_id", None)
+        native_id = resolver(container_name) if callable(resolver) else container_name
         container = self._run(
-            ["docker", "inspect", "--format", "{{.Image}}", container_name],
+            [
+                "docker",
+                "inspect",
+                "--format",
+                "{{.Image}}",
+                native_id,
+            ],
             timeout=_IMAGE_REALIZATION_TIMEOUT,
         )
         if container.returncode != 0:
@@ -404,35 +420,6 @@ class ComposeRealizationImageMixin:
             newline="\n",
         )
         return override_path
-
-    def _start_with_compose_files(
-        self,
-        profiles: list[str],
-        *,
-        build: bool,
-        compose_files: tuple[Path, ...],
-        exclude_services: tuple[str, ...] = (),
-        only_services: tuple[str, ...] = (),
-        scenario_root: Path | None = None,
-    ) -> LabResult:
-        """Start lab services using a generated realization override."""
-
-        cmd = self._build_command(
-            "up", profiles, compose_files=compose_files, scenario_root=scenario_root
-        )
-        build = build and not self._offline_staged
-        if build:
-            cmd.append("--build")
-        if self._offline_staged:
-            cmd.extend(["--pull", "never"])
-        cmd.append("-d")
-        for service in exclude_services:
-            cmd += ["--scale", f"{service}=0"]
-        cmd.extend(only_services)
-        result = self._run(cmd)
-        if result.returncode != 0:
-            return LabResult(success=False, error=result.stderr)
-        return LabResult(success=True, message="Lab started")
 
     def _start_realized_services(
         self,

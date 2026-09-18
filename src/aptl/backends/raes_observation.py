@@ -37,11 +37,13 @@ from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 from aptl.backends._raes_observation_helpers import (
     ObservedResource,
     container_realized as _container_realized,
-    network_realized as _network_realized,
     observed_content_type as _observed_content_type,
     observed_domain_topology as _observed_domain_topology,
     observed_os_family as _observed_os_family,
     settled_inspect as _settled_inspect,
+)
+from aptl.backends._raes_network_observation import (
+    network_realized as _network_realized,
 )
 from aptl.backends._raes_guest_os_observation import (
     guest_operating_system as _guest_operating_system,
@@ -52,6 +54,9 @@ from aptl.backends._raes_operational_observation import (
 from aptl.backends._raes_observation_index import (
     RealizationObservationIndex,
     build_observation_index,
+)
+from aptl.backends._raes_observation_ordering import (
+    align_techvault_identity_collection_observations,
 )
 from aptl.backends._raes_stateful_observation import (
     _observe_generated_artifact,
@@ -125,7 +130,11 @@ def observe_realization(
         observations,
         observation_context,
     )
-    return observations
+    return align_techvault_identity_collection_observations(
+        plan=plan,
+        observations=observations,
+        pack_identity=realization.pack_identity,
+    )
 
 
 def _observe_planned_resource(

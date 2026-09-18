@@ -167,8 +167,8 @@ class TestComposeConsistency:
         assert "/seed/suricata.yaml" in entrypoint
         assert "exec /docker-entrypoint.sh" in entrypoint
 
-    def test_suricata_live_capture_disables_container_checksum_validation(self):
-        """Container offload artifacts must not prevent HTTP rule inspection."""
+    def test_legacy_suricata_config_disables_container_checksum_validation(self):
+        """The in-tree legacy scenario keeps its live-capture checksum policy."""
 
         config = yaml.safe_load(
             (PROJECT_ROOT / "config/suricata/suricata.yaml").read_text(
@@ -178,14 +178,8 @@ class TestComposeConsistency:
 
         assert config["pcap"] == [{"interface": "any", "checksum-checks": False}]
 
-        fixup = (PROJECT_ROOT / "scripts/envpack-suricata-fixups.sh").read_text(
-            encoding="utf-8"
-        )
         seed = (PROJECT_ROOT / "scripts/seed-prime.sh").read_text(encoding="utf-8")
-        assert "CONFIG_CHANGED=1" in fixup
-        assert 'docker restart "$SURICATA_CTR"' in fixup
-        assert "suricatasc -c ruleset-stats" in fixup
-        assert "refusing to report a ready lab" in seed
+        assert "envpack-suricata-fixups" not in seed
 
     def test_otel_collector_healthcheck_uses_image_binary(self):
         """The OTEL collector image is distroless, so the healthcheck cannot
@@ -294,43 +288,24 @@ class TestKaliContainerLifecycle:
         assert "ssh.service" in unit_names, "kali must run and verify sshd"
         assert "kali-capture-bootstrap.service" not in unit_names
 
-    def test_kali_loopback_ssh_proxy_matches_mcp_red(self, compose_config):
-        """mcp-red must use a host-routable Kali SSH endpoint.
+    def test_kali_has_no_scenario_declared_host_proxy(self, compose_config):
+        """Kali's host-routable endpoint is backend apparatus, not a scenario node.
 
-        Docker VM backends do not route Compose bridge IPs back to the host,
-        so the SSH-based MCP server needs the loopback-only proxy published
-        by docker-compose.yml.
+        The old `kali-ssh-proxy` service published 127.0.0.1:2023 for host-run
+        MCP clients. TechVault declares no such node, nothing started it, and it
+        has been removed (issue #1006). Operator access is declared as
+        `agents.red-team-operator.interactive_access` and is the backend's to
+        provide and disclose; this test pins only that the scenario does not
+        reintroduce a proxy node of its own.
         """
         services = compose_config["services"]
+        assert "kali-ssh-proxy" not in services
+        assert "webapp-proxy" not in services
         kali = services["kali"]
         assert "aptl-control" not in kali.get("networks", {}), (
-            "kali must not attach to aptl-control; only the SSH proxy should "
-            "publish a host-routable control endpoint"
+            "kali must not attach to aptl-control; host-routable operator "
+            "access is published by backend apparatus, not by the node"
         )
-
-        proxy = services["kali-ssh-proxy"]
-        assert proxy["container_name"] == "aptl-kali-ssh-proxy"
-        resolved_ports = [_resolve_compose_vars(str(p)) for p in proxy.get("ports", [])]
-        assert "127.0.0.1:2023:2023" in resolved_ports, (
-            "kali-ssh-proxy must publish 127.0.0.1:2023 by default so host-run "
-            "MCP clients work on Docker Desktop, Colima, and WSL2"
-        )
-        assert set(proxy.get("networks", {})) == {
-            "aptl-control",
-            "aptl-redteam",
-        }, (
-            "kali-ssh-proxy should bridge only the host-published control "
-            "network and Kali's red-team network"
-        )
-
-        mcp_config = json.loads(
-            (PROJECT_ROOT / "mcp/mcp-red/docker-lab-config.json").read_text(
-                encoding="utf-8"
-            )
-        )
-        kali_mcp = mcp_config["containers"]["kali"]
-        assert kali_mcp["container_ip"] == "localhost"
-        assert kali_mcp["ssh_port"] == 2023
 
 
 class TestCodeReferencesMatchCompose:

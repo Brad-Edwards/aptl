@@ -25,6 +25,9 @@ from aptl.backends.raes_materializer import (
     EnsureDirectoryOp,
     EnsureUserOp,
     InstallDependencyManifestOp,
+    InstallSoftwareComponentOp,
+    ProvisionDomainAuthorityOp,
+    SetFilesystemMetadataOp,
     plan_node_materialization,
 )
 from aptl.backends.raes_materializer_engine import materialize_node
@@ -43,12 +46,17 @@ class _RecordingExecutor:
         self.enabled: set[tuple[str, str]] = set()
         self.active: set[tuple[str, str]] = set()
         self.directories: set[tuple[str, str]] = set()
+        self.filesystem_metadata: set[tuple[str, SetFilesystemMetadataOp]] = set()
         self.dependency_manifests: set[tuple[str, str]] = set()
+        self.software_components: set[tuple[str, str]] = set()
+        self.domain_authorities: set[tuple[str, str, str]] = set()
 
     def ensure_base_substrate(self, node_address: str, image_ref: str) -> None:
         self.base[node_address] = image_ref
 
-    def install_dependency_manifest(self, node_address: str, op: InstallDependencyManifestOp) -> None:
+    def install_dependency_manifest(
+        self, node_address: str, op: InstallDependencyManifestOp
+    ) -> None:
         self.dependency_manifests.add((node_address, op.path))
 
     def observe_dependency_manifest_installed(
@@ -56,13 +64,45 @@ class _RecordingExecutor:
     ) -> bool:
         return (node_address, op.path) in self.dependency_manifests
 
+    def install_software_component(
+        self, node_address: str, op: InstallSoftwareComponentOp
+    ) -> None:
+        self.software_components.add((node_address, op.manifest_path))
+
+    def observe_software_component(
+        self, node_address: str, op: InstallSoftwareComponentOp
+    ) -> bool:
+        return (node_address, op.manifest_path) in self.software_components
+
+    def provision_domain_authority(
+        self, node_address: str, op: ProvisionDomainAuthorityOp
+    ) -> None:
+        self.domain_authorities.add((node_address, op.domain, op.realm))
+
+    def observe_domain_authority(
+        self, node_address: str, op: ProvisionDomainAuthorityOp
+    ) -> bool:
+        return (node_address, op.domain, op.realm) in self.domain_authorities
+
     def ensure_directory(self, node_address: str, op: EnsureDirectoryOp) -> None:
         self.directories.add((node_address, op.path))
 
     def observe_directory(self, node_address: str, path: str) -> bool:
         return (node_address, path) in self.directories
 
-    def install_packages(self, node_address: str, manager: str, packages: tuple[str, ...]) -> None:
+    def set_filesystem_metadata(
+        self, node_address: str, op: SetFilesystemMetadataOp
+    ) -> None:
+        self.filesystem_metadata.add((node_address, op))
+
+    def observe_filesystem_metadata(
+        self, node_address: str, op: SetFilesystemMetadataOp
+    ) -> bool:
+        return (node_address, op) in self.filesystem_metadata
+
+    def install_packages(
+        self, node_address: str, manager: str, packages: tuple[str, ...]
+    ) -> None:
         self.installed.setdefault((node_address, manager), set()).update(packages)
 
     def ensure_group(self, node_address: str, name: str, gid) -> None:
@@ -115,7 +155,9 @@ def _full_runtime() -> RuntimeConfiguration:
 
 class TestMaterializeNode:
     def test_happy_path_materializes_then_verifies_clean(self):
-        ops = plan_node_materialization(os="linux", os_version="", runtime=_full_runtime())
+        ops = plan_node_materialization(
+            os="linux", os_version="", runtime=_full_runtime()
+        )
         ex = _RecordingExecutor()
         result = materialize_node("techvault.wazuh-manager", ops, ex)
         assert result is None
@@ -127,7 +169,9 @@ class TestMaterializeNode:
         assert ("techvault.wazuh-manager", "wazuh-manager.service") in ex.active
 
     def test_unverifiable_package_fails_closed(self):
-        ops = plan_node_materialization(os="linux", os_version="", runtime=_full_runtime())
+        ops = plan_node_materialization(
+            os="linux", os_version="", runtime=_full_runtime()
+        )
 
         class _SilentInstall(_RecordingExecutor):
             def install_packages(self, node_address, manager, packages):
@@ -140,7 +184,9 @@ class TestMaterializeNode:
         assert "wazuh-manager" in (result.error or "")
 
     def test_unverifiable_service_fails_closed(self):
-        ops = plan_node_materialization(os="linux", os_version="", runtime=_full_runtime())
+        ops = plan_node_materialization(
+            os="linux", os_version="", runtime=_full_runtime()
+        )
 
         class _SilentStart(_RecordingExecutor):
             def start_service_unit(self, node_address, unit_name):
@@ -152,7 +198,9 @@ class TestMaterializeNode:
         assert "wazuh-manager.service" in (result.error or "")
 
     def test_backend_error_translates_to_labresult_not_exception(self):
-        ops = plan_node_materialization(os="linux", os_version="", runtime=_full_runtime())
+        ops = plan_node_materialization(
+            os="linux", os_version="", runtime=_full_runtime()
+        )
 
         class _Broken(_RecordingExecutor):
             def install_packages(self, node_address, manager, packages):
@@ -239,6 +287,74 @@ class TestMaterializeNode:
         assert result is not None
         assert result.success is False
         assert "/app/pyproject.toml" in (result.error or "")
+
+    def test_software_component_is_materialized_and_verified(self):
+        runtime = RuntimeConfiguration.model_validate(
+            {
+                "software_components": [
+                    {
+                        "component_id": "mcp-common",
+                        "name": "aptl-mcp-common",
+                        "version": "0.1.0",
+                        "provenance": "dependency_manifest",
+                        "manifest_path": "/opt/mcp/common/package-lock.json",
+                    }
+                ]
+            }
+        )
+        ops = plan_node_materialization(os="linux", os_version="", runtime=runtime)
+        ex = _RecordingExecutor()
+
+        result = materialize_node("techvault.soc", ops, ex)
+
+        assert result is None
+        assert ("techvault.soc", "/opt/mcp/common/package-lock.json") in (
+            ex.software_components
+        )
+
+    def test_unverifiable_software_component_fails_closed(self):
+        runtime = RuntimeConfiguration.model_validate(
+            {
+                "software_components": [
+                    {
+                        "component_id": "mcp-common",
+                        "name": "aptl-mcp-common",
+                        "version": "0.1.0",
+                        "provenance": "dependency_manifest",
+                        "manifest_path": "/opt/mcp/common/package-lock.json",
+                    }
+                ]
+            }
+        )
+        ops = plan_node_materialization(os="linux", os_version="", runtime=runtime)
+
+        class _SilentInstall(_RecordingExecutor):
+            def install_software_component(self, node_address, op):
+                pass
+
+        result = materialize_node("techvault.soc", ops, _SilentInstall())
+
+        assert result is not None
+        assert result.success is False
+        assert "aptl-mcp-common" in (result.error or "")
+
+    def test_domain_provider_is_materialized_and_verified(self):
+        ops = plan_node_materialization(
+            os="linux",
+            os_version="",
+            runtime=RuntimeConfiguration(),
+            backend_provider_kind="samba-active-directory",
+            backend_provider_parameters=(
+                ("domain", "EXAMPLE"),
+                ("realm", "EXAMPLE.TEST"),
+            ),
+        )
+        ex = _RecordingExecutor()
+
+        result = materialize_node("example.ad", ops, ex)
+
+        assert result is None
+        assert ("example.ad", "EXAMPLE", "EXAMPLE.TEST") in ex.domain_authorities
 
     def test_empty_runtime_only_needs_base_substrate(self):
         ops = plan_node_materialization(os="linux", os_version="", runtime=None)

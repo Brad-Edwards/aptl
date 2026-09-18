@@ -28,14 +28,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install --require-hashes -r requirements/ci.txt
-      # Skip the local test hooks here — the dedicated python-tests /
-      # mcp-tests / web-tests jobs below already run them with the right
-      # toolchain (deps installed, node available, etc). The test hooks
-      # exist for local pre-commit safety, not CI redundancy. The Vale
-      # hook is likewise covered by the dedicated docs job below.
-      - run: pre-commit run --all-files --show-diff-on-failure
-        env:
-          SKIP: pytest,vitest-mcp-common,vitest-mcp-red,vitest-web,vale-prose-lint
+      - name: Secrets and fast hygiene
+        run: pre-commit run --all-files --show-diff-on-failure
+      - name: Dependency freshness and complexity (CI only)
+        run: pre-commit run --config .pre-commit-ci.yaml --all-files --show-diff-on-failure
 
   docs:
     name: Docs (Vale prose lint + mkdocs strict build)
@@ -227,14 +223,15 @@ jobs:
   clean-install-lab-boot:
     name: Clean-install lab boot and teardown (DEP-008)
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     # DEP-008 promises `pipx install aptl-labs && aptl lab init && aptl lab start`
     # produces a working lab with no git clone. Nothing proved it: every other
     # job installs the project editable from the checkout, and a developer
     # checkout carries gitignored generated state (config/soc_certs/, .aptl/)
-    # that hides a fresh-install failure entirely. Issue #951 shipped exactly
-    # that failure to PyPI in 5.2.0 — the quick start failed in nine seconds for
-    # every scenario. This boots the smallest curated scenario from the built
-    # wheel in a clean environment so the released artifact is what gets tested.
+    # that hides a fresh-install failure entirely. This boots the smallest
+    # curated scenario from the built wheel to cover materialization and the
+    # install/start/teardown lifecycle. Full TechVault tests are run manually
+    # during related development; this job does not substitute for those tests.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -347,6 +344,24 @@ jobs:
             fi
             cd -
           done
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Restricted SSH transport against built MCP processes
+        # Exercises real OpenSSH, dispatcher, relay and MCP processes. Deployment
+        # observations are fixtures; this job does not boot or qualify a lab.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssh-server
+          pip install --require-hashes -r requirements/dev.txt
+          pip install -e . --no-deps --no-build-isolation
+          coverage run --data-file=.coverage.transport -m pytest tests/test_mcp_transport_processes.py tests/test_mcp_payload_processes.py -q -m integration
+          coverage xml --data-file=.coverage.transport -o coverage/transport.xml
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: python-transport-coverage
+          path: coverage/transport.xml
+          retention-days: 7
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mcp-coverage
@@ -490,24 +505,48 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: ad
-            dockerfile: containers/ad/Dockerfile
-            context: .
           - name: base-rocky
             dockerfile: containers/base/Dockerfile.rocky
             context: ./containers
           - name: base-ubuntu
             dockerfile: containers/base/Dockerfile.ubuntu
             context: ./containers
+          - name: appliance-egress-proxy
+            dockerfile: containers/appliance-egress-proxy/Dockerfile
+            context: .
+          - name: generic-samba-ad-base
+            dockerfile: containers/generic-samba-ad-base/Dockerfile
+            context: ./containers/generic-samba-ad-base
+          - name: generic-systemd-base
+            dockerfile: containers/generic-systemd-base/Dockerfile
+            context: ./containers/generic-systemd-base
+          - name: generic-systemd-base-debian
+            dockerfile: containers/generic-systemd-base-debian/Dockerfile
+            context: ./containers/generic-systemd-base-debian
+          - name: generic-systemd-node22-base
+            dockerfile: containers/generic-systemd-node22-base/Dockerfile
+            context: ./containers/generic-systemd-node22-base
+          - name: generic-wazuh-agent-base-debian
+            dockerfile: containers/generic-wazuh-agent-base-debian/Dockerfile
+            context: .
+          - name: kali-capture
+            dockerfile: containers/kali-capture/Dockerfile
+            context: .
+          - name: network-boundary-helper
+            dockerfile: containers/network-boundary-helper/Dockerfile
+            context: .
+          - name: operator-access-proxy
+            dockerfile: containers/operator-access-proxy/Dockerfile
+            context: .
+          - name: suricata-wazuh-agent
+            dockerfile: containers/suricata-wazuh-agent/Dockerfile
+            context: .
           - name: misp-suricata-sync
             dockerfile: containers/misp-suricata-sync/Dockerfile
             context: .
           - name: reverse
             dockerfile: containers/reverse/Dockerfile
             context: ./containers
-          - name: wazuh-sidecar
-            dockerfile: containers/wazuh-sidecar/Dockerfile
-            context: .
           - name: web
             dockerfile: web/Dockerfile
             context: web
@@ -623,6 +662,10 @@ jobs:
         with:
           name: python-coverage
           path: .
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-transport-coverage
+          path: coverage/
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: mcp-coverage

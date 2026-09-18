@@ -189,7 +189,11 @@ def test_shipped_scenario_declares_artifact_demand_for_every_imaged_node(tmp_pat
     scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
     scenario = instantiate_scenario(
         scenario,
-        parameters={"flag_ad_user": "flag-user", "flag_ad_root": "flag-root"},
+        parameters={
+            f"flag_{host}_{level}": f"{host}-{level}"
+            for host in ("victim", "workstation", "webapp", "fileshare", "ad")
+            for level in ("user", "root")
+        },
     )
     probe = _Probe(set())
 
@@ -198,8 +202,9 @@ def test_shipped_scenario_declares_artifact_demand_for_every_imaged_node(tmp_pat
     # One address per artifact-bearing address — every image-backed node and
     # every digest-pinned content placement in the full TechVault env-pack. The
     # ADR-088 conversion (#889) removed the `cortex-index-init` image-backed node.
-    # The 6.0 pack's reviewed inventory contains 50 exact artifact demands.
-    assert len(context.requirements) == 50
+    # The 6.0.1 pack's backend-neutral inventory contains 31 exact content
+    # demands; compute substrates are selected separately under OPEN authority.
+    assert len(context.requirements) == 31
     addresses = {requirement.address for requirement in context.requirements}
     assert {
         "provision.content.ad-rules",

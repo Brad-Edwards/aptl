@@ -61,6 +61,8 @@ def _derive_descriptor(
         boundary_helper_image=manifest.boundary.boundary_helper_image,
         egress_proxy_image=manifest.boundary.egress_proxy_image,
         participant_routes_digest=manifest.delivery.participant_routes_digest,
+        canonical_inputs_digest=manifest.delivery.canonical_inputs_digest,
+        host_mcp_contract=manifest.delivery.host_mcp_contract,
         host_observation_id=host_observation_id,
     )
 
@@ -150,4 +152,8 @@ def verify_launch_descriptor(
         raise ApplianceManifestError(
             "appliance launch boundary policy is invalid"
         ) from exc
+    if policy.host_mcp_contract != descriptor.host_mcp_contract:
+        raise ApplianceManifestError(
+            "launch transport policy differs from signed release"
+        )
     return VerifiedApplianceLaunch(descriptor, release_root, policy)

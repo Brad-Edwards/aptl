@@ -21,8 +21,11 @@ from aptl.core.env import load_dotenv
 import subprocess
 from typing import TYPE_CHECKING
 
+from aptl.core.deployment._compose_generic_base_images import (
+    ComposeGenericBaseImageMixin,
+)
 from aptl.core.deployment._compose_realization_networks import (
-    _match_managed_network,
+    _resolve_base_network_bindings,
 )
 from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.deployment.realization import (
@@ -32,19 +35,6 @@ from aptl.core.deployment.realization import (
 
 if TYPE_CHECKING:
     from aptl.backends.raes_base_substrate import BaseContainerSpec, InitRequirements
-
-# Every OS-family/service-manager combination `base_image_for_os`
-# (src/aptl/backends/raes_materializer.py) can select for a runs_services
-# node, mapped to the checked-in Dockerfile that builds it. These are the
-# ONLY generic base images that need a local build: the non-service images
-# (debian:12-slim, rockylinux:9) are real registry images `docker run`
-# already pulls on demand. Never built anywhere in the codebase before
-# issue #581 surfaced it via a fresh-machine boot (a developer's existing
-# local image cache had silently masked the gap since ADR-048 shipped).
-_GENERIC_BASE_IMAGE_BUILD_CONTEXTS: dict[str, str] = {
-    "aptl/generic-systemd-base-debian:latest": "containers/generic-systemd-base-debian",
-    "aptl/generic-systemd-base:latest": "containers/generic-systemd-base",
-}
 
 
 def _init_run_flags(init: "InitRequirements") -> list[str]:
@@ -61,6 +51,8 @@ def _init_run_flags(init: "InitRequirements") -> list[str]:
         flags += ["--cap-add", capability]
     if init.seccomp_unconfined:
         flags += ["--security-opt", "seccomp:unconfined"]
+    if init.apparmor_unconfined:
+        flags += ["--security-opt", "apparmor:unconfined"]
     for env_name, env_value in init.env:
         if not valid_environment_variable_name(env_name):
             raise BackendSeedError("invalid base-container environment variable name")
@@ -70,85 +62,38 @@ def _init_run_flags(init: "InitRequirements") -> list[str]:
     return flags
 
 
-class ComposeBaseSubstrateMixin(object):
+def _base_network_flags(
+    network_bindings: tuple[tuple[str, DeploymentNetworkAttachment], ...] | None,
+) -> list[str]:
+    """Return detached-run or first-network creation flags."""
+
+    if network_bindings is None:
+        return ["-d"]
+    network, attachment = network_bindings[0]
+    return [
+        "--network",
+        network,
+        *(["--ip", attachment.ipv4_address] if attachment.ipv4_address else []),
+    ]
+
+
+def _base_process_args(spec: "BaseContainerSpec", run_image_ref: str) -> list[str]:
+    """Return the image and process arguments for one base container."""
+
+    if spec.init is not None:
+        return [*_init_run_flags(spec.init), run_image_ref]
+    if spec.use_image_command:
+        return [run_image_ref]
+    return [run_image_ref, "sleep", "infinity"]
+
+
+class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
     """Start a node's generic base container and copy content into it (ADR-048).
 
     Mixed into ``DockerComposeBackend``, which supplies the ``_run`` subprocess
     runner, the ``_project_name`` attribute, and (for image builds)
     ``_project_dir``.
     """
-
-    def ensure_generic_base_image(self, image_ref: str) -> list[str]:
-        """Build a locally-built generic base image if it is not already present.
-
-        A no-op for any image not in ``_GENERIC_BASE_IMAGE_BUILD_CONTEXTS``
-        (a real registry reference like ``debian:12-slim`` needs no local
-        build; ``docker run`` pulls it on demand).
-        """
-
-        build_context = _GENERIC_BASE_IMAGE_BUILD_CONTEXTS.get(image_ref)
-        failures: list[str] = []
-        if build_context is None and not self._offline_staged:
-            return failures
-        inspect_result = self._run(
-            ["docker", "image", "inspect", image_ref], timeout=30
-        )
-        if inspect_result.returncode != 0:
-            if self._offline_staged:
-                failures.append(
-                    f"required staged generic base image is missing: {image_ref}"
-                )
-            elif build_context is not None:
-                build_result = self._run(
-                    [
-                        "docker",
-                        "build",
-                        "-t",
-                        image_ref,
-                        str(self._project_dir / build_context),
-                    ],
-                    timeout=600,
-                )
-                if build_result.returncode != 0:
-                    failures.append(f"failed to build generic base image {image_ref}")
-        return failures
-
-    def start_base_container(self, spec: "BaseContainerSpec") -> None:
-        """Start a node's generic base container (ADR-048).
-
-        Runs the generic base image with the validated init requirements when the
-        node declares service units (host cgroup ns, cgroupfs rw, tmpfs,
-        capabilities, unconfined seccomp, systemd as PID 1). A node with no
-        service units runs the base with a keepalive so the materializer can exec
-        into it. Idempotent: any stale container of the same name is removed
-        first. Raises on failure so the materialization engine translates it into
-        the RAES `LabResult` envelope.
-        """
-
-        network_bindings = getattr(self, "_base_networks_by_address", {}).get(
-            spec.node_address
-        )
-        run_image_ref = self._resolve_base_run_image(spec)
-        if self._base_container_already_realized(spec, run_image_ref):
-            # Idempotent: a node that already materialized correctly is left in
-            # place. `aptl lab start` retries a single SOC backend-start failure
-            # by re-running the whole admitted plan, which re-enters node
-            # materialization. Tearing the container down and recreating it would
-            # drop the project networks the post-start reconcile
-            # (_reconcile_realization_networks) attached -- the container is
-            # recreated on the default bridge -- and if that retry then fails or
-            # times out before its own reconcile runs, the node is left stranded
-            # on bridge with no scenario network (the attacker among them). The
-            # retry only fires after materialization already succeeded, so the
-            # existing container is known-good; the caller's remaining
-            # materialization ops run against it idempotently.
-            return
-        self._run(["docker", "rm", "-f", spec.container_name])
-        argv = self._base_container_create_command(
-            spec, network_bindings, run_image_ref
-        )
-        result = self._run(argv, timeout=180)
-        self._complete_base_container_start(spec, network_bindings, result)
 
     def _resolve_base_run_image(self, spec: "BaseContainerSpec") -> str:
         """Return the exact image reference a node's base container runs from.
@@ -180,7 +125,7 @@ class ComposeBaseSubstrateMixin(object):
         return verified
 
     def _base_container_already_realized(
-        self, spec: "BaseContainerSpec", run_image_ref: str
+        self, native_id: str, run_image_ref: str
     ) -> bool:
         """Return whether this node's base container is already up on its image.
 
@@ -195,9 +140,14 @@ class ComposeBaseSubstrateMixin(object):
         """
 
         try:
-            info = self.container_inspect(spec.container_name)
-        # inspect shells out; treat any error as the container being absent.
-        except Exception:
+            info = self._raw_container_inspect(native_id)
+        # A receipt-owned native object that cannot be inspected is uncertain,
+        # never absent and never permission to recreate by name.
+        except Exception as exc:
+            raise BackendSeedError(
+                "base-container ownership observation failed"
+            ) from exc
+        if not info:
             return False
         if not isinstance(info, dict):
             return False
@@ -212,6 +162,9 @@ class ComposeBaseSubstrateMixin(object):
         spec: "BaseContainerSpec",
         network_bindings: (tuple[tuple[str, DeploymentNetworkAttachment], ...] | None),
         run_image_ref: str,
+        *,
+        external_name: str | None = None,
+        ownership_labels: dict[str, str] | None = None,
     ) -> list[str]:
         """Build a create/run command with exact declared network identity.
 
@@ -231,6 +184,8 @@ class ComposeBaseSubstrateMixin(object):
                 else []
             ),
             "--name",
+            external_name or spec.container_name,
+            "--hostname",
             spec.container_name,
             "--label",
             f"aptl.lifecycle.project={self._project_name}",
@@ -244,22 +199,18 @@ class ComposeBaseSubstrateMixin(object):
             "--label",
             f"com.docker.compose.project={self._project_name}",
         ]
-        if network_bindings is None:
-            argv.insert(2, "-d")
-        if network_bindings is not None:
-            first_network, first_attachment = network_bindings[0]
-            argv += ["--network", first_network]
-            if first_attachment.ipv4_address:
-                argv += ["--ip", first_attachment.ipv4_address]
+        argv.extend(
+            item
+            for label_name, label_value in sorted((ownership_labels or {}).items())
+            for item in ("--label", f"{label_name}={label_value}")
+        )
+        argv[2:2] = _base_network_flags(network_bindings)
         self._append_base_mounts(argv, spec)
         self._append_base_ports(argv, spec)
         self._append_base_environment(argv, spec)
-        if spec.init is not None:
-            argv += _init_run_flags(spec.init)
-            # The base image's own CMD runs systemd as init.
-            argv.append(run_image_ref)
-        else:
-            argv += [run_image_ref, "sleep", "infinity"]
+        for capability in spec.backend_run_capabilities:
+            argv += ["--cap-add", capability]
+        argv += _base_process_args(spec, run_image_ref)
         return argv
 
     def _project_dotenv(self) -> dict[str, str]:
@@ -364,17 +315,28 @@ class ComposeBaseSubstrateMixin(object):
         spec: "BaseContainerSpec",
         network_bindings: (tuple[tuple[str, DeploymentNetworkAttachment], ...] | None),
         result: subprocess.CompletedProcess,
+        *,
+        external_name: str | None = None,
+        daemon_id: str | None = None,
+        attempt_id: str | None = None,
     ) -> None:
         """Attach remaining admitted networks, start, and clean failed creates."""
 
+        native_id = self._record_started_base_container(
+            spec,
+            result,
+            external_name=external_name,
+            daemon_id=daemon_id,
+            attempt_id=attempt_id,
+        )
         if result.returncode == 0 and network_bindings is not None:
             result = self._attach_and_start_base_container(
-                spec.container_name,
+                native_id,
                 network_bindings[1:],
             )
         if result.returncode != 0:
-            if network_bindings is not None:
-                self._run(["docker", "rm", "-f", spec.container_name], timeout=30)
+            if network_bindings is not None and native_id:
+                self._run(["docker", "rm", "-f", native_id], timeout=30)
             raise BackendSeedError(
                 f"failed to start base container for node {spec.node_address}"
             )
@@ -410,8 +372,9 @@ class ComposeBaseSubstrateMixin(object):
         """
 
         source = f"{source_path}/." if is_directory else source_path
+        native_id = self._resolve_owned_container_id(container)
         result = self._run(
-            ["docker", "cp", source, f"{container}:{dest_path}"], timeout=120
+            ["docker", "cp", source, f"{native_id}:{dest_path}"], timeout=120
         )
         if result.returncode != 0:
             raise BackendSeedError(
@@ -428,25 +391,9 @@ class ComposeBaseSubstrateMixin(object):
             self._base_networks_by_address = {}
             return
         managed = set(self.host_list_lab_networks(self._project_name))
-        bindings: dict[str, tuple[tuple[str, DeploymentNetworkAttachment], ...]] = {}
-        for node in nodes:
-            attachments = getattr(node, "network_attachments", ())
-            resolved: list[tuple[str, DeploymentNetworkAttachment]] = []
-            for attachment in attachments:
-                concrete = _match_managed_network(
-                    attachment.network,
-                    managed,
-                    self._project_name,
-                )
-                if concrete is None:
-                    raise BackendSeedError(
-                        "image-free node network binding was not observed"
-                    )
-                resolved.append((concrete, attachment))
-            if resolved:
-                bindings[getattr(node, "address")] = tuple(resolved)
-            elif getattr(self, "_appliance_boundary", None) is not None:
-                raise BackendSeedError(
-                    "appliance image-free node has no admitted network"
-                )
-        self._base_networks_by_address = bindings
+        self._base_networks_by_address = _resolve_base_network_bindings(
+            nodes,
+            managed,
+            self._project_name,
+            appliance_boundary=getattr(self, "_appliance_boundary", None) is not None,
+        )

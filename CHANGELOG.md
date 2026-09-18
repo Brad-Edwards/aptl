@@ -9,6 +9,33 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [5.5.0](https://github.com/Brad-Edwards/aptl/compare/v5.4.0...v5.5.0) (2026-09-17)
+
+
+### Features
+
+* enforce scope-aware TechVault evidence capture ([#1046](https://github.com/Brad-Edwards/aptl/issues/1046)) ([042be31](https://github.com/Brad-Edwards/aptl/commit/042be3176a63fda24eef9e8267e6fce5212eb6c0))
+* **mcp:** resolve MCP client host ports from the lab's remapped publications ([#1047](https://github.com/Brad-Edwards/aptl/issues/1047)) ([eb618a9](https://github.com/Brad-Edwards/aptl/commit/eb618a940aa242c29ffe5fa6c80d21ce268cc9c4))
+
+
+### Bug Fixes
+
+* **certs:** run the Wazuh cert generator as container-root under rootless Docker ([#1044](https://github.com/Brad-Edwards/aptl/issues/1044)) ([6b65e71](https://github.com/Brad-Edwards/aptl/commit/6b65e71421a032c9512ff195dd3aaa7c85f838e1))
+
+## [5.4.0](https://github.com/Brad-Edwards/aptl/compare/v5.3.1...v5.4.0) (2026-09-16)
+
+
+### Features
+
+* add scope-aware backend evidence capture ([#1020](https://github.com/Brad-Edwards/aptl/issues/1020)) ([3414c83](https://github.com/Brad-Edwards/aptl/commit/3414c83a001de6076c190496d875b8a081163908))
+* **deployment:** honor a unix:// DOCKER_HOST for the local Docker control endpoint ([#1039](https://github.com/Brad-Edwards/aptl/issues/1039)) ([d4ec7c7](https://github.com/Brad-Edwards/aptl/commit/d4ec7c7af977ab4a006841f3f5d8d58f98a6fea8))
+
+
+### Bug Fixes
+
+* synchronize Starlette lock state ([ace1bda](https://github.com/Brad-Edwards/aptl/commit/ace1bdaced395f7929ff718a1166127e90a477a8))
+* synchronize starlette lock state ([#1035](https://github.com/Brad-Edwards/aptl/issues/1035)) ([ace1bda](https://github.com/Brad-Edwards/aptl/commit/ace1bdaced395f7929ff718a1166127e90a477a8))
+
 ## [5.3.1](https://github.com/Brad-Edwards/aptl/compare/v5.3.0...v5.3.1) (2026-09-15)
 
 

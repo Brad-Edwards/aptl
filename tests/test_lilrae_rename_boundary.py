@@ -70,8 +70,10 @@ REJECTED_CURRENT_PHRASES = (
     "experience-plugin",
 )
 EXPECTED_APTL_IMAGE_IDENTITIES = {
+    "aptl/generic-samba-ad-base:latest",
     "aptl/generic-systemd-base-debian:latest",
     "aptl/generic-systemd-base:latest",
+    "aptl/generic-systemd-node22-base:latest",
     "aptl-wazuh-sidecar:local",
 }
 

@@ -98,12 +98,12 @@ infrastructure, and identity layers.
 ## Planted secrets
 
 By design, secret-named values in this synthetic range are scenario content, not
-real operator secrets. They are captured in full as `secret_fixture` values so
-the range stays reproducible. For example, the PostgreSQL fixture credential
-`techvault_db_pass` appears verbatim as `POSTGRES_PASSWORD` on the `db` node and
-as `DB_PASSWORD` on the `webapp` node. The Active Directory, Flask, JWT, and
-workstation secrets follow the same pattern. Only genuine operator secrets are
-withheld.
+real operator secrets. They remain in the exact portable content or semantic
+fixtures that need them so the range stays reproducible. They are not expressed
+as Docker environment or mount instructions when the author did not choose
+those mechanics: TechVault 6.0.1 leaves those runtime scopes unspecified, which
+RAES resolves CLOSED. The Active Directory, Flask, JWT, and workstation fixture
+secrets remain scenario content; genuine operator secrets are withheld.
 
 ## Curated startup variants
 

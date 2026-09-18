@@ -41,6 +41,21 @@ from aptl.runtime_authority import (
     DeploymentSpawnImageRequirement,
 )
 
+
+@pytest.fixture(autouse=True)
+def _isolate_docker_endpoint_env(monkeypatch):
+    """Keep endpoint-binding tests independent of the runner's ambient env.
+
+    The local Docker endpoint now resolves from ``DOCKER_HOST`` (defaulting to
+    ``/var/run/docker.sock`` when unset); clear it so a value in the developer's
+    or CI runner's shell cannot change what these tests bind. Tests that
+    exercise a specific ``DOCKER_HOST`` set it explicitly after this runs.
+    """
+
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
+    monkeypatch.delenv("DOCKER_CONTEXT", raising=False)
+
+
 _DIGEST = "sha256:" + "a" * 64
 _CHILD_REF = f"ghcr.io/example/worker@{_DIGEST}"
 _IMAGE_ID = "sha256:" + "b" * 64
@@ -726,6 +741,25 @@ def test_authority_holder_without_compose_image_is_rejected_before_realization(
     )
 
 
+def test_spawned_child_contract_requires_attempt_isolated_daemon_before_mutation(
+    tmp_path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path)
+    backend.bind_local_docker_socket = MagicMock(return_value=LabResult(success=True))
+    backend._run = MagicMock()
+
+    result = backend._runtime_orchestration_preflight(_spec())
+
+    assert result is not None
+    assert result.success is False
+    assert result.error == (
+        "Backend resource ownership conflict: runtime-spawned children require "
+        "an attempt-isolated Docker daemon."
+    )
+    backend.bind_local_docker_socket.assert_not_called()
+    backend._run.assert_not_called()
+
+
 def test_effective_compose_rejects_duplicate_or_endpoint_redirects() -> None:
     mount = {
         "type": "bind",
@@ -993,14 +1027,14 @@ def test_authority_attestation_survives_a_holder_without_a_docker_cli(
     assert not backend._runtime_authority_matches("aptl-orborus", admission)
 
 
-def test_local_backend_binds_commands_to_observed_socket_identity(
+def test_local_backend_defaults_to_system_socket_without_docker_host(
     tmp_path, monkeypatch
 ) -> None:
     backend = DockerComposeBackend(tmp_path)
     socket_stat = SimpleNamespace(st_mode=stat.S_IFSOCK, st_dev=9, st_ino=42)
     monkeypatch.setattr(os, "lstat", lambda _path: socket_stat)
     monkeypatch.setattr(os, "access", lambda _path, _mode: True)
-    monkeypatch.setenv("DOCKER_HOST", "tcp://wrong.example:2375")
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
     monkeypatch.setenv("DOCKER_CONTEXT", "wrong-context")
     run = MagicMock(
         return_value=subprocess.CompletedProcess([], 0, stdout="daemon-a\n", stderr="")
@@ -1014,6 +1048,52 @@ def test_local_backend_binds_commands_to_observed_socket_identity(
     assert kwargs["env"]["DOCKER_HOST"] == "unix:///var/run/docker.sock"
     assert "DOCKER_CONTEXT" not in kwargs["env"]
     assert backend.revalidate_local_docker_socket().success is True
+
+
+def test_local_backend_honors_unix_docker_host_for_rootless(
+    tmp_path, monkeypatch
+) -> None:
+    backend = DockerComposeBackend(tmp_path)
+    rootless_host = "unix:///run/user/1234/docker.sock"
+    socket_stat = SimpleNamespace(st_mode=stat.S_IFSOCK, st_dev=7, st_ino=11)
+    seen: dict[str, str] = {}
+
+    def _lstat(path):
+        seen["lstat"] = path
+        return socket_stat
+
+    monkeypatch.setattr(os, "lstat", _lstat)
+    monkeypatch.setattr(os, "access", lambda _path, _mode: True)
+    monkeypatch.setenv("DOCKER_HOST", rootless_host)
+    monkeypatch.setenv("DOCKER_CONTEXT", "rootless")
+    run = MagicMock(
+        return_value=subprocess.CompletedProcess([], 0, stdout="daemon-r\n", stderr="")
+    )
+    monkeypatch.setattr("subprocess.run", run)
+
+    result = backend.bind_local_docker_socket()
+
+    assert result.success is True
+    # The rootless socket path is what gets stat'd and driven, not the default.
+    assert seen["lstat"] == "/run/user/1234/docker.sock"
+    kwargs = run.call_args.kwargs
+    assert kwargs["env"]["DOCKER_HOST"] == rootless_host
+    assert "DOCKER_CONTEXT" not in kwargs["env"]
+    assert backend.revalidate_local_docker_socket().success is True
+
+
+def test_local_backend_rejects_non_unix_docker_host(tmp_path, monkeypatch) -> None:
+    backend = DockerComposeBackend(tmp_path)
+    monkeypatch.setattr(os, "lstat", lambda _path: pytest.fail("must not stat"))
+    monkeypatch.setenv("DOCKER_HOST", "tcp://remote.example:2375")
+
+    result = backend.bind_local_docker_socket()
+
+    assert result.success is False
+    assert result.error == (
+        "Docker control authority requires a local unix:// socket; "
+        "DOCKER_HOST does not name one."
+    )
 
 
 @pytest.mark.parametrize(

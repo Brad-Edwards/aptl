@@ -31,7 +31,7 @@ from raes.runtime_filesystem import RuntimeFilesystemEntryType
 # image (ADR-048). The package family (from the declared package manager) picks a
 # base whose package manager matches: apt -> Debian, dnf/yum -> RHEL.
 _NON_SERVICE_BASE_IMAGE: dict[tuple[str, str], str] = {
-    ("linux", "debian"): "debian:12-slim",
+    ("linux", "debian"): "debian:13-slim",
     ("linux", "rhel"): "rockylinux:9",
 }
 
@@ -106,6 +106,23 @@ class EnsureDirectoryOp:
 
 
 @dataclass(frozen=True)
+class SetFilesystemMetadataOp:
+    """Apply authored ownership and mode to an existing runtime path.
+
+    Content placement remains the authority for creating files.  This
+    operation runs after content so copied files cannot retain backend-default
+    ownership or permissions.
+    """
+
+    path: str
+    owner: str = ""
+    group: str = ""
+    uid: int | str | None = None
+    gid: int | str | None = None
+    mode: str = ""
+
+
+@dataclass(frozen=True)
 class PlaceFileOp:
     """Place a declared config file into the node at an absolute path.
 
@@ -167,6 +184,24 @@ class InstallDependencyManifestOp:
 
 
 @dataclass(frozen=True)
+class InstallSoftwareComponentOp:
+    """Install and build one npm component from its placed lock manifest."""
+
+    ecosystem: str
+    manifest_path: str
+    package_name: str
+    version: str
+
+
+@dataclass(frozen=True)
+class ProvisionDomainAuthorityOp:
+    """Bootstrap an authored Active Directory authority on its provider base."""
+
+    domain: str
+    realm: str
+
+
+@dataclass(frozen=True)
 class EnableServiceUnitOp:
     """Enable a service-manager unit (start on boot)."""
 
@@ -186,10 +221,13 @@ MaterializationOp = (
     | EnsureGroupOp
     | EnsureUserOp
     | EnsureDirectoryOp
+    | SetFilesystemMetadataOp
     | PlaceFileOp
     | PlaceProjectContentOp
     | PlacePackArtifactOp
     | InstallDependencyManifestOp
+    | InstallSoftwareComponentOp
+    | ProvisionDomainAuthorityOp
     | EnableServiceUnitOp
     | StartServiceUnitOp
 )
@@ -280,10 +318,42 @@ def _filesystem_ops(runtime: RuntimeConfiguration) -> list[MaterializationOp]:
 
     return [
         EnsureDirectoryOp(
-            path=entry.path, owner=entry.owner_user, group=entry.owner_group, mode=entry.mode
+            path=entry.path,
+            owner=entry.owner_user,
+            group=entry.owner_group,
+            mode=entry.mode,
         )
         for entry in runtime.filesystem_inventory
         if entry.entry_type == RuntimeFilesystemEntryType.DIRECTORY
+    ]
+
+
+def _filesystem_metadata_ops(
+    runtime: RuntimeConfiguration,
+) -> list[MaterializationOp]:
+    """Lower metadata for entries whose paths another authored op creates."""
+
+    return [
+        SetFilesystemMetadataOp(
+            path=entry.path,
+            owner=entry.owner_user,
+            group=entry.owner_group,
+            uid=entry.uid,
+            gid=entry.gid,
+            mode=entry.mode,
+        )
+        for entry in runtime.filesystem_inventory
+        if str(getattr(entry.presence, "value", entry.presence)) == "present"
+        and any(
+            value not in ("", None)
+            for value in (
+                entry.owner_user,
+                entry.owner_group,
+                entry.uid,
+                entry.gid,
+                entry.mode,
+            )
+        )
     ]
 
 
@@ -291,9 +361,39 @@ def _dependency_manifest_ops(runtime: RuntimeConfiguration) -> list[Materializat
     """Lower declared dependency manifests into install ops."""
 
     return [
-        InstallDependencyManifestOp(ecosystem=entry.ecosystem, path=entry.path, name=entry.name)
+        InstallDependencyManifestOp(
+            ecosystem=entry.ecosystem, path=entry.path, name=entry.name
+        )
         for entry in runtime.dependency_manifests
     ]
+
+
+def _software_component_ops(runtime: RuntimeConfiguration) -> list[MaterializationOp]:
+    """Lower dependency-manifest-backed npm components into install/build ops."""
+
+    operations: list[MaterializationOp] = []
+    seen: set[str] = set()
+    for component in runtime.software_components:
+        provenance = str(
+            getattr(component.provenance, "value", component.provenance) or ""
+        )
+        path = component.manifest_path
+        if (
+            provenance != "dependency_manifest"
+            or not path.endswith("/package-lock.json")
+            or path in seen
+        ):
+            continue
+        seen.add(path)
+        operations.append(
+            InstallSoftwareComponentOp(
+                ecosystem="npm",
+                manifest_path=path,
+                package_name=component.name,
+                version=component.version,
+            )
+        )
+    return operations
 
 
 def _service_unit_ops(runtime: RuntimeConfiguration) -> list[MaterializationOp]:
@@ -318,6 +418,9 @@ def plan_node_materialization(
     os_version: str,
     runtime: RuntimeConfiguration | None,
     content: tuple[MaterializationOp, ...] = (),
+    backend_base_image_ref: str | None = None,
+    backend_provider_kind: str = "",
+    backend_provider_parameters: tuple[tuple[str, str], ...] = (),
 ) -> tuple[MaterializationOp, ...]:
     """Lower one node's declared desired state into ordered generic operations.
 
@@ -331,20 +434,33 @@ def plan_node_materialization(
     runs_services = bool(runtime is not None and runtime.service_manager_units)
     ops: list[MaterializationOp] = [
         BaseSubstrateOp(
-            image_ref=base_image_for_os(
-                os,
-                os_version,
-                runs_services=runs_services,
-                family=package_family(runtime),
+            image_ref=(
+                backend_base_image_ref
+                or base_image_for_os(
+                    os,
+                    os_version,
+                    runs_services=runs_services,
+                    family=package_family(runtime),
+                )
             )
         )
     ]
+    if backend_provider_kind == "samba-active-directory":
+        parameters = dict(backend_provider_parameters)
+        ops.append(
+            ProvisionDomainAuthorityOp(
+                domain=parameters.get("domain", ""),
+                realm=parameters.get("realm", ""),
+            )
+        )
     if runtime is not None:
         ops.extend(_package_ops(runtime))
         ops.extend(_identity_ops(runtime))
         ops.extend(_filesystem_ops(runtime))
     ops.extend(content)
     if runtime is not None:
+        ops.extend(_filesystem_metadata_ops(runtime))
         ops.extend(_dependency_manifest_ops(runtime))
+        ops.extend(_software_component_ops(runtime))
         ops.extend(_service_unit_ops(runtime))
     return tuple(ops)

@@ -157,6 +157,7 @@ def test_interpreter_lowers_stateful_resources_into_deployment_spec(
     assert generated.generator == "certificate_bundle"
     assert generated.outputs[1].sensitivity == "secret"
     assert generated.consumers[0].service_name == "wazuh-indexer"
+    assert generated.consumers[0].delivery_mode == "mount"
     persistent = realization.persistent_volumes[0]
     assert persistent.ordering_dependencies == (artifact.address,)
     assert persistent.consumers[0].mount_destination == "/var/lib/wazuh-indexer"

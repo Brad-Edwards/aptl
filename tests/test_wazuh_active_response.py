@@ -37,6 +37,7 @@ import pytest
 from tests.helpers import (
     LIVE_LAB,
     docker_exec,
+    dockerfile_copies,
 )
 
 # The three kali-side IPs (kali multi-homed across redteam, dmz, internal).
@@ -52,17 +53,19 @@ IN_PROCESS_TARGETS: tuple[str, ...] = (
     "aptl-dns",
 )
 
-# Sidecar agents that also receive the wrapper + whitelist at image
-# build time (db and suricata are the carve-outs from #248).
-SIDECAR_AGENTS: tuple[str, ...] = (
-    "aptl-wazuh-sidecar-db",
-    "aptl-wazuh-sidecar-suricata",
+# The other realized nodes TechVault declares a Wazuh forwarding agent on. The
+# old db/suricata sidecars are gone (issue #1006): each declared agent now runs
+# on its own node, so the live suite targets those nodes, not retired sidecars.
+IN_NODE_FORWARDING_AGENTS: tuple[str, ...] = (
+    "aptl-db",
+    "aptl-suricata",
+    "aptl-victim",
 )
 
 # Every Wazuh agent in the lab — used for "the AR contract is honored
 # everywhere" assertions. The wrapper script and whitelist file ship
 # on each.
-ALL_AGENTS: tuple[str, ...] = IN_PROCESS_TARGETS + SIDECAR_AGENTS
+ALL_AGENTS: tuple[str, ...] = IN_PROCESS_TARGETS + IN_NODE_FORWARDING_AGENTS
 
 WAZUH_MANAGER = "aptl-wazuh-manager"
 WHITELIST_PATH = "/var/ossec/etc/lists/active-response-whitelist"
@@ -74,9 +77,55 @@ MANAGER_OSSEC = "/var/ossec/etc/ossec.conf"
 # spinning up Docker.
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_MANAGER_CONF = REPO_ROOT / "config" / "wazuh_cluster" / "wazuh_manager.conf"
-SRC_WHITELIST = REPO_ROOT / "config" / "wazuh_cluster" / "etc" / "lists" / "active-response-whitelist"
+SRC_WHITELIST = (
+    REPO_ROOT
+    / "config"
+    / "wazuh_cluster"
+    / "etc"
+    / "lists"
+    / "active-response-whitelist"
+)
 SRC_WRAPPER = REPO_ROOT / "containers" / "_wazuh-agent" / "aptl-firewall-drop.sh"
 SRC_INSTALL = REPO_ROOT / "containers" / "_wazuh-agent" / "install.sh"
+SRC_INSTALL_RHEL = REPO_ROOT / "containers" / "_wazuh-agent" / "install-rhel.sh"
+SRC_AR_STEP = REPO_ROOT / "containers" / "_wazuh-agent" / "install-active-response.sh"
+
+
+def _ar_sources(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """Create scratch AR inputs and an output root for the shared step."""
+    wrapper = tmp_path / "aptl-firewall-drop.sh"
+    wrapper.write_text("#!/bin/sh\n")
+    whitelist = tmp_path / "active-response-whitelist"
+    whitelist.write_text("172.20.4.30\n")
+    return wrapper, whitelist, tmp_path / "ossec"
+
+
+def _run_ar_step(
+    tmp_path: Path, wrapper: Path, whitelist: Path, root: Path, calls: Path
+) -> subprocess.CompletedProcess:
+    """Run the real AR step with `install` shimmed so no root is needed.
+
+    The shim records its exact arguments; ownership is part of the contract
+    being asserted, and changing it would require privileges a test lacks.
+    """
+    shim_dir = tmp_path / "bin"
+    shim_dir.mkdir()
+    shim = shim_dir / "install"
+    shim.write_text(f'#!/bin/sh\necho "$*" >> {calls}\n')
+    shim.chmod(0o755)
+    return subprocess.run(
+        ["sh", str(SRC_AR_STEP)],
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": f"{shim_dir}:/usr/bin:/bin",
+            "APTL_AR_WRAPPER_SRC": str(wrapper),
+            "APTL_AR_WHITELIST_SRC": str(whitelist),
+            "APTL_AR_OSSEC_ROOT": str(root),
+        },
+        check=False,
+    )
+
 
 # Dockerfiles that must each install the wrapper + whitelist via the
 # install.sh /tmp pre-COPY pattern. webapp/fileshare/dns moved to SDL
@@ -84,9 +133,16 @@ SRC_INSTALL = REPO_ROOT / "containers" / "_wazuh-agent" / "install.sh"
 # they have no in-process Wazuh agent (and so no AR wrapper) at all until
 # aces#847 (no typed way to declare a third-party apt repository, which
 # install.sh's wazuh-agent package needs) is resolved; tracked as #809.
+# Every image that installs the Wazuh agent. The sidecar and the `ad` image
+# that used to carry the agent are gone (issue #1006): TechVault declares a
+# forwarding agent on the node, and APTL realizes it on these generic agent
+# substrates instead. The active-response contract moved with the agent.
 AGENT_DOCKERFILES: tuple[Path, ...] = (
-    REPO_ROOT / "containers" / "ad" / "Dockerfile",
-    REPO_ROOT / "containers" / "wazuh-sidecar" / "Dockerfile",
+    REPO_ROOT / "containers" / "generic-wazuh-agent-base-debian" / "Dockerfile",
+    REPO_ROOT / "containers" / "generic-systemd-wazuh-agent-base" / "Dockerfile",
+    REPO_ROOT / "containers" / "generic-systemd-wazuh-agent-base-debian" / "Dockerfile",
+    REPO_ROOT / "containers" / "generic-samba-ad-wazuh-agent-base" / "Dockerfile",
+    REPO_ROOT / "containers" / "suricata-wazuh-agent" / "Dockerfile",
 )
 
 
@@ -164,8 +220,9 @@ class TestWazuhActiveResponseConfig:
         # Find the <command> block by name; check each required child.
         m = re.search(
             r"<command>(?P<body>.*?</command>)",
-            content[content.find("<name>aptl-firewall-drop</name>") - 50:]
-                if "<name>aptl-firewall-drop</name>" in content else "",
+            content[content.find("<name>aptl-firewall-drop</name>") - 50 :]
+            if "<name>aptl-firewall-drop</name>" in content
+            else "",
             re.DOTALL,
         )
         assert "<name>aptl-firewall-drop</name>" in content, (
@@ -271,6 +328,7 @@ class TestWazuhActiveResponseConfig:
             leaks,
         )
 
+
 @LIVE_LAB
 @pytest.mark.usefixtures("_check_lab_up")
 class TestWazuhActiveResponseWhitelist:
@@ -303,8 +361,7 @@ class TestWazuhActiveResponseWhitelist:
         because they all COPY the same source file."""
         result = docker_exec("aptl-webapp", f"cat {WHITELIST_PATH}")
         assert result.returncode == 0, (
-            f"could not read {WHITELIST_PATH} on aptl-webapp: "
-            f"{result.stderr[:200]}"
+            f"could not read {WHITELIST_PATH} on aptl-webapp: {result.stderr[:200]}"
         )
         # Strip comments and blank lines for the membership check.
         lines = [
@@ -341,8 +398,7 @@ class TestWazuhActiveResponseWrapper:
                     f"(rc={result.returncode})",
                 )
         assert not broken, (
-            "Wrapper script missing on one or more agents:\n  "
-            + "\n  ".join(broken)
+            "Wrapper script missing on one or more agents:\n  " + "\n  ".join(broken)
         )
 
     def test_wrapper_skips_whitelisted_srcip(self) -> None:
@@ -434,8 +490,7 @@ class TestWazuhActiveResponseWrapper:
         # Verify the insert branch actually ran via the audit log.
         log_check = docker_exec(
             "aptl-webapp",
-            "grep -F 'added DROP for 10.99.99.99' "
-            "/var/ossec/logs/active-responses.log",
+            "grep -F 'added DROP for 10.99.99.99' /var/ossec/logs/active-responses.log",
         )
         assert log_check.returncode == 0, (
             "Wrapper did not log 'added DROP for 10.99.99.99' — the "
@@ -653,7 +708,9 @@ class TestWazuhActiveResponseSource:
             "source-level tests run under macOS /bin/bash 3.2."
         )
 
-    def _run_wrapper(self, tmp_path: Path, payload: str, iptables: str = "/bin/true") -> tuple[subprocess.CompletedProcess, Path]:
+    def _run_wrapper(
+        self, tmp_path: Path, payload: str, iptables: str = "/bin/true"
+    ) -> tuple[subprocess.CompletedProcess, Path]:
         """Helper: run the source wrapper with a temp whitelist + log
         and a mock iptables. Returns (result, log_path)."""
         wl = tmp_path / "whitelist"
@@ -699,11 +756,12 @@ class TestWazuhActiveResponseSource:
             "embedded newline — IPv4 validation regression."
         )
         assert "rejecting invalid srcip" in log_content, (
-            f"Wrapper did not log a srcip rejection; log content: "
-            f"{log_content!r}"
+            f"Wrapper did not log a srcip rejection; log content: {log_content!r}"
         )
 
-    def test_wrapper_script_short_circuits_valid_whitelisted(self, tmp_path: Path) -> None:
+    def test_wrapper_script_short_circuits_valid_whitelisted(
+        self, tmp_path: Path
+    ) -> None:
         """Source-level happy-path: a whitelisted IPv4 must short-
         circuit. With APTL_AR_IPTABLES=/bin/false, any iptables call
         propagates a non-zero exit; rc=0 means the wrapper never
@@ -749,74 +807,189 @@ class TestWazuhActiveResponseSource:
             f"Log: {log_content!r}"
         )
 
-    def test_install_script_handles_optional_ar_extras(self) -> None:
-        """install.sh must check for /tmp/aptl-firewall-drop.sh and
-        /tmp/active-response-whitelist and `install` them with the
-        right perms when present. Centralizing the install in install.sh
-        is the fix for codex finding #4 (Dockerfile boilerplate
-        duplication); a regression here breaks every Dockerfile's
-        AR install at build time."""
-        content = SRC_INSTALL.read_text()
-        assert "/tmp/aptl-firewall-drop.sh" in content, (
-            "install.sh missing /tmp/aptl-firewall-drop.sh handling — "
-            "Dockerfiles pre-COPY the wrapper to that path expecting "
-            "install.sh to install it."
-        )
-        assert "/tmp/active-response-whitelist" in content, (
-            "install.sh missing /tmp/active-response-whitelist handling"
-        )
-        assert re.search(r"install -D? ?-m 0755 -o root -g wazuh", content), (
-            "install.sh wrapper install must set mode 0755 root:wazuh"
-        )
-        assert re.search(r"install -D? ?-m 0640 -o root -g wazuh", content), (
-            "install.sh whitelist install must set mode 0640 root:wazuh"
-        )
+    def test_every_installer_runs_the_shared_active_response_step(self) -> None:
+        """Debian and RHEL installers must both place the AR assets.
+
+        The placement used to live only inside install.sh, as an optional
+        "if the file exists" step. install-rhel.sh never had it, so RHEL-based
+        agents shipped without the wrapper while every source-level check still
+        passed (issue #1006). Both installers now run one shared step
+        unconditionally.
+        """
+        for installer in (SRC_INSTALL, SRC_INSTALL_RHEL):
+            lines = [
+                line.strip()
+                for line in installer.read_text().splitlines()
+                if line.strip() and not line.strip().startswith("#")
+            ]
+            assert "sh /tmp/install-active-response.sh" in lines, (
+                f"{installer.name} does not run the shared active-response step"
+            )
+
+    def test_active_response_step_places_both_assets(self, tmp_path) -> None:
+        """Run the real script against a scratch root, not a grep of its text."""
+        wrapper, whitelist, root = _ar_sources(tmp_path)
+        calls = tmp_path / "install-calls"
+
+        result = _run_ar_step(tmp_path, wrapper, whitelist, root, calls)
+
+        assert result.returncode == 0, result.stderr
+        recorded = calls.read_text().splitlines()
+        assert (
+            f"-D -m 0755 -o root -g wazuh {wrapper} "
+            f"{root}/active-response/bin/aptl-firewall-drop"
+        ) in recorded
+        assert (
+            f"-D -m 0640 -o root -g wazuh {whitelist} "
+            f"{root}/etc/lists/active-response-whitelist"
+        ) in recorded
+
+    @pytest.mark.parametrize("missing", ["wrapper", "whitelist"])
+    def test_active_response_step_fails_on_a_missing_asset(
+        self, tmp_path, missing
+    ) -> None:
+        """A missing asset fails the build instead of shipping a mute agent."""
+        wrapper, whitelist, root = _ar_sources(tmp_path)
+        (wrapper if missing == "wrapper" else whitelist).unlink()
+        calls = tmp_path / "install-calls"
+
+        result = _run_ar_step(tmp_path, wrapper, whitelist, root, calls)
+
+        assert result.returncode != 0
+        assert "active-response asset missing" in result.stderr
+        assert not calls.exists()
 
     def test_every_agent_dockerfile_pre_copies_ar_extras(self) -> None:
-        """Every Wazuh-agent-bearing Dockerfile must pre-COPY the
-        wrapper + whitelist into /tmp before install.sh runs, then
-        rm them in the same RUN. This is the contract that lets the
-        centralized install.sh handle the AR-extras step."""
-        violations: list[str] = []
-        for dockerfile in AGENT_DOCKERFILES:
-            text = dockerfile.read_text()
-            for required in (
+        """Every agent image must COPY each AR input to where its installer reads it.
+
+        Checked on parsed COPY instructions, not independent substrings: a
+        source and destination in different instructions, or a comment naming
+        one of them, used to satisfy the check while the real COPY was wrong.
+        """
+        required = (
+            (
                 "containers/_wazuh-agent/aptl-firewall-drop.sh",
-                "config/wazuh_cluster/etc/lists/active-response-whitelist",
                 "/tmp/aptl-firewall-drop.sh",
+            ),
+            (
+                "config/wazuh_cluster/etc/lists/active-response-whitelist",
                 "/tmp/active-response-whitelist",
-            ):
-                if required not in text:
-                    violations.append(
-                        f"{dockerfile.relative_to(REPO_ROOT)}: missing reference to '{required}'"
-                    )
+            ),
+            (
+                "containers/_wazuh-agent/install-active-response.sh",
+                "/tmp/install-active-response.sh",
+            ),
+        )
+        violations = [
+            f"{dockerfile.relative_to(REPO_ROOT)}: missing COPY {source} {destination}"
+            for dockerfile in AGENT_DOCKERFILES
+            for source, destination in required
+            if (source, destination) not in dockerfile_copies(dockerfile)
+        ]
         assert not violations, (
-            "Dockerfile AR-extras contract violated:\n  "
-            + "\n  ".join(violations)
+            "Dockerfile AR-extras contract violated:\n  " + "\n  ".join(violations)
         )
 
 
 def test_continuity_audit_targets_declare_iptables(tmp_path):
-    """Every audit target must actually carry the tool the audit runs.
-
-    The scenario grants CAP_NET_ADMIN to these nodes precisely so
-    `aptl lab continuity-audit` can inspect and clear active-response DROPs on
-    their INPUT chain. Granting the capability without declaring the package
-    leaves the audit unable to run at all, which reads as "no drops found".
-    """
+    """Closed capability scopes leave no implicit continuity targets."""
     from raes.parser import parse_sdl_file
 
     from aptl.core.continuity import default_targets
     from tests.helpers import techvault_scenario_path
 
     scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
-    # `ad` installs iptables in its own component image rather than declaring a
-    # package, so it is satisfied by its build rather than by runtime packages.
-    generically_materialized = {"webapp", "fileshare", "dns"}
 
-    for container in default_targets():
-        node = container.removeprefix("aptl-")
-        if node not in generically_materialized:
-            continue
-        packages = {p.name for p in scenario.nodes[node].runtime.packages}
-        assert "iptables" in packages, f"{node} audit target cannot run iptables"
+    assert set(default_targets()) == set(IN_PROCESS_TARGETS)
+    assert all(
+        scenario.nodes[node].runtime.linux_capabilities is None
+        for node in ("webapp", "fileshare", "dns", "ad")
+    )
+
+
+def test_live_agent_roster_matches_the_declared_forwarding_agents(tmp_path):
+    """The live suite must target the agents the scenario actually declares.
+
+    It used to require the retired db/suricata sidecars, so a lab with the new
+    topology skipped the whole live active-response suite instead of testing
+    the realized agents (issue #1006).
+    """
+    from raes.parser import parse_sdl_file
+
+    from tests.helpers import techvault_scenario_path
+
+    scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
+    declared = {
+        f"aptl-{name}"
+        for name, node in scenario.nodes.items()
+        if node.runtime is not None
+        and any(
+            str(getattr(agent.implementation, "value", agent.implementation))
+            == "wazuh_agent"
+            for agent in node.runtime.forwarding_agents
+        )
+    }
+
+    assert set(ALL_AGENTS) == declared
+
+
+class _RuntimeAgentBackend:
+    """Container surface for an agent installed at realization time."""
+
+    def __init__(self, project_dir: Path, *, present: dict[str, str] | None = None):
+        self._project_dir = project_dir
+        self.files: dict[str, str] = dict(present or {})
+        self.commands: list[list[str]] = []
+
+    def container_exec(self, name, cmd, *, timeout=None):
+        import hashlib
+
+        self.commands.append(list(cmd))
+        if cmd[0] == "sha256sum":
+            body = self.files.get(cmd[1])
+            if body is None:
+                return subprocess.CompletedProcess(cmd, 1, "", "")
+            digest = hashlib.sha256(body.encode()).hexdigest()
+            return subprocess.CompletedProcess(cmd, 0, f"{digest}  {cmd[1]}\n", "")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    def container_exec_with_input(self, name, cmd, payload, *, timeout=None):
+        path = cmd[-1].split("> ", 1)[1]
+        self.files[path] = payload
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+
+def test_runtime_installed_agent_gets_the_active_response_assets():
+    """An agent installed at realization time carries the same AR contract."""
+    from aptl.core.deployment._wazuh_agent_realization import (
+        ensure_active_response_assets,
+    )
+
+    backend = _RuntimeAgentBackend(REPO_ROOT)
+
+    assert ensure_active_response_assets(backend, "aptl-node") is None
+
+    assert backend.files[WRAPPER_PATH] == SRC_WRAPPER.read_text()
+    assert backend.files[WHITELIST_PATH] == SRC_WHITELIST.read_text()
+    assert ["chmod", "0755", WRAPPER_PATH] in backend.commands
+    assert ["chmod", "0640", WHITELIST_PATH] in backend.commands
+    assert ["chown", "root:wazuh", WRAPPER_PATH] in backend.commands
+
+
+def test_image_staged_assets_are_verified_not_rewritten():
+    """An agent image already carrying the exact assets is left untouched."""
+    from aptl.core.deployment._wazuh_agent_realization import (
+        ensure_active_response_assets,
+    )
+
+    backend = _RuntimeAgentBackend(
+        REPO_ROOT,
+        present={
+            WRAPPER_PATH: SRC_WRAPPER.read_text(),
+            WHITELIST_PATH: SRC_WHITELIST.read_text(),
+        },
+    )
+
+    assert ensure_active_response_assets(backend, "aptl-node") is None
+
+    assert not [c for c in backend.commands if c[0] in {"chmod", "chown"}]

@@ -35,3 +35,8 @@ Issue #823 supplies the release artifact consumed by the host launcher in issue 
 - IMPLEMENTS → CODE_FILE `appliance/guest/provision-offline.sh` (Offline appliance guest provisioning)
 - TESTS → TEST `tests/test_appliance_guest_assets.py` (Appliance guest asset tests)
 - TESTS → TEST `tests/test_appliance_cli.py` (Appliance CLI tests)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/payload_content.py` (Packaged payload completeness and hash validation)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/input_images.py` (Required OCI configuration and layer identities)
+- TESTS → TEST `tests/test_payload_content.py` (Missing and altered offline input rejection)
+- TESTS → TEST `tests/test_mcp_appliance_admission.py` (Signed launch and fresh boundary binding admission)
+- TESTS → TEST `tests/test_canonical_input_roundtrip.py` (Closed input staging and immutable packaged-byte tamper rejection)

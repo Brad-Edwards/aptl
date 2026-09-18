@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -12,36 +12,26 @@ from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot
 
 from aptl.backends._raes_apply_reporting import (
     bounded_apply_details as _bounded_apply_details,
-    capture_apparatus_observations,
     with_artifact_satisfactions,
-    with_capture_apparatus_entries,
 )
 
 from aptl.backends.raes_diagnostics import (
     PROVISIONING_ADDRESS,
     diagnostic,
     has_error,
-    realized_changed_addresses,
-    snapshot_after_apply,
 )
-from aptl.backends.raes_artifact_mechanisms import dynamic_composition_provenance_ref
-from aptl.backends.raes_manifest import (
-    create_aptl_realization_envelope,
+from aptl.backends._raes_provisioner_start import ProvisionerStartMixin
+from aptl.backends._raes_provisioning_helpers import (
+    availability_substrate_digests,
+    compose_validity_diagnostics,
 )
 from aptl.backends.raes_observability_scope import ObservabilityScopeDecision
-from aptl.backends.raes_observation import (
-    observation_evidence,
-    observe_realization,
-    operational_realization_observations,
-)
+from aptl.backends.raes_operator_access import OperatorAccessDecision
 from aptl.backends.raes_realization import (
     AptlRealization,
     interpret_provisioning_plan,
 )
-from aptl.backends.raes_profiles import (
-    load_compose_profile_index,
-    select_backend_profiles,
-)
+from aptl.backends.raes_profiles import select_backend_profiles
 from aptl.core.config import AptlConfig
 from aptl.core.experiment.capture_plan import CapturePlan, empty_capture_plan
 from aptl.core.deployment.realization import (
@@ -49,7 +39,7 @@ from aptl.core.deployment.realization import (
     DeploymentRealizationSpec,
 )
 from aptl.core.deployment.observation import DeploymentObservationContext
-from aptl.utils.redaction import redact
+from aptl.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from raes_contracts.contracts import ArtifactAvailabilityContext
@@ -58,23 +48,26 @@ if TYPE_CHECKING:
     from aptl.core.scenario_bundle import ScenarioBundle
 
 
+log = get_logger("raes-provisioner")
+
+# Application-owned inventories can settle after Compose's health gate. Retry
+# bounded native readback without admitting an absent or partial value.
+_REALIZATION_READBACK_TIMEOUT_SECONDS = 300.0
+_REALIZATION_READBACK_INTERVAL_SECONDS = 2.0
+
+
 @dataclass
-class AptlProvisioner(object):
+class AptlProvisioner(ProvisionerStartMixin):
     """Provisioning component of APTL's ``full-remote-control-plane`` target."""
 
     project_dir: Path
     config: AptlConfig
     deployment_backend: "DeploymentBackend"
-    # The scenario being realized, and the root every scenario-declared input is
-    # anchored to. Required: realization never falls back to ``project_dir`` (the
-    # engine checkout). For an in-tree scenario the bundle root *is* the project
-    # directory, which is what keeps an unmoved scenario unchanged (issue #874).
+    # The scenario and root anchoring every declared input. Realization never
+    # falls back to ``project_dir``; see issue #874.
     bundle: ScenarioBundle
-    # RAES's backend-call boundary replaces a failed apply's diagnostics with
-    # its snapshot-contract / SEM-218 gate output (the gate reads the
-    # never-realized snapshot, so every exact declaration looks unrealized).
-    # Keep the last failed apply's own report here so the handoff can
-    # re-attach the actionable failure (issue #677).
+    # RAES's backend-call boundary replaces failed-apply diagnostics with the
+    # snapshot gate output. Preserve the actionable report; see issue #677.
     last_failure_diagnostics: tuple[Diagnostic, ...] = ()
     # The trusted availability facts gathered before planning (ADR-051). They
     # carry the address-scoped immutable substrate config id each
@@ -86,10 +79,22 @@ class AptlProvisioner(object):
     observability_scope: ObservabilityScopeDecision = field(
         default_factory=ObservabilityScopeDecision
     )
+    # Declared operator interactive access, admitted from the scenario before
+    # planning. RAES carries it in the participant model, not the provisioning
+    # plan, so it reaches the deployment through here (issue #1006).
+    operator_access: OperatorAccessDecision = field(
+        default_factory=OperatorAccessDecision
+    )
     _cached_plan: object | None = field(default=None, init=False, repr=False)
     _cached_realization: AptlRealization | None = field(
         default=None, init=False, repr=False
     )
+    _attempt_id: str | None = field(default=None, init=False, repr=False)
+
+    def bind_attempt_id(self, attempt_id: str | None) -> None:
+        """Bind the one already-resolved lab-start attempt to deployment."""
+
+        self._attempt_id = attempt_id
 
     def validate(self, plan: object) -> list[Diagnostic]:
         """Validate that the RAES provisioning plan is APTL-realizable."""
@@ -103,7 +108,26 @@ class AptlProvisioner(object):
                 )
             ]
 
-        return list(self.realize_plan(plan).diagnostics)
+        return [
+            *self.realize_plan(plan).diagnostics,
+            *self._unrealizable_operator_access_diagnostics(),
+        ]
+
+    def _unrealizable_operator_access_diagnostics(self) -> list[Diagnostic]:
+        """Refuse declared interactive access this backend cannot make reachable."""
+
+        return [
+            diagnostic(
+                "aptl.provisioner.operator-access-unrealizable",
+                PROVISIONING_ADDRESS,
+                (
+                    f"Declared interactive access {access.agent}/{access.access_id} "
+                    f"({access.channel} to {access.target_node}) has no backend "
+                    "apparatus that can make it reachable."
+                ),
+            )
+            for access in self.operator_access.unrealizable
+        ]
 
     def apply(self, plan: object, snapshot: object) -> ApplyResult:
         """Apply a RAES provisioning plan via APTL's deployment backend."""
@@ -201,6 +225,7 @@ class AptlProvisioner(object):
         # loses the code, the address and the node. The contract is a failed
         # ApplyResult carrying diagnostics; return one.
         except (TypeError, ValueError) as exc:
+            log.exception("Deployment backend realization rejected its lowered model")
             diagnostics.append(
                 diagnostic(
                     "aptl.provisioner.realization-not-lowerable",
@@ -246,122 +271,6 @@ class AptlProvisioner(object):
             apparatus_observations,
         )
 
-    def _start_and_observe_apparatus(
-        self,
-        deployment_spec: DeploymentRealizationSpec,
-        snapshot: RuntimeSnapshot,
-        diagnostics: list[Diagnostic],
-        selected_profiles: list[str],
-        realization: AptlRealization,
-    ) -> (
-        tuple[DeploymentObservationContext, tuple[dict[str, object], ...]] | ApplyResult
-    ):
-        """Start the lowered deployment and verify every added observer."""
-
-        observation_context = DeploymentObservationContext()
-        start_result = self.deployment_backend.realize(
-            deployment_spec,
-            scenario_root=self.bundle.root,
-            substrate_digests=self._availability_substrate_digests(),
-            observation_context=observation_context,
-        )
-        if not start_result.success:
-            diagnostics.append(
-                diagnostic(
-                    "aptl.provisioner.backend-start-failed",
-                    PROVISIONING_ADDRESS,
-                    start_result.error or "APTL deployment backend failed.",
-                )
-            )
-            return self._failed_apply(
-                snapshot, diagnostics, selected_profiles, realization
-            )
-        apparatus_observations = capture_apparatus_observations(
-            self.deployment_backend, deployment_spec
-        )
-        if apparatus_observations is None:
-            diagnostics.append(
-                diagnostic(
-                    "aptl.capture-apparatus.realization-unverified",
-                    PROVISIONING_ADDRESS,
-                    "Required capture apparatus could not be verified after realization.",
-                )
-            )
-            return self._failed_apply(
-                snapshot, diagnostics, selected_profiles, realization
-            )
-        return observation_context, apparatus_observations
-
-    def _successful_apply(
-        self,
-        plan: ProvisioningPlan,
-        snapshot: RuntimeSnapshot,
-        diagnostics: list[Diagnostic],
-        realization: AptlRealization,
-        observation_context: DeploymentObservationContext,
-        apparatus_observations: tuple[dict[str, object], ...],
-    ) -> ApplyResult:
-        """Observe and report one deployment whose start checks succeeded."""
-
-        selected_profiles = self.selected_profiles(realization)
-        # The snapshot must record what the backend realized, not what the plan
-        # asked for: the SEM-218 gate reads the realized value out of it, so
-        # echoing the plan back would make the gate compare the plan against
-        # itself and pass unconditionally (issue #578).
-        observations = observe_realization(
-            self.deployment_backend,
-            realization,
-            plan,
-            scenario_root=self.bundle.root,
-            observation_context=observation_context,
-        )
-        realized_snapshot = self._with_artifact_satisfactions(
-            plan,
-            snapshot_after_apply(plan, snapshot, observations),
-            realization,
-            observation_context,
-        )
-        realized_snapshot = with_capture_apparatus_entries(
-            realized_snapshot, apparatus_observations
-        )
-        realization_envelope = create_aptl_realization_envelope()
-        realized_snapshot = replace(
-            realized_snapshot,
-            realization_envelope=realization_envelope.identity,
-        )
-        operational_observations = operational_realization_observations(
-            plan=plan,
-            observations=observations,
-            envelope=realization_envelope,
-            previous=snapshot.realization_observations,
-        )
-        return ApplyResult(
-            success=True,
-            snapshot=realized_snapshot,
-            diagnostics=diagnostics,
-            changed_addresses=[
-                *realized_changed_addresses(plan, realized_snapshot),
-                *(entry["runtime_address"] for entry in apparatus_observations),
-            ],
-            details=_bounded_apply_details(
-                {
-                    "profiles": selected_profiles,
-                    "realization": realization.details(),
-                    "observation_evidence": observation_evidence(observations),
-                    "observability": {
-                        "enabled": self.observability_scope.enabled,
-                        "reason": self.observability_scope.reason,
-                        "governing_scopes": list(
-                            self.observability_scope.governing_scopes
-                        ),
-                    },
-                    "capture_apparatus": list(apparatus_observations),
-                },
-                realization,
-            ),
-            operational_realization_observations=operational_observations,
-        )
-
     def selected_profiles(self, realization: AptlRealization) -> list[str]:
         """Apply the admitted scope decision to the ordinary backend profiles."""
         return self.observability_scope.select_profiles(
@@ -369,35 +278,9 @@ class AptlProvisioner(object):
         )
 
     def _availability_substrate_digests(self) -> dict[str, str]:
-        """Return the address-scoped substrate config id availability verified.
+        """Return address-scoped immutable substrate ids verified by availability."""
 
-        For each dynamic-composition node the availability pass resolved the
-        generic substrate's immutable config id once and recorded it as a
-        verified integrity ref paired with the dynamic-composition provenance
-        ref. Threading that exact id into realization means the base container
-        starts the bytes availability verified, never a second resolution of the
-        mutable tag (issue #876 cycle-6 review). Empty when no node authored a
-        dynamic-composition source.
-        """
-
-        availability = self.artifact_availability
-        if availability is None:
-            return {}
-        provenance = dynamic_composition_provenance_ref()
-        digests: dict[str, str] = {}
-        for requirement in getattr(availability, "requirements", ()):
-            if provenance not in getattr(requirement, "verified_provenance_refs", ()):
-                continue
-            # A dynamic-composition node authors an open source with no exact or
-            # materialized artifact, so its verified integrity set is EXACTLY the
-            # one substrate digest. Require that: a multi-valued or empty set is
-            # ambiguous, and taking one arbitrarily could start an unrelated
-            # artifact, so it yields no verified digest and the start fails closed
-            # (issue #876 cycle-7 review).
-            refs = getattr(requirement, "verified_integrity_refs", ())
-            if len(refs) == 1:
-                digests[requirement.address] = refs[0]
-        return digests
+        return availability_substrate_digests(self.artifact_availability)
 
     def _with_artifact_satisfactions(
         self,
@@ -429,31 +312,7 @@ class AptlProvisioner(object):
         time. Catch that here so ``aptl lab start`` fails fast with an APTL
         diagnostic instead of a raw Compose "undefined service" error.
         """
-        try:
-            profile_index = load_compose_profile_index(self.bundle.root)
-        except (OSError, ValueError) as exc:
-            return [
-                diagnostic(
-                    "aptl.provisioner.compose-profile-index-failed",
-                    PROVISIONING_ADDRESS,
-                    redact(str(exc)),
-                )
-            ]
-        gaps = profile_index.cross_profile_dependency_gaps(set(selected_profiles))
-        return [
-            diagnostic(
-                "aptl.provisioner.compose-project-invalid",
-                PROVISIONING_ADDRESS,
-                (
-                    "Selected APTL compose profiles form an invalid project: "
-                    f"service '{service_name}' depends on "
-                    f"{', '.join(dependencies)}, which the profile selection "
-                    "excludes. Declare the dependency's node or enable its "
-                    "profile."
-                ),
-            )
-            for service_name, dependencies in sorted(gaps.items())
-        ]
+        return compose_validity_diagnostics(self.bundle.root, selected_profiles)
 
     def realize_plan(self, plan: ProvisioningPlan) -> AptlRealization:
         """Interpret one plan once, reusing its exact serving interaction."""
@@ -472,7 +331,6 @@ class AptlProvisioner(object):
 
     def _realize_plan(self, plan: ProvisioningPlan) -> AptlRealization:
         """Backward-compatible private route to the cached interpreter."""
-
         return self.realize_plan(plan)
 
     @staticmethod

@@ -28,7 +28,10 @@ def test_guest_scripts_are_valid_and_have_no_network_install_path() -> None:
 
     provisioner = scripts[0].read_text()
     assert "pip install --no-index" in provisioner
-    assert '"aptl-labs==$APTL_APPLIANCE_VERSION"' in provisioner
+    assert "--require-hashes" in provisioner
+    assert "--only-binary=:all:" in provisioner
+    assert '-r "$payload_dir/requirements.txt"' in provisioner
+    assert "aptl appliance validate-inputs" in provisioner
     assert "docker load" not in provisioner
     assert "/opt/aptl/offline/oci-images.tar" in provisioner
     assert "install -d -m 0700 /var/lib/aptl" in provisioner

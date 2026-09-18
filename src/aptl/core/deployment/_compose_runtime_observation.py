@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from aptl.core.deployment._compose_child_lifecycle import (
     ComposeSpawnedChildLifecycleMixin,
 )
+from aptl.core.deployment._compose_resource_ownership import OwnershipConflictError
 from aptl.core.deployment._compose_runtime_orchestration import (
     deployment_spawn_image_requirements,
     docker_authority_admissions,
@@ -318,6 +319,16 @@ class ComposeRuntimeOrchestrationObservationMixin(
                     if container_id.strip()
                 )
             )
+            if container_ids and getattr(
+                self, "_attempt_isolated_docker_daemon", False
+            ):
+                try:
+                    self._record_isolated_child_receipts(container_ids, requirement)
+                except OwnershipConflictError:
+                    failure = _spawn_failure(
+                        "Spawned-child ownership could not be established",
+                        requirement,
+                    )
         count_required = bool(container_ids or require_children)
         if (
             failure is None

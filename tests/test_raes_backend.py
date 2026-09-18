@@ -266,6 +266,7 @@ def _execution_plan_with_realization_requirements():
 
     from raes_processor.compiler import compile_runtime_model
     from raes_processor.planner import plan
+    from raes_contracts.run_scope import PlanScope
     from raes.parser import parse_sdl
 
     from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, create_aptl_manifest
@@ -285,7 +286,7 @@ def _execution_plan_with_realization_requirements():
     return plan(
         compile_runtime_model(scenario),
         create_aptl_manifest(),
-        target_name=APTL_RAES_TARGET_NAME,
+        scope=PlanScope(target_name=APTL_RAES_TARGET_NAME),
     )
 
 
@@ -307,6 +308,7 @@ def _execution_plan_with_derived_realization_requirements():
 
     from raes_processor.compiler import compile_runtime_model
     from raes_processor.planner import plan
+    from raes_contracts.run_scope import PlanScope
     from raes.parser import parse_sdl
 
     from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, create_aptl_manifest
@@ -331,7 +333,7 @@ def _execution_plan_with_derived_realization_requirements():
     return plan(
         compile_runtime_model(scenario),
         create_aptl_manifest(),
-        target_name=APTL_RAES_TARGET_NAME,
+        scope=PlanScope(target_name=APTL_RAES_TARGET_NAME),
     )
 
 
@@ -341,6 +343,7 @@ def _execution_plan_with_content_realization_requirement():
 
     from raes_processor.compiler import compile_runtime_model
     from raes_processor.planner import plan
+    from raes_contracts.run_scope import PlanScope
     from raes.parser import parse_sdl
 
     from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, create_aptl_manifest
@@ -366,7 +369,7 @@ def _execution_plan_with_content_realization_requirement():
     return plan(
         compile_runtime_model(scenario),
         create_aptl_manifest(),
-        target_name=APTL_RAES_TARGET_NAME,
+        scope=PlanScope(target_name=APTL_RAES_TARGET_NAME),
     )
 
 
@@ -2707,6 +2710,34 @@ def test_provisioner_captures_failure_diagnostics_for_handoff(tmp_path):
     assert provisioner.last_failure_diagnostics == ()
 
 
+def test_provisioner_reports_backend_realization_value_error(tmp_path):
+    """A deployment lowering error must survive the RAES call boundary."""
+    from aptl.backends.raes import AptlProvisioner
+
+    _write_compose(tmp_path, {"kali": ["kali"]})
+    backend = MagicMock()
+    backend.realize.side_effect = ValueError(
+        "service 'kali' has neither an image nor a build context"
+    )
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
+        config=AptlConfig(lab={"name": "test"}, containers={"kali": True}),
+        deployment_backend=backend,
+    )
+
+    result = provisioner.apply(
+        _plan_for_nodes("scenario-a.kali"), RuntimeSnapshot()
+    )
+
+    assert result.success is False
+    assert [item.code for item in result.diagnostics] == [
+        "aptl.provisioner.backend-start-failed"
+    ]
+    assert "neither an image nor a build context" in result.diagnostics[0].message
+    assert provisioner.last_failure_diagnostics == tuple(result.diagnostics)
+
+
 def test_apply_failure_reattaches_backend_diagnostics_after_gate_flood(
     mocker, tmp_path
 ):
@@ -3730,6 +3761,9 @@ def test_provisioner_records_supported_placement_realizations(tmp_path):
         "spn": "",
         "mail": "operator@techvault.local",
         "disabled": False,
+        # The authored credential class is reported back with the placement, so
+        # the runtime sees which class the backend realized (issue #1006).
+        "password_strength": "weak",
     }
 
     # Real lowering, not counting: the typed backend spec actually passed
@@ -4277,6 +4311,97 @@ def test_apply_provisioning_rejects_exact_content_type_probe_mismatch(tmp_path):
     assert "runtime.backend-contract-invalid" in {
         diagnostic.code for diagnostic in result.diagnostics
     }
+
+
+def test_readback_retry_accepts_only_async_native_evidence():
+    """Readback waits for settling native facts, never closed intrusion."""
+    from dataclasses import replace
+
+    from raes_contracts.diagnostics import Diagnostic, Severity
+    from raes_contracts.runtime_state import SnapshotEntry
+
+    from aptl.backends._raes_provisioning_helpers import (
+        retryable_readback_gaps as _retryable_readback_gaps,
+    )
+
+    plan = _execution_plan_with_realization_requirements().provisioning
+    node_type = next(
+        authority
+        for authority in plan.realization_authority
+        if authority.requirement_kind == "node-type"
+    )
+    authority = replace(
+        node_type,
+        field_path="nodes.vm.runtime.applications",
+        requirement_kind="runtime-applications",
+        payload_pointer="/spec/node/runtime/applications",
+    )
+    plan = replace(plan, realization_authority=(authority,))
+    diagnostic = Diagnostic(
+        code="runtime.backend-contract-invalid",
+        domain="runtime-realization",
+        address="provision.node.vm",
+        message=(
+            "Backend did not realize the exact 'runtime-applications' requirement "
+            "at 'nodes.vm.runtime.applications' as the author declared it."
+        ),
+        severity=Severity.ERROR,
+    )
+    existing_node = SnapshotEntry(
+        address="provision.node.vm",
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="node",
+        payload={"node_kind": "compute"},
+    )
+
+    assert _retryable_readback_gaps(
+        plan,
+        RuntimeSnapshot(entries={existing_node.address: existing_node}),
+        [diagnostic],
+    )
+    assert not _retryable_readback_gaps(plan, RuntimeSnapshot(), [diagnostic])
+
+    wrong_value = replace(
+        existing_node,
+        payload={"spec": {"node": {"runtime": {"applications": ["wrong"]}}}},
+    )
+    assert _retryable_readback_gaps(
+        plan,
+        RuntimeSnapshot(entries={wrong_value.address: wrong_value}),
+        [diagnostic],
+    )
+
+    listener_authority = replace(
+        authority,
+        field_path="nodes.vm.runtime.service_listeners",
+        requirement_kind="service-listeners",
+        payload_pointer="/spec/node/runtime/service_listeners",
+    )
+    listener_diagnostic = replace(
+        diagnostic,
+        message=(
+            "Backend returned no valid effective corroboration for "
+            "'service-listeners' requirement at "
+            "'nodes.vm.runtime.service_listeners'."
+        ),
+    )
+    assert _retryable_readback_gaps(
+        replace(plan, realization_authority=(listener_authority,)),
+        RuntimeSnapshot(entries={wrong_value.address: wrong_value}),
+        [listener_diagnostic],
+    )
+
+    closed = next(
+        item.mode
+        for item in _execution_plan_with_realization_requirements()
+        .provisioning.realization_authority
+        if str(getattr(item.mode, "value", item.mode)) == "closed"
+    )
+    assert not _retryable_readback_gaps(
+        replace(plan, realization_authority=(replace(authority, mode=closed),)),
+        RuntimeSnapshot(entries={existing_node.address: existing_node}),
+        [diagnostic],
+    )
 
 
 def test_apply_provisioning_records_content_type_provenance_when_honored(tmp_path):

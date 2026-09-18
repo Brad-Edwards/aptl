@@ -8,15 +8,16 @@ from collections.abc import Mapping
 from aptl.core.scenario_bundle import ScenarioBundle
 
 TECHVAULT_PACK_SET_DIGEST = (
-    "sha256:6300b3d539ab9c1e2287b9852e5408e1811516b818a7acf015f045cb3c9c5b89"
+    "sha256:edd3bb6252990aeaf506904767182d5a3ef2b3828a498fe64c897dccaf954934"
 )
 _TECHVAULT_PACK_VERSION = "0.1.0"
+_FLAG_HOSTS = ("victim", "workstation", "webapp", "fileshare", "ad")
 
 
-def _flag(level: str) -> str:
-    """Return one fresh opaque TechVault AD flag value."""
+def _flag(host: str, level: str) -> str:
+    """Return one fresh opaque TechVault host flag value."""
 
-    return f"APTL{{{level}_ad_{secrets.token_hex(16)}}}"
+    return f"APTL{{{level}_{host}_{secrets.token_hex(16)}}}"
 
 
 def runtime_parameters_for_bundle(
@@ -24,10 +25,10 @@ def runtime_parameters_for_bundle(
 ) -> Mapping[str, object] | None:
     """Return the exact runtime-owned bindings for a supported pack.
 
-    The 6.0 TechVault release deliberately leaves its two AD flag values to
-    the scenario instantiator.  Bind only the content-identified release APTL
-    was qualified against; another pack or a changed TechVault release remains
-    an ordinary required-parameter admission failure.
+    The 6.0.1 TechVault release deliberately leaves ten per-host flag values to
+    the scenario instantiator. Bind only the content-identified release APTL was
+    qualified against; another pack or a changed TechVault release remains an
+    ordinary required-parameter admission failure.
     """
 
     identity = getattr(bundle, "pack_identity", None)
@@ -38,8 +39,9 @@ def runtime_parameters_for_bundle(
     ) != ("techvault", _TECHVAULT_PACK_VERSION, TECHVAULT_PACK_SET_DIGEST):
         return None
     return {
-        "flag_ad_user": _flag("user"),
-        "flag_ad_root": _flag("root"),
+        f"flag_{host}_{level}": _flag(host, level)
+        for host in _FLAG_HOSTS
+        for level in ("user", "root")
     }
 
 

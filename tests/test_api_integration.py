@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from tests.helpers import docker_ps_inventory_row
 
 pytest.importorskip("fastapi", reason="Web dependencies not installed")
 
@@ -60,8 +61,11 @@ class TestLabStatusIntegration:
         mock_run.return_value = MagicMock(
             returncode=0,
             stdout=(
-                "aptl-victim\tvictim:latest\tabc\tUp 1 minute (healthy)\t"
-                "running\tcom.docker.compose.project=integration-test\t"
+                docker_ps_inventory_row(
+                    "aptl-victim",
+                    status="Up 1 minute (healthy)",
+                    labels="com.docker.compose.project=integration-test",
+                )
             ),
             stderr="",
         )
@@ -78,11 +82,21 @@ class TestLabStatusIntegration:
     @patch("aptl.core.deployment.docker_compose.subprocess.run")
     def test_parses_multiple_project_rows(self, mock_run, integration_client):
         """Status endpoint handles one record per project container."""
-        rows = (
-            "aptl-victim\tvictim:latest\taaa\tUp 1 minute (healthy)\trunning\t"
-            "com.docker.compose.project=integration-test\t\n"
-            "aptl-kali\tkali:latest\tbbb\tUp 1 minute\trunning\t"
-            "aptl.lifecycle.project=integration-test\t\n"
+        rows = "\n".join(
+            (
+                docker_ps_inventory_row(
+                    "aptl-victim",
+                    container_id="aaa",
+                    status="Up 1 minute (healthy)",
+                    labels="com.docker.compose.project=integration-test",
+                ),
+                docker_ps_inventory_row(
+                    "aptl-kali",
+                    image="kali:latest",
+                    container_id="bbb",
+                    labels="aptl.lifecycle.project=integration-test",
+                ),
+            )
         )
         mock_run.return_value = MagicMock(
             returncode=0, stdout=rows, stderr=""

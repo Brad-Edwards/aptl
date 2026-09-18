@@ -226,3 +226,13 @@ describe('createPtyTeeWriter', () => {
     expect(existsSync(file)).toBe(true);
   });
 });
+
+describe('management-bound MCP run identity', () => {
+  it('uses the admitted lab-start run without a scenario UI trace file', () => {
+    expect(loadActiveTraceId({ APTL_MCP_ADMITTED_RUN_ID: 'run_20260917T120000Z' }))
+      .toBe('run_20260917T120000Z');
+  });
+  it('refuses an invalid explicit admission instead of falling back to ambient state', () => {
+    expect(() => loadActiveTraceId({ APTL_MCP_ADMITTED_RUN_ID: '../other' })).toThrow();
+  });
+});

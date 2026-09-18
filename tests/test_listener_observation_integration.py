@@ -26,6 +26,7 @@ import uuid
 import pytest
 
 from aptl.core.deployment.docker_compose import DockerComposeBackend
+from tests.helpers import run_owned_container
 
 pytestmark = pytest.mark.integration
 
@@ -54,28 +55,18 @@ _WORKLOAD = (
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
 def test_shadowed_container_ss_cannot_forge_attested_listeners(tmp_path):
-    container_name = "aptl-e2e-listener-trust-" + uuid.uuid4().hex
+    semantic_name = "aptl-e2e-listener-trust-" + uuid.uuid4().hex
     backend = DockerComposeBackend(
         project_dir=tmp_path, project_name="aptl-itest-listener-trust"
     )
-    created = subprocess.run(
-        [
-            "docker",
-            "run",
-            "-d",
-            "--name",
-            container_name,
-            "python:3.12-slim",
-            "sh",
-            "-c",
-            _WORKLOAD,
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=120,
+    # The observer resolves its target through ownership receipts, so the
+    # hostile workload has to be a container this backend really owns. A
+    # container started behind the backend's back is refused rather than
+    # observed, which is the correct scoping: a backend must not read
+    # resources outside its own workspace (#1054).
+    container_id = run_owned_container(
+        backend, semantic_name, ["python:3.12-slim", "sh", "-c", _WORKLOAD]
     )
-    container_id = created.stdout.strip()
     assert re.fullmatch(r"[0-9a-f]{64}", container_id)
     try:
         # Wait until the workload reports it is listening.

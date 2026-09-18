@@ -19,20 +19,15 @@ from aptl.backends.raes_diagnostics import (
 )
 from aptl.backends.raes_dependency_closure import append_dependency_closure
 from aptl.backends.raes_acl_realization import realize_acls
-from raes.runtime_configuration import RuntimeConfiguration
 
 from aptl.backends._raes_realization_diagnostics import (
     _append_node_profile_diagnostic,
     _append_profile_diagnostics,
     _invalid_payload_diagnostics,
 )
-from aptl.backends.raes_base_substrate import base_container_spec
+from aptl.backends import _raes_node_realization
 from aptl.backends.pack_interaction import ResolvedPackBackendInteraction
 from aptl.backends.raes_pack_interaction import apply_pack_interaction
-from aptl.backends.raes_image_realization import (
-    node_source_is_dynamic_composition,
-    resolve_node_image,
-)
 from aptl.backends.raes_placement_realization import (
     placement_node_lookup as _node_lookup,
     realize_placements as _realize_placements,
@@ -40,7 +35,6 @@ from aptl.backends.raes_placement_realization import (
 from aptl.backends.raes_profiles import (
     ComposeProfileIndex,
     load_compose_profile_index,
-    node_aliases,
 )
 from aptl.backends.raes_realization_networks import (
     append_network_topology_diagnostics,
@@ -50,26 +44,25 @@ from aptl.backends.raes_realization_model import (
     AptlRealization,
     NetworkRealization,
     NodeRealization,
-    _single_or_none,
-)
-from aptl.backends._raes_conformance_probe import (
-    _conformance_probe_services,
-    _is_raes_conformance_probe_node,
 )
 from aptl.backends.raes_realization_values import (
     mapping as _mapping,
-    network_names as _network_names,
     optional_bool as _optional_bool,
     optional_string as _optional_string,
-    published_ports as _published_ports,
     resource_name as _resource_name,
-    service_ports as _service_ports,
-    static_address_assignments as _static_address_assignments,
-    static_addresses as _static_addresses,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.deployment.realization import DeploymentGeneratedArtifactRealization
 from aptl.core.scenario_bundle import ScenarioBundle
 from aptl.utils.redaction import redact
+
+_realize_node = _raes_node_realization._realize_node
+# Compatibility exports used by focused node-realization tests and downstream
+# diagnostics. The implementation lives in the split node module.
+_container_name = _raes_node_realization._container_name
+_node_os = _raes_node_realization._node_os
+_node_os_version = _raes_node_realization._node_os_version
+_node_runtime = _raes_node_realization._node_runtime
 
 
 def interpret_provisioning_plan(
@@ -105,6 +98,7 @@ def interpret_provisioning_plan(
 
     payload_resources = _payload_resources(plan, diagnostics)
     nodes, networks, profiles = _realize_nodes_and_networks(
+        plan,
         payload_resources,
         profile_index,
         component_root,
@@ -148,6 +142,11 @@ def interpret_provisioning_plan(
     )
     generated_artifacts, persistent_volumes = realize_stateful_resources(
         payload_resources,
+        nodes,
+        diagnostics,
+    )
+    generated_artifacts = _merge_backend_generated_artifacts(
+        generated_artifacts,
         nodes,
         diagnostics,
     )
@@ -232,6 +231,7 @@ def _payload_resources(
 
 
 def _realize_nodes_and_networks(
+    plan: ProvisioningPlan,
     payload_resources: list[PlannedResource],
     profile_index: ComposeProfileIndex,
     component_root: Path,
@@ -253,6 +253,7 @@ def _realize_nodes_and_networks(
         payload = resource.payload
         if resource.resource_type == "node":
             node = _realize_node(
+                plan,
                 resource,
                 payload,
                 profile_index,
@@ -296,159 +297,52 @@ def _empty_realization(diagnostics: list[Diagnostic]) -> AptlRealization:
     )
 
 
-def _realize_node(
-    resource: PlannedResource,
-    payload: Mapping[str, Any],
-    profile_index: ComposeProfileIndex,
-    component_root: Path,
-    config: AptlConfig,
+def _merge_backend_generated_artifacts(
+    authored: list[DeploymentGeneratedArtifactRealization],
+    nodes: list[NodeRealization],
     diagnostics: list[Diagnostic],
-) -> NodeRealization:
-    """Realize a node resource into APTL profile and runtime details.
+) -> list[DeploymentGeneratedArtifactRealization]:
+    """Add backend-selected prerequisites without overriding authored state."""
 
-    ``component_root`` is the engine checkout a ``materialization-specification``
-    node's build context is resolved against (ADR-051), not the scenario bundle.
-    """
-
-    aliases = node_aliases(resource.address, payload)
-    backend_services = profile_index.service_names_for_aliases(aliases)
-    node_name = resource.address.rsplit(".", 1)[-1]
-    # Project-tree scenarios retain their static Compose membership. A pack
-    # has no static Compose model, so this remains empty until the exact
-    # pack/backend interaction is resolved after all nodes have been lowered.
-    profiles = profile_index.profiles_for_aliases(
-        aliases
-    ) | profile_index.profiles_for_services(set(backend_services))
-    if not profiles and _is_raes_conformance_probe_node(resource, payload):
-        backend_services = _conformance_probe_services(profile_index, config)
-        profiles = profile_index.profiles_for_services(set(backend_services))
-    spec = _mapping(payload.get("spec"))
-    node_spec = _mapping(spec.get("node")) if spec else None
-    infra_spec = _mapping(spec.get("infrastructure")) if spec else None
-    if not backend_services:
-        # Env-pack path (issue #875): with no static compose to index, the
-        # node's own identity is its Compose service name. In-tree scenarios
-        # ship a compose file, so this fallback never fires there.
-        backend_services = frozenset({node_name})
-    service_name = _single_or_none(tuple(sorted(backend_services)))
-    node_os = _node_os(node_spec)
-    node_os_version = _node_os_version(node_spec)
-    node_runtime = _node_runtime(node_spec)
-    container_name = _resolved_container_name(
-        resource,
-        profile_index,
-        backend_services,
-        node_name,
-        node_os=node_os,
-        node_os_version=node_os_version,
-        node_runtime=node_runtime,
-    )
-    return NodeRealization(
-        address=resource.address,
-        name=_resource_name(resource.address, payload),
-        aliases=tuple(sorted(aliases)),
-        profiles=tuple(sorted(profiles)),
-        backend_services=tuple(sorted(backend_services)),
-        container_name=container_name,
-        services=_service_ports(node_spec),
-        networks=tuple(sorted(_network_names(infra_spec))),
-        static_addresses=tuple(sorted(_static_addresses(infra_spec))),
-        static_address_assignments=_static_address_assignments(infra_spec),
-        published_ports=_published_ports(node_spec),
-        image=resolve_node_image(
-            resource=resource,
-            payload=payload,
-            project_dir=component_root,
-            service_name=service_name,
-            diagnostics=diagnostics,
-        ),
-        ordering_dependencies=resource.ordering_dependencies,
-        os=node_os,
-        os_version=node_os_version,
-        runtime=node_runtime,
-        dynamic_composition=node_source_is_dynamic_composition(
-            payload, resource.address
-        ),
-    )
-
-
-def _resolved_container_name(
-    resource: PlannedResource,
-    profile_index: ComposeProfileIndex,
-    backend_services: frozenset[str],
-    node_name: str,
-    *,
-    node_os: str,
-    node_os_version: str,
-    node_runtime: RuntimeConfiguration | None,
-) -> str:
-    """Return the container name the node realizes to.
-
-    Preference order: the static compose service's own container name; then the
-    ``base_container_spec`` name derived from the node's declared runtime; and
-    finally APTL's ``aptl-<node>`` convention.
-    """
-
-    container_name = _container_name(profile_index, backend_services)
-    if container_name is None and node_runtime is not None and node_os:
-        container_name = base_container_spec(
-            resource.address,
-            os=node_os,
-            os_version=node_os_version,
-            runtime=node_runtime,
-        ).container_name
-    if container_name is None:
-        # Env-pack image node (issue #875): no static compose service to read a
-        # container name from, so use APTL's ``aptl-<node>`` convention (the
-        # same one base_container_spec applies to image-free nodes). A node
-        # whose own id already carries the prefix is not doubled.
-        container_name = (
-            node_name if node_name.startswith("aptl-") else f"aptl-{node_name}"
+    merged = list(authored)
+    by_name = {artifact.name: artifact for artifact in authored}
+    for candidate in (
+        artifact for node in nodes for artifact in node.backend_generated_artifacts
+    ):
+        existing = by_name.get(candidate.name)
+        if existing is None:
+            merged.append(candidate)
+            by_name[candidate.name] = candidate
+            continue
+        if _same_generated_artifact_contract(existing, candidate):
+            continue
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.backend-generated-artifact-conflict",
+                candidate.address,
+                "A backend-selected generated artifact conflicts with an authored artifact.",
+            )
         )
-    return container_name
+    return merged
 
 
-def _node_os(node_spec: Mapping[str, Any] | None) -> str:
-    """Return the node's declared OS family, or empty when undeclared."""
+def _same_generated_artifact_contract(
+    left: DeploymentGeneratedArtifactRealization,
+    right: DeploymentGeneratedArtifactRealization,
+) -> bool:
+    """Compare artifact behavior while allowing authored/backend addresses to differ."""
 
-    return str(node_spec.get("os") or "") if node_spec else ""
-
-
-def _node_os_version(node_spec: Mapping[str, Any] | None) -> str:
-    """Return the node's declared OS version, or empty when undeclared."""
-
-    return str(node_spec.get("os_version") or "") if node_spec else ""
-
-
-def _node_runtime(node_spec: Mapping[str, Any] | None) -> RuntimeConfiguration | None:
-    """Reconstruct the typed RAES RuntimeConfiguration from a node payload.
-
-    Best-effort: a node with no declared runtime returns None. A malformed
-    runtime block returns None rather than aborting the whole realization; the
-    materializer/manifest gates surface the missing desired state downstream.
-    """
-
-    raw = node_spec.get("runtime") if node_spec else None
-    if not isinstance(raw, Mapping):
-        return None
-    try:
-        return RuntimeConfiguration.model_validate(dict(raw))
-    except (ValueError, TypeError):
-        return None
-
-
-def _container_name(
-    profile_index: ComposeProfileIndex,
-    service_names: frozenset[str],
-) -> str | None:
-    """Return the concrete container name for an unambiguous service binding."""
-
-    if len(service_names) != 1:
-        return None
-    service = profile_index.services.get(next(iter(service_names)))
-    if service is None:
-        return None
-    return service.container_name or service.name
+    return (
+        left.name == right.name
+        and left.generator == right.generator
+        and left.lifecycle == right.lifecycle
+        and left.provenance == right.provenance
+        and left.outputs == right.outputs
+        and left.consumers == right.consumers
+        and left.environment_consumers == right.environment_consumers
+        and left.ordering_dependencies == right.ordering_dependencies
+        and left.refresh_dependencies == right.refresh_dependencies
+    )
 
 
 def _realize_network(

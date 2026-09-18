@@ -1,6 +1,6 @@
-# Reverse engineering container built on shared Ubuntu 22.04 base
+# Reverse engineering container built on shared Ubuntu 26.04 base
 # Build context must be ./containers/ so both base/ and reverse/ are accessible
-FROM ubuntu:22.04@sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982
+FROM ubuntu:26.04@sha256:513c074113a871b51a8d16ab445c88779d6452d937a164fb5cc479f32668a41d
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -40,11 +40,8 @@ RUN systemctl enable rsyslog ssh systemd-user-sessions && \
     systemctl enable systemd-user-sessions.service && \
     ln -sf /usr/lib/systemd/system/systemd-user-sessions.service /etc/systemd/system/multi-user.target.wants/
 
-RUN mkdir /var/run/sshd && \
-    ssh-keygen -A && \
-    sed -i 's/#PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config && \
-    sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config && \
-    sed -i 's/#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+COPY --chmod=644 base/sshd/00-aptl-hardening.conf /etc/ssh/sshd_config.d/
+RUN ssh-keygen -A && sshd -t
 
 RUN useradd -m -s /bin/bash labadmin && \
     usermod -aG sudo labadmin && \

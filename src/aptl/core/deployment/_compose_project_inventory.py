@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -15,10 +16,13 @@ _PROJECT_OWNERSHIP_LABELS = (
     "aptl.lifecycle.project",
 )
 _MAX_INVENTORY_ERROR_LENGTH = 512
-_PROJECT_INVENTORY_FORMAT = (
-    "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.State}}\t"
-    "{{.Labels}}\t{{.Ports}}"
-)
+# One JSON object per container rather than a tab-delimited row: image labels
+# are arbitrary text and some upstream images (Ubuntu 26.04's
+# `org.opencontainers.image.description`) carry embedded newlines, which split
+# a single container across several "rows" and made the whole inventory
+# unparseable — the lab realized correctly and then failed at attestation
+# (issue #1006). JSON escapes the value, so label text cannot break the shape.
+_PROJECT_INVENTORY_FORMAT = "{{json .}}"
 
 
 def _parse_labels(labels_str: str) -> dict[str, str]:
@@ -43,26 +47,30 @@ def _parse_ports(ports_str: str) -> list[str]:
 
 
 def _parse_lab_row(line: str) -> dict[str, Any] | None:
-    """Parse one project-inventory TSV row, or reject a malformed row."""
+    """Parse one project-inventory JSON row, or reject a malformed row."""
 
-    parts = line.split("\t", 6)
-    if len(parts) < 6:
+    try:
+        row = json.loads(line)
+    except ValueError:
         return None
+    if not isinstance(row, dict):
+        return None
+    status = str(row.get("Status", ""))
     health_match = re.search(
-        r"\((healthy|unhealthy|health: starting)\)", parts[3], re.IGNORECASE
+        r"\((healthy|unhealthy|health: starting)\)", status, re.IGNORECASE
     )
     health = health_match.group(1).casefold() if health_match else ""
     if health == "health: starting":
         health = "starting"
     return {
-        "name": parts[0],
-        "image": parts[1],
-        "id": parts[2],
-        "status": parts[3],
-        "state": parts[4],
+        "name": str(row.get("Names", "")),
+        "image": str(row.get("Image", "")),
+        "id": str(row.get("ID", "")),
+        "status": status,
+        "state": str(row.get("State", "")),
         "health": health,
-        "labels": _parse_labels(parts[5]),
-        "ports": _parse_ports(parts[6] if len(parts) > 6 else ""),
+        "labels": _parse_labels(str(row.get("Labels", ""))),
+        "ports": _parse_ports(str(row.get("Ports", ""))),
     }
 
 
@@ -103,6 +111,7 @@ class ComposeProjectInventoryMixin(object):
                     "docker",
                     "ps",
                     "-a",
+                    "--no-trunc",
                     "--filter",
                     f"label={label}={self._project_name}",
                     "--format",

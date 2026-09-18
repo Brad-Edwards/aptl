@@ -31,12 +31,17 @@ from aptl.core.deployment._compose_realization import (
     _resolve_realization_networks,
 )
 from aptl.core.deployment._compose_queries import _select_shell
+from aptl.core.deployment._compose_resource_ownership import (
+    ResourceReceipt,
+    WorkspaceOwnership,
+)
 from aptl.core.deployment.errors import (
     BackendObservationError,
     BackendSeedError,
     BackendTimeoutError,
 )
 from aptl.core.lab import LabResult, LabStatus
+from tests.helpers import docker_ps_inventory_row
 
 # SSHComposeBackend validates the *local* ssh identity path with
 # Path.is_absolute(), which is platform-specific: a POSIX "/home/..." path is
@@ -130,6 +135,7 @@ def test_container_file_read_rejects_symlink_created_by_docker_cp(
     tmp_path, monkeypatch
 ):
     backend = DockerComposeBackend(project_dir=tmp_path)
+    backend._resolve_owned_container_id = lambda selector: selector  # type: ignore[method-assign]
     host_file = tmp_path / "host-controlled"
     host_file.write_bytes(b"must-not-be-read")
 
@@ -258,7 +264,25 @@ class TestDockerComposeBackend:
     """Tests for the Docker Compose deployment backend."""
 
     def _make_backend(self, tmp_path: Path) -> DockerComposeBackend:
-        return DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        compose_file = tmp_path / "docker-compose.yml"
+        if not compose_file.exists():
+            compose_file.write_text("services:\n  victim:\n    image: test\n")
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        # These tests exercise existing Compose orchestration behavior rather
+        # than ownership establishment.  Inject a deterministic, already-
+        # established scope; ownership-specific behavior is covered by
+        # test_compose_resource_ownership.py.
+        backend._resource_ownership = WorkspaceOwnership(
+            tmp_path, "test", "0" * 32, "test"
+        )
+        backend._docker_daemon_id = "test-daemon"
+        backend._resolve_owned_container_id = lambda selector: selector  # type: ignore[method-assign]
+        backend._resolve_owned_network_id = lambda selector: selector  # type: ignore[method-assign]
+        backend._verify_compose_namespace_is_owned = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+        backend._record_compose_network_receipts = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+        backend._record_compose_volume_receipts = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+        return backend
 
     def test_rejects_unsafe_direct_project_name(self, tmp_path):
         with pytest.raises(ValueError, match="project_name"):
@@ -272,7 +296,9 @@ class TestDockerComposeBackend:
             result = backend.start(["wazuh", "kali"])
 
         assert result.success is True
-        cmd = mock_run.call_args[0][0]
+        cmd = next(
+            call.args[0] for call in mock_run.call_args_list if "up" in call.args[0]
+        )
         assert cmd[0] == "docker"
         assert cmd[1] == "compose"
         # Project name pinned so start/stop act on the same project as
@@ -295,7 +321,9 @@ class TestDockerComposeBackend:
             result = backend.start(["wazuh"], build=False)
 
         assert result.success is True
-        cmd = mock_run.call_args[0][0]
+        cmd = next(
+            call.args[0] for call in mock_run.call_args_list if "up" in call.args[0]
+        )
         assert "--build" not in cmd
 
     def test_start_dedupes_duplicate_local_build_tags(self, tmp_path):
@@ -334,7 +362,9 @@ services:
         assert "pull_policy: never" in override
         assert "sidecar-one:" not in override
         assert "unique:" not in override
-        cmd = mock_run.call_args[0][0]
+        cmd = next(
+            call.args[0] for call in mock_run.call_args_list if "up" in call.args[0]
+        )
         assert cmd[:4] == ["docker", "compose", "-p", "test"]
         assert cmd[4:6] == ["-f", str(tmp_path / "docker-compose.yml")]
         assert cmd[6:8] == ["-f", str(override_path)]
@@ -343,10 +373,12 @@ services:
     def test_start_returns_failure_on_error(self, tmp_path):
         backend = self._make_backend(tmp_path)
 
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=1, stdout="", stderr="compose up failed"
-            )
+        def fake_run(cmd, **_kwargs):
+            if "up" in cmd:
+                return MagicMock(returncode=1, stdout="", stderr="compose up failed")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run):
             result = backend.start(["wazuh"])
 
         assert result.success is False
@@ -629,6 +661,8 @@ services:
                 return MagicMock(returncode=0, stdout=stdout, stderr="")
             if cmd[:4] == ["docker", "compose", "-p", "test"]:
                 return MagicMock(returncode=0, stdout="", stderr="")
+            if cmd[:3] == ["docker", "network", "create"]:
+                return MagicMock(returncode=0, stdout=f"{'a' * 64}\n", stderr="")
             if cmd[:2] == ["docker", "inspect"]:
                 return MagicMock(returncode=0, stdout=inspect_payload, stderr="")
             return MagicMock(returncode=0, stdout="", stderr="")
@@ -638,18 +672,16 @@ services:
 
         assert result.success is True
         commands = [call.args[0] for call in mock_run.call_args_list]
-        create_command = [
-            "docker",
-            "network",
-            "create",
-            "--driver",
-            "bridge",
-            "--label",
-            "com.docker.compose.project=test",
-            "--label",
-            "com.docker.compose.network=aptl-dmz",
-            "--label",
-            "org.aptl.realization.network=true",
+        create_command = next(
+            command
+            for command in commands
+            if command[:3] == ["docker", "network", "create"]
+        )
+        assert "com.docker.compose.project=test" in create_command
+        assert "com.docker.compose.network=aptl-dmz" in create_command
+        assert "org.aptl.realization.network=true" in create_command
+        assert "aptl.workspace.id=00000000000000000000000000000000" in create_command
+        assert create_command[-8:] == [
             "--internal",
             "--subnet",
             "172.20.1.0/24",
@@ -660,7 +692,6 @@ services:
             "172.20.1.128/25",
             "test_aptl-dmz",
         ]
-        assert create_command in commands
         compose_up = next(
             command for command in commands if command[-2:] == ["up", "-d"]
         )
@@ -915,15 +946,20 @@ services:
         backend = self._make_backend(tmp_path)
         spec = DeploymentRealizationSpec(profiles=("kali",), nodes=(), networks=())
 
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=1, stdout="", stderr="compose failed"
-            )
+        def fake_run(cmd, **_kwargs):
+            if "up" in cmd:
+                return MagicMock(returncode=1, stdout="", stderr="compose failed")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
             result = backend.realize(spec, build=False, scenario_root=tmp_path)
 
         assert result.success is False
         assert result.error == "compose failed"
-        assert mock_run.call_count == 1
+        assert not any(
+            call.args[0][:2] == ["docker", "network"]
+            for call in mock_run.call_args_list
+        )
 
     def test_realize_reports_missing_managed_networks(self, tmp_path):
         backend = self._make_backend(tmp_path)
@@ -947,6 +983,8 @@ services:
                 return MagicMock(returncode=0, stdout="", stderr="")
             if cmd[:3] == ["docker", "network", "ls"]:
                 return MagicMock(returncode=0, stdout="", stderr="")
+            if cmd[:3] == ["docker", "network", "create"]:
+                return MagicMock(returncode=0, stdout=f"{'a' * 64}\n", stderr="")
             return MagicMock(returncode=0, stdout="", stderr="")
 
         with patch("subprocess.run", side_effect=fake_run):
@@ -1272,9 +1310,7 @@ services:
 
     def test_stop_tears_down_by_project_identity_not_a_filesystem_model(self, tmp_path):
         """Teardown is scenario-agnostic (#874): ``down`` runs by project identity
-        and volumes are discovered by the ``<project>_`` name prefix, never by
-        reading a scenario Compose model that may belong to a different bundle
-        root."""
+        and receipt-owned volumes do not require a scenario Compose model."""
         backend = self._make_backend(tmp_path)
 
         with patch("subprocess.run") as mock_run:
@@ -1287,11 +1323,7 @@ services:
         # No scenario -f compose model is consulted for teardown.
         assert "-f" not in down_cmd
         assert down_cmd[2:4] == ["-p", "test"]
-        # Volume discovery lists all volumes (scoped by prefix in Python); it
-        # reads no compose file and does not use a project-label filter, which
-        # would miss seeder-created volumes.
-        ls_cmd = next(cmd for cmd in commands if cmd[:3] == ["docker", "volume", "ls"])
-        assert not any("--filter" in a or "label=" in a for a in ls_cmd)
+        assert not any(cmd[:3] == ["docker", "volume", "ls"] for cmd in commands)
 
     def test_stop_with_volumes_removes_only_prefix_scoped_leftovers(self, tmp_path):
         backend = self._make_backend(tmp_path)
@@ -1311,8 +1343,8 @@ services:
 
         assert result.success is True
         commands = [call.args[0] for call in mock_run.call_args_list]
-        assert ["docker", "volume", "rm", "test_seeded_data"] in commands
-        # A global volume outside this project's name prefix is untouched.
+        # Name-prefix similarity never grants destructive authority.
+        assert ["docker", "volume", "rm", "test_seeded_data"] not in commands
         assert all("global-data" not in command for command in commands)
 
     def test_stop_with_volumes_fails_when_seeded_volume_cannot_be_removed(
@@ -1320,11 +1352,37 @@ services:
     ):
         backend = self._make_backend(tmp_path)
         (tmp_path / "docker-compose.yml").write_text("volumes:\n  seeded_data:\n")
+        ownership = backend._resource_ownership
+        assert ownership is not None
+        ownership.record(
+            ResourceReceipt(
+                kind="volume",
+                native_id="test_seeded_data",
+                external_name="test_seeded_data",
+                semantic_name="seeded_data",
+                node_address="seeded_data",
+                workspace_id=ownership.workspace_id,
+                project_name=ownership.project_name,
+                daemon_id="test-daemon",
+                attempt_id="run-a",
+            )
+        )
 
         def fake_run(cmd, **kwargs):
             del kwargs
-            if cmd[:3] == ["docker", "volume", "ls"]:
-                return MagicMock(returncode=0, stdout="test_seeded_data\n", stderr="")
+            if cmd[:3] == ["docker", "volume", "inspect"]:
+                return MagicMock(
+                    returncode=0,
+                    stdout=json.dumps(
+                        [
+                            {
+                                "Name": "test_seeded_data",
+                                "Labels": {"com.docker.compose.project": "test"},
+                            }
+                        ]
+                    ),
+                    stderr="",
+                )
             if cmd[:3] == ["docker", "volume", "rm"]:
                 return MagicMock(returncode=1, stdout="", stderr="still in use")
             return MagicMock(returncode=0, stdout="", stderr="")
@@ -1333,24 +1391,58 @@ services:
             result = backend.stop(["wazuh"], remove_volumes=True)
 
         assert result.success is False
-        assert "Failed to remove project volumes" in result.error
+        assert "failed to remove receipt-owned volume" in result.error
 
     def test_stop_removes_leftover_project_networks(self, tmp_path):
         backend = self._make_backend(tmp_path)
-        network_ls_command = None
+        ownership = backend._resource_ownership
+        assert ownership is not None
+        network_names = {
+            "a" * 64: "test_aptl-dmz",
+            "b" * 64: "test_aptl-isolated",
+        }
+        for native_id, external_name in network_names.items():
+            ownership.record(
+                ResourceReceipt(
+                    kind="network",
+                    native_id=native_id,
+                    external_name=external_name,
+                    semantic_name=external_name.removeprefix("test_"),
+                    node_address=external_name.removeprefix("test_"),
+                    workspace_id=ownership.workspace_id,
+                    project_name=ownership.project_name,
+                    daemon_id="test-daemon",
+                    attempt_id="run-a",
+                )
+            )
         networks_present = True
 
         def fake_run(cmd, **kwargs):
-            nonlocal network_ls_command, networks_present
+            nonlocal networks_present
             del kwargs
             if cmd[:3] == ["docker", "network", "ls"]:
-                network_ls_command = cmd
                 return MagicMock(
                     returncode=0,
                     stdout=(
-                        "test_aptl-dmz\ntest_aptl-isolated\n"
-                        if networks_present
-                        else ""
+                        "\n".join(network_names) + "\n" if networks_present else ""
+                    ),
+                    stderr="",
+                )
+            if cmd[:3] == ["docker", "network", "inspect"]:
+                native_id = cmd[3]
+                return MagicMock(
+                    returncode=0,
+                    stdout=json.dumps(
+                        [
+                            {
+                                "Id": native_id,
+                                "Name": network_names[native_id],
+                                "Driver": "bridge",
+                                "IPAM": {"Config": [{}]},
+                                "Labels": {"com.docker.compose.project": "test"},
+                                "Containers": {},
+                            }
+                        ]
                     ),
                     stderr="",
                 )
@@ -1362,12 +1454,9 @@ services:
             result = backend.stop(["wazuh"])
 
         assert result.success is True
-        assert network_ls_command is not None
-        assert "label=com.docker.compose.project=test" in network_ls_command
-        assert "label=org.aptl.realization.network=true" not in network_ls_command
         commands = [call.args[0] for call in mock_run.call_args_list]
-        assert ["docker", "network", "rm", "test_aptl-dmz"] in commands
-        assert ["docker", "network", "rm", "test_aptl-isolated"] in commands
+        assert ["docker", "network", "rm", "a" * 64] in commands
+        assert ["docker", "network", "rm", "b" * 64] in commands
 
     def test_stop_returns_failure(self, tmp_path):
         backend = self._make_backend(tmp_path)
@@ -1464,8 +1553,7 @@ services:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout=(
-                    "aptl-victim\tvictim:latest\tabc\tUp 1 minute\trunning\t"
-                    "com.docker.compose.project=test\t"
+                    "{\"Names\": \"aptl-victim\", \"Image\": \"victim:latest\", \"ID\": \"abc\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"com.docker.compose.project=test\", \"Ports\": \"\"}"
                 ),
                 stderr="",
             )
@@ -1481,8 +1569,7 @@ services:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout=(
-                    "aptl-victim\tvictim:latest\tabc\tUp 1 minute\trunning\t"
-                    "com.docker.compose.project=test\t"
+                    "{\"Names\": \"aptl-victim\", \"Image\": \"victim:latest\", \"ID\": \"abc\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"com.docker.compose.project=test\", \"Ports\": \"\"}"
                 ),
                 stderr="",
             )
@@ -1505,11 +1592,11 @@ services:
 
     def test_status_parses_multiple_project_rows(self, tmp_path):
         backend = self._make_backend(tmp_path)
-        rows = (
-            "aptl-victim\tvictim:latest\taaa\tUp 1 minute\trunning\t"
-            "com.docker.compose.project=test\t\n"
-            "aptl-kali\tkali:latest\tbbb\tUp 1 minute\trunning\t"
-            "aptl.lifecycle.project=test\t"
+        rows = "\n".join(
+            (
+                "{\"Names\": \"aptl-victim\", \"Image\": \"victim:latest\", \"ID\": \"aaa\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"com.docker.compose.project=test\", \"Ports\": \"\"}",
+                "{\"Names\": \"aptl-kali\", \"Image\": \"kali:latest\", \"ID\": \"bbb\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"aptl.lifecycle.project=test\", \"Ports\": \"\"}",
+            )
         )
 
         with patch("subprocess.run") as mock_run:
@@ -1556,13 +1643,18 @@ services:
     def test_status_unions_project_labels_and_includes_every_state(self, tmp_path):
         backend = self._make_backend(tmp_path)
         compose_rows = (
-            "aptl-compose\tcompose:latest\taaa\tUp 1 minute\trunning\t"
-            "com.docker.compose.project=test\t\n"
+            docker_ps_inventory_row(
+                "aptl-compose", image="compose:latest", container_id="aaa"
+            )
+            + "\n"
         )
-        lifecycle_rows = (
-            compose_rows
-            + "direct-node\tdebian:stable\tbbb\tExited (23) 2 seconds ago\texited\t"
-            "aptl.lifecycle.project=test\t"
+        lifecycle_rows = compose_rows + docker_ps_inventory_row(
+            "direct-node",
+            image="debian:stable",
+            container_id="bbb",
+            status="Exited (23) 2 seconds ago",
+            state="exited",
+            labels="aptl.lifecycle.project=test",
         )
 
         def _inventory(args, **_kwargs):
@@ -1699,7 +1791,9 @@ class TestDockerComposeBackendContainerInteraction:
     """Tests for the 6 container-interaction methods added under CLI-004."""
 
     def _make_backend(self, tmp_path: Path) -> DockerComposeBackend:
-        return DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        backend._resolve_owned_container_id = lambda selector: selector  # type: ignore[method-assign]
+        return backend
 
     # container_list -------------------------------------------------------
 
@@ -1878,6 +1972,23 @@ class TestDockerComposeBackendContainerInteraction:
             backend.container_exec("aptl-victim", ["true"], timeout=5)
         assert mock_run.call_args[1]["timeout"] == 5
 
+    def test_container_exec_detached_uses_docker_detach(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.container_exec_detached(
+                "aptl-webapp", ["gunicorn", "app:app"], timeout=5
+            )
+        assert mock_run.call_args[0][0] == [
+            "docker",
+            "exec",
+            "--detach",
+            "aptl-webapp",
+            "gunicorn",
+            "app:app",
+        ]
+        assert mock_run.call_args[1]["timeout"] == 5
+
     # container_restart ----------------------------------------------------
 
     def test_container_restart_issues_docker_restart(self, tmp_path):
@@ -2016,11 +2127,14 @@ class TestDockerComposeBackendContainerInteraction:
             versions = backend.host_versions()
         assert versions == {"docker": "", "compose": ""}
 
-    def test_host_list_lab_containers_parses_tsv(self, tmp_path):
+    def test_host_list_lab_containers_parses_inventory_rows(self, tmp_path):
         backend = self._make_backend(tmp_path)
-        line = (
-            "aptl-victim\taptl/victim:latest\tabc\tUp 5m (healthy)\t"
-            "running\tservice=victim\t0.0.0.0:2022->22/tcp"
+        line = docker_ps_inventory_row(
+            "aptl-victim",
+            image="aptl/victim:latest",
+            status="Up 5m (healthy)",
+            labels="service=victim",
+            ports="0.0.0.0:2022->22/tcp",
         )
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout=line, stderr="")
@@ -2048,11 +2162,35 @@ class TestDockerComposeBackendContainerInteraction:
         assert row["labels"] == {"service": "victim"}
         assert row["ports"] == ["0.0.0.0:2022->22/tcp"]
 
-    def test_host_list_lab_containers_rejects_short_lines(self, tmp_path):
+    def test_inventory_survives_image_labels_containing_newlines(self, tmp_path):
+        """Image labels are arbitrary text and some contain newlines.
+
+        Ubuntu 26.04 ships an `org.opencontainers.image.description` spanning
+        several lines. Read as tab-delimited rows, that one container split into
+        several malformed "rows" and the whole inventory was rejected — the lab
+        realized correctly and then failed at terminal attestation (issue #1006).
+        """
+        backend = self._make_backend(tmp_path)
+        labels = (
+            "org.opencontainers.image.description=Ubuntu is a Debian-based Linux "
+            "operating system.\nIt is the number one platform for containers.,"
+            "com.docker.compose.project=test"
+        )
+        line = docker_ps_inventory_row("aptl-ad", image="ubuntu:26.04", labels=labels)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=line, stderr="")
+            rows = backend.host_list_lab_containers()
+
+        assert len(rows) == 1
+        assert rows[0]["name"] == "aptl-ad"
+        assert rows[0]["labels"]["com.docker.compose.project"] == "test"
+
+    def test_host_list_lab_containers_rejects_malformed_rows(self, tmp_path):
         backend = self._make_backend(tmp_path)
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
-                returncode=0, stdout="too\tfew", stderr=""
+                returncode=0, stdout="not-json", stderr=""
             )
             with pytest.raises(BackendObservationError, match="parse"):
                 backend.host_list_lab_containers()
@@ -2233,12 +2371,24 @@ class TestSSHComposeBackend:
         user: str = "admin",
         **kwargs,
     ) -> SSHComposeBackend:
-        return SSHComposeBackend(
+        compose_file = tmp_path / "docker-compose.yml"
+        if not compose_file.exists():
+            compose_file.write_text("services:\n  victim:\n    image: test\n")
+        backend = SSHComposeBackend(
             project_dir=tmp_path,
             host=host,
             user=user,
             **kwargs,
         )
+        backend._resource_ownership = WorkspaceOwnership(
+            tmp_path, "aptl", "0" * 32, "aptl"
+        )
+        backend._docker_daemon_id = "test-daemon"
+        backend._resolve_owned_container_id = lambda selector: selector  # type: ignore[method-assign]
+        backend._verify_compose_namespace_is_owned = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+        backend._record_compose_network_receipts = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+        backend._record_compose_volume_receipts = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+        return backend
 
     def test_docker_host_format(self, tmp_path):
         backend = self._make_backend(tmp_path)
@@ -2284,7 +2434,9 @@ class TestSSHComposeBackend:
             result = backend.start(["wazuh", "kali"])
 
         assert result.success is True
-        cmd = mock_run.call_args[0][0]
+        cmd = next(
+            call.args[0] for call in mock_run.call_args_list if "up" in call.args[0]
+        )
         assert "docker" in cmd
         assert "compose" in cmd
         assert "up" in cmd
@@ -2484,7 +2636,7 @@ class TestGetBackend:
 class TestLabBackwardCompat:
     """Verify that lab.py wrapper functions still work without backend arg."""
 
-    def test_start_lab_without_backend(self, mock_subprocess):
+    def test_start_lab_without_backend(self, mock_subprocess, tmp_path):
         from aptl.core.lab import start_lab
 
         config = AptlConfig(
@@ -2493,7 +2645,9 @@ class TestLabBackwardCompat:
         )
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        result = start_lab(config)
+        backend = TestDockerComposeBackend()._make_backend(tmp_path)
+        with patch("aptl.core.lab._get_backend", return_value=backend):
+            result = start_lab(config)
 
         assert result.success is True
 
@@ -2502,7 +2656,9 @@ class TestLabBackwardCompat:
 
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        result = stop_lab(project_dir=tmp_path)
+        backend = TestDockerComposeBackend()._make_backend(tmp_path)
+        with patch("aptl.core.lab._get_backend", return_value=backend):
+            result = stop_lab(project_dir=tmp_path)
 
         assert result.success is True
 
@@ -2512,8 +2668,9 @@ class TestLabBackwardCompat:
         mock_subprocess.return_value = MagicMock(
             returncode=0,
             stdout=(
-                "aptl-victim\tvictim:latest\tabc\tUp 1 minute\trunning\t"
-                "com.docker.compose.project=aptl\t"
+                docker_ps_inventory_row(
+                    "aptl-victim", labels="com.docker.compose.project=aptl"
+                )
             ),
             stderr="",
         )
@@ -2549,7 +2706,9 @@ class TestKillBackwardCompat:
 
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        success, error = kill_lab_containers(project_dir=tmp_path)
+        backend = TestDockerComposeBackend()._make_backend(tmp_path)
+        with patch("aptl.core.kill._kill_backend", return_value=(backend, "")):
+            success, error = kill_lab_containers(project_dir=tmp_path)
 
         assert success is True
 
@@ -2656,7 +2815,27 @@ class TestSeedNamedVolumes:
     """ADR-043 named-volume seeding via short-lived root containers."""
 
     def _backend(self, tmp_path):
-        return DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        ownership = WorkspaceOwnership(tmp_path, "test", "0" * 32, "test")
+        backend._resource_ownership = ownership
+        backend._resource_attempt_id = "run-a"
+        backend._docker_daemon_id = "test-daemon"
+        for suffix in ("suricata_config_seed", "suricata_misp_rules"):
+            volume = f"test_{suffix}"
+            ownership.record(
+                ResourceReceipt(
+                    kind="volume",
+                    native_id=volume,
+                    external_name=volume,
+                    semantic_name=suffix,
+                    node_address=suffix,
+                    workspace_id=ownership.workspace_id,
+                    project_name=ownership.project_name,
+                    daemon_id="test-daemon",
+                    attempt_id="run-a",
+                )
+            )
+        return backend
 
     def _config_seed(self):
         from aptl.core.seed_spec import NamedVolumeSeed, SeedFile
@@ -2690,6 +2869,19 @@ class TestSeedNamedVolumes:
 
         def run(cmd, **kwargs):
             if cmd[:3] == ["docker", "volume", "inspect"]:
+                if "--format" not in cmd:
+                    return MagicMock(
+                        returncode=0,
+                        stdout=json.dumps(
+                            [
+                                {
+                                    "Name": f"test_{volume_suffix}",
+                                    "Labels": json.loads(labels),
+                                }
+                            ]
+                        ),
+                        stderr="",
+                    )
                 return MagicMock(returncode=0, stdout=labels, stderr="")
             defaults = {"returncode": 0, "stdout": "", "stderr": ""}
             defaults.update(result_overrides)
@@ -2735,11 +2927,37 @@ class TestSeedNamedVolumes:
         realization gate on every fresh start (issue #677).
         """
         backend = self._backend(tmp_path)
+        created = False
 
         def run(cmd, **kwargs):
+            nonlocal created
             if cmd[:3] == ["docker", "volume", "inspect"]:
-                return MagicMock(returncode=1, stdout="", stderr="no such volume")
-            return MagicMock(returncode=0, stdout="", stderr="")
+                if not created:
+                    return MagicMock(returncode=1, stdout="", stderr="no such volume")
+                return MagicMock(
+                    returncode=0,
+                    stdout=json.dumps(
+                        [
+                            {
+                                "Name": "test_suricata_config_seed",
+                                "Labels": {
+                                    "com.docker.compose.project": "test",
+                                    "com.docker.compose.volume": "suricata_config_seed",
+                                    "aptl.workspace.id": "0" * 32,
+                                    "aptl.lifecycle.project": "test",
+                                    "aptl.attempt.id": "run-a",
+                                },
+                            }
+                        ]
+                    ),
+                    stderr="",
+                )
+            if cmd[:3] == ["docker", "volume", "create"]:
+                created = True
+                stdout = "test_suricata_config_seed\n"
+            else:
+                stdout = ""
+            return MagicMock(returncode=0, stdout=stdout, stderr="")
 
         with patch("subprocess.run", side_effect=run) as mock_run:
             backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
@@ -2757,6 +2975,82 @@ class TestSeedNamedVolumes:
         )
         assert commands.index(create) < seed_index
 
+    def test_first_seed_scopes_project_before_computing_volume_name(self, tmp_path):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        backend._docker_daemon_id = "test-daemon"
+        created_name = ""
+        created_labels = {}
+
+        def run(cmd, **_kwargs):
+            nonlocal created_name, created_labels
+            if cmd[:3] == ["docker", "volume", "create"]:
+                created_name = cmd[-1]
+                created_labels = {
+                    cmd[index + 1].partition("=")[0]: cmd[index + 1].partition("=")[2]
+                    for index, value in enumerate(cmd)
+                    if value == "--label"
+                }
+                return MagicMock(returncode=0, stdout=f"{created_name}\n", stderr="")
+            if cmd[:3] == ["docker", "volume", "inspect"]:
+                if not created_name:
+                    return MagicMock(returncode=1, stdout="", stderr="not found")
+                return MagicMock(
+                    returncode=0,
+                    stdout=json.dumps(
+                        [{"Name": created_name, "Labels": created_labels}]
+                    ),
+                    stderr="",
+                )
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=run):
+            backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+
+        assert backend.project_name.startswith("test-w")
+        assert created_name == f"{backend.project_name}_suricata_config_seed"
+        assert created_name != "test_suricata_config_seed"
+
+    def test_seed_refuses_create_race_without_deleting_foreign_volume(self, tmp_path):
+        from aptl.core.deployment.errors import BackendSeedError
+
+        backend = self._backend(tmp_path)
+        created = False
+
+        def run(cmd, **kwargs):
+            nonlocal created
+            if cmd[:3] == ["docker", "volume", "inspect"]:
+                if not created:
+                    return MagicMock(returncode=1, stdout="", stderr="missing")
+                return MagicMock(
+                    returncode=0,
+                    stdout=json.dumps(
+                        [
+                            {
+                                "Name": "test_suricata_config_seed",
+                                "Labels": {"foreign.owner": "other-workspace"},
+                            }
+                        ]
+                    ),
+                    stderr="",
+                )
+            if cmd[:3] == ["docker", "volume", "create"]:
+                created = True
+                return MagicMock(
+                    returncode=0,
+                    stdout="test_suricata_config_seed\n",
+                    stderr="",
+                )
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        seeds = [self._config_seed()]
+        with patch("subprocess.run", side_effect=run) as mock_run:
+            with pytest.raises(BackendSeedError, match="could not be verified"):
+                backend.seed_named_volumes(seeds, seeder_image="img:1")
+
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert not any(cmd[:3] == ["docker", "volume", "rm"] for cmd in commands)
+        assert not any(cmd[:2] == ["docker", "run"] for cmd in commands)
+
     def test_seed_skips_volume_create_when_attributed_volume_exists(self, tmp_path):
         import json
 
@@ -2768,8 +3062,10 @@ class TestSeedNamedVolumes:
             }
         )
 
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout=labels, stderr="")
+        with patch(
+            "subprocess.run",
+            side_effect=self._seed_run_mock("suricata_config_seed"),
+        ) as mock_run:
             backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
 
         commands = [call.args[0] for call in mock_run.call_args_list]
@@ -2792,7 +3088,7 @@ class TestSeedNamedVolumes:
             with pytest.raises(BackendSeedError) as exc_info:
                 backend.seed_named_volumes(seeds, seeder_image="img:1")
 
-        assert "attribution" in str(exc_info.value)
+        assert "ownership receipt" in str(exc_info.value)
         commands = [call.args[0] for call in mock_run.call_args_list]
         assert not any(cmd[:2] == ["docker", "run"] for cmd in commands)
 
@@ -2975,6 +3271,19 @@ class TestSeedNamedVolumes:
 
         def run(cmd, **kwargs):
             if cmd[:3] == ["docker", "volume", "inspect"]:
+                if "--format" not in cmd:
+                    return MagicMock(
+                        returncode=0,
+                        stdout=json.dumps(
+                            [
+                                {
+                                    "Name": "test_suricata_misp_rules",
+                                    "Labels": json.loads(labels),
+                                }
+                            ]
+                        ),
+                        stderr="",
+                    )
                 return MagicMock(returncode=0, stdout=labels, stderr="")
             return MagicMock(returncode=1, stdout="", stderr=stderr)
 
@@ -3016,7 +3325,26 @@ class TestRealizeContent:
     """
 
     def _backend(self, tmp_path):
-        return DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        ownership = WorkspaceOwnership(tmp_path, "test", "0" * 32, "test")
+        backend._resource_ownership = ownership
+        backend._resource_attempt_id = "run-a"
+        backend._docker_daemon_id = "test-daemon"
+        volume = "test_fileshare_data"
+        ownership.record(
+            ResourceReceipt(
+                kind="volume",
+                native_id=volume,
+                external_name=volume,
+                semantic_name="fileshare_data",
+                node_address="fileshare_data",
+                workspace_id=ownership.workspace_id,
+                project_name=ownership.project_name,
+                daemon_id="test-daemon",
+                attempt_id="run-a",
+            )
+        )
+        return backend
 
     def _inline_text_item(self, **overrides):
         from aptl.core.deployment.realization import DeploymentContentRealization
@@ -3043,6 +3371,19 @@ class TestRealizeContent:
 
         def run(cmd, **kwargs):
             if cmd[:3] == ["docker", "volume", "inspect"]:
+                if "--format" not in cmd:
+                    return MagicMock(
+                        returncode=0,
+                        stdout=json.dumps(
+                            [
+                                {
+                                    "Name": "test_fileshare_data",
+                                    "Labels": json.loads(labels),
+                                }
+                            ]
+                        ),
+                        stderr="",
+                    )
                 return MagicMock(returncode=0, stdout=labels, stderr="")
             return MagicMock(returncode=0, stdout="", stderr="")
 
@@ -3422,14 +3763,25 @@ class _FakeAd:
 
     Records every command in order so tests can assert sequencing (groups
     before members, existence-check before create, verify after mutation) and
-    convergent-upsert behavior. It does not model passwords — that a secret is
-    never disclosed is proven structurally: an already-existing user is never
-    re-created, so its provisioner-owned password is untouched.
+    convergent-upsert behavior. It models passwords only as far as the declared
+    credential class requires (issue #1006): a set password is remembered, and
+    authenticating as the account succeeds only with that exact secret.
     """
 
-    def __init__(self, *, ready=True, provisioned=True, users=None, groups=None):
+    def __init__(
+        self,
+        *,
+        ready=True,
+        provisioned=True,
+        users=None,
+        groups=None,
+        authentication_works=True,
+    ):
         self.ready = ready
         self.provisioned = provisioned
+        self.authentication_works = authentication_works
+        self.passwords: dict[str, str] = {}
+        self.policy_relaxed = False
         self.users = {
             u: {"mail": "", "disabled": False, "spns": set(), "groups": set()}
             for u in (users or [])
@@ -3459,10 +3811,22 @@ class _FakeAd:
     def _dispatch(self, cmd):
         if cmd[0] == "test" and cmd[1] == "-f":
             return self._ok(cmd) if self.provisioned else self._fail(cmd)
+        if cmd[0] == "smbclient":
+            principal = cmd[cmd.index("-U") + 1]
+            user, _, password = principal.partition("%")
+            authenticated = (
+                self.authentication_works and self.passwords.get(user) == password
+            )
+            return self._ok(cmd) if authenticated else self._fail(cmd)
+        if cmd[1:4] == ["domain", "passwordsettings", "set"]:
+            self.policy_relaxed = True
+            return self._ok(cmd)
         if cmd[1:] == ["domain", "info", "127.0.0.1"]:
             return self._ok(cmd) if self.ready else self._fail(cmd)
         if cmd[1] == "group":
             return self._dispatch_group(cmd)
+        if cmd[1:3] == ["user", "setpassword"]:
+            return self._set_password(cmd)
         if cmd[1] in ("user", "spn"):
             return self._dispatch_user(cmd)
         return self._fail(cmd)
@@ -3485,6 +3849,18 @@ class _FakeAd:
             )
             return self._ok(cmd, stdout=members)
         return self._fail(cmd)
+
+    def _set_password(self, cmd):
+        if cmd[3] not in self.users:
+            return self._fail(cmd)
+        secret = next(
+            (a.split("=", 1)[1] for a in cmd if a.startswith("--newpassword=")), ""
+        )
+        # A real directory refuses a weak secret until the policy allows it.
+        if not self.policy_relaxed and len(secret) < 8:
+            return self._fail(cmd)
+        self.passwords[cmd[3]] = secret
+        return self._ok(cmd)
 
     def _dispatch_user(self, cmd):
         verb = tuple(cmd[1:3])
@@ -3551,6 +3927,7 @@ def _acct(
     spn="",
     mail="",
     disabled=None,
+    password_strength="strong",
 ):
     from aptl.core.deployment.realization import DeploymentAccountRealization
 
@@ -3562,6 +3939,7 @@ def _acct(
         spn=spn,
         mail=mail,
         disabled=disabled,
+        password_strength=password_strength,
     )
 
 
@@ -3935,24 +4313,140 @@ class TestRealizeAccounts:
 
 
 class TestAccountProvisionerOrderingContract:
-    """Issue #577: the AD readiness gate depends on setup-ad.sh's ordering.
+    """Issue #577: the AD readiness gate depends on the substrate's ordering.
 
     ``_account_provider_ready`` waits for ``/var/lib/samba/private/.provisioned``
-    as the provisioner-complete signal. That is only correct if the AD entrypoint
-    writes that marker AFTER running its baseline account provisioner. Lock that
-    container contract here so a future entrypoint change that reorders them (and
-    would reopen the clean-start create race) fails a fast unit test rather than
-    only a full lab boot.
+    as the domain-provisioned signal. That is only correct if the substrate
+    writes that marker AFTER the domain is actually provisioned — accounts are
+    created against a live DC, so a marker written early reopens the clean-start
+    create race. Lock that container contract here so a future change to the
+    script fails a fast unit test rather than only a full lab boot.
+
+    The script moved with the image: the pack stopped declaring an ``ad`` image,
+    so the domain is provisioned by the generic samba-ad substrate rather than
+    by a scenario-specific entrypoint (issue #1006).
     """
 
-    def test_setup_ad_writes_provisioned_marker_after_provision_users(self):
+    def test_provision_domain_writes_marker_after_provisioning_the_domain(self):
         repo_root = Path(__file__).resolve().parents[1]
-        setup = (repo_root / "containers/ad/setup-ad.sh").read_text(encoding="utf-8")
-        marker_write = setup.index('touch "$PROVISIONED_MARKER"')
-        provision_call = setup.index("/opt/provision-users.sh")
+        script = (
+            repo_root / "containers/generic-samba-ad-base/provision-domain.sh"
+        ).read_text(encoding="utf-8")
+        marker_write = script.index('touch "$provisioned_marker"')
+        provision_call = script.index("samba-tool domain provision")
         assert provision_call < marker_write
         # And the marker the backend probes matches the one the script writes.
-        assert 'PROVISIONED_MARKER="/var/lib/samba/private/.provisioned"' in setup
+        assert 'provisioned_marker="$private_root/.provisioned"' in script
+        assert 'private_root=/var/lib/samba/private' in script
+
+
+class TestDeclaredCredentialClassIsRealized:
+    """Issue #1006: a declared weak account must actually hold a weak credential.
+
+    TechVault declares seven weak and four medium accounts. Creating all of them
+    with ``--random-password`` deletes the credential-guessing surface the attack
+    path depends on, while every gate still reports success.
+    """
+
+    def _backend(self, tmp_path):
+        return DockerComposeBackend(project_dir=tmp_path, project_name="test")
+
+    def _realize(self, tmp_path, ad, accounts):
+        backend = self._backend(tmp_path)
+        with patch.object(backend, "container_exec", ad):
+            return backend.realize_accounts(accounts, (_ad_node(),))
+
+    def test_weak_account_gets_a_weak_credential_that_authenticates(self, tmp_path):
+        ad = _FakeAd()
+        account = _acct("michael.thompson", password_strength="weak")
+
+        result = self._realize(tmp_path, ad, (account,))
+
+        assert result is None
+        set_calls = ad.cmds("samba-tool", "user", "setpassword")
+        assert len(set_calls) == 1
+        secret = set_calls[0][4].split("=", 1)[1]
+        # The realized secret is the declared class, and it authenticates.
+        assert len(secret) <= 12
+        assert ad.passwords["michael.thompson"] == secret
+        assert ad.cmds("smbclient")
+
+    def test_realized_credential_is_disclosed_to_the_operator(self, tmp_path):
+        ad = _FakeAd()
+        account = _acct("michael.thompson", password_strength="weak")
+
+        assert self._realize(tmp_path, ad, (account,)) is None
+
+        disclosed = (
+            tmp_path
+            / ".aptl/realization/account-credentials/scenario.node.ad/michael.thompson"
+        )
+        assert disclosed.exists()
+        strength, secret = disclosed.read_text(encoding="utf-8").split()
+        assert strength == "weak"
+        assert ad.passwords["michael.thompson"] == secret
+
+    def test_strong_account_keeps_its_target_generated_secret(self, tmp_path):
+        ad = _FakeAd()
+        account = _acct("sarah.mitchell", password_strength="strong")
+
+        assert self._realize(tmp_path, ad, (account,)) is None
+
+        # Nothing sets a password, so the create-time random secret stands and
+        # no secret is ever disclosed for a strong account.
+        assert ad.cmds("samba-tool", "user", "setpassword") == []
+        assert not (tmp_path / ".aptl/realization/account-credentials").exists()
+
+    def test_policy_is_relaxed_only_when_a_weak_class_is_declared(self, tmp_path):
+        strong_only = _FakeAd()
+        assert (
+            self._realize(
+                tmp_path, strong_only, (_acct("sarah", password_strength="strong"),)
+            )
+            is None
+        )
+        assert strong_only.policy_relaxed is False
+
+        weak = _FakeAd()
+        assert (
+            self._realize(
+                tmp_path / "second", weak, (_acct("mike", password_strength="weak"),)
+            )
+            is None
+        )
+        assert weak.policy_relaxed is True
+
+    def test_medium_only_batch_leaves_the_domain_policy_alone(self, tmp_path):
+        """Medium credentials satisfy the default policy; weakening it is unwarranted."""
+        ad = _FakeAd()
+        account = _acct("lisa.chang", password_strength="medium")
+
+        assert self._realize(tmp_path, ad, (account,)) is None
+
+        assert ad.policy_relaxed is False
+        assert ad.cmds("samba-tool", "domain", "passwordsettings") == []
+        assert ad.passwords["lisa.chang"]
+
+    def test_credential_that_does_not_authenticate_fails_closed(self, tmp_path):
+        """A directory write that accepts the secret is not proof of a usable account."""
+        ad = _FakeAd(authentication_works=False)
+        account = _acct("michael.thompson", password_strength="weak")
+
+        result = self._realize(tmp_path, ad, (account,))
+
+        assert result is not None
+        assert result.success is False
+        assert "account-password-not-authenticable" in (result.error or "")
+        assert "internal detail leak" not in (result.error or "")
+
+    def test_existing_account_keeps_the_credential_it_already_has(self, tmp_path):
+        """Re-minting would invalidate a secret a participant may already hold."""
+        ad = _FakeAd(users=["michael.thompson"])
+        account = _acct("michael.thompson", password_strength="weak")
+
+        assert self._realize(tmp_path, ad, (account,)) is None
+
+        assert ad.cmds("samba-tool", "user", "setpassword") == []
 
 
 class TestComposeRealizeAccountsStep:

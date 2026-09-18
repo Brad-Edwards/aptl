@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aptl-labs"
-version = "5.3.1"
+version = "5.5.0"
 description = "Advanced Purple Team Lab CLI"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,10 +31,11 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-http>=1.33.0",
     "opentelemetry-semantic-conventions>=0.54b0",
     "cryptography>=50.0.0",
-    "raes==4.1.0",
-    "raes-env-packs==6.0.0",
+    "raes==5.0.0",
+    "raes-env-packs==6.0.1",
     "mcp>=2,<3",
     "rfc8785>=0.1.4,<0.2.0",
+    "packaging>=24.2",
     # Imported directly by aptl.core.experiment.resolver; previously satisfied
     # only transitively through the upstream SDL distribution.
     "blake3>=1.0.8,<2",
@@ -60,6 +61,7 @@ parquet = [
     "pyarrow>=17.0.0",
 ]
 web = [
+    "httpx>=0.28.1",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
     "sse-starlette>=2.0.0",
@@ -123,6 +125,7 @@ build = [
 "techvault.aptl" = "aptl_techvault.verification:verifier"
 
 [project.entry-points."aptl.participant_mcp_smoke_plans"]
+"techvault-full.techvault" = "aptl_techvault.participant_smoke:FULL_TECHVAULT_SMOKE_OPERATIONS"
 "guided-purple.techvault-attacker-target" = "aptl_techvault.participant_smoke:PARTICIPANT_SMOKE_OPERATIONS"
 
 [tool.hatch.build.targets.wheel]

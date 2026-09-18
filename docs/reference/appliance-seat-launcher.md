@@ -114,3 +114,19 @@ QEMU/libvirt stderr, guest logs, and credentials are never returned.
 - [ADR-049](../adrs/adr-049-sealed-disposable-lab-appliance.md)
 - [Appliance boundary](../components/appliance-boundary.md)
 - [Issue #824 preflight](../architecture/issue-824-kiosk-launcher-reset-recovery-preflight.md)
+
+## Full-TechVault host access contract
+
+Issue #868 supplies the canonical software inputs and
+[restricted host MCP interface](host-mcp-access.md). The real VM integration in
+#1022 must allocate separate guest and outer ports, observe their explicit
+mapping, and refresh private access records only after live guest identity and
+capture checks. Existing browser-only seat APIs do not infer a host-MCP mapping
+from equal port numbers. A host-MCP-enabled signed policy without an explicit
+observed mapping fails admission.
+
+Claude Code and Codex run on the participant host with user-owned provider
+authentication. They receive a dedicated transport key and role-scoped project
+config; MCP and Docker authority stay inside the guest. Reset revokes all old
+grants and changes the instance generation/host pin before publishing replacement
+access. A kiosk is an optional presentation surface, not a local APTL dependency.

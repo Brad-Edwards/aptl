@@ -19,6 +19,7 @@ from aptl.core.credentials import PathContainmentError
 from aptl.core.certs import CertResult
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment._compose_stateful_realization import (
+    effective_stateful_model_errors,
     stateful_override_payload,
     stateful_realization_errors,
     write_stateful_override,
@@ -249,6 +250,7 @@ def _cortex_credentials_spec() -> DeploymentRealizationSpec:
 
 def test_cortex_credentials_are_generated_distinctly_and_reused(tmp_path: Path) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    backend._docker_daemon_id = "test-daemon"
     artifact = _cortex_credentials_spec().generated_artifacts[0]
 
     assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
@@ -340,7 +342,7 @@ def test_image_free_generated_environment_uses_the_declared_output(
         BaseContainerSpec(
             node_address="provision.node.kali",
             container_name="aptl-kali",
-            image_ref="debian:12-slim",
+            image_ref="debian:13-slim",
             runs_services=True,
             environment_names=("CORTEX_KEY",),
         ),
@@ -365,7 +367,7 @@ def test_base_environment_file_rejects_variable_name_injection(tmp_path: Path) -
     spec = BaseContainerSpec(
         node_address="provision.node.kali",
         container_name="aptl-kali",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
         environment_names=("SAFE\nINJECTED",),
         environment_defaults=(("SAFE\nINJECTED", "value"),),
@@ -386,7 +388,7 @@ def test_base_environment_file_rejects_value_line_injection(tmp_path: Path) -> N
     spec = BaseContainerSpec(
         node_address="provision.node.kali",
         container_name="aptl-kali",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
         environment_names=("SAFE",),
         environment_defaults=(("SAFE", "value\nINJECTED=1"),),
@@ -443,14 +445,16 @@ def _certificate_outputs() -> tuple[DeploymentGeneratedArtifactOutput, ...]:
 
 
 def _effective_payload(
-    tmp_path: Path, spec: DeploymentRealizationSpec
+    tmp_path: Path,
+    spec: DeploymentRealizationSpec,
+    project_name: str = "aptl-test",
 ) -> dict[str, object]:
-    payload = stateful_override_payload(tmp_path, "aptl-test", spec)
+    payload = stateful_override_payload(tmp_path, project_name, spec)
     volumes = payload.get("volumes", {})
     assert isinstance(volumes, dict)
     for name, definition in volumes.items():
         assert isinstance(definition, dict)
-        definition["name"] = f"aptl-test_{name}"
+        definition["name"] = f"{project_name}_{name}"
     return payload
 
 
@@ -809,6 +813,7 @@ def test_generated_compose_model_is_validated_before_up(
     tmp_path: Path, monkeypatch
 ) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    backend._docker_daemon_id = "test-daemon"
     commands: list[list[str]] = []
     monkeypatch.setattr(
         backend,
@@ -826,12 +831,19 @@ def test_generated_compose_model_is_validated_before_up(
 
     def run(cmd, **kwargs):
         commands.append(cmd)
+        if cmd[:3] in (
+            ["docker", "network", "inspect"],
+            ["docker", "volume", "inspect"],
+        ):
+            return MagicMock(returncode=1, stdout="", stderr="missing")
         return MagicMock(
             returncode=0,
             stdout=(
                 "2.24.4"
                 if "version" in cmd
-                else json.dumps(_effective_payload(tmp_path, spec))
+                else json.dumps(
+                    _effective_payload(tmp_path, spec, backend.project_name)
+                )
                 if "config" in cmd
                 else ""
             ),
@@ -909,6 +921,33 @@ def test_effective_compose_model_rejects_undeclared_certificate_mount(
 
     assert result.success is False
     assert "undeclared certificate material" in result.error
+
+
+def test_effective_model_ignores_image_free_certificate_delivery(
+    tmp_path: Path,
+) -> None:
+    """Compose validation does not re-demand a mount delivered as a file."""
+
+    from raes.runtime_configuration import RuntimeConfiguration
+
+    spec = _spec()
+    image_free_node = replace(spec.nodes[0], runtime=RuntimeConfiguration())
+    realization = replace(
+        spec,
+        nodes=(image_free_node,),
+        images=(),
+        persistent_volumes=(),
+    )
+    payload = stateful_override_payload(tmp_path, "aptl-test", realization)
+
+    errors = effective_stateful_model_errors(
+        payload,
+        tmp_path,
+        "aptl-test",
+        realization,
+    )
+
+    assert not any("certificate material" in error for error in errors)
 
 
 def test_invalid_generated_compose_model_blocks_up(tmp_path: Path, monkeypatch) -> None:

@@ -131,6 +131,13 @@ class DeploymentNodeRealization(object):
     # (never a pull, never a moved tag) when the node authored an open
     # dynamic-composition source.
     dynamic_composition: bool = False
+    # Backend-owned base selected under open compute-substrate authority for an
+    # otherwise image-free materialized node.
+    backend_base_image_ref: str | None = None
+    backend_base_use_image_command: bool = False
+    backend_run_capabilities: tuple[str, ...] = ()
+    backend_provider_kind: str = ""
+    backend_provider_parameters: tuple[tuple[str, str], ...] = ()
     # Deployment-serving membership is resolved once by the pack/backend
     # interaction seam and copied through the DTO. Renderers never rediscover it
     # from component names.
@@ -244,9 +251,16 @@ class DeploymentAccountRealization(object):
 
     Carries non-secret identity only (ADR-046 addendum): no password material
     crosses this record. The concrete credential is generated inside the target
-    provider boundary and never disclosed; this record is realization evidence
-    proving the declared account maps to a node whose backend provider actually
-    creates and reconciles it.
+    provider boundary; this record is realization evidence proving the declared
+    account maps to a node whose backend provider actually creates and
+    reconciles it.
+
+    ``password_strength`` is the authored credential class (RAES
+    ``PasswordStrength``), carried because it is a declared fact about the
+    environment an attacker meets, not a secret. The backend must realize a
+    credential of that class or fail closed; realizing every account with a
+    random password silently deletes the scenario's declared weak-credential
+    attack surface (issue #1006).
 
     Author explicitness is preserved for optional attributes so the backend
     reconciles only what the scenario author declared (SEM-218, ADR-046
@@ -263,6 +277,7 @@ class DeploymentAccountRealization(object):
     spn: str = ""
     mail: str = ""
     disabled: bool | None = None
+    password_strength: str = ""
 
     def details(self) -> dict[str, object]:
         return {
@@ -273,6 +288,7 @@ class DeploymentAccountRealization(object):
             "spn": self.spn,
             "mail": self.mail,
             "disabled": self.disabled,
+            "password_strength": self.password_strength,
         }
 
 
@@ -291,6 +307,7 @@ class DeploymentStatefulConsumer(object):
     service_name: str
     mount_destination: str
     access_mode: StatefulConsumerAccessMode
+    delivery_mode: str = "mount"
     selected_outputs: tuple[str, ...] = ()
 
     def details(self) -> dict[str, object]:
@@ -300,6 +317,7 @@ class DeploymentStatefulConsumer(object):
             "service_name": self.service_name,
             "mount_destination": self.mount_destination,
             "access_mode": self.access_mode,
+            "delivery_mode": self.delivery_mode,
             "selected_outputs": list(self.selected_outputs),
         }
 
@@ -428,6 +446,31 @@ class DeploymentCaptureApparatus(object):
             "governing_scopes": list(self.governing_scopes),
             "environment_visible": self.environment_visible,
             "observer_effects": list(self.observer_effects),
+        }
+
+
+@dataclass(frozen=True)
+class DeploymentOperatorAccess(object):
+    """One declared operator interactive access the backend must make reachable.
+
+    A scenario declares that a participant reaches a node interactively
+    (``agents.<agent>.interactive_access.<id>``). That is an in-world fact; how
+    an operator on the host actually reaches an internal node is the backend's
+    choice under open realization, and the backend must make it true or refuse
+    admission (issue #1006).
+    """
+
+    access_id: str
+    agent: str
+    target_node: str
+    channel: str
+
+    def details(self) -> dict[str, object]:
+        return {
+            "access_id": self.access_id,
+            "agent": self.agent,
+            "target_node": self.target_node,
+            "channel": self.channel,
         }
 
 

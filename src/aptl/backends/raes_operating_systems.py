@@ -13,15 +13,18 @@ from raes_contracts.realization_observation import ObservedOperatingSystemIdenti
 # services and generic container substrates.  Unknown or newer releases are not
 # silently treated as compatible: they need an explicit row before admission.
 APTL_OPERATING_SYSTEMS = (
-    OperatingSystemCompatibility("linux", "debian", frozenset({"12"})),
+    OperatingSystemCompatibility("linux", "debian", frozenset({"11", "12", "13"})),
     OperatingSystemCompatibility(
-        "linux", "ubuntu", frozenset({"20.04", "22.04", "24.04"})
+        "linux", "ubuntu", frozenset({"20.04", "22.04", "24.04", "26.04"})
     ),
     OperatingSystemCompatibility("linux", "rocky-linux", frozenset({"8", "9"})),
     OperatingSystemCompatibility(
+        "linux", "x-aptl:almalinux", frozenset({"9"})
+    ),
+    OperatingSystemCompatibility(
         "linux",
         "x-aptl:alpine",
-        frozenset({"3.18", "3.19", "3.20", "3.21", "3.22"}),
+        frozenset({"3.18", "3.19", "3.20", "3.21", "3.22", "3.24"}),
     ),
     OperatingSystemCompatibility(
         "linux", "x-aptl:amazon-linux", frozenset({"2", "2023"})
@@ -39,6 +42,7 @@ _DISTRIBUTION_NAMES = {
     "ubuntu": "ubuntu",
     "rocky": "rocky-linux",
     "rockylinux": "rocky-linux",
+    "almalinux": "x-aptl:almalinux",
     "rhel": "red-hat-enterprise-linux",
     "alpine": "x-aptl:alpine",
     "amzn": "x-aptl:amazon-linux",
@@ -117,15 +121,17 @@ def _supported_os_identity(
     version = fields.get("VERSION_ID", "")
     if distribution is None or not version:
         return None
-    supported = any(
-        row.family == "linux"
-        and row.distribution == distribution
-        and version in row.versions
+    supported_versions = {
+        supported_version
         for row in APTL_OPERATING_SYSTEMS
-    )
+        if row.family == "linux" and row.distribution == distribution
+        for supported_version in row.versions
+        if version == supported_version or version.startswith(supported_version + ".")
+    }
+    supported = max(supported_versions, key=len) if supported_versions else None
     return (
         ObservedOperatingSystemIdentity(
-            family="linux", distribution=distribution, version=version
+            family="linux", distribution=distribution, version=supported
         )
         if supported
         else None

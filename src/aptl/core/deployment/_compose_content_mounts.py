@@ -27,6 +27,9 @@ from aptl.core.deployment.realization import (
 
 CONTENT_MOUNT_ROOT_RELPATH = Path(".aptl") / "realization" / "content"
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_EXECUTABLE_SCRIPT_MEDIA_TYPES = frozenset(
+    {"text/x-python", "text/x-shellscript"}
+)
 
 
 def image_node_content_override(
@@ -208,4 +211,9 @@ def _place_pack_content(
     destination = root / basename
     _remove_previous_output(destination)
     destination.write_bytes(resolved.data)
+    if item.media_type in _EXECUTABLE_SCRIPT_MEDIA_TYPES:
+        # The exact bytes retain their digest identity when the declared script
+        # is made runnable. Without this mode, Cortex cannot execute an analyzer
+        # that was staged with Path.write_bytes().
+        destination.chmod(0o755)
     return destination

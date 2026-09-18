@@ -94,19 +94,6 @@ if [ -x "$SCRIPT_DIR/envpack-soar-fixups.sh" ]; then
     fi
 fi
 
-# Apply the temporary env-pack Suricata content fixups. The frozen env-pack
-# materializes suricata-local-rules as a header-only file (0 signatures) and
-# suricata.yaml with an incomplete address-groups/port-groups block, so the
-# authored 46-rule corpus never loads and ~10 rules fail on undefined vars.
-# This restores the authored corpus + complete vars from config/suricata/ and
-# reloads the sensor (see scripts/envpack-suricata-fixups.sh).
-if [ -x "$SCRIPT_DIR/envpack-suricata-fixups.sh" ]; then
-    if ! "$SCRIPT_DIR/envpack-suricata-fixups.sh"; then
-        echo "  ERROR: env-pack Suricata fixups failed; refusing to report a ready lab"
-        exit 1
-    fi
-fi
-
 # Apply the temporary env-pack Kali capture-wrapper fixup. The frozen env-pack
 # ships a fail-closed ForceCommand wrapper that denies every SSH session unless
 # a control-plane APTL_CAPTURE_CAPABILITY token is present, but nothing in this

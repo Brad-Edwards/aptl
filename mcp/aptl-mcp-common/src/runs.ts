@@ -62,6 +62,11 @@ function stateDirFromEnv(env: NodeJS.ProcessEnv = process.env): string {
  * needed).
  */
 export function loadActiveTraceId(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  // A restricted guest supervisor binds an already-admitted lab-start run.
+  // This never comes from a participant's request or forwarded SSH environment.
+  if (env.APTL_MCP_ADMITTED_RUN_ID !== undefined) {
+    return validateId(env.APTL_MCP_ADMITTED_RUN_ID, 'admitted run');
+  }
   const ctxPath = resolve(stateDirFromEnv(env), 'trace-context.json');
   if (!existsSync(ctxPath)) return undefined;
   let raw: string;

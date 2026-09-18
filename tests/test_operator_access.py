@@ -195,7 +195,7 @@ _KALI = DeploymentOperatorAccess(
 
 
 def test_relay_is_published_on_loopback_with_least_privilege(monkeypatch, tmp_path):
-    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints: [])
+    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints, **kw: [])
     monkeypatch.delenv("APTL_HP_KALI_SSH_PROXY_2023", raising=False)
     backend = _Backend(tmp_path)
     ownership = backend._ownership
@@ -224,7 +224,7 @@ def test_relay_is_published_on_loopback_with_least_privilege(monkeypatch, tmp_pa
 
 def test_relay_and_access_network_are_receipt_owned(monkeypatch, tmp_path):
     """Teardown removes only receipt-owned resources, so both must be receipted."""
-    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints: [])
+    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints, **kw: [])
     backend = _Backend(tmp_path)
 
     assert backend.activate_operator_access((_KALI,)) == []
@@ -238,7 +238,7 @@ def test_relay_and_access_network_are_receipt_owned(monkeypatch, tmp_path):
 
 
 def test_relay_honours_a_remapped_host_port(monkeypatch, tmp_path):
-    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints: [])
+    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints, **kw: [])
     monkeypatch.setenv("APTL_HP_KALI_SSH_PROXY_2023", "32023")
     backend = _Backend(tmp_path)
 
@@ -256,7 +256,7 @@ def test_no_declared_access_starts_nothing(tmp_path):
 
 
 def test_target_not_on_any_network_fails_closed(monkeypatch, tmp_path):
-    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints: [])
+    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints, **kw: [])
     backend = _Backend(tmp_path, target_networks=())
 
     failures = backend.activate_operator_access((_KALI,))
@@ -266,7 +266,7 @@ def test_target_not_on_any_network_fails_closed(monkeypatch, tmp_path):
 
 
 def test_relay_that_cannot_join_its_target_fails_closed(monkeypatch, tmp_path):
-    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints: [])
+    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints, **kw: [])
     backend = _Backend(tmp_path, fail_on=(("docker", "network", "connect"),))
 
     failures = backend.activate_operator_access((_KALI,))
@@ -293,7 +293,7 @@ def test_declared_identity_without_a_delivered_key_is_authorized(monkeypatch, tm
     its `analyst` identity, so the backend installs the operator's public key
     for exactly that user.
     """
-    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints: [])
+    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints, **kw: [])
     backend = _Backend(tmp_path, target_networks=("aptl_aptl-security",))
 
     assert (
@@ -304,14 +304,55 @@ def test_declared_identity_without_a_delivered_key_is_authorized(monkeypatch, tm
     [authorize] = [
         c for c in backend.commands if c[:2] == ["exec", "aptl-soc-workstation"]
     ]
-    # User and key are discrete arguments to a fixed script, never shell text.
-    assert authorize[-2:] == ["analyst", _OPERATOR_KEY]
-    assert _OPERATOR_KEY not in authorize[4]
+    # The key is a discrete argument to a fixed script, never shell text.
+    assert authorize[-1] == _OPERATOR_KEY
+    assert not any(_OPERATOR_KEY in part for part in authorize[:-1])
+
+
+def test_key_is_installed_with_the_target_user_privileges_not_root(
+    monkeypatch, tmp_path
+):
+    """Root writing into a participant's home is the escalation, not the goal.
+
+    The declared identity is a scenario participant in a deliberately
+    vulnerable range, so a process running as that user is expected, and it
+    owns every path the installer touches. As root each step followed the
+    symlinks it controls, so it could redirect the write, the chown and the
+    chmod onto a root-owned file (issue #1105). The installer therefore drops
+    to that identity before touching anything.
+    """
+    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints, **kw: [])
+    backend = _Backend(tmp_path, target_networks=("aptl_aptl-security",))
+
+    backend.activate_operator_access((_SOC,), operator_public_key=_OPERATOR_KEY)
+
+    [authorize] = [
+        c for c in backend.commands if c[:2] == ["exec", "aptl-soc-workstation"]
+    ]
+    argv = authorize[2:]
+    assert argv[:4] == ["runuser", "-u", "analyst", "--"]
+    # Nothing left in the command runs with root's privileges.
+    assert "chown" not in " ".join(argv)
+
+
+def test_installer_refuses_a_redirected_authorized_keys(monkeypatch, tmp_path):
+    """Failing closed beats writing a key somewhere sshd will never read."""
+    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints, **kw: [])
+    backend = _Backend(tmp_path, target_networks=("aptl_aptl-security",))
+
+    backend.activate_operator_access((_SOC,), operator_public_key=_OPERATOR_KEY)
+
+    [authorize] = [
+        c for c in backend.commands if c[:2] == ["exec", "aptl-soc-workstation"]
+    ]
+    script = next(part for part in authorize if "authorized_keys" in part)
+    for guard in ('[ -L "$dir" ]', '[ -L "$keys" ]', '[ ! -f "$keys" ]'):
+        assert guard in script, guard
 
 
 def test_scenario_delivered_key_is_not_overwritten(monkeypatch, tmp_path):
     """Kali's authorized key arrives with the scenario's own SSH bundle."""
-    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints: [])
+    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints, **kw: [])
     backend = _Backend(tmp_path)
 
     assert (
@@ -323,7 +364,7 @@ def test_scenario_delivered_key_is_not_overwritten(monkeypatch, tmp_path):
 
 
 def test_missing_operator_key_fails_closed(monkeypatch, tmp_path):
-    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints: [])
+    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints, **kw: [])
     backend = _Backend(tmp_path, target_networks=("aptl_aptl-security",))
 
     failures = backend.activate_operator_access((_SOC,), operator_public_key=None)
@@ -334,7 +375,7 @@ def test_missing_operator_key_fails_closed(monkeypatch, tmp_path):
 
 
 def test_malformed_operator_key_is_refused(monkeypatch, tmp_path):
-    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints: [])
+    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints, **kw: [])
     backend = _Backend(tmp_path, target_networks=("aptl_aptl-security",))
 
     failures = backend.activate_operator_access(
@@ -346,7 +387,7 @@ def test_malformed_operator_key_is_refused(monkeypatch, tmp_path):
 
 
 def test_authorization_that_fails_in_the_target_fails_closed(monkeypatch, tmp_path):
-    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints: [])
+    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints, **kw: [])
     backend = _Backend(
         tmp_path, target_networks=("aptl_aptl-security",), exec_fails=True
     )
@@ -522,7 +563,7 @@ def test_proof_failure_is_what_activation_returns(monkeypatch, tmp_path):
     """
     seen: list[str] = []
 
-    def failing_proof(endpoints):
+    def failing_proof(endpoints, **kwargs):
         seen.extend(endpoint.relay_container for endpoint in endpoints)
         return ["kali relay reached no SSH server"]
 
@@ -548,3 +589,139 @@ def test_real_proof_runs_when_nothing_answers(monkeypatch, tmp_path):
 
     assert len(failures) == 1
     assert "did not reach an SSH server" in failures[0]
+
+
+# --------------------------------------------------------------------------- #
+# proof is an authenticated login, not a banner
+# --------------------------------------------------------------------------- #
+
+
+def test_a_reachable_server_the_operator_cannot_log_into_is_not_access(monkeypatch):
+    """A banner is the far side answering, not the declared access working.
+
+    Disabled public-key authentication, a denied user, or a key installed
+    where sshd never reads it all produced a banner and were reported as
+    successful realization (issue #1105).
+    """
+    monkeypatch.setattr(proof_mod, "ssh_banner_reachable", lambda host, port: True)
+    monkeypatch.setattr(proof_mod, "ssh_login_succeeds", lambda port, user, key: False)
+
+    failures = proof_mod._prove_endpoints(
+        [OPERATOR_ACCESS_ENDPOINTS["soc-workstation"]],
+        key_path=Path("/operator/key"),
+    )
+
+    assert len(failures) == 1
+    assert "could not authenticate" in failures[0]
+    assert "analyst" in failures[0]
+
+
+def test_an_authenticated_login_is_what_proves_the_access(monkeypatch):
+    monkeypatch.setattr(proof_mod, "ssh_banner_reachable", lambda host, port: True)
+    monkeypatch.setattr(proof_mod, "ssh_login_succeeds", lambda port, user, key: True)
+
+    assert (
+        proof_mod._prove_endpoints(
+            [OPERATOR_ACCESS_ENDPOINTS["kali"]], key_path=Path("/operator/key")
+        )
+        == []
+    )
+
+
+def test_login_is_attempted_as_the_declared_identity_on_the_resolved_port(
+    monkeypatch,
+):
+    monkeypatch.setenv("APTL_HP_SOC_WORKSTATION_SSH_2024", "34567")
+    monkeypatch.setattr(proof_mod, "ssh_banner_reachable", lambda host, port: True)
+    attempts: list[tuple[int, str]] = []
+
+    def record(port, user, key):
+        attempts.append((port, user))
+        return True
+
+    monkeypatch.setattr(proof_mod, "ssh_login_succeeds", record)
+
+    proof_mod._prove_endpoints(
+        [OPERATOR_ACCESS_ENDPOINTS["soc-workstation"]],
+        key_path=Path("/operator/key"),
+    )
+
+    assert attempts == [(34567, "analyst")]
+
+
+def test_no_operator_key_cannot_prove_anything(monkeypatch):
+    """Without a key there is no login to attempt, so nothing is proven."""
+    monkeypatch.setattr(proof_mod, "ssh_banner_reachable", lambda host, port: True)
+
+    failures = proof_mod._prove_endpoints(
+        [OPERATOR_ACCESS_ENDPOINTS["kali"]], key_path=None
+    )
+
+    assert len(failures) == 1
+    assert "no operator private key" in failures[0]
+
+
+def test_login_refuses_an_interactive_fallback(monkeypatch):
+    """BatchMode: a server that falls back to a prompt is not proof."""
+    recorded: dict[str, list[str]] = {}
+
+    class _Completed:
+        returncode = 0
+
+    def fake_run(argv, **kwargs):
+        recorded["argv"] = argv
+        return _Completed()
+
+    monkeypatch.setattr(proof_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(proof_mod.shutil, "which", lambda name: "/usr/bin/ssh")
+
+    assert proof_mod.ssh_login_succeeds(2024, "analyst", Path("/operator/key"))
+
+    argv = recorded["argv"]
+    assert "BatchMode=yes" in argv
+    assert "IdentitiesOnly=yes" in argv
+    assert argv[argv.index("-i") + 1] == "/operator/key"
+    assert "analyst@127.0.0.1" in argv
+
+
+def test_a_forced_command_refusal_still_proves_authentication(monkeypatch):
+    """Kali's broker refuses an unattributed session after authenticating it.
+
+    The declared access terminates at the session-capture broker, a
+    ForceCommand that rejects a session carrying no custody attribution.
+    Demanding a zero exit would fail every boot; the login still proves the
+    operator authenticated (issue #1105).
+    """
+
+    class _Refused:
+        returncode = 1
+        stderr = 'File "/usr/local/bin/broker.py", line 79\nValueError: invalid session id\n'
+
+    monkeypatch.setattr(proof_mod.shutil, "which", lambda name: "/usr/bin/ssh")
+    monkeypatch.setattr(proof_mod.subprocess, "run", lambda *a, **k: _Refused())
+
+    assert proof_mod.ssh_login_succeeds(2023, "kali", Path("/operator/key"))
+
+
+def test_a_rejected_key_is_not_authentication(monkeypatch):
+    class _Denied:
+        returncode = 255
+        stderr = "kali@127.0.0.1: Permission denied (publickey).\n"
+
+    monkeypatch.setattr(proof_mod.shutil, "which", lambda name: "/usr/bin/ssh")
+    monkeypatch.setattr(proof_mod.subprocess, "run", lambda *a, **k: _Denied())
+
+    assert not proof_mod.ssh_login_succeeds(2023, "kali", Path("/operator/key"))
+
+
+def test_a_relay_that_never_connects_is_not_authentication(monkeypatch):
+    """A transport failure proves nothing, so it must not read as success."""
+
+    class _Refused:
+        returncode = 255
+        stderr = "ssh: connect to host 127.0.0.1 port 2023: Connection refused\n"
+
+    monkeypatch.setattr(proof_mod.shutil, "which", lambda name: "/usr/bin/ssh")
+    monkeypatch.setattr(proof_mod.subprocess, "run", lambda *a, **k: _Refused())
+
+    assert not proof_mod.ssh_login_succeeds(2023, "kali", Path("/operator/key"))

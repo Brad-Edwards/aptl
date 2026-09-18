@@ -361,33 +361,50 @@ def samba_domain_relax_password_policy() -> list[str]:
     ]
 
 
-def samba_user_setpassword(user: str, password: str) -> list[str]:
-    """Argv to set one account's password to a backend-minted fixture secret.
+def samba_user_setpassword(user: str) -> list[str]:
+    """Argv to set one account's password, with the secret read from stdin.
 
-    The secret is a discrete argv token inside the target container, never
-    interpolated into a shell string. This is the deliberate exception to the
-    module's no-credential-in-argv rule: a declared weak or medium password is
-    scenario content meant to be discovered inside the range, and the provider
-    offers no stdin path for it. Strong accounts keep their target-generated
-    secret and never pass through here.
+    `samba-tool user setpassword` prompts for the password when
+    `--newpassword` is absent, so the value travels on stdin and never reaches
+    a command line. It used to be a `--newpassword=<secret>` token: a discrete
+    argv element, which keeps it out of shell syntax but not out of
+    `/proc/<pid>/cmdline` — world-readable on the host through
+    `docker exec ...` and readable by any process inside the container. That
+    defeated the mode-0600 disclosure this same path writes (issue #1105).
     """
 
-    return ["samba-tool", "user", "setpassword", user, f"--newpassword={password}"]
+    return ["samba-tool", "user", "setpassword", user]
 
 
-def samba_user_authenticate(user: str, password: str, realm: str = "") -> list[str]:
-    """Argv proving the realized credential actually authenticates.
+def samba_setpassword_input(password: str) -> str:
+    """The stdin `samba-tool user setpassword` prompts for: the value, twice."""
+
+    return f"{password}\n{password}\n"
+
+
+def samba_user_authenticate(realm: str = "") -> list[str]:
+    """Argv proving the realized credential authenticates, secret on stdin.
 
     A zero exit from `setpassword` says the directory accepted the write, not
     that the account is usable with that credential. This is the
     read-after-write for a credential: list shares as the user itself.
+
+    The identity and its secret arrive through smbclient's authentication
+    file, which `/dev/stdin` makes a pipe, so neither the `user%password`
+    principal nor any other form of the secret enters a command line
+    (issue #1105).
     """
 
-    principal = f"{user}%{password}"
-    cmd = ["smbclient", "-L", "localhost", "-U", principal]
+    cmd = ["smbclient", "-L", "localhost", "-A", "/dev/stdin"]
     if realm:
         cmd.extend(["-W", realm])
     return cmd
+
+
+def samba_authenticate_input(user: str, password: str) -> str:
+    """The credentials smbclient reads from its authentication file."""
+
+    return f"username={user}\npassword={password}\n"
 
 
 def samba_user_set_mail(user: str, mail: str) -> list[str]:

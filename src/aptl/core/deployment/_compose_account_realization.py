@@ -285,13 +285,21 @@ class ComposeRealizationAccountMixin(ComposeAccountVerificationMixin):
         A ``strong`` account keeps the target-generated secret from create. A
         ``weak`` or ``medium`` account is the scenario's declared credential
         surface, so the backend mints a password of that class, sets it, and
-        proves it by authenticating as the account. An existing account is left
-        alone: its credential is already realized and re-minting would discard
-        a secret a participant may already hold.
+        proves it by authenticating as the account.
+
+        An existing account is left alone only when the backend can still prove
+        the declared class is true of it — the disclosed credential says that
+        class and still authenticates. Skipping on existence alone accepted an
+        unknown, strong, or unusable secret as the declared attack surface, and
+        made a partial failure permanent: if the set succeeded but the proof or
+        the disclosure did not, the account existed, so every later run skipped
+        it and reported success over a credential nobody held (issue #1105).
         """
 
         strength = account.password_strength
-        if strength not in credentials.BACKEND_MINTED_STRENGTHS or not created:
+        if self._credential_already_realized(
+            container, account, strength, created=created, timeout=timeout
+        ):
             return None
         password = credentials.password_for_strength(strength)
         unproven = self._set_and_prove_password(
@@ -301,6 +309,55 @@ class ComposeRealizationAccountMixin(ComposeAccountVerificationMixin):
             return unproven
         return self._disclose_password(account, password, strength)
 
+    def _credential_already_realized(
+        self,
+        container: str,
+        account: DeploymentAccountRealization,
+        strength: str,
+        *,
+        created: bool,
+        timeout: int,
+    ) -> bool:
+        """Whether this account's declared class is already true of it."""
+
+        if strength not in credentials.BACKEND_MINTED_STRENGTHS:
+            return True
+        return not created and self._retained_credential_is_current(
+            container, account, strength, timeout=timeout
+        )
+
+    def _retained_credential_is_current(
+        self,
+        container: str,
+        account: DeploymentAccountRealization,
+        strength: str,
+        *,
+        timeout: int,
+    ) -> bool:
+        """Whether the disclosed credential still proves the declared class.
+
+        Evidence, not assumption: the disclosed record has to name the declared
+        class and the secret has to still authenticate as the account. Anything
+        else — no record, a record of another class, a secret the directory now
+        refuses — means the declared class is not established, so the caller
+        realizes it rather than inheriting whatever is there.
+        """
+
+        retained = credentials.read_disclosed_credential(
+            self.realization_root,
+            node=account.target_address,
+            username=account.username,
+        )
+        if retained is None or retained[0] != strength:
+            return False
+        proof = self.container_exec_with_input(
+            container,
+            provider.samba_user_authenticate(),
+            provider.samba_authenticate_input(account.username, retained[1]),
+            timeout=timeout,
+        )
+        return proof.returncode == 0
+
     def _set_and_prove_password(
         self,
         container: str,
@@ -309,18 +366,25 @@ class ComposeRealizationAccountMixin(ComposeAccountVerificationMixin):
         *,
         timeout: int,
     ) -> str | None:
-        """Set the minted password, then prove it authenticates as the account."""
+        """Set the minted password, then prove it authenticates as the account.
 
-        applied = self.container_exec(
+        Both halves send the secret on stdin. Through ``container_exec`` it
+        would also land in the host's ``docker exec ...`` argv, where
+        ``/proc/<pid>/cmdline`` is world-readable (issue #1105).
+        """
+
+        applied = self.container_exec_with_input(
             container,
-            provider.samba_user_setpassword(account.username, password),
+            provider.samba_user_setpassword(account.username),
+            provider.samba_setpassword_input(password),
             timeout=timeout,
         )
         if applied.returncode != 0:
             return "account-password-not-applied"
-        proof = self.container_exec(
+        proof = self.container_exec_with_input(
             container,
-            provider.samba_user_authenticate(account.username, password),
+            provider.samba_user_authenticate(),
+            provider.samba_authenticate_input(account.username, password),
             timeout=timeout,
         )
         if proof.returncode != 0:

@@ -117,6 +117,31 @@ def disclose_account_credential(
     return target
 
 
+def read_disclosed_credential(
+    scenario_root: Path, *, node: str, username: str
+) -> tuple[str, str] | None:
+    """Return the ``(strength, password)`` disclosed for one account, if any.
+
+    The disclosed file is the backend's own record of what it minted. It is
+    what makes an already-existing account checkable: without it there is no
+    evidence at all about the secret the account holds, so nothing can say
+    whether the declared credential class is true (issue #1105).
+    """
+
+    try:
+        target = _canonical_generated_path(
+            scenario_root,
+            ACCOUNT_CREDENTIALS_ROOT_RELPATH
+            / _safe_segment(node)
+            / _safe_segment(username),
+        )
+        strength, _, rest = target.read_text(encoding="utf-8").partition("\n")
+    except (OSError, ValueError):
+        return None
+    password = rest.rstrip("\n")
+    return (strength.strip(), password) if strength.strip() and password else None
+
+
 def _write_operator_only(target: Path, content: str) -> None:
     """Atomically write a 0600 file inside an already contained parent.
 

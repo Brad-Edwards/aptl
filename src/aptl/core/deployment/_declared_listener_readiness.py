@@ -45,19 +45,19 @@ def await_declared_listeners(
     """Wait for every declared TCP/UDP listener to be bound; return failures."""
 
     pending = {
-        node.container_name: _declared_ports(node)
+        node.container_name: _declared_listeners(node)
         for node in nodes
-        if node.container_name and _declared_ports(node)
+        if node.container_name and _declared_listeners(node)
     }
     if not pending:
         return []
     deadline = time.monotonic() + timeout
-    unmet: dict[str, set[int]] = {}
+    unmet: dict[str, set[tuple[str, int]]] = {}
     while True:
         unmet = {
             container: missing
-            for container, ports in pending.items()
-            if (missing := _missing_ports(backend, container, ports))
+            for container, declared in pending.items()
+            if (missing := _missing_listeners(backend, container, declared))
         }
         if not unmet or time.monotonic() >= deadline:
             break
@@ -65,24 +65,36 @@ def await_declared_listeners(
     if not unmet:
         return []
     detail = ", ".join(
-        f"{container} (ports {sorted(ports)})"
-        for container, ports in sorted(unmet.items())
+        f"{container} ({', '.join(f'{proto}/{port}' for proto, port in sorted(missing))})"
+        for container, missing in sorted(unmet.items())
     )
     log.warning("declared listeners did not bind within %ss: %s", timeout, detail)
     return [f"declared service listeners did not bind within {timeout}s: {detail}"]
 
 
-def _declared_ports(node: "DeploymentNodeRealization") -> set[int]:
-    """Return the ports a node's runtime declares as service listeners."""
+def _protocol(value: object) -> str:
+    """Normalize a declared or observed protocol to its comparable name."""
+
+    return str(getattr(value, "value", value) or "tcp").strip().lower()
+
+
+def _declared_listeners(node: "DeploymentNodeRealization") -> set[tuple[str, int]]:
+    """Return the (protocol, port) listeners a node's runtime declares.
+
+    The protocol is carried, not dropped. Reduced to a port alone, a declared
+    TCP listener on 53 was satisfied by a bound UDP/53, so the wait ended
+    before the declared service was up and the exact observation raced it —
+    the nondeterminism this module exists to remove (issue #1105).
+    """
 
     runtime = getattr(node, "runtime", None)
     listeners = getattr(runtime, "service_listeners", ()) or ()
-    ports: set[int] = set()
+    declared: set[tuple[str, int]] = set()
     for listener in listeners:
         port = getattr(listener, "port", None)
         if isinstance(port, int) and 0 < port < 65536:
-            ports.add(port)
-    return ports
+            declared.add((_protocol(getattr(listener, "protocol", "tcp")), port))
+    return declared
 
 
 def _observe_listeners(backend: object, container: str) -> object | None:
@@ -97,15 +109,17 @@ def _observe_listeners(backend: object, container: str) -> object | None:
         return None
 
 
-def _missing_ports(backend: object, container: str, ports: set[int]) -> set[int]:
-    """Return declared ports not currently bound inside the container."""
+def _missing_listeners(
+    backend: object, container: str, declared: set[tuple[str, int]]
+) -> set[tuple[str, int]]:
+    """Return declared (protocol, port) listeners not currently bound."""
 
     listeners = _observe_listeners(backend, container)
     if listeners is None:
-        return set(ports)
+        return set(declared)
     bound = {
-        entry[2]
+        (_protocol(entry[0]), entry[2])
         for entry in getattr(listeners, "sockets", ())
         if isinstance(entry, tuple) and len(entry) == 3
     }
-    return {port for port in ports if port not in bound}
+    return declared - bound

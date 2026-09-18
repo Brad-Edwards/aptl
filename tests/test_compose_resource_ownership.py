@@ -635,3 +635,106 @@ def test_network_attachment_resolves_both_resource_ids(tmp_path: Path) -> None:
         _ID_B,
         _ID_A,
     ]
+
+
+def test_network_reuse_inspects_the_verified_id_not_the_name(tmp_path: Path) -> None:
+    """Verification must stay bound to the object ownership just verified.
+
+    `_resolve_owned_network_id` returns the receipt-bound native id. Re-inspecting
+    by the mutable name instead let a same-name replacement between the two calls
+    redirect the policy check onto a different network (issue #1105).
+    """
+    from aptl.core.deployment.realization import DeploymentNetworkRealization
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl")
+    backend._resolve_owned_network_id = MagicMock(return_value=_ID_B)
+    backend.host_inspect_network = MagicMock(return_value={})
+
+    backend._realization_network_reuse_failures(
+        "aptl_aptl-dmz",
+        DeploymentNetworkRealization(name="dmz", cidr="172.31.0.0/24"),
+    )
+
+    backend.host_inspect_network.assert_called_once_with(_ID_B)
+
+
+@pytest.mark.parametrize(
+    "failing_stage",
+    ["container", "network", "volume"],
+)
+def test_a_failed_capture_rolls_the_whole_attempt_back(
+    tmp_path: Path, failing_stage: str
+) -> None:
+    """Whatever stage fails, nothing this attempt created may be left behind.
+
+    The rollback used to remove only receipted containers, so the object whose
+    receipt failed — and every network and volume created alongside it — stayed
+    on the daemon with no receipt. The next preflight read that as a foreign
+    namespace and the workspace could neither start nor clean up (issue #1105).
+    """
+    from aptl.core.deployment._compose_owned_start import _OwnedStartScope
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl")
+    ownership = backend._ensure_resource_ownership()
+    scope = _OwnedStartScope(
+        ownership=ownership,
+        attempt_id="attempt-under-test",
+        daemon_id="daemon",
+        compose_files=(tmp_path / "docker-compose.yml",),
+        semantic_by_service={},
+    )
+
+    def boom(*args, **kwargs):
+        raise OwnershipConflictError(f"{failing_stage} capture failed")
+
+    stages = {
+        "container": "_record_compose_container_receipts",
+        "network": "_record_compose_network_receipts",
+        "volume": "_record_compose_volume_receipts",
+    }
+    for name, attr in stages.items():
+        setattr(
+            backend,
+            attr,
+            boom if name == failing_stage else (lambda *a, **k: None),
+        )
+    backend._remove_owned_attempt_containers = MagicMock()
+    backend._run = MagicMock(
+        return_value=subprocess.CompletedProcess([], 0, stdout="", stderr="")
+    )
+
+    result = backend._capture_started_resources(scope, ["core"])
+
+    assert not result.success
+    [rollback] = [c.args[0] for c in backend._run.call_args_list]
+    assert "down" in rollback
+    # Volumes and orphans included: an unreceipted network or volume is exactly
+    # what a container-only rollback used to strand.
+    assert "--volumes" in rollback
+    assert "--remove-orphans" in rollback
+    backend._remove_owned_attempt_containers.assert_called_once_with(
+        "attempt-under-test"
+    )
+
+
+def test_a_successful_capture_rolls_nothing_back(tmp_path: Path) -> None:
+    from aptl.core.deployment._compose_owned_start import _OwnedStartScope
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl")
+    scope = _OwnedStartScope(
+        ownership=backend._ensure_resource_ownership(),
+        attempt_id="attempt-under-test",
+        daemon_id="daemon",
+        compose_files=(tmp_path / "docker-compose.yml",),
+        semantic_by_service={},
+    )
+    for attr in (
+        "_record_compose_container_receipts",
+        "_record_compose_network_receipts",
+        "_record_compose_volume_receipts",
+    ):
+        setattr(backend, attr, lambda *a, **k: None)
+    backend._run = MagicMock()
+
+    assert backend._capture_started_resources(scope, ["core"]).success
+    backend._run.assert_not_called()

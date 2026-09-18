@@ -2363,7 +2363,11 @@ def _step_activate_operator_access(ctx: _LabStartContext) -> LabResult | None:
     activate = getattr(ctx.backend, "activate_operator_access", None)
     if not callable(activate):
         return LabResult(success=False, error=_OPERATOR_ACCESS_UNAVAILABLE)
-    failures = activate(accesses, operator_public_key=_operator_public_key(ctx))
+    failures = activate(
+        accesses,
+        operator_public_key=_operator_public_key(ctx),
+        operator_key_path=ctx.ssh_key_path,
+    )
     for failure in failures:
         log.error("Operator access failed: %s", failure)
     return (

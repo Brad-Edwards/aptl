@@ -16,6 +16,7 @@ from aptl.core.deployment._declared_listener_readiness import await_declared_lis
 @dataclass
 class _Listener:
     port: int
+    protocol: str = "tcp"
 
 
 @dataclass
@@ -37,20 +38,29 @@ class _Listeners:
 class _Backend:
     """A backend whose listeners appear after a given number of reads."""
 
-    def __init__(self, appears_after: int = 0, *, ports: tuple[int, ...] = (9000,)):
+    def __init__(self, appears_after: int = 0, *, ports=(9000,), protocol="tcp"):
         self.appears_after = appears_after
         self.ports = ports
+        self.protocol = protocol
         self.reads = 0
 
     def observe_container_listeners(self, name: str) -> _Listeners:
         self.reads += 1
         if self.reads > self.appears_after:
-            return _Listeners(tuple(("tcp", "::", port) for port in self.ports))
+            return _Listeners(
+                tuple((self.protocol, "::", port) for port in self.ports)
+            )
         return _Listeners(())
 
 
-def _node(port: int = 9000, container: str | None = "aptl-thehive") -> _Node:
-    return _Node(container_name=container, runtime=_Runtime((_Listener(port),)))
+def _node(
+    port: int = 9000,
+    container: str | None = "aptl-thehive",
+    protocol: str = "tcp",
+) -> _Node:
+    return _Node(
+        container_name=container, runtime=_Runtime((_Listener(port, protocol),))
+    )
 
 
 def test_listener_already_bound_returns_immediately():
@@ -158,3 +168,36 @@ def test_listeners_are_awaited_only_after_providers_start_them(tmp_path):
 
     assert result.success is True
     assert order.index("providers") < order.index("listeners")
+
+
+def test_a_bound_udp_socket_does_not_satisfy_a_declared_tcp_listener():
+    """Protocol is part of the declaration, not noise to reduce away.
+
+    Comparing port numbers alone let a bound UDP/53 end the wait for a declared
+    TCP/53, so observation raced the still-starting TCP service and reproduced
+    the nondeterminism this module removes (issue #1105).
+    """
+    backend = _Backend(appears_after=0, ports=(53,), protocol="udp")
+
+    failures = await_declared_listeners(
+        backend, (_node(53, "aptl-dns", protocol="tcp"),), timeout=0, interval=0
+    )
+
+    assert len(failures) == 1
+    assert "tcp/53" in failures[0]
+
+
+def test_the_declared_protocol_on_the_same_port_is_accepted():
+    backend = _Backend(appears_after=0, ports=(53,), protocol="udp")
+
+    assert (
+        await_declared_listeners(backend, (_node(53, "aptl-dns", protocol="udp"),))
+        == []
+    )
+
+
+def test_a_declared_protocol_is_matched_case_insensitively():
+    """RAES carries the protocol as a vocabulary value; `ss` reports lowercase."""
+    backend = _Backend(appears_after=0, ports=(9000,), protocol="TCP")
+
+    assert await_declared_listeners(backend, (_node(9000),)) == []

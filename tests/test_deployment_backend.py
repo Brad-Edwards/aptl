@@ -3788,10 +3788,24 @@ class _FakeAd:
         }
         self.groups = set(groups or [])
         self.calls: list[list[str]] = []
+        self.inputs: list[tuple[list[str], str]] = []
 
     def __call__(self, name, cmd, *, timeout=None):
         self.calls.append(list(cmd))
         return self._dispatch(cmd)
+
+    def with_input(self, name, cmd, payload, *, timeout=None):
+        """``container_exec_with_input``: the secret arrives on stdin, not argv.
+
+        Credentials are sent this way precisely so they never reach a command
+        line, so the double reads them from the payload — and the recorded
+        ``calls`` stay argv-only, which is what the no-secret-in-argv
+        assertions inspect (issue #1105).
+        """
+
+        self.calls.append(list(cmd))
+        self.inputs.append((list(cmd), payload))
+        return self._dispatch(cmd, payload)
 
     def cmds(self, *prefix):
         """Return recorded calls whose leading tokens match ``prefix``."""
@@ -3808,15 +3822,18 @@ class _FakeAd:
             args=cmd, returncode=1, stdout="", stderr=stderr
         )
 
-    def _dispatch(self, cmd):
+    def _dispatch(self, cmd, payload=""):
         if cmd[0] == "test" and cmd[1] == "-f":
             return self._ok(cmd) if self.provisioned else self._fail(cmd)
         if cmd[0] == "smbclient":
-            principal = cmd[cmd.index("-U") + 1]
-            user, _, password = principal.partition("%")
-            authenticated = (
-                self.authentication_works and self.passwords.get(user) == password
+            fields = dict(
+                line.split("=", 1)
+                for line in payload.splitlines()
+                if "=" in line
             )
+            authenticated = self.authentication_works and self.passwords.get(
+                fields.get("username", "")
+            ) == fields.get("password")
             return self._ok(cmd) if authenticated else self._fail(cmd)
         if cmd[1:4] == ["domain", "passwordsettings", "set"]:
             self.policy_relaxed = True
@@ -3826,7 +3843,7 @@ class _FakeAd:
         if cmd[1] == "group":
             return self._dispatch_group(cmd)
         if cmd[1:3] == ["user", "setpassword"]:
-            return self._set_password(cmd)
+            return self._set_password(cmd, payload)
         if cmd[1] in ("user", "spn"):
             return self._dispatch_user(cmd)
         return self._fail(cmd)
@@ -3850,12 +3867,13 @@ class _FakeAd:
             return self._ok(cmd, stdout=members)
         return self._fail(cmd)
 
-    def _set_password(self, cmd):
+    def _set_password(self, cmd, payload=""):
         if cmd[3] not in self.users:
             return self._fail(cmd)
-        secret = next(
-            (a.split("=", 1)[1] for a in cmd if a.startswith("--newpassword=")), ""
-        )
+        # samba-tool prompts for the value and then for confirmation; both
+        # lines carry the same secret, and neither is in argv.
+        entered = payload.splitlines()
+        secret = entered[0] if entered and len(set(entered)) == 1 else ""
         # A real directory refuses a weak secret until the policy allows it.
         if not self.policy_relaxed and len(secret) < 8:
             return self._fail(cmd)
@@ -4353,7 +4371,10 @@ class TestDeclaredCredentialClassIsRealized:
 
     def _realize(self, tmp_path, ad, accounts):
         backend = self._backend(tmp_path)
-        with patch.object(backend, "container_exec", ad):
+        with (
+            patch.object(backend, "container_exec", ad),
+            patch.object(backend, "container_exec_with_input", ad.with_input),
+        ):
             return backend.realize_accounts(accounts, (_ad_node(),))
 
     def test_weak_account_gets_a_weak_credential_that_authenticates(self, tmp_path):
@@ -4365,11 +4386,12 @@ class TestDeclaredCredentialClassIsRealized:
         assert result is None
         set_calls = ad.cmds("samba-tool", "user", "setpassword")
         assert len(set_calls) == 1
-        secret = set_calls[0][4].split("=", 1)[1]
+        secret = ad.passwords["michael.thompson"]
         # The realized secret is the declared class, and it authenticates.
         assert len(secret) <= 12
-        assert ad.passwords["michael.thompson"] == secret
         assert ad.cmds("smbclient")
+        # It got there on stdin: no command line carries it (issue #1105).
+        assert all(secret not in part for call in ad.calls for part in call)
 
     def test_realized_credential_is_disclosed_to_the_operator(self, tmp_path):
         ad = _FakeAd()
@@ -4439,14 +4461,95 @@ class TestDeclaredCredentialClassIsRealized:
         assert "account-password-not-authenticable" in (result.error or "")
         assert "internal detail leak" not in (result.error or "")
 
-    def test_existing_account_keeps_the_credential_it_already_has(self, tmp_path):
-        """Re-minting would invalidate a secret a participant may already hold."""
+    def _retain(self, tmp_path, ad, username, strength):
+        """Put an account in the state a completed earlier realization leaves.
+
+        The secret is minted by the module under test, never written here: a
+        credential-shaped literal in tracked source is a secret-scanner finding
+        however fake it is.
+        """
+        from aptl.core.deployment import _account_credentials as credentials
+
+        password = credentials.password_for_strength(strength)
+        ad.passwords[username] = password
+        credentials.disclose_account_credential(
+            tmp_path,
+            node="scenario.node.ad",
+            username=username,
+            password=password,
+            strength=strength,
+        )
+        return password
+
+    def test_existing_account_keeps_a_credential_it_can_still_prove(self, tmp_path):
+        """Re-minting would invalidate a secret a participant may already hold.
+
+        Preserved because the declared class is *established*: the disclosed
+        record says weak and that secret still authenticates. Skipping on
+        existence alone accepted any secret at all (issue #1105).
+        """
         ad = _FakeAd(users=["michael.thompson"])
+        retained = self._retain(tmp_path, ad, "michael.thompson", "weak")
         account = _acct("michael.thompson", password_strength="weak")
 
         assert self._realize(tmp_path, ad, (account,)) is None
 
         assert ad.cmds("samba-tool", "user", "setpassword") == []
+        assert ad.passwords["michael.thompson"] == retained
+
+    def test_existing_account_with_no_credential_evidence_is_realized(self, tmp_path):
+        """No record means nothing is known about the secret, so realize the class."""
+        ad = _FakeAd(users=["michael.thompson"])
+        account = _acct("michael.thompson", password_strength="weak")
+
+        assert self._realize(tmp_path, ad, (account,)) is None
+
+        assert len(ad.cmds("samba-tool", "user", "setpassword")) == 1
+        assert ad.passwords["michael.thompson"]
+
+    def test_existing_account_whose_retained_secret_no_longer_works_is_realized(
+        self, tmp_path
+    ):
+        """A record that no longer authenticates is not evidence of anything."""
+        ad = _FakeAd(users=["michael.thompson"])
+        retained = self._retain(tmp_path, ad, "michael.thompson", "weak")
+        # The directory has moved on from the disclosed secret.
+        ad.passwords["michael.thompson"] = retained + "-rotated"
+        account = _acct("michael.thompson", password_strength="weak")
+
+        assert self._realize(tmp_path, ad, (account,)) is None
+
+        assert len(ad.cmds("samba-tool", "user", "setpassword")) == 1
+        assert ad.passwords["michael.thompson"] != retained + "-rotated"
+
+    def test_existing_account_recorded_as_another_class_is_realized(self, tmp_path):
+        """A retained strong secret is not the declared weak attack surface."""
+        ad = _FakeAd(users=["michael.thompson"])
+        self._retain(tmp_path, ad, "michael.thompson", "medium")
+        account = _acct("michael.thompson", password_strength="weak")
+
+        assert self._realize(tmp_path, ad, (account,)) is None
+
+        assert len(ad.cmds("samba-tool", "user", "setpassword")) == 1
+
+    def test_a_partial_failure_is_recovered_on_the_next_run(self, tmp_path):
+        """Set succeeded, proof did not: the account exists but nobody holds it.
+
+        The old path took `not created` and reported success forever after,
+        leaving a live account whose credential was never disclosed and never
+        proven (issue #1105).
+        """
+        broken = _FakeAd(authentication_works=False)
+        account = _acct("michael.thompson", password_strength="weak")
+        assert self._realize(tmp_path, broken, (account,)) is not None
+
+        # Next run: the account exists now, and there is still no evidence.
+        recovered = _FakeAd(users=["michael.thompson"])
+
+        assert self._realize(tmp_path, recovered, (account,)) is None
+
+        assert len(recovered.cmds("samba-tool", "user", "setpassword")) == 1
+        assert recovered.passwords["michael.thompson"]
 
 
 class TestComposeRealizeAccountsStep:

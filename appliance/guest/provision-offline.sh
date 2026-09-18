@@ -55,7 +55,11 @@ test -f "$payload_dir/aptl-appliance-first-boot"
 test -f "$payload_dir/aptl-appliance-first-boot.service"
 test -f "$payload_dir/aptl-launch.mount"
 
-python3 -m pip install --no-index --only-binary=:all: --require-hashes \
+set -- "$payload_dir"/wheelhouse/pip-*.whl
+test "$#" -eq 1
+test -f "$1"
+PYTHONPATH="$1" python3 -m pip install --no-index --only-binary=:all: \
+    --require-hashes \
     --find-links "$payload_dir/wheelhouse" \
     -r "$payload_dir/requirements.txt"
 aptl appliance validate-inputs --staging-dir "$payload_dir"

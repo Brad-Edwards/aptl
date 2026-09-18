@@ -27,6 +27,8 @@ def test_guest_scripts_are_valid_and_have_no_network_install_path() -> None:
         assert "npm " not in text
 
     provisioner = scripts[0].read_text()
+    assert 'PYTHONPATH="$1" python3 -m pip' in provisioner
+    assert 'wheelhouse/pip-*.whl' in provisioner
     assert "pip install --no-index" in provisioner
     assert "--require-hashes" in provisioner
     assert "--only-binary=:all:" in provisioner

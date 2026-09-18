@@ -59,7 +59,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-python -m venv "$root/venv"
+python3 -m venv "$root/venv"
 "$root/venv/bin/pip" install --require-hashes -r requirements/ci.txt
 "$root/venv/bin/python" -m build --no-isolation --outdir "$root/dist"
 "$root/venv/bin/pip" install --require-hashes -r requirements/runtime.txt

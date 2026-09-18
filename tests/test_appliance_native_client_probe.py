@@ -13,7 +13,8 @@ SCRIPT = (
     Path(__file__).resolve().parents[1] / "scripts/appliance/probe-native-client.py"
 )
 SPEC = importlib.util.spec_from_file_location("aptl_native_probe", SCRIPT)
-assert SPEC is not None and SPEC.loader is not None
+assert SPEC is not None
+assert SPEC.loader is not None
 probe = importlib.util.module_from_spec(SPEC)
 _write_bytecode = sys.dont_write_bytecode
 try:

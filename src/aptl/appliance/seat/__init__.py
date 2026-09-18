@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from importlib import import_module
-from typing import Any
-
 __all__ = [
     "SeatLauncherError",
     "SeatRecord",
@@ -19,22 +17,23 @@ __all__ = [
     "stop_seat",
 ]
 
+_LIFECYCLE_MODULE = "aptl.appliance.seat.lifecycle"
 _EXPORT_MODULES = {
     "SeatLauncherError": "aptl.appliance.seat.errors",
     "SeatRecord": "aptl.appliance.seat.models",
     "SeatStatusProjection": "aptl.appliance.seat.models",
     "open_participant_kiosk": "aptl.appliance.seat.kiosk",
-    "reconcile_seat_after_reboot": "aptl.appliance.seat.lifecycle",
-    "recover_seat": "aptl.appliance.seat.lifecycle",
-    "reset_seat": "aptl.appliance.seat.lifecycle",
-    "stage_seat": "aptl.appliance.seat.lifecycle",
-    "start_seat": "aptl.appliance.seat.lifecycle",
-    "status_seat": "aptl.appliance.seat.lifecycle",
-    "stop_seat": "aptl.appliance.seat.lifecycle",
+    "reconcile_seat_after_reboot": _LIFECYCLE_MODULE,
+    "recover_seat": _LIFECYCLE_MODULE,
+    "reset_seat": _LIFECYCLE_MODULE,
+    "stage_seat": _LIFECYCLE_MODULE,
+    "start_seat": _LIFECYCLE_MODULE,
+    "status_seat": _LIFECYCLE_MODULE,
+    "stop_seat": _LIFECYCLE_MODULE,
 }
 
 
-def __getattr__(name: str) -> Any:
+def __getattr__(name: str) -> object:
     """Load public adapters lazily to keep model imports cycle-free."""
 
     module_name = _EXPORT_MODULES.get(name)

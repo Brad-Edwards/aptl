@@ -8,6 +8,7 @@ from aptl.core.appliance_boundary import (
     ApplianceBoundaryBinding,
     ApplianceBoundaryPolicy,
 )
+from aptl.core.appliance_boundary_inventory import GuestBoundaryObservation
 from aptl.core.deployment._compose_boundary import (
     realize_boundary as _realize_boundary,
 )
@@ -155,7 +156,7 @@ class ComposeBoundaryRealizationMixin:
     def observe_appliance_boundary(
         self,
         realization: DeploymentRealizationSpec,
-    ):
+    ) -> GuestBoundaryObservation:
         """Perform fresh guest-side enforcement, traffic, and authority checks."""
 
         from aptl.appliance.guest_observation import collect_guest_observation

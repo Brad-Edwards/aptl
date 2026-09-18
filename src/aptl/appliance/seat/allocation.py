@@ -22,8 +22,6 @@ _LOCK_NAME = "\0aptl-seat-mapping-allocation-v1"
 _RESOURCE_PREFIX = b"name=opt/aptl/resource-reservation,string="
 _RESOURCE_VALUE = re.compile(rb"^(\d+):(\d+):(\d+)$")
 T = TypeVar("T")
-
-
 class _FileAllocatorLock:
     """Advisory allocator lock for non-Linux development hosts."""
 
@@ -40,6 +38,8 @@ class _FileAllocatorLock:
 
 
 def _bind_endpoint(address: str, port: int, protocol: str) -> socket.socket:
+    """Bind and, for TCP, listen on one candidate host endpoint."""
+
     family = socket.AF_INET6 if ":" in address else socket.AF_INET
     kind = socket.SOCK_STREAM if protocol == "tcp" else socket.SOCK_DGRAM
     candidate = socket.socket(family, kind)
@@ -54,6 +54,8 @@ def _bind_endpoint(address: str, port: int, protocol: str) -> socket.socket:
 
 
 def _endpoint_socket(mapping: BoundaryEndpoint) -> socket.socket:
+    """Create a reservation socket for one declared boundary endpoint."""
+
     return _bind_endpoint(mapping.address, mapping.port, mapping.protocol)
 
 
@@ -120,6 +122,8 @@ def reserve_outer_mappings(
 
 
 def _mapping_is_occupied(mapping: BoundaryEndpoint) -> bool:
+    """Return whether another process currently owns the endpoint."""
+
     try:
         candidate = _endpoint_socket(mapping)
     except OSError:

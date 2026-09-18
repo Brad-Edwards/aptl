@@ -11,6 +11,7 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
+from email.message import Message
 from pathlib import Path
 from typing import Protocol
 
@@ -55,7 +56,17 @@ class _BoundedRedirectHandler(urllib.request.HTTPRedirectHandler):
 
     max_redirections = 5
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: object,
+        code: int,
+        msg: str,
+        headers: Message,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        """Admit only bounded HTTPS redirects."""
+
         if code not in {301, 302, 303, 307, 308}:
             return None
         source = urllib.parse.urlparse(req.full_url)
@@ -68,11 +79,15 @@ class _BoundedRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 def _open_request(request: urllib.request.Request) -> DownloadResponse:
+    """Open one artifact request with the bounded redirect policy."""
+
     opener = urllib.request.build_opener(_BoundedRedirectHandler())
     return opener.open(request, timeout=60)
 
 
 def _file_identity(path: Path) -> tuple[str, int]:
+    """Stream the SHA-256 identity and size of one regular file."""
+
     digest = hashlib.sha256()
     size = 0
     flags = os.O_RDONLY | os.O_CLOEXEC
@@ -87,6 +102,8 @@ def _file_identity(path: Path) -> tuple[str, int]:
 
 
 def _header(headers: object, name: str) -> str | None:
+    """Read one string-valued HTTP header from a response abstraction."""
+
     getter = getattr(headers, "get", None)
     value = getter(name) if callable(getter) else None
     return value if isinstance(value, str) else None
@@ -98,6 +115,8 @@ def _admit_response(
     offset: int,
     expected_size: int,
 ) -> None:
+    """Validate status, final transport, and the exact response extent."""
+
     final_url = urllib.parse.urlparse(response.geturl())
     if final_url.scheme != "https":
         raise ApplianceDownloadError("artifact response did not remain on HTTPS")
@@ -160,7 +179,7 @@ def fetch_https_metadata(
             return payload
     except ApplianceDownloadError:
         raise
-    except (OSError, urllib.error.URLError, ValueError) as exc:
+    except (OSError, ValueError) as exc:
         raise ApplianceDownloadError("metadata download failed") from exc
 
 
@@ -240,5 +259,5 @@ def stage_https_artifact(
         return StagedDownload(destination, sha256, size_bytes, reused=False)
     except ApplianceDownloadError:
         raise
-    except (OSError, urllib.error.URLError, ValueError) as exc:
+    except (OSError, ValueError) as exc:
         raise ApplianceDownloadError("artifact download failed") from exc

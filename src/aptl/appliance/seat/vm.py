@@ -15,6 +15,9 @@ from typing import Protocol
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 
+QEMU_SLIRP_SUBNET = "10.0.2.0/24"  # Intentional RFC 1918 guest-only network.
+DEFAULT_QEMU_GUEST_ADDRESS = "10.0.2.15"  # Fixed address inside that private subnet.
+
 
 class VmProcess(Protocol):
     """Minimal VM lifecycle surface used by seat orchestration."""
@@ -41,7 +44,7 @@ class VmLaunchSpec:
     management_socket: Path | None = None
     readiness_socket: Path | None = None
     access_socket: Path | None = None
-    guest_adapter_address: str = "10.0.2.15"
+    guest_adapter_address: str = DEFAULT_QEMU_GUEST_ADDRESS
     mappings: tuple[BoundaryEndpoint, ...] = field(
         default_factory=lambda: (
             BoundaryEndpoint(
@@ -79,7 +82,7 @@ class VmLaunchSpec:
         if self.disk_reservation_bytes < 0:
             raise ValueError("disk reservation cannot be negative")
         adapter = ipaddress.ip_address(self.guest_adapter_address)
-        if adapter not in ipaddress.ip_network("10.0.2.0/24") or adapter.is_loopback:
+        if adapter not in ipaddress.ip_network(QEMU_SLIRP_SUBNET) or adapter.is_loopback:
             raise ValueError("guest adapter address must use the private slirp subnet")
 
 
@@ -181,7 +184,7 @@ def build_qemu_argv(spec: VmLaunchSpec) -> tuple[str, ...]:
         "-qmp",
         f"unix:{management_socket},server=on,wait=off",
         "-netdev",
-        f"user,id=participant,net=10.0.2.0/24,dhcpstart={spec.guest_adapter_address},{forwards}",
+        f"user,id=participant,net={QEMU_SLIRP_SUBNET},dhcpstart={spec.guest_adapter_address},{forwards}",
         "-device",
         "virtio-net-pci,netdev=participant",
         "-serial",
@@ -288,7 +291,7 @@ def read_vm_pid(seat_root: Path) -> int | None:
             start_time_ticks=int(payload["start_time_ticks"]),
             executable=str(payload["executable"]),
         )
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return None
     if expected.pid <= 0 or not _tracked_pid_alive(expected.pid):
         return None

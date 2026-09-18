@@ -9,12 +9,12 @@ import platform
 import re
 import shutil
 from pathlib import Path
-from typing import Literal
+from typing import Literal, TypeVar
 
 import rfc8785
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from pydantic import Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from aptl.appliance.candidate import verify_candidate_directory
 from aptl.appliance.errors import ApplianceManifestError
@@ -39,21 +39,24 @@ from aptl.validation.participant_qualification_evidence import (
     participant_qualification_attestation_payload,
 )
 
+_DIGEST_PATTERN = r"^sha256:[a-f0-9]{64}$"
+ModelT = TypeVar("ModelT", bound=BaseModel)
+
 
 class NativeClientProbeReceipt(_StrictModel):
     """Non-secret receipt emitted only after a live call and failed stale call."""
 
     schema_version: Literal["aptl.native-client-probe/v1"]
     candidate_id: str
-    candidate_manifest_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
-    golden_image_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    candidate_manifest_digest: str = Field(pattern=_DIGEST_PATTERN)
+    golden_image_digest: str = Field(pattern=_DIGEST_PATTERN)
     seat_id: str
     generation: int = Field(ge=1)
     client: Literal["claude", "codex"]
     server_name: str
     tool_name: str
     client_version: str = Field(min_length=1, max_length=256)
-    active_response_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    active_response_digest: str = Field(pattern=_DIGEST_PATTERN)
     live_call_passed: Literal[True]
     stale_call_rejected: Literal[True]
 
@@ -100,14 +103,14 @@ class FailedCandidateReceipt(_StrictModel):
 
     schema_version: Literal["aptl.failed-candidate-proof/v1"]
     candidate_id: str
-    candidate_manifest_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    candidate_manifest_digest: str = Field(pattern=_DIGEST_PATTERN)
     rejected: Literal[True]
     active_response_digests: tuple[str, ...] = Field(min_length=2)
 
     @field_validator("active_response_digests")
     @classmethod
     def response_digests(cls, values: tuple[str, ...]) -> tuple[str, ...]:
-        if any(not re.fullmatch(r"sha256:[a-f0-9]{64}", item) for item in values):
+        if any(not re.fullmatch(_DIGEST_PATTERN, item) for item in values):
             raise ValueError("active response digest is invalid")
         return values
 
@@ -148,6 +151,8 @@ def _host_capacity(path: Path) -> tuple[int, int, int]:
 def _load_probe_receipts(
     paths: tuple[Path, ...],
 ) -> tuple[NativeClientProbeReceipt, ...]:
+    """Load and strictly validate native-client receipts."""
+
     receipts: list[NativeClientProbeReceipt] = []
     for path in paths:
         try:
@@ -330,7 +335,11 @@ def aggregate_machine_drills(
     return report
 
 
-def _read_model(model, path: Path, label: str):
+def _read_model(
+    model: type[ModelT], path: Path, label: str
+) -> ModelT:
+    """Read one bounded strict qualification document with a stable error."""
+
     try:
         return model_validate_json_strict(model, path.read_bytes())
     except (OSError, ValueError) as exc:
@@ -343,6 +352,8 @@ def _qualification_checks(
     browser: BrowserProbeReceipt,
     clients: tuple[NativeClientProbeReceipt, ...],
 ) -> tuple[QualificationCheckEvidence, ...]:
+    """Assemble the exact successful qualification-check surface."""
+
     checks = {item.check_id: item for item in runtime.qualification_checks}
     checks.update({item.check_id: item for item in browser.checks})
     for client in ("claude", "codex"):
@@ -373,6 +384,8 @@ def _qualification_checks(
 def _runtime_surface(
     runtime: GuestRuntimeEvidence,
 ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    """Extract the selected profiles, live services, and networks."""
+
     snapshot = runtime.snapshot
     containers = snapshot.get("containers")
     networks = snapshot.get("networks")

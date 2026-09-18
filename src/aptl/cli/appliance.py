@@ -41,6 +41,7 @@ from aptl.appliance.manifest import (
     verify_release_directory,
 )
 from aptl.appliance.offline import OfflinePayloadError, build_offline_payload
+from aptl.appliance.seat.vm import DEFAULT_QEMU_GUEST_ADDRESS
 from aptl.utils.strict_json import loads_strict, model_validate_json_strict
 
 app = typer.Typer(help="Build and verify signed disposable appliance releases.")
@@ -64,7 +65,7 @@ def proxy_loopback(
     launch_descriptor: Path = typer.Option(..., "--launch-descriptor"),
     release_public_key: Path = typer.Option(..., "--release-public-key"),
     qualification_public_key: Path = typer.Option(..., "--qualification-public-key"),
-    adapter_address: str = typer.Option("10.0.2.15", "--adapter-address"),
+    adapter_address: str = typer.Option(DEFAULT_QEMU_GUEST_ADDRESS, "--adapter-address"),
 ) -> None:
     """Expose verified guest loopback publications on the private VM adapter."""
 

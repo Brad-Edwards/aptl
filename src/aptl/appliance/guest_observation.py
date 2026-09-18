@@ -24,7 +24,10 @@ from aptl.core.appliance_boundary_inventory import (
     GuestBoundaryObservation,
 )
 from aptl.core.deployment.boundary import AcesBoundarySpec, PlatformBoundarySpec
-from aptl.core.deployment.realization import DeploymentRealizationSpec
+from aptl.core.deployment.realization import (
+    DeploymentAclRealization,
+    DeploymentRealizationSpec,
+)
 
 _CONTAINER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 _PROBE_PATH = "/usr/local/bin/aptl-boundary-probe"
@@ -55,9 +58,13 @@ def _read_guest_boot_id() -> str:
 
 
 class _ProbeBackend(Protocol):
+    """Backend operations required to observe and probe the guest boundary."""
+
     _docker_daemon_id: str | None
 
-    def _run(self, command: list[str], *, timeout: int | None = None): ...
+    def _run(
+        self, command: list[str], *, timeout: int | None = None
+    ) -> subprocess.CompletedProcess[str]: ...
 
     def host_list_lab_containers(self) -> list[dict[str, object]]: ...
 
@@ -66,6 +73,8 @@ class _ProbeBackend(Protocol):
 
 @dataclass(frozen=True)
 class _LiveContainer:
+    """Normalized live container identity and network observation."""
+
     identity: str
     name: str
     addresses: tuple[str, ...]
@@ -74,6 +83,8 @@ class _LiveContainer:
 
 @dataclass(frozen=True)
 class _ProbePath:
+    """One active reachability assertion between observed containers."""
+
     identity: str
     authority: str
     source: _LiveContainer
@@ -84,6 +95,8 @@ class _ProbePath:
 
 
 def _live_containers(backend: _ProbeBackend) -> tuple[_LiveContainer, ...]:
+    """Normalize running containers from the guest backend."""
+
     observed: list[_LiveContainer] = []
     for row in backend.host_list_lab_containers():
         if row.get("state") not in {None, "running"}:
@@ -114,6 +127,8 @@ def _live_containers(backend: _ProbeBackend) -> tuple[_LiveContainer, ...]:
 def _container_by_identity(
     containers: tuple[_LiveContainer, ...], identity: str
 ) -> _LiveContainer | None:
+    """Resolve an observed container by its runtime or service identity."""
+
     return next(
         (
             item
@@ -128,6 +143,8 @@ def _container_by_identity(
 def _container_by_ip(
     containers: tuple[_LiveContainer, ...], address: str
 ) -> _LiveContainer | None:
+    """Resolve an observed container that owns an exact address."""
+
     return next((item for item in containers if address in item.addresses), None)
 
 
@@ -137,6 +154,8 @@ def _peer_on_network(
     *,
     exclude: _LiveContainer | None = None,
 ) -> tuple[_LiveContainer, str] | None:
+    """Select a peer and address on one network, excluding an optional owner."""
+
     for item in containers:
         if item == exclude:
             continue
@@ -149,6 +168,8 @@ def _peer_on_network(
 def _probe_command(
     *, image: str, network_container: str, arguments: list[str]
 ) -> list[str]:
+    """Build the fixed, least-privilege active-probe command."""
+
     if not _CONTAINER.fullmatch(network_container):
         raise ValueError("boundary probe container identity is invalid")
     return [
@@ -176,6 +197,8 @@ def _connect(
     address: str,
     port: int,
 ) -> bool:
+    """Run one bounded TCP connection probe from an observed container."""
+
     result = backend._run(
         _probe_command(
             image=image,
@@ -203,6 +226,8 @@ def _start_listener(
     address: str,
     port: int,
 ) -> str | None:
+    """Start a temporary bounded listener for an otherwise quiet target."""
+
     name = "aptl-boundary-probe-" + secrets.token_hex(8)
     command = _probe_command(
         image=image,
@@ -237,6 +262,8 @@ def _probe_path(
     *,
     image: str,
 ) -> BoundaryProbeObservation:
+    """Execute and record one expected reachable or blocked path."""
+
     listener: str | None = None
     try:
         target_ready = _connect(
@@ -290,6 +317,8 @@ def _platform_probe_paths(
     spec: PlatformBoundarySpec,
     containers: tuple[_LiveContainer, ...],
 ) -> tuple[_ProbePath, ...]:
+    """Build representative allow and default-deny platform probes."""
+
     crossing = next((item for item in spec.crossings if item.protocol == "tcp"), None)
     if crossing is None:
         return ()
@@ -339,6 +368,8 @@ def _platform_probe_paths(
 
 
 def _network_cidrs(spec: AcesBoundarySpec) -> dict[str, ipaddress.IPv4Network]:
+    """Index RAES IPv4 networks with concrete CIDRs."""
+
     return {
         item.name: ipaddress.ip_network(item.ipv4_cidr)
         for item in spec.networks
@@ -348,9 +379,11 @@ def _network_cidrs(spec: AcesBoundarySpec) -> dict[str, ipaddress.IPv4Network]:
 
 def _raes_rule_path(
     spec: AcesBoundarySpec,
-    rule,
+    rule: DeploymentAclRealization,
     containers: tuple[_LiveContainer, ...],
 ) -> _ProbePath | None:
+    """Resolve one RAES ACL rule into an executable container probe."""
+
     if rule.protocol != "tcp" or not rule.ports:
         return None
     networks = _network_cidrs(spec)
@@ -407,6 +440,8 @@ def _raes_probe_paths(
     spec: AcesBoundarySpec,
     containers: tuple[_LiveContainer, ...],
 ) -> tuple[_ProbePath, ...]:
+    """Select one representative allowed and denied RAES rule path."""
+
     selected: list[_ProbePath] = []
     for action in ("allow", "deny"):
         for rule in spec.rules:
@@ -422,6 +457,8 @@ def _raes_probe_paths(
 def _enforcement_observations(
     receipts: dict[str, dict[str, object]],
 ) -> tuple[BoundaryEnforcementObservation, ...]:
+    """Normalize signed boundary realization receipts into observations."""
+
     observations = []
     for authority in sorted(receipts):
         receipt = receipts[authority]
@@ -444,6 +481,8 @@ def _authority_holders(
     containers: tuple[_LiveContainer, ...],
     daemon_id: str,
 ) -> tuple[DockerAuthorityHolder, ...]:
+    """Observe admitted holders of the guest Docker authority."""
+
     nodes = {item.address: item for item in realization.nodes}
     holders = []
     for admission in realization.docker_authority_admissions:

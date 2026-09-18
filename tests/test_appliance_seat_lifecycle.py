@@ -370,21 +370,22 @@ def test_start_fails_closed_without_real_boundary_probes(tmp_path: Path) -> None
             "aptl.appliance.seat.lifecycle._launch_descriptor_digest",
             return_value="sha256:" + "d" * 64,
         ),
-        pytest.raises(SeatLauncherError) as exc,
     ):
         start_vm.return_value.pid = 4242
-        start_seat(
-            seat_root,
-            seat_id="seat-01",
-            release_dir=release,
-            release_public_key=public_key,
-            qualification_public_key=qualification_key,
-            options=StartSeatOptions(
-                listener_probe=_listener_probe,
-                forbidden_reachability_probe=lambda: False,
-                reserve_outer_mappings=False,
-            ),
+        options = StartSeatOptions(
+            listener_probe=_listener_probe,
+            forbidden_reachability_probe=lambda: False,
+            reserve_outer_mappings=False,
         )
+        with pytest.raises(SeatLauncherError) as exc:
+            start_seat(
+                seat_root,
+                seat_id="seat-01",
+                release_dir=release,
+                release_public_key=public_key,
+                qualification_public_key=qualification_key,
+                options=options,
+            )
 
     assert exc.value.code == "boundary.host-forbidden-reachability"
 
@@ -605,17 +606,18 @@ def test_start_marks_recoverable_failure_when_boundary_fails(tmp_path: Path) -> 
             "aptl.appliance.seat.lifecycle.host_boundary_findings",
             return_value=("boundary.host-listener-missing",),
         ),
-        pytest.raises(SeatLauncherError) as exc,
     ):
         start_vm.return_value.pid = 4242
-        start_seat(
-            seat_root,
-            seat_id="seat-01",
-            release_dir=release,
-            release_public_key=public_key,
-            qualification_public_key=qualification_key,
-            options=StartSeatOptions(reserve_outer_mappings=False),
-        )
+        options = StartSeatOptions(reserve_outer_mappings=False)
+        with pytest.raises(SeatLauncherError) as exc:
+            start_seat(
+                seat_root,
+                seat_id="seat-01",
+                release_dir=release,
+                release_public_key=public_key,
+                qualification_public_key=qualification_key,
+                options=options,
+            )
 
     assert exc.value.code == "boundary.host-listener-missing"
     failed = load_seat_record(seat_root)

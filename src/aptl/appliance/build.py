@@ -148,6 +148,8 @@ def prepare_golden_image_request(
         raise ApplianceBuildError("golden image request already exists")
 
     def digest(relative: str) -> str:
+        """Return the no-follow identity of a contained build input."""
+
         candidate = root / relative
         parent = candidate.parent.resolve(strict=True)
         if not parent.is_relative_to(root):

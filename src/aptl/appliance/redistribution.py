@@ -11,6 +11,8 @@ from aptl.appliance.models import ApplianceReleaseManifest
 
 
 class _StrictModel(BaseModel):
+    """Closed immutable base for redistribution approval records."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 

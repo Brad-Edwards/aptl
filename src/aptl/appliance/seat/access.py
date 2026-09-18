@@ -35,6 +35,8 @@ MAX_ACCESS_MESSAGE_BYTES = 2 * 1024 * 1024
 
 
 class _StrictModel(BaseModel):
+    """Closed immutable base for generation-scoped access records."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 

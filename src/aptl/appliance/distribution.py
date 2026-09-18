@@ -13,7 +13,7 @@ import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Self
+from typing import BinaryIO, Literal, Protocol, Self
 
 import rfc8785
 from cryptography.exceptions import InvalidSignature
@@ -44,6 +44,8 @@ class ApplianceDistributionError(RuntimeError):
 
 
 class _StrictModel(BaseModel):
+    """Immutable strict base for authenticated distribution documents."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
@@ -99,6 +101,8 @@ class DistributionSignature(_StrictModel):
 
 @dataclass(frozen=True)
 class DistributionBuildResult:
+    """Paths and authenticated index produced by one distribution build."""
+
     index: ApplianceDistributionIndex
     index_path: Path
     signature_path: Path
@@ -108,11 +112,21 @@ MetadataFetcher = Callable[..., bytes]
 ArtifactStager = Callable[..., StagedDownload]
 
 
+class _DigestWriter(Protocol):
+    """Minimal hashlib-compatible update surface used while streaming."""
+
+    def update(self, payload: bytes) -> None: ...
+
+
 def _canonical_index(index: ApplianceDistributionIndex) -> bytes:
+    """Serialize an index to its signature-stable canonical representation."""
+
     return rfc8785.dumps(index.model_dump(mode="json"))
 
 
 def _key_id(key: Ed25519PublicKey) -> str:
+    """Derive the stable SHA-256 identity of an Ed25519 public key."""
+
     der = key.public_bytes(
         serialization.Encoding.DER,
         serialization.PublicFormat.SubjectPublicKeyInfo,
@@ -120,7 +134,9 @@ def _key_id(key: Ed25519PublicKey) -> str:
     return f"sha256:{hashlib.sha256(der).hexdigest()}"
 
 
-def _open_regular_nofollow(path: Path):
+def _open_regular_nofollow(path: Path) -> BinaryIO:
+    """Open one regular file without following its final symbolic link."""
+
     flags = os.O_RDONLY | os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
@@ -132,6 +148,8 @@ def _open_regular_nofollow(path: Path):
 
 
 def _write_create_once(path: Path, payload: bytes, mode: int = 0o444) -> None:
+    """Create and durably write one immutable distribution file."""
+
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
@@ -145,10 +163,10 @@ def _write_create_once(path: Path, payload: bytes, mode: int = 0o444) -> None:
 
 def _write_chunk(
     path: Path,
-    source,
+    source: BinaryIO,
     *,
     chunk_size: int,
-    artifact_hash,
+    artifact_hash: _DigestWriter,
 ) -> tuple[str, int]:
     """Stream one create-once chunk without retaining large artifacts in memory."""
 
@@ -268,6 +286,8 @@ def split_distribution_artifact(
 def _verified_index(
     index_path: Path, signature_path: Path, public_key: Path
 ) -> ApplianceDistributionIndex:
+    """Load and authenticate one canonical distribution index."""
+
     try:
         with _open_regular_nofollow(index_path) as handle:
             index_bytes = handle.read(1024 * 1024 + 1)
@@ -354,7 +374,7 @@ def reconstruct_distribution(
         return output
     except ApplianceDistributionError:
         raise
-    except (FileExistsError, OSError, ValueError) as exc:
+    except (OSError, ValueError) as exc:
         raise ApplianceDistributionError("distribution reconstruction failed") from exc
     finally:
         temporary.unlink(missing_ok=True)

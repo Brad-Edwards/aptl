@@ -106,11 +106,12 @@ def check_host_prerequisites(
             detail="host memory is below the signed minimum",
         )
     )
-    cpu_capacity = (
-        len(os.sched_getaffinity(0))
-        if available_vcpus is None and hasattr(os, "sched_getaffinity")
-        else (available_vcpus if available_vcpus is not None else os.cpu_count() or 0)
-    )
+    if available_vcpus is not None:
+        cpu_capacity = available_vcpus
+    elif hasattr(os, "sched_getaffinity"):
+        cpu_capacity = len(os.sched_getaffinity(0))
+    else:
+        cpu_capacity = os.cpu_count() or 0
     findings.append(
         PrereqFinding(
             code="low-cpu",

@@ -217,10 +217,12 @@ def test_guest_can_publish_access_bundle_to_virtio_character_device() -> None:
 def test_guest_access_wait_fails_if_vm_exits_before_channel_exists(
     tmp_path: Path,
 ) -> None:
+    socket_path = tmp_path / "missing.sock"
+    request = _request()
     with pytest.raises(Exception, match="VM exited before guest access"):
         wait_for_guest_access(
-            tmp_path / "missing.sock",
-            _request(),
+            socket_path,
+            request,
             process_alive=lambda: False,
             timeout_seconds=0.1,
         )

@@ -45,6 +45,7 @@ from aptl.appliance.release_models import (
     StagedArtifact,
 )
 from aptl.appliance.release_validation import (
+    StreamedArtifact,
     read_release_artifact,
     release_artifact_identity,
     validate_canonical_payload,
@@ -55,6 +56,7 @@ from aptl.utils.strict_json import model_validate_json_strict
 
 CANDIDATE_MANIFEST = "candidate-manifest.json"
 CANDIDATE_SIGNATURE = "candidate-manifest.sig.json"
+_SHA256_PATTERN = r"^sha256:[a-f0-9]{64}$"
 _CANDIDATE_KINDS = frozenset(
     {
         "canonical-inputs",
@@ -84,7 +86,7 @@ class ApplianceCandidateTemplate(_StrictModel):
     boundary: BoundaryTemplateBinding
     host_prerequisites: HostPrerequisites
     delivery: DeliveryParity
-    build_request_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    build_request_digest: str = Field(pattern=_SHA256_PATTERN)
 
     @model_validator(mode="after")
     def complete_candidate(self) -> Self:
@@ -109,12 +111,12 @@ class ApplianceCandidateManifest(_StrictModel):
     source: ReleaseSource
     guest: ApplianceGuest
     artifacts: tuple[ArtifactReference, ...]
-    payload_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    payload_digest: str = Field(pattern=_SHA256_PATTERN)
     participant: ParticipantTemplateBinding
     boundary: ApplianceBoundaryReleaseBinding
     host_prerequisites: HostPrerequisites
     delivery: DeliveryParity
-    build_request_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    build_request_digest: str = Field(pattern=_SHA256_PATTERN)
     trust_mode: Literal["qualification-only"]
 
     @model_validator(mode="after")
@@ -127,12 +129,16 @@ class ApplianceCandidateManifest(_StrictModel):
 
 @dataclass(frozen=True)
 class VerifiedCandidateLaunch:
+    """Verified qualification-only launch material and its signed policy."""
+
     descriptor: ApplianceLaunchDescriptor
     release_root: Path
     boundary_policy: ApplianceBoundaryPolicy
 
 
 def _candidate_payload_digest(artifacts: tuple[ArtifactReference, ...]) -> str:
+    """Digest the canonical ordered candidate artifact projection."""
+
     projection = [
         item.model_dump(mode="json")
         for item in sorted(artifacts, key=lambda value: value.artifact_id)
@@ -141,6 +147,8 @@ def _candidate_payload_digest(artifacts: tuple[ArtifactReference, ...]) -> str:
 
 
 def _canonical_candidate_bytes(manifest: ApplianceCandidateManifest) -> bytes:
+    """Serialize a candidate manifest to its signed canonical bytes."""
+
     return rfc8785.dumps(manifest.model_dump(mode="json"))
 
 
@@ -197,6 +205,8 @@ def prepare_candidate_manifest(
 
 
 def _validate_candidate(root: Path, manifest: ApplianceCandidateManifest) -> None:
+    """Validate candidate bytes, build provenance, policy, and offline closure."""
+
     payloads: dict[str, bytes] = {}
     for artifact in manifest.artifacts:
         digest, size, pinned = release_artifact_identity(root, artifact.path)
@@ -249,7 +259,11 @@ def _validate_candidate(root: Path, manifest: ApplianceCandidateManifest) -> Non
     )
 
 
-def _streamed(root: Path, manifest: ApplianceCandidateManifest, kind: str):
+def _streamed(
+    root: Path, manifest: ApplianceCandidateManifest, kind: str
+) -> StreamedArtifact:
+    """Return a pinned streamed candidate artifact by kind."""
+
     artifact = next(item for item in manifest.artifacts if item.kind == kind)
     return release_artifact_identity(root, artifact.path)[2]
 

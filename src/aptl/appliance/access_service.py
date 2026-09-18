@@ -11,10 +11,12 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from aptl.appliance.launch import verify_launch_descriptor
+from aptl.appliance.launch import VerifiedApplianceLaunch, verify_launch_descriptor
 from aptl.appliance.seat.access import (
     GuestAccessBundle,
+    GuestAccessRequest,
     GuestRuntimeEvidence,
     MAX_ACCESS_MESSAGE_BYTES,
     enrolled_key,
@@ -37,9 +39,15 @@ from aptl.workbench.access import SeatEndpoint
 from aptl.workbench.preparation import TransportPreparation, prepare_guest_transport
 from aptl.workbench.profiles import WorkbenchConfigurationError
 from aptl.utils.strict_json import loads_strict
+from aptl.validation.participant_qualification import QualificationCheckEvidence
+
+if TYPE_CHECKING:
+    from aptl.appliance.candidate import VerifiedCandidateLaunch
 
 
 def _descriptor_digest(path: Path) -> str:
+    """Return the SHA-256 identity of one staged launch descriptor."""
+
     return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
 
 
@@ -66,7 +74,7 @@ def _ensure_host_key(path: Path) -> None:
 
 def _write_runtime_observation(
     path: Path,
-    request,
+    request: GuestAccessRequest,
     guest: GuestBoundaryObservation,
     *,
     uid: int,
@@ -106,7 +114,9 @@ def _assign_management_state(project: Path, *, uid: int, gid: int) -> None:
             os.chown(target, uid, gid, follow_symlinks=False)
 
 
-def _qualification_checks(project_dir: Path):
+def _qualification_checks(
+    project_dir: Path,
+) -> tuple[QualificationCheckEvidence, ...]:
     """Run the packaged full-TechVault MCP qualification plan in the guest."""
 
     from aptl.validation.participant_mcp_smoke import (
@@ -196,13 +206,15 @@ def _load_runtime_evidence(
 
 
 def _validate_request(
-    request,
+    request: GuestAccessRequest,
     descriptor_path: Path,
     release_key: Path,
     qualification_key: Path,
     *,
     candidate_trust: bool,
-):
+) -> VerifiedApplianceLaunch | VerifiedCandidateLaunch:
+    """Authenticate the request against the selected signed trust path."""
+
     if candidate_trust:
         from aptl.appliance.candidate import verify_candidate_launch_descriptor
 

@@ -133,10 +133,12 @@ def test_host_waits_for_framed_readiness_from_current_vm(tmp_path: Path) -> None
 def test_host_readiness_fails_if_vm_exits_before_channel_exists(
     tmp_path: Path,
 ) -> None:
+    socket_path = tmp_path / "missing.sock"
+    challenge = _challenge()
     with pytest.raises(Exception, match="VM exited before readiness"):
         wait_for_guest_readiness(
-            tmp_path / "missing.sock",
-            _challenge(),
+            socket_path,
+            challenge,
             process_alive=lambda: False,
             timeout_seconds=0.1,
         )

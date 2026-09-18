@@ -53,6 +53,8 @@ def _relay(client: socket.socket, target: socket.socket) -> None:
     """Copy one connection in both directions until either side closes."""
 
     def copy(source: socket.socket, destination: socket.socket) -> None:
+        """Copy one half of the bidirectional stream and close its writer."""
+
         try:
             while payload := source.recv(64 * 1024):
                 destination.sendall(payload)

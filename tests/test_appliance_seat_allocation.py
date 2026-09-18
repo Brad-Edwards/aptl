@@ -194,9 +194,10 @@ def test_reserved_launcher_rejects_missing_resource_root_and_early_exit() -> Non
 
 
 def test_automatic_launcher_requires_resource_root() -> None:
+    mappings = (_mapping(443),)
     with pytest.raises(SeatLauncherError, match="seat root is required"):
         launch_with_automatic_mappings(
-            (_mapping(443),),
+            mappings,
             lambda mappings: mappings,
             resources=(1, 1, 1),
         )

@@ -22,6 +22,8 @@ MAX_READINESS_BYTES = 256 * 1024
 
 
 class _StrictModel(BaseModel):
+    """Closed immutable base for per-start readiness records."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 

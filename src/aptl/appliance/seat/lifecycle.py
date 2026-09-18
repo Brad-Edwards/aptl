@@ -6,12 +6,14 @@ import hashlib
 import os
 import secrets
 from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 
 from aptl.appliance.bootstrap import initialize_overlay_state
 from aptl.appliance.build import OverlayCreateRequest, create_disposable_overlay
 from aptl.appliance.launch import prepare_launch_descriptor
 from aptl.appliance.candidate import (
+    ApplianceCandidateManifest,
     prepare_candidate_launch_descriptor,
     verify_candidate_directory,
 )
@@ -21,6 +23,7 @@ from aptl.appliance.manifest import (
     verify_release_directory,
     _load_release_documents,
 )
+from aptl.appliance.models import ApplianceReleaseManifest
 from aptl.appliance.seat.context import SeatPaths, StartSeatOptions
 from aptl.appliance.seat.access import (
     GuestAccessRequest,
@@ -69,10 +72,10 @@ from aptl.core.appliance_boundary import (
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.core.appliance_boundary_inventory import GuestBoundaryObservation
 from aptl.core.appliance_boundary_gate import BoundaryPhase, run_appliance_boundary_gate
-from aptl.workbench.profiles import WorkbenchConfigurationError
 
 SEAT_RECORD_SCHEMA = "aptl.seat-record/v2"
 SEAT_NOT_STAGED = "seat is not staged"
+ACCESS_REQUEST_NAME = "access-request.json"
 
 
 @dataclass(frozen=True)
@@ -219,7 +222,9 @@ def _load_verified_release(
     return inspection, policy
 
 
-def _load_delivery_manifest(paths: SeatPaths, *, candidate_trust: bool):
+def _load_delivery_manifest(
+    paths: SeatPaths, *, candidate_trust: bool
+) -> ApplianceCandidateManifest | ApplianceReleaseManifest:
     """Load the already-verified production or qualification-only document."""
 
     if candidate_trust:
@@ -474,7 +479,7 @@ def _establish_host_access(
         host_observation=host.observation,
         guest_observation=guest,
     )
-    publish_guest_access_request(paths.launch_dir / "access-request.json", request)
+    publish_guest_access_request(paths.launch_dir / ACCESS_REQUEST_NAME, request)
     response = wait_for_guest_access(
         access_socket,
         request,
@@ -490,6 +495,39 @@ def _establish_host_access(
         identity_file=options.access_identity_file,
         username=enrollment.username,
         clients=options.access_clients,
+    )
+
+
+def _requires_automatic_mappings(
+    record: SeatRecord | None,
+    seat_id: str,
+    options: StartSeatOptions,
+) -> bool:
+    """Return whether a new seat needs collision-safe host port selection."""
+
+    new_seat = record is None or record.seat_id != seat_id
+    return new_seat and options.mappings is None and options.reserve_outer_mappings
+
+
+def _start_with_selected_mappings(
+    selected: tuple[BoundaryEndpoint, ...],
+    *,
+    seat_root: Path,
+    seat_id: str,
+    release_dir: Path,
+    release_public_key: Path,
+    qualification_public_key: Path,
+    options: StartSeatOptions,
+) -> SeatRecord:
+    """Retry the same start with allocator-selected outer mappings."""
+
+    return start_seat(
+        seat_root,
+        seat_id=seat_id,
+        release_dir=release_dir,
+        release_public_key=release_public_key,
+        qualification_public_key=qualification_public_key,
+        options=replace(options, mappings=selected, reserve_outer_mappings=False),
     )
 
 
@@ -513,30 +551,24 @@ def start_seat(
         release_public_key=release_public_key,
         qualification_public_key=qualification_public_key,
     )
-    if (
-        (record is None or record.seat_id != seat_id)
-        and launch_options.mappings is None
-        and launch_options.reserve_outer_mappings
-    ):
+    if _requires_automatic_mappings(record, seat_id, launch_options):
         _inspection, automatic_policy = _load_verified_release(
             paths, candidate_trust=launch_options.candidate_trust
         )
         automatic_manifest = _load_delivery_manifest(
             paths, candidate_trust=launch_options.candidate_trust
         )
+
         return launch_with_automatic_mappings(
             _policy_publications(automatic_policy),
-            lambda selected: start_seat(
-                seat_root,
+            partial(
+                _start_with_selected_mappings,
+                seat_root=seat_root,
                 seat_id=seat_id,
                 release_dir=release_dir,
                 release_public_key=release_public_key,
                 qualification_public_key=qualification_public_key,
-                options=replace(
-                    launch_options,
-                    mappings=selected,
-                    reserve_outer_mappings=False,
-                ),
+                options=launch_options,
             ),
             resources=(
                 automatic_manifest.host_prerequisites.vcpus,
@@ -760,7 +792,7 @@ def start_seat(
         return ready
     except SeatLauncherError:
         invalidate_host_access(seat_root, reason="start-failed")
-        (paths.launch_dir / "access-request.json").unlink(missing_ok=True)
+        (paths.launch_dir / ACCESS_REQUEST_NAME).unlink(missing_ok=True)
         failed = starting.model_copy(update={"lifecycle_state": "recoverable-failure"})
         persist_seat_record(seat_root, failed)
         raise
@@ -768,10 +800,9 @@ def start_seat(
         ApplianceManifestError,
         OSError,
         ValueError,
-        WorkbenchConfigurationError,
     ) as exc:
         invalidate_host_access(seat_root, reason="start-failed")
-        (paths.launch_dir / "access-request.json").unlink(missing_ok=True)
+        (paths.launch_dir / ACCESS_REQUEST_NAME).unlink(missing_ok=True)
         failed = starting.model_copy(update={"lifecycle_state": "recoverable-failure"})
         persist_seat_record(seat_root, failed)
         raise SeatLauncherError("failed-readiness", "seat start failed") from exc
@@ -785,7 +816,7 @@ def stop_seat(seat_root: Path) -> SeatRecord:
         raise SeatLauncherError("corrupt-seat-state", SEAT_NOT_STAGED)
     invalidate_host_access(seat_root, reason="seat-stopped")
     stop_vm(seat_root)
-    (seat_root / "launch" / "access-request.json").unlink(missing_ok=True)
+    (seat_root / "launch" / ACCESS_REQUEST_NAME).unlink(missing_ok=True)
     updated = record.model_copy(update={"lifecycle_state": "staged"})
     persist_seat_record(seat_root, updated)
     return updated
@@ -819,7 +850,7 @@ def reset_seat(
     for runtime_artifact in (
         paths.launch_descriptor,
         paths.launch_dir / "readiness-challenge.json",
-        paths.launch_dir / "access-request.json",
+        paths.launch_dir / ACCESS_REQUEST_NAME,
     ):
         try:
             runtime_artifact.unlink(missing_ok=True)

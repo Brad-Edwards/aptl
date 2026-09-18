@@ -91,17 +91,13 @@ def test_review_covers_each_exact_distributed_subject_and_renders_notices() -> N
 
 def test_review_rejects_missing_or_different_candidate_subject() -> None:
     manifest, inputs, review = _fixtures()
+    incomplete_review = review.model_copy(update={"entries": review.entries[:-1]})
 
     with pytest.raises(ValueError, match="exact closure"):
-        validate_redistribution_review(
-            review.model_copy(update={"entries": review.entries[:-1]}),
-            manifest,
-            inputs,
-        )
+        validate_redistribution_review(incomplete_review, manifest, inputs)
 
+    different_inputs_review = review.model_copy(
+        update={"canonical_inputs_digest": "sha256:" + "f" * 64}
+    )
     with pytest.raises(ValueError, match="different release inputs"):
-        validate_redistribution_review(
-            review.model_copy(update={"canonical_inputs_digest": "sha256:" + "f" * 64}),
-            manifest,
-            inputs,
-        )
+        validate_redistribution_review(different_inputs_review, manifest, inputs)

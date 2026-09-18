@@ -82,6 +82,8 @@ def read_archive_member(path: Path, name: str, *, limit: int = 4 * 1024**2) -> b
 
 
 def _target_environment(python_version: str, architecture: str) -> dict[str, str]:
+    """Build packaging marker values for the declared offline guest target."""
+
     environment = default_environment()
     environment.update(
         {

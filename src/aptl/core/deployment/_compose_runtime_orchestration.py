@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
 from aptl.core.deployment._compose_docker_authority import (
+    AUTHORITY_SERVICE,
     authority_declaration_error,
 )
 from aptl.runtime_authority import (
@@ -87,6 +88,20 @@ def _positive_int(value: object) -> bool:
     return bool(isinstance(value, int) and not isinstance(value, bool) and value > 0)
 
 
+def _declared_node_networks(node: object) -> set[str]:
+    """Return the carried network names from either node representation."""
+
+    return {
+        str(network)
+        for network in getattr(node, "networks", ()) or ()
+        if str(network)
+    } | {
+        str(getattr(attachment, "network", ""))
+        for attachment in getattr(node, "network_attachments", ()) or ()
+        if str(getattr(attachment, "network", ""))
+    }
+
+
 def docker_socket_volume(
     admission: DeploymentDockerAuthorityAdmission | None,
     mediated_socket: Path | None = None,
@@ -139,12 +154,15 @@ def docker_authority_admissions(
         if requirement.child_label
     ]
     valid = bool(
-        len(addresses) == len(set(addresses))
+        len(admissions) <= 1
+        and len(addresses) == len(set(addresses))
         and len(services) == len(set(services))
         and len(labels) == len(set(labels))
         and all(
             admission.node_address in nodes
             and nodes[admission.node_address].service_name == admission.service_name
+            and set(admission.allowed_networks)
+            == _declared_node_networks(nodes[admission.node_address])
             and _admission_endpoint_is_supported(admission)
             # No non-emptiness requirement: an authority may declare its
             # privilege without declaring an expected child inventory, and a
@@ -271,10 +289,49 @@ def _authority_service_errors(
     return errors
 
 
+def _mount_is_host_socket(mount: object) -> bool:
+    """Whether one mount is the apparatus's exact daemon-socket grant."""
+
+    return bool(
+        isinstance(mount, Mapping)
+        and mount.get("type") == "bind"
+        and mount.get("source") == DOCKER_SOCKET_PATH
+        and mount.get("target") == DOCKER_SOCKET_PATH
+        and mount.get("read_only", False) is False
+    )
+
+
+def _apparatus_service_errors(
+    raw_service: Mapping[object, object],
+    socket_mounts: list[object],
+) -> list[str]:
+    """Validate the sole backend-owned service allowed to hold the host socket."""
+
+    errors: list[str] = []
+    if len(socket_mounts) != 1 or not _mount_is_host_socket(socket_mounts[0]):
+        errors.append(
+            "Docker authority apparatus must have exactly one canonical host socket bind."
+        )
+    if raw_service.get("network_mode") != "none":
+        errors.append("Docker authority apparatus must use network_mode none.")
+    if raw_service.get("read_only") is not True:
+        errors.append("Docker authority apparatus root filesystem must be read-only.")
+    if raw_service.get("privileged") is True:
+        errors.append("Docker authority apparatus must not be privileged.")
+    if raw_service.get("cap_drop") != ["ALL"]:
+        errors.append("Docker authority apparatus must drop all capabilities.")
+    security = raw_service.get("security_opt")
+    if not isinstance(security, Sequence) or "no-new-privileges:true" not in security:
+        errors.append("Docker authority apparatus must prevent privilege escalation.")
+    return errors
+
+
 def _effective_service_errors(
     service_name: object,
     raw_service: object,
     holders: Mapping[str, str],
+    *,
+    apparatus_expected: bool,
 ) -> list[str]:
     """Return authority-containment errors for one effective service."""
 
@@ -285,7 +342,9 @@ def _effective_service_errors(
             for mount in _service_volumes(raw_service)
             if _mount_mentions_socket(mount)
         ]
-        if service_name in holders:
+        if service_name == AUTHORITY_SERVICE and apparatus_expected:
+            errors = _apparatus_service_errors(raw_service, socket_mounts)
+        elif service_name in holders:
             errors = _authority_service_errors(
                 service_name,
                 raw_service,
@@ -319,13 +378,20 @@ def effective_orchestration_model_errors(
     errors = [
         error
         for service_name, raw_service in services.items()
-        for error in _effective_service_errors(service_name, raw_service, holders)
+        for error in _effective_service_errors(
+            service_name,
+            raw_service,
+            holders,
+            apparatus_expected=bool(admissions),
+        )
     ]
     errors.extend(
         f"Docker authority service {holder} is absent from Compose model."
         for holder in holders
         if holder not in services
     )
+    if admissions and AUTHORITY_SERVICE not in services:
+        errors.append("Docker authority apparatus is absent from Compose model.")
     return errors
 
 

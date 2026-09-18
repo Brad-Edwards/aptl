@@ -28,21 +28,28 @@ from aptl.core.credentials import (
 ENROLLMENT_BASELINE_RELPATH = Path(".aptl/realization/wazuh-agent-identity/baseline.json")
 
 
-def enrollment_baseline(scenario_root: Path) -> dict[str, str]:
-    """Return the recorded ``{node: agent_id}`` baseline, empty when absent."""
+def enrollment_baseline(scenario_root: Path) -> dict[str, str] | None:
+    """Return the baseline, empty when absent and ``None`` when unreadable."""
 
     try:
         path = _canonical_generated_path(scenario_root, ENROLLMENT_BASELINE_RELPATH)
+    except ValueError:
+        return None
+    try:
         recorded = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
     except (OSError, ValueError):
-        return {}
-    if not isinstance(recorded, dict):
-        return {}
-    return {
-        str(node): str(identifier)
+        return None
+    if not isinstance(recorded, dict) or any(
+        not isinstance(node, str)
+        or not node
+        or not isinstance(identifier, str)
+        or not identifier
         for node, identifier in recorded.items()
-        if str(node) and str(identifier)
-    }
+    ):
+        return None
+    return dict(recorded)
 
 
 def clear_enrollment_baseline(scenario_root: Path | None) -> list[str]:
@@ -67,7 +74,9 @@ def clear_enrollment_baseline(scenario_root: Path | None) -> list[str]:
     return []
 
 
-def record_enrollment_baseline(scenario_root: Path, observed: dict[str, str]) -> None:
+def record_enrollment_baseline(
+    scenario_root: Path, observed: dict[str, str]
+) -> bool:
     """Record ids for hosts not yet baselined, never overwriting an existing one.
 
     An existing entry is deliberately immutable here: overwriting it would erase
@@ -76,8 +85,11 @@ def record_enrollment_baseline(scenario_root: Path, observed: dict[str, str]) ->
     operation that clears it, through :func:`clear_enrollment_baseline`.
     """
 
+    recorded = enrollment_baseline(scenario_root)
+    if recorded is None:
+        return False
     merged = {**{k: v for k, v in observed.items() if k and v}}
-    merged.update(enrollment_baseline(scenario_root))
+    merged.update(recorded)
     try:
         path = _canonical_generated_path(scenario_root, ENROLLMENT_BASELINE_RELPATH)
         _ensure_secure_dir(path.parent)
@@ -87,7 +99,8 @@ def record_enrollment_baseline(scenario_root: Path, observed: dict[str, str]) ->
     except (OSError, ValueError):
         # A baseline that cannot be written must not be treated as satisfied;
         # the caller sees no recorded identity and reports enrollment unproven.
-        return
+        return False
+    return enrollment_baseline(scenario_root) == merged
 
 
 __all__ = (

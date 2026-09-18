@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from aptl.core.deployment._compose_child_lifecycle import (
     ComposeSpawnedChildLifecycleMixin,
 )
+from aptl.core.deployment._compose_docker_authority import AUTHORITY_OWNER_LABEL
 from aptl.core.deployment._compose_resource_ownership import OwnershipConflictError
 from aptl.core.deployment._compose_runtime_orchestration import (
     deployment_spawn_image_requirements,
@@ -310,6 +311,8 @@ class ComposeRuntimeOrchestrationObservationMixin(
             "-aq",
             "--filter",
             f"ancestor={requirement.image_ref}",
+            "--filter",
+            f"label={AUTHORITY_OWNER_LABEL}",
         ]
         if requirement.child_label:
             query += ["--filter", f"label={requirement.child_label}"]

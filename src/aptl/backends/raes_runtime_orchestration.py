@@ -380,6 +380,7 @@ def admit_docker_authorities(
                 endpoint_read_write=_value(interface.access) == "read_write",
                 spawn_requirements=requirements,
                 allowed_mount_targets=tuple(sorted(allowed_mount_targets)),
+                allowed_networks=tuple(sorted(_node_networks(node))),
             )
         )
     requirements = [

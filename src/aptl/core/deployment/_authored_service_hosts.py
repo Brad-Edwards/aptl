@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 
 _SECURE_SCHEME = "https"
+_CANONICAL_URL_SUFFIX = "-canonical-url"
 
 
 def authored_service_hosts(
@@ -30,6 +31,10 @@ def authored_service_hosts(
     for node in realization.nodes:
         for application in getattr(node.runtime, "platform_applications", ()) or ():
             for setting in getattr(application, "settings", ()) or ():
+                if not str(getattr(setting, "setting_id", "")).endswith(
+                    _CANONICAL_URL_SUFFIX
+                ):
+                    continue
                 host = _secure_host(str(getattr(setting, "value", "")))
                 if host is not None:
                     hosts.setdefault(node.name, set()).add(host)

@@ -8,6 +8,9 @@ import os
 from pathlib import PurePosixPath
 
 DOCKER_SOCKET_PATH = "/var/run/docker.sock"
+MEDIATED_DOCKER_SOCKET_RELPATH = PurePosixPath(
+    ".aptl/realization/docker-authority/docker.sock"
+)
 
 
 @dataclass(frozen=True)
@@ -37,6 +40,7 @@ class DeploymentDockerAuthorityAdmission:
     endpoint_read_write: bool
     spawn_requirements: tuple[DeploymentSpawnImageRequirement, ...]
     allowed_mount_targets: tuple[str, ...] = ()
+    allowed_networks: tuple[str, ...] = ()
 
 
 def bind_source_exposes_docker_socket(source: object) -> bool:
@@ -95,13 +99,17 @@ def is_mediated_authority_socket(
     come to disagree about what a valid grant looks like.
     """
 
-    return bool(
-        target == DOCKER_SOCKET_PATH
-        and read_write
-        and isinstance(source, str)
-        and source
-        and not bind_source_exposes_docker_socket(source)
-    )
+    if (
+        target != DOCKER_SOCKET_PATH
+        or not read_write
+        or not isinstance(source, str)
+        or not source.startswith("/")
+        or bind_source_exposes_docker_socket(source)
+    ):
+        return False
+    source_parts = PurePosixPath(os.path.normpath(source)).parts
+    required_parts = MEDIATED_DOCKER_SOCKET_RELPATH.parts
+    return source_parts[-len(required_parts) :] == required_parts
 
 
 def has_undeclared_runtime_mounts(

@@ -26,6 +26,8 @@ PROXY = (
 )
 ADMITTED = "ghcr.io/shuffle/shuffle-worker@sha256:" + "f" * 64
 OTHER = "ghcr.io/shuffle/shuffle-worker@sha256:" + "e" * 64
+OWNER_LABEL = "org.aptl.docker-authority=managed"
+ALLOWED_NETWORK = "aptl_aptl-security"
 
 
 class _StubDaemon:
@@ -58,7 +60,20 @@ class _StubDaemon:
                 return
             if data:
                 self.received.append(data)
-            body = b'{"Id":"stub"}'
+            request_line = data.split(b"\r\n", 1)[0] if data else b""
+            if b"/containers/abc/json " in request_line:
+                body = json.dumps(
+                    {
+                        "Id": "abc",
+                        "Config": {
+                            "Labels": {"org.aptl.docker-authority": "managed"}
+                        },
+                    }
+                ).encode()
+            elif b"/containers/host-container/json " in request_line:
+                body = b'{"Id":"host-container","Config":{"Labels":{}}}'
+            else:
+                body = b'{"Id":"stub"}'
             connection.sendall(
                 b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
                 + f"Content-Length: {len(body)}\r\n".encode()
@@ -104,6 +119,7 @@ def authority(tmp_path):
             "APTL_DOCKER_AUTHORITY_SOCKET": str(mediated),
             "APTL_DOCKER_AUTHORITY_UPSTREAM": str(upstream),
             "APTL_DOCKER_AUTHORITY_IMAGES": ADMITTED,
+            "APTL_DOCKER_AUTHORITY_NETWORKS": ALLOWED_NETWORK,
         },
         stderr=subprocess.PIPE,
     )
@@ -121,9 +137,8 @@ def authority(tmp_path):
 
 
 def _create(image: str, host_config: dict | None = None) -> dict:
-    payload: dict = {"Image": image, "Cmd": ["true"]}
-    if host_config is not None:
-        payload["HostConfig"] = host_config
+    selected = {"NetworkMode": ALLOWED_NETWORK, **(host_config or {})}
+    payload: dict = {"Image": image, "Cmd": ["true"], "HostConfig": selected}
     return payload
 
 
@@ -136,6 +151,43 @@ def test_an_admitted_image_with_safe_options_reaches_the_daemon(authority):
 
     assert status == 200
     assert len(daemon.received) == 1
+
+
+def test_create_injects_an_unforgeable_authority_ownership_label(authority):
+    """Every later operation is scoped to containers this boundary created."""
+
+    client, daemon = authority
+
+    status, _text = client.request(
+        "POST",
+        "/v1.44/containers/create?name=worker",
+        {**_create(ADMITTED), "Labels": {"scenario": "techvault"}},
+    )
+
+    assert status == 200
+    request = daemon.received[-1]
+    payload = json.loads(request.split(b"\r\n\r\n", 1)[1])
+    assert payload["Labels"] == {
+        "scenario": "techvault",
+        "org.aptl.docker-authority": "managed",
+    }
+
+
+def test_caller_cannot_replace_the_authority_ownership_label(authority):
+    client, daemon = authority
+
+    status, _text = client.request(
+        "POST",
+        "/v1.44/containers/create",
+        {
+            **_create(ADMITTED),
+            "Labels": {"org.aptl.docker-authority": "forged"},
+        },
+    )
+
+    assert status == 200
+    payload = json.loads(daemon.received[-1].split(b"\r\n\r\n", 1)[1])
+    assert payload["Labels"]["org.aptl.docker-authority"] == "managed"
 
 
 @pytest.mark.parametrize(
@@ -159,10 +211,13 @@ def test_an_admitted_image_with_safe_options_reaches_the_daemon(authority):
         ("host devices", {"Devices": [{"PathOnHost": "/dev/sda"}]}),
         ("host network", {"NetworkMode": "host"}),
         ("joining another container", {"NetworkMode": "container:aptl-misp"}),
+        ("an undeclared Docker network", {"NetworkMode": "other_project_default"}),
         ("host pid namespace", {"PidMode": "host"}),
         ("host ipc namespace", {"IpcMode": "host"}),
         ("relaxed seccomp", {"SecurityOpt": ["seccomp=unconfined"]}),
         ("host port publication", {"PublishAllPorts": True}),
+        ("another container's volumes", {"VolumesFrom": ["sensitive:ro"]}),
+        ("legacy link environment", {"Links": ["database:database"]}),
     ],
 )
 def test_an_admitted_image_cannot_be_given_host_access(authority, label, host_config):
@@ -188,6 +243,21 @@ def test_an_admitted_image_cannot_be_given_host_access(authority, label, host_co
 def test_an_image_outside_the_admitted_set_never_reaches_the_daemon(authority, image):
     client, daemon = authority
     payload = {"Cmd": ["true"]} if image is None else {"Image": image, "Cmd": ["true"]}
+
+    status, _text = client.request("POST", "/v1.44/containers/create", payload)
+
+    assert status == 403
+    assert daemon.received == []
+
+
+def test_create_cannot_attach_an_extra_undeclared_network(authority):
+    client, daemon = authority
+    payload = {
+        **_create(ADMITTED),
+        "NetworkingConfig": {
+            "EndpointsConfig": {"other_project_default": {"Aliases": ["worker"]}}
+        },
+    }
 
     status, _text = client.request("POST", "/v1.44/containers/create", payload)
 
@@ -244,7 +314,48 @@ def test_the_routed_read_endpoints_still_work(authority):
     ):
         status, _text = client.request(method, target)
         assert status == 200, f"{method} {target}"
-    assert len(daemon.received) == 7
+    # Container-scoped calls are preceded by an ownership inspection.
+    assert len(daemon.received) == 11
+
+
+@pytest.mark.parametrize(
+    ("method", "target"),
+    [
+        ("GET", "/v1.44/containers/host-container/json"),
+        ("GET", "/v1.44/containers/host-container/logs"),
+        ("POST", "/v1.44/containers/host-container/stop"),
+        ("DELETE", "/v1.44/containers/host-container"),
+    ],
+)
+def test_container_routes_cannot_target_unowned_host_containers(
+    authority, method, target
+):
+    """The proxy must not become a read/delete API for every host container."""
+
+    client, daemon = authority
+
+    status, _text = client.request(method, target)
+
+    assert status == 403
+    # One read-only inspect is the authorization check. The requested action
+    # itself must never be forwarded (for GET .../json they are the same URI,
+    # so exactly that one inspection is expected).
+    assert len(daemon.received) == 1
+    if not target.endswith("/json"):
+        forwarded_lines = [request.split(b"\r\n", 1)[0] for request in daemon.received]
+        assert f"{method} {target} HTTP/1.1".encode() not in forwarded_lines
+
+
+def test_container_listing_is_forcibly_scoped_to_owned_containers(authority):
+    client, daemon = authority
+
+    status, _text = client.request("GET", "/v1.44/containers/json?all=1")
+
+    assert status == 200
+    request_line = daemon.received[-1].split(b"\r\n", 1)[0]
+    assert b"all=1" in request_line
+    assert b"filters=" in request_line
+    assert b"org.aptl.docker-authority" in request_line
 
 
 def test_a_body_the_boundary_cannot_evaluate_is_refused(authority):
@@ -267,6 +378,24 @@ def test_a_body_the_boundary_cannot_evaluate_is_refused(authority):
     assert daemon.received == []
 
 
+def test_conflicting_content_lengths_are_refused_before_the_daemon(authority):
+    client, daemon = authority
+    connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    connection.settimeout(10)
+    connection.connect(str(client.path))
+    connection.sendall(
+        b"GET /_ping HTTP/1.1\r\n"
+        b"Host: localhost\r\n"
+        b"Content-Length: 0\r\n"
+        b"Content-Length: 128\r\n\r\n"
+    )
+    status_line = connection.recv(64)
+    connection.close()
+
+    assert b"403" in status_line
+    assert daemon.received == []
+
+
 def test_the_admitted_set_is_the_only_source_of_permitted_images(tmp_path):
     """An authority with no admitted images may create nothing at all."""
 
@@ -280,6 +409,7 @@ def test_the_admitted_set_is_the_only_source_of_permitted_images(tmp_path):
             "APTL_DOCKER_AUTHORITY_SOCKET": str(mediated),
             "APTL_DOCKER_AUTHORITY_UPSTREAM": str(upstream),
             "APTL_DOCKER_AUTHORITY_IMAGES": "",
+            "APTL_DOCKER_AUTHORITY_NETWORKS": ALLOWED_NETWORK,
         },
         stderr=subprocess.PIPE,
     )

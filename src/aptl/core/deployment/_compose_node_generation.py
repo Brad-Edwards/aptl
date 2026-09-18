@@ -24,6 +24,8 @@ from pathlib import Path
 import yaml
 from aptl.core.deployment._compose_realization_networks import _compose_network_key
 from aptl.core.deployment._compose_docker_authority import (
+    AUTHORITY_OWNER_LABEL_KEY,
+    AUTHORITY_OWNER_LABEL_VALUE,
     AUTHORITY_SERVICE,
     authority_requested,
     authority_socket_path,
@@ -171,6 +173,12 @@ def _render_service(
         # no socket at all. Waiting for the apparatus to report healthy is what
         # makes that ordering deterministic rather than a race.
         _require_healthy_authority(service)
+        labels = service.setdefault("labels", {})
+        if not isinstance(labels, dict):
+            raise ValueError(
+                f"Generated service labels are not a mapping for {node.address}."
+            )
+        labels[AUTHORITY_OWNER_LABEL_KEY] = AUTHORITY_OWNER_LABEL_VALUE
         volumes = service.setdefault("volumes", [])
         if not isinstance(volumes, list):
             raise ValueError(

@@ -15,6 +15,11 @@ services:
     container_name: aptl-docker-authority-proxy
     restart: unless-stopped
     init: true
+    # Rewritten to the invoking uid/gid plus the host daemon socket's group.
+    # The first identity owns the mediated socket directory; the supplemental
+    # group reaches the upstream Docker socket without running as root.
+    user: generated:docker-authority-user
+    group_add: [generated:docker-socket-group]
     read_only: true
     # The proxy talks to the daemon and to its own socket directory. It joins
     # no scenario network, so a compromised in-world workload cannot reach it
@@ -33,6 +38,8 @@ services:
       APTL_DOCKER_AUTHORITY_SOCKET: /run/aptl-docker-authority/docker.sock
       APTL_DOCKER_AUTHORITY_UPSTREAM: /var/run/docker.sock
       APTL_DOCKER_AUTHORITY_IMAGES: ""
+      APTL_DOCKER_AUTHORITY_NETWORKS: ""
+      APTL_DOCKER_AUTHORITY_OWNER_LABEL: ""
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true

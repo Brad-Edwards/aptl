@@ -67,11 +67,12 @@ def realize_misp_server_tls(
         return "MISP server TLS artifact does not match its producer contract."
 
     try:
-        bundle_root = _canonical_generated_path(scenario_root, SOC_CERTS_ROOT_RELPATH)
         root = _canonical_generated_path(scenario_root, MISP_SERVER_TLS_ROOT_RELPATH)
         _ensure_secure_dir(root)
         for name, (relative, source_relative) in _EXPECTED_OUTPUTS.items():
-            source = bundle_root / source_relative
+            source = _canonical_generated_path(
+                scenario_root, SOC_CERTS_ROOT_RELPATH / source_relative
+            )
             content = source.read_text(encoding="utf-8")
             if not content.strip():
                 return "MISP server TLS material is missing from the certificate bundle."

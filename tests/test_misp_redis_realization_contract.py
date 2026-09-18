@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from types import SimpleNamespace
 from importlib.metadata import version
 from pathlib import Path
 
@@ -178,6 +179,22 @@ def test_the_certificate_covers_the_authored_host(realization):
     assert "misp" in misp.sans
 
 
+def test_unrelated_https_settings_do_not_expand_certificate_identity():
+    """A webhook or documentation URL is not the node's service identity."""
+
+    from aptl.core.deployment._authored_service_hosts import authored_service_hosts
+
+    setting = SimpleNamespace(
+        setting_id="incident-webhook-url", value="https://collector.example.invalid/hook"
+    )
+    runtime = SimpleNamespace(
+        platform_applications=(SimpleNamespace(settings=(setting,)),)
+    )
+    realization = SimpleNamespace(nodes=(SimpleNamespace(name="misp", runtime=runtime),))
+
+    assert authored_service_hosts(realization) == {}
+
+
 # --------------------------------------------------------------------------
 # The producers.
 # --------------------------------------------------------------------------
@@ -244,6 +261,17 @@ def test_a_drifted_cache_config_is_regenerated_rather_than_reused(tmp_path):
     assert config_file.read_text(encoding="utf-8") == f"requirepass {regenerated}\n"
 
 
+def test_a_symlinked_cache_output_is_never_reused(tmp_path):
+    assert realize_misp_cache_credential(_cache_artifact(), tmp_path) is None
+    password_file, _config_file = _cache_paths(tmp_path)
+    outside = tmp_path / "outside-password"
+    outside.write_text(password_file.read_text(encoding="utf-8"), encoding="utf-8")
+    password_file.unlink()
+    password_file.symlink_to(outside)
+
+    assert realize_misp_cache_credential(_cache_artifact(), tmp_path) is not None
+
+
 def test_a_cache_artifact_off_its_contract_is_refused(tmp_path):
     artifact = DeploymentGeneratedArtifactRealization(
         **{**_cache_artifact().__dict__, "lifecycle": "replace"}
@@ -302,6 +330,17 @@ def test_a_rotated_leaf_replaces_the_staged_copy(tmp_path):
 
 
 def test_a_missing_bundle_fails_closed_rather_than_staging_nothing(tmp_path):
+    assert realize_misp_server_tls(_tls_artifact(), tmp_path) is not None
+
+
+def test_a_symlinked_bundle_leaf_is_not_staged(tmp_path):
+    _stage_bundle(tmp_path, "CERTIFICATE\n", "PRIVATE KEY\n")
+    key = tmp_path / "config/soc_certs/misp/server.key"
+    outside = tmp_path / "outside-key"
+    outside.write_text("PRIVATE KEY\n", encoding="utf-8")
+    key.unlink()
+    key.symlink_to(outside)
+
     assert realize_misp_server_tls(_tls_artifact(), tmp_path) is not None
 
 

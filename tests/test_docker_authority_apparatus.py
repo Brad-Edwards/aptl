@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+import stat
 
 import pytest
 import yaml
 
 from aptl.core.deployment._compose_docker_authority import (
     AUTHORITY_COMPOSE_FILE,
+    AUTHORITY_OWNER_LABEL,
     AUTHORITY_SERVICE,
     admitted_authority_images,
     authority_compose_file,
@@ -22,6 +24,7 @@ from aptl.core.deployment._compose_docker_authority import (
     authority_requested,
     authority_socket_path,
 )
+from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.runtime_authority import (
     DeploymentDockerAuthorityAdmission,
@@ -32,6 +35,13 @@ from aptl.runtime_authority import (
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _WORKER = "ghcr.io/shuffle/shuffle-worker@sha256:" + "a" * 64
 _APP = "frikky/shuffle@sha256:" + "b" * 64
+
+
+@pytest.fixture(autouse=True)
+def _host_runtime_identity(monkeypatch):
+    from aptl.core.deployment import _compose_docker_authority as authority
+
+    monkeypatch.setattr(authority, "_runtime_identity", lambda: (1000, 1001, 998))
 
 
 def _requirement(image: str, template: str) -> DeploymentSpawnImageRequirement:
@@ -59,6 +69,7 @@ def _spec(images: tuple[str, ...] = (_WORKER, _APP)) -> DeploymentRealizationSpe
         spawn_requirements=tuple(
             _requirement(image, f"t{index}") for index, image in enumerate(images)
         ),
+        allowed_networks=("security-net",),
     )
     return DeploymentRealizationSpec(
         profiles=("soc",),
@@ -90,12 +101,18 @@ def test_an_authority_with_no_admitted_image_permits_none():
 
 
 def test_the_rendered_apparatus_carries_the_admitted_policy(tmp_path):
-    path = authority_compose_file(PROJECT_ROOT, _spec(), tmp_path)
+    path = authority_compose_file(PROJECT_ROOT, _spec(), tmp_path, "aptl")
     model = yaml.safe_load(path.read_text(encoding="utf-8"))
     service = model["services"][AUTHORITY_SERVICE]
 
     permitted = service["environment"]["APTL_DOCKER_AUTHORITY_IMAGES"].splitlines()
     assert sorted(permitted) == sorted((_WORKER, _APP))
+    assert service["environment"]["APTL_DOCKER_AUTHORITY_OWNER_LABEL"] == (
+        AUTHORITY_OWNER_LABEL
+    )
+    assert service["environment"]["APTL_DOCKER_AUTHORITY_NETWORKS"] == (
+        "aptl_aptl-security"
+    )
 
     sources = {mount["source"]: mount for mount in service["volumes"]}
     # The apparatus holds the host socket; that is the whole point of it.
@@ -110,17 +127,31 @@ def test_the_rendered_apparatus_carries_the_admitted_policy(tmp_path):
     assert service["read_only"] is True
     assert service["cap_drop"] == ["ALL"]
     assert "no-new-privileges:true" in service["security_opt"]
+    assert service["user"] == "1000:1001"
+    assert service["group_add"] == ["998"]
+    assert stat.S_IMODE(authority_socket_path(tmp_path).parent.stat().st_mode) == 0o700
     # The declaring workload bind-mounts the socket as a file, so the apparatus
     # must report healthy -- meaning the socket exists and answers -- first.
     assert service["healthcheck"]["test"][0] == "CMD-SHELL"
 
 
 def test_the_rendered_apparatus_never_leaves_a_placeholder_source(tmp_path):
-    path = authority_compose_file(PROJECT_ROOT, _spec(), tmp_path)
+    path = authority_compose_file(PROJECT_ROOT, _spec(), tmp_path, "aptl")
     model = yaml.safe_load(path.read_text(encoding="utf-8"))
 
     rendered = yaml.safe_dump(model)
     assert "generated:" not in rendered
+
+
+def test_the_mediated_socket_directory_cannot_be_redirected_by_a_symlink(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    parent = tmp_path / ".aptl" / "realization"
+    parent.mkdir(parents=True)
+    (parent / "docker-authority").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symlinked path"):
+        authority_socket_path(tmp_path)
 
 
 def test_a_pack_that_owns_the_apparatus_name_is_refused():
@@ -131,6 +162,43 @@ def test_a_pack_that_owns_the_apparatus_name_is_refused():
     spec = replace(spec, docker_authority_admissions=(admission,))
 
     assert authority_declaration_error(spec) == "aptl.docker-authority.ownership-conflict"
+
+
+def test_one_shared_apparatus_never_unions_multiple_authorities():
+    """One holder may not inherit another holder's admitted image set."""
+
+    first = _spec().docker_authority_admissions[0]
+    second = replace(
+        first,
+        node_address="provision.node.second-orchestrator",
+        service_name="second-orchestrator",
+    )
+    spec = replace(_spec(), docker_authority_admissions=(first, second))
+
+    assert authority_declaration_error(spec) == (
+        "aptl.docker-authority.multiple-authorities-unsupported"
+    )
+
+
+def test_env_pack_apparatus_is_read_and_written_under_engine_root(tmp_path):
+    """A pristine pack neither carries nor receives backend apparatus files."""
+
+    pack_root = tmp_path / "pack"
+    engine_root = tmp_path / "engine"
+    pack_root.mkdir()
+    engine_root.mkdir()
+    (engine_root / AUTHORITY_COMPOSE_FILE).write_text(
+        (PROJECT_ROOT / AUTHORITY_COMPOSE_FILE).read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    backend = DockerComposeBackend(engine_root)
+
+    files = backend._with_docker_authority_files((), _spec(), pack_root, engine_root)
+
+    assert files == (
+        engine_root / ".aptl" / "realization" / AUTHORITY_COMPOSE_FILE,
+    )
+    assert not (pack_root / ".aptl").exists()
 
 
 def test_no_authority_needs_no_apparatus():
@@ -158,6 +226,7 @@ def test_the_shipped_apparatus_model_never_hands_over_the_host_socket():
     [
         ("/srv/.aptl/realization/docker-authority/docker.sock", True),
         ("/var/run/docker.sock", False),
+        ("/tmp/unrelated.sock", False),
         ("/var/run", False),
         ("/", False),
     ],

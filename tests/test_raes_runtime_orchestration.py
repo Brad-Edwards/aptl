@@ -68,6 +68,29 @@ _CHILD_INSPECT = f'["{_CHILD_REF}"]\t{_IMAGE_ID}\tlinux/amd64\n'
 _MEDIATED_SOCKET = "/srv/aptl/.aptl/realization/docker-authority/docker.sock"
 
 
+def _authority_apparatus_service() -> dict[str, object]:
+    return {
+        "network_mode": "none",
+        "read_only": True,
+        "cap_drop": ["ALL"],
+        "security_opt": ["no-new-privileges:true"],
+        "volumes": [
+            {
+                "type": "bind",
+                "source": "/var/run/docker.sock",
+                "target": "/var/run/docker.sock",
+                "read_only": False,
+            },
+            {
+                "type": "bind",
+                "source": "/srv/.aptl/realization/docker-authority",
+                "target": "/run/aptl-docker-authority",
+                "read_only": False,
+            },
+        ],
+    }
+
+
 def _runtime(*, image_ref: str = _CHILD_REF) -> RuntimeConfiguration:
     return RuntimeConfiguration.model_validate(
         {
@@ -740,6 +763,7 @@ def test_generated_compose_lowers_one_mediated_socket_bind(tmp_path) -> None:
     ]
     assert service["volumes"][0]["source"] != "/var/run/docker.sock"
     assert service.get("privileged") is not True
+    assert service["labels"]["org.aptl.docker-authority"] == "managed"
 
 
 def test_an_authority_holder_is_never_rendered_without_its_mediation() -> None:
@@ -910,7 +934,30 @@ def test_effective_compose_accepts_omitted_read_write_default() -> None:
                         "target": "/var/run/docker.sock",
                     }
                 ]
-            }
+            },
+            "docker-authority-proxy": _authority_apparatus_service(),
+        }
+    }
+
+    assert effective_orchestration_model_errors(payload, _spec()) == []
+
+
+def test_effective_compose_accepts_the_exact_backend_authority_apparatus() -> None:
+    """The backend service holding the real socket is intentionally bounded."""
+
+    payload = {
+        "services": {
+            "orborus": {
+                "volumes": [
+                    {
+                        "type": "bind",
+                        "source": _MEDIATED_SOCKET,
+                        "target": "/var/run/docker.sock",
+                        "read_only": False,
+                    }
+                ]
+            },
+            "docker-authority-proxy": _authority_apparatus_service(),
         }
     }
 
@@ -1621,6 +1668,8 @@ def test_post_start_rejects_every_spawned_child_docker_authority(
         "--filter",
         f"ancestor={_CHILD_REF}",
         "--filter",
+        "label=org.aptl.docker-authority=managed",
+        "--filter",
         "label=org.aptl.authority=worker-runtime",
     ]
 
@@ -1770,6 +1819,8 @@ def test_startup_child_attestation_uses_exact_label_and_allows_not_yet_spawned(
         "-aq",
         "--filter",
         f"ancestor={_CHILD_REF}",
+        "--filter",
+        "label=org.aptl.docker-authority=managed",
         "--filter",
         "label=org.aptl.authority=worker-runtime",
     ]

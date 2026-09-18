@@ -107,7 +107,7 @@ class ComposeRealizationModelMixin:
         if not authority_requested(realization):
             return files
         apparatus = authority_compose_file(
-            scenario_root, realization, realization_root
+            realization_root, realization, realization_root, self.project_name
         )
         return files if apparatus in files else (*files, apparatus)
 

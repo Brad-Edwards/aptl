@@ -78,9 +78,19 @@ def realize_misp_cache_credential(
             scenario_root, MISP_CACHE_CREDENTIAL_ROOT_RELPATH
         )
         _ensure_secure_dir(root)
-        password = _read_valid_token(root / _EXPECTED_OUTPUTS[MISP_CACHE_PASSWORD_OUTPUT])
+        password_path = _canonical_generated_path(
+            scenario_root,
+            MISP_CACHE_CREDENTIAL_ROOT_RELPATH
+            / _EXPECTED_OUTPUTS[MISP_CACHE_PASSWORD_OUTPUT],
+        )
+        config_path = _canonical_generated_path(
+            scenario_root,
+            MISP_CACHE_CREDENTIAL_ROOT_RELPATH
+            / _EXPECTED_OUTPUTS[MISP_CACHE_CONFIG_OUTPUT],
+        )
+        password = _read_valid_token(password_path)
         if password is None or not _config_matches(
-            root / _EXPECTED_OUTPUTS[MISP_CACHE_CONFIG_OUTPUT], password
+            config_path, password
         ):
             password = secrets.token_urlsafe(32)
             _write_output(

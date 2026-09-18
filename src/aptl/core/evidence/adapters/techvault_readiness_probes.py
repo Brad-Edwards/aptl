@@ -39,24 +39,37 @@ _MISP_API_SCRIPT = r"""
 set -eu
 marker="$1"
 base="https://127.0.0.1:443"
-# curl reads its authorization header from an owner-only config file rather
-# than a -H argument. An argument would be readable through /proc/<pid>/cmdline
-# by any process sharing this container's PID namespace for as long as curl
-# runs, which is enough for a process obtained through the web application to
-# lift the operator's administrator key.
-cfg="$(mktemp)"
-trap 'rm -f "$cfg"' EXIT
+newline='
+'
+carriage_return="$(printf '\r')"
+case "${ADMIN_KEY:-}" in
+    ''|*"$newline"*|*"$carriage_return"*)
+        echo "invalid MISP administrator key" >&2; exit 1 ;;
+esac
+# curl reads the authorization value from an owner-only header file. The key
+# therefore never enters argv or curl's config grammar.
+headers="$(mktemp)"
+id=""
+cleanup() {
+    status="$?"
+    trap - EXIT
+    if [ -n "$id" ]; then
+        curl -ksf -H "@$headers" -X POST "$base/events/delete/$id" \
+            >/dev/null 2>&1 || true
+    fi
+    rm -f "$headers"
+    exit "$status"
+}
+trap cleanup EXIT
 umask 077
-printf 'header = "Authorization: %s"\nheader = "Accept: application/json"\n' \
-    "${ADMIN_KEY}" > "$cfg"
-created="$(curl -ksf -K "$cfg" -X POST "$base/events/add" \
+printf 'Authorization: %s\nAccept: application/json\n' "${ADMIN_KEY}" > "$headers"
+created="$(curl -ksf -H "@$headers" -X POST "$base/events/add" \
     -H 'Content-Type: application/json' \
     -d "{\"Event\":{\"info\":\"$marker\",\"distribution\":\"0\",\"analysis\":\"0\",\"threat_level_id\":\"4\"}}")"
 id="$(printf '%s' "$created" | sed -nE 's/.*"id":"?([0-9]+)"?.*/\1/p' | head -n 1)"
 [ -n "$id" ]
-read_back="$(curl -ksf -K "$cfg" "$base/events/view/$id")"
+read_back="$(curl -ksf -H "@$headers" "$base/events/view/$id")"
 printf '%s' "$read_back" | grep -Fq "$marker"
-curl -ksf -K "$cfg" -X POST "$base/events/delete/$id" >/dev/null
 echo "api_write_read_ok=true"
 """
 
@@ -173,16 +186,19 @@ def _run_probe(
     return _parse_fields(stdout)
 
 
-def _parse_fields(stdout: str) -> dict[str, object]:
-    """Parse ``key=value`` probe output, coercing the literal booleans."""
+def _parse_fields(stdout: str) -> dict[str, object] | None:
+    """Parse an unambiguous ``key=value`` probe response."""
 
     fields: dict[str, object] = {}
     for line in stdout.splitlines():
         name, separator, value = line.partition("=")
         if not separator or not name.strip():
-            continue
+            return None
+        name = name.strip()
+        if name in fields:
+            return None
         cleaned = value.strip()
-        fields[name.strip()] = True if cleaned == "true" else cleaned
+        fields[name] = True if cleaned == "true" else cleaned
     return fields
 
 
@@ -274,6 +290,7 @@ set -eu
 exec python3 - "$@" <<'PYTHON'
 import json
 import sys
+from datetime import datetime, timezone
 
 agent_id, start, end = sys.argv[1], sys.argv[2], sys.argv[3]
 LOGS = (
@@ -281,30 +298,60 @@ LOGS = (
     "/var/ossec/logs/alerts/alerts.json",
 )
 MAX_LINES = 200000
+MAX_BYTES = 32 * 1024 * 1024
+
+def instant(value):
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("timestamp is not timezone-aware")
+    return parsed.astimezone(timezone.utc)
+
+def recent_lines(path):
+    try:
+        handle = open(path, "rb")
+    except OSError:
+        return ()
+    with handle:
+        handle.seek(0, 2)
+        offset = max(0, handle.tell() - MAX_BYTES)
+        handle.seek(offset)
+        data = handle.read(MAX_BYTES)
+    if offset:
+        _partial, separator, data = data.partition(b"\n")
+        if not separator:
+            return ()
+    return data.decode("utf-8", errors="replace").splitlines()[-MAX_LINES:]
+
+try:
+    start_at, end_at = instant(start), instant(end)
+except (TypeError, ValueError):
+    raise SystemExit(2)
+if start_at > end_at:
+    raise SystemExit(2)
+
 count = 0
 for path in LOGS:
-    try:
-        handle = open(path, encoding="utf-8", errors="replace")
-    except OSError:
-        continue
-    with handle:
-        for index, line in enumerate(handle):
-            if index >= MAX_LINES:
-                break
-            try:
-                record = json.loads(line)
-            except ValueError:
-                continue
-            if not isinstance(record, dict):
-                continue
-            agent = record.get("agent")
-            timestamp = record.get("timestamp")
-            if not isinstance(agent, dict) or not isinstance(timestamp, str):
-                continue
-            if str(agent.get("id", "")) != agent_id:
-                continue
-            if start <= timestamp <= end:
-                count += 1
+    for line in recent_lines(path):
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(record, dict):
+            continue
+        agent = record.get("agent")
+        timestamp = record.get("timestamp")
+        if not isinstance(agent, dict) or not isinstance(timestamp, str):
+            continue
+        if str(agent.get("id", "")) != agent_id:
+            continue
+        try:
+            observed_at = instant(timestamp)
+        except (TypeError, ValueError):
+            continue
+        if start_at <= observed_at <= end_at:
+            count += 1
 print("telemetry_event_count=%d" % count)
 PYTHON
 """

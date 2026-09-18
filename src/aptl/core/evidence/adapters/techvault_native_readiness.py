@@ -85,9 +85,11 @@ def wazuh_agent_readiness(
     # never overwrites an existing entry, so every later capture is compared
     # against the identity that was there before it.
     observed_ids: dict[str, str] = _observed_agent_ids(execute, declared)
-    if observed_ids:
-        record_enrollment_baseline(scenario_root, observed_ids)
+    if observed_ids and not record_enrollment_baseline(scenario_root, observed_ids):
+        return None
     recorded = enrollment_baseline(scenario_root)
+    if recorded is None:
+        return None
     hosts = []
     for node, (enrollment_name, sources) in sorted(declared.items()):
         # Every row the manager returned for this name, not one of them: a
@@ -186,11 +188,20 @@ def _misp_environment(realization: object) -> dict[str, str]:
 
 
 def _cache_persistence(realization: object) -> tuple[bool, str] | None:
-    """Return the cache's authored ``(aof, eviction)`` posture."""
+    """Return MISP's bound cache's authored ``(aof, eviction)`` posture."""
+
+    binding = _misp_cache_binding(realization)
+    if binding is None:
+        return None
+    target_node, target_service = binding
 
     for node in getattr(realization, "nodes", ()) or ():
+        if str(getattr(node, "name", "")) != target_node:
+            continue
         runtime = getattr(node, "runtime", None)
         for datastore in getattr(runtime, "datastore_services", ()) or ():
+            if str(getattr(datastore, "service", "")) != target_service:
+                continue
             persistence = getattr(datastore, "persistence", None)
             eviction = getattr(persistence, "eviction", None)
             if persistence is None or eviction is None:
@@ -199,6 +210,29 @@ def _cache_persistence(realization: object) -> tuple[bool, str] | None:
                 value = str(getattr(eviction, "value", eviction))
                 return bool(getattr(persistence, "aof", False)), value
     return None
+
+
+def _misp_cache_binding(realization: object) -> tuple[str, str] | None:
+    """Return MISP's one authored data-source node/service binding."""
+
+    targets = {
+        (
+            str(getattr(binding, "target_node_ref", "")),
+            str(getattr(binding, "target_service_ref", "")),
+        )
+        for node in getattr(realization, "nodes", ()) or ()
+        if str(getattr(node, "name", "")) == _MISP_NODE
+        for application in getattr(
+            getattr(node, "runtime", None), "platform_applications", ()
+        )
+        or ()
+        for binding in getattr(application, "upstream_bindings", ()) or ()
+        if str(getattr(getattr(binding, "role", ""), "value", binding.role))
+        == "data_source"
+        and str(getattr(binding, "target_node_ref", ""))
+        and str(getattr(binding, "target_service_ref", ""))
+    }
+    return targets.pop() if len(targets) == 1 else None
 
 
 def declared_endpoint_agents(
@@ -224,7 +258,10 @@ def declared_endpoint_agents(
                 == _TAILED_PATH
                 and str(getattr(source, "location", ""))
             )
-            declared[str(node.name)] = (str(agent.name), sources)
+            node_name = str(node.name)
+            if not sources or node_name in declared:
+                return {}
+            declared[node_name] = (str(agent.name), sources)
     return declared
 
 

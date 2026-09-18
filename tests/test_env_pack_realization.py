@@ -172,9 +172,15 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
 
     # depends_on never references a service the document does not define.
     defined = set(services)
+    # The Docker authority apparatus is deliberately a separate backend-owned
+    # Compose file merged into the same validated file set. It is the sole
+    # permitted dependency external to the generated scenario base.
+    external_dependencies: set[str] = set()
     for service in services.values():
         for dependency in service.get("depends_on", []):
-            assert dependency in defined
+            if dependency not in defined:
+                external_dependencies.add(dependency)
+    assert external_dependencies == {"docker-authority-proxy"}
 
     # The backend-neutral release no longer authors a Cortex initializer node.
     # The generated model must not resurrect the removed implementation detail.

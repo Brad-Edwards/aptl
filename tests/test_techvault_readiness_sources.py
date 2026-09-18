@@ -8,6 +8,7 @@ asserted here is what they reject.
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -103,6 +104,64 @@ def test_an_unavailable_misp_probe_reports_no_evidence():
 
     assert result.status is CollectorStatus.SOURCE_UNAVAILABLE
     assert result.chunks == ()
+
+
+def test_admitted_cache_policy_comes_from_misps_bound_cache_node():
+    """An unrelated Redis node must not become MISP's admitted expectation."""
+
+    from aptl.core.evidence.adapters.techvault_native_readiness import (
+        admitted_misp_state,
+    )
+
+    def datastore(*, aof: bool, eviction: str):
+        return SimpleNamespace(
+            engine="redis",
+            service="redis",
+            persistence=SimpleNamespace(
+                aof=aof, eviction=SimpleNamespace(value=eviction)
+            ),
+        )
+
+    binding = SimpleNamespace(
+        role="data_source", target_node_ref="misp-redis", target_service_ref="redis"
+    )
+    application = SimpleNamespace(upstream_bindings=(binding,))
+    misp_runtime = SimpleNamespace(
+        platform_applications=(application,),
+        environment=(
+            SimpleNamespace(name="BASE_URL", value="https://misp.techvault.local"),
+            SimpleNamespace(name="MYSQL_DATABASE", value="misp"),
+            SimpleNamespace(name="MYSQL_USER", value="misp"),
+        ),
+        datastore_services=(),
+    )
+    realization = SimpleNamespace(
+        nodes=(
+            SimpleNamespace(
+                name="unrelated-redis",
+                runtime=SimpleNamespace(
+                    platform_applications=(),
+                    environment=(),
+                    datastore_services=(
+                        datastore(aof=True, eviction="allkeys-lru"),
+                    ),
+                ),
+            ),
+            SimpleNamespace(name="misp", runtime=misp_runtime),
+            SimpleNamespace(
+                name="misp-redis",
+                runtime=SimpleNamespace(
+                    platform_applications=(),
+                    environment=(),
+                    datastore_services=(
+                        datastore(aof=False, eviction="noeviction"),
+                    ),
+                ),
+            ),
+        )
+    )
+
+    assert admitted_misp_state(realization) == _ADMITTED
 
 
 @pytest.mark.parametrize(
@@ -319,6 +378,15 @@ def test_an_unparseable_telemetry_count_is_not_read_as_zero_or_as_ready():
     assert telemetry_events(execute, "001", _START, _END) is None
 
 
+def test_a_duplicate_probe_field_is_ambiguous_not_last_value_wins():
+    from aptl.core.evidence.adapters.techvault_readiness_probes import telemetry_events
+
+    def execute(_name, _cmd, _payload, timeout=None):
+        return _Result("telemetry_event_count=0\ntelemetry_event_count=4\n")
+
+    assert telemetry_events(execute, "001", _START, _END) is None
+
+
 def test_a_failed_telemetry_probe_is_not_read_as_no_events():
     from aptl.core.evidence.adapters.techvault_readiness_probes import telemetry_events
 
@@ -351,6 +419,24 @@ def test_a_missing_baseline_reads_as_no_recorded_identity(tmp_path):
     )
 
     assert enrollment_baseline(tmp_path) == {}
+
+
+def test_a_corrupt_baseline_is_not_replaced_with_a_fresh_identity(tmp_path):
+    """Corruption is unknown state, not permission to bless the current id."""
+
+    from aptl.core.evidence.adapters.techvault_enrollment_baseline import (
+        ENROLLMENT_BASELINE_RELPATH,
+        enrollment_baseline,
+        record_enrollment_baseline,
+    )
+
+    path = tmp_path / ENROLLMENT_BASELINE_RELPATH
+    path.parent.mkdir(parents=True)
+    path.write_text("not-json\n", encoding="utf-8")
+
+    assert enrollment_baseline(tmp_path) is None
+    assert record_enrollment_baseline(tmp_path, {"db": "001"}) is False
+    assert path.read_text(encoding="utf-8") == "not-json\n"
 
 
 def test_a_re_enrolled_agent_does_not_pass_enrollment_preservation(tmp_path):
@@ -506,6 +592,30 @@ class _Realization:
 
 def _one_agent_realization() -> _Realization:
     return _Realization()
+
+
+def test_duplicate_endpoint_agents_on_one_node_fail_declaration_closed():
+    from aptl.core.evidence.adapters.techvault_native_readiness import (
+        declared_endpoint_agents,
+    )
+
+    realization = _one_agent_realization()
+    realization.nodes[0].runtime.forwarding_agents = (_Agent(), _Agent())
+
+    assert declared_endpoint_agents(realization) == {}
+
+
+def test_an_endpoint_agent_without_a_declared_tailed_source_is_not_ready():
+    from aptl.core.evidence.adapters.techvault_native_readiness import (
+        declared_endpoint_agents,
+    )
+
+    realization = _one_agent_realization()
+    agent = _Agent()
+    agent.sources = ()
+    realization.nodes[0].runtime.forwarding_agents = (agent,)
+
+    assert declared_endpoint_agents(realization) == {}
 
 
 def test_the_first_capture_establishes_its_own_baseline(tmp_path):

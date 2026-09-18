@@ -90,6 +90,33 @@ def test_events_outside_the_window_are_not_counted(tmp_path):
     assert _count(script) == 1
 
 
+def test_equivalent_timezone_offsets_are_compared_as_instants(tmp_path):
+    """Lexical ISO comparison rejects equivalent timestamps with offsets."""
+
+    script = _archive(
+        tmp_path,
+        [_event("001", "2026-01-01T01:01:00+01:00")],
+    )
+
+    assert _count(script) == 1
+
+
+def test_the_bounded_scan_reads_the_newest_records_not_the_oldest(tmp_path):
+    """A busy long-running manager must not hide the capture window at EOF."""
+
+    script = _archive(
+        tmp_path,
+        [
+            _event("001", "2025-12-31T23:00:00Z"),
+            _event("001", "2025-12-31T23:01:00Z"),
+            _event("001", "2025-12-31T23:02:00Z"),
+            _event("001", "2026-01-01T00:01:00Z"),
+        ],
+    ).replace("MAX_LINES = 200000", "MAX_LINES = 3")
+
+    assert _count(script) == 1
+
+
 def test_another_agents_event_cannot_forge_freshness_from_its_body(tmp_path):
     """Forwarded log bodies carry unauthenticated participant input.
 
@@ -197,3 +224,46 @@ def test_no_probe_puts_a_credential_in_a_child_process_argv(
     observed = recorded.read_text(encoding="utf-8") if recorded.exists() else ""
     assert observed.strip(), f"{setup} was never invoked; the test proves nothing"
     assert _SECRET not in observed, observed
+
+
+def test_misp_probe_deletes_its_event_when_readback_fails(tmp_path):
+    """A failed readiness check must not leave probe data in the scenario."""
+
+    recorded = _argv_recorder(tmp_path, "curl")
+    script = _script("_MISP_API_SCRIPT")
+    result = subprocess.run(
+        ["sh", "-s", "--", "EXPECTED-MARKER"],
+        input=script,
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin",
+            "ADMIN_KEY": _SECRET,
+            "HOME": str(tmp_path),
+        },
+        cwd=tmp_path,
+    )
+
+    assert result.returncode != 0
+    calls = recorded.read_text(encoding="utf-8")
+    assert "events/delete/7" in calls
+
+
+def test_misp_probe_rejects_header_injection_before_curl(tmp_path):
+    recorded = _argv_recorder(tmp_path, "curl")
+
+    result = subprocess.run(
+        ["sh", "-s", "--", "MARKER"],
+        input=_script("_MISP_API_SCRIPT"),
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin",
+            "ADMIN_KEY": "safe\nInjected: header",
+            "HOME": str(tmp_path),
+        },
+        cwd=tmp_path,
+    )
+
+    assert result.returncode != 0
+    assert not recorded.exists()

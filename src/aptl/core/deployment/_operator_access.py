@@ -100,7 +100,7 @@ class ComposeOperatorAccessMixin(object):
         accesses: Sequence["DeploymentOperatorAccess"],
         *,
         operator_public_key: str | None = None,
-        operator_key_path: "Path | None" = None,
+        operator_key_path: Path | None = None,
     ) -> list[str]:
         """Make every admitted operator access reachable, or report why not.
 

@@ -83,7 +83,7 @@ def _log_published_access(
 def _prove_endpoints(
     endpoints: Iterable[OperatorAccessEndpoint],
     *,
-    key_path: "Path | None" = None,
+    key_path: Path | None = None,
     timeout: float | None = None,
     interval: float | None = None,
 ) -> list[str]:
@@ -121,7 +121,7 @@ def _prove_endpoints(
 
 
 def _unauthenticated(
-    endpoints: "Iterable[OperatorAccessEndpoint]", key_path: "Path | None"
+    endpoints: Iterable[OperatorAccessEndpoint], key_path: Path | None
 ) -> list[str]:
     """Return a failure for every endpoint the operator cannot actually log into."""
 
@@ -143,7 +143,7 @@ def _unauthenticated(
     ]
 
 
-def ssh_login_succeeds(port: int, user: str, key_path: "Path") -> bool:
+def ssh_login_succeeds(port: int, user: str, key_path: Path) -> bool:
     """Return whether the operator's key authenticates as ``user`` on the port.
 
     What is proven is authentication, not a completed command. Kali's declared
@@ -160,10 +160,27 @@ def ssh_login_succeeds(port: int, user: str, key_path: "Path") -> bool:
     each run, and the identity that matters here is the operator's key.
     """
 
-    if not user or shutil.which("ssh") is None:
+    completed = _run_login_attempt(port, user, key_path)
+    if completed is None:
         return False
+    if completed.returncode == 0:
+        return True
+    stderr = (completed.stderr or "").lower()
+    return not any(
+        marker in stderr
+        for marker in (*_AUTH_FAILURE_MARKERS, *_TRANSPORT_FAILURE_MARKERS)
+    )
+
+
+def _run_login_attempt(
+    port: int, user: str, key_path: Path
+) -> "subprocess.CompletedProcess[str] | None":
+    """Run one key-only login attempt, or None when it could not be made."""
+
+    if not user or shutil.which("ssh") is None:
+        return None
     try:
-        completed = subprocess.run(
+        return subprocess.run(
             [
                 "ssh",
                 "-i",
@@ -188,14 +205,7 @@ def ssh_login_succeeds(port: int, user: str, key_path: "Path") -> bool:
             timeout=_LOGIN_TIMEOUT_SECONDS,
         )
     except (OSError, subprocess.SubprocessError):
-        return False
-    if completed.returncode == 0:
-        return True
-    stderr = (completed.stderr or "").lower()
-    return not any(
-        marker in stderr
-        for marker in (*_AUTH_FAILURE_MARKERS, *_TRANSPORT_FAILURE_MARKERS)
-    )
+        return None
 
 
 def ssh_banner_reachable(host: str, port: int) -> bool:

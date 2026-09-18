@@ -297,10 +297,8 @@ class ComposeRealizationAccountMixin(ComposeAccountVerificationMixin):
         """
 
         strength = account.password_strength
-        if strength not in credentials.BACKEND_MINTED_STRENGTHS:
-            return None
-        if not created and self._retained_credential_is_current(
-            container, account, strength, timeout=timeout
+        if self._credential_already_realized(
+            container, account, strength, created=created, timeout=timeout
         ):
             return None
         password = credentials.password_for_strength(strength)
@@ -310,6 +308,23 @@ class ComposeRealizationAccountMixin(ComposeAccountVerificationMixin):
         if unproven is not None:
             return unproven
         return self._disclose_password(account, password, strength)
+
+    def _credential_already_realized(
+        self,
+        container: str,
+        account: DeploymentAccountRealization,
+        strength: str,
+        *,
+        created: bool,
+        timeout: int,
+    ) -> bool:
+        """Whether this account's declared class is already true of it."""
+
+        if strength not in credentials.BACKEND_MINTED_STRENGTHS:
+            return True
+        return not created and self._retained_credential_is_current(
+            container, account, strength, timeout=timeout
+        )
 
     def _retained_credential_is_current(
         self,

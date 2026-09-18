@@ -16,6 +16,10 @@ from raes.runtime_configuration import RuntimeConfiguration
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 
 from aptl.backends._runtime_concern_disclosure import _disclose, _record
+from aptl.backends._raes_runtime_container_observation import (
+    CONTAINER_DAEMON_FIELDS as _CONTAINER_DAEMON_FIELDS,
+    observe_container_field as _observe_container_field,
+)
 from aptl.backends._raes_runtime_environment_observation import (
     observe_environment as _observe_environment,
 )
@@ -65,26 +69,6 @@ _MEMORY_LIMIT_PATH = CONCERN_PAYLOAD_PATH["runtime-node-memory-limit"]
 _ENTRYPOINT_PATH = CONCERN_PAYLOAD_PATH["runtime-container-entrypoint"]
 _COMMAND_PATH = CONCERN_PAYLOAD_PATH["runtime-container-command"]
 _AUTOREMOVE_PATH = CONCERN_PAYLOAD_PATH["runtime-container-autoremove"]
-_CONTAINER_DAEMON_FIELDS = {
-    "cgroup_parent": "runtime-container-cgroup-parent",
-    "device_cgroup_rules": "runtime-container-device-cgroup-rules",
-    "devices": "runtime-container-devices",
-    "dns": "runtime-container-dns",
-    "dns_options": "runtime-container-dns-options",
-    "dns_search": "runtime-container-dns-search",
-    "extra_hosts": "runtime-container-extra-hosts",
-    "group_add": "runtime-container-group-add",
-    "init_process": "runtime-container-init-process",
-    "log_driver": "runtime-container-log-driver",
-    "log_options": "runtime-container-log-options",
-    "namespaces": "runtime-container-namespaces",
-    "privileged": "runtime-container-privileged",
-    "read_only_rootfs": "runtime-container-read-only-rootfs",
-    "runtime_name": "runtime-container-runtime-name",
-    "seccomp_profile": "runtime-container-seccomp-profile",
-    "security_opt": "runtime-container-security-opt",
-    "shm_size": "runtime-container-shm-size",
-}
 _PROCESS_RESOURCE_LIMITS_PATH = CONCERN_PAYLOAD_PATH["process-resource-limits"]
 _LOCAL_CONTROL_INTERFACES_PATH = CONCERN_PAYLOAD_PATH[
     "runtime-local-control-interfaces"
@@ -412,167 +396,6 @@ def _observe_autoremove(
         value = _host_config(info).get("AutoRemove")
         corroborated = isinstance(value, bool)
     return _disclose("runtime-container-autoremove", value) if corroborated else None
-
-
-def _json_value(value: object) -> object:
-    """Return the portable JSON value carried by a RAES model field."""
-
-    if hasattr(value, "model_dump"):
-        return value.model_dump(mode="json", by_alias=True)
-    if isinstance(value, tuple):
-        return list(value)
-    if isinstance(value, list):
-        return [
-            item.model_dump(mode="json", by_alias=True)
-            if hasattr(item, "model_dump")
-            else item
-            for item in value
-        ]
-    return value
-
-
-def _truthy(value: object) -> bool:
-    """Normalize RAES bool-or-string runtime flags."""
-
-    if isinstance(value, bool):
-        return value
-    return isinstance(value, str) and value.strip().lower() in {"true", "1", "yes"}
-
-
-def _container_field_was_selected(container: object, field: str) -> bool:
-    """Retain explicit empty/false closed-scope selections."""
-
-    return field in getattr(container, "model_fields_set", set())
-
-
-def _observe_container_field(
-    info: Mapping[str, Any],
-    runtime: RuntimeConfiguration,
-    *,
-    field: str,
-    concern_kind: str,
-) -> object | None:
-    """Disclose one authored container field after exact daemon corroboration."""
-
-    container = runtime.container
-    if container is None or not _container_field_was_selected(container, field):
-        return None
-    declared = getattr(container, field)
-    host = _host_config(info)
-    corroborated = _container_field_matches(host, container, field, declared)
-    return _disclose(concern_kind, _json_value(declared)) if corroborated else None
-
-
-def _container_field_matches(
-    host: Mapping[str, Any],
-    container: object,
-    field: str,
-    declared: object,
-) -> bool:
-    """Compare one supported RAES container field with native HostConfig."""
-
-    direct = _direct_container_field_match(host, field, declared)
-    if direct is not None:
-        return direct
-    if field == "devices":
-        return _devices_match(host, declared)
-    if field == "extra_hosts":
-        expected_hosts = [f"{item.hostname}:{item.address}" for item in declared or ()]
-        return host.get("ExtraHosts") == expected_hosts
-    if field == "namespaces":
-        return _namespaces_match(host, declared)
-    if field in {"seccomp_profile", "security_opt"}:
-        return _security_options_match(host, container)
-    if field == "log_driver":
-        config = host.get("LogConfig")
-        return isinstance(config, Mapping) and config.get("Type") == declared
-    if field == "log_options":
-        config = host.get("LogConfig")
-        return isinstance(config, Mapping) and config.get("Config") == dict(
-            declared or {}
-        )
-    if field == "init_process":
-        return host.get("Init") is _truthy(getattr(declared, "enabled", None))
-    return False
-
-
-def _direct_container_field_match(
-    host: Mapping[str, Any], field: str, declared: object
-) -> bool | None:
-    """Match scalar and list fields with direct HostConfig counterparts."""
-
-    direct_fields = {
-        "privileged": "Privileged",
-        "read_only_rootfs": "ReadonlyRootfs",
-        "shm_size": "ShmSize",
-        "cgroup_parent": "CgroupParent",
-        "runtime_name": "Runtime",
-        "device_cgroup_rules": "DeviceCgroupRules",
-        "group_add": "GroupAdd",
-        "dns": "Dns",
-        "dns_options": "DnsOptions",
-        "dns_search": "DnsSearch",
-    }
-    native_field = direct_fields.get(field)
-    if native_field is None:
-        return None
-    if field in {"privileged", "read_only_rootfs"}:
-        expected = _truthy(declared)
-    elif field in {
-        "device_cgroup_rules",
-        "group_add",
-        "dns",
-        "dns_options",
-        "dns_search",
-    }:
-        expected = list(declared or ())
-    else:
-        expected = declared
-    return host.get(native_field) == expected
-
-
-def _devices_match(host: Mapping[str, Any], declared: object) -> bool:
-    expected_devices = [
-        {
-            "PathOnHost": item.host_path,
-            "PathInContainer": item.container_path,
-            "CgroupPermissions": item.permissions,
-        }
-        for item in declared or ()
-    ]
-    return host.get("Devices") == expected_devices
-
-
-def _namespaces_match(host: Mapping[str, Any], declared: object) -> bool:
-    if getattr(declared, "network", None) is not None:
-        return False
-    for runtime_field, native_field in (
-        ("pid", "PidMode"),
-        ("ipc", "IpcMode"),
-        ("userns", "UsernsMode"),
-        ("uts", "UTSMode"),
-        ("cgroup", "CgroupnsMode"),
-    ):
-        expected = getattr(declared, runtime_field, "")
-        if expected and host.get(native_field) != expected:
-            return False
-    return True
-
-
-def _security_options_match(host: Mapping[str, Any], container: object) -> bool:
-    expected = set(getattr(container, "security_opt", ()) or ())
-    seccomp = getattr(container, "seccomp_profile", "")
-    if seccomp:
-        expected.add(f"seccomp={seccomp}")
-    native = host.get("SecurityOpt")
-    if not isinstance(native, list) or not all(
-        isinstance(item, str) for item in native
-    ):
-        return False
-    allowed = set(expected)
-    if _truthy(getattr(container, "privileged", None)):
-        allowed.add("label=disable")
-    return expected <= set(native) <= allowed
 
 
 def _observe_local_control_interfaces(

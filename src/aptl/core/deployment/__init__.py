@@ -110,7 +110,7 @@ def get_backend(
             raise ValueError("deployment.ssh_host is required for ssh-compose provider")
         if not dep.ssh_user:
             raise ValueError("deployment.ssh_user is required for ssh-compose provider")
-        return SSHComposeBackend(
+        backend = SSHComposeBackend(
             project_dir=project_dir,
             host=dep.ssh_host,
             user=dep.ssh_user,
@@ -118,8 +118,9 @@ def get_backend(
             ssh_port=dep.ssh_port,
             remote_dir=dep.remote_dir,
             project_name=project_name,
-            runtime_authority_policy=policy,
         )
+        backend.configure_runtime_authority_policy(policy)
+        return backend
 
     raise ValueError(
         f"Unknown deployment provider: {provider!r}. "

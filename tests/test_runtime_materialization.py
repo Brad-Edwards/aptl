@@ -164,6 +164,16 @@ def test_runtime_authority_policy_loads_nofollow_and_absence_means_zero_grants(
         load_runtime_authority_policy(tmp_path, "policy-link.json")
 
 
+def test_backend_runtime_authority_policy_cannot_be_replaced(tmp_path: Path) -> None:
+    backend = DockerComposeBackend(tmp_path)
+    policy = RuntimeAuthorityPolicy.empty()
+
+    backend.configure_runtime_authority_policy(policy)
+
+    with pytest.raises(ValueError, match="already configured"):
+        backend.configure_runtime_authority_policy(policy)
+
+
 def test_compose_lowering_preserves_supported_runtime_security_fields() -> None:
     runtime = RuntimeConfiguration.model_validate(
         {
@@ -608,14 +618,15 @@ def test_static_undeclared_host_bind_is_rejected_before_ownership(
 
 
 def _isolated_backend(tmp_path: Path) -> SSHComposeBackend:
-    return SSHComposeBackend(
+    backend = SSHComposeBackend(
         tmp_path,
         host="range.example.test",
         user="aptl",
-        runtime_authority_policy=RuntimeAuthorityPolicy.model_validate(
-            _policy_payload()
-        ),
     )
+    backend.configure_runtime_authority_policy(
+        RuntimeAuthorityPolicy.model_validate(_policy_payload())
+    )
+    return backend
 
 
 def _exclusive_daemon_run(argv: list[str], **_kwargs: object):

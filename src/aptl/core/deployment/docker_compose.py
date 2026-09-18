@@ -101,6 +101,9 @@ class DockerComposeBackend(
         self._runtime_authority_policy = (
             runtime_authority_policy or RuntimeAuthorityPolicy.empty()
         )
+        self._runtime_authority_policy_configured = (
+            runtime_authority_policy is not None
+        )
         self._appliance_boundary: (
             tuple[
                 ApplianceBoundaryPolicy,
@@ -120,6 +123,17 @@ class DockerComposeBackend(
         self._docker_host_override: str | None = None
         self._docker_socket_path: str | None = None
         self._docker_socket_host: str | None = None
+
+    def configure_runtime_authority_policy(
+        self,
+        policy: RuntimeAuthorityPolicy,
+    ) -> None:
+        """Bind validated operator policy exactly once before admission."""
+
+        if self._runtime_authority_policy_configured:
+            raise ValueError("runtime authority policy is already configured")
+        self._runtime_authority_policy = policy
+        self._runtime_authority_policy_configured = True
 
     @property
     def project_dir(self) -> Path:

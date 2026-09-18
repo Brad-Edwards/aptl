@@ -1666,3 +1666,13 @@ docs/architecture/issue-956-sdl-runtime-authority-containment-preflight.md	archi
 src/aptl/core/deployment/runtime_materialization.py	backend-substrate	Retain runtime materialization qualification with deployment authority
 src/aptl/core/runtime_authority_policy.py	backend-substrate	Retain exact operator grants with runtime authority policy
 tests/test_runtime_materialization.py	tests-follow-owner	Retain runtime materialization and containment regression coverage
+src/aptl/backends/_raes_runtime_container_observation.py	backend-observability	Retain native runtime-container readback with deployment evidence ownership
+src/aptl/backends/_raes_runtime_materialization_admission.py	backend-substrate	Retain post-plan qualification and deferred component materialization
+src/aptl/backends/_raes_runtime_target_options.py	backend-substrate	Retain request-scoped runtime target authorities and evidence inputs
+src/aptl/core/deployment/_compose_runtime_config.py	backend-substrate	Retain faithful runtime-to-Compose lowering with deployment authority
+src/aptl/core/deployment/_compose_runtime_materialization.py	backend-substrate	Retain pre-mutation Compose runtime qualification
+src/aptl/core/deployment/_runtime_materialization_authority.py	backend-substrate	Retain exact raw-daemon authority qualification
+src/aptl/core/deployment/_runtime_materialization_effective.py	backend-substrate	Retain effective Compose authority comparison
+src/aptl/core/deployment/_runtime_materialization_qualification.py	backend-substrate	Retain authored runtime-field qualification
+src/aptl/core/deployment/_runtime_materialization_types.py	backend-substrate	Retain typed runtime containment profiles and diagnostics
+src/aptl/core/deployment/_ssh_runtime_authority.py	backend-substrate	Retain exact remote Docker target qualification

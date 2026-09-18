@@ -54,6 +54,7 @@ from aptl.backends.raes_runtime_attestation import (
 from aptl.backends._raes_backend_implementation_profiles import (
     backend_profile_selected_concerns,
 )
+from aptl.backends import _raes_runtime_container_observation as container_observation
 
 TECHVAULT_PACK_ID = "techvault"
 TECHVAULT_PACK_VERSION = "0.1.0"
@@ -72,27 +73,10 @@ DAEMON_READBACK_RUNTIME_CONCERNS = frozenset(
         *ARTIFACT_ATTESTED_RUNTIME_CONCERNS,
         "linux-capabilities",
         "published-ports",
+        *container_observation.RUNTIME_CONTAINER_DAEMON_CONCERNS,
         "runtime-container-autoremove",
         "runtime-container-command",
-        "runtime-container-cgroup-parent",
-        "runtime-container-device-cgroup-rules",
-        "runtime-container-devices",
-        "runtime-container-dns",
-        "runtime-container-dns-options",
-        "runtime-container-dns-search",
         "runtime-container-entrypoint",
-        "runtime-container-extra-hosts",
-        "runtime-container-group-add",
-        "runtime-container-init-process",
-        "runtime-container-log-driver",
-        "runtime-container-log-options",
-        "runtime-container-namespaces",
-        "runtime-container-privileged",
-        "runtime-container-read-only-rootfs",
-        "runtime-container-runtime-name",
-        "runtime-container-seccomp-profile",
-        "runtime-container-security-opt",
-        "runtime-container-shm-size",
         "runtime-environment",
         "runtime-local-control-interfaces",
         "runtime-mounts",

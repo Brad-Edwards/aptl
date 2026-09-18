@@ -21,7 +21,6 @@ from aptl.utils.pathsafe import read_contained_nofollow
 _DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
 _DAEMON_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
-_ADDRESS = re.compile(r"^[a-z0-9][a-z0-9._-]*(?:\.[a-z0-9][a-z0-9._-]*)+$")
 
 
 class _StrictPolicyModel(BaseModel):
@@ -77,11 +76,23 @@ class RuntimeAuthorityGrant(_StrictPolicyModel):
     pack_id: str = Field(pattern=_IDENTIFIER.pattern)
     pack_version: str = Field(min_length=1, max_length=128)
     pack_set_digest: str
-    component_address: str = Field(pattern=_ADDRESS.pattern)
+    component_address: str
     authority_id: str = Field(pattern=_IDENTIFIER.pattern)
     endpoint_source: str
     image_template_ids: tuple[str, ...] = ()
     delegated_template_ids: tuple[str, ...] = ()
+
+    @field_validator("component_address")
+    @classmethod
+    def validate_component_address(cls, value: str) -> str:
+        """Validate a dotted canonical address without backtracking regexes."""
+
+        parts = value.split(".")
+        if len(parts) < 2 or any(
+            not part or _IDENTIFIER.fullmatch(part) is None for part in parts
+        ):
+            raise ValueError("component_address must be a dotted canonical address")
+        return value
 
     @field_validator("pack_set_digest")
     @classmethod

@@ -135,25 +135,52 @@ class TestProviderArgv:
     credential-shaped literal in tracked source is a secret-scanner finding
     however fake it is, and a minted one is the value these helpers actually
     carry in a realized range.
+
+    These assertions used to require the secret to BE in argv, as a discrete
+    token. That keeps it out of shell syntax but not out of
+    `/proc/<pid>/cmdline`, which is world-readable on the host through
+    `docker exec ...` and readable by any process in the target. The contract
+    is now the opposite: no argv element may carry it (issue #1105).
     """
 
-    def test_setpassword_keeps_the_secret_a_discrete_token(self):
+    def test_setpassword_carries_no_secret_in_argv(self):
         password = credentials.password_for_strength("medium")
 
-        argv = provider.samba_user_setpassword("bob", password)
+        argv = provider.samba_user_setpassword("bob")
 
-        assert argv[:4] == ["samba-tool", "user", "setpassword", "bob"]
-        # One token, never interpolated into a shell string.
-        assert argv[4] == f"--newpassword={password}"
-        assert all(" " not in part or part.startswith("--") for part in argv)
+        assert argv == ["samba-tool", "user", "setpassword", "bob"]
+        assert all(password not in part for part in argv)
 
-    def test_authentication_probe_uses_the_account_itself(self):
+    def test_setpassword_answers_both_prompts_on_stdin(self):
+        """samba-tool asks for the value and then asks again to confirm."""
         password = credentials.password_for_strength("medium")
 
-        argv = provider.samba_user_authenticate("bob", password)
+        assert provider.samba_setpassword_input(password) == (
+            f"{password}\n{password}\n"
+        )
+
+    def test_authentication_probe_carries_no_secret_in_argv(self):
+        password = credentials.password_for_strength("medium")
+
+        argv = provider.samba_user_authenticate()
 
         assert argv[0] == "smbclient"
-        assert f"bob%{password}" in argv
+        # The identity and its secret arrive through the authentication file.
+        assert "-A" in argv
+        assert argv[argv.index("-A") + 1] == "/dev/stdin"
+        assert all(password not in part and "bob%" not in part for part in argv)
+
+    def test_authentication_input_is_the_credentials_file_smbclient_reads(self):
+        password = credentials.password_for_strength("weak")
+
+        body = provider.samba_authenticate_input("bob", password)
+
+        assert body == f"username=bob\npassword={password}\n"
+
+    def test_realm_still_reaches_the_probe(self):
+        argv = provider.samba_user_authenticate("TECHVAULT.LOCAL")
+
+        assert argv[argv.index("-W") + 1] == "TECHVAULT.LOCAL"
 
     def test_policy_relaxation_permits_the_declared_weak_class(self):
         argv = provider.samba_domain_relax_password_policy()

@@ -304,9 +304,50 @@ def test_declared_identity_without_a_delivered_key_is_authorized(monkeypatch, tm
     [authorize] = [
         c for c in backend.commands if c[:2] == ["exec", "aptl-soc-workstation"]
     ]
-    # User and key are discrete arguments to a fixed script, never shell text.
-    assert authorize[-2:] == ["analyst", _OPERATOR_KEY]
-    assert _OPERATOR_KEY not in authorize[4]
+    # The key is a discrete argument to a fixed script, never shell text.
+    assert authorize[-1] == _OPERATOR_KEY
+    assert not any(_OPERATOR_KEY in part for part in authorize[:-1])
+
+
+def test_key_is_installed_with_the_target_user_privileges_not_root(
+    monkeypatch, tmp_path
+):
+    """Root writing into a participant's home is the escalation, not the goal.
+
+    The declared identity is a scenario participant in a deliberately
+    vulnerable range, so a process running as that user is expected, and it
+    owns every path the installer touches. As root each step followed the
+    symlinks it controls, so it could redirect the write, the chown and the
+    chmod onto a root-owned file (issue #1105). The installer therefore drops
+    to that identity before touching anything.
+    """
+    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints: [])
+    backend = _Backend(tmp_path, target_networks=("aptl_aptl-security",))
+
+    backend.activate_operator_access((_SOC,), operator_public_key=_OPERATOR_KEY)
+
+    [authorize] = [
+        c for c in backend.commands if c[:2] == ["exec", "aptl-soc-workstation"]
+    ]
+    argv = authorize[2:]
+    assert argv[:4] == ["runuser", "-u", "analyst", "--"]
+    # Nothing left in the command runs with root's privileges.
+    assert "chown" not in " ".join(argv)
+
+
+def test_installer_refuses_a_redirected_authorized_keys(monkeypatch, tmp_path):
+    """Failing closed beats writing a key somewhere sshd will never read."""
+    monkeypatch.setattr(access_mod, "_prove_endpoints", lambda endpoints: [])
+    backend = _Backend(tmp_path, target_networks=("aptl_aptl-security",))
+
+    backend.activate_operator_access((_SOC,), operator_public_key=_OPERATOR_KEY)
+
+    [authorize] = [
+        c for c in backend.commands if c[:2] == ["exec", "aptl-soc-workstation"]
+    ]
+    script = next(part for part in authorize if "authorized_keys" in part)
+    for guard in ('[ -L "$dir" ]', '[ -L "$keys" ]', '[ ! -f "$keys" ]'):
+        assert guard in script, guard
 
 
 def test_scenario_delivered_key_is_not_overwritten(monkeypatch, tmp_path):

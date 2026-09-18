@@ -3788,10 +3788,24 @@ class _FakeAd:
         }
         self.groups = set(groups or [])
         self.calls: list[list[str]] = []
+        self.inputs: list[tuple[list[str], str]] = []
 
     def __call__(self, name, cmd, *, timeout=None):
         self.calls.append(list(cmd))
         return self._dispatch(cmd)
+
+    def with_input(self, name, cmd, payload, *, timeout=None):
+        """``container_exec_with_input``: the secret arrives on stdin, not argv.
+
+        Credentials are sent this way precisely so they never reach a command
+        line, so the double reads them from the payload — and the recorded
+        ``calls`` stay argv-only, which is what the no-secret-in-argv
+        assertions inspect (issue #1105).
+        """
+
+        self.calls.append(list(cmd))
+        self.inputs.append((list(cmd), payload))
+        return self._dispatch(cmd, payload)
 
     def cmds(self, *prefix):
         """Return recorded calls whose leading tokens match ``prefix``."""
@@ -3808,15 +3822,18 @@ class _FakeAd:
             args=cmd, returncode=1, stdout="", stderr=stderr
         )
 
-    def _dispatch(self, cmd):
+    def _dispatch(self, cmd, payload=""):
         if cmd[0] == "test" and cmd[1] == "-f":
             return self._ok(cmd) if self.provisioned else self._fail(cmd)
         if cmd[0] == "smbclient":
-            principal = cmd[cmd.index("-U") + 1]
-            user, _, password = principal.partition("%")
-            authenticated = (
-                self.authentication_works and self.passwords.get(user) == password
+            fields = dict(
+                line.split("=", 1)
+                for line in payload.splitlines()
+                if "=" in line
             )
+            authenticated = self.authentication_works and self.passwords.get(
+                fields.get("username", "")
+            ) == fields.get("password")
             return self._ok(cmd) if authenticated else self._fail(cmd)
         if cmd[1:4] == ["domain", "passwordsettings", "set"]:
             self.policy_relaxed = True
@@ -3826,7 +3843,7 @@ class _FakeAd:
         if cmd[1] == "group":
             return self._dispatch_group(cmd)
         if cmd[1:3] == ["user", "setpassword"]:
-            return self._set_password(cmd)
+            return self._set_password(cmd, payload)
         if cmd[1] in ("user", "spn"):
             return self._dispatch_user(cmd)
         return self._fail(cmd)
@@ -3850,12 +3867,13 @@ class _FakeAd:
             return self._ok(cmd, stdout=members)
         return self._fail(cmd)
 
-    def _set_password(self, cmd):
+    def _set_password(self, cmd, payload=""):
         if cmd[3] not in self.users:
             return self._fail(cmd)
-        secret = next(
-            (a.split("=", 1)[1] for a in cmd if a.startswith("--newpassword=")), ""
-        )
+        # samba-tool prompts for the value and then for confirmation; both
+        # lines carry the same secret, and neither is in argv.
+        entered = payload.splitlines()
+        secret = entered[0] if entered and len(set(entered)) == 1 else ""
         # A real directory refuses a weak secret until the policy allows it.
         if not self.policy_relaxed and len(secret) < 8:
             return self._fail(cmd)
@@ -4353,7 +4371,10 @@ class TestDeclaredCredentialClassIsRealized:
 
     def _realize(self, tmp_path, ad, accounts):
         backend = self._backend(tmp_path)
-        with patch.object(backend, "container_exec", ad):
+        with (
+            patch.object(backend, "container_exec", ad),
+            patch.object(backend, "container_exec_with_input", ad.with_input),
+        ):
             return backend.realize_accounts(accounts, (_ad_node(),))
 
     def test_weak_account_gets_a_weak_credential_that_authenticates(self, tmp_path):
@@ -4365,11 +4386,12 @@ class TestDeclaredCredentialClassIsRealized:
         assert result is None
         set_calls = ad.cmds("samba-tool", "user", "setpassword")
         assert len(set_calls) == 1
-        secret = set_calls[0][4].split("=", 1)[1]
+        secret = ad.passwords["michael.thompson"]
         # The realized secret is the declared class, and it authenticates.
         assert len(secret) <= 12
-        assert ad.passwords["michael.thompson"] == secret
         assert ad.cmds("smbclient")
+        # It got there on stdin: no command line carries it (issue #1105).
+        assert all(secret not in part for call in ad.calls for part in call)
 
     def test_realized_credential_is_disclosed_to_the_operator(self, tmp_path):
         ad = _FakeAd()

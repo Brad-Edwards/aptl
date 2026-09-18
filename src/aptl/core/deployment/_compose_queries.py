@@ -350,14 +350,18 @@ class ComposeQueryMixin(object):
         *,
         timeout: int | None = None,
     ) -> subprocess.CompletedProcess:
-        """Exec ``cmd`` in a container with non-secret structured stdin.
+        """Exec ``cmd`` in a container with structured stdin.
 
         The interactive ``-i`` flag keeps stdin open so a fixed helper (e.g.
         ``sh -s``) reads its script/body from ``payload`` rather than the host
         argv. Used by the ADR-088 service-materialization provider so native
         index names, endpoints, and request bodies never enter host process
-        argv (issue #889). Shares the selected-daemon behaviour of every other
-        exec: the SSH backend inherits it unchanged over ``DOCKER_HOST``.
+        argv (issue #889). Account realization sends minted credentials the
+        same way, for the same reason and a sharper one: ``/proc/<pid>/cmdline``
+        is world-readable, so a secret in argv is readable by any local user on
+        the host and any process in the target (issue #1105). Shares the
+        selected-daemon behaviour of every other exec: the SSH backend inherits
+        it unchanged over ``DOCKER_HOST``.
         """
 
         argv = [

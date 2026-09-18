@@ -309,18 +309,25 @@ class ComposeRealizationAccountMixin(ComposeAccountVerificationMixin):
         *,
         timeout: int,
     ) -> str | None:
-        """Set the minted password, then prove it authenticates as the account."""
+        """Set the minted password, then prove it authenticates as the account.
 
-        applied = self.container_exec(
+        Both halves send the secret on stdin. Through ``container_exec`` it
+        would also land in the host's ``docker exec ...`` argv, where
+        ``/proc/<pid>/cmdline`` is world-readable (issue #1105).
+        """
+
+        applied = self.container_exec_with_input(
             container,
-            provider.samba_user_setpassword(account.username, password),
+            provider.samba_user_setpassword(account.username),
+            provider.samba_setpassword_input(password),
             timeout=timeout,
         )
         if applied.returncode != 0:
             return "account-password-not-applied"
-        proof = self.container_exec(
+        proof = self.container_exec_with_input(
             container,
-            provider.samba_user_authenticate(account.username, password),
+            provider.samba_user_authenticate(),
+            provider.samba_authenticate_input(account.username, password),
             timeout=timeout,
         )
         if proof.returncode != 0:

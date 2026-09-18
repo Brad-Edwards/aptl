@@ -52,16 +52,37 @@ OPERATOR_ACCESS_NETWORK_SUFFIX = "aptl-operator-access"
 _PUBLIC_KEY_RE = re.compile(
     r"(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp\d+) [A-Za-z0-9+/=]+( [^\n]*)?"
 )
-# Positional args: $1 user, $2 public key. The user must already exist as a
-# declared identity; the script never creates one.
+# Positional arg: $1 public key. The user must already exist as a declared
+# identity; the script never creates one.
+#
+# This runs with the target user's own privileges, never root's. The declared
+# identity is a scenario participant in a deliberately vulnerable range, so a
+# process already running as that user is the expected state, and it owns every
+# path here. Running as root, each step resolved symlinks the participant
+# controls, which let them redirect the write, the chown and the chmod onto a
+# root-owned file and escalate (issue #1105). Dropping privileges removes the
+# escalation outright rather than guarding against it: the worst a redirect can
+# now reach is a file the participant could already write.
+#
+# The symlink refusals below are not the security boundary — privilege
+# separation is. They make the backend fail closed and say so, instead of
+# quietly writing a key somewhere sshd will not read it.
 _AUTHORIZE_SCRIPT = (
-    'set -eu; home=$(getent passwd "$1" | cut -d: -f6); '
-    'test -n "$home"; '
-    'install -d -m 0700 -o "$1" -g "$(id -gn "$1")" "$home/.ssh"; '
-    'keys="$home/.ssh/authorized_keys"; touch "$keys"; '
-    'grep -qxF -- "$2" "$keys" || printf "%s\\n" "$2" >> "$keys"; '
-    'chown "$1":"$(id -gn "$1")" "$keys"; chmod 0600 "$keys"'
+    'set -eu; key="$1"; '
+    'home=$(getent passwd "$(id -un)" | cut -d: -f6); test -n "$home"; '
+    'dir="$home/.ssh"; '
+    'if [ -L "$dir" ]; then echo "refusing a symlinked .ssh" >&2; exit 1; fi; '
+    'if [ ! -d "$dir" ]; then mkdir -m 0700 "$dir"; fi; '
+    'keys="$dir/authorized_keys"; '
+    'if [ -L "$keys" ]; then '
+    'echo "refusing a symlinked authorized_keys" >&2; exit 1; fi; '
+    'if [ -e "$keys" ] && [ ! -f "$keys" ]; then '
+    'echo "refusing a non-regular authorized_keys" >&2; exit 1; fi; '
+    'touch "$keys"; chmod 0600 "$keys"; '
+    'grep -qxF -- "$key" "$keys" || printf "%s\\n" "$key" >> "$keys"'
 )
+# `runuser` (util-linux) drops to the declared identity without a PAM session.
+_AUTHORIZE_ARGV_PREFIX = ("runuser", "-u")
 
 
 class ComposeOperatorAccessMixin(object):
@@ -144,7 +165,16 @@ class ComposeOperatorAccessMixin(object):
         try:
             installed = self.container_exec(
                 endpoint.target_container,
-                ["sh", "-c", _AUTHORIZE_SCRIPT, "aptl-authorize-operator", user, key],
+                [
+                    *_AUTHORIZE_ARGV_PREFIX,
+                    user,
+                    "--",
+                    "/bin/sh",
+                    "-c",
+                    _AUTHORIZE_SCRIPT,
+                    "aptl-authorize-operator",
+                    key,
+                ],
                 timeout=60,
             )
         except (BackendTimeoutError, OwnershipConflictError, OSError):

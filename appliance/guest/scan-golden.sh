@@ -27,10 +27,11 @@ then
 fi
 test "$(awk -F: '$2 == "" { print $1 }' /etc/shadow)" = aptl-mcp
 
-for executable in docker node python3 systemctl sshd
+for executable in aptl docker node python3 systemctl sshd
 do
     command -v "$executable" >/dev/null
 done
+test -x /opt/aptl/python/bin/aptl
 case "$(node --version)" in
     v22.*) ;;
     *) exit 1 ;;

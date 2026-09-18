@@ -58,10 +58,25 @@ test -f "$payload_dir/aptl-launch.mount"
 set -- "$payload_dir"/wheelhouse/pip-*.whl
 test "$#" -eq 1
 test -f "$1"
+install -d -m 0755 /opt/aptl/python /usr/local/bin
 PYTHONPATH="$1" python3 -m pip install --no-index --only-binary=:all: \
+    --target /opt/aptl/python \
     --require-hashes \
     --find-links "$payload_dir/wheelhouse" \
     -r "$payload_dir/requirements.txt"
+
+# The Ubuntu base marks its system Python as externally managed and does not
+# ship ensurepip. Keep the authenticated application closure isolated under
+# /opt and expose only fixed launchers through the system PATH.
+cat > /usr/local/bin/aptl <<'EOF'
+#!/bin/sh
+PYTHONPATH=/opt/aptl/python exec /usr/bin/python3 /opt/aptl/python/bin/aptl "$@"
+EOF
+cat > /usr/local/bin/aptl-misp-suricata-sync <<'EOF'
+#!/bin/sh
+PYTHONPATH=/opt/aptl/python exec /usr/bin/python3 /opt/aptl/python/bin/aptl-misp-suricata-sync "$@"
+EOF
+chmod 0755 /usr/local/bin/aptl /usr/local/bin/aptl-misp-suricata-sync
 aptl appliance validate-inputs --staging-dir "$payload_dir"
 
 install -d -m 0755 /opt/aptl/project

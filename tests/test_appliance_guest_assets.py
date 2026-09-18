@@ -30,9 +30,13 @@ def test_guest_scripts_are_valid_and_have_no_network_install_path() -> None:
     assert 'PYTHONPATH="$1" python3 -m pip' in provisioner
     assert 'wheelhouse/pip-*.whl' in provisioner
     assert "pip install --no-index" in provisioner
+    assert "--target /opt/aptl/python" in provisioner
+    assert "--break-system-packages" not in provisioner
     assert "--require-hashes" in provisioner
     assert "--only-binary=:all:" in provisioner
     assert '-r "$payload_dir/requirements.txt"' in provisioner
+    assert "PYTHONPATH=/opt/aptl/python exec /usr/bin/python3" in provisioner
+    assert "/usr/local/bin/aptl-misp-suricata-sync" in provisioner
     assert "aptl appliance validate-inputs" in provisioner
     assert "docker load" not in provisioner
     assert "/opt/aptl/offline/oci-images.tar" in provisioner
@@ -41,6 +45,8 @@ def test_guest_scripts_are_valid_and_have_no_network_install_path() -> None:
     assert 'rm -rf "$stage"' in provisioner
 
     scanner = scripts[2].read_text()
+    assert "for executable in aptl docker node python3 systemctl sshd" in scanner
+    assert "test -x /opt/aptl/python/bin/aptl" in scanner
     assert "/var/lib/cloud/instances" in scanner
     assert "/opt/aptl-stage" in scanner
     assert "/opt/aptl/offline/oci-images.tar" in scanner

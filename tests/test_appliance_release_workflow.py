@@ -120,3 +120,13 @@ def test_local_candidate_path_uses_exact_commit_and_no_registry_dependency() -> 
     assert "--system-packages-lock" in builder
     assert 'docker image inspect "$canonical"' in builder
     assert "APTL_IMAGE_NAMESPACE" not in wrapper
+
+
+def test_qualification_venv_installs_the_locked_runtime_closure() -> None:
+    qualifier = (ROOT / "scripts/appliance/qualify-candidate.sh").read_text()
+
+    ci_install = 'pip" install --require-hashes -r requirements/ci.txt'
+    runtime_install = 'pip" install --require-hashes -r requirements/runtime.txt'
+    local_install = 'pip" install --no-deps .'
+    assert qualifier.index(ci_install) < qualifier.index(runtime_install)
+    assert qualifier.index(runtime_install) < qualifier.index(local_install)

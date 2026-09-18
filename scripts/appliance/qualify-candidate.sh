@@ -33,6 +33,7 @@ PYTHON
 
 python3 -m venv "$work/venv"
 "$work/venv/bin/pip" install --require-hashes -r requirements/ci.txt
+"$work/venv/bin/pip" install --require-hashes -r requirements/runtime.txt
 "$work/venv/bin/pip" install --no-deps .
 
 reconstruct() {

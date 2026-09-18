@@ -76,6 +76,31 @@ def test_require_host_prerequisites_raises(tmp_path: Path) -> None:
     assert exc.value.code == "low-memory"
 
 
+def test_require_host_prerequisites_reports_every_failed_check(tmp_path: Path) -> None:
+    with pytest.raises(SeatLauncherError) as exc:
+        require_host_prerequisites(
+            _requirements(),
+            seat_root=tmp_path,
+            memory_bytes=1024,
+            available_vcpus=1,
+            free_disk_bytes=1024,
+            kvm_available=False,
+            qemu_img_available=False,
+            qemu_system_available=False,
+        )
+
+    assert exc.value.code == "host-prerequisites-failed"
+    for code in (
+        "no-kvm",
+        "low-memory",
+        "low-cpu",
+        "low-disk",
+        "missing-qemu-img",
+        "missing-qemu-system",
+    ):
+        assert code in exc.value.message
+
+
 def test_prereqs_fail_on_low_disk_and_missing_tools(tmp_path: Path) -> None:
     report = check_host_prerequisites(
         _requirements(),

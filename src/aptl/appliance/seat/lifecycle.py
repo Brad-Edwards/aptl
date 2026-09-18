@@ -222,6 +222,33 @@ def _load_verified_release(
     return inspection, policy
 
 
+def release_requires_host_access(
+    *,
+    release_dir: Path,
+    release_public_key: Path,
+    qualification_public_key: Path,
+    candidate_trust: bool = False,
+) -> bool:
+    """Return whether one verified release requires host CLI enrollment."""
+
+    placeholder = Path(".")
+    paths = SeatPaths(
+        seat_root=placeholder,
+        release_dir=release_dir,
+        release_public_key=release_public_key,
+        qualification_public_key=qualification_public_key,
+        launch_dir=placeholder,
+        launch_descriptor=placeholder / "appliance-launch.json",
+        overlay_path=placeholder / "seat.qcow2",
+        overlay_state_dir=placeholder / "seat.state",
+    )
+    _inspection, policy = _load_verified_release(
+        paths,
+        candidate_trust=candidate_trust,
+    )
+    return policy.host_mcp_contract == "aptl.restricted-ssh-mcp/v1"
+
+
 def _load_delivery_manifest(
     paths: SeatPaths, *, candidate_trust: bool
 ) -> ApplianceCandidateManifest | ApplianceReleaseManifest:

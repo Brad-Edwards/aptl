@@ -172,6 +172,9 @@ def require_host_prerequisites(
 
     report = check_host_prerequisites(requirements, seat_root=seat_root, **overrides)
     if not report.passed:
-        failed = next(item for item in report.findings if not item.passed)
-        raise SeatLauncherError(failed.code, failed.detail)
+        failed = tuple(item for item in report.findings if not item.passed)
+        if len(failed) == 1:
+            raise SeatLauncherError(failed[0].code, failed[0].detail)
+        summary = "; ".join(f"{item.code}: {item.detail}" for item in failed)
+        raise SeatLauncherError("host-prerequisites-failed", summary)
     return report

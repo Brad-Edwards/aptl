@@ -31,13 +31,14 @@ def test_guest_scripts_are_valid_and_have_no_network_install_path() -> None:
     assert 'wheelhouse/pip-*.whl' in provisioner
     assert "pip install --no-index" in provisioner
     assert "--target /opt/aptl/python" in provisioner
+    assert "--ignore-installed" in provisioner
     assert "--break-system-packages" not in provisioner
     assert "--require-hashes" in provisioner
     assert "--only-binary=:all:" in provisioner
     assert '-r "$payload_dir/requirements.txt"' in provisioner
     assert "PYTHONPATH=/opt/aptl/python exec /usr/bin/python3" in provisioner
     assert "/usr/local/bin/aptl-misp-suricata-sync" in provisioner
-    assert "aptl appliance validate-inputs" in provisioner
+    assert "/usr/local/bin/aptl appliance validate-inputs" in provisioner
     assert "docker load" not in provisioner
     assert "/opt/aptl/offline/oci-images.tar" in provisioner
     assert "install -d -m 0700 /var/lib/aptl" in provisioner
@@ -45,15 +46,16 @@ def test_guest_scripts_are_valid_and_have_no_network_install_path() -> None:
     assert 'rm -rf "$stage"' in provisioner
 
     scanner = scripts[2].read_text()
-    assert "for executable in aptl docker node python3 systemctl sshd" in scanner
+    assert "for executable in docker node python3 systemctl sshd" in scanner
     assert "test -x /opt/aptl/python/bin/aptl" in scanner
+    assert "/usr/local/bin/aptl --version" in scanner
     assert "/var/lib/cloud/instances" in scanner
     assert "/opt/aptl-stage" in scanner
     assert "/opt/aptl/offline/oci-images.tar" in scanner
     assert ".docker/config.json" in scanner
 
     first_boot = scripts[1].read_text()
-    assert "bootstrap-overlay" in first_boot
+    assert "/usr/local/bin/aptl appliance bootstrap-overlay" in first_boot
     assert "docker load" in first_boot
     assert "images-loaded" in first_boot
     assert "lab start" in first_boot
@@ -61,7 +63,8 @@ def test_guest_scripts_are_valid_and_have_no_network_install_path() -> None:
     assert "--appliance-launch-descriptor" in first_boot
     assert "--appliance-release-public-key" in first_boot
     assert "--appliance-qualification-public-key" in first_boot
-    assert "appliance proxy-loopback" in first_boot
+    assert "/usr/local/bin/aptl appliance proxy-loopback" in first_boot
+    assert "set -- /usr/local/bin/aptl lab start" in first_boot
     assert "exec aptl lab start" not in first_boot
 
 

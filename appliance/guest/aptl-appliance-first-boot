@@ -7,7 +7,7 @@ umask 077
 : "${APTL_APPLIANCE_SCENARIO:?missing staged appliance scenario identity}"
 test "$APTL_APPLIANCE_SCENARIO" = techvault
 
-aptl appliance bootstrap-overlay --state-dir /var/lib/aptl/overlay
+/usr/local/bin/aptl appliance bootstrap-overlay --state-dir /var/lib/aptl/overlay
 images_loaded=/var/lib/aptl/overlay/images-loaded
 if test ! -f "$images_loaded"; then
     docker load --input /opt/aptl/offline/oci-images.tar
@@ -16,7 +16,7 @@ if test ! -f "$images_loaded"; then
     chmod 0600 "$marker"
     mv "$marker" "$images_loaded"
 fi
-aptl appliance proxy-loopback \
+/usr/local/bin/aptl appliance proxy-loopback \
     --launch-descriptor /run/aptl-launch/appliance-launch.json \
     --release-public-key /run/aptl-launch/release-public.pem \
     --qualification-public-key /run/aptl-launch/qualification-public.pem \
@@ -27,7 +27,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-set -- aptl lab start \
+set -- /usr/local/bin/aptl lab start \
     --project-dir /opt/aptl/project \
     --offline-staged \
     --appliance-launch-descriptor /run/aptl-launch/appliance-launch.json \

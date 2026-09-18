@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Literal
 
 import rfc8785
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from aptl.core._soc_ca_io import _atomic_write
@@ -32,6 +34,86 @@ from aptl.validation.participant_qualification_evidence import (
 )
 
 MAX_ACCESS_MESSAGE_BYTES = 2 * 1024 * 1024
+
+
+def _read_private_regular(path: Path) -> bytes:
+    """Read one small owner-only regular file without following a leaf link."""
+
+    flags = os.O_RDONLY | os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags)
+    with os.fdopen(descriptor, "rb") as handle:
+        info = os.fstat(handle.fileno())
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) != 0o600
+        ):
+            raise OSError("transport identity is not owner-only")
+        payload = handle.read(64 * 1024 + 1)
+    if not payload or len(payload) > 64 * 1024:
+        raise OSError("transport identity has invalid size")
+    return payload
+
+
+def _write_private_create_once(path: Path, payload: bytes) -> None:
+    """Create and fsync one owner-only identity file."""
+
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags, 0o600)
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def ensure_transport_identity(seat_root: Path) -> tuple[Path, Path]:
+    """Create or validate the user's persistent seat transport keypair."""
+
+    root = seat_root / "access"
+    private_path = root / "transport-key"
+    public_path = root / "transport-key.pub"
+    try:
+        if root.is_symlink():
+            raise OSError("access root is a symlink")
+        root.mkdir(parents=True, mode=0o700, exist_ok=True)
+        root.chmod(0o700)
+        info = root.stat(follow_symlinks=False)
+        if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
+            raise OSError("access root is not owner-only")
+        if private_path.exists() or private_path.is_symlink():
+            private_bytes = _read_private_regular(private_path)
+            key = serialization.load_ssh_private_key(private_bytes, password=None)
+            if not isinstance(key, Ed25519PrivateKey):
+                raise ValueError("transport identity is not Ed25519")
+        else:
+            if public_path.exists() or public_path.is_symlink():
+                raise OSError("transport public key exists without its private key")
+            key = Ed25519PrivateKey.generate()
+            private_bytes = key.private_bytes(
+                serialization.Encoding.PEM,
+                serialization.PrivateFormat.OpenSSH,
+                serialization.NoEncryption(),
+            )
+            _write_private_create_once(private_path, private_bytes)
+        public_bytes = (
+            key.public_key().public_bytes(
+                serialization.Encoding.OpenSSH,
+                serialization.PublicFormat.OpenSSH,
+            )
+            + b"\n"
+        )
+        if public_path.exists() or public_path.is_symlink():
+            if _read_private_regular(public_path).strip() != public_bytes.strip():
+                raise ValueError("transport public key does not match")
+        else:
+            _write_private_create_once(public_path, public_bytes)
+        return private_path, public_path
+    except (OSError, ValueError, TypeError) as exc:
+        raise WorkbenchConfigurationError("seat transport identity is invalid") from exc
 
 
 class _StrictModel(BaseModel):

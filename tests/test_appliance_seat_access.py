@@ -25,6 +25,7 @@ from aptl.appliance.seat.access import (
     publish_guest_access_request,
     read_guest_access_request,
     wait_for_guest_access,
+    ensure_transport_identity,
 )
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.workbench.dispatch import key_fingerprint
@@ -141,6 +142,20 @@ def test_access_bundle_is_private_and_invalidated_on_stop(tmp_path: Path) -> Non
     assert not (output / "grant.json").exists()
     assert (output / "invalidated").read_text() == "seat-stopped\n"
     assert '"lifecycle_state":"needs-reset"' in (output / "access.json").read_text()
+
+
+def test_transport_identity_is_created_once_and_owner_only(tmp_path: Path) -> None:
+    private, public = ensure_transport_identity(tmp_path)
+    original_private = private.read_bytes()
+    original_public = public.read_bytes()
+
+    assert private.stat().st_mode & 0o777 == 0o600
+    assert public.stat().st_mode & 0o777 == 0o600
+    assert original_public.startswith(b"ssh-ed25519 ")
+
+    assert ensure_transport_identity(tmp_path) == (private, public)
+    assert private.read_bytes() == original_private
+    assert public.read_bytes() == original_public
 
 
 def test_bundle_configures_both_native_clients_without_provider_state(

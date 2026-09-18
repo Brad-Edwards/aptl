@@ -19,10 +19,48 @@ Trust anchors:
 - `--release-public-key`: release manifest Ed25519 anchor
 - `--qualification-public-key`: participant qualification attestation anchor
 
+Each user who launches a seat needs read/write access to `/dev/kvm`. On the
+usual Linux packaging this means membership in the `kvm` group followed by a
+new login session. The launcher reports every failed host prerequisite in one
+bounded error instead of stopping after the first missing resource or tool.
+
+## Install and start
+
+Install a selected qualified public release using independently provisioned
+trust anchors:
+
+```bash
+aptl seat install \
+  --tag v5.5.0 \
+  --release-public-key /etc/aptl/trust/release-public.pem \
+  --qualification-public-key /etc/aptl/trust/qualification-public.pem
+aptl seat start
+```
+
+`seat install` anonymously downloads the signed metadata and transport chunks,
+authenticates the metadata before downloading the large artifacts, resumes and
+reuses verified cache entries, reconstructs both canonical artifacts, verifies
+the complete release, and only then publishes it to the launcher's state.
+Downloaded keys are never trusted merely because they appear beside a release;
+the two key arguments are the independently provisioned trust anchors.
+
+`seat start` automatically selects distinct outer ports. When the signed
+release requires host MCP access, it creates an owner-only Ed25519 transport
+identity, enrolls the current user for that seat generation, and safely updates
+the Claude and Codex project configurations in the current directory. Provider
+authentication remains entirely user-owned and is neither read nor copied.
+
+All lifecycle commands default to the current user's private seat root:
+`$XDG_STATE_HOME/aptl/seat`, or `~/.local/state/aptl/seat` when
+`XDG_STATE_HOME` is unset. The download cache similarly defaults to
+`$XDG_CACHE_HOME/aptl/appliance`, or `~/.cache/aptl/appliance`. `--seat-root`
+and the explicit release/key options remain available for managed deployments
+and qualification runs.
+
 ## Directory layout
 
 ```text
-/srv/aptl-seat/
+~/.local/state/aptl/seat/
   seat-state.json
   vm.pid                    # PID + procfs start/executable identity
   launch/
@@ -37,10 +75,10 @@ Trust anchors:
 
 ## Supported operator flow
 
-The simplest path is to run `seat start` without `--mapping` and without a
-pre-existing staged record. The launcher selects distinct loopback ports while
-holding a host-wide lock through QEMU's bind and live-listener readback, then
-persists those mappings for restart.
+After `seat install`, the simplest path is `aptl seat start` without `--mapping`
+and without a pre-existing staged record. The launcher selects distinct
+loopback ports while holding a host-wide lock through QEMU's bind and
+live-listener readback, then persists those mappings for restart.
 
 To reserve operator-selected ports instead, stage a verified release with one
 repeated typed mapping for every signed guest publication:
@@ -78,23 +116,23 @@ all agree for the current generation:
 
 ```bash
 aptl seat start \
-  --seat-root /srv/aptl-seat \
   --seat-id seat-01 \
   --release-dir /srv/aptl-seat/launch/release \
   --release-public-key /etc/aptl/trust/release-public.pem \
-  --qualification-public-key /etc/aptl/trust/qualification-public.pem
+  --qualification-public-key /etc/aptl/trust/qualification-public.pem \
+  --seat-root /srv/aptl-seat
 ```
 
 Open the participant kiosk browser (presentation only):
 
 ```bash
-aptl seat open-kiosk --seat-root /srv/aptl-seat
+aptl seat open-kiosk
 ```
 
 Inspect coarse health (no credentials):
 
 ```bash
-aptl seat status --seat-root /srv/aptl-seat
+aptl seat status
 ```
 
 ## Reset and recovery
@@ -125,7 +163,7 @@ aptl seat recover \
 After a physical-host reboot, reconcile persisted seat metadata before reuse:
 
 ```bash
-aptl seat reconcile --seat-root /srv/aptl-seat
+aptl seat reconcile
 ```
 
 When reconciliation reports `host-reboot-detected` or `vm-not-running`, run

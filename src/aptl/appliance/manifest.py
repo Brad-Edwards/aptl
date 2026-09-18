@@ -470,3 +470,21 @@ def verify_release_directory(
         ) from exc
     _verify_checksum_file(release_root, manifest)
     return _inspection(manifest)
+
+
+def verify_release_metadata(
+    release_dir: Path,
+    public_key_path: Path,
+) -> ApplianceReleaseManifest:
+    """Authenticate a release manifest before downloading its large artifacts."""
+
+    release_root = release_dir.resolve()
+    if not release_root.is_dir():
+        raise ApplianceManifestError(_MISSING_RELEASE)
+    public_key_pem = _read_external_file(
+        public_key_path,
+        label="release trust anchor",
+    )
+    manifest, signature = _load_release_documents(release_root)
+    verify_manifest_signature(manifest, signature, public_key_pem)
+    return manifest

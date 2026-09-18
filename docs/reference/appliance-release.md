@@ -230,6 +230,20 @@ because it came from the same release page. The release workflow pins both
 public keys in protected repository variables and refuses sealing or public
 acceptance when the corresponding private/qualification key differs.
 
+End users normally use the higher-level installer, which performs the metadata
+download, both authenticated reconstructions, complete release verification,
+and atomic publication into their private seat state:
+
+```bash
+aptl seat install --tag v5.5.0 \
+  --release-public-key /etc/aptl/trust/release-public.pem \
+  --qualification-public-key /etc/aptl/trust/qualification-public.pem
+aptl seat start
+```
+
+The lower-level distribution commands remain available for release engineering
+and diagnostics.
+
 Publication also requires a protected `aptl.redistribution-review/v1` approval
 for the exact source commit and canonical-input digest. The review must cover
 the guest base image, every unique OCI image identity, every Python wheel, and

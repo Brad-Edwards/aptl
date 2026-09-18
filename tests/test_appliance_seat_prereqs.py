@@ -37,6 +37,7 @@ def test_prereqs_pass_with_injected_probes(tmp_path: Path) -> None:
         _requirements(),
         seat_root=tmp_path,
         memory_bytes=32 * 1024**3,
+        available_vcpus=16,
         free_disk_bytes=200 * 1024**3,
         kvm_available=True,
         qemu_img_available=True,

@@ -1,4 +1,4 @@
-"""Trusted native owners for the four TechVault capture registrations.
+"""Trusted native owners for the TechVault capture registrations.
 
 The public SDL chooses no URL, command, credential, path, or executable.  This
 module binds the exact code-owned TechVault registrations to bounded native
@@ -27,6 +27,18 @@ from aptl.core.evidence.adapters.techvault import (
     SuricataRuleReadinessSource,
     SuricataWazuhSqliSource,
 )
+from aptl.core.evidence.adapters.techvault_misp_readiness import (
+    MispAuthenticatedApiReadinessSource,
+)
+from aptl.core.evidence.adapters.techvault_native_readiness import (
+    admitted_misp_state,
+    declared_endpoint_agents,
+    misp_readiness,
+    wazuh_agent_readiness,
+)
+from aptl.core.evidence.adapters.techvault_wazuh_agent_readiness import (
+    WazuhAgentReadinessSource,
+)
 from aptl.core.evidence.adapters.techvault_native_support import (
     MAX_SOURCE_BYTES,
     bounded,
@@ -42,6 +54,8 @@ from aptl.core.evidence.adapters.techvault_native_support import (
 from aptl.utils.curl_safe import basic_auth_header, curl_json
 
 _CORTEX_REGISTRATION = "aptl.collector.cortex-enrichment"
+_MISP_READINESS_REGISTRATION = "aptl.collector.misp-authenticated-api-readiness"
+_WAZUH_AGENT_REGISTRATION = "aptl.collector.wazuh-agent-readiness"
 _READINESS_REGISTRATION = "aptl.collector.suricata-rule-readiness"
 _SQLI_REGISTRATION = "aptl.collector.suricata-wazuh-sqli"
 _SURICATA_CONTAINER = "aptl-suricata"
@@ -71,7 +85,7 @@ class TechVaultNativeDependencies:
 
 
 class TechVaultNativeEvidenceOwner:
-    """Own the bounded native operations behind three TechVault sources."""
+    """Own the bounded native operations behind the TechVault sources."""
 
     def __init__(
         self,
@@ -119,6 +133,11 @@ class TechVaultNativeEvidenceOwner:
             kwargs["sleep"] = self._sleep
         return {
             _CORTEX_REGISTRATION: CortexEnrichmentSource(self.cortex_query),
+            **self._misp_readiness_source(),
+            _WAZUH_AGENT_REGISTRATION: WazuhAgentReadinessSource(
+                self.wazuh_agent_readiness_query,
+                tuple(declared_endpoint_agents(self._realization)),
+            ),
             _READINESS_REGISTRATION: SuricataRuleReadinessSource(
                 self.suricata_readiness_query
             ),
@@ -129,6 +148,46 @@ class TechVaultNativeEvidenceOwner:
                 **kwargs,
             ),
         }
+
+    def _misp_readiness_source(self) -> dict[str, object]:
+        """Bind the MISP source only when the plan admits a state to compare.
+
+        Without admitted values there is nothing to compare an observation
+        with, so no source is offered at all and the demand reports itself
+        uncovered -- rather than a source that would accept whatever it saw.
+        """
+
+        admitted = admitted_misp_state(self._realization)
+        if admitted is None:
+            return {}
+        return {
+            _MISP_READINESS_REGISTRATION: MispAuthenticatedApiReadinessSource(
+                self.misp_readiness_query, admitted
+            )
+        }
+
+    def misp_readiness_query(
+        self, _start_iso: str, _end_iso: str
+    ) -> Mapping[str, object] | None:
+        """Observe MISP, its database and its cache through the admitted plan."""
+
+        return misp_readiness(
+            getattr(self._backend, "container_exec_with_input", None),
+            self._realization,
+        )
+
+    def wazuh_agent_readiness_query(
+        self, start_iso: str, end_iso: str
+    ) -> Mapping[str, object] | None:
+        """Correlate each declared endpoint agent with the manager's roster."""
+
+        return wazuh_agent_readiness(
+            getattr(self._backend, "container_exec_with_input", None),
+            self._realization,
+            self._project_dir,
+            start_iso,
+            end_iso,
+        )
 
     def cortex_query(self, start_iso: str, end_iso: str) -> Mapping[str, object] | None:
         """Execute the exact analyzer and read TheHive's native connector status."""

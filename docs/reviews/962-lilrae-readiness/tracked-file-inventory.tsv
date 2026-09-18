@@ -140,6 +140,8 @@ containers/db/init/02-seed-data.sql	split-pack-delivery	Inventory exact content 
 containers/dns/named.conf	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/dns/zones/172.20.rev	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/dns/zones/techvault.local.zone	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/docker-authority-proxy/Dockerfile	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/docker-authority-proxy/proxy.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/fileshare/smb.conf	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/generic-samba-ad-base/Dockerfile	backend-substrate	Retain the generic Samba identity-authority substrate independently of TechVault
 containers/generic-samba-ad-base/provider-start.sh	backend-substrate	Retain the generic Samba provider lifecycle independently of TechVault
@@ -199,6 +201,7 @@ containers/windows-victim/setup-vs-buildtools.ps1	split-pack-delivery	Inventory 
 containers/windows-victim/setup-wazuh-agent.ps1	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/windows-victim/setup-wdk.ps1	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/windows-victim/setup-x64dbg.ps1	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+docker-compose.authority.yml	backend-substrate	Post-baseline capture apparatus; retain with evidence custody authority
 docker-compose.capture.yml	backend-substrate	Post-baseline capture apparatus; retain with evidence custody authority
 docker-compose.observability.yml	backend-substrate	Post-baseline optional observability apparatus; retain with deployment authority
 docker-compose.yml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
@@ -298,6 +301,7 @@ docs/architecture/issue-876-dynamic-composition-readback-preflight.md	docs-follo
 docs/architecture/issue-878-scenario-verification-plugin-seam-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-892-dynamic-composition-artifact-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-905-lab-lifecycle-robustness-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-912-misp-redis-post-realization-mutation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-913-shuffle-post-realization-mutation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-934-rename-boundary-preflight.md	architecture-history	Binding #934 rename-boundary inventory and retirement guardrails
 docs/architecture/issue-949-orborus-control-authority-preflight.md	architecture-history	Post-baseline architecture guidance; retain with its owning issue
@@ -967,6 +971,7 @@ src/aptl/core/deployment/_compose_child_lifecycle.py	backend-substrate	Post-base
 src/aptl/core/deployment/_compose_content_mounts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_content_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_direct_network.py	backend-substrate	Post-baseline direct network ownership mechanism; retain with deployment authority
+src/aptl/core/deployment/_compose_docker_authority.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_image_fetch.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_image_free_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_image_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1011,6 +1016,9 @@ src/aptl/core/deployment/_compose_stateful_volumes.py	core-candidate	Migrate onl
 src/aptl/core/deployment/_compose_stop.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_traffic_mirror.py	backend-observability	Retain scope-admitted minimum-intrusion traffic-mirror realization and readback
 src/aptl/core/deployment/_compose_volume_cleanup.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_authored_service_hosts.py	backend-substrate	Authored host names the certificate bundle must cover; retain with deployment authority
+src/aptl/core/deployment/_misp_cache_credential.py	backend-substrate	Post-baseline runtime credential delivery; retain with deployment authority
+src/aptl/core/deployment/_misp_server_tls.py	backend-substrate	Image-native delivery of the authored MISP leaf; retain with deployment authority
 src/aptl/core/deployment/_cortex_service_credentials.py	backend-substrate	Post-baseline runtime credential delivery; retain with deployment authority
 src/aptl/core/deployment/_docker_endpoint_binding.py	backend-substrate	Post-baseline Docker endpoint binding; retain with ownership and exposure checks
 src/aptl/core/deployment/_docker_image_identity.py	backend-substrate	Post-baseline Docker image identity helper; retain with digest evidence
@@ -1044,6 +1052,11 @@ src/aptl/core/evidence/adapters/sources.py	core-candidate	Migrate only after pub
 src/aptl/core/evidence/adapters/techvault.py	scenario-integration-plugin	Selected TechVault evidence integration; generic capture remains backend-owned
 src/aptl/core/evidence/adapters/techvault_native.py	scenario-integration-plugin	Selected TechVault native evidence integration; generic capture remains backend-owned
 src/aptl/core/evidence/adapters/techvault_native_support.py	scenario-integration-plugin	Selected TechVault native evidence support; generic capture remains backend-owned
+src/aptl/core/evidence/adapters/techvault_enrollment_baseline.py	scenario-integration-plugin	Selected TechVault readiness evidence integration; generic capture remains backend-owned
+src/aptl/core/evidence/adapters/techvault_misp_readiness.py	scenario-integration-plugin	Selected TechVault readiness evidence integration; generic capture remains backend-owned
+src/aptl/core/evidence/adapters/techvault_native_readiness.py	scenario-integration-plugin	Selected TechVault readiness evidence integration; generic capture remains backend-owned
+src/aptl/core/evidence/adapters/techvault_readiness_probes.py	scenario-integration-plugin	Selected TechVault readiness evidence integration; generic capture remains backend-owned
+src/aptl/core/evidence/adapters/techvault_wazuh_agent_readiness.py	scenario-integration-plugin	Selected TechVault readiness evidence integration; generic capture remains backend-owned
 src/aptl/core/evidence/adapters/techvault_readiness.py	scenario-integration-plugin	Selected TechVault readiness evidence integration; generic capture remains backend-owned
 src/aptl/core/evidence/adapters/techvault_transcript.py	scenario-integration-plugin	Selected TechVault transcript evidence integration; generic capture remains backend-owned
 src/aptl/core/evidence/adapters/wiring.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1322,6 +1335,8 @@ tests/test_curated_live_proof.py	tests-follow-owner	Retain meaningful boundary a
 tests/test_curl_safe.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_deployment_backend.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_declared_listener_readiness.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_docker_authority_apparatus.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_docker_authority_proxy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_operator_access.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_deployment_stateful_realization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_detection.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1502,6 +1517,7 @@ tests/test_service_index_materialization.py	tests-follow-owner	Retain meaningful
 tests/test_services.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_session.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_shell.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_misp_redis_realization_contract.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_shuffle_realization_contract.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_smoke.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_snapshot.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1516,6 +1532,8 @@ tests/test_techvault_curated_variants.py	tests-follow-owner	Retain meaningful bo
 tests/test_techvault_dns_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_evidence_sources.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_live_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_techvault_readiness_probe_scripts.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_techvault_readiness_sources.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_native_evidence.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_pack_interaction_provider.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_runtime_parameters.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

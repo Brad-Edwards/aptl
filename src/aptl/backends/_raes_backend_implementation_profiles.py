@@ -209,9 +209,22 @@ def _record_matches(record: object, selector: SemanticRuntimeSelector) -> bool:
 
     value = _plain_value(getattr(record, selector.field_name, ""))
     version = _plain_value(getattr(record, "version", ""))
-    return value == selector.value and (
-        not selector.version or version == selector.version
+    return (
+        value == selector.value
+        and (not selector.version or version == selector.version)
+        and _authorization_matches(record, selector)
     )
+
+
+def _authorization_matches(
+    record: object, selector: SemanticRuntimeSelector
+) -> bool:
+    """Return whether the record's authorization posture matches the selector."""
+
+    if selector.authorization_required is None:
+        return True
+    declared = bool(_plain_value(getattr(record, "authorization_ref", "")))
+    return declared is selector.authorization_required
 
 
 def _plain_value(value: object) -> str:

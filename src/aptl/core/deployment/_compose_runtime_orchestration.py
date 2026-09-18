@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from collections.abc import Mapping, Sequence
 
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
+from aptl.core.deployment._compose_docker_authority import (
+    authority_declaration_error,
+)
 from aptl.runtime_authority import (
     DOCKER_SOCKET_PATH,
     DeploymentDockerAuthorityAdmission,
     DeploymentSpawnImageRequirement,
+    is_mediated_authority_socket,
     mount_exposes_or_mentions_docker_socket,
 )
 
@@ -36,15 +42,24 @@ def _spawn_requirement_is_complete(
     *,
     node_address: str,
 ) -> bool:
-    """Whether a carried child contract contains every field core code consumes."""
+    """Whether a carried child contract contains every field core code consumes.
 
+    Image identity and the execution deadline are required of every carried
+    requirement. The correlation pair is required only when one was authored:
+    a template the pack pinned without declaring an expected child inventory
+    carries neither a label nor a count, and demanding them would reject the
+    very requirement that exists to gate what the authority may launch.
+    """
+
+    correlated = bool(requirement.child_label) or bool(requirement.expected_count)
     return bool(
         _spawn_requirement_identity_is_complete(
             requirement,
             node_address=node_address,
+            correlated=correlated,
         )
         and _positive_int(requirement.execution_timeout_seconds)
-        and _positive_int(requirement.expected_count)
+        and (not correlated or _positive_int(requirement.expected_count))
     )
 
 
@@ -52,6 +67,7 @@ def _spawn_requirement_identity_is_complete(
     requirement: DeploymentSpawnImageRequirement,
     *,
     node_address: str,
+    correlated: bool,
 ) -> bool:
     """Whether a child contract carries its complete immutable identity."""
 
@@ -61,8 +77,7 @@ def _spawn_requirement_identity_is_complete(
         and requirement.authority_id
         and requirement.template_id
         and requirement.image_ref
-        and label_name
-        and label_value
+        and (not correlated or (label_name and label_value))
     )
 
 
@@ -74,8 +89,19 @@ def _positive_int(value: object) -> bool:
 
 def docker_socket_volume(
     admission: DeploymentDockerAuthorityAdmission | None,
+    mediated_socket: Path | None = None,
 ) -> dict[str, object] | None:
-    """Return the sole admitted Compose socket bind for one node."""
+    """Return the sole admitted Compose socket bind for one node.
+
+    The declared endpoint is satisfied either way -- the holder sees a
+    read-write Docker socket at the path its scenario declared. What differs is
+    which socket: with a mediated source the holder reaches the authorization
+    boundary, and the host's own socket never enters the container at all.
+
+    ``mediated_socket`` is absent only where no apparatus was composed, which
+    the authority declaration check refuses separately rather than silently
+    falling back to the host socket here.
+    """
 
     if admission is None:
         return None
@@ -84,9 +110,14 @@ def docker_socket_volume(
             "aptl.provisioner.runtime-authority-admission-invalid: "
             f"Docker authority is not admitted on {admission.node_address}."
         )
+    if mediated_socket is None:
+        raise ValueError(
+            "aptl.provisioner.docker-authority-unmediated: "
+            f"Docker authority on {admission.node_address} has no mediated socket."
+        )
     return {
         "type": "bind",
-        "source": DOCKER_SOCKET_PATH,
+        "source": str(mediated_socket),
         "target": DOCKER_SOCKET_PATH,
         "read_only": False,
     }
@@ -105,6 +136,7 @@ def docker_authority_admissions(
         requirement.child_label
         for admission in admissions
         for requirement in admission.spawn_requirements
+        if requirement.child_label
     ]
     valid = bool(
         len(addresses) == len(set(addresses))
@@ -177,14 +209,19 @@ def _environment_names(raw: object) -> set[str]:
 
 
 def _mount_is_exact_socket(mount: object) -> bool:
-    """Whether one effective mount is the canonical admitted socket bind."""
+    """Whether one effective mount is the canonical admitted socket bind.
 
-    return bool(
-        isinstance(mount, Mapping)
-        and mount.get("type") == "bind"
-        and mount.get("source") == DOCKER_SOCKET_PATH
-        and mount.get("target") == DOCKER_SOCKET_PATH
-        and mount.get("read_only", False) is False
+    The declared path is what the holder must see; the host's own socket is
+    what it must not be given. A bind whose source is the host socket is the
+    unmediated grant this issue removed, so it is not canonical (issue #912).
+    """
+
+    if not isinstance(mount, Mapping):
+        return False
+    return bool(mount.get("type") == "bind") and is_mediated_authority_socket(
+        source=mount.get("source"),
+        target=mount.get("target"),
+        read_write=mount.get("read_only", False) is False,
     )
 
 
@@ -357,6 +394,9 @@ class ComposeRuntimeOrchestrationRouteMixin:
     ) -> LabResult | None:
         """Validate the route and bind its endpoint as one ordered preflight."""
 
+        error = authority_declaration_error(realization)
+        if error is not None:
+            return LabResult(success=False, error=error)
         failure = self._validate_runtime_orchestration_route(realization)
         if failure is None:
             failure = self._bind_runtime_orchestration(realization)

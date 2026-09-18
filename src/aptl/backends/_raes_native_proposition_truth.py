@@ -39,12 +39,26 @@ NATIVE_EVIDENCE_CAPABILITIES = {
         evidence_kind="observation",
         record_channel_ref="participant-observation",
     ),
+    "misp-authenticated-api-readiness": NativeEvidenceCapability(
+        predicate_property="misp-authenticated-api-ready",
+        semantic_ref="urn:techvault:observable:misp-authenticated-api-ready",
+        evidence_channel="api_response",
+        evidence_kind="observation",
+        record_channel_ref="participant-observation",
+    ),
     "suricata-local-rule-readiness": NativeEvidenceCapability(
         predicate_property="network-detection-rule-source-ready",
         semantic_ref="urn:raes:observable:network-detection-rule-source-ready",
         evidence_channel="log",
         evidence_kind="log",
         record_channel_ref="backend-log",
+    ),
+    "wazuh-agent-readiness": NativeEvidenceCapability(
+        predicate_property="wazuh-agent-ready",
+        semantic_ref="urn:techvault:observable:wazuh-agent-ready",
+        evidence_channel="file_artifact",
+        evidence_kind="artifact",
+        record_channel_ref="file-artifact",
     ),
     "suricata-login-sqli-alert": NativeEvidenceCapability(
         predicate_property="network-detection-alert-sid-1000010-observed",

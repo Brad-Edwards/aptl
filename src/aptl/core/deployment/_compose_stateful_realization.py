@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 from aptl.core.certs import CertResult, ensure_ssl_certs
+from aptl.core.deployment._authored_service_hosts import authored_service_hosts
 from aptl.core.soc_ca import derive_soc_service_certs, ensure_soc_certs
 from aptl.core.credentials import (
     RENDERED_MANAGER_RELPATH,
@@ -27,6 +28,9 @@ from aptl.core.deployment._compose_stateful_graph import (
     owned_wazuh_services,
     stateful_realization_errors,
 )
+from aptl.core.deployment._compose_stateful_constants import (
+    ENVIRONMENT_DELIVERY_PROVENANCES as _ENVIRONMENT_DELIVERY_PROVENANCES,
+)
 from aptl.core.deployment._compose_stateful_model import (
     artifact_environment_file_path,
     artifact_source_path as _artifact_source_path,
@@ -37,6 +41,14 @@ from aptl.core.deployment._compose_stateful_override import write_stateful_overr
 from aptl.core.deployment._cortex_service_credentials import (
     CORTEX_SERVICE_CREDENTIALS_PROFILE,
     realize_cortex_service_credentials,
+)
+from aptl.core.deployment._misp_cache_credential import (
+    MISP_CACHE_CREDENTIAL_PROFILE,
+    realize_misp_cache_credential,
+)
+from aptl.core.deployment._misp_server_tls import (
+    MISP_SERVER_TLS_PROFILE,
+    realize_misp_server_tls,
 )
 from aptl.core.deployment._compose_stateful_readiness import (
     ComposeStatefulReadinessMixin,
@@ -59,6 +71,70 @@ from aptl.core.lab_types import LabResult
 artifact_source_path = _artifact_source_path
 effective_stateful_model_errors = _effective_stateful_model_errors
 stateful_override_payload = _stateful_override_payload
+
+
+def _artifacts_in_dependency_order(
+    artifacts: tuple[DeploymentGeneratedArtifactRealization, ...],
+) -> tuple[DeploymentGeneratedArtifactRealization, ...]:
+    """Order artifacts so each one is produced after what it depends on.
+
+    The realization spec sorts artifacts by address because that is a stable
+    canonical order for a document, not a safe execution order: an artifact
+    whose address happens to sort earlier than its producer would otherwise run
+    first and read material that does not exist yet.
+
+    Ties are broken by address so the result stays deterministic, and a
+    dependency that names nothing in this set is ignored rather than treated as
+    a cycle -- ordering references also point at persistent volumes, which are
+    realized separately. A genuine cycle cannot be ordered, so the remaining
+    artifacts keep their canonical order and their own producers fail closed
+    rather than being silently dropped.
+    """
+
+    remaining = {artifact.address: artifact for artifact in artifacts}
+    dependencies = {
+        address: {
+            resolved
+            for reference in artifact.ordering_dependencies
+            if (resolved := _resolve_ordering_reference(reference, remaining))
+        }
+        for address, artifact in remaining.items()
+    }
+    ordered: list[DeploymentGeneratedArtifactRealization] = []
+    produced: set[str] = set()
+    while remaining:
+        ready = sorted(
+            address
+            for address, needs in dependencies.items()
+            if address in remaining and needs <= produced
+        )
+        if not ready:
+            ordered.extend(remaining[address] for address in sorted(remaining))
+            break
+        for address in ready:
+            ordered.append(remaining.pop(address))
+            produced.add(address)
+    return tuple(ordered)
+
+
+def _resolve_ordering_reference(
+    reference: str, artifacts: dict[str, DeploymentGeneratedArtifactRealization]
+) -> str | None:
+    """Resolve one ordering reference to an artifact address in this set.
+
+    Authored dependencies arrive as resolved addresses, while a backend-selected
+    artifact names its producer the way the SDL does, as
+    ``generated_artifacts.<name>``. Both forms identify the same artifact, so
+    both resolve here instead of one of them silently matching nothing.
+    """
+
+    if reference in artifacts:
+        return reference
+    name = reference.rsplit(".", 1)[-1]
+    matches = [
+        address for address, artifact in artifacts.items() if artifact.name == name
+    ]
+    return matches[0] if len(matches) == 1 else None
 
 
 class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
@@ -122,8 +198,12 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         """
 
         failure: LabResult | None = None
-        for artifact in realization.generated_artifacts:
-            failure = self._realize_one_generated_artifact(artifact, scenario_root)
+        for artifact in _artifacts_in_dependency_order(
+            realization.generated_artifacts
+        ):
+            failure = self._realize_one_generated_artifact(
+                artifact, scenario_root, realization
+            )
             if failure is not None:
                 break
         return failure
@@ -132,11 +212,14 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         self,
         artifact: DeploymentGeneratedArtifactRealization,
         scenario_root: Path,
+        realization: DeploymentRealizationSpec,
     ) -> LabResult | None:
         """Materialize one generated artifact, dispatched by generator kind."""
 
         realizer = {
-            "certificate_bundle": self._realize_certificate_bundle,
+            "certificate_bundle": lambda item, root: self._realize_certificate_bundle(
+                item, root, realization
+            ),
             "rendered_config": self._realize_rendered_config,
             "ssh_key_bundle": self._realize_ssh_key_bundle,
         }.get(artifact.generator)
@@ -200,6 +283,12 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
             return self._realize_flag_signing_keys(artifact, scenario_root)
         if artifact.provenance == CORTEX_SERVICE_CREDENTIALS_PROFILE:
             error = realize_cortex_service_credentials(artifact, scenario_root)
+            return LabResult(success=False, error=error) if error is not None else None
+        if artifact.provenance == MISP_CACHE_CREDENTIAL_PROFILE:
+            error = realize_misp_cache_credential(artifact, scenario_root)
+            return LabResult(success=False, error=error) if error is not None else None
+        if artifact.provenance == MISP_SERVER_TLS_PROFILE:
+            error = realize_misp_server_tls(artifact, scenario_root)
             return LabResult(success=False, error=error) if error is not None else None
         return self._realize_wazuh_config(artifact, scenario_root)
 
@@ -268,7 +357,7 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         """Write exact output-to-variable bindings without putting secrets in YAML."""
 
         failure = None
-        if artifact.provenance != CORTEX_SERVICE_CREDENTIALS_PROFILE:
+        if artifact.provenance not in _ENVIRONMENT_DELIVERY_PROVENANCES:
             failure = LabResult(
                 success=False,
                 error=(
@@ -321,6 +410,7 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         self,
         artifact: DeploymentGeneratedArtifactRealization,
         scenario_root: Path,
+        realization: DeploymentRealizationSpec,
     ) -> LabResult | None:
         """Generate and cryptographically validate a certificate bundle.
 
@@ -329,7 +419,9 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         """
 
         if artifact.provenance == SOC_CERT_PROFILE:
-            return self._realize_soc_certificate_bundle(artifact, scenario_root)
+            return self._realize_soc_certificate_bundle(
+                artifact, scenario_root, realization
+            )
         try:
             _canonical_generated_path(scenario_root, CERTIFICATE_ROOT_RELPATH)
         except ValueError:
@@ -347,6 +439,7 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
     def _realize_soc_certificate_bundle(
         artifact: DeploymentGeneratedArtifactRealization,
         scenario_root: Path,
+        realization: DeploymentRealizationSpec,
     ) -> LabResult | None:
         """Generate the SOC CA + per-service certs (techvault:soc-certificate-profile/v1).
 
@@ -367,7 +460,8 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         # rather than a hardcoded registry, so APTL never decides the range's SOC
         # service identity (issue #875, SDL-authority class remediation).
         services = derive_soc_service_certs(
-            tuple(output.path for output in artifact.outputs)
+            tuple(output.path for output in artifact.outputs),
+            authored_service_hosts(realization),
         )
         result = ensure_soc_certs(scenario_root, services=services)
         failure: LabResult | None = None

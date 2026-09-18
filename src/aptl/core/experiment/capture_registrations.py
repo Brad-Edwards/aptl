@@ -57,6 +57,30 @@ _SQLI_SCOPE = (
     "Suricata signature_id 1000010 and Wazuh rule id 303020; unrelated alerts "
     "and aggregate counts do not satisfy this requirement."
 )
+# The two scope strings below are the released TechVault pack's own
+# ``evidence_requirements.<id>.scope`` text. RAES admits a demand only on an
+# exact scope match, so these are transcribed verbatim from the pack and must
+# be updated with it -- never paraphrased.
+_MISP_READINESS_SCOPE = (
+    "On a clean realization, record the canonical MISP URL and certificate "
+    "verification result, an authenticated API write/read result, the declared "
+    "database identity and application-role access result, and authenticated "
+    "Redis access with the declared cache policy. Missing, anonymous, "
+    "substituted, stale, or contradictory state fails readiness. Report only "
+    "bounded statuses, stable identities, and correlation ids; omit backend "
+    "choices, credential values, and configuration bodies."
+)
+_WAZUH_AGENT_READINESS_SCOPE = (
+    "For each subject, correlate the declared forwarding agent with exactly one "
+    "active manager member by its stable enrollment name and node reference. "
+    "Missing, duplicate, stale or disconnected required identities fail readiness. "
+    "Confirm readable declared log sources and fresh telemetry attributed to that "
+    "identity before and after restart or recreation, preserving compatible "
+    "enrollment. PostgreSQL and Suricata retain their own source ownership; "
+    "Suricata EVE, generic syslog and manager health do not prove another host's "
+    "endpoint-agent readiness. Report bounded identity/status/correlation results "
+    "and loss; omit enrollment keys, credentials and raw event bodies."
+)
 
 
 @dataclass(frozen=True)
@@ -110,6 +134,12 @@ _TECHVAULT_LIMITS = {
     "readiness": CaptureLimits(256 * 1024, 1, 300),
     "sqli": CaptureLimits(2 * 1024 * 1024, 256, 300),
     "transcript": CaptureLimits(32 * 1024 * 1024, 4096, 24 * 60 * 60),
+    # One bounded status document per readiness capture. MISP reports three
+    # subjects (application, database, cache); the Wazuh agent capture reports
+    # one row per monitored host plus the manager, so it carries a larger byte
+    # budget while staying a single artifact.
+    "misp-readiness": CaptureLimits(256 * 1024, 1, 300),
+    "wazuh-agent-readiness": CaptureLimits(512 * 1024, 1, 300),
 }
 
 
@@ -298,13 +328,85 @@ _SURICATA_WAZUH_SQLI = _techvault_registration(
     limits=_TECHVAULT_LIMITS["sqli"],
 )
 
+_MISP_AUTHENTICATED_API_READINESS = _techvault_registration(
+    "aptl.collector.misp-authenticated-api-readiness",
+    offer=_offer(
+        "aptl.collector.misp-authenticated-api-readiness",
+        _OfferSpec(
+            artifact_role="service_materialization_readback",
+            media_type=_JSON_MEDIA_TYPE,
+            capture_kind="observation",
+            source_refs=frozenset(
+                {
+                    "nodes.misp.runtime.platform_applications.misp-threat-intelligence",
+                    "nodes.misp-db.runtime.database_services.misp-db",
+                    "nodes.misp-redis.runtime.datastore_services.misp-redis",
+                }
+            ),
+            scope=_MISP_READINESS_SCOPE,
+            scope_refs=frozenset({"nodes.misp", "nodes.misp-db", "nodes.misp-redis"}),
+            channel_kind="participant-observation",
+            window_kinds=frozenset({"system_under_test"}),
+            integrity_mode="checksum",
+            redaction_policy="redact_secrets",
+        ),
+    ),
+    limits=_TECHVAULT_LIMITS["misp-readiness"],
+)
+
+_WAZUH_AGENT_READINESS = _techvault_registration(
+    "aptl.collector.wazuh-agent-readiness",
+    offer=_offer(
+        "aptl.collector.wazuh-agent-readiness",
+        _OfferSpec(
+            artifact_role="service_materialization_readback",
+            media_type=_JSON_MEDIA_TYPE,
+            capture_kind="artifact",
+            source_refs=frozenset(
+                {
+                    "nodes.wazuh-manager.runtime.security_monitoring_managers.wazuh-manager",
+                    "nodes.webapp.runtime.forwarding_agents.webapp-access-forwarder",
+                    "nodes.ad.runtime.forwarding_agents.ad-samba-forwarder",
+                    "nodes.dns.runtime.forwarding_agents.dns-query-forwarder",
+                    "nodes.fileshare.runtime.forwarding_agents.fileshare-samba-forwarder",
+                    "nodes.victim.runtime.forwarding_agents.victim-system-forwarder",
+                    "nodes.workstation.runtime.forwarding_agents.workstation-system-forwarder",
+                    "nodes.db.runtime.forwarding_agents.db-postgres-forwarder",
+                    "nodes.suricata.runtime.forwarding_agents.suricata-eve-forwarder",
+                }
+            ),
+            scope=_WAZUH_AGENT_READINESS_SCOPE,
+            scope_refs=frozenset(
+                {
+                    "nodes.webapp",
+                    "nodes.ad",
+                    "nodes.dns",
+                    "nodes.fileshare",
+                    "nodes.victim",
+                    "nodes.workstation",
+                    "nodes.db",
+                    "nodes.suricata",
+                    "nodes.wazuh-manager",
+                }
+            ),
+            channel_kind="file-artifact",
+            window_kinds=frozenset({"system_under_test"}),
+            integrity_mode="checksum",
+            redaction_policy="redact_secrets",
+        ),
+    ),
+    limits=_TECHVAULT_LIMITS["wazuh-agent-readiness"],
+)
+
 #: The trusted built-in fleet — one per source owner, covering the acceptance
 #: criterion's synchronized red / container / network / defensive evidence.
 BUILTIN_REGISTRATIONS: tuple[CollectorRegistration, ...] = (
     _CORTEX_ENRICHMENT,
+    _MISP_AUTHENTICATED_API_READINESS,
     _REDTEAM_SESSION_TRANSCRIPT,
     _SURICATA_RULE_READINESS,
     _SURICATA_WAZUH_SQLI,
+    _WAZUH_AGENT_READINESS,
     # Red-team activity via the MCP result envelope (participant's own action).
     _builtin(
         "aptl.collector.mcp-red",

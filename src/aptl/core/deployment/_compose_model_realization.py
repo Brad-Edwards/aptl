@@ -18,6 +18,10 @@ from pathlib import Path
 import yaml
 
 from aptl.core.deployment._compose_content_realization import CONTENT_SEEDER_IMAGE
+from aptl.core.deployment._compose_docker_authority import (
+    authority_compose_file,
+    authority_requested,
+)
 from aptl.core.deployment._compose_node_generation import (
     STATIC_COMPOSE_FILENAME,
     base_compose_file,
@@ -74,6 +78,10 @@ class ComposeRealizationModelMixin:
             not overrides
             and "otel" not in realization.profiles
             and not realization.capture_apparatus
+            # An admitted Docker authority always needs its mediating
+            # apparatus composed; without it the holder has no socket to be
+            # given, and the only one available would be the host's own.
+            and not authority_requested(realization)
         ):
             return compose_files
         base_files = compose_files or (
@@ -82,7 +90,26 @@ class ComposeRealizationModelMixin:
         files = self._with_observability_files(
             (*base_files, *overrides), realization.profiles
         )
-        return self._with_capture_apparatus_files(files, realization)
+        files = self._with_capture_apparatus_files(files, realization)
+        return self._with_docker_authority_files(
+            files, realization, scenario_root, realization_root
+        )
+
+    def _with_docker_authority_files(
+        self,
+        files: tuple[Path, ...],
+        realization: DeploymentRealizationSpec,
+        scenario_root: Path,
+        realization_root: Path,
+    ) -> tuple[Path, ...]:
+        """Compose the authorization boundary an admitted authority reaches."""
+
+        if not authority_requested(realization):
+            return files
+        apparatus = authority_compose_file(
+            scenario_root, realization, realization_root
+        )
+        return files if apparatus in files else (*files, apparatus)
 
     @staticmethod
     def _write_image_node_content_override(

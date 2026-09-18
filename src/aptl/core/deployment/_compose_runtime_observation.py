@@ -25,6 +25,7 @@ from aptl.runtime_authority import (
     DeploymentDockerAuthorityAdmission,
     DeploymentSpawnImageRequirement,
     has_undeclared_runtime_mounts,
+    is_mediated_authority_socket,
     mount_exposes_or_mentions_docker_socket,
 )
 
@@ -99,14 +100,21 @@ def _inspect_has_socket_route(info: object) -> bool:
 
 
 def _mount_is_canonical_authority_socket(mount: object) -> bool:
-    """Whether one observed mount is the admitted canonical socket bind."""
+    """Whether one observed mount is the admitted mediated socket bind.
 
-    return bool(
-        isinstance(mount, Mapping)
-        and mount.get("Type") == "bind"
-        and mount.get("Source") == "/var/run/docker.sock"
-        and mount.get("Destination") == "/var/run/docker.sock"
-        and mount.get("RW") is True
+    The holder must see a read-write Docker socket at its declared path -- that
+    is the declaration being satisfied. It must *not* be the host's own socket:
+    the whole point of the mediating apparatus is that the host socket never
+    enters the holder, so observing it here is the failure this check exists to
+    catch, not the expected state (issue #912).
+    """
+
+    if not isinstance(mount, Mapping):
+        return False
+    return bool(mount.get("Type") == "bind") and is_mediated_authority_socket(
+        source=mount.get("Source"),
+        target=mount.get("Destination"),
+        read_write=mount.get("RW") is True,
     )
 
 
@@ -292,17 +300,22 @@ class ComposeRuntimeOrchestrationObservationMixin(
     ) -> tuple[LabResult | None, tuple[str, ...]]:
         """Query one exact image-label pair and enforce its declared count."""
 
+        # Without an authored child there is no label to filter on, so the
+        # query narrows to the exact authored image alone. Dropping the filter
+        # widens what is observed, never what is accepted: every container it
+        # returns is still checked against the pinned image identity below.
+        query = [
+            "docker",
+            "ps",
+            "-aq",
+            "--filter",
+            f"ancestor={requirement.image_ref}",
+        ]
+        if requirement.child_label:
+            query += ["--filter", f"label={requirement.child_label}"]
         try:
             result = self._run(
-                [
-                    "docker",
-                    "ps",
-                    "-aq",
-                    "--filter",
-                    f"ancestor={requirement.image_ref}",
-                    "--filter",
-                    f"label={requirement.child_label}",
-                ],
+                query,
                 timeout=requirement.execution_timeout_seconds,
             )
         except BackendTimeoutError:
@@ -329,7 +342,12 @@ class ComposeRuntimeOrchestrationObservationMixin(
                         "Spawned-child ownership could not be established",
                         requirement,
                     )
-        count_required = bool(container_ids or require_children)
+        # A count can only be enforced against an authored one. A template
+        # without a declared child inventory says which image may run, not how
+        # many may run, so its children are identity-checked and not counted.
+        count_required = bool(requirement.child_label) and bool(
+            container_ids or require_children
+        )
         if (
             failure is None
             and count_required
@@ -386,6 +404,12 @@ class ComposeRuntimeOrchestrationObservationMixin(
     ) -> bool:
         """Whether inspect output carries the exact admitted child label."""
 
+        if not requirement.child_label:
+            # Nothing was authored to correlate against. The child's image
+            # identity is still verified by the caller; only the label match is
+            # vacuous here, and claiming a match that was never declared would
+            # be the false positive this check exists to avoid.
+            return True
         config = info.get("Config") if isinstance(info, Mapping) else None
         labels = config.get("Labels") if isinstance(config, Mapping) else None
         label_name, label_value = requirement.child_label.split("=", 1)

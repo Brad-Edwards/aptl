@@ -192,8 +192,11 @@ _ORCHESTRATOR = OrchestratorCapabilities(
 # ADR-088 service materialization (#889) and EXP-010 TechVault native evidence
 # (#992) declare boolean observed-state postconditions. APTL evaluates only the
 # exact predicate/evidence bindings implemented by its fresh native readbacks;
-# those bindings use api_response and log channels. This is not a general
-# proposition-evaluation engine.
+# those bindings use the api_response, log, and file_artifact channels. This is
+# not a general proposition-evaluation engine: the channel set below is exactly
+# the set of channels NATIVE_EVIDENCE_CAPABILITIES can decide a proposition on,
+# and adding a channel here without its capability entry would claim an
+# evaluation APTL cannot perform.
 _EVALUATOR = EvaluatorCapabilities(
     name="aptl-rte-evaluator",
     supported_sections=frozenset(
@@ -204,7 +207,7 @@ _EVALUATOR = EvaluatorCapabilities(
     supported_predicate_families=frozenset({"boolean", "presence"}),
     supported_quantifiers=frozenset({"all"}),
     supported_truth_outcomes=frozenset({"true", "false", "unknown", "unsupported"}),
-    supported_evidence_channels=frozenset({"api_response", "log"}),
+    supported_evidence_channels=frozenset({"api_response", "file_artifact", "log"}),
     supported_time_domains=frozenset({"scenario_time"}),
     preserves_binding_provenance=True,
 )

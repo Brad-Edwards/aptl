@@ -23,6 +23,11 @@ from pathlib import Path
 
 import yaml
 from aptl.core.deployment._compose_realization_networks import _compose_network_key
+from aptl.core.deployment._compose_docker_authority import (
+    AUTHORITY_SERVICE,
+    authority_requested,
+    authority_socket_path,
+)
 from aptl.core.deployment._compose_runtime_orchestration import (
     docker_authority_admissions_by_address,
     docker_socket_volume,
@@ -48,17 +53,38 @@ GENERATED_COMPOSE_RELPATH = Path(".aptl") / "realization" / "compose-base.yml"
 STATIC_COMPOSE_FILENAME = "docker-compose.yml"
 
 
-def render_realization_compose(spec: DeploymentRealizationSpec) -> dict[str, object]:
+def _require_healthy_authority(service: dict[str, object]) -> None:
+    """Make an authority holder wait for its mediating apparatus."""
+
+    depends = service.get("depends_on")
+    if not isinstance(depends, dict):
+        depends = {name: {"condition": "service_started"} for name in depends or ()}
+    depends[AUTHORITY_SERVICE] = {"condition": "service_healthy"}
+    service["depends_on"] = depends
+
+
+def render_realization_compose(
+    spec: DeploymentRealizationSpec, realization_root: Path | None = None
+) -> dict[str, object]:
     """Return a Compose document for the spec's image-backed nodes and networks.
 
     Image-free nodes (no backing image) are omitted: the generic materializer
     realizes them directly. ``depends_on`` edges are kept only when the target
     is itself an emitted service, so the document never references an undefined
     service.
+
+    ``realization_root`` locates the mediated Docker socket an authority holder
+    is given in place of the host's own. It is required whenever the spec
+    carries an authority; a holder is never rendered with an unmediated socket.
     """
 
     image_by_address = {image.address: image for image in spec.images}
     admissions = docker_authority_admissions_by_address(spec)
+    mediated_socket = (
+        authority_socket_path(realization_root)
+        if realization_root is not None and authority_requested(spec)
+        else None
+    )
     emitted_services: dict[str, str] = {
         node.service_name: node.address
         for node in spec.nodes
@@ -87,6 +113,7 @@ def render_realization_compose(spec: DeploymentRealizationSpec) -> dict[str, obj
             service_names,
             completion_services,
             docker_authority_admission=admissions.get(node.address),
+            mediated_socket=mediated_socket,
             network_aliases=canonical_aliases.get(node.service_name, ()),
         )
 
@@ -104,6 +131,7 @@ def _render_service(
     completion_services: set[str],
     *,
     docker_authority_admission: DeploymentDockerAuthorityAdmission | None,
+    mediated_socket: Path | None = None,
     network_aliases: tuple[str, ...] = (),
 ) -> dict[str, object]:
     """Render one image node into a Compose service definition."""
@@ -135,8 +163,14 @@ def _render_service(
     if depends:
         service["depends_on"] = depends
     service.update(_operational_config(node.runtime))
-    socket_volume = docker_socket_volume(docker_authority_admission)
+    socket_volume = docker_socket_volume(docker_authority_admission, mediated_socket)
     if socket_volume is not None:
+        # The mediated socket is bind-mounted as a *file*, so it has to exist
+        # on the host before this container is created -- Docker would
+        # otherwise create a directory in its place and the holder would find
+        # no socket at all. Waiting for the apparatus to report healthy is what
+        # makes that ordering deterministic rather than a race.
+        _require_healthy_authority(service)
         volumes = service.setdefault("volumes", [])
         if not isinstance(volumes, list):
             raise ValueError(
@@ -443,7 +477,9 @@ def write_realization_compose(
     path = scenario_root / GENERATED_COMPOSE_RELPATH
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        yaml.safe_dump(render_realization_compose(spec), sort_keys=True),
+        yaml.safe_dump(
+            render_realization_compose(spec, scenario_root), sort_keys=True
+        ),
         encoding="utf-8",
         newline="\n",
     )

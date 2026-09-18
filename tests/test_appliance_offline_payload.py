@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from aptl.appliance import inputs
 from aptl.appliance.offline import OfflinePayloadError, build_offline_payload
 
 
@@ -90,3 +91,42 @@ def test_offline_payload_requires_one_aptl_wheel_matching_version(
 
     with pytest.raises(OfflinePayloadError, match="exactly one matching"):
         build_offline_payload(staging, tmp_path / "duplicate.tar")
+
+
+def test_archive_roles_use_saved_config_ids_not_docker_store_ids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    registry_ref = "example/remote@sha256:" + "a" * 64
+    references = {
+        "scenario.local": "example/local:latest",
+        "scenario.remote": registry_ref,
+    }
+    images = {
+        "sha256:" + "b" * 64: ("example/local:latest",),
+        "sha256:" + "c" * 64: (),
+    }
+    monkeypatch.setattr(
+        inputs,
+        "registry_image_id",
+        lambda *_args, **_kwargs: "sha256:" + "c" * 64,
+    )
+
+    assert inputs._resolve_archive_image_roles(
+        references, images, tmp_path / "images.tar", {}
+    ) == {
+        "scenario.local": "sha256:" + "b" * 64,
+        "scenario.remote": "sha256:" + "c" * 64,
+    }
+
+
+def test_archive_roles_reject_an_ambiguous_saved_tag(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="missing or ambiguous"):
+        inputs._resolve_archive_image_roles(
+            {"scenario.local": "example/local:latest"},
+            {
+                "sha256:" + "b" * 64: ("example/local:latest",),
+                "sha256:" + "c" * 64: ("example/local:latest",),
+            },
+            tmp_path / "images.tar",
+            {},
+        )

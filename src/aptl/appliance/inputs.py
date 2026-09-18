@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import platform
-import re
 import shutil
 import subprocess
 import tarfile
@@ -25,6 +24,7 @@ from aptl.appliance.payload_content import (
     archive_files,
     docker_archive_images,
     read_archive_member,
+    registry_image_id,
     validate_wheel_closure,
 )
 from aptl.core.assets import materialize, resolve_asset_source
@@ -66,6 +66,29 @@ HELPER_ROLES = frozenset(
 )
 
 
+def _resolve_archive_image_roles(
+    references: dict[str, str],
+    images: dict[str, tuple[str, ...]],
+    image_archive: Path,
+    image_files: dict[str, str],
+) -> dict[str, str]:
+    """Resolve roles to saved config identities, independent of Docker's store."""
+
+    resolved: dict[str, str] = {}
+    for reference in sorted(set(references.values())):
+        if "@sha256:" in reference:
+            identity = registry_image_id(image_archive, image_files, reference)
+        else:
+            matches = [
+                identity for identity, tags in images.items() if reference in tags
+            ]
+            if len(matches) != 1:
+                raise ValueError("saved Docker tag is missing or ambiguous")
+            identity = matches[0]
+        resolved[reference] = identity
+    return {role: resolved[reference] for role, reference in references.items()}
+
+
 def acquire_canonical_images(
     *, image_archive: Path, image_roles: Path
 ) -> dict[str, str]:
@@ -83,10 +106,9 @@ def acquire_canonical_images(
         materialize(project)
         bundle = env_pack_bundle(Path(work) / "packs")
         references = canonical_image_references(project, bundle)
-        resolved: dict[str, str] = {}
         for reference in sorted(set(references.values())):
             inspected = subprocess.run(
-                ["docker", "image", "inspect", "--format", "{{.Id}}", reference],
+                ["docker", "image", "inspect", reference],
                 capture_output=True,
                 text=True,
                 timeout=60,
@@ -101,19 +123,20 @@ def acquire_canonical_images(
                     timeout=3600,
                 )
                 inspected = subprocess.run(
-                    ["docker", "image", "inspect", "--format", "{{.Id}}", reference],
+                    ["docker", "image", "inspect", reference],
                     check=True,
                     capture_output=True,
                     text=True,
                     timeout=60,
                 )
-            identity = inspected.stdout.strip()
-            if not re.fullmatch(r"sha256:[a-f0-9]{64}", identity):
-                raise ValueError("Docker returned an invalid image identity")
-            resolved[reference] = identity
-        roles = {role: resolved[reference] for role, reference in references.items()}
         subprocess.run(
-            ["docker", "save", "--output", str(image_archive), *sorted(resolved)],
+            [
+                "docker",
+                "save",
+                "--output",
+                str(image_archive),
+                *sorted(set(references.values())),
+            ],
             check=True,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
@@ -122,6 +145,9 @@ def acquire_canonical_images(
         )
         image_files = archive_files(image_archive)
         images = docker_archive_images(image_archive, image_files)
+        roles = _resolve_archive_image_roles(
+            references, images, image_archive, image_files
+        )
         if set(roles.values()) != set(images):
             raise ValueError("saved Docker archive differs from resolved image closure")
         _validate_image_sources(

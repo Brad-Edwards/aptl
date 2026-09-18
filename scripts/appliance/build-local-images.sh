@@ -6,7 +6,7 @@ build_image() {
   local context=$2
   local dockerfile=$3
   local base_mode=${4:-remote}
-  local build=(docker build)
+  local build=(docker build --provenance=false)
   if test "$base_mode" = remote; then
     build+=(--pull)
   elif test "$base_mode" != local; then

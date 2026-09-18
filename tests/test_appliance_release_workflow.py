@@ -100,6 +100,8 @@ def test_private_build_public_promotion_and_candidate_acquisition_sets_match() -
         re.findall(r"^build_image ([^ ]+) ", local_builder, re.MULTILINE)
     )
     assert len(local_images) == 13
+    assert "docker build --provenance=false" in publisher
+    assert "docker build --provenance=false" in local_builder
 
 
 def test_local_candidate_path_uses_exact_commit_and_no_registry_dependency() -> None:
@@ -111,6 +113,6 @@ def test_local_candidate_path_uses_exact_commit_and_no_registry_dependency() -> 
     assert "scripts/appliance/build-candidate.sh" in wrapper
     assert "source_revision" in builder
     assert 'python3 -m venv "$root/venv"' in builder
-    assert '\npython -m venv ' not in builder
+    assert "\npython -m venv " not in builder
     assert 'docker image inspect "$canonical"' in builder
     assert "APTL_IMAGE_NAMESPACE" not in wrapper

@@ -8,7 +8,10 @@ import pytest
 
 from aptl.appliance.models import HostPrerequisites
 from aptl.appliance.seat.errors import SeatLauncherError
-from aptl.appliance.seat.prereqs import check_host_prerequisites, require_host_prerequisites
+from aptl.appliance.seat.prereqs import (
+    check_host_prerequisites,
+    require_host_prerequisites,
+)
 from aptl.core import hostenv
 
 pytestmark = pytest.mark.skipif(
@@ -88,3 +91,19 @@ def test_prereqs_fail_on_low_disk_and_missing_tools(tmp_path: Path) -> None:
     assert "low-disk" in codes
     assert "missing-qemu-img" in codes
     assert "missing-qemu-system" in codes
+
+
+def test_prereqs_use_available_cpu_and_memory_capacity(tmp_path: Path) -> None:
+    report = check_host_prerequisites(
+        _requirements(),
+        seat_root=tmp_path,
+        memory_bytes=8 * 1024**3,
+        free_disk_bytes=200 * 1024**3,
+        available_vcpus=4,
+        kvm_available=True,
+        qemu_img_available=True,
+        qemu_system_available=True,
+    )
+
+    codes = {item.code for item in report.findings if not item.passed}
+    assert codes == {"low-memory", "low-cpu"}

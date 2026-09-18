@@ -16,6 +16,7 @@ from pydantic import ValidationError
 
 from aptl.appliance.manifest import (
     ApplianceManifestError,
+    _load_release_documents,
     canonical_manifest_bytes,
     compute_payload_digest,
     describe_artifact,
@@ -77,18 +78,31 @@ def _artifact(
     )
 
 
-def _machine(machine_id: str) -> MachineDrill:
+def _machine(machine_id: str, *, seat_count: int = 1) -> MachineDrill:
     return MachineDrill(
         machine_id=f"sha256:{hashlib.sha256(machine_id.encode()).hexdigest()}",
+        candidate_id="aptl-5.1.1-candidate-x86_64",
+        candidate_manifest_digest=f"sha256:{_HEX_A}",
+        candidate_payload_digest=f"sha256:{_HEX_B}",
+        golden_image_digest=f"sha256:{_HEX_C}",
         architecture="x86_64",
         vcpus=8,
         memory_bytes=16 * 1024**3,
         disk_bytes=100 * 1024**3,
+        hypervisor="qemu-kvm",
+        seat_count=seat_count,
+        host_access_clients=("claude", "codex"),
         build_passed=True,
         offline_boot_passed=True,
         participant_smoke_passed=True,
+        host_access_passed=True,
+        revocation_passed=True,
         rollback_passed=True,
         overlay_destroy_passed=True,
+        golden_secret_scan_passed=True,
+        golden_read_only_passed=True,
+        distinct_overlay_identities_passed=seat_count >= 2,
+        failed_candidate_preserved_active_passed=True,
     )
 
 
@@ -124,6 +138,18 @@ def _manifest() -> ApplianceReleaseManifest:
             "participant-qualification",
             "evidence/qualification.json",
             _HEX_E,
+        ),
+        _artifact(
+            "participant-run-record",
+            "participant-run-record",
+            "evidence/run-record.json",
+            _HEX_A,
+        ),
+        _artifact(
+            "participant-snapshot",
+            "participant-snapshot",
+            "evidence/snapshot.json",
+            _HEX_B,
         ),
         _artifact(
             "boundary-policy",
@@ -202,8 +228,8 @@ def _manifest() -> ApplianceReleaseManifest:
             ),
         ),
         qualification=ApplianceDrillReport(
-            schema_version="aptl.appliance-drill/v1",
-            machines=(_machine("host-a"), _machine("host-b")),
+            schema_version="aptl.appliance-drill/v2",
+            machines=(_machine("host-a", seat_count=2), _machine("host-b")),
             golden_secret_scan_passed=True,
             golden_read_only_passed=True,
             distinct_overlay_identities_passed=True,
@@ -296,6 +322,11 @@ def test_artifact_reference_rejects_unsafe_paths(path: str) -> None:
         _artifact("golden-disk", "golden-disk", path)
 
 
+def test_artifact_reference_rejects_reserved_release_documents() -> None:
+    with pytest.raises(ValidationError, match="reserved release document"):
+        _artifact("golden-disk", "golden-disk", "manifest.json")
+
+
 def test_manifest_rejects_duplicate_and_missing_release_artifacts() -> None:
     manifest = _manifest()
     duplicate = manifest.artifacts + (manifest.artifacts[0],)
@@ -373,6 +404,20 @@ def _write_signed_release(root: Path) -> tuple[ApplianceReleaseManifest, bytes]:
         encoding=serialization.Encoding.DER,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
+    snapshot_payload = json.dumps(
+        {"containers": [], "networks": []}, separators=(",", ":")
+    ).encode()
+    run_record_payload = json.dumps(
+        {
+            "schema_version": "aptl.run-record/v1",
+            "outcome": "success",
+            "backend_evidence": {
+                "selected_profiles": [],
+                "range_snapshot": json.loads(snapshot_payload),
+            },
+        },
+        separators=(",", ":"),
+    ).encode()
     qualification_document = {
         "schema_version": "aptl.participant-qualification/v1",
         "profile_id": "guided-purple",
@@ -382,9 +427,9 @@ def _write_signed_release(root: Path) -> tuple[ApplianceReleaseManifest, bytes]:
             f"sha256:{hashlib.sha256(asset_lock_payload).hexdigest()}"
         ),
         "run_record_ref": "evidence/run-record.json",
-        "run_record_sha256": "1" * 64,
+        "run_record_sha256": hashlib.sha256(run_record_payload).hexdigest(),
         "snapshot_ref": "evidence/snapshot.json",
-        "snapshot_sha256": "2" * 64,
+        "snapshot_sha256": hashlib.sha256(snapshot_payload).hexdigest(),
         "hardware": {
             "architecture": "x86_64",
             "vcpus": 8,
@@ -522,6 +567,10 @@ def _write_signed_release(root: Path) -> tuple[ApplianceReleaseManifest, bytes]:
             payload = asset_lock_payload
         elif artifact.kind == "participant-qualification":
             payload = qualification_payload
+        elif artifact.kind == "participant-run-record":
+            payload = run_record_payload
+        elif artifact.kind == "participant-snapshot":
+            payload = snapshot_payload
         elif artifact.kind == "boundary-policy":
             payload = boundary_payload
         elif artifact.kind == "offline-payload":
@@ -646,6 +695,53 @@ def test_release_directory_verifies_every_artifact_and_safe_projection(
     assert inspection.minimum_host_memory_bytes == 16 * 1024**3
 
 
+def test_release_verification_streams_disk_and_offline_payload(
+    tmp_path: Path, monkeypatch
+) -> None:
+    release = tmp_path / "release"
+    _manifest, public_pem = _write_signed_release(release)
+    public_key = tmp_path / "release-public.pem"
+    public_key.write_bytes(public_pem)
+    from aptl.appliance import release_validation
+
+    original = release_validation.read_release_artifact
+
+    def reject_unbounded_large_read(root: Path, relative_path: str) -> bytes:
+        if relative_path in {
+            "artifacts/golden.qcow2",
+            "artifacts/offline-payload.tar",
+        }:
+            raise AssertionError("large release artifact was read into memory")
+        return original(root, relative_path)
+
+    monkeypatch.setattr(
+        release_validation, "read_release_artifact", reject_unbounded_large_read
+    )
+    import aptl.appliance.manifest as manifest_module
+
+    original_manifest_read = manifest_module._read_release_artifact
+
+    def reject_manifest_large_read(root: Path, relative_path: str) -> bytes:
+        if relative_path in {
+            "artifacts/golden.qcow2",
+            "artifacts/offline-payload.tar",
+        }:
+            raise AssertionError("large checksum input was read into memory")
+        return original_manifest_read(root, relative_path)
+
+    monkeypatch.setattr(
+        manifest_module, "_read_release_artifact", reject_manifest_large_read
+    )
+
+    inspection = verify_release_directory(
+        release,
+        public_key,
+        qualification_public_key_path=tmp_path / "qualification-public.pem",
+    )
+
+    assert inspection.release_id == "aptl-v5.1.1-x86_64"
+
+
 def test_release_directory_rejects_artifact_tampering_and_symlinks(
     tmp_path: Path,
 ) -> None:
@@ -671,6 +767,18 @@ def test_release_directory_rejects_artifact_tampering_and_symlinks(
             public_key,
             qualification_public_key_path=tmp_path / "qualification-public.pem",
         )
+
+
+def test_release_documents_reject_duplicate_json_object_keys(tmp_path: Path) -> None:
+    release = tmp_path / "release"
+    _write_signed_release(release)
+    manifest = (release / "manifest.json").read_text()
+    (release / "manifest.json").write_text(
+        '{"release_id":"aptl-v0.0.0-x86_64",' + manifest[1:]
+    )
+
+    with pytest.raises(ApplianceManifestError, match="invalid appliance release"):
+        _load_release_documents(release)
 
 
 def test_release_directory_rejects_golden_state_contamination(

@@ -20,8 +20,6 @@ workflow:
   format_command: pre-commit run --all-files
   codex_review:
     pre_push_cap: 1
-  test_quality_review:
-    pre_push_cap: 1
   review_disposition:
     enabled: false
     mode: shadow
@@ -72,6 +70,8 @@ grc:
       paths:
         - docker-compose.yml
         - containers/base/**
+        - appliance/guest/**
+        - src/aptl/appliance/**
         - src/aptl/cli/**
       # src/aptl/cli (python) -> application; docker-compose.yml -> docker-compose;
       # containers/base/Dockerfile.* -> dockerfile.
@@ -81,6 +81,7 @@ grc:
       description: Red/blue MCP servers and orchestrator that AI agents drive — the agent authorization and command-filtering surface.
       paths:
         - mcp/**
+        - src/aptl/workbench/**
       # mcp/** is first-party TypeScript -> application (Dockerfiles under mcp/ are
       # vendored node_modules only).
       surfaces: [application]

@@ -19,7 +19,7 @@ from aptl.core.lab_types import LabResult
 #: ``raes`` -> ``raes`` with the RAES migration - MUST bump this tag. Leaving it
 #: pinned would pair a cached older helper with newer APTL code and fail every
 #: boundary mutation closed on hosts that already built the previous image.
-DEFAULT_BOUNDARY_HELPER_IMAGE = "aptl-network-boundary-helper:3"
+DEFAULT_BOUNDARY_HELPER_IMAGE = "aptl-network-boundary-helper:4"
 _BOUNDARY_TIMEOUT = 30
 
 

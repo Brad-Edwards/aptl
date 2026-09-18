@@ -24,7 +24,7 @@ from aptl.appliance.seat.models import SeatRecord
 from aptl.appliance.seat.persistence import load_seat_record, persist_seat_record
 from aptl.core import hostenv
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
-from tests.test_appliance_boundary_inventory import _policy
+from tests.test_appliance_boundary_inventory import _guest, _policy
 
 pytestmark = pytest.mark.skipif(
     hostenv.host_os() != hostenv.OS_LINUX,
@@ -72,6 +72,7 @@ def _manifest_stub():
         host_prerequisites=SimpleNamespace(
             vcpus=8,
             memory_bytes=16 * 1024**3,
+            disk_bytes=100 * 1024**3,
         ),
         boundary=SimpleNamespace(
             policy_digest="sha256:" + "1" * 64,
@@ -139,10 +140,135 @@ def test_stage_persists_seat_record(tmp_path: Path) -> None:
         )
 
     assert record.lifecycle_state == "staged"
+    assert record.schema_version == "aptl.seat-record/v2"
+    assert record.generation == 1
+    assert {mapping.audience for mapping in record.mappings} == {
+        "participant",
+        "recovery",
+    }
+    assert all(mapping.guest_port is not None for mapping in record.mappings)
+    assert (seat_root / "launch" / "release-public.pem").read_text() == "public"
+    assert (
+        seat_root / "launch" / "qualification-public.pem"
+    ).read_text() == "qualification"
     assert load_seat_record(seat_root) == record
 
 
+def test_stage_persists_explicit_outer_mapping(tmp_path: Path) -> None:
+    seat_root = tmp_path / "seat"
+    seat_root.mkdir()
+    release = tmp_path / "release"
+    release.mkdir()
+    public_key = tmp_path / "release-public.pem"
+    qualification_key = tmp_path / "qualification-public.pem"
+    public_key.write_text("public")
+    qualification_key.write_text("qualification")
+    mappings = (
+        BoundaryEndpoint(
+            audience="participant",
+            address="127.0.0.1",
+            port=10443,
+            protocol="tcp",
+            guest_address="127.0.0.1",
+            guest_port=443,
+        ),
+        BoundaryEndpoint(
+            audience="recovery",
+            address="127.0.0.1",
+            port=11443,
+            protocol="tcp",
+            guest_address="127.0.0.1",
+            guest_port=9443,
+        ),
+    )
+
+    with (
+        patch(
+            "aptl.appliance.seat.lifecycle.require_host_prerequisites",
+            return_value=object(),
+        ),
+        patch(
+            "aptl.appliance.seat.lifecycle._load_verified_release",
+            return_value=(_inspection(), _policy()),
+        ),
+        patch(
+            "aptl.appliance.seat.lifecycle._load_release_documents",
+            return_value=(_manifest_stub(), object()),
+        ),
+        patch("aptl.appliance.seat.lifecycle.prepare_launch_descriptor"),
+        patch(
+            "aptl.appliance.seat.lifecycle._launch_descriptor_digest",
+            return_value="sha256:" + "d" * 64,
+        ),
+    ):
+        record = stage_seat(
+            seat_root,
+            seat_id="seat-01",
+            release_dir=release,
+            release_public_key=public_key,
+            qualification_public_key=qualification_key,
+            mappings=mappings,
+        )
+
+    assert record.mappings == mappings
+
+
 def test_start_marks_ready_when_boundary_passes(tmp_path: Path) -> None:
+    seat_root = tmp_path / "seat"
+    seat_root.mkdir()
+    release = seat_root / "launch" / "release"
+    release.mkdir(parents=True)
+    public_key = tmp_path / "release-public.pem"
+    qualification_key = tmp_path / "qualification-public.pem"
+    public_key.write_text("public")
+    qualification_key.write_text("qualification")
+
+    with (
+        patch(
+            "aptl.appliance.seat.lifecycle.require_host_prerequisites",
+            return_value=object(),
+        ),
+        patch(
+            "aptl.appliance.seat.lifecycle._load_verified_release",
+            return_value=(_inspection(), _policy()),
+        ),
+        patch(
+            "aptl.appliance.seat.lifecycle._load_release_documents",
+            return_value=(_manifest_stub(), object()),
+        ),
+        patch("aptl.appliance.seat.lifecycle._ensure_overlay"),
+        patch("aptl.appliance.seat.lifecycle.require_host_exposure"),
+        patch("aptl.appliance.seat.lifecycle.start_vm") as start_vm,
+        patch("aptl.appliance.seat.lifecycle.write_vm_pid"),
+        patch("aptl.appliance.seat.lifecycle.read_vm_pid", return_value=4242),
+        patch("aptl.appliance.seat.lifecycle.prepare_launch_descriptor"),
+        patch("aptl.appliance.seat.lifecycle.run_appliance_boundary_gate") as gate,
+        patch(
+            "aptl.appliance.seat.lifecycle._launch_descriptor_digest",
+            return_value="sha256:" + "d" * 64,
+        ),
+    ):
+        start_vm.return_value.pid = 4242
+        gate.return_value = type("Result", (), {"passed": True, "findings": ()})()
+        record = start_seat(
+            seat_root,
+            seat_id="seat-01",
+            release_dir=release,
+            release_public_key=public_key,
+            qualification_public_key=qualification_key,
+            options=StartSeatOptions(
+                listener_probe=_listener_probe,
+                forbidden_reachability_probe=lambda: True,
+                guest_readiness_probe=_guest,
+                reserve_outer_mappings=False,
+            ),
+        )
+
+    assert record.lifecycle_state == "ready"
+    gate.assert_called_once()
+
+
+def test_start_fails_closed_without_real_boundary_probes(tmp_path: Path) -> None:
     seat_root = tmp_path / "seat"
     seat_root.mkdir()
     release = seat_root / "launch" / "release"
@@ -175,18 +301,23 @@ def test_start_marks_ready_when_boundary_passes(tmp_path: Path) -> None:
             "aptl.appliance.seat.lifecycle._launch_descriptor_digest",
             return_value="sha256:" + "d" * 64,
         ),
+        pytest.raises(SeatLauncherError) as exc,
     ):
         start_vm.return_value.pid = 4242
-        record = start_seat(
+        start_seat(
             seat_root,
             seat_id="seat-01",
             release_dir=release,
             release_public_key=public_key,
             qualification_public_key=qualification_key,
-            options=StartSeatOptions(listener_probe=_listener_probe),
+            options=StartSeatOptions(
+                listener_probe=_listener_probe,
+                forbidden_reachability_probe=lambda: False,
+                reserve_outer_mappings=False,
+            ),
         )
 
-    assert record.lifecycle_state == "ready"
+    assert exc.value.code == "boundary.host-forbidden-reachability"
 
 
 def test_reset_destroys_overlay_and_restage(tmp_path: Path) -> None:
@@ -393,7 +524,10 @@ def test_start_marks_recoverable_failure_when_boundary_fails(tmp_path: Path) -> 
         patch("aptl.appliance.seat.lifecycle.require_host_exposure"),
         patch("aptl.appliance.seat.lifecycle.start_vm") as start_vm,
         patch("aptl.appliance.seat.lifecycle.write_vm_pid"),
-        patch("aptl.appliance.seat.lifecycle.read_vm_pid", return_value=None),
+        patch(
+            "aptl.appliance.seat.lifecycle.read_vm_pid",
+            side_effect=(None, 4242),
+        ),
         patch(
             "aptl.appliance.seat.lifecycle.collect_loopback_listeners",
             return_value=(),
@@ -411,6 +545,7 @@ def test_start_marks_recoverable_failure_when_boundary_fails(tmp_path: Path) -> 
             release_dir=release,
             release_public_key=public_key,
             qualification_public_key=qualification_key,
+            options=StartSeatOptions(reserve_outer_mappings=False),
         )
 
     assert exc.value.code == "boundary.host-listener-missing"

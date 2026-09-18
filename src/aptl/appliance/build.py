@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from aptl.appliance.models import GoldenImageInventory
 from aptl.appliance.release_models import ApplianceLaunchDescriptor
+from aptl.utils.strict_json import loads_strict
 
 _SHA256_PATTERN = r"^sha256:[a-f0-9]{64}$"
 
@@ -115,6 +116,71 @@ class OverlayCreateResult:
     golden_image_digest: str
 
 
+def prepare_golden_image_request(
+    build_root: Path,
+    *,
+    base_image_path: str,
+    offline_payload_path: str,
+    provisioner_path: str,
+    scanner_path: str,
+    output_image_path: str,
+    inventory_output_path: str,
+    virtual_size_bytes: int,
+    request_path: str,
+) -> GoldenImageBuildRequest:
+    """Derive one checksum-pinned build request from already staged inputs."""
+
+    root = build_root.resolve(strict=True)
+    values = {
+        name: _safe_relative_path(value)
+        for name, value in {
+            "base_image_path": base_image_path,
+            "offline_payload_path": offline_payload_path,
+            "provisioner_path": provisioner_path,
+            "scanner_path": scanner_path,
+            "output_image_path": output_image_path,
+            "inventory_output_path": inventory_output_path,
+            "request_path": request_path,
+        }.items()
+    }
+    output = _output_path(root, values.pop("request_path"))
+    if output.exists() or output.is_symlink():
+        raise ApplianceBuildError("golden image request already exists")
+
+    def digest(relative: str) -> str:
+        candidate = root / relative
+        parent = candidate.parent.resolve(strict=True)
+        if not parent.is_relative_to(root):
+            raise ApplianceBuildError("golden image request input escapes build root")
+        return _file_identity(parent / candidate.name, nofollow=True)[0]
+
+    request = GoldenImageBuildRequest(
+        schema_version="aptl.golden-image-build/v1",
+        base_image_path=values["base_image_path"],
+        base_image_digest=digest(values["base_image_path"]),
+        offline_payload_path=values["offline_payload_path"],
+        offline_payload_digest=digest(values["offline_payload_path"]),
+        provisioner_path=values["provisioner_path"],
+        provisioner_digest=digest(values["provisioner_path"]),
+        scanner_path=values["scanner_path"],
+        scanner_digest=digest(values["scanner_path"]),
+        output_image_path=values["output_image_path"],
+        inventory_output_path=values["inventory_output_path"],
+        virtual_size_bytes=virtual_size_bytes,
+    )
+    payload = rfc8785.dumps(request.model_dump(mode="json"))
+    descriptor = os.open(
+        output,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC,
+        0o600,
+    )
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+    return request
+
+
 class CommandRunner(Protocol):
     """Injectable fixed-argv subprocess boundary."""
 
@@ -131,6 +197,38 @@ def _run_command(argv: list[str]) -> subprocess.CompletedProcess[str]:
         text=True,
         timeout=3600,
     )
+
+
+def _require_standalone_qcow(path: Path, runner: CommandRunner) -> None:
+    """Reject qcow2 images with external backing or data-file dependencies."""
+
+    try:
+        result = runner(["qemu-img", "info", "--output=json", str(path)])
+    except (
+        ApplianceBuildError,
+        OSError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+    ) as exc:
+        raise ApplianceBuildError("qcow2 metadata could not be inspected") from exc
+    if len(result.stdout) > 1024 * 1024:
+        raise ApplianceBuildError("qcow2 metadata exceeds the admission limit")
+    try:
+        document = loads_strict(result.stdout)
+    except (TypeError, ValueError) as exc:
+        raise ApplianceBuildError("qcow2 metadata is invalid") from exc
+    external_fields = {
+        "backing-filename",
+        "full-backing-filename",
+        "backing-filename-format",
+        "data-file",
+    }
+    if (
+        not isinstance(document, dict)
+        or document.get("format") != "qcow2"
+        or external_fields & document.keys()
+    ):
+        raise ApplianceBuildError("qcow2 image is not standalone")
 
 
 def _verified_input(
@@ -184,15 +282,19 @@ def _build_commands(
     return (
         [
             "qemu-img",
-            "convert",
+            "create",
             "-f",
             "qcow2",
-            "-O",
-            "qcow2",
+            str(candidate),
+            str(virtual_size_bytes),
+        ],
+        [
+            "virt-resize",
+            "--expand",
+            "/dev/sda1",
             str(base),
             str(candidate),
         ],
-        ["qemu-img", "resize", str(candidate), str(virtual_size_bytes)],
         [
             "virt-customize",
             "-a",
@@ -217,6 +319,12 @@ def _build_commands(
             "/var/lib/aptl/*",
             "--delete",
             "/opt/aptl/project/.aptl/*",
+            "--delete",
+            "/var/lib/cloud/instance",
+            "--delete",
+            "/var/lib/cloud/instances/*",
+            "--delete",
+            "/var/lib/cloud/seed/*",
         ],
         [
             "virt-customize",
@@ -318,6 +426,7 @@ def build_golden_image(
     )
     inventory_linked = False
     try:
+        _require_standalone_qcow(base, runner)
         for argv in _build_commands(
             base,
             payload,
@@ -329,6 +438,7 @@ def build_golden_image(
             runner(argv)
         if not candidate.is_file() or candidate.is_symlink():
             raise ApplianceBuildError("golden image candidate was not produced")
+        _require_standalone_qcow(candidate, runner)
         inventory = GoldenImageInventory(
             schema_version="aptl.golden-inventory/v1",
             scan_complete=True,
@@ -350,7 +460,12 @@ def build_golden_image(
             sha256=digest,
             size_bytes=size,
         )
-    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+    except (
+        ApplianceBuildError,
+        OSError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+    ) as exc:
         if inventory_linked and not output.exists():
             try:
                 inventory_output.unlink()
@@ -378,6 +493,7 @@ def create_disposable_overlay(
     )
     if golden.stat(follow_symlinks=False).st_mode & 0o222:
         raise ApplianceBuildError("golden image must be read-only")
+    _require_standalone_qcow(golden, runner)
     launch_path = _verified_input(
         root,
         request.launch_descriptor_path,

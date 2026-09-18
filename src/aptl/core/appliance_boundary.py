@@ -16,6 +16,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from aptl.utils.strict_json import loads_strict
 
 _DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
 _AUTHORITY = re.compile(
@@ -212,6 +213,8 @@ class ApplianceBoundaryBinding(_StrictModel):
     boundary_helper_image: str = Field(pattern=_IMAGE_DIGEST.pattern)
     egress_proxy_image: str = Field(pattern=_IMAGE_DIGEST.pattern)
     boot_id: str = Field(min_length=1, max_length=128)
+    host_boot_id: str | None = Field(default=None, min_length=1, max_length=128)
+    guest_boot_id: str | None = Field(default=None, min_length=1, max_length=128)
     guest_daemon_id: str = Field(min_length=1, max_length=128)
     host_observation_id: str = Field(min_length=1, max_length=128)
 
@@ -226,7 +229,7 @@ def load_boundary_policy(
     actual = "sha256:" + hashlib.sha256(payload).hexdigest()
     if actual != binding.policy_digest:
         raise ValueError("appliance boundary policy digest does not match binding")
-    parsed = json.loads(payload)
+    parsed = loads_strict(payload)
     if not isinstance(parsed, dict):
         raise ValueError("appliance boundary policy must be a JSON object")
     return ApplianceBoundaryPolicy.model_validate(parsed)

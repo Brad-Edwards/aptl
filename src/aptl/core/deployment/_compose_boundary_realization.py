@@ -132,6 +132,7 @@ class ComposeBoundaryRealizationMixin:
 
         if policy.authority == "raes" and not policy.rules:
             self._boundary_receipts.pop("raes", None)
+            self._boundary_specs.pop("raes", None)
             return
         binding = (
             self._appliance_boundary[1]
@@ -149,6 +150,28 @@ class ComposeBoundaryRealizationMixin:
             "families": ("bridge", "inet"),
             "default_deny": policy.authority == "platform",
         }
+        self._boundary_specs[policy.authority] = policy
+
+    def observe_appliance_boundary(
+        self,
+        realization: DeploymentRealizationSpec,
+    ):
+        """Perform fresh guest-side enforcement, traffic, and authority checks."""
+
+        from aptl.appliance.guest_observation import collect_guest_observation
+
+        configured = getattr(self, "_appliance_boundary", None)
+        if configured is None:
+            raise ValueError("appliance boundary is not configured")
+        policy, binding = configured
+        return collect_guest_observation(
+            backend=self,
+            policy=policy,
+            binding=binding,
+            boundary_specs=dict(self._boundary_specs),
+            boundary_receipts=dict(self._boundary_receipts),
+            realization=realization,
+        )
 
     def _realize_authority_boundaries(
         self,

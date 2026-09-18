@@ -6,6 +6,7 @@ import json
 import subprocess
 from types import SimpleNamespace
 
+from aptl.core.deployment._compose_boundary import DEFAULT_BOUNDARY_HELPER_IMAGE
 from aptl.core.deployment._compose_traffic_mirror import ComposeTrafficMirrorMixin
 
 
@@ -77,7 +78,7 @@ def test_admitted_mirror_is_applied_in_both_directions_and_reported():
     assert observed["apparatus_kind"] == "host-veth-frame-mirror"
     assert observed["added_scenario_components"] == []
     assert observed["implementation_privileges"] == ["CAP_NET_ADMIN"]
-    assert observed["implementation_helper_image"].endswith(":3")
+    assert observed["implementation_helper_image"] == DEFAULT_BOUNDARY_HELPER_IMAGE
     assert observed["network"] == "aptl-dmz"
     assert all("sudo" not in command for command in backend.commands)
     assert all("--cap-add=NET_ADMIN" in command for command in backend.commands)

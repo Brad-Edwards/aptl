@@ -24,6 +24,7 @@ def _staging(root: Path) -> Path:
     )
     (staging / "aptl-appliance-first-boot").write_text("#!/bin/sh\nset -eu\n")
     (staging / "aptl-appliance-first-boot.service").write_text("[Unit]\n")
+    (staging / "aptl-launch.mount").write_text("[Mount]\n")
     return staging
 
 

@@ -29,8 +29,28 @@ def test_audit_host_process_inventory_probes_docker_by_default() -> None:
         report = audit_host_process_inventory()
 
     probe.assert_called_once()
-    assert report.passed is False
-    assert "host.exposure.docker-daemon-present" in report.findings
+    assert report.passed is True
+    assert report.findings == ()
+
+
+def test_require_host_exposure_allows_unrelated_host_docker(tmp_path: Path) -> None:
+    launch_mount = tmp_path / "launch"
+    launch_mount.mkdir()
+    overlay = tmp_path / "overlay.qcow2"
+    overlay.write_bytes(b"overlay")
+    argv = build_qemu_argv(
+        VmLaunchSpec(
+            overlay_path=overlay,
+            launch_mount=launch_mount,
+            vcpus=2,
+            memory_mib=512,
+        )
+    )
+
+    report = require_host_exposure(vm_argv=argv, docker_daemon_running=True)
+
+    assert report.passed is True
+    assert report.findings == ()
 
 
 def test_audit_vm_argv_allows_writable_overlay_drive(tmp_path: Path) -> None:

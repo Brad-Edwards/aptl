@@ -116,6 +116,12 @@ class ApplianceStartOptions:
     launch_descriptor: Path | None = None
     release_public_key: Path | None = None
     qualification_public_key: Path | None = None
+    readiness_challenge: Path | None = None
+    readiness_device: Path | None = None
+    access_request: Path | None = None
+    access_device: Path | None = None
+    access_output_dir: Path | None = None
+    candidate_trust: bool = False
 
 
 _STALE_NETWORK_RECOVERY_HINT = (
@@ -900,6 +906,12 @@ class _LabStartContext(object):
     appliance_launch_descriptor: Path | None = None
     appliance_release_public_key: Path | None = None
     appliance_qualification_public_key: Path | None = None
+    appliance_readiness_challenge: Path | None = None
+    appliance_readiness_device: Path | None = None
+    appliance_access_request: Path | None = None
+    appliance_access_device: Path | None = None
+    appliance_access_output_dir: Path | None = None
+    appliance_candidate_trust: bool = False
     scenario_path: Path | None = None
     progress: ProgressCallback | None = None
     raw_env: dict[str, str] = field(default_factory=dict)
@@ -1206,6 +1218,25 @@ def _configure_verified_appliance_launch(
     descriptor_path = ctx.appliance_launch_descriptor
     if descriptor_path is None:
         return None
+    readiness = (
+        ctx.appliance_readiness_challenge,
+        ctx.appliance_readiness_device,
+    )
+    if any(readiness) != all(readiness):
+        return LabResult(
+            success=False,
+            error="Appliance readiness channel inputs are incomplete.",
+        )
+    access = (
+        ctx.appliance_access_request,
+        ctx.appliance_access_device,
+        ctx.appliance_access_output_dir,
+    )
+    if any(access) and (not all(access) or not all(readiness)):
+        return LabResult(
+            success=False,
+            error="Appliance access channel inputs are incomplete.",
+        )
     if (
         not ctx.offline_staged
         or ctx.appliance_release_public_key is None
@@ -1221,11 +1252,21 @@ def _configure_verified_appliance_launch(
         from aptl.core.appliance_boundary import ApplianceBoundaryBinding
 
         try:
-            launch = verify_launch_descriptor(
-                descriptor_path,
-                ctx.appliance_release_public_key,
-                ctx.appliance_qualification_public_key,
-            )
+            if ctx.appliance_candidate_trust:
+                from aptl.appliance.candidate import (
+                    verify_candidate_launch_descriptor,
+                )
+
+                launch = verify_candidate_launch_descriptor(
+                    descriptor_path,
+                    ctx.appliance_release_public_key,
+                )
+            else:
+                launch = verify_launch_descriptor(
+                    descriptor_path,
+                    ctx.appliance_release_public_key,
+                    ctx.appliance_qualification_public_key,
+                )
             boot_id = _read_appliance_boot_id()
             daemon = subprocess.run(
                 ["docker", "info", "--format", "{{.ID}}"],
@@ -3344,6 +3385,12 @@ def _orchestrate_lab_start_owned(
         appliance_launch_descriptor=appliance.launch_descriptor,
         appliance_release_public_key=appliance.release_public_key,
         appliance_qualification_public_key=appliance.qualification_public_key,
+        appliance_readiness_challenge=appliance.readiness_challenge,
+        appliance_readiness_device=appliance.readiness_device,
+        appliance_access_request=appliance.access_request,
+        appliance_access_device=appliance.access_device,
+        appliance_access_output_dir=appliance.access_output_dir,
+        appliance_candidate_trust=appliance.candidate_trust,
         scenario_path=scenario_path,
         progress=progress,
     )
@@ -3384,6 +3431,9 @@ def _orchestrate_lab_start_owned(
                 diagnostics=list(ctx.diagnostics),
             )
 
+    readiness_failure = _publish_appliance_guest_readiness(ctx)
+    if readiness_failure is not None:
+        return readiness_failure
     outcome = derive_startup_outcome(ctx.diagnostics, fatal=False)
     if outcome is StartupOutcome.READY:
         log.info("APTL lab started successfully!")
@@ -3398,6 +3448,70 @@ def _orchestrate_lab_start_owned(
         diagnostics=list(ctx.diagnostics),
         resolved_ports=list(ctx.resolved_ports),
     )
+
+
+def _publish_appliance_guest_readiness(
+    ctx: _LabStartContext,
+) -> LabResult | None:
+    """Send fresh active guest evidence for one verified appliance launch."""
+
+    challenge = ctx.appliance_readiness_challenge
+    device = ctx.appliance_readiness_device
+    if challenge is None and device is None:
+        return None
+    if (
+        challenge is None
+        or device is None
+        or ctx.backend is None
+        or ctx.admitted_start is None
+    ):
+        return LabResult(success=False, error="Appliance readiness is unavailable.")
+    realization = getattr(ctx.admitted_start, "realization", None)
+    observe = getattr(ctx.backend, "observe_appliance_boundary", None)
+    if realization is None or not callable(observe):
+        return LabResult(success=False, error="Appliance readiness is unavailable.")
+    try:
+        deployment = realization.deployment_spec(sorted(ctx.selected_profiles))
+        observation = observe(deployment)
+        from aptl.appliance.seat.readiness import publish_guest_readiness
+
+        publish_guest_readiness(challenge, device, observation)
+        access_values = (
+            ctx.appliance_access_request,
+            ctx.appliance_access_device,
+            ctx.appliance_access_output_dir,
+        )
+        if any(access_values):
+            if (
+                not all(access_values)
+                or ctx.appliance_launch_descriptor is None
+                or ctx.appliance_release_public_key is None
+                or ctx.appliance_qualification_public_key is None
+            ):
+                raise ValueError("appliance access channel is incomplete")
+            from aptl.appliance.access_service import serve_appliance_access
+
+            assert ctx.appliance_access_request is not None
+            assert ctx.appliance_access_device is not None
+            assert ctx.appliance_access_output_dir is not None
+            serve_appliance_access(
+                request_path=ctx.appliance_access_request,
+                descriptor_path=ctx.appliance_launch_descriptor,
+                release_public_key=ctx.appliance_release_public_key,
+                qualification_public_key=ctx.appliance_qualification_public_key,
+                device_path=ctx.appliance_access_device,
+                output_dir=ctx.appliance_access_output_dir,
+                project_dir=ctx.project_dir,
+                observe_boundary=lambda: observe(deployment),
+                candidate_trust=ctx.appliance_candidate_trust,
+            )
+    except Exception:
+        log.exception("Appliance guest readiness publication failed")
+        return LabResult(
+            success=False,
+            error="Appliance guest readiness publication failed.",
+        )
+    return None
 
 
 _MCP_SERVER_KEYS = {

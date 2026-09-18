@@ -21,6 +21,7 @@ from aptl.appliance.manifest import (
 from aptl.appliance.models import ApplianceReleaseManifest
 from aptl.appliance.release_models import ApplianceLaunchDescriptor
 from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
+from aptl.utils.strict_json import model_validate_json_strict
 
 
 @dataclass(frozen=True)
@@ -110,8 +111,9 @@ def verify_launch_descriptor(
     """Reverify the attached release and exact launch projection in the guest."""
 
     try:
-        descriptor = ApplianceLaunchDescriptor.model_validate_json(
-            _read_external_file(descriptor_path, label="appliance launch descriptor")
+        descriptor = model_validate_json_strict(
+            ApplianceLaunchDescriptor,
+            _read_external_file(descriptor_path, label="appliance launch descriptor"),
         )
     except (ValidationError, ValueError) as exc:
         raise ApplianceManifestError("invalid appliance launch descriptor") from exc
@@ -147,7 +149,7 @@ def verify_launch_descriptor(
             "appliance launch boundary policy does not match the release"
         )
     try:
-        policy = ApplianceBoundaryPolicy.model_validate_json(policy_payload)
+        policy = model_validate_json_strict(ApplianceBoundaryPolicy, policy_payload)
     except ValueError as exc:
         raise ApplianceManifestError(
             "appliance launch boundary policy is invalid"

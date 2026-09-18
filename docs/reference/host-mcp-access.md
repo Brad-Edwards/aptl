@@ -138,10 +138,19 @@ selected MCP tool; this check approved only `kali_info` for that invocation.
 Provider authentication stayed in the host client account. These checks prove
 client/transport interoperability, not command execution in a booted guest.
 
-## Downstream seat contract
+## Appliance-seat integration
 
-#1022 owns actual VM/key wiring, authenticated access-file distribution and
-refresh, port allocation, browser session verification, concurrent seats,
-stop/reset/recovery, offline VM boot, independent-machine qualification,
-signing and publication. These files do not claim those tests passed. Signed
-release verification and existing machine-drill requirements remain enforced.
+`aptl seat start` now carries this contract through the real VM management
+channel. The launcher publishes a nonce-bound enrollment request in the
+read-only launch share, accepts the guest response only on the private
+generation-specific socket, persists the owner-only access bundle, and writes
+the selected Claude and Codex configurations. Stop and failed start invalidate
+the generation; reset destroys the overlay, rotates instance/generation state,
+and requires new client material. Calls made with stale files therefore fail
+instead of silently reaching a replacement seat.
+
+Production qualification invokes a read-only tool through both native client
+configurations, proves revocation after stop, resets the seat, and records the
+current guest/container identities. The two-seat machine-A drill and distinct
+machine-B drill remain separately signed evidence; neither unit protocol tests
+nor two VMs on one machine substitute for that evidence.

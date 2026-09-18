@@ -11,7 +11,7 @@ The physical host must satisfy the signed release `host_prerequisites` block:
 
 - Linux with hardware virtualization (`/dev/kvm`)
 - `qemu-img` and `qemu-system-x86_64`
-- RAM and free disk at or above the manifest minimums
+- available CPU/RAM and free disk at or above the manifest minimums
 - No dependency on host Docker for seat operations
 
 Trust anchors:
@@ -24,10 +24,12 @@ Trust anchors:
 ```text
 /srv/aptl-seat/
   seat-state.json
-  vm.pid
+  vm.pid                    # PID + procfs start/executable identity
   launch/
     release/                 # verified release directory
     appliance-launch.json    # create-once launch projection
+    release-public.pem       # public release anchor
+    qualification-public.pem # public qualification anchor
   instances/
     seat-01.qcow2            # disposable overlay
     seat-01.state/           # guest-only overlay identity (host tracks path only)
@@ -35,7 +37,13 @@ Trust anchors:
 
 ## Supported operator flow
 
-Stage a verified release:
+The simplest path is to run `seat start` without `--mapping` and without a
+pre-existing staged record. The launcher selects distinct loopback ports while
+holding a host-wide lock through QEMU's bind and live-listener readback, then
+persists those mappings for restart.
+
+To reserve operator-selected ports instead, stage a verified release with one
+repeated typed mapping for every signed guest publication:
 
 ```bash
 aptl seat stage \
@@ -43,10 +51,30 @@ aptl seat stage \
   --seat-id seat-01 \
   --release-dir /srv/aptl-seat/launch/release \
   --release-public-key /etc/aptl/trust/release-public.pem \
-  --qualification-public-key /etc/aptl/trust/qualification-public.pem
+  --qualification-public-key /etc/aptl/trust/qualification-public.pem \
+  --mapping participant,tcp,127.0.0.1,10443,127.0.0.1,443 \
+  --mapping recovery,tcp,127.0.0.1,11443,127.0.0.1,9443
 ```
 
-Start the seat VM and validate host exposure:
+The six mapping fields are audience, protocol, outer address, outer port,
+guest address, and fixed guest port.
+
+Duplicate outer endpoints, incomplete mappings, and destinations absent from
+the signed publication policy fail closed. A staged mapping cannot be changed
+during start; reset creates a new generation.
+
+Automatic selection, explicit endpoint handoff, and capacity admission are
+serialized across launcher processes. Each QEMU seat publishes its signed CPU,
+RAM, and disk reservation in
+a fixed `fw_cfg` argument. Before launch, the allocator sums every visible APTL
+QEMU reservation and rejects the new seat if the concurrent total would exceed
+host capacity. This makes the two-seat path an admitted resource allocation,
+not two independent minimum checks racing each other.
+
+Start the seat VM and validate host exposure. Readiness is not inferred from a
+live PID or listener: the tracked QEMU instance, real forbidden-reachability
+probe, guest boot/daemon observation, and complete appliance boundary gate must
+all agree for the current generation:
 
 ```bash
 aptl seat start \
@@ -60,7 +88,7 @@ aptl seat start \
 Open the participant kiosk browser (presentation only):
 
 ```bash
-aptl seat open-kiosk
+aptl seat open-kiosk --seat-root /srv/aptl-seat
 ```
 
 Inspect coarse health (no credentials):
@@ -130,3 +158,8 @@ authentication. They receive a dedicated transport key and role-scoped project
 config; MCP and Docker authority stay inside the guest. Reset revokes all old
 grants and changes the instance generation/host pin before publishing replacement
 access. A kiosk is an optional presentation surface, not a local APTL dependency.
+The #1022 release qualification invokes an actual read-only `kali_info` MCP call
+through each installed native client and its generated configuration, recording
+only the response digest and client version. It then invokes the clients against
+the revoked surface and independently proves the stale transport itself fails.
+Service credentials and provider state never leave the guest.

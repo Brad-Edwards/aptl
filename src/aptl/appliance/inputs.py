@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import platform
+import re
 import shutil
 import subprocess
 import tarfile
@@ -12,9 +14,10 @@ import zipfile
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from aptl.appliance.input_images import (
+    canonical_image_references,
     validate_image_sources as _validate_image_sources,
 )
 from aptl.appliance.input_profile import _entry, _write_full_profile
@@ -29,6 +32,7 @@ from aptl.core.config import AptlConfig
 from aptl.core.scenario_bundle import PackIdentity, env_pack_bundle
 from aptl.utils.deterministic_archive import deterministic_tarinfo, open_nofollow
 from aptl.utils.deterministic_archive import hash_file_nofollow as _hash_file_nofollow
+from aptl.utils.strict_json import model_validate_json_strict
 from aptl.validation.curated_live_proof import expected_bundle_matrix
 from aptl.validation.participant_profile_models import (
     AssetLockEntry,
@@ -52,10 +56,79 @@ HELPER_ROLES = frozenset(
         "helper.egress",
         "helper.certs",
         "helper.suricata-seed",
+        "helper.operator-access",
+        "helper.generic-samba-ad-base",
+        "helper.generic-systemd-base",
+        "helper.generic-systemd-base-debian",
         "child.shuffle-worker",
         "child.shuffle-http",
     }
 )
+
+
+def acquire_canonical_images(
+    *, image_archive: Path, image_roles: Path
+) -> dict[str, str]:
+    """Resolve and save the complete wheel-authored TechVault image closure."""
+
+    _, packaged = resolve_asset_source()
+    if not packaged:
+        raise ValueError("image acquisition must run from the installed APTL wheel")
+    if any(path.exists() or path.is_symlink() for path in (image_archive, image_roles)):
+        raise ValueError("image acquisition outputs must be new")
+    image_archive.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+    image_roles.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="aptl-image-acquire-") as work:
+        project = Path(work) / "project"
+        materialize(project)
+        bundle = env_pack_bundle(Path(work) / "packs")
+        references = canonical_image_references(project, bundle)
+        resolved: dict[str, str] = {}
+        for reference in sorted(set(references.values())):
+            inspected = subprocess.run(
+                ["docker", "image", "inspect", "--format", "{{.Id}}", reference],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if inspected.returncode != 0:
+                subprocess.run(
+                    ["docker", "pull", reference],
+                    check=True,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=3600,
+                )
+                inspected = subprocess.run(
+                    ["docker", "image", "inspect", "--format", "{{.Id}}", reference],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+            identity = inspected.stdout.strip()
+            if not re.fullmatch(r"sha256:[a-f0-9]{64}", identity):
+                raise ValueError("Docker returned an invalid image identity")
+            resolved[reference] = identity
+        roles = {role: resolved[reference] for role, reference in references.items()}
+        subprocess.run(
+            ["docker", "save", "--output", str(image_archive), *sorted(resolved)],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=7200,
+        )
+        image_files = archive_files(image_archive)
+        images = docker_archive_images(image_archive, image_files)
+        if set(roles.values()) != set(images):
+            raise ValueError("saved Docker archive differs from resolved image closure")
+        _validate_image_sources(
+            project, bundle, images, roles, image_archive, image_files
+        )
+    image_roles.write_text(json.dumps(roles, indent=2, sort_keys=True) + "\n")
+    return roles
 
 
 class CanonicalInputs(BaseModel):
@@ -65,7 +138,7 @@ class CanonicalInputs(BaseModel):
     schema_version: Literal["aptl.canonical-inputs/v1"]
     aptl_version: str
     scenario_pack: PackIdentity
-    python_version: str
+    python_version: str = Field(pattern=r"^3\.\d{1,2}$")
     architecture: Literal["x86_64", "aarch64"]
     runtime_prerequisites: dict[str, str]
     image_roles: dict[str, str]
@@ -100,25 +173,39 @@ def _required_built_paths() -> set[str]:
     }
 
 
-def validate_canonical_inputs(staging: Path) -> CanonicalInputs:
+def validate_canonical_inputs(
+    staging: Path, *, enforce_runtime_target: bool = True
+) -> CanonicalInputs:
     """Validate a closed platform-specific payload, including nested archives."""
     from aptl.appliance.offline import _release_environment, _validate_staged_paths
 
     _validate_staged_paths(staging)
-    inputs = CanonicalInputs.model_validate_json((staging / INPUTS_RECORD).read_bytes())
+    inputs = model_validate_json_strict(
+        CanonicalInputs, (staging / INPUTS_RECORD).read_bytes()
+    )
     if _release_environment(staging) != ("techvault", inputs.aptl_version):
         raise ValueError("canonical release identity mismatch")
-    if (
+    running_python = ".".join(platform.python_version().split(".")[:2])
+    if enforce_runtime_target and (
         platform.system() != "Linux"
-        or inputs.python_version != platform.python_version()
+        or inputs.python_version != running_python
         or inputs.architecture != platform.machine()
     ):
         raise ValueError("validate inputs on their declared Python/architecture target")
     project = archive_files(staging / PROJECT_ARCHIVE)
     image_files = archive_files(staging / IMAGE_ARCHIVE)
-    images = docker_archive_images(staging / IMAGE_ARCHIVE, image_files)
+    images = docker_archive_images(
+        staging / IMAGE_ARCHIVE,
+        image_files,
+        architecture=inputs.architecture,
+    )
     requirements = (staging / REQUIREMENTS_FILE).read_text()
-    wheels = validate_wheel_closure(staging / "wheelhouse", requirements)
+    wheels = validate_wheel_closure(
+        staging / "wheelhouse",
+        requirements,
+        python_version=inputs.python_version,
+        architecture=inputs.architecture,
+    )
     _validate_project_runtime(project)
     _validate_asset_lock(staging, inputs, project, wheels, images)
     with tempfile.TemporaryDirectory(prefix="aptl-input-pack-") as work:
@@ -133,8 +220,16 @@ def validate_canonical_inputs(staging: Path) -> CanonicalInputs:
     ).decode()
     from aptl.appliance.payload_content import locked_requirements
 
-    baseline = locked_requirements(exported)
-    closure = locked_requirements(requirements)
+    baseline = locked_requirements(
+        exported,
+        python_version=inputs.python_version,
+        architecture=inputs.architecture,
+    )
+    closure = locked_requirements(
+        requirements,
+        python_version=inputs.python_version,
+        architecture=inputs.architecture,
+    )
     if {
         name: value for name, value in closure.items() if name != "aptl-labs"
     } != baseline:
@@ -147,7 +242,12 @@ def _archive_project(project: Path, output: Path) -> dict[str, str]:
     files = {}
     with tarfile.open(output, "w", format=tarfile.PAX_FORMAT) as archive:
         for path in sorted(project.rglob("*")):
-            if path.is_dir() or ".bin" in path.parts or "__pycache__" in path.parts:
+            if (
+                path.is_dir()
+                or ".bin" in path.parts
+                or "node_gyp_bins" in path.parts
+                or "__pycache__" in path.parts
+            ):
                 continue
             resolved = path.resolve(strict=True)
             if not resolved.is_relative_to(project) or not resolved.is_file():
@@ -168,7 +268,13 @@ def _archive_project(project: Path, output: Path) -> dict[str, str]:
 
 
 def stage_canonical_inputs(
-    *, staging: Path, wheelhouse: Path, image_archive: Path, image_roles: dict[str, str]
+    *,
+    staging: Path,
+    wheelhouse: Path,
+    image_archive: Path,
+    image_roles: dict[str, str],
+    target_python_version: str | None = None,
+    target_architecture: Literal["x86_64", "aarch64"] | None = None,
 ) -> CanonicalInputs:
     """Build fresh wheel-supplied assets and write a verifiable input inventory.
 
@@ -182,8 +288,16 @@ def stage_canonical_inputs(
         raise ValueError("input assembly must run from the installed APTL wheel")
     if staging.exists():
         raise ValueError("input staging must be a new directory")
+    python_target = target_python_version or ".".join(
+        platform.python_version().split(".")[:2]
+    )
+    architecture_target = target_architecture or platform.machine()
+    if architecture_target not in {"x86_64", "aarch64"}:
+        raise ValueError("unsupported canonical input target architecture")
     image_files = archive_files(image_archive)
-    images = docker_archive_images(image_archive, image_files)
+    images = docker_archive_images(
+        image_archive, image_files, architecture=architecture_target
+    )
     if set(image_roles.values()) != set(images) or bool(
         HELPER_ROLES - image_roles.keys()
     ):
@@ -201,7 +315,13 @@ def stage_canonical_inputs(
         }:
             raise ValueError("image roles do not match full TechVault")
         _validate_image_sources(
-            project, bundle, images, image_roles, image_archive, image_files
+            project,
+            bundle,
+            images,
+            image_roles,
+            image_archive,
+            image_files,
+            architecture=architecture_target,
         )
         _build_outputs(project, work)
         shutil.copytree(wheelhouse, staging / "wheelhouse", symlinks=True)
@@ -213,22 +333,31 @@ def stage_canonical_inputs(
         requirement = (project / "requirements/web.txt").read_text()
         requirement += f"\naptl-labs[web]=={aptl.__version__} --hash=sha256:{hash_file_nofollow(aptl_wheels[0])[0]}\n"
         (staging / REQUIREMENTS_FILE).write_text(requirement)
-        validate_wheel_closure(staging / "wheelhouse", requirement)
+        validate_wheel_closure(
+            staging / "wheelhouse",
+            requirement,
+            python_version=python_target,
+            architecture=architecture_target,
+        )
         _write_full_profile(project, bundle, matrix, image_roles)
         project_files = _archive_project(project, staging / PROJECT_ARCHIVE)
         shutil.copyfile(image_archive, staging / IMAGE_ARCHIVE)
         (staging / "appliance-release.env").write_text(
             f"APTL_APPLIANCE_SCENARIO=techvault\nAPTL_APPLIANCE_VERSION={aptl.__version__}\n"
         )
-        for name in ("aptl-appliance-first-boot", "aptl-appliance-first-boot.service"):
+        for name in (
+            "aptl-appliance-first-boot",
+            "aptl-appliance-first-boot.service",
+            "aptl-launch.mount",
+        ):
             shutil.copyfile(project / "appliance/guest" / name, staging / name)
         assets = _staged_assets(staging, project_files, images)
         inputs = CanonicalInputs(
             schema_version="aptl.canonical-inputs/v1",
             aptl_version=aptl.__version__,
             scenario_pack=bundle.pack_identity,
-            python_version=platform.python_version(),
-            architecture=platform.machine(),
+            python_version=python_target,
+            architecture=architecture_target,
             runtime_prerequisites={
                 "node": "22",
                 "openssh": "public-key forced-command support",
@@ -244,7 +373,7 @@ def stage_canonical_inputs(
             ),
         )
         (staging / INPUTS_RECORD).write_text(inputs.model_dump_json(indent=2) + "\n")
-    return validate_canonical_inputs(staging)
+    return validate_canonical_inputs(staging, enforce_runtime_target=False)
 
 
 def _build_outputs(project: Path, work: Path) -> None:
@@ -336,7 +465,11 @@ def _verify_packaged_project(
         ):
             raise ValueError("project assets differ from the delivered APTL wheel")
         _verify_packaged_images(wheel, assets, inputs, staging, images, image_files)
-    for name in ("aptl-appliance-first-boot", "aptl-appliance-first-boot.service"):
+    for name in (
+        "aptl-appliance-first-boot",
+        "aptl-appliance-first-boot.service",
+        "aptl-launch.mount",
+    ):
         if hash_file_nofollow(staging / name)[0] != project.get(
             "appliance/guest/" + name
         ):
@@ -413,9 +546,11 @@ def _canonical_wheel_path(staging: Path, inputs: CanonicalInputs) -> Path:
     ]
     if len(wheels) != 1 or aptl_wheel_version(wheels[0].name) != inputs.aptl_version:
         raise ValueError("canonical APTL wheel version differs")
-    requirement = locked_requirements((staging / REQUIREMENTS_FILE).read_text()).get(
-        "aptl-labs"
-    )
+    requirement = locked_requirements(
+        (staging / REQUIREMENTS_FILE).read_text(),
+        python_version=inputs.python_version,
+        architecture=inputs.architecture,
+    ).get("aptl-labs")
     if requirement is None or requirement[0].extras != {"web"}:
         raise ValueError("canonical inputs require the complete web dependency closure")
     return wheels[0]
@@ -486,6 +621,7 @@ def _verify_packaged_images(
             inputs.image_roles,
             staging / IMAGE_ARCHIVE,
             image_files,
+            architecture=inputs.architecture,
         )
         matrix = expected_bundle_matrix(root, AptlConfig(), bundle)
         if set(inputs.image_roles) != {

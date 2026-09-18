@@ -8,6 +8,8 @@ from unittest.mock import patch
 from typer.testing import CliRunner
 
 from aptl.appliance.seat.models import SeatRecord
+from aptl.appliance.seat.persistence import persist_seat_record
+from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.cli.main import app
 
 runner = CliRunner()
@@ -81,6 +83,48 @@ def test_seat_stage_success_emits_json() -> None:
     assert '"staged":true' in result.stdout.replace(" ", "")
 
 
+def test_seat_stage_parses_typed_outer_mapping() -> None:
+    record = _seat_record().model_copy(update={"lifecycle_state": "staged"})
+    with patch("aptl.cli.seat.stage_seat", return_value=record) as stage:
+        result = runner.invoke(
+            app,
+            [
+                "seat",
+                "stage",
+                *_common_seat_args(),
+                "--mapping",
+                "participant,tcp,127.0.0.1,10443,127.0.0.1,443",
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    mapping = stage.call_args.kwargs["mappings"][0]
+    assert mapping == BoundaryEndpoint(
+        audience="participant",
+        protocol="tcp",
+        address="127.0.0.1",
+        port=10443,
+        guest_address="127.0.0.1",
+        guest_port=443,
+    )
+
+
+def test_seat_stage_rejects_invalid_outer_mapping() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "seat",
+            "stage",
+            *_common_seat_args(),
+            "--mapping",
+            "participant,tcp,127.0.0.1,not-a-port,127.0.0.1,443",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "invalid-mapping" in result.stderr
+
+
 def test_seat_start_success_emits_json() -> None:
     with patch("aptl.cli.seat.start_seat", return_value=_seat_record()):
         result = runner.invoke(app, ["seat", "start", *_common_seat_args()])
@@ -94,7 +138,9 @@ def test_seat_start_error_is_bounded() -> None:
         "aptl.cli.seat.start_seat",
         side_effect=__import__(
             "aptl.appliance.seat.errors", fromlist=["SeatLauncherError"]
-        ).SeatLauncherError("boundary.host-listener-missing", "host boundary inventory failed"),
+        ).SeatLauncherError(
+            "boundary.host-listener-missing", "host boundary inventory failed"
+        ),
     ):
         result = runner.invoke(app, ["seat", "start", *_common_seat_args()])
 
@@ -165,3 +211,29 @@ def test_open_kiosk_honors_browser_command() -> None:
     assert result.exit_code == 0
     popen.assert_not_called()
     assert "/usr/bin/custom-browser" in result.stdout
+
+
+def test_open_kiosk_uses_persisted_participant_mapping(tmp_path: Path) -> None:
+    mapping = BoundaryEndpoint(
+        audience="participant",
+        address="127.0.0.1",
+        port=10443,
+        protocol="tcp",
+        guest_address="127.0.0.1",
+        guest_port=443,
+    )
+    record = _seat_record().model_copy(
+        update={
+            "schema_version": "aptl.seat-record/v2",
+            "mappings": (mapping,),
+        }
+    )
+    persist_seat_record(tmp_path, record)
+
+    result = runner.invoke(
+        app,
+        ["seat", "open-kiosk", "--seat-root", str(tmp_path), "--dry-run"],
+    )
+
+    assert result.exit_code == 0
+    assert "https://127.0.0.1:10443/" in result.stdout

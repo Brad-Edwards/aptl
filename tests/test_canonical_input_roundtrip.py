@@ -12,6 +12,7 @@ import shutil
 import tarfile
 import tempfile
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -93,6 +94,15 @@ def test_canonical_staging_roundtrip_binds_acquired_bytes_and_rejects_tampering(
     monkeypatch.setattr(platform, "system", lambda: "Linux")
     template = tmp_path / "template"
     materialize(template)
+    # New packaged assets are intentionally absent from git-ls-files until the
+    # publish boundary stages them; include this source asset in the TDD tree.
+    mount_source = (
+        Path(__file__).resolve().parents[1] / "appliance/guest/aptl-launch.mount"
+    )
+    shutil.copyfile(
+        mount_source,
+        template / "appliance/guest/aptl-launch.mount",
+    )
     # This wheel's dependency closure is deliberately empty except for itself.
     # Its immutable export is still checked against the staged requirements.
     (template / "requirements/web.txt").write_text("")
@@ -103,7 +113,25 @@ def test_canonical_staging_roundtrip_binds_acquired_bytes_and_rejects_tampering(
         "scenario." + name for name in matrix.expected_services
     }
     assert set(real_references) == expected_roles
-    assert real_references["child.shuffle-http"].endswith(":http_1.4.0")
+    assert real_references["child.shuffle-http"].startswith(
+        "frikky/shuffle:http_1.4.0@sha256:"
+    )
+    assert all(
+        reference.startswith(("aptl/", "aptl-")) or "@sha256:" in reference
+        for reference in real_references.values()
+    )
+    assert real_references["helper.operator-access"] == (
+        "aptl/operator-access-proxy:latest"
+    )
+    assert real_references["helper.generic-samba-ad-base"] == (
+        "aptl/generic-samba-ad-base:latest"
+    )
+    assert real_references["helper.generic-systemd-base"] == (
+        "aptl/generic-systemd-base:latest"
+    )
+    assert real_references["helper.generic-systemd-base-debian"] == (
+        "aptl/generic-systemd-base-debian:latest"
+    )
     references = {role: "fixture/" + role + ":1" for role in expected_roles}
     archive = tmp_path / "images.tar"
     image_id = _image_archive(archive, references)
@@ -127,21 +155,29 @@ def test_canonical_staging_roundtrip_binds_acquired_bytes_and_rejects_tampering(
     monkeypatch.setattr(tempfile, "tempdir", str(work_alias))
     staging = tmp_path / "staged"
     admitted = inputs.stage_canonical_inputs(
-        staging=staging, wheelhouse=wheelhouse, image_archive=archive, image_roles=roles
+        staging=staging,
+        wheelhouse=wheelhouse,
+        image_archive=archive,
+        image_roles=roles,
+        target_python_version="3.14",
+        target_architecture="x86_64",
     )
     assert admitted.scenario_pack == bundle.pack_identity
     assert set(admitted.image_roles) == expected_roles
     assert admitted.qualification == "inputs-only"
+    assert admitted.python_version == "3.14"
     assert admitted.asset_lock.schema_version == "aptl.participant-asset-lock/v2"
     assert any(
         asset.source == "project/web/build/index.html"
         for asset in admitted.asset_lock.assets
     )
+    with pytest.raises(ValueError, match="declared Python/architecture target"):
+        inputs.validate_canonical_inputs(staging)
     first_boot = staging / "aptl-appliance-first-boot"
     original = first_boot.read_bytes()
     first_boot.write_bytes(original + b"\n# altered\n")
     with pytest.raises(ValueError, match="asset lock"):
-        inputs.validate_canonical_inputs(staging)
+        inputs.validate_canonical_inputs(staging, enforce_runtime_target=False)
     # Updating the top-level content lock cannot authorize a changed packaged script.
     changed = admitted.model_copy(
         update={
@@ -161,4 +197,4 @@ def test_canonical_staging_roundtrip_binds_acquired_bytes_and_rejects_tampering(
     )
     (staging / "inputs.json").write_text(changed.model_dump_json())
     with pytest.raises(ValueError, match="first-boot input differs"):
-        inputs.validate_canonical_inputs(staging)
+        inputs.validate_canonical_inputs(staging, enforce_runtime_target=False)

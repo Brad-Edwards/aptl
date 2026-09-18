@@ -1,12 +1,14 @@
 [Unit]
 Description=APTL disposable appliance first-boot readiness
-After=docker.service network.target
+After=docker.service network-online.target
+After=run-aptl\x2dlaunch.mount
 Requires=docker.service
+Requires=run-aptl\x2dlaunch.mount
+Wants=network-online.target
 
 [Service]
-Type=oneshot
+Type=exec
 ExecStart=/usr/local/libexec/aptl-appliance-first-boot
-RemainAfterExit=yes
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true

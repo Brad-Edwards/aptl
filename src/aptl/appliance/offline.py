@@ -26,6 +26,7 @@ _ALLOWED_TOP_LEVEL = frozenset(
         "appliance-release.env",
         "aptl-appliance-first-boot",
         "aptl-appliance-first-boot.service",
+        "aptl-launch.mount",
     }
 )
 _CANONICAL_TOP_LEVEL = _ALLOWED_TOP_LEVEL | {"inputs.json", "requirements.txt"}

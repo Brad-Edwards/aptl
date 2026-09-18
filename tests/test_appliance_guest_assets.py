@@ -36,6 +36,13 @@ def test_guest_scripts_are_valid_and_have_no_network_install_path() -> None:
     assert "/opt/aptl/offline/oci-images.tar" in provisioner
     assert "install -d -m 0700 /var/lib/aptl" in provisioner
     assert "systemctl enable aptl-appliance-first-boot.service" in provisioner
+    assert 'rm -rf "$stage"' in provisioner
+
+    scanner = scripts[2].read_text()
+    assert "/var/lib/cloud/instances" in scanner
+    assert "/opt/aptl-stage" in scanner
+    assert "/opt/aptl/offline/oci-images.tar" in scanner
+    assert ".docker/config.json" in scanner
 
     first_boot = scripts[1].read_text()
     assert "bootstrap-overlay" in first_boot
@@ -46,6 +53,8 @@ def test_guest_scripts_are_valid_and_have_no_network_install_path() -> None:
     assert "--appliance-launch-descriptor" in first_boot
     assert "--appliance-release-public-key" in first_boot
     assert "--appliance-qualification-public-key" in first_boot
+    assert "appliance proxy-loopback" in first_boot
+    assert "exec aptl lab start" not in first_boot
 
 
 def test_first_boot_service_uses_guest_only_mutable_state() -> None:
@@ -56,6 +65,18 @@ def test_first_boot_service_uses_guest_only_mutable_state() -> None:
     assert "ExecStart=/usr/local/libexec/aptl-appliance-first-boot" in service
     assert "ProtectHome=true" in service
     assert "ReadWritePaths=/var/lib/aptl /opt/aptl/project" in service
+    assert "Requires=run-aptl\\x2dlaunch.mount" in service
+    assert "After=run-aptl\\x2dlaunch.mount" in service
+
+
+def test_launch_share_mount_is_read_only_and_ordered_before_first_boot() -> None:
+    mount = (GUEST_DIR / "aptl-launch.mount").read_text()
+
+    assert "What=aptl-launch" in mount
+    assert "Where=/run/aptl-launch" in mount
+    assert "Type=9p" in mount
+    assert "Options=trans=virtio,version=9p2000.L,ro" in mount
+    assert "Before=aptl-appliance-first-boot.service" in mount
 
 
 def test_appliance_guest_assets_ship_with_the_lab_distribution() -> None:

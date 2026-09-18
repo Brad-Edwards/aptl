@@ -53,6 +53,7 @@ test -f "$payload_dir/oci-images.tar"
 test -f "$payload_dir/appliance-release.env"
 test -f "$payload_dir/aptl-appliance-first-boot"
 test -f "$payload_dir/aptl-appliance-first-boot.service"
+test -f "$payload_dir/aptl-launch.mount"
 
 python3 -m pip install --no-index --only-binary=:all: --require-hashes \
     --find-links "$payload_dir/wheelhouse" \
@@ -74,10 +75,26 @@ install -m 0755 "$payload_dir/aptl-appliance-first-boot" \
     /usr/local/libexec/aptl-appliance-first-boot
 install -m 0644 "$payload_dir/aptl-appliance-first-boot.service" \
     /etc/systemd/system/aptl-appliance-first-boot.service
+install -m 0644 "$payload_dir/aptl-launch.mount" \
+    /etc/systemd/system/run-aptl\\x2dlaunch.mount
 install -d -m 0700 /var/lib/aptl
+if ! getent passwd aptl-mcp >/dev/null; then
+    useradd --system --create-home --home-dir /var/lib/aptl/mcp \
+        --shell /bin/sh aptl-mcp
+fi
+# sshd disables every password method. An empty password field keeps the
+# account eligible for public-key forced commands on builds that reject locked
+# accounts before consulting AuthorizedKeysFile.
+passwd --delete aptl-mcp >/dev/null
+if getent group docker >/dev/null; then
+    usermod --append --groups docker aptl-mcp
+fi
+chown aptl-mcp:aptl-mcp /var/lib/aptl/mcp
+chmod 0700 /var/lib/aptl/mcp
+systemctl enable run-aptl\\x2dlaunch.mount
 systemctl enable aptl-appliance-first-boot.service
 
 # The release contains installed inputs only. Per-overlay identity, .env,
 # service credentials, Docker writable state, and run evidence are created
 # after the launcher has attached a disposable overlay.
-rm -rf "$payload_dir"
+rm -rf "$stage"

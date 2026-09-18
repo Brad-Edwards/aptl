@@ -1,8 +1,11 @@
 # APP-1 Appliance Boundary Materialization Preflight
 
-This note is the architecture preflight for APP-1 / issue #822. It narrows
+This note is the architecture preflight for APP-1 / issues #822 and #1022. It narrows
 [ADR-049](../adrs/adr-049-sealed-disposable-lab-appliance.md) for boundary
 materialization and verification; it is guidance, not an implementation plan.
+The #1022 revalidation below reflects the current repository. Consume #868's
+merged contracts and [ADR-059](../adrs/adr-059-canonical-techvault-delivery-and-host-mcp-access.md);
+#1053 remains independent. No additional ADR or parallel boundary model is needed.
 
 ## Authority And Contract Boundaries
 
@@ -35,11 +38,11 @@ direction, endpoint form, action, protocol, port combination, wildcard, or rule
 precedence it cannot enforce exactly. This is provider capability validation,
 not a duplicate SDL schema.
 
-`create_aptl_manifest()` currently declares `supports_acls=False`. That claim
-must remain false until the selected backend can validate, materialize, read
-back, and negatively test the complete supported ACL subset. Flipping the bit
-after translation alone would bypass the planner's existing
-`provisioner.acls-unsupported` fail-closed gate.
+`create_aptl_manifest()` now declares `supports_acls=True`; typed ACL lowering,
+compilation, and helper readback already exist. Preserve capability honesty:
+this claim covers the implemented subset, not arbitrary ACL semantics or proof
+of appliance readiness. Unsupported endpoints, protocols, precedence, or
+backend capabilities must still fail closed before mutation.
 
 The platform half is one versioned, signed appliance-boundary policy contract.
 It is payload policy, not mutable `aptl.json` configuration and not an
@@ -71,15 +74,12 @@ the first mutation. Enforcement must have a deny baseline before an untrusted
 workload can run. Policy updates must be atomic or staged so a failure retains
 the last verified deny posture; rollback must never reopen traffic.
 
-This ordering exposes an existing incompatibility that implementation must
-address. `_compose_base_substrate.start_base_container()` currently starts an
-image-free node on Docker's implicit default bridge, and package refresh/install
-occurs before `_disconnect_default_bridge()` runs during later network
-reconciliation. Supported appliance mode cannot reuse that window. A node must
-start with no ambient network and receive only admitted attachments; any
-provisioning download must traverse an explicit platform-owned update path.
-Kali and target nodes must never receive temporary general egress because
-materialization is still in progress.
+`_compose_base_substrate.py` now creates image-free nodes on admitted networks,
+attaches remaining declared networks while stopped, then starts them. Preserve
+that ordering and prove the deny floor exists before workload execution;
+network-before-start alone is not firewall-before-start. No temporary default
+bridge or general egress is permitted. Appliance startup uses staged inputs
+only, without downloads, package resolution, image pulls, or builds.
 
 Likewise, a Docker network marked `internal`, a loopback bind, a listener, a
 successful TCP probe, and a firewall authorization are distinct facts. None is
@@ -143,7 +143,7 @@ physical-host safety from guest loopback bindings.
 | Concern | Canonical incumbent to extend or consume |
 | --- | --- |
 | RAES shape and semantics | `raes.infrastructure.ACLRule`, `parse_sdl_file()`, semantic validation, instantiation, compiler, `ProvisioningPlan`, planner diagnostics, `RuntimeManager`, and RAES `Diagnostic` |
-| Capability honesty | `src/aptl/backends/raes_manifest.py` and its current `supports_acls=False` claim |
+| Capability honesty | `src/aptl/backends/raes_manifest.py`, provider subset validation, and selected-backend enforcement/readback |
 | Interpretation | `raes_realization.py`, `raes_realization_values.py`, `raes_realization_networks.py`, `raes_realization_model.py`, and `raes_diagnostics.py` |
 | Apply and observation | `AptlProvisioner`, `observe_realization()`, `ObservedResource`, `snapshot_after_apply()`, and RAES's existing realization-disclosure gate |
 | Deployment authority | `DeploymentRealizationSpec`, `DeploymentBackend`, `DockerComposeBackend`, SSH transport parity where supported, Compose project labels, bounded runner calls, and `BackendTimeoutError` |
@@ -229,17 +229,110 @@ None implies firewall authorization. In appliance mode, an explicit RAES
 all-interface publication may still be rejected by platform policy even though
 developer-local mode allows it.
 
-Current raw Docker socket mounts in `docker-compose.yml` (Shuffle components,
-Cortex, and the web API) are migration findings, not approved inventory
-defaults. A participant payload either disables the dependent feature or
-replaces it with fixed service-specific typed operations. A generic Docker API
-proxy remains guest-root authority and does not satisfy least privilege.
+ADR-059 requires full TechVault, including explicitly admitted management
+orchestration. Reuse [issue #949's authority admission](../architecture/issue-949-orborus-control-authority-preflight.md)
+and [issue #964's ownership receipts](../architecture/issue-964-backend-resource-ownership-preflight.md):
+one graph-derived typed admission, the exact guest-local socket/daemon, effective
+Compose validation, child-image closure, and observed owned children. Do not
+remove required SOC services to make qualification pass or infer approval from
+a static socket mount, self-authored label, read-only socket, or generic proxy.
+The launcher, participants, and boundary helper receive no Docker socket.
 
 The generic base substrate also requests host cgroup namespace access, a
 writable cgroup filesystem, Linux capabilities, and sometimes unconfined
 seccomp. Those are guest-host authority inside the appliance. The platform
 contract must explicitly admit and observe every such feature per workload;
 “inside a VM” is not blanket approval.
+
+## #1022 Boundary Revalidation
+
+These are implementation blockers found by source inspection, not claims of
+live exploitation or VM qualification. Existing unit fixtures do not resolve
+them. Image construction, publication, and VM lifecycle remain #1022's delivery
+scope; this section constrains their use of APP-1.
+
+### Preserve identity meanings and evidence provenance
+
+- `seat/lifecycle.py`, `core/lab.py`, and
+  `workbench/guest_binding.py` currently populate or compare `raes_plan_digest`
+  with `participant_routes_digest`. Routes and the admitted infrastructure plan
+  are different artifacts. Bind the actual admitted plan identity through the
+  existing release/launch/boundary contracts; do not relabel one digest or
+  recompute a second plan. Version incompatible contracts and update all
+  producers, readers, signatures, fixtures, and qualification evidence together.
+- The launcher uses the physical-host boot ID; guest startup and
+  `GuestAdmission` use the guest boot ID in the same boundary field. Keep host
+  boot, guest boot, overlay instance/generation, process start identity, and
+  daemon ID distinct. Prove their association over an authenticated management
+  channel bound to this launch. A content digest is integrity, not producer
+  authentication. Public anchors belong in the read-only launch share;
+  credentials do not.
+- `stage_seat()` constructs completed host observations from planned endpoints,
+  and `start_seat()` asserts forbidden-reachability success. Stage intent cannot
+  be evidence of a later boot. Separate immutable launch intent from fresh
+  evidence using the incumbent contracts; define their authenticated association
+  without a circular requirement to know a post-boot digest before launch.
+  Never overwrite a create-once descriptor or copy its old observation into a
+  new generation. `observation_id_for()` omits completion, and the verifier
+  recomputes it only for host-MCP policies: all audiences need equivalent
+  provenance and coverage of verdict-bearing fields.
+- `run_appliance_boundary_gate()` has a protocol and test adapter, but no
+  production `materialize_and_observe_boundary()` implementation in this tree.
+  The launcher calls the host-only check; MCP admission separately consumes
+  supplied guest observations. Connect qualification and every start to the
+  same complete verifier and real producer. Keep read-only per-call admission
+  separate from materialization; an MCP request must not reinstall policy.
+- `_append_probe_findings()` checks for some passing positive and negative
+  probes per authority, not completeness against required crossings. Derive
+  required coverage from admitted policy/capabilities, require unique probe
+  identities and current source provenance, and distinguish blocked traffic
+  from broken instrumentation or an unavailable destination. Unknown is fatal.
+  Complete Docker-authority inspection must likewise precede accepting an empty
+  holder list. Preserve kernel readback, atomic deny posture, and re-observation
+  after drift; refreshing a timestamp does not refresh evidence.
+
+### Keep outer transport separate from guest publications
+
+`GuestPublication` and `BoundaryEndpoint` already validate loopback and typed
+guest-to-outer mappings. `SeatEndpoint`/`SeatAccessRecord` already own host-MCP
+discovery. Extend those owners and the versioned seat launch binding for every
+approved audience; derive QEMU argv, kiosk URLs, persisted state, and client
+configuration from one validated mapping collection. Duplicate physical bind
+tuples must fail even if audiences differ. Preserve IPv4/IPv6 identity rather
+than rewriting `::1` to `127.0.0.1`, as the current listener parser does.
+
+The current QEMU adapter omits the guest address in `hostfwd`, while the policy
+permits guest loopback only. QEMU documents an omitted address as the guest's
+DHCP address, so this is not proof of a path to a loopback service. Its user
+network also has host, DNS, and dual-stack behavior beyond the declared ingress.
+The adapter must prove an explicit, narrow ingress path and controlled egress
+or reject that capability; do not change services to wildcard binds to make a
+probe pass. Any forwarding bridge must be platform-owned and observed, without
+changing scenario ports. See [QEMU network options](https://www.qemu.org/docs/master/system/invocation.html).
+
+Host coexistence requires proving ownership of every seat listener and absence
+of unauthorized seat-owned exposure, not filtering all host listeners down to
+expected ports. The current `map_publications_to_listeners()` discards extras;
+preserve the complete seat-owned inventory for the gate. Unrelated Docker and
+listeners are not authority violations, but inaccessible ownership information
+is not success. Reuse endpoint parsing from `core/host_ports.py`, not its
+check-then-close allocation as a concurrency reservation. Allocation needs
+cross-user coordination through bind outcome; a per-seat/user lock cannot
+serialize competing users. Per-seat lifecycle locking, owner-verified process
+handles, resource reservations, and failure cleanup must not affect another
+seat or unrelated host resources.
+
+### Additional cross-cutting passage for seat delivery
+
+| Layer / incumbent | Required passage |
+| --- | --- |
+| Release/input admission: `appliance/{inputs,offline,build,manifest,launch,release_validation}.py`, `ParticipantAssetLock`, `_asset_manifest.py`, `hatch_build.py` | Consume #868's canonical full-TechVault inputs, exact dependencies and helper/child-image closure. Preserve safe archive extraction, signed byte identity, offline boot, separate development trust, and real independent-machine qualification. Transport chunking must authenticate reconstruction without changing canonical release identity. |
+| Config/env shapes: `core/config.py`, `core/env.py`, `raes_stateful_realization.py`, deployment generated-artifact consumers | Preserve strict config, declared output/consumer/delivery shapes, env-name/value and placeholder checks. Outer mappings do not belong in `aptl.json`, Compose env overrides, or scenario topology. |
+| MCP config/auth: `workbench/{agent,access,dispatch,guest_binding,preparation,access_clients,client_files}.py`, common `config.ts` and `server.ts` | Internal managed config accepts its closed `mcpServers` shape; host native config/discovery are separate serializers. Use the existing minimal guest environment with dotenv discovery disabled and resolved aliases/ports. Reuse key-bound grants, role/tool checks, pinned SSH host keys, per-call guest/capture admission, revocation, and bounded descendant cleanup. Discovery grants no authority; host provider auth stays user-owned. |
+| OS/process boundary: `seat/{vm,exposure,prereqs}.py`, `_docker_endpoint_binding.py`, `workbench/process.py` | Verify effective KVM access, available concurrent resources, QEMU support, selected guest daemon, and owned native IDs. Fixed argv alone does not prevent QEMU comma-option injection through paths: validate/encode values for QEMU's own grammar. No secrets in argv, URLs, environment dumps, public shares, or diagnostics; no arbitrary shell/forwarding passthrough. |
+| Persistence: `seat/persistence.py`, `utils/pathsafe.py`, `_atomic_write`, `core/lifecycle_guard.py`, `RunStorageBackend` | Reuse private atomic/no-follow I/O and lock semantics; prove ownership, bounded reads, ancestor containment and concurrent replacement safety rather than assuming mode bits suffice. Keep seat state, access discovery, and run evidence distinct. Invalidate access on stop/failure/reboot; reset revokes old grants, pins, and live sessions. |
+| Errors/projections: `SeatLauncherError`, `WorkbenchConfigurationError`, `LabResult`/`StartupDiagnostic`, RAES diagnostics, API schemas/BFF | Translate native failures once at the owning edge to existing stable codes. Never emit raw Pydantic input errors, subprocess stderr, inspect data, paths or secrets. Operator projections retain token/Host/Origin/CSRF/session controls; participant output remains coarse. Use `get_logger()` and Python/TypeScript `redact()` before external serialization. |
+| Repository/qualification gates: `.ground-control.yaml`, `.gc/plan-rules.md`, `.github/workflows/{checks,release-please}.yml`, appliance/seat/boundary/host-MCP tests | Extend current tests and release workflow. Require real KVM boot, two concurrent users, forbidden crossing probes, stale/replaced identity rejection, and isolation through reset/stop; mocked argv/process tests are not those proofs. Common MCP changes require all dependents; image/Compose/config changes require fresh-machine clean-lab validation. Keep GRC path ownership accurate for appliance, workbench, guest assets and helper containers without inventing unsupported adapter surface names. |
 
 ## Extensibility And Whole-Repository Scope
 
@@ -249,6 +342,10 @@ envelope. A future local hypervisor, hosted seat gateway, model provider, or
 approved update mirror varies that pair and its declared capabilities; it does
 not fork scenarios, Compose files, API DTOs, frontend bundles, or the verifier.
 Scenario variation remains entirely in admitted RAES resources.
+For #1022, the concrete parameter is a collection of audience/protocol/outer
+endpoint/guest endpoint mappings plus adapter observation capabilities, bound
+to the current instance generation. An additional approved audience or future
+hypervisor extends that seam, not scenario artifacts or a second verifier.
 
 Implementation must reconcile all repository/runtime surfaces that can grant or
 observe authority:
@@ -303,16 +400,20 @@ observe authority:
 
 ## Non-Goals And Implementation Boundary
 
-- Do not implement the disposable payload/image builder (#823), physical-host
-  launcher mechanics (#824), hosted fleet, participant UI, or model agent.
+- APP-1 owns the shared policy and fatal verifier, not a second builder,
+  launcher, hosted fleet, participant UI, or model agent. #1022 repairs and
+  integrates the existing #823/#824 builder and launcher under these contracts.
+  This preflight changes guidance only and authorizes no artifact publication.
 - Do not redefine RAES ACLs, scenario topology, domain membership, services,
   exercise effects, participant contracts, or evidence contracts.
 - Do not replace Docker/Compose as the inner deployment mechanism or make the
   outer VM a RAES node provider.
 - Do not make developer-local Compose satisfy the supported participant
   appliance contract; it may remain an explicitly separate mode.
-- Do not redesign current operator API auth, MCP schemas, run archive layout,
-  evidence acquisition, or lifecycle/reset semantics.
+- Do not redesign operator API auth, MCP tool schemas, run archive layout, or
+  evidence acquisition. Use ADR-059's restricted host-MCP transport and existing
+  lifecycle/reset contracts; version necessary identity/mapping corrections
+  instead of creating a parallel workflow.
 - Do not broaden Kali/target egress, preserve unsafe socket-dependent optional
   features, or weaken a required control because an enforcement or observation
   mechanism is unavailable.

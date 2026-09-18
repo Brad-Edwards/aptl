@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from typer.testing import CliRunner
@@ -24,6 +25,36 @@ def test_appliance_help_lists_local_overlay_creation() -> None:
     assert result.exit_code == 0
     assert "create-overlay" in result.stdout
     assert "prepare-launch" in result.stdout
+    assert "doctor" in result.stdout
+    assert "fetch-distribution" in result.stdout
+
+
+def test_appliance_doctor_reports_missing_build_tools_without_installing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    report = SimpleNamespace(
+        passed=False,
+        findings=(
+            SimpleNamespace(code="missing-virt-customize", passed=False),
+            SimpleNamespace(code="missing-virt-sysprep", passed=False),
+        ),
+    )
+    monkeypatch.setattr("aptl.cli.appliance.check_build_host", lambda **_: report)
+
+    result = runner.invoke(
+        app,
+        ["appliance", "doctor", "--build-root", str(tmp_path)],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "passed": False,
+        "findings": [
+            {"code": "missing-virt-customize", "passed": False},
+            {"code": "missing-virt-sysprep", "passed": False},
+        ],
+    }
 
 
 def test_appliance_verify_and_inspect_emit_only_safe_release_projection(
@@ -210,6 +241,48 @@ def test_lab_start_forwards_offline_staged_mode(tmp_path: Path, monkeypatch) -> 
 
     assert result.exit_code == 0, result.output
     assert calls[0]["appliance"].offline_staged is True
+
+
+def test_lab_start_forwards_guest_readiness_channel(
+    tmp_path: Path, monkeypatch
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_start(project_dir, **kwargs):
+        calls.append({"project_dir": project_dir, **kwargs})
+        return LabResult(success=True, message="ready")
+
+    monkeypatch.setattr("aptl.cli.lab.orchestrate_lab_start", fake_start)
+    monkeypatch.setattr(
+        "aptl.cli.lab.resolve_scenario_selection",
+        lambda *args, **kwargs: None,
+    )
+    launch = tmp_path / "launch"
+    result = runner.invoke(
+        app,
+        [
+            "lab",
+            "start",
+            "--project-dir",
+            str(tmp_path),
+            "--offline-staged",
+            "--appliance-launch-descriptor",
+            str(launch / "appliance-launch.json"),
+            "--appliance-release-public-key",
+            str(launch / "release-public.pem"),
+            "--appliance-qualification-public-key",
+            str(launch / "qualification-public.pem"),
+            "--appliance-readiness-challenge",
+            str(launch / "readiness-challenge.json"),
+            "--appliance-readiness-device",
+            "/dev/virtio-ports/org.aptl.readiness",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    appliance = calls[0]["appliance"]
+    assert appliance.readiness_challenge == launch / "readiness-challenge.json"
+    assert str(appliance.readiness_device).endswith("org.aptl.readiness")
 
 
 @pytest.mark.parametrize(

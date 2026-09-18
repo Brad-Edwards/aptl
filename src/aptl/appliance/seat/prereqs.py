@@ -30,13 +30,13 @@ class PrereqReport:
     findings: tuple[PrereqFinding, ...]
 
 
-def _read_total_memory_bytes() -> int:
-    """Read total physical memory from ``/proc/meminfo`` when available."""
+def _read_available_memory_bytes() -> int:
+    """Read currently available memory from ``/proc/meminfo`` when available."""
 
     try:
         with Path("/proc/meminfo").open(encoding="utf-8") as handle:
             for line in handle:
-                if line.startswith("MemTotal:"):
+                if line.startswith("MemAvailable:"):
                     return int(line.split()[1]) * 1024
     except (OSError, ValueError, IndexError):
         return 0
@@ -70,6 +70,7 @@ def check_host_prerequisites(
     *,
     seat_root: Path,
     memory_bytes: int | None = None,
+    available_vcpus: int | None = None,
     free_disk_bytes: int | None = None,
     kvm_available: bool | None = None,
     qemu_img_available: bool | None = None,
@@ -95,12 +96,26 @@ def check_host_prerequisites(
                 detail="hardware virtualization is unavailable",
             )
         )
-    total_memory = _read_total_memory_bytes() if memory_bytes is None else memory_bytes
+    total_memory = (
+        _read_available_memory_bytes() if memory_bytes is None else memory_bytes
+    )
     findings.append(
         PrereqFinding(
             code="low-memory",
             passed=total_memory >= requirements.memory_bytes,
             detail="host memory is below the signed minimum",
+        )
+    )
+    cpu_capacity = (
+        len(os.sched_getaffinity(0))
+        if available_vcpus is None and hasattr(os, "sched_getaffinity")
+        else (available_vcpus if available_vcpus is not None else os.cpu_count() or 0)
+    )
+    findings.append(
+        PrereqFinding(
+            code="low-cpu",
+            passed=cpu_capacity >= requirements.vcpus,
+            detail="available CPU capacity is below the signed minimum",
         )
     )
     try:

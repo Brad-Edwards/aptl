@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import socket
+import tempfile
 import threading
 
 import pytest
@@ -96,35 +97,37 @@ def test_guest_challenge_loader_rejects_leaf_symlink(tmp_path: Path) -> None:
 
 
 def test_host_waits_for_framed_readiness_from_current_vm(tmp_path: Path) -> None:
-    socket_path = tmp_path / "readiness.sock"
+    del tmp_path
     challenge = _challenge()
     payload = encode_guest_readiness(challenge, _guest())
-    listening = threading.Event()
+    with tempfile.TemporaryDirectory(prefix="aptl-ready-", dir="/tmp") as directory:
+        socket_path = Path(directory) / "s"
+        listening = threading.Event()
 
-    def publish() -> None:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
-            server.bind(str(socket_path))
-            server.listen(1)
-            listening.set()
-            connection, _ = server.accept()
-            with connection:
-                connection.sendall(payload[:17])
-                connection.sendall(payload[17:])
+        def publish() -> None:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(str(socket_path))
+                server.listen(1)
+                listening.set()
+                connection, _ = server.accept()
+                with connection:
+                    connection.sendall(payload[:17])
+                    connection.sendall(payload[17:])
 
-    thread = threading.Thread(target=publish)
-    thread.start()
-    assert listening.wait(timeout=2)
+        thread = threading.Thread(target=publish)
+        thread.start()
+        assert listening.wait(timeout=2)
 
-    observed = wait_for_guest_readiness(
-        socket_path,
-        challenge,
-        process_alive=lambda: True,
-        timeout_seconds=2,
-    )
-    thread.join(timeout=2)
+        observed = wait_for_guest_readiness(
+            socket_path,
+            challenge,
+            process_alive=lambda: True,
+            timeout_seconds=2,
+        )
+        thread.join(timeout=2)
 
-    assert observed == _guest()
-    assert not thread.is_alive()
+        assert observed == _guest()
+        assert not thread.is_alive()
 
 
 def test_host_readiness_fails_if_vm_exits_before_channel_exists(

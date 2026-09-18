@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import socket
+import tempfile
 import threading
 
 import pytest
@@ -168,6 +169,7 @@ def test_bundle_configures_both_native_clients_without_provider_state(
 
 
 def test_guest_access_channel_roundtrips_current_generation(tmp_path: Path) -> None:
+    del tmp_path
     request = _request()
     bundle = _bundle(_public_key()).model_copy(
         update={
@@ -178,33 +180,34 @@ def test_guest_access_channel_roundtrips_current_generation(tmp_path: Path) -> N
         }
     )
     payload = encode_guest_access_bundle(bundle)
-    socket_path = tmp_path / "access.sock"
-    listening = threading.Event()
+    with tempfile.TemporaryDirectory(prefix="aptl-access-", dir="/tmp") as directory:
+        socket_path = Path(directory) / "s"
+        listening = threading.Event()
 
-    def publish() -> None:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
-            server.bind(str(socket_path))
-            server.listen(1)
-            listening.set()
-            connection, _ = server.accept()
-            with connection:
-                connection.sendall(payload[:31])
-                connection.sendall(payload[31:])
+        def publish() -> None:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(str(socket_path))
+                server.listen(1)
+                listening.set()
+                connection, _ = server.accept()
+                with connection:
+                    connection.sendall(payload[:31])
+                    connection.sendall(payload[31:])
 
-    thread = threading.Thread(target=publish)
-    thread.start()
-    assert listening.wait(timeout=2)
+        thread = threading.Thread(target=publish)
+        thread.start()
+        assert listening.wait(timeout=2)
 
-    observed = wait_for_guest_access(
-        socket_path,
-        request,
-        process_alive=lambda: True,
-        timeout_seconds=2,
-    )
-    thread.join(timeout=2)
+        observed = wait_for_guest_access(
+            socket_path,
+            request,
+            process_alive=lambda: True,
+            timeout_seconds=2,
+        )
+        thread.join(timeout=2)
 
-    assert observed == bundle
-    assert not thread.is_alive()
+        assert observed == bundle
+        assert not thread.is_alive()
 
 
 def test_guest_can_publish_access_bundle_to_virtio_character_device() -> None:

@@ -144,7 +144,12 @@ def test_resource_reservations_are_discovered_from_qemu_argv(tmp_path: Path) -> 
 def test_resource_admission_observes_live_host_capacity(
     tmp_path: Path, monkeypatch
 ) -> None:
-    monkeypatch.setattr(allocation.os, "sched_getaffinity", lambda pid: {0, 1, 2, 3})
+    monkeypatch.setattr(
+        allocation.os,
+        "sched_getaffinity",
+        lambda pid: {0, 1, 2, 3},
+        raising=False,
+    )
     monkeypatch.setattr(
         allocation.os,
         "sysconf",

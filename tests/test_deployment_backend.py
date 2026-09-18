@@ -4461,14 +4461,95 @@ class TestDeclaredCredentialClassIsRealized:
         assert "account-password-not-authenticable" in (result.error or "")
         assert "internal detail leak" not in (result.error or "")
 
-    def test_existing_account_keeps_the_credential_it_already_has(self, tmp_path):
-        """Re-minting would invalidate a secret a participant may already hold."""
+    def _retain(self, tmp_path, ad, username, strength):
+        """Put an account in the state a completed earlier realization leaves.
+
+        The secret is minted by the module under test, never written here: a
+        credential-shaped literal in tracked source is a secret-scanner finding
+        however fake it is.
+        """
+        from aptl.core.deployment import _account_credentials as credentials
+
+        password = credentials.password_for_strength(strength)
+        ad.passwords[username] = password
+        credentials.disclose_account_credential(
+            tmp_path,
+            node="scenario.node.ad",
+            username=username,
+            password=password,
+            strength=strength,
+        )
+        return password
+
+    def test_existing_account_keeps_a_credential_it_can_still_prove(self, tmp_path):
+        """Re-minting would invalidate a secret a participant may already hold.
+
+        Preserved because the declared class is *established*: the disclosed
+        record says weak and that secret still authenticates. Skipping on
+        existence alone accepted any secret at all (issue #1105).
+        """
         ad = _FakeAd(users=["michael.thompson"])
+        retained = self._retain(tmp_path, ad, "michael.thompson", "weak")
         account = _acct("michael.thompson", password_strength="weak")
 
         assert self._realize(tmp_path, ad, (account,)) is None
 
         assert ad.cmds("samba-tool", "user", "setpassword") == []
+        assert ad.passwords["michael.thompson"] == retained
+
+    def test_existing_account_with_no_credential_evidence_is_realized(self, tmp_path):
+        """No record means nothing is known about the secret, so realize the class."""
+        ad = _FakeAd(users=["michael.thompson"])
+        account = _acct("michael.thompson", password_strength="weak")
+
+        assert self._realize(tmp_path, ad, (account,)) is None
+
+        assert len(ad.cmds("samba-tool", "user", "setpassword")) == 1
+        assert ad.passwords["michael.thompson"]
+
+    def test_existing_account_whose_retained_secret_no_longer_works_is_realized(
+        self, tmp_path
+    ):
+        """A record that no longer authenticates is not evidence of anything."""
+        ad = _FakeAd(users=["michael.thompson"])
+        retained = self._retain(tmp_path, ad, "michael.thompson", "weak")
+        # The directory has moved on from the disclosed secret.
+        ad.passwords["michael.thompson"] = retained + "-rotated"
+        account = _acct("michael.thompson", password_strength="weak")
+
+        assert self._realize(tmp_path, ad, (account,)) is None
+
+        assert len(ad.cmds("samba-tool", "user", "setpassword")) == 1
+        assert ad.passwords["michael.thompson"] != retained + "-rotated"
+
+    def test_existing_account_recorded_as_another_class_is_realized(self, tmp_path):
+        """A retained strong secret is not the declared weak attack surface."""
+        ad = _FakeAd(users=["michael.thompson"])
+        self._retain(tmp_path, ad, "michael.thompson", "medium")
+        account = _acct("michael.thompson", password_strength="weak")
+
+        assert self._realize(tmp_path, ad, (account,)) is None
+
+        assert len(ad.cmds("samba-tool", "user", "setpassword")) == 1
+
+    def test_a_partial_failure_is_recovered_on_the_next_run(self, tmp_path):
+        """Set succeeded, proof did not: the account exists but nobody holds it.
+
+        The old path took `not created` and reported success forever after,
+        leaving a live account whose credential was never disclosed and never
+        proven (issue #1105).
+        """
+        broken = _FakeAd(authentication_works=False)
+        account = _acct("michael.thompson", password_strength="weak")
+        assert self._realize(tmp_path, broken, (account,)) is not None
+
+        # Next run: the account exists now, and there is still no evidence.
+        recovered = _FakeAd(users=["michael.thompson"])
+
+        assert self._realize(tmp_path, recovered, (account,)) is None
+
+        assert len(recovered.cmds("samba-tool", "user", "setpassword")) == 1
+        assert recovered.passwords["michael.thompson"]
 
 
 class TestComposeRealizeAccountsStep:

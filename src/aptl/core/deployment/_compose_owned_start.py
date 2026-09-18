@@ -130,7 +130,7 @@ class ComposeOwnedStartMixin:
         if result.returncode != 0:
             log.error("Lab start failed: %s", result.stderr)
             return LabResult(success=False, error=result.stderr)
-        return self._capture_started_resources(prepared)
+        return self._capture_started_resources(prepared, profiles)
 
     def _prepare_owned_start(
         self, compose_files: tuple[Path, ...]
@@ -198,8 +198,23 @@ class ComposeOwnedStartMixin:
         log.debug("Command: %s", " ".join(command))
         return command
 
-    def _capture_started_resources(self, scope: _OwnedStartScope) -> LabResult:
-        """Record all Compose resources or roll back this attempt's containers."""
+    def _capture_started_resources(
+        self, scope: _OwnedStartScope, profiles: list[str]
+    ) -> LabResult:
+        """Record all Compose resources, or roll the whole attempt back.
+
+        Rollback cannot be limited to what was receipted, because the failure
+        mode is receipting itself: the first container receipt, a network
+        capture, or a volume capture can fail after Compose created the object,
+        and an object with no receipt was invisible to the old container-only
+        rollback. The next preflight then found unreceipted objects in the
+        namespace, classified it foreign, and the workspace could neither start
+        nor clean up without manual Docker surgery (issue #1105).
+
+        Compose labelled everything it made with this attempt's project, and
+        preflight already established that project is ours, so `down` is the
+        complete and correctly-scoped undo.
+        """
 
         try:
             self._record_compose_container_receipts(
@@ -220,7 +235,7 @@ class ComposeOwnedStartMixin:
             )
         except OwnershipConflictError as exc:
             log.exception("Compose post-start ownership capture failed: %s", exc)
-            self._remove_owned_attempt_containers(scope.attempt_id)
+            self._roll_back_started_project(scope, profiles)
             return LabResult(
                 success=False,
                 error=(
@@ -230,6 +245,29 @@ class ComposeOwnedStartMixin:
             )
         log.info("Lab started successfully")
         return LabResult(success=True, message="Lab started")
+
+    def _roll_back_started_project(
+        self, scope: _OwnedStartScope, profiles: list[str]
+    ) -> None:
+        """Undo everything this attempt started, receipted or not."""
+
+        try:
+            self._run(
+                [
+                    *self._build_command(
+                        "down", profiles, compose_files=scope.compose_files
+                    ),
+                    "--volumes",
+                    "--remove-orphans",
+                ],
+                timeout=300,
+            )
+        except (OSError, ValueError):
+            log.exception("Compose rollback of a failed start did not complete")
+        # Receipted containers may include directly-run resources Compose does
+        # not know about, so this still runs — now as the remainder, not the
+        # whole rollback.
+        self._remove_owned_attempt_containers(scope.attempt_id)
 
     def _start_preflight(self, profiles: list[str], root: Path) -> LabResult | None:
         """Run observability configuration and ownership checks before start."""

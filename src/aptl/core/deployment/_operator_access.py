@@ -44,6 +44,8 @@ from aptl.core.deployment._operator_access_proof import (
 from aptl.core.deployment.errors import BackendTimeoutError
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from aptl.core.deployment._compose_resource_ownership import WorkspaceOwnership
     from aptl.core.deployment.realization import DeploymentOperatorAccess
 
@@ -98,6 +100,7 @@ class ComposeOperatorAccessMixin(object):
         accesses: Sequence["DeploymentOperatorAccess"],
         *,
         operator_public_key: str | None = None,
+        operator_key_path: "Path | None" = None,
     ) -> list[str]:
         """Make every admitted operator access reachable, or report why not.
 
@@ -113,7 +116,11 @@ class ComposeOperatorAccessMixin(object):
         failures = self._start_declared_relays(accesses, operator_public_key)
         if not failures:
             failures = _prove_endpoints(
-                OPERATOR_ACCESS_ENDPOINTS[access.target_node] for access in accesses
+                (
+                    OPERATOR_ACCESS_ENDPOINTS[access.target_node]
+                    for access in accesses
+                ),
+                key_path=operator_key_path,
             )
         if not failures:
             _log_published_access(accesses)

@@ -140,8 +140,12 @@ class ComposeRealizationNetworkMixin:
         """Return fail-closed errors for an existing realized network."""
 
         failures: list[str] = []
+        native_id = ""
         try:
-            self._resolve_owned_network_id(network_name)
+            # Keep the verified handle: inspecting by the mutable name again
+            # would let a same-name replacement between the two calls redirect
+            # verification onto a different network (issue #1105).
+            native_id = self._resolve_owned_network_id(network_name)
         except OwnershipConflictError:
             failures = [
                 f"Existing network {network_name} has no verified APTL ownership receipt."
@@ -149,7 +153,7 @@ class ComposeRealizationNetworkMixin:
         compose_key = _compose_network_key(network.name) if not failures else None
         if not failures and not compose_key:
             failures = ["Invalid network realization name."]
-        details = self.host_inspect_network(network_name) if not failures else {}
+        details = self.host_inspect_network(native_id) if not failures else {}
         if not failures and not details:
             failures = [
                 f"Existing network {network_name} was not inspectable "

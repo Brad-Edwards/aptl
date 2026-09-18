@@ -37,10 +37,14 @@ class OperatorAccessEndpoint(object):
     env_var: str
     default_port: int
     profile: str
-    # The declared local identity the operator logs in as, when the scenario
-    # declares the access but provisions no key for it. The backend installs the
-    # operator's public key for exactly that identity. None when the scenario
-    # already delivers the authorized key (Kali's arrives with its SSH bundle).
+    # The identity the operator actually logs in as. Realization is proven by
+    # authenticating as this user, not merely by reaching an SSH server
+    # (issue #1105).
+    login_user: str = ""
+    # The declared local identity whose authorized_keys the backend installs,
+    # when the scenario declares the access but provisions no key for it. None
+    # when the scenario already delivers the authorized key (Kali's arrives with
+    # its SSH bundle).
     authorized_user: str | None = None
 
 
@@ -57,6 +61,7 @@ OPERATOR_ACCESS_ENDPOINTS: dict[str, OperatorAccessEndpoint] = {
         env_var="APTL_HP_KALI_SSH_PROXY_2023",
         default_port=2023,
         profile="kali",
+        login_user="kali",
     ),
     "soc-workstation": OperatorAccessEndpoint(
         target_node="soc-workstation",
@@ -66,6 +71,7 @@ OPERATOR_ACCESS_ENDPOINTS: dict[str, OperatorAccessEndpoint] = {
         env_var="APTL_HP_SOC_WORKSTATION_SSH_2024",
         default_port=2024,
         profile="soc",
+        login_user="analyst",
         authorized_user="analyst",
     ),
 }

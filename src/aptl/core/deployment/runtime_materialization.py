@@ -573,8 +573,15 @@ def effective_runtime_contract_issues(
     realization: DeploymentRealizationSpec,
     *,
     profile: RuntimeMaterializationProfile,
+    validated_service_volumes: Mapping[str, Sequence[object]] | None = None,
 ) -> tuple[RuntimeMaterializationIssue, ...]:
-    """Compare a read-only effective Compose model with the admitted runtime."""
+    """Compare a read-only effective Compose model with the admitted runtime.
+
+    ``validated_service_volumes`` contains exact generated mounts already
+    checked by the stateful realization validator.  They are admitted graph
+    edges rather than ``runtime.mounts`` and must therefore participate in the
+    expected authority set without being mistaken for an undeclared host bind.
+    """
 
     from aptl.core.deployment._compose_node_generation import _operational_config
 
@@ -609,6 +616,16 @@ def effective_runtime_contract_issues(
             )
             continue
         expected = _operational_config(node.runtime)
+        validated_volumes = (
+            validated_service_volumes.get(node.service_name, ())
+            if validated_service_volumes is not None
+            else ()
+        )
+        if validated_volumes:
+            expected["volumes"] = [
+                *expected.get("volumes", []),
+                *validated_volumes,
+            ]
         for compose_field, value in expected.items():
             portable_field = _RUNTIME_COMPOSE_FIELDS.get(compose_field)
             if portable_field is None:

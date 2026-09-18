@@ -12,6 +12,7 @@ this module owns only the file-set and model concerns.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 import json
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from aptl.core.deployment._compose_node_generation import (
 from aptl.core.deployment._compose_port_realization import write_port_override
 from aptl.core.deployment._compose_stateful_realization import (
     effective_stateful_model_errors,
+    stateful_override_payload,
 )
 from aptl.core.deployment._compose_runtime_orchestration import (
     effective_orchestration_model_errors,
@@ -241,12 +243,26 @@ class ComposeRealizationModelMixin:
         )
 
         profile = self._runtime_materialization_profile(realization)
+        stateful_payload = stateful_override_payload(
+            realization_root,
+            self.project_name,
+            realization,
+        )
+        stateful_services = stateful_payload.get("services", {})
+        validated_service_volumes = {
+            str(service_name): tuple(volumes)
+            for service_name, service in stateful_services.items()
+            if isinstance(service, Mapping)
+            and isinstance((volumes := service.get("volumes")), Sequence)
+            and not isinstance(volumes, (str, bytes))
+        }
         errors.extend(
             issue.render()
             for issue in effective_runtime_contract_issues(
                 payload,
                 realization,
                 profile=profile,
+                validated_service_volumes=validated_service_volumes,
             )
         )
         return "; ".join(errors[:5]) if errors else None

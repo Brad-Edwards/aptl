@@ -114,5 +114,6 @@ def test_local_candidate_path_uses_exact_commit_and_no_registry_dependency() -> 
     assert "source_revision" in builder
     assert 'python3 -m venv "$root/venv"' in builder
     assert "\npython -m venv " not in builder
+    assert 'pip download --require-hashes -r requirements/web.txt' in builder
     assert 'docker image inspect "$canonical"' in builder
     assert "APTL_IMAGE_NAMESPACE" not in wrapper

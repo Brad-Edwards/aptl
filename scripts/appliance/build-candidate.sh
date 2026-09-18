@@ -70,7 +70,7 @@ if test -z "$target_python" && command -v uv >/dev/null 2>&1; then
   target_python=$(uv python find "$APTL_GUEST_PYTHON_VERSION")
 fi
 test -n "$target_python"
-"$target_python" -m pip download --require-hashes -r requirements/runtime.txt \
+"$target_python" -m pip download --require-hashes -r requirements/web.txt \
   --dest "$root/wheelhouse"
 cp "$root"/dist/aptl_labs-*.whl "$root/wheelhouse/"
 

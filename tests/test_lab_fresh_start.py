@@ -11,10 +11,12 @@ every existing test. Two things hid it:
 
 So these tests start from a directory materialized by the public ``aptl lab
 init`` path and assert those generated roots are absent before anything runs.
-They then drive the real ordered lab-start steps that produced the failure —
-load the environment, admit the configured scenario, prepare SOC TLS material,
-check bind mounts — against the bundled env-pack default, with no stubs on the
-admission seam.
+They drive the real environment/config/admission steps against the bundled
+env-pack default, with no stubs on the admission seam.  The default TechVault
+pack now correctly stops at the runtime-materialization gate on shared Docker,
+so the fixture captures that real admission and then hands its already-admitted
+surface to the two downstream bind-model assertions.  Production startup never
+runs those later mutations after the gate fails.
 
 Integration-marked and integration-named: admitting the default scenario stages
 the bundled pack and asks the deployment backend for component-image
@@ -35,9 +37,12 @@ import pytest
 def admitted_fresh_lab(tmp_path_factory):
     """Materialize a lab the way ``aptl lab init`` does, then admit it once.
 
-    Returns the startup context after the real `_step_load_env` and
-    `_step_load_config` have run, so the assertions below read one admission.
+    Returns the startup context and the expected shared-Docker limitation after
+    the real `_step_load_env` and `_step_load_config` have run.  A capturing
+    wrapper retains the one real admission result for the downstream regression
+    assertions; it does not replace or alter admission.
     """
+    import aptl.core.lab as lab_module
     from aptl.core.assets import materialize
     from aptl.core.lab import _LabStartContext, _step_load_config, _step_load_env
 
@@ -51,9 +56,47 @@ def admitted_fresh_lab(tmp_path_factory):
 
     ctx = _LabStartContext(project_dir=project_dir, skip_seed=True)
     assert _step_load_env(ctx) is None
-    load_config_result = _step_load_config(ctx)
-    assert load_config_result is None, load_config_result
-    return ctx
+    captured = {}
+    real_admit = lab_module.admit_start_surface
+
+    def capture_admission(*args, **kwargs):
+        result = real_admit(*args, **kwargs)
+        captured["result"] = result
+        return result
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(lab_module, "admit_start_surface", capture_admission)
+        materialization_failure = _step_load_config(ctx)
+
+    admitted, surface = captured["result"]
+    assert materialization_failure is admitted.runtime_materialization_failure
+    assert materialization_failure is not None
+    assert "aptl.provisioner.runtime-materialization-unsupported" in (
+        materialization_failure.error
+    )
+    assert "backend=shared-docker" in materialization_failure.error
+    assert ctx.admitted_start is None
+    assert ctx.admitted_surface is None
+
+    # The two tests below concern the later env-pack Compose model.  Make the
+    # captured, already-admitted surface available to those direct step calls;
+    # the public startup path above proved it stops before reaching them.
+    ctx.admitted_start = admitted
+    ctx.admitted_surface = surface
+    ctx.stateful_artifact_ownership = surface.stateful_artifact_ownership
+    return ctx, materialization_failure
+
+
+@pytest.mark.integration
+def test_fresh_init_default_fails_closed_on_shared_docker(admitted_fresh_lab):
+    """The high-authority default pack stops before deployment preparation."""
+    ctx, failure = admitted_fresh_lab
+
+    assert failure.success is False
+    assert not (ctx.project_dir / "config" / "soc_certs").exists()
+    assert not (
+        ctx.project_dir / ".aptl" / "lifecycle" / "workspace-ownership-v1.json"
+    ).exists()
 
 
 @pytest.mark.integration
@@ -70,7 +113,7 @@ def test_fresh_init_directory_passes_bind_mount_preflight_integration(
     """
     from aptl.core.lab import _step_check_bind_mounts, _step_generate_soc_certs
 
-    ctx = admitted_fresh_lab
+    ctx, _failure = admitted_fresh_lab
     # The configured default is the bundled env-pack, and admission must have
     # resolved it rather than substituting a scenario path deleted in #908.
     assert ctx.admitted_surface is not None
@@ -93,7 +136,7 @@ def test_fresh_init_admits_the_compose_model_the_run_applies_integration(
     """
     from aptl.core.scenario_bundle import ScenarioSourceKind
 
-    ctx = admitted_fresh_lab
+    ctx, _failure = admitted_fresh_lab
     surface = ctx.admitted_surface
     assert surface is not None
     assert surface.source_kind is ScenarioSourceKind.ENV_PACK

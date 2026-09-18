@@ -1329,6 +1329,8 @@ def _load_admitted_start_surface(
                 f"{redact(str(exc))}"
             ),
         )
+    if failure is None and admitted is not None:
+        failure = getattr(admitted, "runtime_materialization_failure", None)
     if failure is None:
         assert admitted is not None and surface is not None
         ctx.admitted_start = admitted

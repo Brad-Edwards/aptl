@@ -7,6 +7,7 @@ calls are mocked.
 
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import ANY, MagicMock, call, patch
 from uuid import uuid4
 
@@ -2210,6 +2211,35 @@ class TestAdmittedStartSurface:
         assert ctx.admitted_start is admitted
         assert ctx.admitted_surface is surface
         assert ctx.stateful_artifact_ownership == surface.stateful_artifact_ownership
+
+    def test_runtime_materialization_failure_stops_before_legacy_mutation(
+        self, mocker, tmp_path
+    ):
+        """A valid SDL plan can still be unsupported by the selected backend."""
+        from aptl.core.lab import _load_admitted_start_surface
+        from aptl.core.lab_types import LabResult
+
+        ctx = self._ctx(tmp_path)
+        failure = LabResult(
+            success=False,
+            error=(
+                "aptl.provisioner.runtime-materialization-unsupported: "
+                "node=provision.node.probe field=runtime.container.privileged "
+                "backend=shared-docker"
+            ),
+        )
+        admitted = SimpleNamespace(runtime_materialization_failure=failure)
+        mocker.patch(
+            "aptl.core.lab.admit_start_surface",
+            return_value=(admitted, _admitted_surface(tmp_path)),
+        )
+
+        result = _load_admitted_start_surface(ctx)
+
+        assert result is failure
+        assert ctx.admitted_start is None
+        assert ctx.admitted_surface is None
+        assert ctx.stateful_artifact_ownership == frozenset()
 
     def test_admission_failure_fails_closed_before_legacy_mutation(
         self, mocker, tmp_path

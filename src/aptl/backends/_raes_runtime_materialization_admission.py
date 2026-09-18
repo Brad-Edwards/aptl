@@ -13,6 +13,7 @@ from aptl.backends.raes_artifact_availability import (
 )
 from aptl.backends.raes_diagnostics import PROVISIONING_ADDRESS, diagnostic
 from aptl.backends.raes_provisioner import AptlProvisioner
+from aptl.core.lab_types import LabResult
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
@@ -125,8 +126,8 @@ def qualify_admitted_runtime(
     realization: object | None,
     execution_plan: object,
     availability: ArtifactAvailabilityContext,
-) -> tuple[object, ArtifactAvailabilityContext]:
-    """Qualify one valid plan and materialize only on a supported backend."""
+) -> tuple[object, ArtifactAvailabilityContext, LabResult | None]:
+    """Qualify one plan and retain any backend limitation for the caller."""
 
     eligible = (
         isinstance(provisioner, AptlProvisioner)
@@ -134,6 +135,7 @@ def qualify_admitted_runtime(
         and not any(item.is_error for item in execution_plan.diagnostics)
     )
     result = (execution_plan, availability)
+    failure = None
     if eligible:
         backend = provisioner.deployment_backend
         deployment_spec = _deployment_spec(provisioner, realization, execution_plan)
@@ -142,6 +144,8 @@ def qualify_admitted_runtime(
                 deployment_spec,
                 scenario_root=bundle.root,
             )
+            if not qualification.success:
+                failure = qualification
             should_materialize = (
                 qualification.success
                 and _has_materialization_specifications(availability)
@@ -159,4 +163,4 @@ def qualify_admitted_runtime(
                     availability,
                     materialized,
                 )
-    return result
+    return (*result, failure)

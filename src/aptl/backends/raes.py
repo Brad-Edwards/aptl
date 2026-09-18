@@ -311,7 +311,7 @@ def admit_raes_scenario(
         if isinstance(provisioner, AptlProvisioner)
         else None
     )
-    execution_plan, availability = qualify_admitted_runtime(
+    execution_plan, availability, materialization_failure = qualify_admitted_runtime(
         scenario=scenario,
         bundle=bundle,
         project_dir=project_dir,
@@ -340,6 +340,7 @@ def admit_raes_scenario(
         execution_plan=execution_plan,
         realization=realization,
         capture_plan=capture_plan,
+        runtime_materialization_failure=materialization_failure,
     )
 
 

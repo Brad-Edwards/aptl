@@ -39,6 +39,7 @@ class AdmittedScenarioStart:
     execution_plan: ExecutionPlan
     realization: AptlRealization | None
     capture_plan: CapturePlan = field(default_factory=empty_capture_plan)
+    runtime_materialization_failure: LabResult | None = None
 
 
 @dataclass(frozen=True)

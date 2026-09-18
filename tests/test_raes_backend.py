@@ -1824,6 +1824,10 @@ def test_admission_preserves_valid_plan_when_backend_cannot_materialize(
 
     assert admitted.execution_plan.is_valid is True
     assert admitted.execution_plan.diagnostics == []
+    assert admitted.runtime_materialization_failure is not None
+    assert admitted.runtime_materialization_failure.error == (
+        "selected backend cannot safely realize this runtime"
+    )
     assert materialization_modes == [False]
     backend.qualify_runtime_materialization.assert_called_once()
     backend.realize.assert_not_called()

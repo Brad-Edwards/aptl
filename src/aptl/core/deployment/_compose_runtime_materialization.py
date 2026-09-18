@@ -64,12 +64,6 @@ class ComposeRuntimeMaterializationMixin:
         del realization
         return SHARED_DOCKER_PROFILE
 
-    @staticmethod
-    def _qualify_runtime_materialization_target() -> LabResult | None:
-        """Perform backend-specific read-only containment qualification."""
-
-        return None
-
     def _runtime_materialization_preflight(
         self,
         realization: DeploymentRealizationSpec,
@@ -78,7 +72,14 @@ class ComposeRuntimeMaterializationMixin:
     ) -> LabResult | None:
         """Qualify the complete runtime graph without creating backend state."""
 
-        failure = self._qualify_runtime_materialization_target()
+        target_qualification = getattr(
+            self,
+            "_qualify_runtime_materialization_target",
+            None,
+        )
+        failure = (
+            target_qualification() if target_qualification is not None else None
+        )
         profile = self._runtime_materialization_profile(realization)
         if failure is None:
             issues = qualify_runtime_materialization(

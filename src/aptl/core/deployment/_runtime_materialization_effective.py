@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import TypeGuard
 
 from aptl.core.deployment._runtime_materialization_types import (
     RuntimeMaterializationIssue,
@@ -78,10 +77,12 @@ def _compose_authority_field(field: str) -> str:
     return _RUNTIME_COMPOSE_FIELDS.get(field, f"compose.services[].{field}")
 
 
-def _is_sequence(value: object) -> TypeGuard[Sequence[object]]:
-    """Whether a value is a non-text sequence."""
+def _as_sequence(value: object) -> Sequence[object] | None:
+    """Return a non-text sequence, or ``None`` for every other value."""
 
-    return isinstance(value, Sequence) and not isinstance(value, (str, bytes))
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return value
+    return None
 
 
 def _mapping_contains(actual: object, expected: Mapping[object, object]) -> bool:
@@ -96,14 +97,15 @@ def _mapping_contains(actual: object, expected: Mapping[object, object]) -> bool
 def _sequence_contains(actual: object, expected: Sequence[object]) -> bool:
     """Compare exact sequences or unordered sequences of mappings."""
 
-    if not _is_sequence(actual):
+    actual_items = _as_sequence(actual)
+    if actual_items is None:
         return False
     if expected and all(isinstance(item, Mapping) for item in expected):
         return all(
-            any(_contains_expected(candidate, item) for candidate in actual)
+            any(_contains_expected(candidate, item) for candidate in actual_items)
             for item in expected
         )
-    return list(actual) == list(expected)
+    return list(actual_items) == list(expected)
 
 
 def _contains_expected(actual: object, expected: object) -> bool:
@@ -111,8 +113,8 @@ def _contains_expected(actual: object, expected: object) -> bool:
 
     if isinstance(expected, Mapping):
         return _mapping_contains(actual, expected)
-    if _is_sequence(expected):
-        return _sequence_contains(actual, expected)
+    if (expected_items := _as_sequence(expected)) is not None:
+        return _sequence_contains(actual, expected_items)
     return actual == expected
 
 
@@ -164,16 +166,17 @@ def _undeclared_mount_authority(
 ) -> bool:
     """Whether an effective service adds a bind, tmpfs, or socket mount."""
 
-    if not _is_sequence(actual):
+    actual_items = _as_sequence(actual)
+    if actual_items is None:
         return bool(actual)
-    expected_items = expected if _is_sequence(expected) else ()
+    expected_items = _as_sequence(expected) or ()
     return any(
         _undeclared_mount_item(
             item,
             expected_items,
             allow_docker_socket=allow_docker_socket,
         )
-        for item in actual
+        for item in actual_items
     )
 
 

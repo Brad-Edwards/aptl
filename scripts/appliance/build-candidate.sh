@@ -51,6 +51,11 @@ export APTL_CANDIDATE_VERSION="$candidate_version"
 root=$PWD/build/appliance
 test ! -e "$root"
 install -d -m 0700 "$root" "$root/input" "$root/cache" "$root/candidate"
+target_python=$(command -v "python${APTL_GUEST_PYTHON_VERSION}" || true)
+if test -z "$target_python" && command -v uv >/dev/null 2>&1; then
+  target_python=$(uv python find "$APTL_GUEST_PYTHON_VERSION")
+fi
+test -n "$target_python"
 cleanup() {
   rm -f "$root/input/candidate-private.pem"
   if test "$candidate_mode" = release; then
@@ -59,17 +64,12 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-python3 -m venv "$root/venv"
+"$target_python" -m venv "$root/venv"
 "$root/venv/bin/pip" install --require-hashes -r requirements/ci.txt
 "$root/venv/bin/python" -m build --no-isolation --outdir "$root/dist"
 "$root/venv/bin/pip" install --require-hashes -r requirements/runtime.txt
 "$root/venv/bin/pip" install --no-deps "$root"/dist/aptl_labs-*.whl
 install -d -m 0700 "$root/wheelhouse"
-target_python=$(command -v "python${APTL_GUEST_PYTHON_VERSION}" || true)
-if test -z "$target_python" && command -v uv >/dev/null 2>&1; then
-  target_python=$(uv python find "$APTL_GUEST_PYTHON_VERSION")
-fi
-test -n "$target_python"
 "$target_python" -m pip download --require-hashes -r requirements/web.txt \
   --dest "$root/wheelhouse"
 cp "$root"/dist/aptl_labs-*.whl "$root/wheelhouse/"

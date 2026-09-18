@@ -63,8 +63,14 @@ def main() -> None:
         samples = [value for pid in processes if (value := _process(pid))]
         process_ticks = max((item[0] for item in samples), default=0)
         system_ticks = _system_ticks()
-        peak_memory = max(peak_memory, *(item[1] for item in samples))
-        peak_disk = max(peak_disk, *(_disk(root) for root in args.seat_root))
+        peak_memory = max(
+            peak_memory,
+            max((item[1] for item in samples), default=0),
+        )
+        peak_disk = max(
+            peak_disk,
+            max((_disk(root) for root in args.seat_root), default=0),
+        )
         if previous is not None and system_ticks > previous[1]:
             peak_cpu = max(
                 peak_cpu,

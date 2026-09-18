@@ -130,3 +130,10 @@ def test_qualification_venv_installs_the_locked_runtime_closure() -> None:
     local_install = 'pip" install --no-deps .'
     assert qualifier.index(ci_install) < qualifier.index(runtime_install)
     assert qualifier.index(runtime_install) < qualifier.index(local_install)
+
+
+def test_resource_sampler_handles_seats_before_their_pid_files_exist() -> None:
+    sampler = (ROOT / "scripts/appliance/sample-seat-resources.py").read_text()
+
+    assert "max((item[1] for item in samples), default=0)" in sampler
+    assert "max((_disk(root) for root in args.seat_root), default=0)" in sampler

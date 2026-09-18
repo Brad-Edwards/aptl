@@ -54,7 +54,7 @@ template set may only narrow that set. The grant does not filter runtime fields
 or prove realization; native container readback independently corroborates the
 effective privileges, capabilities, security options, namespace modes, devices,
 mounts, runtime selection, DNS/host/group configuration, logging, init, and
-read-only-root state.
+read-only root state.
 
 The current Compose profile reports unsupported materialization for masked and
 read-only path lists, publish-all-ports, custom init contracts, process-scoped
@@ -179,7 +179,7 @@ Shared networks are valid scenario topology. Authority holders and spawned
 children may share them when authored, but the network implementation must be
 inside the same containment/ownership domain and must not bridge to APTL
 management or another workspace. The current `soc` profile and
-management-only-shape tests are not containment evidence and must not be used
+tests of management-only shapes are not containment evidence and must not be used
 to reject a scenario that a stronger target can realize.
 
 ### Preserve authored state; distinguish backend choices and mechanics
@@ -192,8 +192,8 @@ container-policy lowering. Neither route defines SDL support by itself.
 
 One qualification decision covers both routes before dispatch. Exact or closed
 authored values pass through unchanged on a supporting target. Backend choices
-for semantically open or underspecified requirements—such as choosing a Linux
-distribution or an init implementation—use the existing realization-authority
+for semantically open or underspecified requirements, such as choosing a Linux
+distribution or an init implementation, use the existing realization-authority
 and backend-implementation-profile machinery, are recorded as backend choices,
 and receive native readback. Backend mechanics may not add authority behind an
 exact/closed declaration. In particular:

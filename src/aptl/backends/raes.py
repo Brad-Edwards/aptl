@@ -347,15 +347,15 @@ def admit_raes_scenario(
                 deployment_spec,
                 scenario_root=bundle.root,
             )
-            if not qualification.success:
-                execution_plan.diagnostics.append(
-                    diagnostic(
-                        "aptl.provisioner.runtime-materialization-unsupported",
-                        PROVISIONING_ADDRESS,
-                        qualification.error or "Runtime materialization is unsupported.",
-                    )
-                )
-            elif _has_materialization_specifications(availability):
+            # A backend limitation does not make valid SDL invalid.  The same
+            # read-only gate runs again at apply and returns its precise
+            # unsupported-materialization LabResult before ownership or Docker
+            # mutation.  Component builds remain deferred unless qualification
+            # succeeds, so admission can still expose the valid plan without
+            # mutating the selected daemon.
+            if qualification.success and _has_materialization_specifications(
+                availability
+            ):
                 materialized_availability = artifact_availability_for_scenario(
                     scenario,
                     backend,

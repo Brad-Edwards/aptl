@@ -25,6 +25,7 @@ from aptl.appliance.errors import ApplianceManifestError
 from aptl.appliance.manifest import verify_release_directory
 from aptl.appliance.models import (
     ApplianceGuest,
+    CandidateSource,
     DeliveryAdapter,
     DeliveryParity,
     HostPrerequisites,
@@ -78,7 +79,9 @@ def _key_pair(tmp_path: Path) -> tuple[Path, Path]:
     return private, public
 
 
-def _candidate(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
+def _candidate(
+    tmp_path: Path, *, development_source: bool = False
+) -> tuple[Path, Path, Path, Path]:
     candidate = tmp_path / "launch" / "candidate"
     candidate.mkdir(parents=True)
     version = "5.1.1"
@@ -156,8 +159,18 @@ def _candidate(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
     template = ApplianceCandidateTemplate(
         schema_version="aptl.appliance-candidate-template/v1",
         candidate_id="aptl-5.1.1-candidate-x86_64",
-        source=ReleaseSource(
-            aptl_version=version, source_tag="v5.1.1", source_commit="1" * 40
+        source=(
+            CandidateSource(
+                aptl_version=version,
+                source_revision="commit:" + "1" * 40,
+                source_commit="1" * 40,
+            )
+            if development_source
+            else ReleaseSource(
+                aptl_version=version,
+                source_tag="v5.1.1",
+                source_commit="1" * 40,
+            )
         ),
         guest=ApplianceGuest(
             os_id="ubuntu",
@@ -236,6 +249,26 @@ def test_candidate_is_signed_launchable_and_never_production_shaped(
             public,
             qualification_public_key_path=public,
         )
+
+
+def test_candidate_can_bind_an_untagged_exact_source_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "aptl.appliance.candidate.validate_canonical_payload", lambda *_: None
+    )
+    candidate, template, private, public = _candidate(tmp_path, development_source=True)
+
+    manifest = prepare_candidate_manifest(candidate, template)
+    seal_candidate(candidate, private)
+    verified, _inspection = verify_candidate_directory(candidate, public)
+
+    assert manifest.source == CandidateSource(
+        aptl_version="5.1.1",
+        source_revision="commit:" + "1" * 40,
+        source_commit="1" * 40,
+    )
+    assert verified.source == manifest.source
 
 
 def test_candidate_tampering_and_build_provenance_mismatch_fail_closed(

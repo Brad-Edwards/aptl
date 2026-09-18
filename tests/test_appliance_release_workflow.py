@@ -88,10 +88,27 @@ def test_sealing_requires_exact_redistribution_review_and_publishes_notices() ->
 def test_private_build_public_promotion_and_candidate_acquisition_sets_match() -> None:
     publisher = (ROOT / "scripts/appliance/publish-images.sh").read_text()
     builder = (ROOT / "scripts/appliance/build-candidate.sh").read_text()
+    local_builder = (ROOT / "scripts/appliance/build-local-images.sh").read_text()
     promoter = (ROOT / "scripts/appliance/verify-public-images.sh").read_text()
     published = set(re.findall(r"^build_image ([a-z0-9-]+) ", publisher, re.MULTILINE))
-    acquired = set(re.findall(r"^pull_tag ([a-z0-9-]+) ", builder, re.MULTILINE))
+    acquired = set(re.findall(r"^  '([a-z0-9-]+) [^']+'$", builder, re.MULTILINE))
     image_block = promoter.split("images=(", 1)[1].split(")", 1)[0]
     promoted = set(re.findall(r"^  ([a-z0-9-]+)$", image_block, re.MULTILINE))
     assert published == acquired == promoted
     assert len(published) == 13
+    local_images = set(
+        re.findall(r"^build_image ([^ ]+) ", local_builder, re.MULTILINE)
+    )
+    assert len(local_images) == 13
+
+
+def test_local_candidate_path_uses_exact_commit_and_no_registry_dependency() -> None:
+    wrapper = (ROOT / "scripts/appliance/build-local-candidate.sh").read_text()
+    builder = (ROOT / "scripts/appliance/build-candidate.sh").read_text()
+    assert "git status --porcelain --untracked-files=no" in wrapper
+    assert "APTL_CANDIDATE_MODE=local" in wrapper
+    assert "scripts/appliance/build-local-images.sh" in wrapper
+    assert "scripts/appliance/build-candidate.sh" in wrapper
+    assert "source_revision" in builder
+    assert 'docker image inspect "$canonical"' in builder
+    assert "APTL_IMAGE_NAMESPACE" not in wrapper

@@ -159,6 +159,34 @@ class ReleaseSource(_StrictModel):
         return self
 
 
+class CandidateSource(_StrictModel):
+    """Exact source revision for a qualification-only development candidate."""
+
+    aptl_version: str
+    source_revision: str
+    source_commit: str
+
+    @field_validator("aptl_version")
+    @classmethod
+    def validate_version(cls, value: str) -> str:
+        if not is_appliance_version(value):
+            raise ValueError("invalid APTL candidate version")
+        return value
+
+    @field_validator("source_commit")
+    @classmethod
+    def validate_commit(cls, value: str) -> str:
+        if not _COMMIT_RE.fullmatch(value):
+            raise ValueError("source commit must be a full hexadecimal object id")
+        return value
+
+    @model_validator(mode="after")
+    def validate_revision(self) -> CandidateSource:
+        if self.source_revision != f"commit:{self.source_commit}":
+            raise ValueError("candidate source revision must name its exact commit")
+        return self
+
+
 class ApplianceGuest(_StrictModel):
     """Immutable guest and disposable-overlay contract."""
 

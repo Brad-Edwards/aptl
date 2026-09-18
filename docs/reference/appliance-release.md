@@ -51,6 +51,49 @@ aptl appliance doctor --build-root build
 The report checks Linux/x86-64, available build-root space, QEMU, and both
 libguestfs tools. It reports missing packages but never installs them.
 
+## Build and qualify an exact local commit
+
+The development candidate path builds directly from a clean checkout; it does
+not require a Git tag, GitHub Release, GHCR login, or production signing key.
+It rebuilds all thirteen project-owned OCI images under their canonical local
+names, assembles the wheel and complete offline closure, downloads the pinned
+Ubuntu 26.04 `20260823` qcow2 by its recorded size and SHA-256, and signs the
+candidate with a throwaway qualification-only key:
+
+```bash
+sudo apt-get install libguestfs-tools
+aptl appliance doctor --build-root build
+git status --porcelain
+git rev-parse HEAD
+scripts/appliance/build-local-candidate.sh
+```
+
+The command refuses a tracked-file diff so the candidate manifest can bind the
+exact commit as `commit:<full-sha>`. The resulting files are under
+`build/appliance/candidate-publication/`; they are deliberately not shaped as a
+production release and `seal-release.sh` cannot promote their development
+source identity.
+
+Run the real two-seat KVM qualification locally with a separate temporary
+qualification key. The key is only for local evidence and must not be reused as
+the protected production qualification key:
+
+```bash
+openssl genpkey -algorithm ED25519 -out build/local-qualification.pem
+APTL_CANDIDATE_PUBLICATION="$PWD/build/appliance/candidate-publication" \
+APTL_QUALIFICATION_OUTPUT="$PWD/build/local-machine-a.json" \
+APTL_QUALIFICATION_SEATS=2 \
+APTL_QUALIFICATION_SIGNING_KEY_PEM="$(<build/local-qualification.pem)" \
+scripts/appliance/qualify-candidate.sh
+rm build/local-qualification.pem
+```
+
+This exercises real KVM boot, concurrent overlays and mappings, full guest
+readiness, browser reachability, authenticated Claude and Codex MCP calls,
+revocation, reset, recovery, tamper rejection, and resource measurements. It
+does not replace the two independent machines and production trust anchors
+required before public release sealing.
+
 Network access is permitted while a release engineer resolves and stages
 version-pinned inputs, including the canonical npm builds. The subsequent payload assembly and golden-image build
 are deliberately offline: they contain no checkout, dependency resolution,

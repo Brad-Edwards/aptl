@@ -1,23 +1,61 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${APTL_RELEASE_TAG:?release tag is required}"
 : "${APTL_BASE_IMAGE_URL:?base image URL is required}"
 : "${APTL_BASE_IMAGE_SHA256:?base image SHA-256 is required}"
 : "${APTL_BASE_IMAGE_SIZE_BYTES:?base image size is required}"
-: "${APTL_IMAGE_NAMESPACE:?GHCR image namespace is required}"
 : "${APTL_GUEST_PYTHON_VERSION:?guest Python target is required}"
 
 source_root=$PWD
-test "$(git describe --tags --exact-match HEAD)" = "$APTL_RELEASE_TAG"
-test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$APTL_RELEASE_TAG")"
+candidate_mode=${APTL_CANDIDATE_MODE:-release}
+source_commit=$(git rev-parse HEAD)
+case "$candidate_mode" in
+  release)
+    : "${APTL_RELEASE_TAG:?release tag is required}"
+    : "${APTL_IMAGE_NAMESPACE:?GHCR image namespace is required}"
+    test "$(git describe --tags --exact-match HEAD)" = "$APTL_RELEASE_TAG"
+    test "$source_commit" = "$(git rev-list -n 1 "$APTL_RELEASE_TAG")"
+    candidate_version=${APTL_RELEASE_TAG#v}
+    candidate_id="aptl-${candidate_version}-candidate-x86_64"
+    source_identity=$(printf \
+      '{"aptl_version":"%s","source_tag":"%s","source_commit":"%s"}' \
+      "$candidate_version" "$APTL_RELEASE_TAG" "$source_commit")
+    ;;
+  local)
+    if test -n "$(git status --porcelain --untracked-files=no)"; then
+      echo 'local candidate builds require a clean exact source commit' >&2
+      exit 2
+    fi
+    candidate_version=$(python3 - <<'PYTHON'
+import pathlib
+import tomllib
+
+print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])
+PYTHON
+    )
+    candidate_id="aptl-${candidate_version}-commit-${source_commit:0:12}-candidate-x86_64"
+    source_identity=$(printf \
+      '{"aptl_version":"%s","source_revision":"commit:%s","source_commit":"%s"}' \
+      "$candidate_version" "$source_commit" "$source_commit")
+    ;;
+  *)
+    echo 'APTL_CANDIDATE_MODE must be release or local' >&2
+    exit 2
+    ;;
+esac
+export APTL_CANDIDATE_MODE="$candidate_mode"
+export APTL_CANDIDATE_ID="$candidate_id"
+export APTL_CANDIDATE_SOURCE="$source_identity"
+export APTL_CANDIDATE_VERSION="$candidate_version"
 
 root=$PWD/build/appliance
 test ! -e "$root"
 install -d -m 0700 "$root" "$root/input" "$root/cache" "$root/candidate"
 cleanup() {
   rm -f "$root/input/candidate-private.pem"
-  docker logout ghcr.io >/dev/null 2>&1 || true
+  if test "$candidate_mode" = release; then
+    docker logout ghcr.io >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT INT TERM
 
@@ -27,7 +65,11 @@ python -m venv "$root/venv"
 "$root/venv/bin/pip" install --require-hashes -r requirements/runtime.txt
 "$root/venv/bin/pip" install --no-deps "$root"/dist/aptl_labs-*.whl
 install -d -m 0700 "$root/wheelhouse"
-target_python=$(command -v "python${APTL_GUEST_PYTHON_VERSION}")
+target_python=$(command -v "python${APTL_GUEST_PYTHON_VERSION}" || true)
+if test -z "$target_python" && command -v uv >/dev/null 2>&1; then
+  target_python=$(uv python find "$APTL_GUEST_PYTHON_VERSION")
+fi
+test -n "$target_python"
 "$target_python" -m pip download --require-hashes -r requirements/runtime.txt \
   --dest "$root/wheelhouse"
 cp "$root"/dist/aptl_labs-*.whl "$root/wheelhouse/"
@@ -39,19 +81,29 @@ pull_tag() {
   docker tag "${APTL_IMAGE_NAMESPACE,,}/${package}:${APTL_RELEASE_TAG}" "$canonical"
 }
 
-pull_tag generic-samba-ad-wazuh-agent-base aptl/generic-samba-ad-wazuh-agent-base:latest
-pull_tag generic-samba-ad-base aptl/generic-samba-ad-base:latest
-pull_tag generic-systemd-wazuh-agent-base aptl/generic-systemd-wazuh-agent-base:latest
-pull_tag generic-systemd-wazuh-agent-base-debian aptl/generic-systemd-wazuh-agent-base-debian:latest
-pull_tag generic-systemd-base-debian aptl/generic-systemd-base-debian:latest
-pull_tag generic-systemd-node22-base aptl/generic-systemd-node22-base:latest
-pull_tag generic-wazuh-agent-base-debian aptl/generic-wazuh-agent-base-debian:latest
-pull_tag generic-systemd-base aptl/generic-systemd-base:latest
-pull_tag suricata-wazuh-agent aptl/suricata-wazuh-agent:latest
-pull_tag kali-capture aptl-kali-capture:latest
-pull_tag network-boundary-helper aptl-network-boundary-helper:4
-pull_tag appliance-egress-proxy aptl-appliance-egress-proxy:1
-pull_tag operator-access-proxy aptl/operator-access-proxy:latest
+images=(
+  'generic-samba-ad-wazuh-agent-base aptl/generic-samba-ad-wazuh-agent-base:latest'
+  'generic-samba-ad-base aptl/generic-samba-ad-base:latest'
+  'generic-systemd-wazuh-agent-base aptl/generic-systemd-wazuh-agent-base:latest'
+  'generic-systemd-wazuh-agent-base-debian aptl/generic-systemd-wazuh-agent-base-debian:latest'
+  'generic-systemd-base-debian aptl/generic-systemd-base-debian:latest'
+  'generic-systemd-node22-base aptl/generic-systemd-node22-base:latest'
+  'generic-wazuh-agent-base-debian aptl/generic-wazuh-agent-base-debian:latest'
+  'generic-systemd-base aptl/generic-systemd-base:latest'
+  'suricata-wazuh-agent aptl/suricata-wazuh-agent:latest'
+  'kali-capture aptl-kali-capture:latest'
+  'network-boundary-helper aptl-network-boundary-helper:4'
+  'appliance-egress-proxy aptl-appliance-egress-proxy:1'
+  'operator-access-proxy aptl/operator-access-proxy:latest'
+)
+for image in "${images[@]}"; do
+  read -r package canonical <<<"$image"
+  if test "$candidate_mode" = release; then
+    pull_tag "$package" "$canonical"
+  else
+    docker image inspect "$canonical" >/dev/null
+  fi
+done
 
 cd "$root"
 "$root/venv/bin/aptl" appliance acquire-images \
@@ -112,21 +164,49 @@ with tarfile.open(root / "offline-staging/project.tar", "r:") as archive:
 def digest(path):
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
-version = __import__("os").environ["APTL_RELEASE_TAG"].removeprefix("v")
-commit = __import__("subprocess").check_output(
-    ["git", "rev-parse", "HEAD"], text=True, cwd=source_root
-).strip()
-namespace = __import__("os").environ["APTL_IMAGE_NAMESPACE"].lower()
-tag = __import__("os").environ["APTL_RELEASE_TAG"]
+environment = __import__("os").environ
+version = environment["APTL_CANDIDATE_VERSION"]
+source = json.loads(environment["APTL_CANDIDATE_SOURCE"])
+mode = environment["APTL_CANDIDATE_MODE"]
 
-def repo_digest(package):
-    value = __import__("subprocess").check_output(
-        ["docker", "image", "inspect", "--format", "{{index .RepoDigests 0}}", f"{namespace}/{package}:{tag}"],
-        text=True,
-    ).strip()
+def image_digest(package, canonical):
+    reference = canonical
+    if mode == "release":
+        namespace = environment["APTL_IMAGE_NAMESPACE"].lower()
+        tag = environment["APTL_RELEASE_TAG"]
+        reference = f"{namespace}/{package}:{tag}"
+        value = __import__("subprocess").check_output(
+            ["docker", "image", "inspect", "--format", "{{index .RepoDigests 0}}", reference],
+            text=True,
+        ).strip()
+    else:
+        identity = __import__("subprocess").check_output(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", reference],
+            text=True,
+        ).strip()
+        value = f"{canonical.rsplit(':', 1)[0]}@{identity}"
     if "@sha256:" not in value:
-        raise SystemExit(f"missing repository digest for {package}")
+        raise SystemExit(f"missing immutable image digest for {reference}")
     return value
+
+candidate_id = environment["APTL_CANDIDATE_ID"]
+if mode == "local" and source != {
+    "aptl_version": version,
+    "source_revision": f"commit:{source['source_commit']}",
+    "source_commit": source["source_commit"],
+}:
+    raise SystemExit("local candidate source identity is inconsistent")
+
+if mode == "release":
+    commit = __import__("subprocess").check_output(
+        ["git", "rev-parse", "HEAD"], text=True, cwd=source_root
+    ).strip()
+    if source != {
+        "aptl_version": version,
+        "source_tag": environment["APTL_RELEASE_TAG"],
+        "source_commit": commit,
+    }:
+        raise SystemExit("release candidate source identity is inconsistent")
 
 artifacts = [
     ("canonical-inputs", "canonical-inputs", "inputs.json"),
@@ -143,8 +223,8 @@ artifacts = [
 ]
 template = {
     "schema_version": "aptl.appliance-candidate-template/v1",
-    "candidate_id": f"aptl-{version}-candidate-x86_64",
-    "source": {"aptl_version": version, "source_tag": tag, "source_commit": commit},
+    "candidate_id": candidate_id,
+    "source": source,
     "guest": {
         "os_id": "ubuntu", "os_version": "26.04", "architecture": "x86_64",
         "disk_format": "qcow2", "base_image_digest": __import__("os").environ["APTL_BASE_IMAGE_SHA256"],
@@ -156,8 +236,12 @@ template = {
     ],
     "participant": {"profile_id": "techvault-full", "profile_version": 1},
     "boundary": {
-        "boundary_helper_image": repo_digest("network-boundary-helper"),
-        "egress_proxy_image": repo_digest("appliance-egress-proxy"),
+        "boundary_helper_image": image_digest(
+            "network-boundary-helper", "aptl-network-boundary-helper:4"
+        ),
+        "egress_proxy_image": image_digest(
+            "appliance-egress-proxy", "aptl-appliance-egress-proxy:1"
+        ),
     },
     "host_prerequisites": {
         "architecture": "x86_64", "vcpus": 8, "memory_bytes": 34359738368,
@@ -192,12 +276,12 @@ install -d -m 0700 candidate-publication
 "$root/venv/bin/aptl" appliance split-distribution \
   --source candidate/aptl-golden.qcow2 \
   --output-dir candidate-publication/golden \
-  --release-id "aptl-${APTL_RELEASE_TAG#v}-candidate-x86_64" \
+  --release-id "$candidate_id" \
   --manifest-digest "$manifest_digest" --private-key input/candidate-private.pem
 "$root/venv/bin/aptl" appliance split-distribution \
   --source candidate/offline-payload.tar \
   --output-dir candidate-publication/offline \
-  --release-id "aptl-${APTL_RELEASE_TAG#v}-candidate-x86_64" \
+  --release-id "$candidate_id" \
   --manifest-digest "$manifest_digest" --private-key input/candidate-private.pem
 tar --create --file candidate-publication/candidate-metadata.tar \
   --exclude=aptl-golden.qcow2 --exclude=offline-payload.tar \

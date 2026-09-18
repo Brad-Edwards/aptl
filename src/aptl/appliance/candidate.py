@@ -29,6 +29,7 @@ from aptl.appliance.manifest import (
 )
 from aptl.appliance.models import (
     ApplianceBoundaryReleaseBinding,
+    CandidateSource,
     ApplianceGuest,
     ApplianceManifestSignature,
     ArtifactReference,
@@ -79,7 +80,7 @@ class ApplianceCandidateTemplate(_StrictModel):
 
     schema_version: Literal["aptl.appliance-candidate-template/v1"]
     candidate_id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,127}$")
-    source: ReleaseSource
+    source: ReleaseSource | CandidateSource
     guest: ApplianceGuest
     artifacts: tuple[StagedArtifact, ...]
     participant: ParticipantTemplateBinding
@@ -108,7 +109,7 @@ class ApplianceCandidateManifest(_StrictModel):
 
     schema_version: Literal["aptl.appliance-candidate/v1"]
     candidate_id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,127}$")
-    source: ReleaseSource
+    source: ReleaseSource | CandidateSource
     guest: ApplianceGuest
     artifacts: tuple[ArtifactReference, ...]
     payload_digest: str = Field(pattern=_SHA256_PATTERN)

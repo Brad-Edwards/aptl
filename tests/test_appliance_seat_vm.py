@@ -44,6 +44,18 @@ def test_write_and_read_vm_pid_roundtrip(tmp_path: Path) -> None:
     assert read_vm_pid(tmp_path) == os.getpid()
 
 
+def test_process_identity_falls_back_to_posix_ps_without_procfs() -> None:
+    current = __import__("aptl.appliance.seat.vm", fromlist=["_read_process_identity"])
+
+    with patch("pathlib.Path.read_text", side_effect=OSError):
+        identity = current._read_process_identity(os.getpid())
+
+    assert identity is not None
+    assert identity.pid == os.getpid()
+    assert identity.start_time_ticks > 0
+    assert identity.executable
+
+
 def test_read_vm_pid_rejects_reused_process_identity(tmp_path: Path) -> None:
     write_vm_pid(tmp_path, os.getpid())
     current = __import__("aptl.appliance.seat.vm", fromlist=["_read_process_identity"])

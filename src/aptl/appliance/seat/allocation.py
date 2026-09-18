@@ -7,6 +7,8 @@ import os
 import re
 import shutil
 import socket
+import sys
+import tempfile
 import time
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -20,6 +22,21 @@ _LOCK_NAME = "\0aptl-seat-mapping-allocation-v1"
 _RESOURCE_PREFIX = b"name=opt/aptl/resource-reservation,string="
 _RESOURCE_VALUE = re.compile(rb"^(\d+):(\d+):(\d+)$")
 T = TypeVar("T")
+
+
+class _FileAllocatorLock:
+    """Advisory allocator lock for non-Linux development hosts."""
+
+    def __init__(self, descriptor: int) -> None:
+        self.descriptor = descriptor
+
+    def close(self) -> None:
+        import fcntl
+
+        try:
+            fcntl.flock(self.descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(self.descriptor)
 
 
 def _bind_endpoint(address: str, port: int, protocol: str) -> socket.socket:
@@ -40,8 +57,28 @@ def _endpoint_socket(mapping: BoundaryEndpoint) -> socket.socket:
     return _bind_endpoint(mapping.address, mapping.port, mapping.protocol)
 
 
-def _acquire_allocator_lock(deadline: float) -> socket.socket:
+def _acquire_allocator_lock(deadline: float) -> socket.socket | _FileAllocatorLock:
     """Acquire the host-network-wide APTL allocation mutex."""
+
+    if sys.platform != "linux":
+        import fcntl
+
+        lock_path = Path(tempfile.gettempdir()) / (
+            f"aptl-seat-mapping-allocation-v1-{os.getuid()}.lock"
+        )
+        flags = os.O_RDWR | os.O_CREAT | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(lock_path, flags, 0o600)
+        while True:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return _FileAllocatorLock(descriptor)
+            except BlockingIOError as exc:
+                if time.monotonic() >= deadline:
+                    os.close(descriptor)
+                    raise SeatLauncherError(
+                        "mapping-allocation-busy", "seat mapping allocation is busy"
+                    ) from exc
+                time.sleep(0.05)
 
     lock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
     while True:

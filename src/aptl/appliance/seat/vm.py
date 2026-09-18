@@ -7,6 +7,7 @@ import json
 import os
 import signal
 import subprocess
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -107,7 +108,7 @@ VmRunner = type[SubprocessVm] | None
 
 @dataclass(frozen=True)
 class VmProcessIdentity:
-    """Linux process identity that remains safe when a numeric PID is reused."""
+    """Process identity that remains safe when a numeric PID is reused."""
 
     pid: int
     start_time_ticks: int
@@ -237,14 +238,33 @@ def _tracked_pid_alive(pid: int) -> bool:
 
 
 def _read_process_identity(pid: int) -> VmProcessIdentity | None:
-    """Read an immutable-enough process identity from procfs."""
+    """Read an immutable-enough process identity from procfs or POSIX ps."""
 
     try:
         stat_payload = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
         after_name = stat_payload.rsplit(")", 1)[1].split()
         start_time_ticks = int(after_name[19])
         executable = os.readlink(f"/proc/{pid}/exe")
+        return VmProcessIdentity(
+            pid=pid,
+            start_time_ticks=start_time_ticks,
+            executable=executable,
+        )
     except (IndexError, OSError, ValueError):
+        pass
+    try:
+        observed = subprocess.run(
+            ["ps", "-o", "lstart=", "-o", "comm=", "-p", str(pid)],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout.strip()
+        start_text, executable = observed[:24], observed[24:].strip()
+        start_time_ticks = int(time.mktime(time.strptime(start_text)))
+        if not executable:
+            return None
+    except (OSError, subprocess.SubprocessError, ValueError):
         return None
     return VmProcessIdentity(
         pid=pid,

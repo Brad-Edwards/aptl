@@ -2,11 +2,13 @@
 
 from pathlib import Path
 from types import SimpleNamespace
+from subprocess import CompletedProcess
 from unittest.mock import patch
 
 from aptl.appliance.guest_observation import (
     _ProbePath,
     _probe_command,
+    _read_guest_boot_id,
     collect_guest_observation,
 )
 from aptl.core.appliance_boundary_inventory import BoundaryProbeObservation
@@ -152,7 +154,22 @@ def test_guest_observation_requires_real_positive_and_negative_probes() -> None:
     assert result.observation_complete is True
     assert {probe.expectation for probe in result.probes} == {"reachable", "blocked"}
     assert result.guest_daemon_id == "daemon-42"
-    assert result.boot_id == Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    assert result.boot_id == _read_guest_boot_id()
+
+
+def test_guest_boot_identity_has_a_portable_fallback() -> None:
+    observed = CompletedProcess(
+        ["sysctl"], 0, stdout="{ sec = 1790000000, usec = 0 }\n", stderr=""
+    )
+    with (
+        patch("pathlib.Path.read_text", side_effect=OSError),
+        patch("aptl.appliance.guest_observation.subprocess.run", return_value=observed),
+    ):
+        first = _read_guest_boot_id()
+        second = _read_guest_boot_id()
+
+    assert first == second
+    assert first.startswith("sha256:")
 
 
 def test_probe_command_joins_only_the_observed_container_namespace() -> None:

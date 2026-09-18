@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import socket
 from pathlib import Path
 
 import pytest
 
+import aptl.appliance.seat.allocation as allocation
 from aptl.appliance.seat.allocation import (
     _require_resource_capacity,
     _running_resource_reservations,
@@ -90,6 +92,18 @@ def test_automatic_allocator_selects_distinct_ports_and_holds_launch_lock() -> N
     finally:
         for listener in listeners:
             listener.close()
+
+
+def test_allocator_lock_falls_back_to_file_lock_off_linux(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(allocation.sys, "platform", "darwin")
+    monkeypatch.setattr(allocation.tempfile, "gettempdir", lambda: str(tmp_path))
+    mapping = _mapping(_free_port())
+
+    with reserve_outer_mappings((mapping,)):
+        lock = tmp_path / f"aptl-seat-mapping-allocation-v1-{os.getuid()}.lock"
+        assert lock.is_file()
 
 
 def test_resource_admission_accounts_for_running_seats(tmp_path: Path) -> None:

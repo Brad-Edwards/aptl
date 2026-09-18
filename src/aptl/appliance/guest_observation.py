@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import re
 import secrets
+import subprocess
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -26,6 +28,30 @@ from aptl.core.deployment.realization import DeploymentRealizationSpec
 
 _CONTAINER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 _PROBE_PATH = "/usr/local/bin/aptl-boundary-probe"
+
+
+def _read_guest_boot_id() -> str:
+    """Read a stable boot identity on Linux and portable test hosts."""
+
+    try:
+        value = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    except OSError:
+        try:
+            observed = subprocess.run(
+                ["sysctl", "-n", "kern.boottime"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            ).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            observed = ""
+        if not observed:
+            raise ValueError("guest boot identity is unavailable")
+        value = "sha256:" + hashlib.sha256(observed.encode()).hexdigest()
+    if not value:
+        raise ValueError("guest boot identity is unavailable")
+    return value
 
 
 class _ProbeBackend(Protocol):
@@ -504,7 +530,7 @@ def collect_guest_observation(
     return GuestBoundaryObservation(
         policy_digest=binding.policy_digest,
         raes_plan_digest=binding.raes_plan_digest,
-        boot_id=Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
+        boot_id=_read_guest_boot_id(),
         guest_daemon_id=daemon_id,
         workbench_policy_version=policy.workbench_policy_version,
         enforcements=enforcements,

@@ -33,6 +33,7 @@ from aptl.workbench.guest_binding import (
     observe_guest,
     verify_guest_observation,
 )
+from aptl.workbench.access import SeatEndpoint
 from aptl.workbench.preparation import TransportPreparation, prepare_guest_transport
 from aptl.workbench.profiles import WorkbenchConfigurationError
 from aptl.utils.strict_json import loads_strict
@@ -296,8 +297,14 @@ def serve_appliance_access(
         seat_id=request.seat_id,
         instance_id=request.instance_id,
         generation=request.generation,
-        guest_endpoint=request.guest_endpoint,
-        outer_endpoint=request.outer_endpoint,
+        guest_endpoint=SeatEndpoint(
+            address=request.guest_endpoint.address,
+            port=request.guest_endpoint.port,
+        ),
+        outer_endpoint=SeatEndpoint(
+            address=request.outer_endpoint.address,
+            port=request.outer_endpoint.port,
+        ),
         project_dir=project_dir,
         management_home=Path(account.pw_dir),
         node_executable=Path(shutil.which("node") or "/usr/bin/node"),

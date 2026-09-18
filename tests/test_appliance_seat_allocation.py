@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import socket
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -138,3 +139,59 @@ def test_resource_reservations_are_discovered_from_qemu_argv(tmp_path: Path) -> 
         16 * 1024**3,
         100 * 1024**3,
     )
+
+
+def test_resource_admission_observes_live_host_capacity(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(allocation.os, "sched_getaffinity", lambda pid: {0, 1, 2, 3})
+    monkeypatch.setattr(
+        allocation.os,
+        "sysconf",
+        lambda name: {"SC_PHYS_PAGES": 8 * 1024**2, "SC_PAGE_SIZE": 4096}[name],
+    )
+    monkeypatch.setattr(
+        allocation.shutil,
+        "disk_usage",
+        lambda path: SimpleNamespace(total=500 * 1024**3, free=400 * 1024**3),
+    )
+    original_read_text = Path.read_text
+
+    def read_text(path: Path, *args, **kwargs):
+        if path == Path("/proc/meminfo"):
+            return "MemAvailable: 25165824 kB\n"
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+
+    _require_resource_capacity(
+        (2, 4 * 1024**3, 20 * 1024**3),
+        seat_root=tmp_path,
+        reservations=(0, 0, 0),
+    )
+
+
+def test_reserved_launcher_rejects_missing_resource_root_and_early_exit() -> None:
+    mapping = _mapping(_free_port())
+    with pytest.raises(SeatLauncherError, match="seat root is required"):
+        launch_with_reserved_mappings(
+            (mapping,),
+            lambda: object(),
+            resources=(1, 1, 1),
+        )
+
+    class Exited:
+        def poll(self):
+            return 1
+
+    with pytest.raises(SeatLauncherError, match="VM exited during port bind"):
+        launch_with_reserved_mappings((mapping,), Exited)
+
+
+def test_automatic_launcher_requires_resource_root() -> None:
+    with pytest.raises(SeatLauncherError, match="seat root is required"):
+        launch_with_automatic_mappings(
+            (_mapping(443),),
+            lambda mappings: mappings,
+            resources=(1, 1, 1),
+        )

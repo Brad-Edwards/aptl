@@ -1,8 +1,15 @@
 """Guest adapter tests for signed loopback publications."""
 
+import socket
+import threading
+
 import pytest
 
-from aptl.appliance.loopback_proxy import build_proxy_bindings
+from aptl.appliance.loopback_proxy import (
+    ProxyBinding,
+    _ThreadingProxyServer,
+    build_proxy_bindings,
+)
 from tests.test_appliance_boundary_inventory import _policy
 
 
@@ -30,3 +37,41 @@ def test_proxy_bindings_reject_non_tcp_publication() -> None:
 
     with pytest.raises(ValueError, match="TCP"):
         build_proxy_bindings(policy, adapter_address="10.0.2.15")
+
+
+def test_proxy_relays_bytes_to_the_fixed_loopback_target() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as upstream:
+        upstream.bind(("127.0.0.1", 0))
+        upstream.listen(1)
+        upstream_port = upstream.getsockname()[1]
+
+        def echo() -> None:
+            connection, _ = upstream.accept()
+            with connection:
+                connection.sendall(connection.recv(1024).upper())
+
+        echo_thread = threading.Thread(target=echo)
+        echo_thread.start()
+        proxy = _ThreadingProxyServer(
+            ProxyBinding(
+                listen_address="127.0.0.1",
+                listen_port=0,
+                target_address="127.0.0.1",
+                target_port=upstream_port,
+            )
+        )
+        proxy_thread = threading.Thread(target=proxy.serve_forever)
+        proxy_thread.start()
+        try:
+            with socket.create_connection(proxy.server_address, timeout=2) as client:
+                client.sendall(b"candidate")
+                client.shutdown(socket.SHUT_WR)
+                assert client.recv(1024) == b"CANDIDATE"
+        finally:
+            proxy.shutdown()
+            proxy.server_close()
+            proxy_thread.join(timeout=2)
+            echo_thread.join(timeout=2)
+
+    assert not proxy_thread.is_alive()
+    assert not echo_thread.is_alive()

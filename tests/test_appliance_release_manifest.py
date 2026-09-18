@@ -50,6 +50,10 @@ from aptl.appliance.release_models import (
     ParticipantTemplateBinding,
     StagedArtifact,
 )
+from aptl.appliance.release_validation import (
+    _verify_embedded_inputs,
+    validate_canonical_payload,
+)
 from aptl.validation.participant_qualification_evidence import (
     ParticipantQualificationReport,
     participant_qualification_attestation_payload,
@@ -61,6 +65,40 @@ _HEX_C = "c" * 64
 _HEX_D = "d" * 64
 _HEX_E = "e" * 64
 _HEX_F = "f" * 64
+
+
+def test_canonical_payload_is_safely_materialized_and_revalidated(
+    monkeypatch,
+) -> None:
+    from aptl.appliance import inputs
+
+    canonical = b'{"schema_version":"aptl.canonical-inputs/v1"}'
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:") as archive:
+        directory = tarfile.TarInfo("project")
+        directory.type = tarfile.DIRTYPE
+        archive.addfile(directory)
+        for name, payload in (
+            ("inputs.json", canonical),
+            ("project/README.md", b"offline closure\n"),
+        ):
+            member = tarfile.TarInfo(name)
+            member.size = len(payload)
+            archive.addfile(member, io.BytesIO(payload))
+
+    observed = []
+    monkeypatch.setattr(
+        inputs,
+        "validate_canonical_inputs",
+        lambda staging, **kwargs: observed.append((staging, kwargs)),
+    )
+    payload = buffer.getvalue()
+
+    _verify_embedded_inputs(payload, canonical)
+    validate_canonical_payload(payload, canonical)
+
+    assert len(observed) == 1
+    assert observed[0][1] == {"enforce_runtime_target": False}
 
 
 def _artifact(

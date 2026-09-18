@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+import socket
+import threading
 
+import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
@@ -14,10 +17,13 @@ from aptl.appliance.seat.access import (
     GuestRuntimeEvidence,
     SeatAccessEnrollment,
     configure_host_clients,
+    encode_guest_access_bundle,
     invalidate_host_access,
     persist_host_access_bundle,
+    publish_guest_access,
     publish_guest_access_request,
     read_guest_access_request,
+    wait_for_guest_access,
 )
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.workbench.dispatch import key_fingerprint
@@ -159,3 +165,59 @@ def test_bundle_configures_both_native_clients_without_provider_state(
     content = "\n".join(path.read_text() for path in paths)
     assert "30222" in content
     assert "provider" not in content.lower()
+
+
+def test_guest_access_channel_roundtrips_current_generation(tmp_path: Path) -> None:
+    request = _request()
+    bundle = _bundle(_public_key()).model_copy(
+        update={
+            "nonce": request.nonce,
+            "seat_id": request.seat_id,
+            "instance_id": request.instance_id,
+            "generation": request.generation,
+        }
+    )
+    payload = encode_guest_access_bundle(bundle)
+    socket_path = tmp_path / "access.sock"
+    listening = threading.Event()
+
+    def publish() -> None:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+            server.bind(str(socket_path))
+            server.listen(1)
+            listening.set()
+            connection, _ = server.accept()
+            with connection:
+                connection.sendall(payload[:31])
+                connection.sendall(payload[31:])
+
+    thread = threading.Thread(target=publish)
+    thread.start()
+    assert listening.wait(timeout=2)
+
+    observed = wait_for_guest_access(
+        socket_path,
+        request,
+        process_alive=lambda: True,
+        timeout_seconds=2,
+    )
+    thread.join(timeout=2)
+
+    assert observed == bundle
+    assert not thread.is_alive()
+
+
+def test_guest_can_publish_access_bundle_to_virtio_character_device() -> None:
+    publish_guest_access(Path("/dev/null"), _bundle(_public_key()))
+
+
+def test_guest_access_wait_fails_if_vm_exits_before_channel_exists(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(Exception, match="VM exited before guest access"):
+        wait_for_guest_access(
+            tmp_path / "missing.sock",
+            _request(),
+            process_alive=lambda: False,
+            timeout_seconds=0.1,
+        )

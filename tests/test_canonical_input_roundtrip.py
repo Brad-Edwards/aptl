@@ -9,6 +9,7 @@ import io
 import json
 import platform
 import shutil
+import subprocess
 import tarfile
 import tempfile
 import zipfile
@@ -85,6 +86,49 @@ def _wheel_with_assets(wheelhouse, project):
                 wheel.write(
                     asset, "aptl/_labdata/" + asset.relative_to(project).as_posix()
                 )
+
+
+def test_image_acquisition_records_exact_daemon_identity_and_archive_closure(
+    tmp_path, monkeypatch
+):
+    image_archive = tmp_path / "output" / "oci-images.tar"
+    image_roles = tmp_path / "output" / "image-roles.json"
+    reference = "example.test/participant:fixed"
+    identity = "sha256:" + "a" * 64
+    calls = []
+
+    monkeypatch.setattr(inputs, "resolve_asset_source", lambda: (tmp_path, True))
+    monkeypatch.setattr(inputs, "materialize", lambda project: project.mkdir())
+    monkeypatch.setattr(inputs, "env_pack_bundle", lambda path: object())
+    monkeypatch.setattr(
+        inputs,
+        "canonical_image_references",
+        lambda project, bundle: {"scenario.participant": reference},
+    )
+
+    def run(argv, **kwargs):
+        calls.append(argv)
+        if argv[:3] == ["docker", "image", "inspect"]:
+            return subprocess.CompletedProcess(argv, 0, stdout=identity + "\n")
+        return subprocess.CompletedProcess(argv, 0, stdout="")
+
+    monkeypatch.setattr(inputs.subprocess, "run", run)
+    monkeypatch.setattr(inputs, "archive_files", lambda path: {})
+    monkeypatch.setattr(
+        inputs,
+        "docker_archive_images",
+        lambda path, files: {identity: (reference,)},
+    )
+    monkeypatch.setattr(inputs, "_validate_image_sources", lambda *args: None)
+
+    roles = inputs.acquire_canonical_images(
+        image_archive=image_archive,
+        image_roles=image_roles,
+    )
+
+    assert roles == {"scenario.participant": identity}
+    assert json.loads(image_roles.read_text()) == roles
+    assert any(command[:2] == ["docker", "save"] for command in calls)
 
 
 def test_canonical_staging_roundtrip_binds_acquired_bytes_and_rejects_tampering(

@@ -271,6 +271,8 @@ def wait_for_guest_access(
         if actual != expected:
             raise ValueError("guest access response belongs to another start")
         return bundle
+    except WorkbenchConfigurationError:
+        raise
     except (OSError, ValueError) as exc:
         raise WorkbenchConfigurationError("guest access response was invalid") from exc
     finally:

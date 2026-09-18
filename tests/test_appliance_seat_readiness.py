@@ -1,6 +1,8 @@
 """Per-start VM readiness channel tests."""
 
 from pathlib import Path
+import socket
+import threading
 
 import pytest
 
@@ -11,6 +13,7 @@ from aptl.appliance.seat.readiness import (
     load_guest_readiness_challenge,
     publish_guest_readiness,
     publish_readiness_challenge,
+    wait_for_guest_readiness,
 )
 from tests.test_appliance_boundary_inventory import _guest
 
@@ -90,3 +93,47 @@ def test_guest_challenge_loader_rejects_leaf_symlink(tmp_path: Path) -> None:
 
     with pytest.raises(Exception, match="challenge was invalid"):
         load_guest_readiness_challenge(linked)
+
+
+def test_host_waits_for_framed_readiness_from_current_vm(tmp_path: Path) -> None:
+    socket_path = tmp_path / "readiness.sock"
+    challenge = _challenge()
+    payload = encode_guest_readiness(challenge, _guest())
+    listening = threading.Event()
+
+    def publish() -> None:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+            server.bind(str(socket_path))
+            server.listen(1)
+            listening.set()
+            connection, _ = server.accept()
+            with connection:
+                connection.sendall(payload[:17])
+                connection.sendall(payload[17:])
+
+    thread = threading.Thread(target=publish)
+    thread.start()
+    assert listening.wait(timeout=2)
+
+    observed = wait_for_guest_readiness(
+        socket_path,
+        challenge,
+        process_alive=lambda: True,
+        timeout_seconds=2,
+    )
+    thread.join(timeout=2)
+
+    assert observed == _guest()
+    assert not thread.is_alive()
+
+
+def test_host_readiness_fails_if_vm_exits_before_channel_exists(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(Exception, match="VM exited before readiness"):
+        wait_for_guest_readiness(
+            tmp_path / "missing.sock",
+            _challenge(),
+            process_alive=lambda: False,
+            timeout_seconds=0.1,
+        )

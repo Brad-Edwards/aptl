@@ -1696,9 +1696,11 @@ src/aptl/appliance/guest_observation.py	optional-delivery	Keep authenticated gue
 src/aptl/appliance/policy.py	optional-delivery	Keep full-TechVault appliance policy with delivery owner
 src/aptl/appliance/qualification.py	optional-delivery	Keep machine-derived qualification evidence with delivery owner
 src/aptl/appliance/seat/access.py	optional-delivery	Keep generation-scoped host access with delivery owner
+tests/test_appliance_access_service.py	tests-follow-owner	Retain guest-restricted MCP service tests with migrated owner
 tests/test_appliance_candidate.py	tests-follow-owner	Retain candidate trust and tamper tests with migrated owner
 tests/test_appliance_guest_observation.py	tests-follow-owner	Retain guest observation tests with migrated owner
 tests/test_appliance_policy.py	tests-follow-owner	Retain appliance policy tests with migrated owner
+tests/test_appliance_qualification.py	tests-follow-owner	Retain candidate qualification evidence tests with migrated owner
 tests/test_appliance_seat_access.py	tests-follow-owner	Retain seat access and revocation tests with migrated owner
 tests/test_network_boundary_probe.py	tests-follow-owner	Retain boundary probe tests with migrated owner
 tests/test_appliance_release_workflow.py	tests-follow-owner	Retain public release workflow gates with migrated owner

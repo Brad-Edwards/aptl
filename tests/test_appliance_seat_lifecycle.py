@@ -11,6 +11,8 @@ from aptl.appliance.manifest import ApplianceReleaseInspection
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.appliance.seat.lifecycle import (
     StartSeatOptions,
+    _ensure_overlay,
+    _seat_paths,
     reconcile_seat_after_reboot,
     recover_seat,
     reset_seat,
@@ -100,6 +102,73 @@ def _listener_probe():
             protocol="tcp",
         ),
     )
+
+
+def test_overlay_creation_is_bound_to_release_and_launch_digests(
+    tmp_path: Path,
+) -> None:
+    seat_root = tmp_path / "seat"
+    release = seat_root / "release"
+    launch = seat_root / "launch"
+    release.mkdir(parents=True)
+    launch.mkdir()
+    public_key = launch / "release-public.pem"
+    qualification_key = launch / "qualification-public.pem"
+    public_key.write_text("public")
+    qualification_key.write_text("qualification")
+    paths = _seat_paths(
+        seat_root,
+        seat_id="seat-01",
+        release_dir=release,
+        release_public_key=public_key,
+        qualification_public_key=qualification_key,
+    )
+    paths.launch_descriptor.write_text("launch")
+    record = SeatRecord(
+        schema_version="aptl.seat-record/v2",
+        seat_id="seat-01",
+        instance_id="a" * 32,
+        generation=1,
+        selected_release_id="aptl-v5.1.1-x86_64",
+        launch_descriptor_digest="sha256:" + "d" * 64,
+        overlay_path="instances/seat-01.qcow2",
+        host_observation_id="host-1",
+        lifecycle_state="staged",
+        taint_state="clean",
+        host_boot_id="boot-1",
+        mappings=tuple(
+            mapping.model_copy(
+                update={
+                    "guest_address": mapping.address,
+                    "guest_port": mapping.port,
+                }
+            )
+            for mapping in _listener_probe()
+        ),
+    )
+    captured = []
+
+    with (
+        patch(
+            "aptl.appliance.seat.lifecycle._load_delivery_manifest",
+            return_value=_manifest_stub(),
+        ),
+        patch(
+            "aptl.appliance.seat.lifecycle.create_disposable_overlay",
+            side_effect=lambda root, request: captured.append((root, request)),
+        ),
+        patch("aptl.appliance.seat.lifecycle.initialize_overlay_state") as initialize,
+    ):
+        _ensure_overlay(paths, record, candidate_trust=False)
+
+    assert len(captured) == 1
+    root, request = captured[0]
+    assert root == seat_root
+    assert request.golden_image_path == "release/artifacts/golden.qcow2"
+    assert request.golden_image_digest == "sha256:" + "c" * 64
+    assert request.launch_descriptor_digest == record.launch_descriptor_digest
+    assert request.overlay_path == record.overlay_path
+    initialize.assert_called_once_with(paths.overlay_state_dir)
 
 
 def test_stage_persists_seat_record(tmp_path: Path) -> None:

@@ -19,6 +19,7 @@ from aptl.appliance.build import (
     OverlayCreateRequest,
     build_golden_image,
     create_disposable_overlay,
+    prepare_golden_image_request,
 )
 from aptl.appliance.launch import canonical_launch_bytes
 from aptl.appliance.models import GoldenImageInventory
@@ -109,6 +110,44 @@ def _overlay_request(
         launch_descriptor_digest=f"sha256:{hashlib.sha256(payload).hexdigest()}",
         overlay_path=overlay_path,
     )
+
+
+def test_build_request_planning_pins_every_staged_input_create_once(
+    tmp_path: Path,
+) -> None:
+    expected = _request(tmp_path)
+
+    planned = prepare_golden_image_request(
+        tmp_path,
+        base_image_path=expected.base_image_path,
+        offline_payload_path=expected.offline_payload_path,
+        provisioner_path=expected.provisioner_path,
+        scanner_path=expected.scanner_path,
+        output_image_path=expected.output_image_path,
+        inventory_output_path=expected.inventory_output_path,
+        virtual_size_bytes=expected.virtual_size_bytes,
+        request_path="output/build-request.json",
+    )
+
+    assert planned == expected
+    assert (
+        GoldenImageBuildRequest.model_validate_json(
+            (tmp_path / "output/build-request.json").read_bytes()
+        )
+        == expected
+    )
+    with pytest.raises(ApplianceBuildError, match="already exists"):
+        prepare_golden_image_request(
+            tmp_path,
+            base_image_path=expected.base_image_path,
+            offline_payload_path=expected.offline_payload_path,
+            provisioner_path=expected.provisioner_path,
+            scanner_path=expected.scanner_path,
+            output_image_path=expected.output_image_path,
+            inventory_output_path=expected.inventory_output_path,
+            virtual_size_bytes=expected.virtual_size_bytes,
+            request_path="output/build-request.json",
+        )
 
 
 def test_golden_image_build_uses_fixed_offline_commands_and_read_only_output(

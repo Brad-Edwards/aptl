@@ -20,6 +20,7 @@ from aptl.core.deployment.realization import (
 from aptl.core.lab import (
     _LabStartContext,
     _configure_verified_appliance_launch,
+    _publish_appliance_guest_readiness,
     _step_pull_images,
     _step_seed_suricata_volumes,
 )
@@ -321,3 +322,49 @@ def test_verified_launch_reverification_failure_is_a_hard_stop(
     assert "unsafe verification detail" not in result.error
     run.assert_not_called()
     backend.configure_appliance_boundary.assert_not_called()
+
+
+def test_guest_readiness_and_access_are_published_from_one_observation(
+    tmp_path: Path,
+) -> None:
+    deployment = object()
+    observation = object()
+    realization = SimpleNamespace(
+        deployment_spec=lambda profiles: deployment,
+    )
+    backend = SimpleNamespace(
+        observe_appliance_boundary=lambda value: observation,
+    )
+    context = _LabStartContext(
+        project_dir=tmp_path,
+        skip_seed=False,
+        backend=backend,
+        selected_profiles={"red", "blue"},
+        admitted_start=SimpleNamespace(realization=realization),
+        appliance_readiness_challenge=tmp_path / "readiness.json",
+        appliance_readiness_device=tmp_path / "readiness.sock",
+        appliance_access_request=tmp_path / "access-request.json",
+        appliance_access_device=tmp_path / "access.sock",
+        appliance_access_output_dir=tmp_path / "access",
+        appliance_launch_descriptor=tmp_path / "launch.json",
+        appliance_release_public_key=tmp_path / "release.pem",
+        appliance_qualification_public_key=tmp_path / "qualification.pem",
+        appliance_candidate_trust=True,
+    )
+
+    with (
+        patch(
+            "aptl.appliance.seat.readiness.publish_guest_readiness"
+        ) as publish_readiness,
+        patch("aptl.appliance.access_service.serve_appliance_access") as serve_access,
+    ):
+        result = _publish_appliance_guest_readiness(context)
+
+    assert result is None
+    publish_readiness.assert_called_once_with(
+        context.appliance_readiness_challenge,
+        context.appliance_readiness_device,
+        observation,
+    )
+    assert serve_access.call_args.kwargs["candidate_trust"] is True
+    assert serve_access.call_args.kwargs["observe_boundary"]() is observation

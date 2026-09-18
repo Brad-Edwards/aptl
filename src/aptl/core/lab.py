@@ -3491,16 +3491,13 @@ def _publish_appliance_guest_readiness(
                 raise ValueError("appliance access channel is incomplete")
             from aptl.appliance.access_service import serve_appliance_access
 
-            assert ctx.appliance_access_request is not None
-            assert ctx.appliance_access_device is not None
-            assert ctx.appliance_access_output_dir is not None
             serve_appliance_access(
-                request_path=ctx.appliance_access_request,
+                request_path=cast(Path, ctx.appliance_access_request),
                 descriptor_path=ctx.appliance_launch_descriptor,
                 release_public_key=ctx.appliance_release_public_key,
                 qualification_public_key=ctx.appliance_qualification_public_key,
-                device_path=ctx.appliance_access_device,
-                output_dir=ctx.appliance_access_output_dir,
+                device_path=cast(Path, ctx.appliance_access_device),
+                output_dir=cast(Path, ctx.appliance_access_output_dir),
                 project_dir=ctx.project_dir,
                 observe_boundary=lambda: observe(deployment),
                 candidate_trust=ctx.appliance_candidate_trust,

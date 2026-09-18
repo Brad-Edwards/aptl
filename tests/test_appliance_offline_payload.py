@@ -47,6 +47,19 @@ def test_offline_payload_is_byte_reproducible_and_read_only(tmp_path: Path) -> N
         assert all(member.mtime == 0 for member in archive.getmembers())
 
 
+def test_offline_payload_supports_locked_wheel_names_beyond_ustar(
+    tmp_path: Path,
+) -> None:
+    staging = _staging(tmp_path)
+    wheel_name = "dependency-1.0-" + "x" * 100 + ".whl"
+    (staging / "wheelhouse" / wheel_name).write_bytes(b"dependency")
+
+    result = build_offline_payload(staging, tmp_path / "long-wheel.tar")
+
+    with tarfile.open(result.output_path, "r:") as archive:
+        assert f"wheelhouse/{wheel_name}" in archive.getnames()
+
+
 def test_offline_payload_rejects_unknown_files_invalid_env_and_symlinks(
     tmp_path: Path,
 ) -> None:

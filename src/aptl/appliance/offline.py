@@ -156,11 +156,11 @@ def _write_tar(staging: Path, paths: list[Path], candidate: Path) -> None:
     """Write a deterministic USTAR archive from already-validated paths."""
 
     try:
-        with tarfile.open(candidate, "w", format=tarfile.USTAR_FORMAT) as archive:
+        with tarfile.open(candidate, "w", format=tarfile.PAX_FORMAT) as archive:
             for path in paths:
                 relative = path.relative_to(staging).as_posix()
                 _add_tar_member(archive, path, relative)
-    except (OSError, tarfile.TarError) as exc:
+    except (OSError, tarfile.TarError, ValueError) as exc:
         raise OfflinePayloadError("offline payload could not be assembled") from exc
 
 

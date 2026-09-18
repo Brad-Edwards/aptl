@@ -115,5 +115,8 @@ def test_local_candidate_path_uses_exact_commit_and_no_registry_dependency() -> 
     assert '"$target_python" -m venv "$root/venv"' in builder
     assert "\npython -m venv " not in builder
     assert 'pip download --require-hashes -r requirements/web.txt' in builder
+    assert "acquire-guest-system-packages.sh" in builder
+    assert "--system-packages system-packages" in builder
+    assert "--system-packages-lock" in builder
     assert 'docker image inspect "$canonical"' in builder
     assert "APTL_IMAGE_NAMESPACE" not in wrapper

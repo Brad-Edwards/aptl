@@ -56,6 +56,7 @@ def _dockerfiles() -> list[Path]:
         p
         for p in REPO_ROOT.rglob("Dockerfile*")
         if p.is_file()
+        and not p.is_relative_to(REPO_ROOT / "build")
         and "node_modules" not in p.parts
         and "site" not in p.parts
         and ".venv" not in p.parts

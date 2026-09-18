@@ -73,6 +73,8 @@ install -d -m 0700 "$root/wheelhouse"
 "$target_python" -m pip download --require-hashes -r requirements/web.txt \
   --dest "$root/wheelhouse"
 cp "$root"/dist/aptl_labs-*.whl "$root/wheelhouse/"
+"$source_root/scripts/appliance/acquire-guest-system-packages.sh" \
+  "$root/system-packages"
 
 pull_tag() {
   local package=$1
@@ -111,6 +113,8 @@ cd "$root"
 "$root/venv/bin/aptl" appliance assemble-inputs \
   --staging-dir offline-staging --wheelhouse wheelhouse \
   --image-archive input/oci-images.tar --image-roles input/image-roles.json \
+  --system-packages system-packages \
+  --system-packages-lock "$source_root/appliance/guest/system-packages.sha256" \
   --target-python-version "$APTL_GUEST_PYTHON_VERSION" \
   --target-architecture x86_64
 "$root/venv/bin/aptl" appliance bundle \

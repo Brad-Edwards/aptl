@@ -29,6 +29,17 @@ def _staging(root: Path) -> Path:
     return staging
 
 
+def _canonical_system_packages(staging: Path) -> None:
+    packages = staging / "system-packages"
+    packages.mkdir()
+    (packages / "docker.io_1_amd64.deb").write_bytes(b"docker")
+    digest = __import__("hashlib").sha256(b"docker").hexdigest()
+    (staging / "system-packages.sha256").write_text(
+        f"{digest}  docker.io_1_amd64.deb\n"
+    )
+    (staging / "requirements.txt").write_text("aptl-labs==5.1.1\n")
+
+
 def test_offline_payload_is_byte_reproducible_and_read_only(tmp_path: Path) -> None:
     staging = _staging(tmp_path)
     first = build_offline_payload(staging, tmp_path / "first.tar")
@@ -104,6 +115,19 @@ def test_offline_payload_requires_one_aptl_wheel_matching_version(
 
     with pytest.raises(OfflinePayloadError, match="exactly one matching"):
         build_offline_payload(staging, tmp_path / "duplicate.tar")
+
+
+def test_canonical_payload_admits_only_locked_system_packages(tmp_path: Path) -> None:
+    staging = _staging(tmp_path)
+    _canonical_system_packages(staging)
+    (staging / "inputs.json").write_text("{}")
+
+    with pytest.raises(OfflinePayloadError, match="canonical payload"):
+        build_offline_payload(staging, tmp_path / "canonical.tar")
+
+    (staging / "system-packages/extra.deb").write_bytes(b"extra")
+    with pytest.raises(OfflinePayloadError, match="canonical payload"):
+        build_offline_payload(staging, tmp_path / "extra.tar")
 
 
 def test_archive_roles_use_saved_config_ids_not_docker_store_ids(

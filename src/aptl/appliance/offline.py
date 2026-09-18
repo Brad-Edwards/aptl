@@ -29,7 +29,12 @@ _ALLOWED_TOP_LEVEL = frozenset(
         "aptl-launch.mount",
     }
 )
-_CANONICAL_TOP_LEVEL = _ALLOWED_TOP_LEVEL | {"inputs.json", "requirements.txt"}
+_CANONICAL_TOP_LEVEL = _ALLOWED_TOP_LEVEL | {
+    "inputs.json",
+    "requirements.txt",
+    "system-packages",
+    "system-packages.sha256",
+}
 _SCENARIO_RE = re.compile(r"^[a-z0-9][a-z0-9.-]*$")
 _INVALID_RELEASE_ENV = "invalid non-secret appliance release environment"
 

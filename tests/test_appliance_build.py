@@ -188,6 +188,8 @@ def test_golden_image_build_uses_fixed_offline_commands_and_read_only_output(
     assert all("/bin/sh" not in value and "bash" not in value for value in customize)
     scanner = runner.calls[5]
     assert "--no-network" in scanner
+    assert scanner[scanner.index("--run-command") + 1] == ": > /etc/machine-id"
+    assert scanner.index("--run-command") < scanner.index("--run")
     assert "--run" in scanner
 
 

@@ -1707,3 +1707,9 @@ tests/test_appliance_release_workflow.py	tests-follow-owner	Retain public releas
 src/aptl/appliance/redistribution.py	optional-delivery	Keep exact-closure redistribution gate with delivery owner
 tests/test_appliance_redistribution.py	tests-follow-owner	Retain redistribution review coverage with migrated owner
 tests/test_appliance_native_client_probe.py	tests-follow-owner	Retain actual native client event proof with migrated owner
+appliance/guest/system-packages.sha256	optional-delivery	Keep exact guest system package closure with delivery owner
+scripts/appliance/acquire-guest-system-packages.sh	optional-delivery	Keep content-locked guest package acquisition with delivery owner
+scripts/appliance/build-local-candidate.sh	optional-delivery	Keep exact-commit local candidate build path with delivery owner
+scripts/appliance/build-local-images.sh	optional-delivery	Keep local appliance image build path with delivery owner
+src/aptl/appliance/public_install.py	optional-delivery	Keep signed public seat installation with delivery owner
+tests/test_appliance_public_install.py	tests-follow-owner	Retain public seat installation and tamper tests with migrated owner

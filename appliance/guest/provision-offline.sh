@@ -54,6 +54,8 @@ test -f "$payload_dir/appliance-release.env"
 test -f "$payload_dir/aptl-appliance-first-boot"
 test -f "$payload_dir/aptl-appliance-first-boot.service"
 test -f "$payload_dir/aptl-launch.mount"
+test -d "$payload_dir/system-packages"
+test -f "$payload_dir/system-packages.sha256"
 
 set -- "$payload_dir"/wheelhouse/pip-*.whl
 test "$#" -eq 1
@@ -80,6 +82,21 @@ EOF
 chmod 0755 /usr/local/bin/aptl /usr/local/bin/aptl-misp-suricata-sync
 /usr/local/bin/aptl appliance validate-inputs --staging-dir "$payload_dir"
 
+# Install the content-locked guest runtime without granting the build guest
+# network access. Suppress maintainer-script service starts until first boot.
+(cd "$payload_dir/system-packages" && \
+    sha256sum --check --strict ../system-packages.sha256)
+test ! -e /usr/sbin/policy-rc.d
+cat > /usr/sbin/policy-rc.d <<'EOF'
+#!/bin/sh
+exit 101
+EOF
+chmod 0755 /usr/sbin/policy-rc.d
+dpkg --unpack "$payload_dir"/system-packages/*.deb
+dpkg --configure --pending
+rm -f /usr/sbin/policy-rc.d
+systemctl enable docker.service
+
 install -d -m 0755 /opt/aptl/project
 tar --extract --file "$payload_dir/project.tar" \
     --directory /opt/aptl/project --no-same-owner
@@ -99,7 +116,7 @@ install -m 0644 "$payload_dir/aptl-launch.mount" \
     /etc/systemd/system/run-aptl\\x2dlaunch.mount
 install -d -m 0700 /var/lib/aptl
 if ! getent passwd aptl-mcp >/dev/null; then
-    useradd --system --create-home --home-dir /var/lib/aptl/mcp \
+    useradd --system --no-create-home --home-dir /var/lib/aptl/mcp \
         --shell /bin/sh aptl-mcp
 fi
 # sshd disables every password method. An empty password field keeps the
@@ -109,8 +126,7 @@ passwd --delete aptl-mcp >/dev/null
 if getent group docker >/dev/null; then
     usermod --append --groups docker aptl-mcp
 fi
-chown aptl-mcp:aptl-mcp /var/lib/aptl/mcp
-chmod 0700 /var/lib/aptl/mcp
+install -d -m 0700 -o aptl-mcp -g aptl-mcp /var/lib/aptl/mcp
 systemctl enable run-aptl\\x2dlaunch.mount
 systemctl enable aptl-appliance-first-boot.service
 

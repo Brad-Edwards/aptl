@@ -715,6 +715,8 @@ def assemble_inputs(
     wheelhouse: Path = typer.Option(...),
     image_archive: Path = typer.Option(...),
     image_roles: Path = typer.Option(...),
+    system_packages: Path = typer.Option(..., "--system-packages"),
+    system_packages_lock: Path = typer.Option(..., "--system-packages-lock"),
     target_python_version: str | None = typer.Option(None, "--target-python-version"),
     target_architecture: str | None = typer.Option(None, "--target-architecture"),
 ) -> None:
@@ -728,6 +730,8 @@ def assemble_inputs(
             wheelhouse=wheelhouse,
             image_archive=image_archive,
             image_roles=loads_strict(image_roles.read_bytes()),
+            system_packages=system_packages,
+            system_packages_lock=system_packages_lock,
             target_python_version=target_python_version,
             target_architecture=target_architecture,
         )

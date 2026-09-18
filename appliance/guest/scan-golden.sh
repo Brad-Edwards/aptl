@@ -58,7 +58,6 @@ done
 
 for runtime_path in \
     /var/lib/docker \
-    /var/lib/aptl \
     /opt/aptl/project/.aptl
 do
     if test -d "$runtime_path" &&
@@ -67,6 +66,19 @@ do
         exit 1
     fi
 done
+
+# The service account's empty home is immutable account scaffolding, not
+# overlay state. No sibling or descendant may exist in the golden image.
+test -d /var/lib/aptl/mcp
+if find /var/lib/aptl -mindepth 1 -maxdepth 1 ! -name mcp -print -quit |
+    grep -q .
+then
+    exit 1
+fi
+if find /var/lib/aptl/mcp -mindepth 1 -print -quit | grep -q .
+then
+    exit 1
+fi
 
 test ! -e /opt/aptl/project/.env
 test -r /opt/aptl/offline/oci-images.tar

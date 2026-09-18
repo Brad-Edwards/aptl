@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import platform
+import re
 import shutil
 import subprocess
 import tarfile
@@ -44,6 +45,11 @@ INPUTS_RECORD = "inputs.json"
 PROJECT_ARCHIVE = "project.tar"
 IMAGE_ARCHIVE = "oci-images.tar"
 REQUIREMENTS_FILE = "requirements.txt"
+SYSTEM_PACKAGES_DIRECTORY = "system-packages"
+SYSTEM_PACKAGES_LOCK = "system-packages.sha256"
+_SYSTEM_PACKAGE_LINE = re.compile(
+    r"^(?P<sha256>[0-9a-f]{64})  (?P<filename>[A-Za-z0-9.+%:~_-]+\.deb)$"
+)
 
 # These are apparatus roles in addition to the model-derived scenario services.
 # References are supplied from the image acquisition/build record and checked
@@ -179,6 +185,41 @@ def hash_file_nofollow(path: Path) -> tuple[str, int]:
     return digest.removeprefix("sha256:"), size
 
 
+def validate_system_packages(
+    packages: Path, lock: Path, *, architecture: str
+) -> dict[str, str]:
+    """Validate an exact offline Debian package closure against its byte lock."""
+
+    if packages.is_symlink() or not packages.is_dir() or lock.is_symlink():
+        raise ValueError("guest system package closure is invalid")
+    lines = lock.read_text(encoding="utf-8").splitlines()
+    expected: dict[str, str] = {}
+    for line in lines:
+        match = _SYSTEM_PACKAGE_LINE.fullmatch(line)
+        if match is None or match["filename"] in expected:
+            raise ValueError("guest system package lock is invalid")
+        expected[match["filename"]] = match["sha256"]
+    machine_architecture = {"x86_64": "amd64", "aarch64": "arm64"}.get(
+        architecture
+    )
+    if not expected or machine_architecture is None or any(
+        not name.endswith((f"_{machine_architecture}.deb", "_all.deb"))
+        for name in expected
+    ):
+        raise ValueError("guest system package architecture is invalid")
+    actual: dict[str, str] = {}
+    for path in packages.iterdir():
+        if path.is_symlink() or not path.is_file() or path.name not in expected:
+            raise ValueError("guest system package closure contains an extra input")
+        actual[path.name] = hash_file_nofollow(path)[0]
+    if actual != expected:
+        raise ValueError("guest system package closure differs from its lock")
+    for required in ("docker.io_", "nodejs_", "openssh-server_"):
+        if sum(name.startswith(required) for name in expected) != 1:
+            raise ValueError("guest system package closure is incomplete")
+    return actual
+
+
 def _hash(data: bytes) -> str:
     """Hash immutable input bytes using the asset-lock encoding."""
     return hashlib.sha256(data).hexdigest()
@@ -232,8 +273,15 @@ def validate_canonical_inputs(
         python_version=inputs.python_version,
         architecture=inputs.architecture,
     )
+    system_packages = validate_system_packages(
+        staging / SYSTEM_PACKAGES_DIRECTORY,
+        staging / SYSTEM_PACKAGES_LOCK,
+        architecture=inputs.architecture,
+    )
     _validate_project_runtime(project)
-    _validate_asset_lock(staging, inputs, project, wheels, images)
+    _validate_asset_lock(
+        staging, inputs, project, wheels, system_packages, images
+    )
     with tempfile.TemporaryDirectory(prefix="aptl-input-pack-") as work:
         bundle = env_pack_bundle(Path(work))
         if bundle.pack_identity != inputs.scenario_pack:
@@ -299,6 +347,8 @@ def stage_canonical_inputs(
     wheelhouse: Path,
     image_archive: Path,
     image_roles: dict[str, str],
+    system_packages: Path,
+    system_packages_lock: Path,
     target_python_version: str | None = None,
     target_architecture: Literal["x86_64", "aarch64"] | None = None,
 ) -> CanonicalInputs:
@@ -320,6 +370,11 @@ def stage_canonical_inputs(
     architecture_target = target_architecture or platform.machine()
     if architecture_target not in {"x86_64", "aarch64"}:
         raise ValueError("unsupported canonical input target architecture")
+    validate_system_packages(
+        system_packages,
+        system_packages_lock,
+        architecture=architecture_target,
+    )
     image_files = archive_files(image_archive)
     images = docker_archive_images(
         image_archive, image_files, architecture=architecture_target
@@ -351,6 +406,12 @@ def stage_canonical_inputs(
         )
         _build_outputs(project, work)
         shutil.copytree(wheelhouse, staging / "wheelhouse", symlinks=True)
+        shutil.copytree(
+            system_packages,
+            staging / SYSTEM_PACKAGES_DIRECTORY,
+            symlinks=True,
+        )
+        shutil.copyfile(system_packages_lock, staging / SYSTEM_PACKAGES_LOCK)
         aptl_wheels = list(
             (staging / "wheelhouse").glob(f"aptl_labs-{aptl.__version__}-*.whl")
         )
@@ -385,9 +446,9 @@ def stage_canonical_inputs(
             python_version=python_target,
             architecture=architecture_target,
             runtime_prerequisites={
-                "node": "22",
+                "node": "22.22.1",
                 "openssh": "public-key forced-command support",
-                "docker": "rootful Linux with nftables",
+                "docker": "29.1.3 rootful Linux with nftables",
                 "systemd": "guest service manager",
             },
             image_roles=image_roles,
@@ -500,6 +561,10 @@ def _verify_packaged_project(
             "appliance/guest/" + name
         ):
             raise ValueError("first-boot input differs from the packaged script")
+    if hash_file_nofollow(staging / SYSTEM_PACKAGES_LOCK)[0] != project.get(
+        "appliance/guest/" + SYSTEM_PACKAGES_LOCK
+    ):
+        raise ValueError("system package lock differs from the packaged lock")
 
 
 def _validate_project_runtime(project: dict[str, str]) -> None:
@@ -536,13 +601,21 @@ def _validate_asset_lock(
     inputs: CanonicalInputs,
     project: dict[str, str],
     wheels: dict[str, str],
+    system_packages: dict[str, str],
     images: dict[str, tuple[str, ...]],
 ) -> None:
     """Require an exact content and image inventory without duplicate entries."""
     actual = {"project/" + name: digest for name, digest in project.items()}
     actual.update({"wheelhouse/" + name: digest for name, digest in wheels.items()})
+    actual.update(
+        {"system-packages/" + name: digest for name, digest in system_packages.items()}
+    )
     for path in staging.iterdir():
-        if path.name not in {"wheelhouse", INPUTS_RECORD}:
+        if path.name not in {
+            "wheelhouse",
+            SYSTEM_PACKAGES_DIRECTORY,
+            INPUTS_RECORD,
+        }:
             actual[path.name] = hash_file_nofollow(path)[0]
     locked = {
         asset.source: asset.sha256

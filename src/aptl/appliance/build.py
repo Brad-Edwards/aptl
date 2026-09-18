@@ -333,6 +333,11 @@ def _build_commands(
             "-a",
             str(candidate),
             "--no-network",
+            # virt-customize initializes an empty machine-id before running
+            # guest scripts.  Re-clear that tool-owned mutation so the scanner
+            # validates, and the golden retains, the sysprepped state.
+            "--run-command",
+            ": > /etc/machine-id",
             "--run",
             str(scanner),
         ],

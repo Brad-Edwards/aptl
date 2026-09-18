@@ -88,6 +88,23 @@ def _wheel_with_assets(wheelhouse, project):
                 )
 
 
+def _system_packages(root: Path) -> tuple[Path, Path]:
+    packages = root / "system-packages"
+    packages.mkdir()
+    contents = {
+        "docker.io_1_amd64.deb": b"docker",
+        "nodejs_1_amd64.deb": b"node",
+        "openssh-server_1_amd64.deb": b"sshd",
+    }
+    for name, content in contents.items():
+        (packages / name).write_bytes(content)
+    lock = root / "system-packages.sha256"
+    lock.write_text(
+        "".join(f"{_digest(content)}  {name}\n" for name, content in contents.items())
+    )
+    return packages, lock
+
+
 def test_image_acquisition_records_exact_daemon_identity_and_archive_closure(
     tmp_path, monkeypatch
 ):
@@ -180,6 +197,11 @@ def test_canonical_staging_roundtrip_binds_acquired_bytes_and_rejects_tampering(
     archive = tmp_path / "images.tar"
     image_id = _image_archive(archive, references)
     roles = {role: image_id for role in references}
+    system_packages, system_packages_lock = _system_packages(tmp_path)
+    shutil.copyfile(
+        system_packages_lock,
+        template / "appliance/guest/system-packages.sha256",
+    )
     wheelhouse = tmp_path / "wheels"
     wheelhouse.mkdir()
     _wheel_with_assets(wheelhouse, template)
@@ -203,6 +225,8 @@ def test_canonical_staging_roundtrip_binds_acquired_bytes_and_rejects_tampering(
         wheelhouse=wheelhouse,
         image_archive=archive,
         image_roles=roles,
+        system_packages=system_packages,
+        system_packages_lock=system_packages_lock,
         target_python_version="3.14",
         target_architecture="x86_64",
     )

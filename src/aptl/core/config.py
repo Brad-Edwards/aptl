@@ -181,6 +181,10 @@ class DeploymentConfig(BaseModel):
     ssh_key: str | None = None
     ssh_port: int = 22
     remote_dir: str | None = None
+    # Optional pointer to the separate, strict runtime-authority grant document.
+    # Keeping only the pointer here prevents AptlConfig from becoming a parallel
+    # schema for authored runtime semantics.
+    runtime_authority_policy: str | None = None
 
     @field_validator("provider")
     @classmethod
@@ -199,6 +203,26 @@ class DeploymentConfig(BaseModel):
         """Validate the identity used by Compose and destructive label queries."""
 
         return validate_compose_project_name(value)
+
+    @field_validator("runtime_authority_policy")
+    @classmethod
+    def validate_runtime_authority_policy(cls, value: str | None) -> str | None:
+        """Require the policy pointer to stay within the project root."""
+
+        if value is None:
+            return None
+        cleaned = value.strip()
+        candidate = PurePosixPath(cleaned)
+        if (
+            not cleaned
+            or "\x00" in cleaned
+            or candidate.is_absolute()
+            or ".." in candidate.parts
+        ):
+            raise ValueError(
+                "runtime authority policy must be a contained relative path"
+            )
+        return cleaned
 
 
 _TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")

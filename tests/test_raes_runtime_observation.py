@@ -121,6 +121,7 @@ def _inspect(
     entrypoint=None,
     command=None,
     autoremove=False,
+    host_config=None,
 ):
     """Build a realized-container ``docker inspect`` dict."""
 
@@ -140,6 +141,7 @@ def _inspect(
             "RestartPolicy": {"Name": restart},
             "Memory": memory,
             "AutoRemove": autoremove,
+            **(host_config or {}),
         },
         "Mounts": list(mounts),
     }
@@ -499,6 +501,126 @@ def test_container_entrypoint_and_command_are_read_from_daemon_state():
         codes, _provenance, observations = _gate(runtime, backend, kind)
         assert codes == []
         assert CONCERN_PAYLOAD_PATH[kind] in observations[_ADDRESS].concerns
+
+
+def test_container_security_contract_is_read_back_from_daemon_state():
+    runtime = _runtime(
+        container={
+            "privileged": True,
+            "read_only_rootfs": True,
+            "shm_size": "64 MiB",
+            "namespaces": {
+                "pid": "host",
+                "ipc": "private",
+                "userns": "host",
+                "uts": "host",
+                "cgroup": "private",
+            },
+            "devices": [
+                {
+                    "host_path": "/dev/net/tun",
+                    "container_path": "/dev/net/tun",
+                    "permissions": "rwm",
+                }
+            ],
+            "device_cgroup_rules": ["c 10:200 rwm"],
+            "seccomp_profile": "unconfined",
+            "security_opt": ["no-new-privileges=false"],
+            "cgroup_parent": "scenario.slice",
+            "runtime_name": "runc",
+            "group_add": ["1000"],
+            "extra_hosts": [{"hostname": "db", "address": "10.0.0.5"}],
+            "dns": ["10.0.0.2"],
+            "dns_options": ["use-vc"],
+            "dns_search": ["scenario.test"],
+            "log_driver": "json-file",
+            "log_options": {"max-size": "10m"},
+            "init_process": {"enabled": True},
+        }
+    )
+    backend = _Backend(
+        {
+            _CONTAINER: _inspect(
+                host_config={
+                    "Privileged": True,
+                    "ReadonlyRootfs": True,
+                    "ShmSize": 67108864,
+                    "PidMode": "host",
+                    "IpcMode": "private",
+                    "UsernsMode": "host",
+                    "UTSMode": "host",
+                    "CgroupnsMode": "private",
+                    "Devices": [
+                        {
+                            "PathOnHost": "/dev/net/tun",
+                            "PathInContainer": "/dev/net/tun",
+                            "CgroupPermissions": "rwm",
+                        }
+                    ],
+                    "DeviceCgroupRules": ["c 10:200 rwm"],
+                    "SecurityOpt": [
+                        "no-new-privileges=false",
+                        "seccomp=unconfined",
+                        "label=disable",
+                    ],
+                    "CgroupParent": "scenario.slice",
+                    "Runtime": "runc",
+                    "GroupAdd": ["1000"],
+                    "ExtraHosts": ["db:10.0.0.5"],
+                    "Dns": ["10.0.0.2"],
+                    "DnsOptions": ["use-vc"],
+                    "DnsSearch": ["scenario.test"],
+                    "LogConfig": {
+                        "Type": "json-file",
+                        "Config": {"max-size": "10m"},
+                    },
+                    "Init": True,
+                }
+            )
+        }
+    )
+    kinds = (
+        "runtime-container-privileged",
+        "runtime-container-read-only-rootfs",
+        "runtime-container-shm-size",
+        "runtime-container-namespaces",
+        "runtime-container-devices",
+        "runtime-container-device-cgroup-rules",
+        "runtime-container-seccomp-profile",
+        "runtime-container-security-opt",
+        "runtime-container-cgroup-parent",
+        "runtime-container-runtime-name",
+        "runtime-container-group-add",
+        "runtime-container-extra-hosts",
+        "runtime-container-dns",
+        "runtime-container-dns-options",
+        "runtime-container-dns-search",
+        "runtime-container-log-driver",
+        "runtime-container-log-options",
+        "runtime-container-init-process",
+    )
+
+    for kind in kinds:
+        assert kind in DAEMON_READBACK_RUNTIME_CONCERNS
+        codes, _provenance, observations = _gate(runtime, backend, kind)
+        assert codes == [], kind
+        assert CONCERN_PAYLOAD_PATH[kind] in observations[_ADDRESS].concerns
+
+
+def test_container_privilege_is_not_disclosed_when_daemon_state_differs():
+    runtime = _runtime(container={"privileged": True})
+    backend = _Backend(
+        {_CONTAINER: _inspect(host_config={"Privileged": False})}
+    )
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-container-privileged"
+    )
+
+    assert CONCERN_PAYLOAD_PATH["runtime-container-privileged"] not in (
+        observations[_ADDRESS].concerns
+    )
+    assert _GATE_REJECT in codes
 
 
 def test_verified_autoremove_receipt_realizes_removed_completed_node():

@@ -204,7 +204,12 @@ def _environment_config(runtime: object) -> dict[str, str]:
 
 # RuntimeContainer sequence fields that translate one-to-one into the Compose
 # field of the same name, copied as a list.
-_CONTAINER_SEQUENCE_FIELDS = ("command", "entrypoint", "security_opt", "dns")
+_CONTAINER_SEQUENCE_FIELDS = ("command", "entrypoint", "dns", "group_add")
+_UNSUPPORTED_CONTAINER_FIELDS = (
+    "masked_paths",
+    "read_only_paths",
+    "publish_all_ports",
+)
 
 
 def _operational_config(runtime: object) -> dict[str, object]:
@@ -224,6 +229,9 @@ def _operational_config(runtime: object) -> dict[str, object]:
     environment = _environment_config(runtime)
     if environment:
         config["environment"] = environment
+    mounts = _runtime_mount_config(runtime)
+    if mounts:
+        config["volumes"] = mounts
     policy = getattr(runtime, "operational_policy", None)
     if policy is not None:
         restart = getattr(policy, "restart", None)
@@ -235,10 +243,76 @@ def _operational_config(runtime: object) -> dict[str, object]:
         if memory is not None:
             config["mem_limit"] = memory
     config.update(_container_config(getattr(runtime, "container", None)))
-    capabilities = _capability_config(runtime)
-    if capabilities:
-        config["cap_add"] = capabilities
+    added = _capability_config(runtime, "add")
+    dropped = _capability_config(runtime, "drop")
+    if added:
+        config["cap_add"] = added
+    if dropped:
+        config["cap_drop"] = dropped
     return config
+
+
+def _runtime_mount_config(runtime: object) -> list[dict[str, object]]:
+    """Lower faithfully supported authored runtime mounts to long-form Compose."""
+
+    rendered: list[dict[str, object]] = []
+    for mount in getattr(runtime, "mounts", ()):
+        kind = str(
+            getattr(
+                getattr(mount, "source_kind", ""),
+                "value",
+                getattr(mount, "source_kind", ""),
+            )
+            or ""
+        )
+        source = str(getattr(mount, "source", "") or "")
+        fields_set = getattr(mount, "model_fields_set", set())
+        if kind not in {"bind", "volume", "tmpfs"}:
+            raise ValueError(
+                "aptl.provisioner.runtime-materialization-unsupported: "
+                f"runtime.mounts source_kind={kind or 'unspecified'} has no faithful Compose lowering."
+            )
+        if kind in {"bind", "volume"} and not source:
+            raise ValueError(
+                "aptl.provisioner.runtime-materialization-unsupported: "
+                f"runtime.mounts {kind} source is unresolved."
+            )
+        if getattr(mount, "filesystem_type", "") or getattr(mount, "options", ()):
+            raise ValueError(
+                "aptl.provisioner.runtime-materialization-unsupported: "
+                "runtime.mounts filesystem options have no faithful Compose lowering."
+            )
+        item: dict[str, object] = {
+            "type": kind,
+            "target": mount.target,
+            "read_only": _truthy(getattr(mount, "read_only", False)),
+        }
+        if source:
+            item["source"] = source
+        propagation = str(
+            getattr(
+                getattr(mount, "propagation", ""),
+                "value",
+                getattr(mount, "propagation", ""),
+            )
+            or ""
+        )
+        if "propagation" in fields_set:
+            if kind != "bind" or propagation not in {
+                "private",
+                "rprivate",
+                "shared",
+                "rshared",
+                "slave",
+                "rslave",
+            }:
+                raise ValueError(
+                    "aptl.provisioner.runtime-materialization-unsupported: "
+                    "runtime.mounts propagation is not faithfully expressible."
+                )
+            item["bind"] = {"propagation": propagation}
+        rendered.append(item)
+    return rendered
 
 
 def _container_config(container: object) -> dict[str, object]:
@@ -246,34 +320,182 @@ def _container_config(container: object) -> dict[str, object]:
 
     if container is None:
         return {}
-    config: dict[str, object] = {}
+    unsupported = next(
+        (
+            field
+            for field in _UNSUPPORTED_CONTAINER_FIELDS
+            if getattr(container, field, None)
+        ),
+        None,
+    )
+    if unsupported is not None:
+        raise ValueError(
+            "aptl.provisioner.runtime-materialization-unsupported: "
+            f"runtime.container.{unsupported} has no faithful Compose lowering."
+        )
+    config = _container_scalar_config(container)
     for field in _CONTAINER_SEQUENCE_FIELDS:
         value = getattr(container, field, None)
         if value:
             config[field] = list(value)
-    if getattr(container, "shm_size", None):
-        config["shm_size"] = container.shm_size
-    if _truthy(getattr(container, "privileged", None)):
-        config["privileged"] = True
+    for section in (
+        _namespace_config(container),
+        _device_config(container),
+        _security_config(container),
+        _host_integration_config(container),
+        _logging_config(container),
+        _init_config(container),
+    ):
+        config.update(section)
     if _truthy(getattr(container, "autoremove", None)):
-        # A node declaring autoremove is a one-shot (an init job that runs to
-        # completion and exits, e.g. an index bootstrap). Compose has no
-        # service-level --rm, so restart: "no" lets post-start reconciliation
-        # first observe its successful exit and then remove it (issue #992).
         config["restart"] = "no"
     return config
 
 
-def _capability_config(runtime: object) -> list[str]:
-    """Return the Compose ``cap_add`` list a node's declared runtime asks for.
+def _container_scalar_config(container: object) -> dict[str, object]:
+    """Return directly mapped scalar container settings."""
+
+    config: dict[str, object] = {}
+    if getattr(container, "shm_size", None):
+        config["shm_size"] = container.shm_size
+    if _truthy(getattr(container, "privileged", None)):
+        config["privileged"] = True
+    if _truthy(getattr(container, "read_only_rootfs", None)):
+        config["read_only"] = True
+    for runtime_field, compose_field in (
+        ("cgroup_parent", "cgroup_parent"),
+        ("runtime_name", "runtime"),
+    ):
+        value = getattr(container, runtime_field, "")
+        if value:
+            config[compose_field] = value
+    return config
+
+
+def _namespace_config(container: object) -> dict[str, object]:
+    """Return supported namespace modes."""
+
+    config: dict[str, object] = {}
+    namespaces = getattr(container, "namespaces", None)
+    if namespaces is not None:
+        for runtime_field, compose_field in (
+            ("pid", "pid"),
+            ("ipc", "ipc"),
+            ("userns", "userns_mode"),
+            ("uts", "uts"),
+            ("cgroup", "cgroup"),
+        ):
+            value = getattr(namespaces, runtime_field, "")
+            if value:
+                config[compose_field] = value
+    return config
+
+
+def _device_config(container: object) -> dict[str, object]:
+    """Return exact device mappings and cgroup rules."""
+
+    config: dict[str, object] = {}
+    devices = getattr(container, "devices", ()) or ()
+    if devices:
+        config["devices"] = [
+            ":".join(
+                part
+                for part in (
+                    device.host_path,
+                    device.container_path,
+                    device.permissions,
+                )
+                if part
+            )
+            for device in devices
+        ]
+    rules = getattr(container, "device_cgroup_rules", ()) or ()
+    if rules:
+        config["device_cgroup_rules"] = list(rules)
+    return config
+
+
+def _security_config(container: object) -> dict[str, object]:
+    """Return the combined security-option and seccomp contract."""
+
+    security_opt = list(getattr(container, "security_opt", ()) or ())
+    seccomp = getattr(container, "seccomp_profile", "")
+    if seccomp:
+        seccomp_option = f"seccomp={seccomp}"
+        existing = [item for item in security_opt if item.startswith("seccomp=")]
+        if existing and existing != [seccomp_option]:
+            raise ValueError(
+                "aptl.provisioner.runtime-materialization-unsupported: "
+                "runtime.container.seccomp_profile conflicts with security_opt."
+            )
+        if seccomp_option not in security_opt:
+            security_opt.append(seccomp_option)
+    return {"security_opt": security_opt} if security_opt else {}
+
+
+def _host_integration_config(container: object) -> dict[str, object]:
+    """Return host, DNS, and supplemental-group selections."""
+
+    config: dict[str, object] = {}
+    extra_hosts = getattr(container, "extra_hosts", ()) or ()
+    if extra_hosts:
+        config["extra_hosts"] = [
+            f"{entry.hostname}:{entry.address}" for entry in extra_hosts
+        ]
+    dns_options = getattr(container, "dns_options", ()) or ()
+    if dns_options:
+        config["dns_opt"] = list(dns_options)
+    dns_search = getattr(container, "dns_search", ()) or ()
+    if dns_search:
+        config["dns_search"] = list(dns_search)
+    return config
+
+
+def _logging_config(container: object) -> dict[str, object]:
+    """Return the selected daemon log driver and options."""
+
+    log_driver = getattr(container, "log_driver", "")
+    log_options = getattr(container, "log_options", {}) or {}
+    if not log_driver and not log_options:
+        return {}
+    logging: dict[str, object] = {}
+    if log_driver:
+        logging["driver"] = log_driver
+    if log_options:
+        logging["options"] = dict(log_options)
+    return {"logging": logging}
+
+
+def _init_config(container: object) -> dict[str, object]:
+    """Return the standard init toggle or reject custom init semantics."""
+
+    init_process = getattr(container, "init_process", None)
+    if init_process is None:
+        return {}
+    unsupported_init = bool(
+        getattr(init_process, "implementation", "")
+        or getattr(init_process, "executable_path", "")
+        or getattr(init_process, "reaps_children", None)
+        or getattr(init_process, "argv", ())
+    )
+    if unsupported_init:
+        raise ValueError(
+            "aptl.provisioner.runtime-materialization-unsupported: "
+            "runtime.container.init_process requires an unsupported custom init."
+        )
+    return {"init": True} if _truthy(getattr(init_process, "enabled", None)) else {}
+
+
+def _capability_config(runtime: object, field: str) -> list[str]:
+    """Return one Compose capability list a node's runtime asks for.
 
     RAES uses the kernel CAP_* form; Docker's cap_add wants it without the
     prefix (NET_ADMIN, not CAP_NET_ADMIN).
     """
 
     capabilities = getattr(runtime, "linux_capabilities", None)
-    added = list(getattr(capabilities, "add", ()) or ()) if capabilities else []
-    return [capability.removeprefix("CAP_") for capability in added]
+    selected = list(getattr(capabilities, field, ()) or ()) if capabilities else []
+    return [capability.removeprefix("CAP_") for capability in selected]
 
 
 def _service_networks(

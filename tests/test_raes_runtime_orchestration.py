@@ -558,25 +558,26 @@ def test_ports_are_not_queried_when_nothing_declares_an_exact_binding(
     assert queried == []
 
 
-def test_graph_admission_rejects_participant_profile_authority_holder() -> None:
+def test_graph_admission_preserves_participant_profile_authority_holder() -> None:
     holder = replace(_spec().nodes[0], profiles=("kali",))
 
-    with pytest.raises(
-        ValueError, match="aptl.provisioner.runtime-authority-not-management-only"
-    ):
-        admit_docker_authorities((holder,))
+    admissions = admit_docker_authorities((holder,))
+
+    assert len(admissions) == 1
+    assert admissions[0].node_address == holder.address
 
 
-def test_graph_admission_rejects_participant_serving_authority_holder() -> None:
+def test_graph_admission_preserves_serving_holder_on_shared_network() -> None:
     holder = replace(
         _spec().nodes[0],
         services=(DeploymentServicePort(name="participant-api", port=8080),),
     )
 
-    with pytest.raises(
-        ValueError, match="aptl.provisioner.runtime-authority-not-management-only"
-    ):
-        admit_docker_authorities((holder,))
+    admissions = admit_docker_authorities((holder,))
+
+    assert len(admissions) == 1
+    assert holder.networks == ("security-net",)
+    assert admissions[0].node_address == holder.address
 
 
 def test_effective_model_rejects_missing_graph_admission() -> None:
@@ -784,7 +785,7 @@ def test_effective_compose_rejects_duplicate_or_endpoint_redirects() -> None:
     assert any("unauthorized service" in error for error in errors)
 
 
-def test_effective_compose_rejects_privileged_authority_holder() -> None:
+def test_effective_compose_preserves_privileged_authority_holder() -> None:
     render_payload = {
         "services": {
             "orborus": {
@@ -801,10 +802,7 @@ def test_effective_compose_rejects_privileged_authority_holder() -> None:
         }
     }
 
-    assert any(
-        "must not be privileged" in error
-        for error in effective_orchestration_model_errors(render_payload, _spec())
-    )
+    assert effective_orchestration_model_errors(render_payload, _spec()) == []
 
 
 @pytest.mark.parametrize("source", ["/", "/var/run", "/socket-alias"])

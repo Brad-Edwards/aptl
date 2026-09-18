@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import json
 from pathlib import Path
 
 from aptl.core.deployment._compose_account_realization import (
@@ -60,6 +61,12 @@ from aptl.core.deployment._compose_runtime_orchestration import (
     ComposeRuntimeOrchestrationRouteMixin,
 )
 from aptl.core.deployment.realization import DeploymentRealizationSpec
+from aptl.core.deployment.runtime_materialization import (
+    SHARED_DOCKER_PROFILE,
+    RuntimeMaterializationProfile,
+    effective_runtime_contract_issues,
+    qualify_runtime_materialization,
+)
 from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.lab_types import LabResult
 
@@ -136,6 +143,12 @@ class ComposeRealizationMixin(
         resolution of the mutable tag.
         """
 
+        failure = self._runtime_materialization_preflight(
+            realization, scenario_root=scenario_root
+        )
+        if failure is not None:
+            return failure
+
         observation_context = observation_context or DeploymentObservationContext()
         attempt_id = observation_context.attempt_id or self._resource_attempt_id
         ownership = self._ensure_resource_ownership()
@@ -157,6 +170,162 @@ class ComposeRealizationMixin(
                 observation_context=observation_context,
             )
         return result
+
+    def qualify_runtime_materialization(
+        self,
+        realization: DeploymentRealizationSpec,
+        *,
+        scenario_root: Path,
+    ) -> LabResult:
+        """Expose the read-only graph gate to pre-build scenario admission."""
+
+        failure = self._runtime_materialization_preflight(
+            realization,
+            scenario_root=scenario_root,
+        )
+        return failure or LabResult(success=True)
+
+    def _runtime_materialization_profile(
+        self, realization: DeploymentRealizationSpec
+    ) -> RuntimeMaterializationProfile:
+        """Return the backend envelope proven before any deployment mutation."""
+
+        del realization
+        return SHARED_DOCKER_PROFILE
+
+    def _qualify_runtime_materialization_target(self) -> LabResult | None:
+        """Perform backend-specific read-only containment qualification."""
+
+        return None
+
+    def _runtime_materialization_preflight(
+        self,
+        realization: DeploymentRealizationSpec,
+        *,
+        scenario_root: Path | None = None,
+    ) -> LabResult | None:
+        """Qualify the complete runtime graph without creating backend state."""
+
+        target_failure = self._qualify_runtime_materialization_target()
+        if target_failure is not None:
+            return target_failure
+        profile = self._runtime_materialization_profile(realization)
+        issues = qualify_runtime_materialization(
+            realization,
+            profile=profile,
+            policy=self._runtime_authority_policy,
+        )
+        if not issues:
+            # Exercise the pure renderer now so mixed image-free nodes cannot be
+            # dispatched before an image-backed lowering conflict is known.
+            from aptl.core.deployment._compose_node_generation import (
+                render_realization_compose,
+            )
+
+            try:
+                rendered = render_realization_compose(realization)
+            except ValueError as exc:
+                return LabResult(
+                    success=False,
+                    error=(
+                        "aptl.provisioner.runtime-materialization-unsupported: "
+                        f"backend={profile.name} limitation={exc}"
+                    ),
+                )
+            rendered_issues = effective_runtime_contract_issues(
+                rendered,
+                realization,
+                profile=profile,
+            )
+            if rendered_issues:
+                return LabResult(
+                    success=False,
+                    error="; ".join(
+                        issue.render() for issue in rendered_issues[:5]
+                    ),
+                )
+            if scenario_root is not None:
+                return self._static_runtime_contract_preflight(
+                    realization,
+                    scenario_root=scenario_root,
+                    profile=profile,
+                )
+            return None
+        return LabResult(
+            success=False,
+            error="; ".join(issue.render() for issue in issues[:5]),
+        )
+
+    def _static_runtime_contract_preflight(
+        self,
+        realization: DeploymentRealizationSpec,
+        *,
+        scenario_root: Path,
+        profile: RuntimeMaterializationProfile,
+    ) -> LabResult | None:
+        """Read and compare a static effective model before mixed mutation."""
+
+        from aptl.core.deployment._compose_node_generation import (
+            STATIC_COMPOSE_FILENAME,
+        )
+
+        static = scenario_root / STATIC_COMPOSE_FILENAME
+        if not static.exists():
+            return None
+        image_addresses = {image.address for image in realization.images}
+        if not any(
+            node.address in image_addresses and node.service_name
+            for node in realization.nodes
+        ):
+            return None
+        command = self._build_command(
+            "config",
+            list(realization.profiles),
+            compose_files=(static,),
+            scenario_root=scenario_root,
+        )
+        command.extend(["--no-interpolate", "--format", "json"])
+        result = self._run(command)
+        if result.returncode != 0:
+            return LabResult(
+                success=False,
+                error=(
+                    "aptl.provisioner.runtime-materialization-unsupported: "
+                    f"backend={profile.name} limitation=effective Compose model is unavailable"
+                ),
+            )
+        try:
+            payload = json.loads(result.stdout)
+        except (TypeError, ValueError):
+            payload = None
+        issues = effective_runtime_contract_issues(
+            payload,
+            realization,
+            profile=profile,
+        )
+        from aptl.core.deployment._compose_runtime_orchestration import (
+            effective_orchestration_model_errors,
+        )
+
+        authority_errors = effective_orchestration_model_errors(payload, realization)
+        if issues or authority_errors:
+            errors = [issue.render() for issue in issues[:5]]
+            if authority_errors and len(errors) < 5:
+                node = (
+                    realization.docker_authority_admissions[0].node_address
+                    if realization.docker_authority_admissions
+                    else "provision.graph"
+                )
+                errors.append(
+                    "aptl.provisioner.runtime-materialization-unsupported: "
+                    f"node={node} field=runtime.orchestration_authorities "
+                    f"backend={profile.name} limitation={authority_errors[0]}"
+                )
+            return LabResult(
+                success=False,
+                error="; ".join(errors),
+            )
+        return None
 
     def _realization_preflight(
         self,

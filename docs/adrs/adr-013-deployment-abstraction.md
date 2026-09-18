@@ -78,6 +78,62 @@ For SSH remote deployment:
 }
 ```
 
+An SSH deployment can select a separate, strict runtime-authority target policy
+by a project-relative path:
+
+```json
+{
+  "deployment": {
+    "provider": "ssh-compose",
+    "ssh_host": "range-guest.example.com",
+    "ssh_user": "labadmin",
+    "runtime_authority_policy": "runtime-authority.json"
+  }
+}
+```
+
+The referenced policy has this closed shape (replace identities with the
+validated target and pack values):
+
+```json
+{
+  "schema_version": "aptl.runtime-authority-policy/v1",
+  "target": {
+    "profile_id": "range-guest",
+    "provider": "ssh-compose",
+    "ssh_host": "range-guest.example.com",
+    "daemon_id": "scenario-daemon-01",
+    "endpoint_source": "/var/run/docker.sock"
+  },
+  "grants": [
+    {
+      "pack_id": "example-pack",
+      "pack_version": "1.0.0",
+      "pack_set_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "component_address": "provision.node.orchestrator",
+      "authority_id": "worker-runtime",
+      "endpoint_source": "/var/run/docker.sock",
+      "image_template_ids": ["worker", "app"],
+      "delegated_template_ids": ["worker"]
+    }
+  ]
+}
+```
+
+The policy binds a remote daemon candidate and individual raw-socket grants to
+immutable pack identity. It is authorization, not containment evidence. The
+current `ssh-compose` implementation verifies endpoint identity and empty native
+inventory but remains a `shared-docker` profile, so it rejects host-equivalent
+runtime authority before mutation. A later contained provider must add
+independent boundary attestation and negative escape evidence rather than
+promoting this policy or an empty inventory into an isolation claim. Absence
+means zero grants; malformed files, symlinks, target/daemon mismatches, and
+foreign daemon resources fail closed.
+See the [issue #956 containment boundary](../architecture/issue-956-sdl-runtime-authority-containment-preflight.md)
+for the schema, qualification evidence, supported runtime fields, and
+pre-mutation failure semantics. This policy authorizes the selected target; it
+does not narrow or replace SDL requirements.
+
 A factory function `get_backend(config, project_dir)` instantiates the correct backend.
 
 ### Scope

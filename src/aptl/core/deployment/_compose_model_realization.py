@@ -181,12 +181,22 @@ class ComposeRealizationModelMixin:
             compose_files=compose_files,
             scenario_root=scenario_root,
         )
-        stateful = bool(
-            realization.generated_artifacts or realization.persistent_volumes
+        image_addresses = {image.address for image in realization.images}
+        has_image_services = any(
+            node.address in image_addresses and node.service_name
+            for node in realization.nodes
+        )
+        needs_effective_model = bool(
+            has_image_services
+            or realization.generated_artifacts
+            or realization.persistent_volumes
+            or realization_has_docker_authority(realization)
         )
         error = (
-            self._effective_compose_model_error(command, realization, realization_root)
-            if stateful or realization_has_docker_authority(realization)
+            self._effective_compose_model_error(
+                command, realization, realization_root
+            )
+            if needs_effective_model
             else self._compose_syntax_error(command)
         )
         return LabResult(success=False, error=error) if error is not None else None
@@ -226,4 +236,17 @@ class ComposeRealizationModelMixin:
             realization,
         )
         errors.extend(effective_orchestration_model_errors(payload, realization))
+        from aptl.core.deployment.runtime_materialization import (
+            effective_runtime_contract_issues,
+        )
+
+        profile = self._runtime_materialization_profile(realization)
+        errors.extend(
+            issue.render()
+            for issue in effective_runtime_contract_issues(
+                payload,
+                realization,
+                profile=profile,
+            )
+        )
         return "; ".join(errors[:5]) if errors else None

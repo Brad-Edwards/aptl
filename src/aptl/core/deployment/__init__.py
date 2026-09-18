@@ -37,6 +37,7 @@ from aptl.core.deployment.realization import (
     DeploymentStatefulConsumer,
 )
 from aptl.core.deployment.ssh_compose import SSHComposeBackend
+from aptl.core.runtime_authority_policy import load_runtime_authority_policy
 
 if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
@@ -86,12 +87,17 @@ def get_backend(
     """
     provider = config.deployment.provider
     project_name = config.deployment.project_name
+    policy = load_runtime_authority_policy(
+        project_dir,
+        config.deployment.runtime_authority_policy,
+    )
 
     if provider == "docker-compose":
         return DockerComposeBackend(
             project_dir=project_dir,
             project_name=project_name,
             offline_staged=offline_staged,
+            runtime_authority_policy=policy,
         )
 
     if provider == "ssh-compose":
@@ -112,6 +118,7 @@ def get_backend(
             ssh_port=dep.ssh_port,
             remote_dir=dep.remote_dir,
             project_name=project_name,
+            runtime_authority_policy=policy,
         )
 
     raise ValueError(

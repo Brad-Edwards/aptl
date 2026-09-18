@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -31,6 +31,8 @@ from aptl.backends._raes_scenario_resolution import (
     resolve_scenario_bundle,
 )
 from aptl.backends.raes_diagnostics import (
+    PROVISIONING_ADDRESS,
+    diagnostic,
     render_raes_diagnostics,
 )
 from aptl.backends.raes_execution_helpers import (
@@ -289,7 +291,11 @@ def admit_raes_scenario(
     # own inputs (including a component build context) anchor to the bundle,
     # which is the project directory only while the scenario still lives in-tree.
     availability = artifact_availability_for_scenario(
-        scenario, backend, scenario_root=bundle.root, component_root=project_dir
+        scenario,
+        backend,
+        scenario_root=bundle.root,
+        component_root=project_dir,
+        materialize=False,
     )
     target = create_aptl_runtime_target(
         project_dir=project_dir,
@@ -320,6 +326,62 @@ def admit_raes_scenario(
         if isinstance(provisioner, AptlProvisioner)
         else None
     )
+    if (
+        isinstance(provisioner, AptlProvisioner)
+        and realization is not None
+        and not any(item.is_error for item in execution_plan.diagnostics)
+    ):
+        selected_profiles = provisioner.selected_profiles(realization)
+        try:
+            deployment_spec = realization.deployment_spec(selected_profiles)
+        except (TypeError, ValueError) as exc:
+            execution_plan.diagnostics.append(
+                diagnostic(
+                    "aptl.provisioner.realization-not-lowerable",
+                    PROVISIONING_ADDRESS,
+                    str(exc),
+                )
+            )
+        else:
+            qualification = backend.qualify_runtime_materialization(
+                deployment_spec,
+                scenario_root=bundle.root,
+            )
+            if not qualification.success:
+                execution_plan.diagnostics.append(
+                    diagnostic(
+                        "aptl.provisioner.runtime-materialization-unsupported",
+                        PROVISIONING_ADDRESS,
+                        qualification.error or "Runtime materialization is unsupported.",
+                    )
+                )
+            elif _has_materialization_specifications(availability):
+                materialized_availability = artifact_availability_for_scenario(
+                    scenario,
+                    backend,
+                    scenario_root=bundle.root,
+                    component_root=project_dir,
+                    materialize=True,
+                )
+                unavailable = _failed_materialization_addresses(
+                    availability,
+                    materialized_availability,
+                )
+                if unavailable:
+                    execution_plan.diagnostics.append(
+                        diagnostic(
+                            "aptl.provisioner.artifact-materialization-failed",
+                            unavailable[0],
+                            "Qualified component image materialization failed.",
+                        )
+                    )
+                else:
+                    availability = materialized_availability
+                    provisioner.artifact_availability = availability
+                    execution_plan = replace(
+                        execution_plan,
+                        artifact_availability=availability,
+                    )
     participant_action_specs = participant_action_specs_from_runtime_model(
         execution_plan.model,
         provisioning_plan=execution_plan.provisioning,
@@ -340,6 +402,37 @@ def admit_raes_scenario(
         execution_plan=execution_plan,
         realization=realization,
         capture_plan=capture_plan,
+    )
+
+
+def _failed_materialization_addresses(
+    inspected: ArtifactAvailabilityContext,
+    materialized: ArtifactAvailabilityContext,
+) -> tuple[str, ...]:
+    """Return addresses whose inspected build specification failed to build."""
+
+    completed = {
+        item.address: set(item.available_materialization_specification_digests)
+        for item in materialized.requirements
+    }
+    return tuple(
+        item.address
+        for item in inspected.requirements
+        if item.available_materialization_specification_digests
+        and not set(item.available_materialization_specification_digests).issubset(
+            completed.get(item.address, set())
+        )
+    )
+
+
+def _has_materialization_specifications(
+    availability: ArtifactAvailabilityContext,
+) -> bool:
+    """Whether the read-only facts contain a deferred component build."""
+
+    return any(
+        item.available_materialization_specification_digests
+        for item in availability.requirements
     )
 
 

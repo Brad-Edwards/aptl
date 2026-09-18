@@ -31,7 +31,6 @@ _DIGEST_IMAGE = re.compile(r"^[^\s@]+@sha256:[0-9a-f]{64}$")
 _CHILD_LABEL = re.compile(
     r"^docker-label:([a-z0-9][a-z0-9._/-]*)=([a-z0-9][a-z0-9._-]*)$"
 )
-_MANAGEMENT_PROFILES = frozenset({"soc"})
 
 
 class DockerControlBinder(Protocol):
@@ -273,31 +272,6 @@ def spawn_image_requirements(
     return tuple(requirements)
 
 
-def _node_networks(node: DeploymentNodeRealization) -> set[str]:
-    """Return every network selected through either node representation."""
-
-    return set(node.networks) | {
-        attachment.network for attachment in node.network_attachments
-    }
-
-
-def _authority_holder_is_management_only(node: DeploymentNodeRealization) -> bool:
-    """Whether an authority holder is isolated from participant workloads."""
-
-    container = getattr(node.runtime, "container", None)
-    namespaces = getattr(container, "namespaces", None)
-    network_namespace = getattr(namespaces, "network", None)
-    return bool(
-        node.service_name
-        and _node_networks(node)
-        and node.profiles
-        and set(node.profiles) <= _MANAGEMENT_PROFILES
-        and not node.services
-        and not node.published_ports
-        and not getattr(network_namespace, "target_node_ref", None)
-    )
-
-
 def _allowed_mount_targets(node: DeploymentNodeRealization) -> set[str]:
     """Return the admitted runtime mount footprint for one holder."""
 
@@ -314,18 +288,19 @@ def _allowed_mount_targets(node: DeploymentNodeRealization) -> set[str]:
 def admit_docker_authorities(
     nodes: tuple[DeploymentNodeRealization, ...],
 ) -> tuple[DeploymentDockerAuthorityAdmission, ...]:
-    """Return one immutable admission per management-only authority holder."""
+    """Return one immutable admission per authored authority holder.
+
+    Network, profile, and service placement do not attenuate a raw Docker
+    socket.  Whether the selected backend contains that authority is decided by
+    the graph-wide runtime materialization gate, not by censoring valid SDL
+    holder shapes here.
+    """
 
     admissions: list[DeploymentDockerAuthorityAdmission] = []
     for node in nodes:
         bindings = docker_control_authorities(node.runtime, node_address=node.address)
         if not bindings:
             continue
-        if not _authority_holder_is_management_only(node):
-            raise ValueError(
-                "aptl.provisioner.runtime-authority-not-management-only: "
-                f"Docker authority is not management-only on {node.address}."
-            )
         authority, interface = bindings[0]
         requirements = spawn_image_requirements(node.runtime, node_address=node.address)
         allowed_mount_targets = _allowed_mount_targets(node)
@@ -340,6 +315,10 @@ def admit_docker_authorities(
                 endpoint_target=str(interface.path),
                 endpoint_read_write=_value(interface.access) == "read_write",
                 spawn_requirements=requirements,
+                authority_id=str(authority.orchestration_authority_id),
+                image_template_ids=tuple(
+                    str(template.template_id) for template in authority.spawn_templates
+                ),
                 allowed_mount_targets=tuple(sorted(allowed_mount_targets)),
             )
         )

@@ -227,10 +227,6 @@ def _authority_service_errors(
         errors.append(
             f"Docker authority service {service_name} has a Docker endpoint override."
         )
-    if raw_service.get("privileged") is True:
-        errors.append(
-            f"Docker authority service {service_name} must not be privileged."
-        )
     return errors
 
 

@@ -36,6 +36,8 @@ class DeploymentDockerAuthorityAdmission:
     endpoint_target: str
     endpoint_read_write: bool
     spawn_requirements: tuple[DeploymentSpawnImageRequirement, ...]
+    authority_id: str = ""
+    image_template_ids: tuple[str, ...] = ()
     allowed_mount_targets: tuple[str, ...] = ()
 
 

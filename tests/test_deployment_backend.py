@@ -211,6 +211,18 @@ class TestDeploymentConfig:
         assert cfg.ssh_port == 2222
         assert cfg.remote_dir == "/opt/aptl"
 
+    @pytest.mark.parametrize(
+        "policy_path", ["", "/etc/aptl/policy.json", "../policy.json"]
+    )
+    def test_rejects_uncontained_runtime_authority_policy_path(self, policy_path):
+        with pytest.raises(ValueError, match="runtime authority policy"):
+            DeploymentConfig(runtime_authority_policy=policy_path)
+
+    def test_accepts_contained_runtime_authority_policy_path(self):
+        cfg = DeploymentConfig(runtime_authority_policy="policy/runtime.json")
+
+        assert cfg.runtime_authority_policy == "policy/runtime.json"
+
 
 class TestAptlConfigDeployment:
     """Tests for DeploymentConfig in AptlConfig."""
@@ -2579,6 +2591,38 @@ class TestGetBackend:
         assert isinstance(backend, SSHComposeBackend)
         assert backend.host == "server.example.com"
         assert backend.user == "deploy"
+
+    def test_loads_strict_runtime_authority_policy_for_ssh_backend(self, tmp_path):
+        policy = tmp_path / "runtime-policy.json"
+        policy.write_text(
+            json.dumps(
+                {
+                    "schema_version": "aptl.runtime-authority-policy/v1",
+                    "target": {
+                        "profile_id": "isolated-range",
+                        "provider": "ssh-compose",
+                        "ssh_host": "server.example.com",
+                        "daemon_id": "daemon-fixture",
+                        "endpoint_source": "/var/run/docker.sock",
+                    },
+                    "grants": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        config = AptlConfig(
+            lab={"name": "test"},
+            deployment={
+                "provider": "ssh-compose",
+                "ssh_host": "server.example.com",
+                "ssh_user": "deploy",
+                "runtime_authority_policy": "runtime-policy.json",
+            },
+        )
+
+        backend = get_backend(config, tmp_path)
+
+        assert backend._runtime_authority_policy.target.daemon_id == "daemon-fixture"
 
     def test_ssh_compose_requires_host(self, tmp_path):
         config = AptlConfig(

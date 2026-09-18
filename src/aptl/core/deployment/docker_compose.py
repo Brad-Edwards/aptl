@@ -47,6 +47,7 @@ from aptl.core.deployment._compose_stop import stop_compose_lab
 from aptl.core.deployment._docker_endpoint_binding import DockerEndpointBindingMixin
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.lab_types import LabResult, LabStatus
+from aptl.core.runtime_authority_policy import RuntimeAuthorityPolicy
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.docker_compose")
@@ -86,6 +87,7 @@ class DockerComposeBackend(
         *,
         offline_staged: bool = False,
         docker_socket_path: Path | None = None,
+        runtime_authority_policy: RuntimeAuthorityPolicy | None = None,
     ) -> None:
         if docker_socket_path is not None and not docker_socket_path.is_absolute():
             raise ValueError("managed Docker socket must be absolute")
@@ -96,6 +98,9 @@ class DockerComposeBackend(
         self._resource_ownership: WorkspaceOwnership | None = None
         self._resource_attempt_id: str | None = None
         self._offline_staged = offline_staged
+        self._runtime_authority_policy = (
+            runtime_authority_policy or RuntimeAuthorityPolicy.empty()
+        )
         self._appliance_boundary: (
             tuple[
                 ApplianceBoundaryPolicy,

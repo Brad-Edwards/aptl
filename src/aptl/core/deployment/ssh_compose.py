@@ -12,6 +12,12 @@ from pathlib import Path
 
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.deployment.runtime_materialization import (
+    SHARED_DOCKER_PROFILE,
+    RuntimeMaterializationProfile,
+)
+from aptl.core.lab_types import LabResult
+from aptl.core.runtime_authority_policy import RuntimeAuthorityPolicy
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.ssh_compose")
@@ -45,6 +51,7 @@ class SSHComposeBackend(DockerComposeBackend):
         ssh_port: int = 22,
         remote_dir: str | None = None,
         project_name: str = "aptl",
+        runtime_authority_policy: RuntimeAuthorityPolicy | None = None,
     ) -> None:
         # Validate parameters before constructing SSH URI.
         if not isinstance(ssh_port, int) or not (1 <= ssh_port <= 65535):
@@ -56,15 +63,15 @@ class SSHComposeBackend(DockerComposeBackend):
         if ssh_key is not None:
             key_path = Path(ssh_key)
             if not key_path.is_absolute():
-                raise ValueError(
-                    f"ssh_key must be an absolute path, got {ssh_key!r}"
-                )
+                raise ValueError(f"ssh_key must be an absolute path, got {ssh_key!r}")
             if ".." in key_path.parts:
-                raise ValueError(
-                    f"ssh_key must not contain '..', got {ssh_key!r}"
-                )
+                raise ValueError(f"ssh_key must not contain '..', got {ssh_key!r}")
 
-        super().__init__(project_dir=project_dir, project_name=project_name)
+        super().__init__(
+            project_dir=project_dir,
+            project_name=project_name,
+            runtime_authority_policy=runtime_authority_policy,
+        )
         self._host = host
         self._user = user
         self._ssh_key = ssh_key
@@ -73,6 +80,8 @@ class SSHComposeBackend(DockerComposeBackend):
         self._docker_host = f"ssh://{user}@{host}"
         if ssh_port != 22:
             self._docker_host = f"ssh://{user}@{host}:{ssh_port}"
+        self._remote_target_qualified = False
+        self._runtime_containment_evidence: dict[str, object] = {}
 
     @property
     def host(self) -> str:
@@ -91,6 +100,149 @@ class SSHComposeBackend(DockerComposeBackend):
         """Remote Docker cannot consume controller-local generated files."""
 
         return False
+
+    def _runtime_materialization_profile(
+        self, realization: object
+    ) -> RuntimeMaterializationProfile:
+        """Return the only containment envelope this provider has proved.
+
+        SSH transport, daemon identity, and an empty Docker inventory do not
+        establish a guest/hypervisor boundary.  Until an independently attested
+        boundary provider supplies that evidence, this backend remains shared
+        and high-authority SDL is reported as unsupported.
+        """
+
+        del realization
+        return SHARED_DOCKER_PROFILE
+
+    def _qualify_runtime_materialization_target(self) -> LabResult | None:
+        """Qualify the configured remote daemon before any deployment mutation."""
+
+        if self._runtime_authority_policy.target is None:
+            return None
+        result = self.bind_local_docker_socket()
+        return None if result.success else result
+
+    def bind_local_docker_socket(self) -> LabResult:
+        """Bind and inspect the exact operator-selected remote Docker target.
+
+        The inherited method intentionally supports only local sockets.  For the
+        SSH provider, the operator-selected target is remote; support is claimed
+        only when its immutable daemon identity matches policy and the native
+        inventory contains no foreign workload, volume, or custom network.
+        Those checks do not promote it to an isolated containment profile.
+        """
+
+        if self._remote_target_qualified:
+            return self.revalidate_local_docker_socket()
+        self._runtime_containment_evidence = {}
+        target = self._runtime_authority_policy.target
+        if (
+            target is None
+            or target.provider != "ssh-compose"
+            or target.ssh_host != self._host
+        ):
+            return LabResult(
+                success=False,
+                error=(
+                    "Runtime authority has no exact operator-selected isolated "
+                    "Docker target."
+                ),
+            )
+        daemon_id = self._current_docker_daemon_id()
+        if daemon_id != target.daemon_id:
+            return LabResult(
+                success=False,
+                error="Docker control endpoint identity changed.",
+            )
+        inventories = self._isolated_daemon_inventory()
+        if inventories is None:
+            return LabResult(
+                success=False,
+                error="Isolated Docker target inventory is unavailable.",
+            )
+        containers, volumes, networks = inventories
+        if containers:
+            return LabResult(
+                success=False,
+                error=(
+                    "Isolated Docker target contains foreign containers; "
+                    "refusing runtime authority."
+                ),
+            )
+        if volumes:
+            return LabResult(
+                success=False,
+                error=(
+                    "Isolated Docker target contains foreign volumes; refusing "
+                    "runtime authority."
+                ),
+            )
+        foreign_networks = networks - {"bridge", "host", "none"}
+        if foreign_networks:
+            return LabResult(
+                success=False,
+                error=(
+                    "Isolated Docker target contains foreign networks; refusing "
+                    "runtime authority."
+                ),
+            )
+        self._docker_daemon_id = daemon_id
+        self._remote_target_qualified = True
+        self._runtime_containment_evidence = {
+            "daemon_id": daemon_id,
+            "provider": "ssh-compose",
+            "containment_profile": "shared-docker",
+            "foreign_containers": 0,
+            "foreign_volumes": 0,
+            "foreign_networks": 0,
+        }
+        return LabResult(success=True)
+
+    def revalidate_local_docker_socket(self) -> LabResult:
+        """Re-attest the policy-bound remote daemon at mutation boundaries."""
+
+        target = self._runtime_authority_policy.target
+        daemon_id = self._current_docker_daemon_id()
+        if (
+            not self._remote_target_qualified
+            or target is None
+            or target.ssh_host != self._host
+            or daemon_id != self._docker_daemon_id
+            or daemon_id != target.daemon_id
+        ):
+            return LabResult(
+                success=False,
+                error="Docker control endpoint identity changed.",
+            )
+        return LabResult(success=True)
+
+    def _isolated_daemon_inventory(
+        self,
+    ) -> tuple[set[str], set[str], set[str]] | None:
+        """Return bounded native resource names used to prove an empty target."""
+
+        commands = (
+            ["docker", "ps", "-aq"],
+            ["docker", "volume", "ls", "-q"],
+            ["docker", "network", "ls", "--format", "{{.Name}}"],
+        )
+        values: list[set[str]] = []
+        try:
+            for command in commands:
+                result = self._run(command, timeout=30)
+                if result.returncode != 0:
+                    return None
+                values.append(
+                    {
+                        line.strip()
+                        for line in result.stdout.splitlines()
+                        if line.strip()
+                    }
+                )
+        except (BackendTimeoutError, OSError):
+            return None
+        return values[0], values[1], values[2]
 
     def _subprocess_kwargs(
         self,

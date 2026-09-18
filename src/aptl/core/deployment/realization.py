@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from aptl.runtime_authority import DeploymentDockerAuthorityAdmission
+from aptl.core.scenario_bundle import PackIdentity
 from aptl.core.deployment._realization_primitives import (
     DeploymentImageRealization,
     DeploymentNetworkAttachment,
@@ -492,6 +493,10 @@ class DeploymentRealizationSpec(object):
     generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
     persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()
     capture_apparatus: tuple[DeploymentCaptureApparatus, ...] = ()
+    # Immutable env-pack identity used only for operator authorization.  SDL
+    # still owns desired state; this identity prevents a grant transferring to
+    # a different pack revision that reused public names.
+    pack_identity: PackIdentity | None = None
     # ADR-048 image-free materialization is no longer a whole-spec flag: routing
     # is derived per node at realize() time (``_needs_compose`` /
     # ``_image_free_node_addresses``) so a graph that mixes pinned artifacts,

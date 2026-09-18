@@ -36,6 +36,7 @@ from aptl.backends.raes_participant_fixture import (
 )
 from aptl.backends.raes_participant_realizations import BPA_ACTION_REALIZATIONS
 from aptl.core.config import AptlConfig
+from aptl.core.lab_types import LabResult
 from aptl.core.runstore import LocalRunStore
 from aptl.validation import participant_agency_readiness
 from aptl.validation.participant_agency_readiness import (
@@ -189,6 +190,12 @@ class _StatefulBackend:
     def __init__(self) -> None:
         self.state: dict[str, str] = {}
         self.calls: list[tuple[str, tuple[str, ...]]] = []
+
+    def qualify_runtime_materialization(
+        self, _realization: object, *, scenario_root: Path
+    ) -> LabResult:
+        del scenario_root
+        return LabResult(success=True)
 
     def container_exec(
         self,

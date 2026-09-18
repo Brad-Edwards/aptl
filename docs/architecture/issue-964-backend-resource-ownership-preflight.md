@@ -102,29 +102,30 @@ check.
 
 ### Runtime-spawned children require independent backend ownership
 
-Issue #949's exact authored image and `child_label` checks remain required,
-but they prove template conformance and semantic correlation only. They do not
-prove which workspace or attempt created a child. `_correlated_child_ids()`
-must first restrict discovery to the current backend ownership scope and only
-then apply the authored image/label/count checks. Every selected child is
-pinned by native ID and revalidated before observation or termination.
+Issue #974 supersedes issue #949's authored `child_label` and count contract.
+Exact authored spawn-template images remain preparation/conformance inputs;
+actual children and counts are post-execution observations. Backend-generated
+run/execution correlation must first restrict discovery to the current daemon,
+workspace, attempt, run, and accepted product execution. Every selected child
+is then recorded in the existing ownership receipt, pinned by native ID, and
+revalidated before observation or termination.
 
 An APTL-controlled opaque owner marker may be used only where the admitted
 runtime contract permits that backend metadata and its observability does not
 change closed/exact SDL semantics. It must be independent of the authored
-label and impossible for a prior attempt's stale marker to satisfy the current
-receipt. Do not rewrite, overload, or require authors to add the marker. A
-runtime authority with the raw daemon socket can see and forge ordinary Docker
-labels, so label secrecy is not an ownership boundary.
+content and impossible for a prior attempt's stale marker to satisfy the
+current receipt. Do not rewrite, overload, or require authors to add the
+marker. A runtime authority with the raw daemon socket can see and forge
+ordinary Docker labels, so label secrecy is not an ownership boundary.
 
 When the child producer cannot carry trustworthy attempt ownership without an
 SDL-observable change, select a daemon/namespace dedicated to the admitted
 workspace/attempt and bind that isolation into the ownership receipt. On the
-ordinary shared host daemon, authored image plus authored label is
-insufficient: admission or post-start verification must report the backend
-resource/materialization conflict before APTL observes, waits on, stops, or
-kills a candidate. A timestamp window, child count, container name, ancestor
-filter, or parent-holder identity does not repair this gap.
+ordinary shared host daemon, exact image plus product correlation metadata is
+insufficient by itself: admission or post-start verification must report the
+backend resource/materialization conflict before APTL observes, waits on,
+stops, or kills a candidate. A timestamp window, child count, container name,
+ancestor filter, or parent-holder identity does not repair this gap.
 
 ### Teardown and recovery use receipts, not broad cleanup authority
 

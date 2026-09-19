@@ -11,6 +11,9 @@ import pytest
 
 from aptl.appliance.public_install import (
     AppliancePublicInstallError,
+    PublicReleaseInstallDependencies,
+    PublicReleaseSelection,
+    _extract_metadata_archive,
     install_public_release,
 )
 
@@ -66,17 +69,21 @@ def test_public_release_install_is_atomic_and_stages_launcher_defaults(
         return SimpleNamespace(release_id="aptl-v5.5.0-x86_64")
 
     result = install_public_release(
-        repository="Brad-Edwards/aptl",
-        tag="v5.5.0",
-        release_id="aptl-v5.5.0-x86_64",
+        selection=PublicReleaseSelection(
+            repository="Brad-Edwards/aptl",
+            tag="v5.5.0",
+            release_id="aptl-v5.5.0-x86_64",
+        ),
         release_public_key=release_key,
         qualification_public_key=qualification_key,
         seat_root=seat_root,
         cache_dir=cache,
-        fetch_metadata=fetch_metadata,
-        fetch_artifact=fetch_artifact,
-        verify_metadata=verify_metadata,
-        verify_release=verify_release,
+        dependencies=PublicReleaseInstallDependencies(
+            fetch_metadata=fetch_metadata,
+            fetch_artifact=fetch_artifact,
+            verify_metadata=verify_metadata,
+            verify_release=verify_release,
+        ),
     )
 
     assert result.release_dir == seat_root / "launch" / "release"
@@ -103,14 +110,59 @@ def test_public_release_install_rejects_unsafe_metadata_member(tmp_path: Path) -
 
     with pytest.raises(AppliancePublicInstallError, match="metadata archive"):
         install_public_release(
-            repository="Brad-Edwards/aptl",
-            tag="v5.5.0",
-            release_id="aptl-v5.5.0-x86_64",
+            selection=PublicReleaseSelection(
+                repository="Brad-Edwards/aptl",
+                tag="v5.5.0",
+                release_id="aptl-v5.5.0-x86_64",
+            ),
             release_public_key=release_key,
             qualification_public_key=qualification_key,
             seat_root=tmp_path / "seat",
             cache_dir=tmp_path / "cache",
-            fetch_metadata=lambda *_args, **_kwargs: payload.getvalue(),
+            dependencies=PublicReleaseInstallDependencies(
+                fetch_metadata=lambda *_args, **_kwargs: payload.getvalue()
+            ),
         )
 
     assert not (tmp_path / "outside").exists()
+
+
+@pytest.mark.parametrize("unsafe_member", ["duplicate", "symlink", "absolute"])
+def test_metadata_archive_rejects_unsafe_members(
+    tmp_path: Path, unsafe_member: str
+) -> None:
+    payload = io.BytesIO()
+    with tarfile.open(fileobj=payload, mode="w:") as archive:
+        first = tarfile.TarInfo("manifest.json")
+        first.size = 2
+        archive.addfile(first, io.BytesIO(b"{}"))
+        if unsafe_member == "duplicate":
+            second = tarfile.TarInfo("manifest.json")
+        elif unsafe_member == "symlink":
+            second = tarfile.TarInfo("link")
+            second.type = tarfile.SYMTYPE
+            second.linkname = "manifest.json"
+        else:
+            second = tarfile.TarInfo("/outside")
+        archive.addfile(second, io.BytesIO())
+
+    archive_bytes = payload.getvalue()
+    destination = tmp_path / "release"
+    with pytest.raises(AppliancePublicInstallError, match="metadata archive"):
+        _extract_metadata_archive(archive_bytes, destination)
+
+
+def test_metadata_archive_accepts_root_directory_entry(tmp_path: Path) -> None:
+    payload = io.BytesIO()
+    with tarfile.open(fileobj=payload, mode="w:") as archive:
+        root = tarfile.TarInfo(".")
+        root.type = tarfile.DIRTYPE
+        archive.addfile(root)
+        member = tarfile.TarInfo("manifest.json")
+        member.size = 2
+        archive.addfile(member, io.BytesIO(b"{}"))
+
+    destination = tmp_path / "release"
+    destination.mkdir()
+    _extract_metadata_archive(payload.getvalue(), destination)
+    assert (destination / "manifest.json").read_bytes() == b"{}"

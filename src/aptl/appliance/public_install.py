@@ -37,6 +37,8 @@ class AppliancePublicInstallError(RuntimeError):
 
 
 class _ReleaseIdentity(Protocol):
+    """Signed manifest or inspection carrying the selected release identity."""
+
     release_id: str
 
 
@@ -53,6 +55,25 @@ MetadataFetcher = Callable[..., bytes]
 ArtifactFetcher = Callable[..., Path]
 MetadataVerifier = Callable[[Path, Path], _ReleaseIdentity]
 ReleaseVerifier = Callable[..., _ReleaseIdentity]
+
+
+@dataclass(frozen=True)
+class PublicReleaseSelection:
+    """Immutable coordinates of one GitHub-hosted appliance release."""
+
+    repository: str
+    tag: str
+    release_id: str
+
+
+@dataclass(frozen=True)
+class PublicReleaseInstallDependencies:
+    """Injectable transfer and verification boundaries for one installation."""
+
+    fetch_metadata: MetadataFetcher = fetch_https_metadata
+    fetch_artifact: ArtifactFetcher = fetch_distribution_artifact
+    verify_metadata: MetadataVerifier = verify_release_metadata
+    verify_release: ReleaseVerifier = verify_release_directory
 
 
 def _ensure_private_directory(path: Path) -> None:
@@ -100,6 +121,46 @@ def _copy_public_anchor(source: Path, destination: Path) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def _metadata_member_path(member: tarfile.TarInfo) -> PurePosixPath | None:
+    """Normalize one member name without allowing traversal or duplicates."""
+
+    relative = PurePosixPath(member.name)
+    parts = tuple(part for part in relative.parts if part not in {"", "."})
+    if relative.is_absolute() or ".." in parts:
+        raise ValueError("unsafe member path")
+    if not parts:
+        if member.isdir():
+            return None
+        raise ValueError("unsafe member path")
+    return PurePosixPath(*parts)
+
+
+def _write_metadata_member(
+    archive: tarfile.TarFile,
+    member: tarfile.TarInfo,
+    destination: Path,
+    relative: PurePosixPath,
+) -> None:
+    """Write one validated directory or bounded regular member."""
+
+    target = destination.joinpath(*relative.parts)
+    if member.isdir():
+        target.mkdir(parents=True, exist_ok=True, mode=0o700)
+        return
+    if not member.isreg() or member.size < 0:
+        raise ValueError("unsupported member type")
+    target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    source = archive.extractfile(member)
+    if source is None:
+        raise ValueError("member is unreadable")
+    content = source.read(member.size + 1)
+    if len(content) != member.size:
+        raise ValueError("member size mismatch")
+    with target.open("xb") as handle:
+        handle.write(content)
+    target.chmod(0o400)
+
+
 def _extract_metadata_archive(payload: bytes, destination: Path) -> None:
     """Extract a bounded regular-file-only metadata archive into a new directory."""
 
@@ -113,35 +174,17 @@ def _extract_metadata_archive(payload: bytes, destination: Path) -> None:
             if not members or len(members) > _MAX_METADATA_MEMBERS:
                 raise ValueError("invalid member count")
             for member in members:
-                relative = PurePosixPath(member.name)
-                parts = tuple(part for part in relative.parts if part not in {"", "."})
-                if relative.is_absolute() or not parts or ".." in parts:
-                    if not parts and member.isdir():
-                        continue
-                    raise ValueError("unsafe member path")
-                normalized = PurePosixPath(*parts)
-                if normalized in seen:
-                    raise ValueError("duplicate member")
-                seen.add(normalized)
-                target = destination.joinpath(*normalized.parts)
-                if member.isdir():
-                    target.mkdir(parents=True, exist_ok=True, mode=0o700)
+                relative = _metadata_member_path(member)
+                if relative is None:
                     continue
-                if not member.isreg() or member.size < 0:
-                    raise ValueError("unsupported member type")
-                total_size += member.size
-                if total_size > _MAX_METADATA_BYTES:
-                    raise ValueError("metadata is too large")
-                target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-                source = archive.extractfile(member)
-                if source is None:
-                    raise ValueError("member is unreadable")
-                content = source.read(member.size + 1)
-                if len(content) != member.size:
-                    raise ValueError("member size mismatch")
-                with target.open("xb") as handle:
-                    handle.write(content)
-                target.chmod(0o400)
+                if relative in seen:
+                    raise ValueError("duplicate member")
+                seen.add(relative)
+                if member.isreg():
+                    total_size += member.size
+                    if total_size > _MAX_METADATA_BYTES:
+                        raise ValueError("metadata is too large")
+                _write_metadata_member(archive, member, destination, relative)
     except AppliancePublicInstallError:
         raise
     except (OSError, tarfile.TarError, ValueError) as exc:
@@ -152,20 +195,24 @@ def _extract_metadata_archive(payload: bytes, destination: Path) -> None:
 
 def install_public_release(
     *,
-    repository: str,
-    tag: str,
-    release_id: str,
+    selection: PublicReleaseSelection,
     release_public_key: Path,
     qualification_public_key: Path,
     seat_root: Path,
     cache_dir: Path,
-    fetch_metadata: MetadataFetcher = fetch_https_metadata,
-    fetch_artifact: ArtifactFetcher = fetch_distribution_artifact,
-    verify_metadata: MetadataVerifier = verify_release_metadata,
-    verify_release: ReleaseVerifier = verify_release_directory,
+    dependencies: PublicReleaseInstallDependencies = PublicReleaseInstallDependencies(),
 ) -> PublicReleaseInstallResult:
     """Download, authenticate, and atomically install one public release."""
 
+    repository, tag, release_id = (
+        selection.repository,
+        selection.tag,
+        selection.release_id,
+    )
+    fetch_metadata = dependencies.fetch_metadata
+    fetch_artifact = dependencies.fetch_artifact
+    verify_metadata = dependencies.verify_metadata
+    verify_release = dependencies.verify_release
     if not _RELEASE_ID.fullmatch(release_id):
         raise AppliancePublicInstallError("public release identity is invalid")
     try:

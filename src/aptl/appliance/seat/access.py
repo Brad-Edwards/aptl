@@ -70,6 +70,41 @@ def _write_private_create_once(path: Path, payload: bytes) -> None:
         os.fsync(handle.fileno())
 
 
+def _ensure_private_access_root(root: Path) -> None:
+    """Admit an owner-only state directory without following a leaf link."""
+
+    if root.is_symlink():
+        raise OSError("access root is a symlink")
+    root.mkdir(parents=True, mode=0o700, exist_ok=True)
+    root.chmod(0o700)
+    info = root.stat(follow_symlinks=False)
+    if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
+        raise OSError("access root is not owner-only")
+
+
+def _load_or_create_transport_key(
+    private_path: Path, public_path: Path
+) -> Ed25519PrivateKey:
+    """Reuse a valid Ed25519 key or create one only in an empty key slot."""
+
+    if private_path.exists() or private_path.is_symlink():
+        private_bytes = _read_private_regular(private_path)
+        key = serialization.load_ssh_private_key(private_bytes, password=None)
+        if not isinstance(key, Ed25519PrivateKey):
+            raise ValueError("transport identity is not Ed25519")
+        return key
+    if public_path.exists() or public_path.is_symlink():
+        raise OSError("transport public key exists without its private key")
+    key = Ed25519PrivateKey.generate()
+    private_bytes = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.OpenSSH,
+        serialization.NoEncryption(),
+    )
+    _write_private_create_once(private_path, private_bytes)
+    return key
+
+
 def ensure_transport_identity(seat_root: Path) -> tuple[Path, Path]:
     """Create or validate the user's persistent seat transport keypair."""
 
@@ -77,28 +112,8 @@ def ensure_transport_identity(seat_root: Path) -> tuple[Path, Path]:
     private_path = root / "transport-key"
     public_path = root / "transport-key.pub"
     try:
-        if root.is_symlink():
-            raise OSError("access root is a symlink")
-        root.mkdir(parents=True, mode=0o700, exist_ok=True)
-        root.chmod(0o700)
-        info = root.stat(follow_symlinks=False)
-        if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
-            raise OSError("access root is not owner-only")
-        if private_path.exists() or private_path.is_symlink():
-            private_bytes = _read_private_regular(private_path)
-            key = serialization.load_ssh_private_key(private_bytes, password=None)
-            if not isinstance(key, Ed25519PrivateKey):
-                raise ValueError("transport identity is not Ed25519")
-        else:
-            if public_path.exists() or public_path.is_symlink():
-                raise OSError("transport public key exists without its private key")
-            key = Ed25519PrivateKey.generate()
-            private_bytes = key.private_bytes(
-                serialization.Encoding.PEM,
-                serialization.PrivateFormat.OpenSSH,
-                serialization.NoEncryption(),
-            )
-            _write_private_create_once(private_path, private_bytes)
+        _ensure_private_access_root(root)
+        key = _load_or_create_transport_key(private_path, public_path)
         public_bytes = (
             key.public_key().public_bytes(
                 serialization.Encoding.OpenSSH,

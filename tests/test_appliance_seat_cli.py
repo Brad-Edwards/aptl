@@ -91,7 +91,7 @@ def test_seat_install_targets_private_default_layout(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert install.call_args.kwargs["seat_root"] == state_home / "aptl" / "seat"
     assert install.call_args.kwargs["cache_dir"] == cache_home / "aptl" / "appliance"
-    assert install.call_args.kwargs["release_id"] == "aptl-v5.5.0-x86_64"
+    assert install.call_args.kwargs["selection"].release_id == "aptl-v5.5.0-x86_64"
 
 
 def test_seat_status_emits_bounded_json(tmp_path: Path) -> None:

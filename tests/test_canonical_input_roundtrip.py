@@ -227,8 +227,9 @@ def test_canonical_staging_roundtrip_binds_acquired_bytes_and_rejects_tampering(
         image_roles=roles,
         system_packages=system_packages,
         system_packages_lock=system_packages_lock,
-        target_python_version="3.14",
-        target_architecture="x86_64",
+        target=inputs.CanonicalBuildTarget(
+            python_version="3.14", architecture="x86_64"
+        ),
     )
     assert admitted.scenario_pack == bundle.pack_identity
     assert set(admitted.image_roles) == expected_roles

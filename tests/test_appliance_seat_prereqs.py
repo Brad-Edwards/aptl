@@ -82,9 +82,10 @@ def test_require_host_prerequisites_raises(tmp_path: Path) -> None:
 
 
 def test_require_host_prerequisites_reports_every_failed_check(tmp_path: Path) -> None:
+    requirements = _requirements()
     with pytest.raises(SeatLauncherError) as exc:
         require_host_prerequisites(
-            _requirements(),
+            requirements,
             seat_root=tmp_path,
             memory_bytes=1024,
             available_vcpus=1,

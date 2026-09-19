@@ -11,6 +11,7 @@ import subprocess
 import tarfile
 import tempfile
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -48,7 +49,7 @@ REQUIREMENTS_FILE = "requirements.txt"
 SYSTEM_PACKAGES_DIRECTORY = "system-packages"
 SYSTEM_PACKAGES_LOCK = "system-packages.sha256"
 _SYSTEM_PACKAGE_LINE = re.compile(
-    r"^(?P<sha256>[0-9a-f]{64})  (?P<filename>[A-Za-z0-9.+%:~_-]+\.deb)$"
+    r"^(?P<sha256>[0-9a-f]{64}) {2}(?P<filename>[A-Za-z0-9.+%:~_-]+\.deb)$"
 )
 
 # These are apparatus roles in addition to the model-derived scenario services.
@@ -128,7 +129,7 @@ def acquire_canonical_images(
                     stderr=subprocess.DEVNULL,
                     timeout=3600,
                 )
-                inspected = subprocess.run(
+                subprocess.run(
                     ["docker", "image", "inspect", reference],
                     check=True,
                     capture_output=True,
@@ -185,13 +186,9 @@ def hash_file_nofollow(path: Path) -> tuple[str, int]:
     return digest.removeprefix("sha256:"), size
 
 
-def validate_system_packages(
-    packages: Path, lock: Path, *, architecture: str
-) -> dict[str, str]:
-    """Validate an exact offline Debian package closure against its byte lock."""
+def _expected_system_packages(lock: Path, architecture: str) -> dict[str, str]:
+    """Read the byte lock and reject mixed-architecture package sets."""
 
-    if packages.is_symlink() or not packages.is_dir() or lock.is_symlink():
-        raise ValueError("guest system package closure is invalid")
     lines = lock.read_text(encoding="utf-8").splitlines()
     expected: dict[str, str] = {}
     for line in lines:
@@ -199,14 +196,27 @@ def validate_system_packages(
         if match is None or match["filename"] in expected:
             raise ValueError("guest system package lock is invalid")
         expected[match["filename"]] = match["sha256"]
-    machine_architecture = {"x86_64": "amd64", "aarch64": "arm64"}.get(
-        architecture
-    )
-    if not expected or machine_architecture is None or any(
-        not name.endswith((f"_{machine_architecture}.deb", "_all.deb"))
-        for name in expected
+    machine_architecture = {"x86_64": "amd64", "aarch64": "arm64"}.get(architecture)
+    if (
+        not expected
+        or machine_architecture is None
+        or any(
+            not name.endswith((f"_{machine_architecture}.deb", "_all.deb"))
+            for name in expected
+        )
     ):
         raise ValueError("guest system package architecture is invalid")
+    return expected
+
+
+def validate_system_packages(
+    packages: Path, lock: Path, *, architecture: str
+) -> dict[str, str]:
+    """Validate an exact offline Debian package closure against its byte lock."""
+
+    if packages.is_symlink() or not packages.is_dir() or lock.is_symlink():
+        raise ValueError("guest system package closure is invalid")
+    expected = _expected_system_packages(lock, architecture)
     actual: dict[str, str] = {}
     for path in packages.iterdir():
         if path.is_symlink() or not path.is_file() or path.name not in expected:
@@ -279,9 +289,7 @@ def validate_canonical_inputs(
         architecture=inputs.architecture,
     )
     _validate_project_runtime(project)
-    _validate_asset_lock(
-        staging, inputs, project, wheels, system_packages, images
-    )
+    _validate_asset_lock(staging, inputs, project, wheels, system_packages, images)
     with tempfile.TemporaryDirectory(prefix="aptl-input-pack-") as work:
         bundle = env_pack_bundle(Path(work))
         if bundle.pack_identity != inputs.scenario_pack:
@@ -341,6 +349,51 @@ def _archive_project(project: Path, output: Path) -> dict[str, str]:
     return files
 
 
+@dataclass(frozen=True)
+class CanonicalBuildTarget:
+    """Optional Python and architecture target for an input build."""
+
+    python_version: str | None = None
+    architecture: str | None = None
+
+
+def _write_wheel_requirements(
+    staging: Path, project: Path, python_target: str, architecture_target: str
+) -> None:
+    """Bind the installed wheel to the guest's offline web closure."""
+
+    import aptl
+
+    aptl_wheels = list(
+        (staging / "wheelhouse").glob(f"aptl_labs-{aptl.__version__}-*.whl")
+    )
+    if len(aptl_wheels) != 1:
+        raise ValueError("wheelhouse must contain the installed APTL version")
+    requirement = (project / "requirements/web.txt").read_text()
+    requirement += f"\naptl-labs[web]=={aptl.__version__} --hash=sha256:{hash_file_nofollow(aptl_wheels[0])[0]}\n"
+    (staging / REQUIREMENTS_FILE).write_text(requirement)
+    validate_wheel_closure(
+        staging / "wheelhouse",
+        requirement,
+        python_version=python_target,
+        architecture=architecture_target,
+    )
+
+
+def _stage_guest_boot_files(staging: Path, project: Path, aptl_version: str) -> None:
+    """Copy the versioned guest entry point and systemd units into the input set."""
+
+    (staging / "appliance-release.env").write_text(
+        f"APTL_APPLIANCE_SCENARIO=techvault\nAPTL_APPLIANCE_VERSION={aptl_version}\n"
+    )
+    for name in (
+        "aptl-appliance-first-boot",
+        "aptl-appliance-first-boot.service",
+        "aptl-launch.mount",
+    ):
+        shutil.copyfile(project / "appliance/guest" / name, staging / name)
+
+
 def stage_canonical_inputs(
     *,
     staging: Path,
@@ -349,8 +402,7 @@ def stage_canonical_inputs(
     image_roles: dict[str, str],
     system_packages: Path,
     system_packages_lock: Path,
-    target_python_version: str | None = None,
-    target_architecture: Literal["x86_64", "aarch64"] | None = None,
+    target: CanonicalBuildTarget | None = None,
 ) -> CanonicalInputs:
     """Build fresh wheel-supplied assets and write a verifiable input inventory.
 
@@ -364,10 +416,12 @@ def stage_canonical_inputs(
         raise ValueError("input assembly must run from the installed APTL wheel")
     if staging.exists():
         raise ValueError("input staging must be a new directory")
-    python_target = target_python_version or ".".join(
+    python_target = (target.python_version if target else None) or ".".join(
         platform.python_version().split(".")[:2]
     )
-    architecture_target = target_architecture or platform.machine()
+    architecture_target = (
+        target.architecture if target else None
+    ) or platform.machine()
     if architecture_target not in {"x86_64", "aarch64"}:
         raise ValueError("unsupported canonical input target architecture")
     validate_system_packages(
@@ -412,32 +466,11 @@ def stage_canonical_inputs(
             symlinks=True,
         )
         shutil.copyfile(system_packages_lock, staging / SYSTEM_PACKAGES_LOCK)
-        aptl_wheels = list(
-            (staging / "wheelhouse").glob(f"aptl_labs-{aptl.__version__}-*.whl")
-        )
-        if len(aptl_wheels) != 1:
-            raise ValueError("wheelhouse must contain the installed APTL version")
-        requirement = (project / "requirements/web.txt").read_text()
-        requirement += f"\naptl-labs[web]=={aptl.__version__} --hash=sha256:{hash_file_nofollow(aptl_wheels[0])[0]}\n"
-        (staging / REQUIREMENTS_FILE).write_text(requirement)
-        validate_wheel_closure(
-            staging / "wheelhouse",
-            requirement,
-            python_version=python_target,
-            architecture=architecture_target,
-        )
+        _write_wheel_requirements(staging, project, python_target, architecture_target)
         _write_full_profile(project, bundle, matrix, image_roles)
         project_files = _archive_project(project, staging / PROJECT_ARCHIVE)
         shutil.copyfile(image_archive, staging / IMAGE_ARCHIVE)
-        (staging / "appliance-release.env").write_text(
-            f"APTL_APPLIANCE_SCENARIO=techvault\nAPTL_APPLIANCE_VERSION={aptl.__version__}\n"
-        )
-        for name in (
-            "aptl-appliance-first-boot",
-            "aptl-appliance-first-boot.service",
-            "aptl-launch.mount",
-        ):
-            shutil.copyfile(project / "appliance/guest" / name, staging / name)
+        _stage_guest_boot_files(staging, project, aptl.__version__)
         assets = _staged_assets(staging, project_files, images)
         inputs = CanonicalInputs(
             schema_version="aptl.canonical-inputs/v1",

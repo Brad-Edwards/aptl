@@ -65,7 +65,9 @@ def proxy_loopback(
     launch_descriptor: Path = typer.Option(..., "--launch-descriptor"),
     release_public_key: Path = typer.Option(..., "--release-public-key"),
     qualification_public_key: Path = typer.Option(..., "--qualification-public-key"),
-    adapter_address: str = typer.Option(DEFAULT_QEMU_GUEST_ADDRESS, "--adapter-address"),
+    adapter_address: str = typer.Option(
+        DEFAULT_QEMU_GUEST_ADDRESS, "--adapter-address"
+    ),
     candidate_trust: bool = typer.Option(False, "--candidate-trust"),
 ) -> None:
     """Expose verified guest loopback publications on the private VM adapter."""
@@ -729,7 +731,7 @@ def assemble_inputs(
     target_architecture: str | None = typer.Option(None, "--target-architecture"),
 ) -> None:
     """Build canonical package inputs for an image builder, without a VM."""
-    from aptl.appliance.inputs import stage_canonical_inputs
+    from aptl.appliance.inputs import CanonicalBuildTarget, stage_canonical_inputs
     from aptl.utils.deterministic_archive import hash_file_nofollow
 
     try:
@@ -740,8 +742,10 @@ def assemble_inputs(
             image_roles=loads_strict(image_roles.read_bytes()),
             system_packages=system_packages,
             system_packages_lock=system_packages_lock,
-            target_python_version=target_python_version,
-            target_architecture=target_architecture,
+            target=CanonicalBuildTarget(
+                python_version=target_python_version,
+                architecture=target_architecture,
+            ),
         )
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         _fail("canonical input assembly failed", exc)

@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from aptl.appliance.seat.context import StartSeatOptions
 from aptl.appliance.public_install import (
     AppliancePublicInstallError,
+    PublicReleaseSelection,
     install_public_release,
 )
 from aptl.appliance.manifest import ApplianceManifestError
@@ -129,9 +130,9 @@ def install(
     selected_release_id = release_id or f"aptl-{tag}-x86_64"
     try:
         result = install_public_release(
-            repository=repository,
-            tag=tag,
-            release_id=selected_release_id,
+            selection=PublicReleaseSelection(
+                repository=repository, tag=tag, release_id=selected_release_id
+            ),
             release_public_key=release_public_key,
             qualification_public_key=qualification_public_key,
             seat_root=_resolved_seat_root(seat_root),

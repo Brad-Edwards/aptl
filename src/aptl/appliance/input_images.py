@@ -16,6 +16,7 @@ from aptl.core.deployment._operator_access_endpoints import OPERATOR_ACCESS_IMAG
 from aptl.core.scenario_bundle import ScenarioBundle
 from aptl.validation.curated_live_proof import bundle_realization
 
+_DIGEST_SEPARATOR = "@sha256:"
 _PINNED_THIRD_PARTY_IMAGES = {
     "debian:13-slim": (
         "debian:13-slim@sha256:"
@@ -40,7 +41,7 @@ def _pin_third_party(reference: str) -> str:
     """Require immutable registry identities for every non-APTL image."""
 
     pinned = _PINNED_THIRD_PARTY_IMAGES.get(reference, reference)
-    if not pinned.startswith(("aptl/", "aptl-")) and "@sha256:" not in pinned:
+    if not pinned.startswith(("aptl/", "aptl-")) and _DIGEST_SEPARATOR not in pinned:
         raise ValueError("canonical third-party image is not pinned by digest")
     return pinned
 
@@ -59,7 +60,7 @@ def compose_runtime_image_aliases(
 
     pinned_by_repository: dict[str, str] = {}
     for reference in set(references.values()):
-        if "@sha256:" not in reference:
+        if _DIGEST_SEPARATOR not in reference:
             continue
         repository = runtime_image_tag(reference).rsplit(":", 1)[0]
         previous = pinned_by_repository.setdefault(repository, reference)
@@ -158,7 +159,7 @@ def validate_image_sources(
     references = canonical_image_references(project, bundle)
     for role, reference in references.items():
         identity = roles.get(role)
-        if "@sha256:" in reference:
+        if _DIGEST_SEPARATOR in reference:
             expected = registry_image_id(
                 image_archive,
                 image_files,

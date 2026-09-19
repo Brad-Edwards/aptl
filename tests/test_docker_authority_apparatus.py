@@ -81,7 +81,9 @@ def _spec(images: tuple[str, ...] = (_WORKER, _APP)) -> DeploymentRealizationSpe
 
 def test_an_admitted_authority_always_requests_its_mediation():
     assert authority_requested(_spec()) is True
-    assert authority_requested(replace(_spec(), docker_authority_admissions=())) is False
+    assert (
+        authority_requested(replace(_spec(), docker_authority_admissions=())) is False
+    )
 
 
 def test_the_permitted_images_are_exactly_the_admitted_ones():
@@ -158,10 +160,14 @@ def test_a_pack_that_owns_the_apparatus_name_is_refused():
     """The apparatus must not silently lose to a scenario service of its name."""
 
     spec = _spec()
-    admission = replace(spec.docker_authority_admissions[0], service_name=AUTHORITY_SERVICE)
+    admission = replace(
+        spec.docker_authority_admissions[0], service_name=AUTHORITY_SERVICE
+    )
     spec = replace(spec, docker_authority_admissions=(admission,))
 
-    assert authority_declaration_error(spec) == "aptl.docker-authority.ownership-conflict"
+    assert (
+        authority_declaration_error(spec) == "aptl.docker-authority.ownership-conflict"
+    )
 
 
 def test_one_shared_apparatus_never_unions_multiple_authorities():
@@ -193,16 +199,17 @@ def test_env_pack_apparatus_is_read_and_written_under_engine_root(tmp_path):
     )
     backend = DockerComposeBackend(engine_root)
 
-    files = backend._with_docker_authority_files((), _spec(), pack_root, engine_root)
+    files = backend._with_docker_authority_files((), _spec(), engine_root)
 
-    assert files == (
-        engine_root / ".aptl" / "realization" / AUTHORITY_COMPOSE_FILE,
-    )
+    assert files == (engine_root / ".aptl" / "realization" / AUTHORITY_COMPOSE_FILE,)
     assert not (pack_root / ".aptl").exists()
 
 
 def test_no_authority_needs_no_apparatus():
-    assert authority_declaration_error(replace(_spec(), docker_authority_admissions=())) is None
+    assert (
+        authority_declaration_error(replace(_spec(), docker_authority_admissions=()))
+        is None
+    )
 
 
 def test_the_shipped_apparatus_model_never_hands_over_the_host_socket():

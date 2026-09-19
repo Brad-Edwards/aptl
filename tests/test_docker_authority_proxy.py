@@ -8,12 +8,15 @@ an authorization boundary.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 import http.client
 import json
 import os
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -21,8 +24,7 @@ from pathlib import Path
 import pytest
 
 PROXY = (
-    Path(__file__).resolve().parents[1]
-    / "containers/docker-authority-proxy/proxy.py"
+    Path(__file__).resolve().parents[1] / "containers/docker-authority-proxy/proxy.py"
 )
 ADMITTED = "ghcr.io/shuffle/shuffle-worker@sha256:" + "f" * 64
 OTHER = "ghcr.io/shuffle/shuffle-worker@sha256:" + "e" * 64
@@ -65,9 +67,7 @@ class _StubDaemon:
                 body = json.dumps(
                     {
                         "Id": "abc",
-                        "Config": {
-                            "Labels": {"org.aptl.docker-authority": "managed"}
-                        },
+                        "Config": {"Labels": {"org.aptl.docker-authority": "managed"}},
                     }
                 ).encode()
             elif b"/containers/host-container/json " in request_line:
@@ -105,35 +105,54 @@ class _Client:
         return response.status, text
 
 
+@contextmanager
+def _running_authority(
+    images: str,
+) -> Iterator[tuple[_Client, _StubDaemon]]:
+    """Run the proxy with socket paths short enough for every supported OS."""
+
+    # macOS limits AF_UNIX paths to 104 bytes. Pytest's per-test tmp_path can
+    # exceed that before the socket filename is appended. Prefer the standard
+    # short POSIX temp root when present and otherwise use the platform default.
+    temporary_root = "/tmp" if Path("/tmp").is_dir() else None
+    with tempfile.TemporaryDirectory(
+        prefix="aptl-da-", dir=temporary_root
+    ) as temporary_directory:
+        socket_directory = Path(temporary_directory)
+        upstream = socket_directory / "upstream.sock"
+        mediated = socket_directory / "mediated.sock"
+        daemon = _StubDaemon(upstream)
+        process = subprocess.Popen(
+            [sys.executable, str(PROXY)],
+            env={
+                **os.environ,
+                "APTL_DOCKER_AUTHORITY_SOCKET": str(mediated),
+                "APTL_DOCKER_AUTHORITY_UPSTREAM": str(upstream),
+                "APTL_DOCKER_AUTHORITY_IMAGES": images,
+                "APTL_DOCKER_AUTHORITY_NETWORKS": ALLOWED_NETWORK,
+            },
+            stderr=subprocess.PIPE,
+        )
+        try:
+            for _ in range(100):
+                if mediated.exists():
+                    break
+                time.sleep(0.05)
+            assert mediated.exists(), "the mediated socket never appeared"
+            yield _Client(mediated), daemon
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                process.wait(timeout=10)
+            daemon.close()
+
+
 @pytest.fixture
-def authority(tmp_path):
+def authority():
     """Run the real proxy in front of a stub daemon."""
 
-    upstream = tmp_path / "upstream.sock"
-    mediated = tmp_path / "mediated.sock"
-    daemon = _StubDaemon(upstream)
-    process = subprocess.Popen(
-        [sys.executable, str(PROXY)],
-        env={
-            **os.environ,
-            "APTL_DOCKER_AUTHORITY_SOCKET": str(mediated),
-            "APTL_DOCKER_AUTHORITY_UPSTREAM": str(upstream),
-            "APTL_DOCKER_AUTHORITY_IMAGES": ADMITTED,
-            "APTL_DOCKER_AUTHORITY_NETWORKS": ALLOWED_NETWORK,
-        },
-        stderr=subprocess.PIPE,
-    )
-    for _ in range(100):
-        if mediated.exists():
-            break
-        time.sleep(0.05)
-    assert mediated.exists(), "the mediated socket never appeared"
-    try:
-        yield _Client(mediated), daemon
-    finally:
-        process.terminate()
-        process.wait(timeout=10)
-        daemon.close()
+    with _running_authority(ADMITTED) as running:
+        yield running
 
 
 def _create(image: str, host_config: dict | None = None) -> dict:
@@ -396,35 +415,13 @@ def test_conflicting_content_lengths_are_refused_before_the_daemon(authority):
     assert daemon.received == []
 
 
-def test_the_admitted_set_is_the_only_source_of_permitted_images(tmp_path):
+def test_the_admitted_set_is_the_only_source_of_permitted_images():
     """An authority with no admitted images may create nothing at all."""
 
-    upstream = tmp_path / "upstream.sock"
-    mediated = tmp_path / "mediated.sock"
-    daemon = _StubDaemon(upstream)
-    process = subprocess.Popen(
-        [sys.executable, str(PROXY)],
-        env={
-            **os.environ,
-            "APTL_DOCKER_AUTHORITY_SOCKET": str(mediated),
-            "APTL_DOCKER_AUTHORITY_UPSTREAM": str(upstream),
-            "APTL_DOCKER_AUTHORITY_IMAGES": "",
-            "APTL_DOCKER_AUTHORITY_NETWORKS": ALLOWED_NETWORK,
-        },
-        stderr=subprocess.PIPE,
-    )
-    try:
-        for _ in range(100):
-            if mediated.exists():
-                break
-            time.sleep(0.05)
-        status, _text = _Client(mediated).request(
+    with _running_authority("") as (client, daemon):
+        status, _text = client.request(
             "POST", "/v1.44/containers/create", _create(ADMITTED)
         )
-    finally:
-        process.terminate()
-        process.wait(timeout=10)
-        daemon.close()
 
     assert status == 403
     assert daemon.received == []

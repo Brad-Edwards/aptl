@@ -793,7 +793,9 @@ src/aptl/backends/_compose_profile_index.py	core-candidate	Migrate only after pu
 src/aptl/backends/_raes_apply_helpers.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_apply_reporting.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_artifact_delivery_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_backend_generated_artifacts.py	backend-owned-runtime	Retain generated-artifact selection and realization under backend authority
 src/aptl/backends/_raes_backend_implementation_catalog.py	backend-owned-runtime	Retain immutable backend implementation profiles selected only under open authority
+src/aptl/backends/_raes_backend_implementation_images.py	backend-owned-runtime	Retain backend image implementation choices selected only under open realization authority
 src/aptl/backends/_raes_backend_implementation_profiles.py	backend-owned-runtime	Retain backend implementation choices selected only under open realization authority
 src/aptl/backends/_raes_backend_implementation_types.py	backend-owned-runtime	Retain typed backend implementation profile and substrate selections
 src/aptl/backends/_raes_conformance_probe.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -805,6 +807,7 @@ src/aptl/backends/_raes_evaluator_progress.py	core-candidate	Migrate only after 
 src/aptl/backends/_raes_guest_os_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_guest_package_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_image_policy.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_manifest_resources.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_native_evidence_acquisition.py	backend-observability	Retain admitted native evidence request orchestration and acquisition
 src/aptl/backends/_raes_native_proposition_truth.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_network_observation.py	backend-owned-runtime	Retain provider readback for realized scenario networks
@@ -981,6 +984,7 @@ src/aptl/core/deployment/_compose_model_realization.py	core-candidate	Migrate on
 src/aptl/core/deployment/_compose_network_conflicts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_network_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_node_generation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_node_topology.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_observability.py	backend-substrate	Post-baseline optional observability mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_owned_start.py	backend-substrate	Post-baseline owned Compose startup mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_port_readback.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -998,6 +1002,7 @@ src/aptl/core/deployment/_compose_resource_ownership.py	backend-substrate	Post-b
 src/aptl/core/deployment/_compose_resource_resolution.py	backend-substrate	Post-baseline native resource resolution mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_runtime_inventory.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_runtime_observation.py	backend-substrate	Post-baseline native runtime observation mechanism; retain with deployment authority
+src/aptl/core/deployment/_compose_runtime_observation_helpers.py	backend-substrate	Post-baseline native runtime observation mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_runtime_orchestration.py	backend-substrate	Post-baseline Compose runtime-orchestration mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_seed_attribution.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_seed_execution.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1005,6 +1010,7 @@ src/aptl/core/deployment/_compose_seed_safety.py	core-candidate	Migrate only aft
 src/aptl/core/deployment/_compose_service_health.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_service_index_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_spawn_image_realization.py	backend-substrate	Post-baseline child-image realization mechanism; retain with exact authority checks
+src/aptl/core/deployment/_compose_stateful_artifact_helpers.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_stateful_constants.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_stateful_graph.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_stateful_model.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1051,6 +1057,7 @@ src/aptl/core/evidence/adapters/builtins.py	core-candidate	Migrate only after pu
 src/aptl/core/evidence/adapters/sources.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/evidence/adapters/techvault.py	scenario-integration-plugin	Selected TechVault evidence integration; generic capture remains backend-owned
 src/aptl/core/evidence/adapters/techvault_native.py	scenario-integration-plugin	Selected TechVault native evidence integration; generic capture remains backend-owned
+src/aptl/core/evidence/adapters/_techvault_native_cortex.py	scenario-integration-plugin	Selected TechVault native Cortex evidence integration; generic capture remains backend-owned
 src/aptl/core/evidence/adapters/techvault_native_support.py	scenario-integration-plugin	Selected TechVault native evidence support; generic capture remains backend-owned
 src/aptl/core/evidence/adapters/techvault_enrollment_baseline.py	scenario-integration-plugin	Selected TechVault readiness evidence integration; generic capture remains backend-owned
 src/aptl/core/evidence/adapters/techvault_misp_readiness.py	scenario-integration-plugin	Selected TechVault readiness evidence integration; generic capture remains backend-owned

@@ -148,6 +148,40 @@ def _restore_local_image_tags(images: dict[str, tuple[str, str]]) -> None:
         )
 
 
+def _saved_manifest_config_pairs(
+    image_archive: Path, image_files: dict[str, str]
+) -> set[tuple[str, str]]:
+    """Map Docker's inspected manifest IDs to saved config IDs."""
+
+    index = json.loads(read_archive_member(image_archive, "index.json"))
+    if not isinstance(index, dict) or not isinstance(index.get("manifests"), list):
+        raise ValueError("saved Docker archive has no OCI image index")
+    pairs: set[tuple[str, str]] = set()
+    for descriptor in index["manifests"]:
+        if not isinstance(descriptor, dict):
+            raise ValueError("saved Docker archive has an invalid OCI descriptor")
+        manifest_id = descriptor.get("digest")
+        if (
+            not isinstance(manifest_id, str)
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", manifest_id) is None
+        ):
+            continue
+        manifest_path = "blobs/sha256/" + manifest_id.removeprefix("sha256:")
+        if manifest_path not in image_files:
+            continue
+        manifest = json.loads(read_archive_member(image_archive, manifest_path))
+        config = manifest.get("config") if isinstance(manifest, dict) else None
+        config_id = config.get("digest") if isinstance(config, dict) else None
+        if (
+            isinstance(config_id, str)
+            and re.fullmatch(r"sha256:[0-9a-f]{64}", config_id) is not None
+        ):
+            pairs.add((manifest_id, config_id))
+    if not pairs:
+        raise ValueError("saved Docker archive has no image identity mapping")
+    return pairs
+
+
 def acquire_canonical_images(
     *,
     image_archive: Path,
@@ -258,11 +292,16 @@ def acquire_canonical_images(
             roles = _resolve_archive_image_roles(
                 references, images, image_archive, image_files
             )
+            saved_pairs = (
+                _saved_manifest_config_pairs(image_archive, image_files)
+                if local_images
+                else set()
+            )
             mismatched = [
                 role
                 for role, reference in references.items()
                 if reference in local_images
-                and roles[role] != local_images[reference][1]
+                and (local_images[reference][1], roles[role]) not in saved_pairs
             ]
             if not mismatched:
                 break

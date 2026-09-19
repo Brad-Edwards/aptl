@@ -161,6 +161,7 @@ def test_local_image_acquisition_retags_locked_build_and_retries_stale_save(
     lock.write_text(f"{canonical} {unique} {expected}\n")
     calls = []
     saved = iter((stale, expected))
+    saved_config = []
 
     monkeypatch.setattr(inputs, "resolve_asset_source", lambda: (tmp_path, True))
     monkeypatch.setattr(inputs, "materialize", lambda project: project.mkdir())
@@ -181,10 +182,16 @@ def test_local_image_acquisition_retags_locked_build_and_retries_stale_save(
 
     monkeypatch.setattr(inputs.subprocess, "run", run)
     monkeypatch.setattr(inputs, "archive_files", lambda path: {})
+
+    def saved_images(path, files):
+        saved_config[:] = [next(saved)]
+        return {saved_config[0]: (canonical,)}
+
+    monkeypatch.setattr(inputs, "docker_archive_images", saved_images)
     monkeypatch.setattr(
         inputs,
-        "docker_archive_images",
-        lambda path, files: {next(saved): (canonical,)},
+        "_saved_manifest_config_pairs",
+        lambda path, files: {(saved_config[0], saved_config[0])},
     )
     monkeypatch.setattr(inputs, "_validate_image_sources", lambda *args: None)
 
@@ -197,6 +204,27 @@ def test_local_image_acquisition_retags_locked_build_and_retries_stale_save(
     assert roles == {"scenario.db": expected}
     assert calls.count(["docker", "tag", unique, canonical]) >= 2
     assert sum(call[:2] == ["docker", "save"] for call in calls) == 2
+
+
+def test_saved_manifest_config_pairs_reads_docker_oci_index(
+    tmp_path, monkeypatch
+) -> None:
+    manifest = "sha256:" + "a" * 64
+    config = "sha256:" + "b" * 64
+    manifest_path = "blobs/sha256/" + manifest.removeprefix("sha256:")
+    documents = {
+        "index.json": {"schemaVersion": 2, "manifests": [{"digest": manifest}]},
+        manifest_path: {"config": {"digest": config}},
+    }
+    monkeypatch.setattr(
+        inputs,
+        "read_archive_member",
+        lambda path, name: json.dumps(documents[name]).encode(),
+    )
+
+    assert inputs._saved_manifest_config_pairs(
+        tmp_path / "images.tar", {manifest_path: manifest.removeprefix("sha256:")}
+    ) == {(manifest, config)}
 
 
 @pytest.mark.parametrize(

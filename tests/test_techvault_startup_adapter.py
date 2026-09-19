@@ -272,7 +272,8 @@ def test_core_preparation_rejects_a_missing_declared_operator_alias(tmp_path) ->
 
     failure = _prepare_scenario_startup(ctx, _bundle())
 
-    assert failure is not None and not failure.success
+    assert failure is not None
+    assert not failure.success
     assert "MISP_API_KEY" in failure.error
     assert ctx.scenario_startup is None
     assert not (tmp_path / ".env").exists()

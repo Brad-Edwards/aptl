@@ -175,7 +175,7 @@ def _install_rsyslog_config(
         return "rsyslog configuration staging failed"
     if not _ok(backend, container, ["rsyslogd", "-N1", "-f", _RSYSLOG_STAGING]):
         return "rsyslog configuration validation failed"
-    if not _ok(
+    installed = _ok(
         backend,
         container,
         [
@@ -189,9 +189,8 @@ def _install_rsyslog_config(
             _RSYSLOG_STAGING,
             _RSYSLOG_CONFIG,
         ],
-    ):
-        return "rsyslog configuration installation failed"
-    return None
+    )
+    return None if installed else "rsyslog configuration installation failed"
 
 
 def _configure_syslog_bridge(backend: LogSourceBackend, container: str) -> str | None:
@@ -237,9 +236,11 @@ def _activate_syslog_socket(backend: LogSourceBackend, container: str) -> str | 
     ):
         return "rsyslog service stop failed"
     _ok(backend, container, ["systemctl", "start", "syslog.socket"], 120)
-    if not _await_active_unit(backend, container, "syslog.socket"):
-        return "syslog socket failed"
-    return None
+    return (
+        None
+        if _await_active_unit(backend, container, "syslog.socket")
+        else "syslog socket failed"
+    )
 
 
 def _enable_syslog_services(backend: LogSourceBackend, container: str) -> str | None:
@@ -254,9 +255,11 @@ def _enable_syslog_services(backend: LogSourceBackend, container: str) -> str | 
     if not _await_active_unit(backend, container, _RSYSLOG_SERVICE):
         return "rsyslog service did not start"
     _ok(backend, container, ["systemctl", "restart", "systemd-journald.service"], 120)
-    if not _await_active_unit(backend, container, "systemd-journald.service"):
-        return "journald restart failed"
-    return None
+    return (
+        None
+        if _await_active_unit(backend, container, "systemd-journald.service")
+        else "journald restart failed"
+    )
 
 
 def _verify_syslog_paths(backend: LogSourceBackend, container: str) -> str | None:
@@ -342,9 +345,11 @@ def _install_samba_dropin(
         backend, container, ["systemctl", "daemon-reload"]
     ):
         return "Samba service override failed"
-    if not _ok(backend, container, ["systemctl", "restart", _SMBD_SERVICE], 120):
-        return "Samba service restart failed"
-    return None
+    return (
+        None
+        if _ok(backend, container, ["systemctl", "restart", _SMBD_SERVICE], 120)
+        else "Samba service restart failed"
+    )
 
 
 def _verify_samba_service(backend: LogSourceBackend, container: str) -> str | None:
@@ -375,9 +380,11 @@ def _probe_samba_audit(
         60,
     ):
         return "Samba guest-share probe failed"
-    if not _await_file_growth(backend, container, audit_path, before):
-        return "Samba audit log did not receive an authentication event"
-    return None
+    return (
+        None
+        if _await_file_growth(backend, container, audit_path, before)
+        else "Samba audit log did not receive an authentication event"
+    )
 
 
 def _realize_samba_ad_logs(

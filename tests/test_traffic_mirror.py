@@ -7,6 +7,7 @@ import subprocess
 from types import SimpleNamespace
 
 from aptl.core.deployment._compose_traffic_mirror import ComposeTrafficMirrorMixin
+from aptl.core.deployment.errors import BackendTimeoutError
 
 
 class _Apparatus:
@@ -96,3 +97,16 @@ def test_traffic_mirror_discovers_exact_shared_network_host_veths():
         "veth-sensor",
         "aptl-dmz",
     )
+
+
+def test_traffic_mirror_allows_bounded_docker_startup_under_soc_load():
+    class SlowHelperBackend(_Backend):
+        def _run(self, command, *, timeout=None):
+            if command[:2] == ["docker", "run"] and (timeout or 0) < 60:
+                raise BackendTimeoutError("docker run timed out")
+            return super()._run(command, timeout=timeout)
+
+    backend = SlowHelperBackend()
+
+    assert backend._realize_traffic_mirrors(_realization()) == []
+    assert any(command[:2] == ["docker", "run"] for command in backend.commands)

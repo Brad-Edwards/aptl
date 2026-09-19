@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 from raes.parser import parse_sdl_file
 
+import aptl_techvault.log_sources as log_sources
 from aptl_techvault.log_sources import (
     _declared_tailed_files,
     _postgres_candidate,
@@ -402,4 +403,59 @@ def test_domain_samba_provider_proves_a_new_native_audit_event(scenario):
         cmd[:3] == ("smbclient", "-N", "-U")
         and cmd[4:] == ("//ad/sysvol", "-c", "quit")
         for _, cmd in backend.commands
+    )
+
+
+def test_rsyslog_config_reports_failed_final_install() -> None:
+    class FailedInstall(_Backend):
+        def container_exec(self, name, cmd, *, timeout=None):
+            if cmd[:1] == ["install"]:
+                return SimpleNamespace(returncode=1, stdout="")
+            return super().container_exec(name, cmd, timeout=timeout)
+
+    assert (
+        log_sources._install_rsyslog_config(FailedInstall(), "aptl-workstation", "ok")
+        == "rsyslog configuration installation failed"
+    )
+
+
+def test_syslog_socket_reports_failed_final_readback(mocker) -> None:
+    mocker.patch("aptl_techvault.log_sources._await_active_unit", return_value=False)
+
+    assert (
+        log_sources._activate_syslog_socket(_Backend(), "aptl-workstation")
+        == "syslog socket failed"
+    )
+
+
+def test_syslog_bridge_reports_failed_journald_readback(mocker) -> None:
+    mocker.patch(
+        "aptl_techvault.log_sources._await_active_unit", side_effect=[True, False]
+    )
+
+    assert (
+        log_sources._enable_syslog_services(_Backend(), "aptl-workstation")
+        == "journald restart failed"
+    )
+
+
+def test_samba_override_reports_failed_service_restart() -> None:
+    class FailedRestart(_Backend):
+        def container_exec(self, name, cmd, *, timeout=None):
+            if cmd[:2] == ["systemctl", "restart"]:
+                return SimpleNamespace(returncode=1, stdout="")
+            return super().container_exec(name, cmd, timeout=timeout)
+
+    assert (
+        log_sources._install_samba_dropin(FailedRestart(), "aptl-fileshare", "ok")
+        == "Samba service restart failed"
+    )
+
+
+def test_samba_probe_requires_a_fresh_audit_record(mocker) -> None:
+    mocker.patch("aptl_techvault.log_sources._await_file_growth", return_value=False)
+
+    assert (
+        log_sources._probe_samba_audit(_Backend(), "aptl-fileshare", "aptl-kali")
+        == "Samba audit log did not receive an authentication event"
     )

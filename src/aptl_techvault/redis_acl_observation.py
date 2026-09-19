@@ -73,7 +73,8 @@ def _readback_verified(result: object) -> bool:
     lines = str(getattr(result, "stdout", "") or "").splitlines()
     if len(lines) != 4 or any("=" not in line for line in lines):
         return False
-    fields = dict(line.split("=", 1) for line in lines)
+    pairs = (line.split("=", 1) for line in lines)
+    fields = {name: value for name, value in pairs}
     return fields == {
         "config": "exact",
         "auth": "PONG",

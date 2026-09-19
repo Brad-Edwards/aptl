@@ -76,7 +76,6 @@ from aptl.core.scenario_bundle import (
 )
 from aptl.core.lab_types import LabResult
 from aptl.utils.logging import get_logger
-from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
     from raes_processor.models import ExecutionPlan

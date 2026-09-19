@@ -30,11 +30,11 @@ def wazuh_config(agent: object) -> str | None:
     target = _valid_target(agent)
     if target is None:
         return None
-    host, ingestion, protocol, enrollment = target
+    host, ingestion, protocol, enrollment_host, enrollment = target
     name = str(getattr(agent, "name", "") or getattr(agent, "forwarding_agent_id", ""))
     crypto = _value(getattr(getattr(agent, "buffer_policy", None), "crypto", "aes"))
     lines = _wazuh_header(host, ingestion, protocol, name, crypto)
-    lines.extend(_enrollment_lines(host, enrollment, name))
+    lines.extend(_enrollment_lines(enrollment_host, enrollment, name))
     lines.extend(
         (
             "  </client>",
@@ -60,16 +60,53 @@ def wazuh_config(agent: object) -> str | None:
     return "\n".join(lines) + "\n"
 
 
-def _valid_target(agent: object) -> tuple[str, int, str, object] | None:
-    """Validate and return the single Wazuh manager target."""
+def _valid_target(agent: object) -> tuple[str, int, str, str | None, int | None] | None:
+    """Resolve the declared ingestion and optional enrollment endpoints."""
 
-    target = _single_target(agent)
-    host = str(getattr(target, "target_node_ref", "") or "") if target else ""
-    ingestion = getattr(target, "ingestion_port", None)
-    protocol = _value(getattr(target, "protocol", "tcp")) or "tcp"
+    targets = tuple(getattr(agent, "ship_targets", ()))
+    ingestion_targets = tuple(
+        target
+        for target in targets
+        if getattr(target, "ingestion_port", None) is not None
+    )
+    enrollment_targets = tuple(
+        target
+        for target in targets
+        if getattr(target, "enrollment_port", None) is not None
+    )
+    if (
+        len(ingestion_targets) != 1
+        or len(enrollment_targets) > 1
+        or any(
+            target not in ingestion_targets and target not in enrollment_targets
+            for target in targets
+        )
+    ):
+        return None
+    ingestion_target = ingestion_targets[0]
+    host = str(getattr(ingestion_target, "target_node_ref", "") or "")
+    ingestion = _valid_port(getattr(ingestion_target, "ingestion_port", None))
+    protocol = _value(getattr(ingestion_target, "protocol", "tcp")) or "tcp"
     if not _SAFE_HOST.fullmatch(host) or ingestion is None:
         return None
-    return host, int(ingestion), protocol, getattr(target, "enrollment_port", None)
+    if not enrollment_targets:
+        return host, ingestion, protocol, None, None
+    enrollment_target = enrollment_targets[0]
+    enrollment_host = str(getattr(enrollment_target, "target_node_ref", "") or "")
+    enrollment = _valid_port(getattr(enrollment_target, "enrollment_port", None))
+    if not _SAFE_HOST.fullmatch(enrollment_host) or enrollment is None:
+        return None
+    return host, ingestion, protocol, enrollment_host, enrollment
+
+
+def _valid_port(value: object) -> int | None:
+    """Return a TCP/UDP port only when the authored value is usable."""
+
+    try:
+        port = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return port if 1 <= port <= 65535 else None
 
 
 def _wazuh_header(
@@ -93,16 +130,16 @@ def _wazuh_header(
     ]
 
 
-def _enrollment_lines(host: str, enrollment: object, name: str) -> list[str]:
+def _enrollment_lines(host: str | None, enrollment: int | None, name: str) -> list[str]:
     """Return enrollment lines only when the author selected an enrollment port."""
 
-    if enrollment is None:
+    if host is None or enrollment is None:
         return []
     lines = [
         "    <enrollment>",
         "      <enabled>yes</enabled>",
         f"      <manager_address>{escape(host)}</manager_address>",
-        f"      <port>{int(enrollment)}</port>",
+        f"      <port>{enrollment}</port>",
     ]
     # The scenario names each forwarding agent, and that name is how the agent
     # is identified on the manager. Without <agent_name> the agent enrolls
@@ -138,10 +175,3 @@ def _wazuh_log_format(value: object) -> str:
 
     selected = _value(value)
     return "json" if selected == "eve_json" else selected
-
-
-def _single_target(agent: object) -> object | None:
-    """Return the sole ship target, rejecting ambiguous target sets."""
-
-    targets = tuple(getattr(agent, "ship_targets", ()))
-    return targets[0] if len(targets) == 1 else None

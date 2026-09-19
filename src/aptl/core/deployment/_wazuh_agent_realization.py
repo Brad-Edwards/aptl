@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-import re
 from typing import Protocol
 
 from aptl.core.deployment._wazuh_agent_configuration import (
-    _single_target,
+    _valid_target,
     wazuh_config,
 )
 
@@ -17,7 +16,6 @@ _WAZUH_CONFIG = "/var/ossec/etc/ossec.conf"
 _WAZUH_CONTROL = "/var/ossec/bin/wazuh-control"
 _WAZUH_BOOTSTRAP_DIR = "/var/lib/aptl-bootstrap"
 _WAZUH_KEY_DOWNLOAD = f"{_WAZUH_BOOTSTRAP_DIR}/wazuh.gpg"
-_SAFE_HOST = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$")
 
 
 class WazuhAgentBackend(Protocol):
@@ -57,11 +55,10 @@ def realize_wazuh_agent(
 
 
 def _manager_host(agent: object) -> str | None:
-    """Return the validated manager host from the sole ship target."""
+    """Return the validated ingestion manager from authored ship targets."""
 
-    target = _single_target(agent)
-    host = str(getattr(target, "target_node_ref", "") or "") if target else ""
-    return host if _SAFE_HOST.fullmatch(host) else None
+    target = _valid_target(agent)
+    return target[0] if target is not None else None
 
 
 def _ensure_wazuh_installed(

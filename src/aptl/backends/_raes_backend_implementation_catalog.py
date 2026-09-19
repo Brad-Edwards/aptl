@@ -9,7 +9,6 @@ before using it.
 from __future__ import annotations
 
 from aptl.core.deployment._misp_cache_credential import (
-    MISP_CACHE_CONFIG_CONTAINER_PATH,
     MISP_CACHE_PASSWORD_OUTPUT,
 )
 from aptl.backends._raes_backend_implementation_types import (
@@ -274,10 +273,20 @@ BACKEND_IMPLEMENTATION_PROFILES = (
             "6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99"
         ),
         runtime_selections={
-            # The path is in the command; the credential is in the file.
+            # The bind-mounted owner-only file is readable by container root,
+            # not by the image's redis account. Stage an owner-only copy for
+            # that account before the stock entrypoint drops privileges. Only
+            # paths, never the credential, enter the process command line.
+            "runtime-container-entrypoint": [
+                "/bin/sh",
+                "-ec",
+                "install -m 0400 -o redis -g redis /etc/redis/redis.conf "
+                '/tmp/aptl-redis.conf && exec docker-entrypoint.sh "$@"',
+                "--",
+            ],
             "runtime-container-command": [
                 "redis-server",
-                MISP_CACHE_CONFIG_CONTAINER_PATH,
+                "/tmp/aptl-redis.conf",
             ],
         },
     ),

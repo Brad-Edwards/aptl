@@ -43,6 +43,7 @@ from aptl.backends.raes_runtime_guest_observation import (
     observe_packages,
     observe_process_resource_limits,
     observe_service_manager_units,
+    observe_software_components,
 )
 from aptl.utils.logging import get_logger
 from aptl.core.deployment._forwarding_agent_realization import (
@@ -64,6 +65,7 @@ _FORWARDING_AGENTS_PATH = CONCERN_PAYLOAD_PATH["forwarding-agents"]
 _PACKAGES_PATH = CONCERN_PAYLOAD_PATH["runtime-packages"]
 _FILESYSTEM_INVENTORY_PATH = CONCERN_PAYLOAD_PATH["runtime-filesystem-inventory"]
 _SERVICE_MANAGER_UNITS_PATH = CONCERN_PAYLOAD_PATH["runtime-service-manager-units"]
+_SOFTWARE_COMPONENTS_PATH = CONCERN_PAYLOAD_PATH["runtime-software-components"]
 _RESTART_POLICY_PATH = CONCERN_PAYLOAD_PATH["runtime-restart-policy"]
 _MEMORY_LIMIT_PATH = CONCERN_PAYLOAD_PATH["runtime-node-memory-limit"]
 _ENTRYPOINT_PATH = CONCERN_PAYLOAD_PATH["runtime-container-entrypoint"]
@@ -299,6 +301,11 @@ def _record_guest_inventory(
         concerns,
         _SERVICE_MANAGER_UNITS_PATH,
         lambda: observe_service_manager_units(backend, container_name, runtime),
+    )
+    _record(
+        concerns,
+        _SOFTWARE_COMPONENTS_PATH,
+        lambda: observe_software_components(backend, container_name, runtime),
     )
 
 

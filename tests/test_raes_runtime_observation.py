@@ -795,6 +795,72 @@ Max open files            65536                65536                files
 _PACKAGES_PATH = CONCERN_PAYLOAD_PATH["runtime-packages"]
 _FILESYSTEM_PATH = CONCERN_PAYLOAD_PATH["runtime-filesystem-inventory"]
 _SERVICE_UNITS_PATH = CONCERN_PAYLOAD_PATH["runtime-service-manager-units"]
+_SOFTWARE_PATH = CONCERN_PAYLOAD_PATH["runtime-software-components"]
+
+
+def test_wazuh_software_component_requires_guest_version_and_agent_type():
+    runtime = _runtime(
+        software_components=[
+            {
+                "component_id": "wazuh-agent",
+                "name": "Wazuh agent",
+                "component_type": "application",
+                "presence": "required",
+                "version": "4.12.0",
+            }
+        ]
+    )
+    info_command = ("/var/ossec/bin/wazuh-control", "info")
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                info_command: (
+                    0,
+                    'WAZUH_VERSION="v4.12.0"\nWAZUH_TYPE="agent"\n',
+                )
+            }
+        },
+    )
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-software-components"
+    )
+
+    assert codes == []
+    assert _SOFTWARE_PATH in observations[_ADDRESS].concerns
+
+
+def test_wazuh_software_component_rejects_wrong_guest_version():
+    runtime = _runtime(
+        software_components=[
+            {
+                "component_id": "wazuh-agent",
+                "name": "Wazuh agent",
+                "component_type": "application",
+                "presence": "required",
+                "version": "4.12.0",
+            }
+        ]
+    )
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                ("/var/ossec/bin/wazuh-control", "info"): (
+                    0,
+                    'WAZUH_VERSION="v4.11.0"\nWAZUH_TYPE="agent"\n',
+                )
+            }
+        },
+    )
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-software-components"
+    )
+
+    assert _GATE_REJECT in codes
+    assert _SOFTWARE_PATH not in observations[_ADDRESS].concerns
 
 
 def test_declared_package_is_disclosed_only_after_guest_query_matches():
@@ -2092,6 +2158,49 @@ def test_wazuh_agent_enrolls_under_the_declared_agent_name():
     # what the agent reads when it registers.
     enrollment = payload.split("<enrollment>", 1)[1].split("</enrollment>", 1)[0]
     assert f"<agent_name>{agent_name}</agent_name>" in enrollment
+
+
+def test_wazuh_agent_accepts_separate_declared_ingestion_and_enrollment_targets():
+    """A two-endpoint SDL declaration drives both Wazuh connection roles."""
+    from aptl.core.deployment._wazuh_agent_configuration import wazuh_config
+    from aptl.core.deployment._wazuh_agent_realization import _manager_host
+
+    agent = SimpleNamespace(
+        name="workstation-forwarder",
+        ship_targets=(
+            SimpleNamespace(
+                target_node_ref="events-manager",
+                ingestion_port=1514,
+                protocol="tcp",
+            ),
+            SimpleNamespace(target_node_ref="enrollment-manager", enrollment_port=1515),
+        ),
+        sources=(),
+    )
+
+    payload = wazuh_config(agent)
+
+    assert _manager_host(agent) == "events-manager"
+    assert payload is not None
+    assert "<address>events-manager</address>" in payload
+    assert "<manager_address>enrollment-manager</manager_address>" in payload
+    assert "<port>1515</port>" in payload
+
+
+def test_wazuh_agent_rejects_ambiguous_declared_targets():
+    from aptl.core.deployment._wazuh_agent_configuration import wazuh_config
+    from aptl.core.deployment._wazuh_agent_realization import _manager_host
+
+    ingestion = SimpleNamespace(target_node_ref="manager", ingestion_port=1514)
+    enrollment = SimpleNamespace(target_node_ref="manager", enrollment_port=1515)
+    for targets in (
+        (ingestion, ingestion),
+        (ingestion, enrollment, enrollment),
+        (ingestion, SimpleNamespace(target_node_ref="unused")),
+    ):
+        agent = SimpleNamespace(ship_targets=targets)
+        assert _manager_host(agent) is None
+        assert wazuh_config(agent) is None
 
 
 def test_wazuh_apt_bootstrap_downloads_key_into_private_directory():

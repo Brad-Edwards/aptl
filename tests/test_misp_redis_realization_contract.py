@@ -10,7 +10,6 @@ import pytest
 from raes.parser import parse_sdl_file
 
 from aptl.core.deployment._misp_cache_credential import (
-    MISP_CACHE_CONFIG_CONTAINER_PATH,
     MISP_CACHE_CONFIG_OUTPUT,
     MISP_CACHE_PASSWORD_OUTPUT,
     realize_misp_cache_credential,
@@ -88,7 +87,14 @@ def test_the_cache_is_authenticated_without_putting_the_secret_in_argv(realizati
     cache = next(node for node in realization.nodes if node.name == "misp-redis")
     command = list(cache.runtime.container.command)
 
-    assert command == ["redis-server", MISP_CACHE_CONFIG_CONTAINER_PATH]
+    assert command == ["redis-server", "/tmp/aptl-redis.conf"]
+    assert list(cache.runtime.container.entrypoint) == [
+        "/bin/sh",
+        "-ec",
+        "install -m 0400 -o redis -g redis /etc/redis/redis.conf "
+        '/tmp/aptl-redis.conf && exec docker-entrypoint.sh "$@"',
+        "--",
+    ]
     # `--requirepass <value>` would work, and would also publish the credential
     # in the container's command line and in `docker inspect`.
     assert "--requirepass" not in command

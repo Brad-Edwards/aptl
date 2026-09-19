@@ -138,6 +138,61 @@ def test_shared_volume_creation_waits_for_ownership_receipt(tmp_path: Path) -> N
     assert len(ownership.receipts("volume")) == 1
 
 
+def test_compose_preflight_ignores_retired_network_identity(tmp_path: Path) -> None:
+    """A restarted network is accepted only through its one live native ID."""
+
+    backend = DockerComposeBackend(tmp_path)
+    ownership = backend._ensure_resource_ownership(attempt_id="run-b")
+    backend._docker_daemon_id = "daemon-a"
+    name = f"{ownership.project_name}_security-net"
+    for native_id, attempt_id in ((_ID_A, "run-a"), (_ID_B, "run-b")):
+        ownership.record(
+            ResourceReceipt(
+                kind="network",
+                native_id=native_id,
+                external_name=name,
+                semantic_name="security-net",
+                node_address="provision.network.security-net",
+                workspace_id=ownership.workspace_id,
+                project_name=ownership.project_name,
+                daemon_id="daemon-a",
+                attempt_id=attempt_id,
+            )
+        )
+
+    def inspect(network_id):
+        if network_id != _ID_B:
+            return {}
+        return {
+            "id": _ID_B,
+            "name": name,
+            "labels": {"com.docker.compose.project": ownership.project_name},
+        }
+
+    backend.host_inspect_network = MagicMock(side_effect=inspect)
+    backend._verify_scoped_receipts(
+        ownership,
+        daemon_id="daemon-a",
+        kind="network",
+        selectors=(name,),
+        resolver=backend._resolve_owned_network_id,
+    )
+
+    backend.host_inspect_network.side_effect = lambda network_id: {
+        "id": network_id,
+        "name": name,
+        "labels": {"com.docker.compose.project": ownership.project_name},
+    }
+    with pytest.raises(OwnershipConflictError, match="absent or ambiguous"):
+        backend._verify_scoped_receipts(
+            ownership,
+            daemon_id="daemon-a",
+            kind="network",
+            selectors=(name,),
+            resolver=backend._resolve_owned_network_id,
+        )
+
+
 def test_container_action_uses_recorded_id_and_rejects_replacement(
     tmp_path: Path,
 ) -> None:

@@ -289,6 +289,44 @@ def observe_filesystem_inventory(
     )
 
 
+def observe_software_components(
+    backend: "DeploymentBackend",
+    container_name: str,
+    runtime: RuntimeConfiguration,
+) -> object | None:
+    """Corroborate the supported Wazuh agent component in the guest."""
+
+    components = tuple(runtime.software_components)
+    if len(components) != 1:
+        return None
+    component = components[0]
+    version = str(getattr(component, "version", "") or "")
+    if (
+        getattr(component, "component_id", "") != "wazuh-agent"
+        or _value(getattr(component, "component_type", "")) != "application"
+        or _value(getattr(component, "presence", "")) != "required"
+        or not version
+    ):
+        return None
+    output = _exec_stdout(
+        backend, container_name, ["/var/ossec/bin/wazuh-control", "info"]
+    )
+    if output is None:
+        return None
+    lines = output.splitlines()
+    if (
+        sum(line == f'WAZUH_VERSION="v{version}"' for line in lines) != 1
+        or sum(line == 'WAZUH_TYPE="agent"' for line in lines) != 1
+        or sum(line.startswith("WAZUH_VERSION=") for line in lines) != 1
+        or sum(line.startswith("WAZUH_TYPE=") for line in lines) != 1
+    ):
+        return None
+    return _disclose(
+        "runtime-software-components",
+        [component.model_dump(mode="json", by_alias=True)],
+    )
+
+
 def _filesystem_entry_matches(
     backend: "DeploymentBackend", container_name: str, entry: object
 ) -> bool:

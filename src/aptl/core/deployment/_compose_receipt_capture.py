@@ -132,7 +132,11 @@ class ComposeReceiptCaptureMixin:
         """Require one receipt and a fresh resolver match per discovered object."""
 
         for selector in selectors:
-            if len(ownership.candidates(selector, kind=kind, daemon_id=daemon_id)) != 1:
+            # A stopped/recreated network retains an immutable historical
+            # receipt under its old native ID. The resolver inspects every
+            # candidate and requires exactly one *live* identity; counting
+            # historical candidates here rejects a correctly owned restart.
+            if not ownership.candidates(selector, kind=kind, daemon_id=daemon_id):
                 raise OwnershipConflictError(_FOREIGN_NAMESPACE)
             resolver(selector)
 

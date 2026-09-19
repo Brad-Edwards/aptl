@@ -178,6 +178,17 @@ class ComposeMixedRealizationMixin:
             endpoint = self.revalidate_local_docker_socket()
             failure = None if endpoint.success else endpoint
         if failure is None:
+            failure = self._start_boundary_anchor_services(
+                realization,
+                profiles=profiles,
+                build=build,
+                compose_files=compose_files,
+                excluded_services=excluded_services,
+                scenario_root=scenario_root,
+            )
+        if failure is None:
+            failure = self._realize_platform_boundary()
+        if failure is None:
             phase = self._materialize_service_index_schemas(
                 realization,
                 build=build and not self._offline_staged,
@@ -200,3 +211,50 @@ class ComposeMixedRealizationMixin:
                 observation_context,
             )
         return failure
+
+    def _start_boundary_anchor_services(
+        self,
+        realization: DeploymentRealizationSpec,
+        *,
+        profiles: list[str],
+        build: bool,
+        compose_files: tuple[Path, ...] | None,
+        excluded_services: tuple[str, ...],
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Start only missing signed anchors under the observed deny baseline."""
+
+        configured = self._appliance_boundary
+        if configured is None:
+            return None
+        policy, _binding = configured
+        nodes = {node.address: node for node in realization.nodes}
+        imaged = {image.address for image in realization.images}
+        services: set[str] = set()
+        for zone in ("participant", "management", "egress"):
+            selector = getattr(policy.platform_anchors, zone)
+            key, separator, address = selector.partition("=")
+            node = nodes.get(address)
+            if key != "aptl.node.address" or not separator or node is None:
+                return LabResult(
+                    success=False,
+                    error="Platform boundary anchor selection is unsupported.",
+                )
+            if address in imaged:
+                if not node.service_name:
+                    return LabResult(
+                        success=False,
+                        error="Platform boundary anchor has no Compose service.",
+                    )
+                services.add(node.service_name)
+        if not services:
+            return None
+        result = self._start_realized_services(
+            profiles,
+            build=build and not self._offline_staged,
+            compose_files=compose_files,
+            exclude_services=excluded_services,
+            only_services=tuple(sorted(services)),
+            scenario_root=scenario_root,
+        )
+        return None if result.success else result

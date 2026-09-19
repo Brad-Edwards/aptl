@@ -20,10 +20,12 @@ from aptl.core.deployment.boundary import (
     BoundaryEnforcementSpec,
     BoundaryNetwork,
     BoundaryWorkload,
+    PlatformBoundaryBootstrapSpec,
 )
 from aptl.core.deployment.boundary_compiler import (
     BoundaryCompileError,
     compile_raes_boundary,
+    compile_platform_bootstrap,
     compile_platform_boundary,
 )
 from aptl.core.deployment.realization import DeploymentRealizationSpec
@@ -141,6 +143,11 @@ class ComposeBoundaryRealizationMixin:
     def _record_boundary_receipt(self, policy: BoundaryEnforcementSpec) -> None:
         """Store only normalized enforcement identity needed by qualification."""
 
+        if isinstance(policy, PlatformBoundaryBootstrapSpec):
+            # A deny-only floor is not the final observed platform authority.
+            self._boundary_receipts.pop("platform", None)
+            self._boundary_specs.pop("platform", None)
+            return
         if policy.authority == "raes" and not policy.rules:
             self._boundary_receipts.pop("raes", None)
             self._boundary_specs.pop("raes", None)
@@ -188,12 +195,35 @@ class ComposeBoundaryRealizationMixin:
         self,
         realization: DeploymentRealizationSpec,
     ) -> LabResult | None:
-        """Apply platform policy first, then the independent RAES authority."""
+        """Install the platform deny floor before any scenario node can run."""
 
-        platform = self._realize_platform_boundary()
+        platform = self._realize_platform_baseline()
         if platform is not None:
             return platform
         return self._realize_raes_boundary(realization)
+
+    def _realize_platform_baseline(self) -> LabResult | None:
+        """Enforce signed zones with no grants until anchors can be observed."""
+
+        configured = getattr(self, "_appliance_boundary", None)
+        if configured is None:
+            return None
+        policy, binding = configured
+        try:
+            networks = self._project_boundary_network_observations()
+            enforcement = compile_platform_bootstrap(
+                policy,
+                policy_digest=binding.policy_digest,
+                networks=networks,
+                owner=self._project_name,
+            )
+        except BoundaryCompileError:
+            return LabResult(
+                success=False,
+                error="Platform boundary networks were not observed exactly.",
+            )
+        result = self.realize_boundary(enforcement)
+        return None if result.success else result
 
     def _realize_platform_boundary(self) -> LabResult | None:
         """Compile and enforce the configured signed platform policy."""

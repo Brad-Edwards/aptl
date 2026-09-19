@@ -227,7 +227,60 @@ class PlatformBoundarySpec:
         return _digest(self.canonical_json())
 
 
-BoundaryEnforcementSpec = AcesBoundarySpec | PlatformBoundarySpec
+@dataclass(frozen=True)
+class PlatformBoundaryBootstrapSpec:
+    """Deny-only policy installed before any platform anchor can run."""
+
+    owner: str
+    policy_digest: str
+    networks: tuple[BoundaryNetwork, ...]
+    zone_networks: tuple[
+        tuple[Literal["participant", "management", "egress"], str],
+        ...,
+    ]
+    anchors: tuple[tuple[str, BoundaryWorkload], ...] = ()
+    crossings: tuple[PlatformCrossing, ...] = ()
+    egress_ports: tuple[int, ...] = ()
+    default_deny: Literal[True] = True
+    authority: Literal["platform"] = "platform"
+    bootstrap: Literal[True] = True
+
+    def __post_init__(self) -> None:
+        _validate_owner(self.owner)
+        if not re.fullmatch(r"sha256:[a-f0-9]{64}", self.policy_digest):
+            raise ValueError("invalid platform policy digest")
+        known = _validate_platform_networks(self.networks)
+        _validate_zone_networks(self.zone_networks, known)
+        if self.anchors or self.crossings or self.egress_ports:
+            raise ValueError("bootstrap boundary cannot grant traffic")
+
+    def details(self) -> dict[str, object]:
+        return {
+            "authority": self.authority,
+            "owner": self.owner,
+            "policy_digest": self.policy_digest,
+            "networks": [network.details() for network in self.networks],
+            "zone_networks": [
+                {"zone": zone, "network": network}
+                for zone, network in self.zone_networks
+            ],
+            "anchors": [],
+            "crossings": [],
+            "egress_ports": [],
+            "default_deny": True,
+            "bootstrap": True,
+        }
+
+    def canonical_json(self) -> str:
+        return _canonical(self.details())
+
+    def digest(self) -> str:
+        return _digest(self.canonical_json())
+
+
+BoundaryEnforcementSpec = (
+    AcesBoundarySpec | PlatformBoundarySpec | PlatformBoundaryBootstrapSpec
+)
 
 
 def _validate_owner(owner: str) -> None:

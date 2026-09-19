@@ -94,7 +94,7 @@ images=(
   'generic-systemd-base aptl/generic-systemd-base:latest'
   'suricata-wazuh-agent aptl/suricata-wazuh-agent:latest'
   'kali-capture aptl-kali-capture:latest'
-  'network-boundary-helper aptl-network-boundary-helper:4'
+  'network-boundary-helper aptl-network-boundary-helper:5'
   'appliance-egress-proxy aptl-appliance-egress-proxy:1'
   'operator-access-proxy aptl/operator-access-proxy:latest'
 )
@@ -241,7 +241,7 @@ template = {
     "participant": {"profile_id": "techvault-full", "profile_version": 1},
     "boundary": {
         "boundary_helper_image": image_digest(
-            "network-boundary-helper", "aptl-network-boundary-helper:4"
+            "network-boundary-helper", "aptl-network-boundary-helper:5"
         ),
         "egress_proxy_image": image_digest(
             "appliance-egress-proxy", "aptl-appliance-egress-proxy:1"

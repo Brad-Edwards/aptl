@@ -319,7 +319,10 @@ class ComposeRealizationMixin(
             extra_ops,
             persistent_volumes=realization.persistent_volumes,
         )
-        return node_result if node_result is not None else LabResult(success=True)
+        if node_result is not None and not node_result.success:
+            return node_result
+        platform = self._realize_platform_boundary()
+        return platform or node_result or LabResult(success=True)
 
     def _realize_published_ports(
         self,

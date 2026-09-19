@@ -299,6 +299,7 @@ def _validate_raes_rule_semantics(
 
 
 def _validate_platform(policy: dict[str, object]) -> dict[str, object]:
+    bootstrap = policy.get("bootstrap") is True
     _validate_common(
         policy,
         {
@@ -311,6 +312,7 @@ def _validate_platform(policy: dict[str, object]) -> dict[str, object]:
             "crossings",
             "egress_ports",
             "default_deny",
+            *({"bootstrap"} if bootstrap else set()),
         },
     )
     if not isinstance(policy["policy_digest"], str) or not _DIGEST.fullmatch(
@@ -334,6 +336,10 @@ def _validate_platform(policy: dict[str, object]) -> dict[str, object]:
     network_index = _validated_platform_networks(networks)
     _validate_ports(egress_ports, "tcp")
     zone_network_index = _validated_zone_networks(zone_networks, network_index)
+    if bootstrap:
+        if anchors or crossings or egress_ports:
+            raise ValueError("platform bootstrap cannot grant traffic")
+        return policy
     zones: set[str] = set()
     for anchor in anchors:
         zones.add(

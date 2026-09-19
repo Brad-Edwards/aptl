@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from aptl.appliance.seat.vm import (
+    OVMF_CODE_PATH,
     SubprocessVm,
     VmLaunchSpec,
     VmProcessIdentity,
@@ -140,6 +141,26 @@ def test_qemu_argv_uses_private_management_socket(tmp_path: Path) -> None:
     qmp = argv[argv.index("-qmp") + 1]
     assert qmp == f"unix:{management_socket},server=on,wait=off"
     assert "-monitor" not in argv
+
+
+def test_qemu_argv_boots_with_immutable_uefi_firmware(tmp_path: Path) -> None:
+    launch_mount = tmp_path / "launch"
+    launch_mount.mkdir()
+    overlay = tmp_path / "overlay.qcow2"
+    overlay.write_bytes(b"overlay")
+
+    argv = build_qemu_argv(
+        VmLaunchSpec(
+            overlay_path=overlay,
+            launch_mount=launch_mount,
+            vcpus=2,
+            memory_mib=512,
+        )
+    )
+
+    assert (
+        f"if=pflash,format=raw,readonly=on,file={OVMF_CODE_PATH}" in argv
+    )
 
 
 def test_qemu_argv_publishes_resource_reservation(tmp_path: Path) -> None:

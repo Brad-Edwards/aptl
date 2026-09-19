@@ -10,6 +10,7 @@ from pathlib import Path
 
 from aptl.appliance.models import HostPrerequisites
 from aptl.appliance.seat.errors import SeatLauncherError
+from aptl.appliance.seat.vm import OVMF_CODE_PATH
 from aptl.core import hostenv
 
 
@@ -75,6 +76,7 @@ def check_host_prerequisites(
     kvm_available: bool | None = None,
     qemu_img_available: bool | None = None,
     qemu_system_available: bool | None = None,
+    ovmf_available: bool | None = None,
 ) -> PrereqReport:
     """Validate host resources and launcher tools against the signed manifest."""
 
@@ -156,6 +158,14 @@ def check_host_prerequisites(
             code="missing-qemu-system",
             passed=qemu_system_ok,
             detail="qemu-system-x86_64 is required for seat launch",
+        )
+    )
+    ovmf_ok = OVMF_CODE_PATH.is_file() if ovmf_available is None else ovmf_available
+    findings.append(
+        PrereqFinding(
+            code="missing-uefi-firmware",
+            passed=ovmf_ok,
+            detail=f"read-only UEFI firmware is required at {OVMF_CODE_PATH}",
         )
     )
     passed = all(item.passed for item in findings)

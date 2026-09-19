@@ -70,7 +70,13 @@ def test_audit_vm_argv_allows_writable_overlay_drive(tmp_path: Path) -> None:
     report = audit_vm_argv(argv)
 
     assert report.passed is True
-    assert "readonly=off" in argv[argv.index("-drive") + 1]
+    drives = tuple(
+        argv[index + 1]
+        for index, argument in enumerate(argv[:-1])
+        if argument == "-drive"
+    )
+    assert any("readonly=off" in drive for drive in drives)
+    assert any("if=pflash" in drive and "readonly=on" in drive for drive in drives)
     require_host_exposure(vm_argv=argv, docker_daemon_running=False)
 
 

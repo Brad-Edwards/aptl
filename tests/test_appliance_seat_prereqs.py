@@ -42,6 +42,7 @@ def test_prereqs_pass_with_injected_probes(tmp_path: Path) -> None:
         kvm_available=True,
         qemu_img_available=True,
         qemu_system_available=True,
+        ovmf_available=True,
     )
 
     assert report.passed is True
@@ -55,6 +56,7 @@ def test_prereqs_fail_closed_on_missing_kvm(tmp_path: Path) -> None:
         kvm_available=False,
         qemu_img_available=True,
         qemu_system_available=True,
+        ovmf_available=True,
     )
 
     assert report.passed is False
@@ -71,6 +73,7 @@ def test_require_host_prerequisites_raises(tmp_path: Path) -> None:
             kvm_available=True,
             qemu_img_available=True,
             qemu_system_available=True,
+            ovmf_available=True,
         )
 
     assert exc.value.code == "low-memory"
@@ -87,6 +90,7 @@ def test_require_host_prerequisites_reports_every_failed_check(tmp_path: Path) -
             kvm_available=False,
             qemu_img_available=False,
             qemu_system_available=False,
+            ovmf_available=False,
         )
 
     assert exc.value.code == "host-prerequisites-failed"
@@ -97,6 +101,7 @@ def test_require_host_prerequisites_reports_every_failed_check(tmp_path: Path) -
         "low-disk",
         "missing-qemu-img",
         "missing-qemu-system",
+        "missing-uefi-firmware",
     ):
         assert code in exc.value.message
 
@@ -110,6 +115,7 @@ def test_prereqs_fail_on_low_disk_and_missing_tools(tmp_path: Path) -> None:
         kvm_available=True,
         qemu_img_available=False,
         qemu_system_available=False,
+        ovmf_available=False,
     )
 
     assert report.passed is False
@@ -117,6 +123,7 @@ def test_prereqs_fail_on_low_disk_and_missing_tools(tmp_path: Path) -> None:
     assert "low-disk" in codes
     assert "missing-qemu-img" in codes
     assert "missing-qemu-system" in codes
+    assert "missing-uefi-firmware" in codes
 
 
 def test_prereqs_use_available_cpu_and_memory_capacity(tmp_path: Path) -> None:
@@ -129,6 +136,7 @@ def test_prereqs_use_available_cpu_and_memory_capacity(tmp_path: Path) -> None:
         kvm_available=True,
         qemu_img_available=True,
         qemu_system_available=True,
+        ovmf_available=True,
     )
 
     codes = {item.code for item in report.findings if not item.passed}

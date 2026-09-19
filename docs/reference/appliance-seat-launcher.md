@@ -10,7 +10,7 @@ host-resident APTL runtime.
 The physical host must satisfy the signed release `host_prerequisites` block:
 
 - Linux with hardware virtualization (`/dev/kvm`)
-- `qemu-img` and `qemu-system-x86_64`
+- `qemu-img`, `qemu-system-x86_64`, and read-only OVMF UEFI firmware
 - available CPU/RAM and free disk at or above the manifest minimums
 - No dependency on host Docker for seat operations
 
@@ -23,6 +23,14 @@ Each user who launches a seat needs read/write access to `/dev/kvm`. On the
 usual Linux packaging this means membership in the `kvm` group followed by a
 new login session. The launcher reports every failed host prerequisite in one
 bounded error instead of stopping after the first missing resource or tool.
+On Debian/Ubuntu hosts, install the complete host dependency set once with:
+
+```bash
+sudo apt-get install qemu-system-x86 qemu-utils ovmf
+```
+
+No shared `seat-state` directory is required. Each user's default seat state
+is created privately below that user's own `$XDG_STATE_HOME` or home directory.
 
 ## Install and start
 

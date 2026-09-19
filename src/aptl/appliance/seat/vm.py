@@ -19,6 +19,9 @@ from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 QEMU_SLIRP_SUBNET = "10.0.2.0/24"
 # Fixed address inside that private subnet.
 DEFAULT_QEMU_GUEST_ADDRESS = "10.0.2.15"
+# Ubuntu's supported cloud image is UEFI-only.  Keep firmware immutable so all
+# disposable state remains on the seat overlay.
+OVMF_CODE_PATH = Path("/usr/share/OVMF/OVMF_CODE_4M.fd")
 
 
 class VmProcess(Protocol):
@@ -165,6 +168,8 @@ def build_qemu_argv(spec: VmLaunchSpec) -> tuple[str, ...]:
         "-m",
         str(spec.memory_mib),
         *resource_arguments,
+        "-drive",
+        f"if=pflash,format=raw,readonly=on,file={OVMF_CODE_PATH}",
         "-drive",
         f"file={spec.overlay_path},format=qcow2,if=virtio,cache=none,aio=threads,readonly=off",
         "-fsdev",

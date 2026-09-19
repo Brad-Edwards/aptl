@@ -158,11 +158,19 @@ def test_image_acquisition_saves_pinned_runtime_tag(
     image_roles = tmp_path / "output" / "image-roles.json"
     reference = repository + "@sha256:" + "a" * 64
     runtime_tag = input_images.runtime_image_tag(reference)
+    compose_tag = "example.test/participant:runtime"
     identity = "sha256:" + "b" * 64
     calls = []
 
     monkeypatch.setattr(inputs, "resolve_asset_source", lambda: (tmp_path, True))
-    monkeypatch.setattr(inputs, "materialize", lambda project: project.mkdir())
+
+    def materialize_project(project):
+        project.mkdir()
+        (project / "docker-compose.yml").write_text(
+            f"services:\n  participant:\n    image: {compose_tag}\n"
+        )
+
+    monkeypatch.setattr(inputs, "materialize", materialize_project)
     monkeypatch.setattr(inputs, "env_pack_bundle", lambda path: object())
     monkeypatch.setattr(
         inputs,
@@ -174,7 +182,9 @@ def test_image_acquisition_saves_pinned_runtime_tag(
         calls.append(argv)
         if argv[:5] == ["docker", "image", "inspect", "--format", "{{.Id}}"]:
             return subprocess.CompletedProcess(
-                argv, 1 if argv[-1] == runtime_tag else 0, stdout=identity + "\n"
+                argv,
+                1 if argv[-1] in {runtime_tag, compose_tag} else 0,
+                stdout=identity + "\n",
             )
         return subprocess.CompletedProcess(argv, 0, stdout="")
 
@@ -183,7 +193,7 @@ def test_image_acquisition_saves_pinned_runtime_tag(
     monkeypatch.setattr(
         inputs,
         "docker_archive_images",
-        lambda path, files: {identity: (runtime_tag,)},
+        lambda path, files: {identity: (runtime_tag, compose_tag)},
     )
     monkeypatch.setattr(inputs, "registry_image_id", lambda *args: identity)
     monkeypatch.setattr(inputs, "_validate_image_sources", lambda *args: None)
@@ -194,10 +204,12 @@ def test_image_acquisition_saves_pinned_runtime_tag(
 
     assert roles == {"scenario.participant": identity}
     assert ["docker", "tag", reference, runtime_tag] in calls
+    assert ["docker", "tag", reference, compose_tag] in calls
     assert any(
         command[:2] == ["docker", "save"]
         and reference in command
         and runtime_tag in command
+        and compose_tag in command
         for command in calls
     )
 

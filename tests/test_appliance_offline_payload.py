@@ -200,3 +200,42 @@ def test_pinned_image_without_runtime_tag_is_rejected(
             tmp_path / "images.tar",
             {},
         )
+
+
+def test_compose_version_tag_must_match_pinned_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reference = "wazuh/wazuh-manager@sha256:" + "a" * 64
+    identity = "sha256:" + "b" * 64
+    version_tag = "wazuh/wazuh-manager:4.12.0"
+    (tmp_path / "docker-compose.yml").write_text(
+        f"services:\n  wazuh.manager:\n    image: {version_tag}\n"
+    )
+    monkeypatch.setattr(
+        input_images,
+        "canonical_image_references",
+        lambda project, bundle: {"scenario.wazuh-manager": reference},
+    )
+    monkeypatch.setattr(
+        input_images, "registry_image_id", lambda *args, **kwargs: identity
+    )
+    roles = {"scenario.wazuh-manager": identity}
+    archive = tmp_path / "images.tar"
+    with pytest.raises(ValueError, match="Compose runtime tag"):
+        input_images.validate_image_sources(
+            tmp_path,
+            object(),
+            {identity: ("wazuh/wazuh-manager:latest",)},
+            roles,
+            archive,
+            {},
+        )
+
+    input_images.validate_image_sources(
+        tmp_path,
+        object(),
+        {identity: ("wazuh/wazuh-manager:latest", version_tag)},
+        roles,
+        archive,
+        {},
+    )

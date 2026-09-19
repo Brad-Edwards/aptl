@@ -52,6 +52,36 @@ def runtime_image_tag(reference: str) -> str:
     return name if ":" in name.rsplit("/", 1)[-1] else name + ":latest"
 
 
+def compose_runtime_image_aliases(
+    project: Path, references: dict[str, str]
+) -> dict[str, str]:
+    """Bind authored Compose tags to the pinned images for their repositories."""
+
+    pinned_by_repository: dict[str, str] = {}
+    for reference in set(references.values()):
+        if "@sha256:" not in reference:
+            continue
+        repository = runtime_image_tag(reference).rsplit(":", 1)[0]
+        previous = pinned_by_repository.setdefault(repository, reference)
+        if previous != reference:
+            raise ValueError("canonical pinned image repository is ambiguous")
+    if not pinned_by_repository:
+        return {}
+
+    services = yaml.safe_load((project / "docker-compose.yml").read_text())["services"]
+    if not isinstance(services, dict):
+        raise ValueError("canonical Compose services are invalid")
+    aliases: dict[str, str] = {}
+    for service in services.values():
+        if not isinstance(service, dict) or not isinstance(service.get("image"), str):
+            continue
+        tag = runtime_image_tag(service["image"])
+        pinned = pinned_by_repository.get(tag.rsplit(":", 1)[0])
+        if pinned is not None:
+            aliases[tag] = pinned
+    return aliases
+
+
 def canonical_image_references(project: Path, bundle: ScenarioBundle) -> dict[str, str]:
     """Read scenario references and authored child images from canonical sources."""
     realization = bundle_realization(project, AptlConfig(), bundle)
@@ -125,7 +155,8 @@ def validate_image_sources(
     architecture: str | None = None,
 ) -> None:
     """Bind each canonical tag or manifest reference to its locked config bytes."""
-    for role, reference in canonical_image_references(project, bundle).items():
+    references = canonical_image_references(project, bundle)
+    for role, reference in references.items():
         identity = roles.get(role)
         if "@sha256:" in reference:
             expected = registry_image_id(
@@ -141,3 +172,11 @@ def validate_image_sources(
             valid = reference in images.get(identity, ())
         if not valid:
             raise ValueError("canonical image reference differs from role " + role)
+    for tag, reference in compose_runtime_image_aliases(project, references).items():
+        identity = registry_image_id(
+            image_archive, image_files, reference, architecture=architecture
+        )
+        if tag not in images.get(identity, ()):
+            raise ValueError(
+                "canonical Compose runtime tag differs from pinned image " + tag
+            )

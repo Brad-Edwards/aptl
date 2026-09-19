@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from aptl.appliance.input_images import (
     canonical_image_references,
+    compose_runtime_image_aliases,
     runtime_image_tag,
     validate_image_sources as _validate_image_sources,
 )
@@ -144,6 +145,7 @@ def acquire_canonical_images(
             for reference in references.values()
             if "@sha256:" in reference
         }
+        pinned_runtime_tags.update(compose_runtime_image_aliases(project, references))
         for runtime_tag, pinned_reference in sorted(pinned_runtime_tags.items()):
             pinned_id = subprocess.run(
                 ["docker", "image", "inspect", "--format", "{{.Id}}", pinned_reference],

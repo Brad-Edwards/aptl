@@ -131,6 +131,30 @@ def test_startup_policy_cannot_add_undeclared_dependency_or_service() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "probe",
+    [
+        StartupHealthProbe("thehive", ("CMD-SHELL", "true")),
+        StartupHealthProbe("thehive", ("CMD",)),
+        StartupHealthProbe("thehive", ("CMD", "true"), timeout_seconds=0),
+        StartupHealthProbe("thehive", ("CMD", "true"), retries=True),
+    ],
+)
+def test_startup_policy_rejects_malformed_health_probes(probe) -> None:
+    with pytest.raises(ScenarioStartupProviderError, match="result-invalid"):
+        _validated_policy(
+            ScenarioComposeStartupPolicy(probes=(probe,)), _startup_spec()
+        )
+
+
+def test_startup_policy_rejects_duplicate_health_probe() -> None:
+    probe = StartupHealthProbe("thehive", ("CMD", "true"))
+    with pytest.raises(ScenarioStartupProviderError, match="result-invalid"):
+        _validated_policy(
+            ScenarioComposeStartupPolicy(probes=(probe, probe)), _startup_spec()
+        )
+
+
 def test_exact_release_resolves_seed_and_runtime_bindings() -> None:
     plan = resolve_scenario_startup(_bundle())
 

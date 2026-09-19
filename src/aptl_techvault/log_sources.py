@@ -9,30 +9,37 @@ is fabricated merely to satisfy a presence check.
 from __future__ import annotations
 
 import hashlib
-import re
 import secrets
-import time
 from pathlib import PurePosixPath
-from typing import Protocol
+
+from aptl_techvault.log_source_support import (
+    SAMBA_AUDIT_LOG as _SAMBA_AUDIT_LOG,
+    SAMBA_MAIN_LOG as _SAMBA_MAIN_LOG,
+    SMBD_SERVICE as _SMBD_SERVICE,
+    LogSourceBackend,
+    _await_active_unit,
+    _await_file_growth,
+    _await_log_event,
+    _await_nonempty_file,
+    _declared_tailed_files,
+    _exec,
+    _file_size,
+    _ok,
+    _apply_postgres_log_settings,
+    _postgres_cluster,
+    _postgres_candidate,
+    _postgres_log_path,
+    _postgres_settings,
+    _read_file,
+    _rocky_syslog_candidate,
+    _samba_ad_candidate,
+    _samba_candidate,
+    _stdout,
+    _value,
+)
 
 
-class LogSourceBackend(Protocol):
-    """Container execution capabilities needed for native log realization."""
-
-    def container_exec(
-        self, name: str, cmd: list[str], *, timeout: int | None = None
-    ) -> object: ...
-
-    def container_exec_with_input(
-        self, name: str, cmd: list[str], payload: str, *, timeout: int | None = None
-    ) -> object: ...
-
-
-_SAFE_CLUSTER = re.compile(r"[A-Za-z0-9_.-]+")
 _SAMBA_DROPIN = "/etc/systemd/system/smbd.service.d/60-aptl-log-sources.conf"
-_SAMBA_AUDIT_LOG = "/var/log/samba/log.samba"
-_SAMBA_MAIN_LOG = "/var/log/samba/log.smbd"
-_SMBD_SERVICE = "smbd.service"
 _CHECK_MARKER = "aptl-log-source-readback"
 _RSYSLOG_CONFIG = "/etc/rsyslog.conf"
 # Stage under a root-owned parent, not the guest's publicly writable /tmp.
@@ -50,14 +57,7 @@ def realize_log_sources(
     """Configure only exact source/producer combinations the pack declares."""
 
     failures: list[str] = []
-    smb_clients = [
-        str(getattr(node, "container_name", "") or "")
-        for node in nodes
-        if any(
-            getattr(package, "name", "") == "smbclient"
-            for package in getattr(getattr(node, "runtime", None), "packages", ())
-        )
-    ]
+    smb_client = _single_smb_probe_client(nodes)
     for node in nodes:
         container = str(getattr(node, "container_name", "") or "")
         runtime = getattr(node, "runtime", None)
@@ -66,224 +66,47 @@ def realize_log_sources(
         sources = _declared_tailed_files(runtime)
         if not sources:
             continue
-        reason = None
-        if _postgres_candidate(runtime, sources):
-            reason = _realize_postgres_log(backend, container, sources)
-        elif _rocky_syslog_candidate(runtime, sources):
-            reason = _realize_rocky_syslog(backend, container)
-        elif _samba_ad_candidate(runtime, sources):
-            reason = _realize_samba_ad_logs(
-                backend, container, smb_clients[0] if len(smb_clients) == 1 else ""
-            )
-        elif _samba_candidate(runtime, sources):
-            reason = _realize_samba_logs(
-                backend, container, smb_clients[0] if len(smb_clients) == 1 else ""
-            )
+        reason = _realize_declared_source(
+            backend, container, runtime, sources, smb_client
+        )
         if reason is not None:
             failures.append(f"declared log source failed for {container}: {reason}")
     return failures
 
 
-def _value(value: object) -> str:
-    """Normalize RAES enum-like values before comparing declarations."""
+def _single_smb_probe_client(nodes: tuple[object, ...]) -> str:
+    """Use a guest SMB client only when the admitted nodes identify one."""
 
-    return str(getattr(value, "value", value) or "")
-
-
-def _declared_tailed_files(runtime: object) -> frozenset[str]:
-    """Find paths both inventoried as files and tailed by Wazuh agents."""
-
-    inventory = {
-        str(entry.path)
-        for entry in getattr(runtime, "filesystem_inventory", ())
-        if _value(getattr(entry, "entry_type", "")) == "file"
-        and _value(getattr(entry, "presence", "")) == "present"
-    }
-    tailed = {
-        str(source.location)
-        for agent in getattr(runtime, "forwarding_agents", ())
-        if _value(getattr(agent, "implementation", "")) == "wazuh_agent"
-        for source in getattr(agent, "sources", ())
-        if _value(getattr(source, "kind", "")) == "tailed_path"
-    }
-    return frozenset(inventory & tailed)
-
-
-def _has_unit(runtime: object, unit_name: str) -> bool:
-    """Check whether the SDL declares a systemd unit by name."""
-
-    return any(
-        getattr(unit, "unit_name", "") == unit_name
-        for unit in getattr(runtime, "service_manager_units", ())
-    )
-
-
-def _postgres_candidate(runtime: object, sources: frozenset[str]) -> bool:
-    """Select a declared PostgreSQL producer with an inventoried log path."""
-
-    return bool(
-        _has_unit(runtime, "postgresql.service")
-        and any(
-            _value(getattr(service, "engine", "")) == "postgresql"
-            for service in getattr(runtime, "database_services", ())
+    clients = [
+        str(getattr(node, "container_name", "") or "")
+        for node in nodes
+        if any(
+            getattr(package, "name", "") == "smbclient"
+            for package in getattr(getattr(node, "runtime", None), "packages", ())
         )
-        and any(path.startswith("/var/log/postgresql/") for path in sources)
-    )
+    ]
+    return clients[0] if len(clients) == 1 else ""
 
 
-def _rocky_syslog_candidate(runtime: object, sources: frozenset[str]) -> bool:
-    """Select the Rocky syslog producer only for its declared log paths."""
-
-    return bool(
-        {"/var/log/secure", "/var/log/messages"} <= sources
-        and _has_unit(runtime, "sshd.service")
-        and any(
-            getattr(package, "manager", "") in {"dnf", "yum"}
-            for package in getattr(runtime, "packages", ())
-        )
-    )
-
-
-def _samba_candidate(runtime: object, sources: frozenset[str]) -> bool:
-    """Select standalone Samba only when its native logs are declared."""
-
-    return bool(
-        {_SAMBA_MAIN_LOG, _SAMBA_AUDIT_LOG} <= sources
-        and _has_unit(runtime, _SMBD_SERVICE)
-        and any(
-            _value(getattr(service, "protocol", "")) == "smb"
-            for service in getattr(runtime, "file_services", ())
-        )
-    )
-
-
-def _samba_ad_candidate(runtime: object, sources: frozenset[str]) -> bool:
-    """Select the domain provider only when its Samba sources are declared."""
-
-    return bool(
-        {_SAMBA_AUDIT_LOG, _SAMBA_MAIN_LOG} <= sources
-        and any(
-            _value(getattr(authority, "kind", "")) == "domain"
-            for authority in getattr(runtime, "identity_authorities", ())
-        )
-    )
-
-
-def _exec(
-    backend: LogSourceBackend, container: str, command: list[str], timeout: int = 30
-) -> object:
-    """Run a bounded command in a realized container."""
-
-    return backend.container_exec(container, command, timeout=timeout)
-
-
-def _ok(
-    backend: LogSourceBackend, container: str, command: list[str], timeout: int = 30
-) -> bool:
-    """Return whether the bounded container command succeeded."""
-
-    return getattr(_exec(backend, container, command, timeout), "returncode", 1) == 0
-
-
-def _stdout(
-    backend: LogSourceBackend, container: str, command: list[str], timeout: int = 30
+def _realize_declared_source(
+    backend: LogSourceBackend,
+    container: str,
+    runtime: object,
+    sources: frozenset[str],
+    smb_client: str,
 ) -> str | None:
-    """Read trimmed output only from a successful container command."""
+    """Select the first exact producer supported by this pack adapter."""
 
-    result = _exec(backend, container, command, timeout)
-    if getattr(result, "returncode", 1) != 0:
-        return None
-    return str(getattr(result, "stdout", "") or "").strip()
-
-
-def _read_file(backend: LogSourceBackend, container: str, path: str) -> str | None:
-    """Read a guest file without mistaking a failed cat for empty content."""
-
-    result = _exec(backend, container, ["cat", path])
-    if getattr(result, "returncode", 1) != 0:
-        return None
-    return str(getattr(result, "stdout", "") or "")
-
-
-def _await_nonempty_file(backend: LogSourceBackend, container: str, path: str) -> bool:
-    """Wait briefly for a native producer to write a nonempty file."""
-
-    for attempt in range(20):
-        if _ok(backend, container, ["test", "-s", path]):
-            return True
-        if attempt < 19:
-            time.sleep(0.25)
-    return False
-
-
-def _await_active_unit(backend: LogSourceBackend, container: str, unit: str) -> bool:
-    """Read the settled systemd state after an asynchronous service job."""
-
-    for attempt in range(40):
-        if _ok(backend, container, ["systemctl", "is-active", "--quiet", unit]):
-            return True
-        if attempt < 39:
-            time.sleep(0.25)
-    return False
-
-
-def _file_size(backend: LogSourceBackend, container: str, path: str) -> int:
-    """Read a guest file's size, treating a missing file as empty."""
-
-    output = _stdout(backend, container, ["stat", "-c", "%s", path])
-    try:
-        return max(0, int(output or "0"))
-    except ValueError:
-        return 0
-
-
-def _await_file_growth(
-    backend: LogSourceBackend, container: str, path: str, before: int
-) -> bool:
-    """Confirm a fresh producer event increased the guest file size."""
-
-    for attempt in range(40):
-        if _file_size(backend, container, path) > before:
-            return True
-        if attempt < 39:
-            time.sleep(0.25)
-    return False
-
-
-def _await_log_event(
-    backend: LogSourceBackend, container: str, path: str, marker: str
-) -> bool:
-    """Wait for an exact probe marker in a native guest log."""
-
-    command = ["grep", "-Fq", marker, path]
-    for attempt in range(40):
-        if _ok(backend, container, command):
-            return True
-        if attempt < 39:
-            time.sleep(0.25)
-    return False
-
-
-def _postgres_settings(
-    backend: LogSourceBackend, container: str
-) -> tuple[str, str, str] | None:
-    """Read PostgreSQL's effective logging directory, file, and collector."""
-
-    result = _stdout(
-        backend,
-        container,
-        [
-            "runuser",
-            "-u",
-            "postgres",
-            "--",
-            "psql",
-            "-Atqc",
-            "SHOW log_directory; SHOW log_filename; SHOW logging_collector;",
-        ],
-    )
-    values = result.splitlines() if result is not None else []
-    return tuple(values) if len(values) == 3 else None
+    reason = None
+    if _postgres_candidate(runtime, sources):
+        reason = _realize_postgres_log(backend, container, sources)
+    elif _rocky_syslog_candidate(runtime, sources):
+        reason = _realize_rocky_syslog(backend, container)
+    elif _samba_ad_candidate(runtime, sources):
+        reason = _realize_samba_ad_logs(backend, container, smb_client)
+    elif _samba_candidate(runtime, sources):
+        reason = _realize_samba_logs(backend, container, smb_client)
+    return reason
 
 
 def _realize_postgres_log(
@@ -291,46 +114,26 @@ def _realize_postgres_log(
 ) -> str | None:
     """Configure and corroborate the one declared PostgreSQL log producer."""
 
-    selected = [
-        path
-        for path in sources
-        if path.startswith("/var/log/postgresql/") and path.endswith(".log")
-    ]
-    if len(selected) != 1:
-        return "PostgreSQL log path is ambiguous"
-    path = PurePosixPath(selected[0])
-    if path.parent != PurePosixPath("/var/log/postgresql"):
-        return "PostgreSQL log path is invalid"
+    path, reason = _postgres_log_path(sources)
+    if reason is not None or path is None:
+        return reason or "PostgreSQL log path is invalid"
     expected = (str(path.parent), path.name, "on")
     if _postgres_settings(backend, container) == expected and _ok(
         backend, container, ["test", "-s", str(path)]
     ):
         return None
-    rows = _stdout(backend, container, ["pg_lsclusters", "--no-header"])
-    clusters = [line.split()[:2] for line in rows.splitlines()] if rows else []
-    if (
-        len(clusters) != 1
-        or len(clusters[0]) != 2
-        or not all(_SAFE_CLUSTER.fullmatch(value) for value in clusters[0])
-    ):
-        return "PostgreSQL cluster selection is ambiguous"
-    version, cluster = clusters[0]
-    for key, value in (
-        ("log_directory", str(path.parent)),
-        ("log_filename", path.name),
-        ("logging_collector", "on"),
-    ):
-        if not _ok(
-            backend, container, ["pg_conftool", version, cluster, "set", key, value]
-        ):
-            return "PostgreSQL log configuration failed"
-    if not _ok(backend, container, ["pg_ctlcluster", version, cluster, "restart"], 120):
-        return "PostgreSQL cluster restart failed"
-    if _postgres_settings(backend, container) != expected or not _await_nonempty_file(
+    cluster = _postgres_cluster(backend, container)
+    if cluster is None:
+        reason = "PostgreSQL cluster selection is ambiguous"
+    elif not _apply_postgres_log_settings(backend, container, *cluster, path):
+        reason = "PostgreSQL log configuration failed"
+    elif not _ok(backend, container, ["pg_ctlcluster", *cluster, "restart"], 120):
+        reason = "PostgreSQL cluster restart failed"
+    elif _postgres_settings(backend, container) != expected or not _await_nonempty_file(
         backend, container, str(path)
     ):
-        return "PostgreSQL log producer did not verify"
-    return None
+        reason = "PostgreSQL log producer did not verify"
+    return reason
 
 
 def _rocky_rsyslog_config(original: str) -> str | None:
@@ -342,6 +145,23 @@ def _rocky_rsyslog_config(original: str) -> str | None:
     ):
         return original
     lines = original.splitlines(keepends=True)
+    bounds = _rsyslog_module_bounds(lines)
+    if bounds is None or not all(
+        path in original
+        for path in ('file="/var/log/secure"', 'file="/var/log/messages"')
+    ):
+        return None
+    imux, journal_end = bounds
+    return "".join(
+        lines[:imux]
+        + ['module(load="imuxsock" SysSock.Use="on")\n']
+        + lines[journal_end + 1 :]
+    )
+
+
+def _rsyslog_module_bounds(lines: list[str]) -> tuple[int, int] | None:
+    """Recognize only the supported adjacent distro input-module blocks."""
+
     imux = next(
         (
             i
@@ -378,16 +198,7 @@ def _rocky_rsyslog_config(original: str) -> str | None:
     )
     if imux_end is None or journal_end is None or imjournal - imux_end > 3:
         return None
-    if not all(
-        path in original
-        for path in ('file="/var/log/secure"', 'file="/var/log/messages"')
-    ):
-        return None
-    return "".join(
-        lines[:imux]
-        + ['module(load="imuxsock" SysSock.Use="on")\n']
-        + lines[journal_end + 1 :]
-    )
+    return imux, journal_end
 
 
 def _write_container_file(

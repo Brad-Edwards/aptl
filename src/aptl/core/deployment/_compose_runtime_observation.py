@@ -195,30 +195,11 @@ class ComposeRuntimeOrchestrationObservationMixin(
         # image to this lab, so never inspect foreign containers by image alone.
         if not requirement.child_label:
             return None, ()
-        query = _child_query(requirement)
-        try:
-            result = self._run(
-                query,
-                timeout=requirement.execution_timeout_seconds,
-            )
-        except BackendTimeoutError:
-            result = None
-        failure = None
-        container_ids: tuple[str, ...] = ()
-        if result is None or result.returncode != 0:
-            failure = _spawn_failure("Spawned-child observation failed", requirement)
-        else:
-            container_ids = _container_ids(result.stdout)
-            if container_ids and getattr(
-                self, "_attempt_isolated_docker_daemon", False
-            ):
-                failure = self._record_child_receipts(container_ids, requirement)
+        failure, container_ids = self._query_correlated_child_ids(requirement)
         # A count can only be enforced against an authored one. A template
         # without a declared child inventory says which image may run, not how
         # many may run, so its children are identity-checked and not counted.
-        count_required = bool(requirement.child_label) and bool(
-            container_ids or require_children
-        )
+        count_required = bool(container_ids or require_children)
         if (
             failure is None
             and count_required
@@ -229,6 +210,29 @@ class ComposeRuntimeOrchestrationObservationMixin(
                 requirement,
             )
         return failure, container_ids
+
+    def _query_correlated_child_ids(
+        self, requirement: DeploymentSpawnImageRequirement
+    ) -> tuple[LabResult | None, tuple[str, ...]]:
+        """Query exact child labels and capture isolated-daemon ownership."""
+
+        query = _child_query(requirement)
+        try:
+            result = self._run(
+                query,
+                timeout=requirement.execution_timeout_seconds,
+            )
+        except BackendTimeoutError:
+            result = None
+        if result is None or result.returncode != 0:
+            return _spawn_failure("Spawned-child observation failed", requirement), ()
+        container_ids = _container_ids(result.stdout)
+        if container_ids and getattr(self, "_attempt_isolated_docker_daemon", False):
+            return (
+                self._record_child_receipts(container_ids, requirement),
+                container_ids,
+            )
+        return None, container_ids
 
     def _record_child_receipts(
         self,
@@ -380,6 +384,5 @@ class ComposeRuntimeOrchestrationObservationMixin(
         """Whether inspect output exposes Docker control, not mere privilege."""
 
         return bool(
-            _inspect_has_socket_route(info)
-            or _inspect_has_endpoint_override(info)
+            _inspect_has_socket_route(info) or _inspect_has_endpoint_override(info)
         )

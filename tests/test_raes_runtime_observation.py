@@ -16,6 +16,7 @@ from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from raes.explicitness import ExplicitnessClass, ExplicitnessProvenance
 from raes.runtime_configuration import RuntimeConfiguration
 from raes_contracts.planning import (
@@ -890,6 +891,21 @@ def test_techvault_redis_authorization_rejects_admin_access():
     )
 
     assert _APP_AUTH_PATH not in observed
+
+
+@pytest.mark.parametrize(
+    "readback",
+    [
+        "config=exact\nauth=PONG\nrw=verified\nadmin=allowed\n",
+        "config=exact\nauth=PONG\nrw=verified\nadmin=denied\nextra=value\n",
+        "config=exact\nauth=PONG\nrw=verified\nadmin=denied\nadmin=denied\n",
+        "config=exact\nauth=PONG\nrw=verified\nadmin\n",
+    ],
+)
+def test_techvault_redis_authorization_rejects_malformed_readback(readback):
+    from aptl_techvault.redis_acl_observation import _readback_verified
+
+    assert not _readback_verified(SimpleNamespace(stdout=readback))
 
 
 def test_wazuh_software_component_requires_guest_version_and_agent_type():

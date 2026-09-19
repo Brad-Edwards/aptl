@@ -182,18 +182,30 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
     ) -> Mapping[str, object] | None:
         """Correlate each declared endpoint agent with the manager's roster."""
 
-        def observe() -> Mapping[str, object] | None:
-            """Read the manager roster using the admitted scenario identities."""
+        observed = self._observe_agent_readiness(start_iso, end_iso)
+        return self._refresh_agent_telemetry(observed, start_iso, end_iso)
 
-            return wazuh_agent_readiness(
-                getattr(self._backend, "container_exec_with_input", None),
-                self._realization,
-                self._project_dir,
-                start_iso,
-                end_iso,
-            )
+    def _observe_agent_readiness(
+        self, start_iso: str, end_iso: str
+    ) -> Mapping[str, object] | None:
+        """Read the manager roster using the admitted scenario identities."""
 
-        observed = observe()
+        return wazuh_agent_readiness(
+            getattr(self._backend, "container_exec_with_input", None),
+            self._realization,
+            self._project_dir,
+            start_iso,
+            end_iso,
+        )
+
+    def _refresh_agent_telemetry(
+        self,
+        observed: Mapping[str, object] | None,
+        start_iso: str,
+        end_iso: str,
+    ) -> Mapping[str, object] | None:
+        """Stimulate only stale declared hosts, then await native freshness."""
+
         if observed is None:
             return None
         hosts = observed.get("hosts", ())
@@ -202,8 +214,34 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
             for host in hosts
             if isinstance(host, Mapping) and host.get("telemetry_fresh") is False
         ]
-        if not missing:
+        deadline = self._agent_refresh_deadline(missing, end_iso)
+        if deadline is None:
             return observed
+        sleep = self._sleep or time.sleep
+        for _attempt in range(30):
+            if datetime.fromisoformat(self._now().replace("Z", "+00:00")) >= deadline:
+                break
+            sleep(2.0)
+            observed = self._observe_agent_readiness(start_iso, end_iso)
+            if observed is None or self._all_agent_telemetry_fresh(observed):
+                break
+        return observed
+
+    def _agent_refresh_deadline(
+        self, missing: list[str], end_iso: str
+    ) -> datetime | None:
+        """Start bounded re-observation only after real stimulus was emitted."""
+
+        if not missing or not self._emit_missing_agent_events(missing):
+            return None
+        try:
+            return datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    def _emit_missing_agent_events(self, missing: list[str]) -> bool:
+        """Trigger real source activity for stale admitted endpoint agents."""
+
         declared = {
             node: sources
             for node, (_enrollment, sources) in declared_endpoint_agents(
@@ -211,32 +249,20 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
             ).items()
         }
         try:
-            emitted = emit_missing_agent_events(
+            return emit_missing_agent_events(
                 self._backend, self._realization, missing, declared, self.trigger_sqli
             )
         except Exception:
-            emitted = False
-        if not emitted:
-            return observed
-        try:
-            deadline = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
-        except ValueError:
-            return observed
-        sleep = self._sleep or time.sleep
-        for _attempt in range(30):
-            if datetime.fromisoformat(self._now().replace("Z", "+00:00")) >= deadline:
-                break
-            sleep(2.0)
-            observed = observe()
-            if observed is None:
-                return None
-            hosts = observed.get("hosts", ())
-            if all(
-                isinstance(host, Mapping) and host.get("telemetry_fresh") is True
-                for host in hosts
-            ):
-                return observed
-        return observed
+            return False
+
+    @staticmethod
+    def _all_agent_telemetry_fresh(observed: Mapping[str, object]) -> bool:
+        """Require every corroborated host to carry a fresh telemetry marker."""
+
+        return all(
+            isinstance(host, Mapping) and host.get("telemetry_fresh") is True
+            for host in observed.get("hosts", ())
+        )
 
     def suricata_readiness_query(
         self, _start_iso: str, _end_iso: str

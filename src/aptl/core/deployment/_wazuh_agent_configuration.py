@@ -63,6 +63,20 @@ def wazuh_config(agent: object) -> str | None:
 def _valid_target(agent: object) -> tuple[str, int, str, str | None, int | None] | None:
     """Resolve the declared ingestion and optional enrollment endpoints."""
 
+    selected = _selected_ship_targets(agent)
+    if selected is None:
+        return None
+    ingestion_target, enrollment_target = selected
+    ingestion = _ingestion_endpoint(ingestion_target)
+    enrollment = _enrollment_endpoint(enrollment_target)
+    if ingestion is None or enrollment is None:
+        return None
+    return (*ingestion, *enrollment)
+
+
+def _selected_ship_targets(agent: object) -> tuple[object, object | None] | None:
+    """Require one ingestion endpoint and at most one enrollment endpoint."""
+
     targets = tuple(getattr(agent, "ship_targets", ()))
     ingestion_targets = tuple(
         target
@@ -83,20 +97,30 @@ def _valid_target(agent: object) -> tuple[str, int, str, str | None, int | None]
         )
     ):
         return None
-    ingestion_target = ingestion_targets[0]
-    host = str(getattr(ingestion_target, "target_node_ref", "") or "")
-    ingestion = _valid_port(getattr(ingestion_target, "ingestion_port", None))
-    protocol = _value(getattr(ingestion_target, "protocol", "tcp")) or "tcp"
+    return ingestion_targets[0], enrollment_targets[0] if enrollment_targets else None
+
+
+def _ingestion_endpoint(target: object) -> tuple[str, int, str] | None:
+    """Validate the authored manager host, port, and transport."""
+
+    host = str(getattr(target, "target_node_ref", "") or "")
+    ingestion = _valid_port(getattr(target, "ingestion_port", None))
     if not _SAFE_HOST.fullmatch(host) or ingestion is None:
         return None
-    if not enrollment_targets:
-        return host, ingestion, protocol, None, None
-    enrollment_target = enrollment_targets[0]
-    enrollment_host = str(getattr(enrollment_target, "target_node_ref", "") or "")
-    enrollment = _valid_port(getattr(enrollment_target, "enrollment_port", None))
+    protocol = _value(getattr(target, "protocol", "tcp")) or "tcp"
+    return host, ingestion, protocol
+
+
+def _enrollment_endpoint(target: object | None) -> tuple[str | None, int | None] | None:
+    """Validate an optional enrollment endpoint independently of ingestion."""
+
+    if target is None:
+        return None, None
+    enrollment_host = str(getattr(target, "target_node_ref", "") or "")
+    enrollment = _valid_port(getattr(target, "enrollment_port", None))
     if not _SAFE_HOST.fullmatch(enrollment_host) or enrollment is None:
         return None
-    return host, ingestion, protocol, enrollment_host, enrollment
+    return enrollment_host, enrollment
 
 
 def _valid_port(value: object) -> int | None:

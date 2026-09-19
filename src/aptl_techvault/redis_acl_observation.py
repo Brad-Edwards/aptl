@@ -59,24 +59,27 @@ def observe_redis_app_authorizations(
     result = backend.container_exec(
         container_name, ["sh", "-ec", _REDIS_ACL_READBACK_SCRIPT], timeout=30
     )
-    if getattr(result, "returncode", 1) != 0:
-        return None
-    lines = str(getattr(result, "stdout", "") or "").splitlines()
-    if any("=" not in line for line in lines):
-        return None
-    fields = {key: value for key, value in (line.split("=", 1) for line in lines)}
-    if (
-        len(lines) != 4
-        or fields.get("config") != "exact"
-        or fields.get("auth") != "PONG"
-        or fields.get("rw") != "verified"
-        or fields.get("admin") != "denied"
-    ):
+    if getattr(result, "returncode", 1) != 0 or not _readback_verified(result):
         return None
     return _disclose(
         "runtime-app-authorizations",
         [item.model_dump(mode="json", by_alias=True) for item in authorizations],
     )
+
+
+def _readback_verified(result: object) -> bool:
+    """Require the bounded guest probe's four exact classified outcomes."""
+
+    lines = str(getattr(result, "stdout", "") or "").splitlines()
+    if len(lines) != 4 or any("=" not in line for line in lines):
+        return False
+    fields = {key: value for key, value in (line.split("=", 1) for line in lines)}
+    return fields == {
+        "config": "exact",
+        "auth": "PONG",
+        "rw": "verified",
+        "admin": "denied",
+    }
 
 
 def _supported_read_write_acl(authorization: object) -> bool:
@@ -104,12 +107,30 @@ def _supported_read_write_acl(authorization: object) -> bool:
     return bool(
         principal_id
         and role_id
-        and _value(getattr(principal, "kind", "")) == "service_account"
+        and _principal_matches(principal)
+        and _grant_mapping_matches(grant, mapping, principal_id, role_id)
+    )
+
+
+def _principal_matches(principal: object) -> bool:
+    """Require one password-only default Redis service account."""
+
+    return bool(
+        _value(getattr(principal, "kind", "")) == "service_account"
         and _value(getattr(principal, "credential_classification", ""))
         in {"redacted", "operator_secret"}
         and getattr(principal, "name", "") in {"", "default"}
         and not getattr(principal, "backend_roles", ())
-        and getattr(grant, "role_ref", "") == role_id
+    )
+
+
+def _grant_mapping_matches(
+    grant: object, mapping: object, principal_id: str, role_id: str
+) -> bool:
+    """Require exactly read/write access without Redis administration."""
+
+    return bool(
+        getattr(grant, "role_ref", "") == role_id
         and _value(getattr(grant, "resource_kind", "")) == "redis_acl"
         and _value(getattr(grant, "effect", "")) == "allow"
         and set(getattr(grant, "actions", ())) == {"read", "write"}

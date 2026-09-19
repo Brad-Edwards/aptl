@@ -19,6 +19,7 @@ from aptl_techvault.log_sources import (
     _samba_dropin,
     realize_log_sources,
 )
+from aptl_techvault.log_source_support import _postgres_cluster, _postgres_log_path
 from tests.helpers import techvault_scenario_path
 
 
@@ -140,6 +141,45 @@ def test_postgres_provider_configures_the_authored_path_not_the_package_version(
     assert not any(cmd[:1] == ("touch",) for cmd in argvs)
 
 
+@pytest.mark.parametrize(
+    "sources",
+    [
+        frozenset(),
+        frozenset({"/var/log/postgresql/../escaped.log"}),
+        frozenset(
+            {
+                "/var/log/postgresql/first.log",
+                "/var/log/postgresql/second.log",
+            }
+        ),
+    ],
+)
+def test_postgres_provider_rejects_missing_or_ambiguous_authored_path(sources):
+    path, reason = _postgres_log_path(sources)
+
+    assert path is None
+    assert reason is not None
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "17 main 5432 online postgres\n18 other 5432 online postgres\n",
+        "17 ../other 5432 online postgres\n",
+        "17 main;echo 5432 online postgres\n",
+        "17\n",
+    ],
+)
+def test_postgres_provider_rejects_ambiguous_or_unsafe_cluster_names(row):
+    class ClusterBackend(_Backend):
+        def container_exec(self, name, cmd, *, timeout=None):
+            if cmd[:2] == ["pg_lsclusters", "--no-header"]:
+                return SimpleNamespace(returncode=0, stdout=row)
+            return super().container_exec(name, cmd, timeout=timeout)
+
+    assert _postgres_cluster(ClusterBackend(), "aptl-db") is None
+
+
 def test_rocky_provider_starts_rsyslog_and_proves_both_logs_receive_events(scenario):
     backend = _Backend()
 
@@ -187,9 +227,9 @@ def test_rocky_provider_uses_settled_unit_state_after_start_job_error(scenario):
 def test_rocky_provider_rejects_a_service_that_never_becomes_active(
     scenario, monkeypatch
 ):
-    from aptl_techvault import log_sources
+    from aptl_techvault import log_source_support
 
-    monkeypatch.setattr(log_sources.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(log_source_support.time, "sleep", lambda _seconds: None)
 
     class InactiveBackend(_Backend):
         def container_exec(self, name, cmd, *, timeout=None):

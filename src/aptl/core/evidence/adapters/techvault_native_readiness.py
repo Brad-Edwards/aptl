@@ -14,8 +14,8 @@ or a legacy Compose file.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from ipaddress import ip_address, ip_network
+from collections.abc import Iterable, Mapping
+from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
 from urllib.parse import urlparse
 
 from pathlib import Path
@@ -378,6 +378,57 @@ def _authored_base_url(realization: object) -> str | None:
     return None
 
 
+def _single_named(items: Iterable[object], name: str) -> object | None:
+    """Reject an absent or ambiguous admitted node or network name."""
+
+    matches = [item for item in items if str(getattr(item, "name", "")) == name]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _declared_node_subnet(
+    realization: object, name: str
+) -> tuple[object, IPv4Network | IPv6Network] | None:
+    """Find the node's one declared network and its strict authored subnet."""
+
+    node = _single_named(getattr(realization, "nodes", ()) or (), name)
+    declared_networks = tuple(getattr(node, "networks", ()) or ())
+    network = (
+        _single_named(getattr(realization, "networks", ()) or (), declared_networks[0])
+        if len(declared_networks) == 1
+        else None
+    )
+    if network is None:
+        return None
+    try:
+        subnet = ip_network(str(getattr(network, "cidr", "")), strict=True)
+    except ValueError:
+        return None
+    return node, subnet
+
+
+def _owned_attachment_address(backend: object, node: object, name: str) -> str | None:
+    """Read one owned container attachment with the expected node alias."""
+
+    inspect = getattr(backend, "container_inspect", None)
+    info = (
+        inspect(str(getattr(node, "container_name", ""))) if callable(inspect) else None
+    )
+    settings = info.get("NetworkSettings") if isinstance(info, Mapping) else None
+    attachments = settings.get("Networks") if isinstance(settings, Mapping) else None
+    if not isinstance(attachments, Mapping) or len(attachments) != 1:
+        return None
+    attachment = next(iter(attachments.values()))
+    aliases = attachment.get("Aliases") if isinstance(attachment, Mapping) else None
+    address = attachment.get("IPAddress") if isinstance(attachment, Mapping) else None
+    if (
+        not isinstance(aliases, list)
+        or name not in aliases
+        or not isinstance(address, str)
+    ):
+        return None
+    return address
+
+
 def _deployed_node_address(
     backend: object, realization: object, name: str
 ) -> str | None:
@@ -388,49 +439,15 @@ def _deployed_node_address(
     when it belongs to that subnet and to the uniquely attached owned node.
     """
 
-    nodes = [
-        node
-        for node in getattr(realization, "nodes", ()) or ()
-        if str(getattr(node, "name", "")) == name
-    ]
-    if len(nodes) != 1:
+    declared = _declared_node_subnet(realization, name)
+    if declared is None:
         return None
-    node = nodes[0]
-    declared_networks = tuple(getattr(node, "networks", ()) or ())
-    if len(declared_networks) != 1:
-        return None
-    networks = [
-        network
-        for network in getattr(realization, "networks", ()) or ()
-        if str(getattr(network, "name", "")) == declared_networks[0]
-    ]
-    if len(networks) != 1:
-        return None
+    node, subnet = declared
+    address = _owned_attachment_address(backend, node, name)
     try:
-        subnet = ip_network(str(getattr(networks[0], "cidr", "")), strict=True)
-    except ValueError:
-        return None
-    inspect = getattr(backend, "container_inspect", None)
-    if not callable(inspect):
-        return None
-    info = inspect(str(getattr(node, "container_name", "")))
-    if not isinstance(info, Mapping):
-        return None
-    settings = info.get("NetworkSettings")
-    attachments = settings.get("Networks") if isinstance(settings, Mapping) else None
-    if not isinstance(attachments, Mapping) or len(attachments) != 1:
-        return None
-    attachment = next(iter(attachments.values()))
-    if not isinstance(attachment, Mapping):
-        return None
-    aliases = attachment.get("Aliases")
-    if not isinstance(aliases, list) or name not in aliases:
-        return None
-    address = attachment.get("IPAddress")
-    if not isinstance(address, str):
-        return None
-    try:
-        return address if ip_address(address) in subnet else None
+        return (
+            address if address is not None and ip_address(address) in subnet else None
+        )
     except ValueError:
         return None
 

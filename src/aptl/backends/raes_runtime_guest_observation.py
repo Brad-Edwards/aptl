@@ -297,33 +297,42 @@ def observe_software_components(
     """Corroborate the supported Wazuh agent component in the guest."""
 
     components = tuple(runtime.software_components)
-    if len(components) != 1:
+    if len(components) != 1 or not _supported_wazuh_agent(components[0]):
         return None
     component = components[0]
-    version = str(getattr(component, "version", "") or "")
-    if (
-        getattr(component, "component_id", "") != "wazuh-agent"
-        or _value(getattr(component, "component_type", "")) != "application"
-        or _value(getattr(component, "presence", "")) != "required"
-        or not version
-    ):
-        return None
     output = _exec_stdout(
         backend, container_name, ["/var/ossec/bin/wazuh-control", "info"]
     )
-    if output is None:
-        return None
-    lines = output.splitlines()
-    if (
-        sum(line == f'WAZUH_VERSION="v{version}"' for line in lines) != 1
-        or sum(line == 'WAZUH_TYPE="agent"' for line in lines) != 1
-        or sum(line.startswith("WAZUH_VERSION=") for line in lines) != 1
-        or sum(line.startswith("WAZUH_TYPE=") for line in lines) != 1
+    if output is None or not _wazuh_info_matches(
+        output, str(getattr(component, "version", "") or "")
     ):
         return None
     return _disclose(
         "runtime-software-components",
         [component.model_dump(mode="json", by_alias=True)],
+    )
+
+
+def _supported_wazuh_agent(component: object) -> bool:
+    """Admit only the one Wazuh agent shape this observer can corroborate."""
+
+    return bool(
+        getattr(component, "component_id", "") == "wazuh-agent"
+        and _value(getattr(component, "component_type", "")) == "application"
+        and _value(getattr(component, "presence", "")) == "required"
+        and str(getattr(component, "version", "") or "")
+    )
+
+
+def _wazuh_info_matches(output: str, version: str) -> bool:
+    """Require one exact agent type and version in guest Wazuh output."""
+
+    lines = output.splitlines()
+    return bool(
+        sum(line == f'WAZUH_VERSION="v{version}"' for line in lines) == 1
+        and sum(line == 'WAZUH_TYPE="agent"' for line in lines) == 1
+        and sum(line.startswith("WAZUH_VERSION=") for line in lines) == 1
+        and sum(line.startswith("WAZUH_TYPE=") for line in lines) == 1
     )
 
 

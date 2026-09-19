@@ -333,6 +333,50 @@ def _verify_op(
     return verifier(op, node_address, executor) if verifier is not None else None
 
 
+def _safe_failed_step(op: MaterializationOp, node_address: str, exc: Exception) -> str:
+    """Classify only known pack-copy errors without exposing raw details."""
+
+    step = ""
+    if isinstance(op, PlacePackArtifactOp):
+        if exc.args == (f"pack content copy failed on {node_address}",):
+            step = "copy"
+        elif exc.args == (
+            f"generic materialization step 'prep content dir' failed on {node_address}",
+        ):
+            step = "prepare-directory"
+    return step
+
+
+def _operation_failure(
+    op: MaterializationOp, node_address: str, exc: Exception
+) -> LabResult:
+    """Convert an executor failure to the redacted RAES result envelope."""
+
+    nested = exc.__cause__ or exc.__context__
+    safe_step = _safe_failed_step(op, node_address, exc)
+    log.error(
+        "Materialization %s at %s failed: %s%s%s",
+        type(op).__name__,
+        node_address,
+        type(exc).__name__,
+        f"; step={safe_step}" if safe_step else "",
+        f"; cause={type(nested).__name__}" if nested is not None else "",
+    )
+    return LabResult(
+        success=False,
+        error=render_raes_diagnostics(
+            [
+                diagnostic(
+                    "aptl.materializer.operation-failed",
+                    node_address,
+                    f"materialization step {type(op).__name__} failed on "
+                    f"node {node_address}.",
+                )
+            ]
+        ),
+    )
+
+
 def materialize_node(
     node_address: str,
     operations: tuple[MaterializationOp, ...],
@@ -352,36 +396,7 @@ def materialize_node(
             # Admission boundary: translate every internal/backend failure into
             # the RAES LabResult envelope; the raw detail is deliberately not
             # echoed (redaction + no verbatim message).
-            nested = exc.__cause__ or exc.__context__
-            safe_step = ""
-            if isinstance(op, PlacePackArtifactOp):
-                if exc.args == (f"pack content copy failed on {node_address}",):
-                    safe_step = "copy"
-                elif exc.args == (
-                    f"generic materialization step 'prep content dir' failed on {node_address}",
-                ):
-                    safe_step = "prepare-directory"
-            log.error(
-                "Materialization %s at %s failed: %s%s%s",
-                type(op).__name__,
-                node_address,
-                type(exc).__name__,
-                f"; step={safe_step}" if safe_step else "",
-                f"; cause={type(nested).__name__}" if nested is not None else "",
-            )
-            return LabResult(
-                success=False,
-                error=render_raes_diagnostics(
-                    [
-                        diagnostic(
-                            "aptl.materializer.operation-failed",
-                            node_address,
-                            f"materialization step {type(op).__name__} failed on "
-                            f"node {node_address}.",
-                        )
-                    ]
-                ),
-            )
+            return _operation_failure(op, node_address, exc)
 
     diagnostics = []
     for op in operations:

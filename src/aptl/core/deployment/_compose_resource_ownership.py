@@ -266,22 +266,29 @@ class WorkspaceOwnership:
         for name in names:
             if _RECEIPT_PUBLISH_TEMP.fullmatch(name):
                 continue
-            if not name.endswith(".json"):
-                raise OwnershipConflictError(_RECEIPT_MALFORMED)
-            try:
-                payload = read_contained_nofollow(self.root, f"{relative_dir}/{name}")
-                receipt = _decode_receipt(payload)
-            except (OSError, ValueError, TypeError, PathContainmentError) as exc:
-                raise OwnershipConflictError(_RECEIPT_MALFORMED) from exc
-            if (
-                receipt.kind != kind
-                or receipt.workspace_id != self.workspace_id
-                or receipt.project_name != self.project_name
-                or self._receipt_path(kind, receipt.native_id).name != name
-            ):
-                raise OwnershipConflictError(_RECEIPT_MALFORMED)
-            receipts.append(receipt)
+            receipts.append(self._receipt_named(kind, relative_dir, name))
         return tuple(receipts)
+
+    def _receipt_named(
+        self, kind: str, relative_dir: str, name: str
+    ) -> ResourceReceipt:
+        """Decode one exact named receipt without following path replacements."""
+
+        if not name.endswith(".json"):
+            raise OwnershipConflictError(_RECEIPT_MALFORMED)
+        try:
+            payload = read_contained_nofollow(self.root, f"{relative_dir}/{name}")
+            receipt = _decode_receipt(payload)
+        except (OSError, ValueError, TypeError, PathContainmentError) as exc:
+            raise OwnershipConflictError(_RECEIPT_MALFORMED) from exc
+        if (
+            receipt.kind != kind
+            or receipt.workspace_id != self.workspace_id
+            or receipt.project_name != self.project_name
+            or self._receipt_path(kind, receipt.native_id).name != name
+        ):
+            raise OwnershipConflictError(_RECEIPT_MALFORMED)
+        return receipt
 
     def candidates(
         self, selector: str, *, kind: str, daemon_id: str

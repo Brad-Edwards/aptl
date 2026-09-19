@@ -8,7 +8,7 @@ import re
 
 EXACT_IMAGE_INSPECT_FORMAT = (
     "{{json .RepoDigests}}\t{{.Id}}\t{{.Os}}/{{.Architecture}}"
-    "{{if .Variant}}/{{.Variant}}{{end}}"
+    '{{with index . "Variant"}}/{{.}}{{end}}'
 )
 _IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 
@@ -72,6 +72,13 @@ def exact_inspected_image_identity(
 ) -> ExactDockerImageIdentity | None:
     """Parse identity only when inspection proves the requested repo digest."""
 
+    reference, separator, digest = image_ref.rpartition("@")
+    namespace, slash, image_name = reference.rpartition("/")
+    if not separator or not _IMAGE_ID.fullmatch(digest) or not image_name:
+        return None
+    # Docker records RepoDigests as repository@digest even when the requested
+    # immutable reference also carries a human-readable tag before the @.
+    canonical_digest = f"{namespace}{slash}{image_name.split(':', 1)[0]}@{digest}"
     try:
         repo_digests_raw, image_id, platform_raw = (
             str(stdout or "").strip().split("\t", 2)
@@ -82,7 +89,7 @@ def exact_inspected_image_identity(
     platform = normalized_platform(platform_raw)
     if (
         not isinstance(repo_digests, list)
-        or image_ref not in repo_digests
+        or canonical_digest not in repo_digests
         or not _IMAGE_ID.fullmatch(image_id)
         or platform is None
     ):

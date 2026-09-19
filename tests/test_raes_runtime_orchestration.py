@@ -27,6 +27,7 @@ from aptl.core.deployment._compose_runtime_orchestration import (
     effective_orchestration_model_errors,
 )
 from aptl.core.deployment.docker_compose import DockerComposeBackend
+from aptl.core.deployment._docker_image_identity import EXACT_IMAGE_INSPECT_FORMAT
 from aptl.core.config import AptlConfig
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
@@ -737,6 +738,7 @@ def test_generated_compose_lowers_the_declared_host_root_socket(tmp_path) -> Non
     ]
     assert service.get("privileged") is not True
 
+
 def test_generated_compose_preserves_existing_volumes_when_adding_socket(
     monkeypatch, tmp_path
 ) -> None:
@@ -892,7 +894,6 @@ def test_effective_compose_accepts_omitted_read_write_default() -> None:
     }
 
     assert effective_orchestration_model_errors(payload, _spec()) == []
-
 
 
 def test_an_admitted_authority_admits_only_its_exact_host_socket_mount() -> None:
@@ -1307,6 +1308,10 @@ def test_online_child_image_is_pulled_and_verified_by_exact_reference(tmp_path) 
     commands = [call.args[0] for call in backend._run.call_args_list]
     assert commands[1] == ["docker", "pull", _CHILD_REF]
     assert commands[2][-1] == _CHILD_REF
+    # Docker omits Variant for images without an architecture variant. A
+    # direct .Variant lookup makes the entire inspect command fail on amd64.
+    assert '{{with index . "Variant"}}/{{.}}{{end}}' in commands[2][4]
+    assert commands[2][4] == EXACT_IMAGE_INSPECT_FORMAT
     assert backend._run.call_args_list[1].kwargs["timeout"] == 600
     assert backend._run.call_args_list[2].kwargs["timeout"] == 600
 

@@ -39,7 +39,7 @@ _GENERIC_BASE_IMAGE_BUILDS: dict[str, tuple[str, str]] = {
     ),
     "aptl/generic-systemd-node22-base:latest": (
         "containers/generic-systemd-node22-base/Dockerfile",
-        "containers/generic-systemd-node22-base",
+        ".",
     ),
     "aptl/generic-samba-ad-base:latest": (
         "containers/generic-samba-ad-base/Dockerfile",

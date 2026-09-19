@@ -461,6 +461,22 @@ class TestSoftwareComponent:
             ["npm", "--prefix", "/opt/mcp/common", "run", "build", "--if-present"],
         ]
 
+    def test_offline_npm_component_uses_preloaded_cache_only(self):
+        fake = _FakeExec()
+        op = InstallSoftwareComponentOp(
+            ecosystem="npm",
+            manifest_path="/opt/mcp/common/package-lock.json",
+            package_name="aptl-mcp-common",
+            version="0.1.0",
+        )
+
+        _executor(fake, offline_staged=True).install_software_component("n.node", op)
+
+        assert fake.argvs() == [
+            ["npm", "--prefix", "/opt/mcp/common", "ci", "--include=dev", "--offline"],
+            ["npm", "--prefix", "/opt/mcp/common", "run", "build", "--if-present"],
+        ]
+
     def test_observation_requires_exact_identity_and_declared_output(self):
         package = (
             '{"name":"aptl-mcp-common","version":"0.1.0","main":"./build/index.js"}'

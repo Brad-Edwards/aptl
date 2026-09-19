@@ -88,7 +88,7 @@ build_image generic-systemd-wazuh-agent-base-debian \
   aptl/generic-systemd-wazuh-agent-base-debian:latest . \
   containers/generic-systemd-wazuh-agent-base-debian/Dockerfile local
 build_image generic-systemd-node22-base aptl/generic-systemd-node22-base:latest \
-  containers/generic-systemd-node22-base containers/generic-systemd-node22-base/Dockerfile
+  . containers/generic-systemd-node22-base/Dockerfile
 build_image generic-wazuh-agent-base-debian aptl/generic-wazuh-agent-base-debian:latest \
   . containers/generic-wazuh-agent-base-debian/Dockerfile
 build_image suricata-wazuh-agent aptl/suricata-wazuh-agent:latest \

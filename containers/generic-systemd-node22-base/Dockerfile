@@ -9,5 +9,17 @@ RUN apt-get update \
         smbclient ldap-utils sqlmap hydra python3-impacket \
     && apt-get clean \
     && find /var/lib/apt/lists -mindepth 1 -delete
+# First boot is sealed from the network. Prime npm's content-addressed cache
+# from every exact MCP lockfile while the image is built, so materialization can
+# still run npm ci against the scenario's own copied manifests and sources.
+COPY mcp /opt/aptl/npm-source
+ENV npm_config_cache=/opt/aptl/npm-cache
+RUN set -eu; \
+    for project in aptl-mcp-common mcp-casemgmt mcp-indexer mcp-network \
+        mcp-red mcp-reverse mcp-soar mcp-threatintel mcp-wazuh; do \
+        npm --prefix "/opt/aptl/npm-source/$project" ci \
+            --include=dev --ignore-scripts --no-audit --no-fund; \
+    done; \
+    find /opt/aptl/npm-source -type d -name node_modules -prune -exec rm -rf {} +
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]

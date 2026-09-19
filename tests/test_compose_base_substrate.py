@@ -148,9 +148,7 @@ class TestEnsureGenericBaseImage:
             for call in mock_run.call_args_list
             if call.args[0][:2] == ["docker", "build"]
         )
-        assert build_call.args[0][-1] == str(
-            tmp_path / "containers" / "generic-systemd-node22-base"
-        )
+        assert build_call.args[0][-1] == str(tmp_path)
 
     def test_builds_backend_selected_samba_provider_base(self, tmp_path):
         backend = _backend(tmp_path)

@@ -529,7 +529,7 @@ jobs:
             context: .
           - name: generic-systemd-node22-base
             dockerfile: containers/generic-systemd-node22-base/Dockerfile
-            context: ./containers/generic-systemd-node22-base
+            context: .
           - name: generic-wazuh-agent-base-debian
             dockerfile: containers/generic-wazuh-agent-base-debian/Dockerfile
             context: .

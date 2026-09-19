@@ -122,6 +122,18 @@ def test_local_candidate_path_uses_exact_commit_and_no_registry_dependency() -> 
     assert "APTL_IMAGE_NAMESPACE" not in wrapper
 
 
+def test_node22_image_preloads_exact_mcp_locks_for_offline_materialization() -> None:
+    dockerfile = (
+        ROOT / "containers/generic-systemd-node22-base/Dockerfile"
+    ).read_text()
+    assert "COPY mcp /opt/aptl/npm-source" in dockerfile
+    assert "npm_config_cache=/opt/aptl/npm-cache" in dockerfile
+    assert "aptl-mcp-common mcp-casemgmt mcp-indexer mcp-network" in dockerfile
+    assert "mcp-red mcp-reverse mcp-soar mcp-threatintel mcp-wazuh" in dockerfile
+    assert "--ignore-scripts --no-audit --no-fund" in dockerfile
+    assert "**/node_modules" in (ROOT / ".dockerignore").read_text()
+
+
 def test_qualification_venv_installs_the_locked_runtime_closure() -> None:
     qualifier = (ROOT / "scripts/appliance/qualify-candidate.sh").read_text()
 

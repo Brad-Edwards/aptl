@@ -325,11 +325,10 @@ class DockerMaterializationExecutor(DockerMaterializationObservationMixin):
                 f"unsupported software component ecosystem on {node_address}"
             )
         directory = str(PurePosixPath(op.manifest_path).parent)
-        self._require_ok(
-            node_address,
-            ["npm", "--prefix", directory, "ci", "--include=dev"],
-            "install software component",
-        )
+        install_argv = ["npm", "--prefix", directory, "ci", "--include=dev"]
+        if self._offline_staged:
+            install_argv.append("--offline")
+        self._require_ok(node_address, install_argv, "install software component")
         self._require_ok(
             node_address,
             ["npm", "--prefix", directory, "run", "build", "--if-present"],

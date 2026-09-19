@@ -99,19 +99,20 @@ def _stimulate(
 ) -> bool:
     """Exercise the declared product source without fabricating log content."""
 
+    emitted = False
     if node in {"victim", "workstation"}:
-        return _run(
+        emitted = _run(
             backend, f"aptl-{node}", ["logger", "-p", "authpriv.notice", marker]
         )
-    if node == "db":
+    elif node == "db":
         statement = f"DO $$ BEGIN RAISE LOG '{marker}'; END $$;"
-        return _run(
+        emitted = _run(
             backend,
             "aptl-db",
             ["runuser", "-u", "postgres", "--", "psql", "-Atqc", statement],
         )
-    if node == "dns":
-        return _run(
+    elif node == "dns":
+        emitted = _run(
             backend,
             "aptl-dns",
             [
@@ -123,9 +124,9 @@ def _stimulate(
                 "A",
             ],
         )
-    if node == "fileshare":
+    elif node == "fileshare":
         share = _guest_share(realization)
-        return bool(
+        emitted = bool(
             share
             and _run(
                 backend,
@@ -133,10 +134,10 @@ def _stimulate(
                 ["smbclient", "-N", f"//fileshare/{share}", "-c", "quit"],
             )
         )
-    if node == "ad":
+    elif node == "ad":
         # Guest authorization is expected to fail; the audit log growth is
         # the proof of execution, not smbclient's exit status.
-        return (
+        emitted = (
             _exec(
                 backend,
                 "aptl-kali",
@@ -144,25 +145,31 @@ def _stimulate(
             )
             is not None
         )
-    if node == "webapp":
-        endpoint = webapp_endpoint(realization)
-        if endpoint is None:
-            return False
-        address, port = endpoint
-        return _run(
-            backend,
-            "aptl-kali",
-            [
-                "curl",
-                "-fsS",
-                "-o",
-                "/dev/null",
-                f"http://{address}:{port}/?aptl_readiness={quote(marker)}",
-            ],
-        )
-    if node == "suricata":
-        return trigger_sqli() is not None
-    return False
+    elif node == "webapp":
+        emitted = _stimulate_webapp(backend, realization, marker)
+    elif node == "suricata":
+        emitted = trigger_sqli() is not None
+    return emitted
+
+
+def _stimulate_webapp(backend: object, realization: object, marker: str) -> bool:
+    """Exercise the SDL-declared in-world HTTP service from the Kali guest."""
+
+    endpoint = webapp_endpoint(realization)
+    if endpoint is None:
+        return False
+    address, port = endpoint
+    return _run(
+        backend,
+        "aptl-kali",
+        [
+            "curl",
+            "-fsS",
+            "-o",
+            "/dev/null",
+            f"http://{address}:{port}/?aptl_readiness={quote(marker)}",
+        ],
+    )
 
 
 def emit_missing_agent_events(
@@ -175,19 +182,34 @@ def emit_missing_agent_events(
     """Stimulate only silent declared hosts and verify native source growth."""
 
     for node in sorted(set(missing)):
-        path = _SOURCES.get(node)
-        if path is None or path not in declared_sources.get(node, ()):
-            return False
-        container = f"aptl-{node}"
-        before = _size(backend, container, path)
-        if before is None:
-            return False
-        marker = f"aptl-readiness-{secrets.token_hex(8)}"
-        if not _stimulate(backend, realization, node, marker, trigger_sqli):
-            return False
-        if not _grew(backend, container, path, before):
+        if not _emit_declared_agent_event(
+            backend, realization, node, declared_sources, trigger_sqli
+        ):
             return False
     return True
+
+
+def _emit_declared_agent_event(
+    backend: object,
+    realization: object,
+    node: str,
+    declared_sources: Mapping[str, tuple[str, ...]],
+    trigger_sqli: Callable[[], Mapping[str, object] | None],
+) -> bool:
+    """Require one admitted source to grow after a real producer action."""
+
+    path = _SOURCES.get(node)
+    if path is None or path not in declared_sources.get(node, ()):
+        return False
+    container = f"aptl-{node}"
+    before = _size(backend, container, path)
+    if before is None:
+        return False
+    marker = f"aptl-readiness-{secrets.token_hex(8)}"
+    return bool(
+        _stimulate(backend, realization, node, marker, trigger_sqli)
+        and _grew(backend, container, path, before)
+    )
 
 
 __all__ = ("emit_missing_agent_events",)

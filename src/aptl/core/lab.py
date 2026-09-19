@@ -97,6 +97,7 @@ if TYPE_CHECKING:
     from raes_contracts.contracts import ExperimentEvidenceRecordModel
 
     from aptl.backends._raes_scenario_queries import AdmittedStartSurface
+    from aptl.backends.scenario_startup import ScenarioStartupPlan
     from aptl.backends.raes_realization_model import AptlRealization
     from aptl.backends.raes import AcesStartOutcome
     from aptl.backends.raes_start_model import AcesRunTarget, AdmittedScenarioStart
@@ -1364,35 +1365,42 @@ def _prepare_scenario_startup(
         plan = resolve_scenario_startup(bundle)
         if plan is None:
             return None
-        missing = sorted(
-            alias.source
-            for alias in plan.environment_aliases
-            if not ctx.raw_env.get(alias.source)
-        )
-        if missing:
-            return LabResult(
-                success=False,
-                error=(
-                    "Scenario startup adapter requires unavailable operator "
-                    f"environment source(s): {', '.join(missing)}."
-                ),
-            )
-        updates = {
-            alias.target: ctx.raw_env[alias.source]
-            for alias in plan.environment_aliases
-        }
-        changed = update_dotenv_values(ctx.project_dir / ".env", updates)
-        if changed:
-            log.info("Applied %d scenario startup environment binding(s)", len(changed))
-        ctx.raw_env = load_dotenv(ctx.project_dir / ".env")
-        ctx.env = env_vars_from_dict(ctx.raw_env)
-        ctx.scenario_startup = plan
+        return _bind_scenario_startup_environment(ctx, plan)
     except (OSError, ValueError, ScenarioStartupProviderError):
         log.warning("Scenario startup adapter preparation failed")
         return LabResult(
             success=False,
             error="Scenario startup adapter preparation failed.",
         )
+
+
+def _bind_scenario_startup_environment(
+    ctx: _LabStartContext, plan: ScenarioStartupPlan
+) -> LabResult | None:
+    """Bind only declared aliases to the generated project environment."""
+
+    missing = sorted(
+        alias.source
+        for alias in plan.environment_aliases
+        if not ctx.raw_env.get(alias.source)
+    )
+    if missing:
+        return LabResult(
+            success=False,
+            error=(
+                "Scenario startup adapter requires unavailable operator "
+                f"environment source(s): {', '.join(missing)}."
+            ),
+        )
+    updates = {
+        alias.target: ctx.raw_env[alias.source] for alias in plan.environment_aliases
+    }
+    changed = update_dotenv_values(ctx.project_dir / ".env", updates)
+    if changed:
+        log.info("Applied %d scenario startup environment binding(s)", len(changed))
+    ctx.raw_env = load_dotenv(ctx.project_dir / ".env")
+    ctx.env = env_vars_from_dict(ctx.raw_env)
+    ctx.scenario_startup = plan
     return None
 
 
@@ -1726,10 +1734,12 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
 def _step_generate_certs(ctx: _LabStartContext) -> LabResult | None:
     """Generate SSL certificates required by the base stack."""
     log.info("Step 6: Generating SSL certificates...")
-    if ctx.admitted_surface is not None and "wazuh" not in ctx.selected_profiles:
+    skip_profile = (
+        ctx.admitted_surface is not None and "wazuh" not in ctx.selected_profiles
+    )
+    if skip_profile:
         log.debug("Wazuh profile not selected, skipping certificate generation")
-        return None
-    if _WAZUH_CERTIFICATE_OWNERSHIP <= ctx.stateful_artifact_ownership:
+    if skip_profile or _WAZUH_CERTIFICATE_OWNERSHIP <= ctx.stateful_artifact_ownership:
         return None
     cert_result = ensure_ssl_certs(ctx.project_dir)
     if cert_result.success:
@@ -2807,11 +2817,12 @@ def _step_pin_terminal_host_keys(ctx: _LabStartContext) -> LabResult | None:
 
 def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
     """Build local MCP server artifacts after the lab is running."""
-    if ctx.admitted_surface is not None and not ctx.selected_profiles:
-        log.debug("No adapter profiles selected, skipping MCP artifact build")
-        return None
-    if ctx.offline_staged:
-        log.info("Using pre-staged MCP server artifacts")
+    no_adapter_profiles = ctx.admitted_surface is not None and not ctx.selected_profiles
+    if no_adapter_profiles or ctx.offline_staged:
+        if no_adapter_profiles:
+            log.debug("No adapter profiles selected, skipping MCP artifact build")
+        else:
+            log.info("Using pre-staged MCP server artifacts")
         return None
     log.info("Step 12: Building MCP servers...")
     mcp_script = ctx.project_dir / "mcp" / "build-all-mcps.sh"

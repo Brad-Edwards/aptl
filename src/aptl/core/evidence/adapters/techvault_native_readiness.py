@@ -250,10 +250,8 @@ def _bound_datastore(
 def _redis_persistence(datastore: object | None) -> tuple[bool, str] | None:
     """Project the persistence posture from an admitted Redis datastore."""
 
-    if datastore is None:
-        return None
     engine = getattr(datastore, "engine", "")
-    if str(getattr(engine, "value", engine)) != "redis":
+    if datastore is None or str(getattr(engine, "value", engine)) != "redis":
         return None
     persistence = getattr(datastore, "persistence", None)
     eviction = getattr(persistence, "eviction", None)
@@ -418,15 +416,21 @@ def _owned_attachment_address(backend: object, node: object, name: str) -> str |
     if not isinstance(attachments, Mapping) or len(attachments) != 1:
         return None
     attachment = next(iter(attachments.values()))
-    aliases = attachment.get("Aliases") if isinstance(attachment, Mapping) else None
-    address = attachment.get("IPAddress") if isinstance(attachment, Mapping) else None
-    if (
-        not isinstance(aliases, list)
-        or name not in aliases
-        or not isinstance(address, str)
-    ):
+    return _aliased_attachment_address(attachment, name)
+
+
+def _aliased_attachment_address(attachment: object, name: str) -> str | None:
+    """Accept only an explicitly aliased IP address from one attachment."""
+
+    if not isinstance(attachment, Mapping):
         return None
-    return address
+    aliases = attachment.get("Aliases")
+    address = attachment.get("IPAddress")
+    return (
+        address
+        if isinstance(aliases, list) and name in aliases and isinstance(address, str)
+        else None
+    )
 
 
 def _deployed_node_address(

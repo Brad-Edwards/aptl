@@ -73,20 +73,21 @@ _DOCKER_COMMAND_ACTIONS = frozenset(
 def _safe_command_operation(cmd: list[str]) -> str:
     """Classify a Docker timeout without logging command arguments or secrets."""
 
+    operation = "backend command"
     if not cmd or cmd[0] != "docker":
-        return "backend command"
-    if len(cmd) < 2:
-        return "docker command"
-    verb = cmd[1]
-    if verb in _DOCKER_COMMAND_GROUPS:
-        action = next(
-            (part for part in cmd[2:] if part in _DOCKER_COMMAND_ACTIONS),
-            "command",
-        )
-        return f"docker {verb} {action}"
-    if verb in {"exec", "inspect", "ps", "run", "start", "stop", "kill"}:
-        return f"docker {verb}"
-    return "docker command"
+        return operation
+    operation = "docker command"
+    if len(cmd) >= 2:
+        verb = cmd[1]
+        if verb in _DOCKER_COMMAND_GROUPS:
+            action = next(
+                (part for part in cmd[2:] if part in _DOCKER_COMMAND_ACTIONS),
+                "command",
+            )
+            operation = f"docker {verb} {action}"
+        elif verb in {"exec", "inspect", "ps", "run", "start", "stop", "kill"}:
+            operation = f"docker {verb}"
+    return operation
 
 
 def _timed_out_operation(cmd: list[str], timeout: int | None) -> BackendTimeoutError:

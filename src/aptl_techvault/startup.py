@@ -102,11 +102,13 @@ class TechVaultStartupProvider:
     def observe_runtime(backend: object, node: object) -> dict[tuple[str, ...], object]:
         """Corroborate TechVault's generated cache ACL without exposing it."""
 
-        if getattr(node, "name", "") != "misp-redis":
-            return {}
         runtime = getattr(node, "runtime", None)
         container = getattr(node, "container_name", "")
-        if runtime is None or not container:
+        if (
+            getattr(node, "name", "") != "misp-redis"
+            or runtime is None
+            or not container
+        ):
             return {}
         observed = observe_redis_app_authorizations(backend, container, runtime)
         if observed is None:

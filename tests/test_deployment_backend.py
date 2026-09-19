@@ -35,6 +35,7 @@ from aptl.core.deployment._compose_resource_ownership import (
     ResourceReceipt,
     WorkspaceOwnership,
 )
+from aptl.core.deployment.docker_compose import _safe_command_operation
 from aptl.core.deployment.errors import (
     BackendObservationError,
     BackendSeedError,
@@ -143,6 +144,22 @@ class TestRunRaisesBackendTimeoutError:
         assert "docker compose up timed out after 5s" in caplog.text
         assert secret not in str(failure.value)
         assert secret not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        (["not-docker", "private-token"], "backend command"),
+        (["docker", "private-token"], "docker command"),
+        (["docker", "exec", "private-token"], "docker exec"),
+        (["docker", "compose", "-f", "private-token", "down"], "docker compose down"),
+    ],
+)
+def test_docker_timeout_operation_never_discloses_arguments(command, expected):
+    operation = _safe_command_operation(command)
+
+    assert operation == expected
+    assert "private-token" not in operation
 
 
 def test_container_file_read_rejects_symlink_created_by_docker_cp(

@@ -1,8 +1,9 @@
 """TechVault-local source selection and bounded native log readback helpers.
 
 Only the content-qualified adapter imports these helpers. They select exact
-SDL-declared source/producer combinations and corroborate guest activity;
-they never invent a source or append fabricated log content.
+SDL-declared source/producer combinations, transform supported native configs,
+and corroborate guest activity; they never invent a source or append fabricated
+log content.
 """
 
 from __future__ import annotations
@@ -286,3 +287,121 @@ def _apply_postgres_log_settings(
         ):
             return False
     return True
+
+
+def _rocky_rsyslog_config(original: str) -> str | None:
+    """Use the systemd syslog socket while retaining the distro's output rules."""
+
+    if (
+        'module(load="imuxsock" SysSock.Use="on")' in original
+        and 'module(load="imjournal"' not in original
+    ):
+        return original
+    lines = original.splitlines(keepends=True)
+    bounds = _rsyslog_module_bounds(lines)
+    if bounds is None or not all(
+        path in original
+        for path in ('file="/var/log/secure"', 'file="/var/log/messages"')
+    ):
+        return None
+    imux, journal_end = bounds
+    return "".join(
+        lines[:imux]
+        + ['module(load="imuxsock" SysSock.Use="on")\n']
+        + lines[journal_end + 1 :]
+    )
+
+
+def _rsyslog_module_bounds(lines: list[str]) -> tuple[int, int] | None:
+    """Recognize only the supported adjacent distro input-module blocks."""
+
+    imux = _first_prefixed_line(lines, 'module(load="imuxsock"')
+    imjournal = _first_prefixed_line(lines, 'module(load="imjournal"')
+    if imux is None or imjournal is None or imjournal <= imux:
+        return None
+    imux_end = _module_end(lines, imux, 5, 'SysSock.Use="off")')
+    journal_end = _module_end(lines, imjournal, 7, 'StateFile="imjournal.state")')
+    if imux_end is None or journal_end is None or imjournal - imux_end > 3:
+        return None
+    return imux, journal_end
+
+
+def _first_prefixed_line(lines: list[str], prefix: str) -> int | None:
+    """Find one distro module declaration by its exact line prefix."""
+
+    return next((i for i, line in enumerate(lines) if line.startswith(prefix)), None)
+
+
+def _module_end(lines: list[str], start: int, width: int, marker: str) -> int | None:
+    """Bound how far a supported multiline module declaration may extend."""
+
+    return next(
+        (i for i in range(start, min(start + width, len(lines))) if marker in lines[i]),
+        None,
+    )
+
+
+def _samba_ad_config(original: str) -> str | None:
+    """Add native audit logging without replacing the provisioned AD config."""
+
+    lines = original.splitlines(keepends=True)
+    bounds = _samba_global_bounds(lines)
+    configured = None
+    if bounds is not None:
+        start, end = bounds
+        expected = {
+            "log file": SAMBA_AUDIT_LOG,
+            "log level": "1 auth_audit:5",
+        }
+        present = _samba_logging_present(lines, start, end, expected)
+        if present is not None and all(
+            present.get(key, value) == value for key, value in expected.items()
+        ):
+            if len(present) == len(expected):
+                configured = original
+            else:
+                additions = [
+                    f"\t{key} = {value}\n"
+                    for key, value in expected.items()
+                    if key not in present
+                ]
+                configured = "".join(
+                    lines[: start + 1] + additions + lines[start + 1 :]
+                )
+    return configured
+
+
+def _samba_global_bounds(lines: list[str]) -> tuple[int, int] | None:
+    """Locate exactly one Samba global section without widening its scope."""
+
+    global_headers = [
+        index for index, line in enumerate(lines) if line.strip() == "[global]"
+    ]
+    if len(global_headers) != 1:
+        return None
+    start = global_headers[0]
+    end = next(
+        (
+            index
+            for index in range(start + 1, len(lines))
+            if lines[index].startswith("[")
+        ),
+        len(lines),
+    )
+    return start, end
+
+
+def _samba_logging_present(
+    lines: list[str], start: int, end: int, expected: dict[str, str]
+) -> dict[str, str] | None:
+    """Reject duplicate controlled keys before adding missing log settings."""
+
+    present: dict[str, str] = {}
+    for line in lines[start + 1 : end]:
+        key, separator, value = line.partition("=")
+        key = key.strip().lower()
+        if separator and key in expected:
+            if key in present:
+                return None
+            present[key] = value.strip()
+    return present

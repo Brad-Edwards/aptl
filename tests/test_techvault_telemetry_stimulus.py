@@ -98,6 +98,47 @@ def test_a_missing_declared_source_cannot_be_stimulated(monkeypatch):
     assert backend.commands == []
 
 
+def test_stimulus_without_native_log_growth_does_not_count_as_telemetry(monkeypatch):
+    from aptl.core.evidence.adapters import techvault_telemetry_stimulus
+
+    monkeypatch.setattr(techvault_telemetry_stimulus.time, "sleep", lambda _s: None)
+
+    class NoGrowthBackend(_Backend):
+        def container_exec(self, container, command, *, timeout=None):
+            if command[0] == "logger":
+                self.commands.append((container, tuple(command)))
+                return SimpleNamespace(returncode=0, stdout="")
+            return super().container_exec(container, command, timeout=timeout)
+
+    backend = NoGrowthBackend()
+
+    assert not emit_missing_agent_events(
+        backend,
+        _realization(),
+        ("victim",),
+        {"victim": (_SOURCES["victim"],)},
+        lambda: {"ok": True},
+    )
+
+
+def test_webapp_stimulus_requires_the_declared_endpoint(monkeypatch):
+    from aptl.core.evidence.adapters import techvault_telemetry_stimulus
+
+    monkeypatch.setattr(
+        techvault_telemetry_stimulus, "webapp_endpoint", lambda _realization: None
+    )
+    backend = _Backend()
+
+    assert not emit_missing_agent_events(
+        backend,
+        _realization(),
+        ("webapp",),
+        {"webapp": (_SOURCES["webapp"],)},
+        lambda: {"ok": True},
+    )
+    assert not any(command[0] == "curl" for _container, command in backend.commands)
+
+
 def test_native_owner_stimulates_only_silent_agents_and_waits_for_ingestion(
     monkeypatch,
 ):

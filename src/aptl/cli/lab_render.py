@@ -331,14 +331,14 @@ def emit_lab_access_summary(
     )
     typer.echo("")
     typer.echo("Access:")
-    if dashboard_port is not None and not (
-        caller_reported_no_ports and not live_ports and not active_services
+    if _published_access_port(
+        dashboard_port, caller_reported_no_ports, live_ports, active_services
     ):
         typer.echo(f"  Wazuh Dashboard: https://localhost:{dashboard_port}")
         typer.echo("    username: admin")
         typer.echo("    password: see INDEXER_PASSWORD in .env")
-    if grafana_port is not None and not (
-        caller_reported_no_ports and not live_ports and not active_services
+    if _published_access_port(
+        grafana_port, caller_reported_no_ports, live_ports, active_services
     ):
         typer.echo(f"  Grafana: http://localhost:{grafana_port}")
         typer.echo("    username: admin")
@@ -349,3 +349,16 @@ def emit_lab_access_summary(
             f"    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p {reverse_port}"
         )
     _emit_host_port_remaps(resolved_ports)
+
+
+def _published_access_port(
+    port: int | None,
+    caller_reported_no_ports: bool,
+    live_ports: list[ResolvedPort],
+    active_services: set[str],
+) -> bool:
+    """Never advertise a planned default when neither source observed a port."""
+
+    return port is not None and not (
+        caller_reported_no_ports and not live_ports and not active_services
+    )

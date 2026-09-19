@@ -265,6 +265,19 @@ def test_core_preparation_binds_operator_alias_without_scenario_import(
     assert ctx.raw_env["ADMIN_KEY"] == values["MISP_API_KEY"]
 
 
+def test_core_preparation_rejects_a_missing_declared_operator_alias(tmp_path) -> None:
+    from aptl.core.lab import _LabStartContext, _prepare_scenario_startup
+
+    ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False, raw_env={})
+
+    failure = _prepare_scenario_startup(ctx, _bundle())
+
+    assert failure is not None and not failure.success
+    assert "MISP_API_KEY" in failure.error
+    assert ctx.scenario_startup is None
+    assert not (tmp_path / ".env").exists()
+
+
 def test_seed_environment_uses_receipt_resolved_container_names(tmp_path) -> None:
     from unittest.mock import MagicMock
 

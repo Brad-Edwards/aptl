@@ -265,25 +265,40 @@ def run_scenario_runtime(
         return ["scenario runtime provider selection failed"]
     if provider is None:
         return []
+    return _invoke_runtime_provider(provider, identity, backend, nodes)
+
+
+def _invoke_runtime_provider(
+    provider: object,
+    identity: PackIdentity | None,
+    backend: object,
+    nodes: tuple[object, ...],
+) -> list[str]:
+    """Invoke one selected adapter and normalize its bounded failure list."""
+
     runner = getattr(provider, "realize_runtime", None)
-    if runner is None:
-        return []
-    if not callable(runner):
-        return ["scenario runtime provider is malformed"]
-    try:
-        failures = runner(backend, nodes)
-    except Exception as exc:
-        log.warning(
-            "scenario runtime provider failed: selector=%s exception=%s",
-            identity.pack_id,
-            type(exc).__name__,
-        )
-        return ["scenario runtime provider failed"]
-    if not isinstance(failures, list) or any(
-        not isinstance(item, str) or not item for item in failures
-    ):
-        return ["scenario runtime provider returned an invalid result"]
-    return failures
+    result: list[str] = []
+    if runner is not None:
+        if not callable(runner):
+            result = ["scenario runtime provider is malformed"]
+        else:
+            try:
+                failures = runner(backend, nodes)
+            except Exception as exc:
+                log.warning(
+                    "scenario runtime provider failed: selector=%s exception=%s",
+                    getattr(identity, "pack_id", ""),
+                    type(exc).__name__,
+                )
+                result = ["scenario runtime provider failed"]
+            else:
+                if not isinstance(failures, list) or any(
+                    not isinstance(item, str) or not item for item in failures
+                ):
+                    result = ["scenario runtime provider returned an invalid result"]
+                else:
+                    result = failures
+    return result
 
 
 def observe_scenario_runtime_concerns(
@@ -298,21 +313,7 @@ def observe_scenario_runtime_concerns(
     particular, core never guesses a product's authorization semantics.
     """
 
-    try:
-        provider = _runtime_provider(identity)
-        observer = getattr(provider, "observe_runtime", None) if provider else None
-        if observer is None:
-            return {}
-        if not callable(observer):
-            raise ScenarioStartupProviderError("provider-malformed")
-        observed = observer(backend, node)
-    except Exception as exc:
-        log.warning(
-            "scenario runtime observation failed: selector=%s exception=%s",
-            getattr(identity, "pack_id", ""),
-            type(exc).__name__,
-        )
-        return {}
+    observed = _observe_runtime_provider(identity, backend, node)
     kinds_by_path = {path: kind for kind, path in CONCERN_PAYLOAD_PATH.items()}
     if not isinstance(observed, dict) or any(
         not isinstance(path, tuple) or path not in kinds_by_path or value is None
@@ -325,6 +326,28 @@ def observe_scenario_runtime_concerns(
     except (TypeError, ValueError):
         return {}
     return observed
+
+
+def _observe_runtime_provider(
+    identity: PackIdentity | None, backend: object, node: object
+) -> object | None:
+    """Read one qualified adapter result, leaving validation to the caller."""
+
+    try:
+        provider = _runtime_provider(identity)
+        observer = getattr(provider, "observe_runtime", None) if provider else None
+        if observer is None:
+            return None
+        if not callable(observer):
+            raise ScenarioStartupProviderError("provider-malformed")
+        return observer(backend, node)
+    except Exception as exc:
+        log.warning(
+            "scenario runtime observation failed: selector=%s exception=%s",
+            getattr(identity, "pack_id", ""),
+            type(exc).__name__,
+        )
+        return None
 
 
 def seed_script_path(project_dir: Path, plan: ScenarioStartupPlan) -> Path:

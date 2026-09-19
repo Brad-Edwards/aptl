@@ -246,6 +246,26 @@ def test_rocky_provider_rejects_a_service_that_never_becomes_active(
     assert "rsyslog service did not start" in failures[0]
 
 
+def test_rocky_provider_rejects_an_unexpected_syslog_service_alias(scenario):
+    class WrongAliasBackend(_Backend):
+        def container_exec(self, name, cmd, *, timeout=None):
+            if cmd == ["test", "-L", "/etc/systemd/system/syslog.service"]:
+                return SimpleNamespace(returncode=0, stdout="")
+            if cmd == ["readlink", "-f", "/etc/systemd/system/syslog.service"]:
+                return SimpleNamespace(returncode=0, stdout="/other/service\n")
+            return super().container_exec(name, cmd, timeout=timeout)
+
+    backend = WrongAliasBackend()
+
+    failures = realize_log_sources(backend, (_node(scenario, "victim"),))
+
+    assert len(failures) == 1
+    assert "syslog socket service alias is unexpected" in failures[0]
+    assert not any(
+        cmd == ("systemctl", "daemon-reload") for _name, cmd in backend.commands
+    )
+
+
 def test_rhel_wazuh_base_installs_the_syslog_producer_before_network_isolation():
     dockerfile = (
         Path(__file__).resolve().parents[1]
@@ -303,6 +323,25 @@ def test_samba_provider_preserves_exact_pack_config_and_uses_native_audit_class(
     assert not any(cmd[:1] == ("touch",) for cmd in argvs)
 
 
+def test_samba_provider_rejects_a_failed_service_override_write(scenario):
+    class FailedOverrideBackend(_Backend):
+        def container_exec_with_input(self, name, cmd, payload, *, timeout=None):
+            super().container_exec_with_input(name, cmd, payload, timeout=timeout)
+            return SimpleNamespace(returncode=1, stdout="")
+
+    backend = FailedOverrideBackend()
+
+    failures = realize_log_sources(
+        backend, (_node(scenario, "fileshare"), _node(scenario, "kali"))
+    )
+
+    assert len(failures) == 1
+    assert "Samba service override failed" in failures[0]
+    assert not any(
+        cmd[:2] == ("systemctl", "restart") for _name, cmd in backend.commands
+    )
+
+
 def test_domain_samba_config_is_idempotent_and_rejects_conflicting_log_authority():
     original = "# Global parameters\n[global]\n\trealm = TECHVAULT.LOCAL\n\n[sysvol]\n\tpath = /var/lib/samba/sysvol\n"
 
@@ -314,6 +353,15 @@ def test_domain_samba_config_is_idempotent_and_rejects_conflicting_log_authority
     assert _samba_ad_config(configured) == configured
     assert (
         _samba_ad_config(original.replace("[global]\n", "[global]\n\tlog level = 9\n"))
+        is None
+    )
+    assert (
+        _samba_ad_config(
+            original.replace(
+                "[global]\n",
+                "[global]\n\tlog level = 1 auth_audit:5\n\tlog level = 1 auth_audit:5\n",
+            )
+        )
         is None
     )
 

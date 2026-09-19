@@ -124,6 +124,9 @@ build = [
 [project.entry-points."aptl.scenario_runtime_parameters"]
 "techvault" = "aptl_techvault.runtime_parameters:provider"
 
+[project.entry-points."aptl.scenario_startup"]
+"techvault" = "aptl_techvault.startup:provider"
+
 [project.entry-points."aptl.scenario_verifiers"]
 "techvault.aptl" = "aptl_techvault.verification:verifier"
 

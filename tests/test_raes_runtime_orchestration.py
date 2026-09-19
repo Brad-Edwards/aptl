@@ -663,7 +663,11 @@ def test_public_plan_binds_authority_before_artifact_availability(
     from aptl.backends import raes
 
     calls: list[str] = []
-    bundle = SimpleNamespace(sdl_path=tmp_path / "scenario.yaml", root=tmp_path)
+    bundle = SimpleNamespace(
+        sdl_path=tmp_path / "scenario.yaml",
+        root=tmp_path,
+        pack_identity=None,
+    )
     scenario = SimpleNamespace(nodes={})
     monkeypatch.setattr(raes, "resolve_scenario_bundle", lambda *_args: bundle)
     monkeypatch.setattr(raes, "parse_sdl_file", lambda _path: scenario)

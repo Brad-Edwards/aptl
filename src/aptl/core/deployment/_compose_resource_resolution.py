@@ -233,13 +233,17 @@ class ComposeResourceResolutionMixin:
             ownership = self._ensure_resource_ownership()
             failures = []
             for receipt in ownership.receipts("volume"):
-                if not self._raw_volume_inspect(receipt.native_id):
+                if self._raw_volume_inspect(receipt.native_id):
+                    volume = self._resolve_owned_volume_name(receipt.native_id)
+                    if self._run(
+                        ["docker", "volume", "rm", volume], timeout=_DOCKER_TIMEOUT
+                    ).returncode:
+                        failures.append("failed to remove receipt-owned volume")
+                        continue
+                if self._raw_volume_inspect(receipt.native_id):
+                    failures.append("failed to verify receipt-owned volume removal")
                     continue
-                volume = self._resolve_owned_volume_name(receipt.native_id)
-                if self._run(
-                    ["docker", "volume", "rm", volume], timeout=_DOCKER_TIMEOUT
-                ).returncode:
-                    failures.append("failed to remove receipt-owned volume")
+                ownership.retire_deleted_volume(receipt)
             return failures
         except (OwnershipConflictError, BackendTimeoutError, OSError):
             return ["failed to establish volume cleanup authority"]
@@ -316,6 +320,10 @@ class ComposeResourceResolutionMixin:
             raise BackendSeedError(
                 f"failed to recover owned base container for node {spec.node_address}"
             )
+        for logical_volume in dict.fromkeys(
+            mount.source for mount in spec.volume_mounts
+        ):
+            self._ensure_labeled_project_volume(logical_volume)
         command = self._base_container_create_command(
             spec,
             network_bindings,

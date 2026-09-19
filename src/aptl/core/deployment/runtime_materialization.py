@@ -8,14 +8,12 @@ from aptl.core.deployment._runtime_materialization_qualification import (
 )
 from aptl.core.deployment._runtime_materialization_types import (
     SHARED_DOCKER_PROFILE,
-    RuntimeContainmentEvidence,
     RuntimeMaterializationIssue,
     RuntimeMaterializationProfile,
 )
 
 __all__ = [
     "SHARED_DOCKER_PROFILE",
-    "RuntimeContainmentEvidence",
     "RuntimeMaterializationIssue",
     "RuntimeMaterializationProfile",
     "effective_runtime_contract_issues",

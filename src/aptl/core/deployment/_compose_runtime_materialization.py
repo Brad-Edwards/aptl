@@ -72,22 +72,12 @@ class ComposeRuntimeMaterializationMixin:
     ) -> LabResult | None:
         """Qualify the complete runtime graph without creating backend state."""
 
-        target_qualification = getattr(
-            self,
-            "_qualify_runtime_materialization_target",
-            None,
-        )
-        failure = (
-            target_qualification() if target_qualification is not None else None
-        )
         profile = self._runtime_materialization_profile(realization)
-        if failure is None:
-            issues = qualify_runtime_materialization(
-                realization,
-                profile=profile,
-                policy=self._runtime_authority_policy,
-            )
-            failure = _issues_failure(issues)
+        issues = qualify_runtime_materialization(
+            realization,
+            profile=profile,
+        )
+        failure = _issues_failure(issues)
         if failure is None:
             failure = self._rendered_runtime_contract_failure(realization, profile)
         if failure is None and scenario_root is not None:

@@ -42,6 +42,7 @@ from aptl.core.env import (
     find_placeholder_env_values,
     hydrate_dotenv,
     load_dotenv,
+    update_dotenv_values,
 )
 
 # Re-export the lifecycle DTO types from the leaf module (#266 + ADR-030).
@@ -102,6 +103,7 @@ if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.experiment.capture_plan import CapturePlan
     from aptl.core.experiment.capture_registry import CaptureBinding
+    from aptl.core.scenario_bundle import ScenarioBundle
 
 log = get_logger("lab")
 
@@ -932,6 +934,9 @@ class _LabStartContext(object):
     # use sites to keep the RAES import lazy.
     admitted_start: object = None
     admitted_surface: "AdmittedStartSurface | None" = None
+    # Optional content-identified startup enrichment selected through the
+    # installed scenario adapter. Core treats the validated plan generically.
+    scenario_startup: object = None
     # Required native evidence is acquired after service readiness and retained
     # here so the run record can reference the exact persisted capture set.
     native_evidence_acquisition: object = None
@@ -1341,7 +1346,56 @@ def _load_admitted_start_surface(
         ctx.admitted_surface = surface
         ctx.selected_profiles = set(surface.selected_profiles)
         ctx.stateful_artifact_ownership = surface.stateful_artifact_ownership
+        failure = _prepare_scenario_startup(ctx, admitted.bundle)
     return failure
+
+
+def _prepare_scenario_startup(
+    ctx: _LabStartContext, bundle: "ScenarioBundle"
+) -> LabResult | None:
+    """Resolve optional pack startup behavior and bind credential aliases."""
+
+    from aptl.backends.scenario_startup import (
+        ScenarioStartupProviderError,
+        resolve_scenario_startup,
+    )
+
+    try:
+        plan = resolve_scenario_startup(bundle)
+        if plan is None:
+            return None
+        missing = sorted(
+            alias.source
+            for alias in plan.environment_aliases
+            if not ctx.raw_env.get(alias.source)
+        )
+        if missing:
+            return LabResult(
+                success=False,
+                error=(
+                    "Scenario startup adapter requires unavailable operator "
+                    f"environment source(s): {', '.join(missing)}."
+                ),
+            )
+        updates = {
+            alias.target: ctx.raw_env[alias.source]
+            for alias in plan.environment_aliases
+        }
+        changed = update_dotenv_values(ctx.project_dir / ".env", updates)
+        if changed:
+            log.info(
+                "Applied %d scenario startup environment binding(s)", len(changed)
+            )
+        ctx.raw_env = load_dotenv(ctx.project_dir / ".env")
+        ctx.env = env_vars_from_dict(ctx.raw_env)
+        ctx.scenario_startup = plan
+    except (OSError, ValueError, ScenarioStartupProviderError):
+        log.warning("Scenario startup adapter preparation failed")
+        return LabResult(
+            success=False,
+            error="Scenario startup adapter preparation failed.",
+        )
+    return None
 
 
 def _ssh_key_step_failure(result: SSHKeyResult, what: str) -> LabResult | None:
@@ -2805,26 +2859,7 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
     return None
 
 
-# Issue #214: the prime scenario seed (`scripts/seed-prime.sh`) provisions
-# TheHive cases, MISP feeds, and Shuffle workflows that span the full
-# prime profile set. ADR-005 supports selective SOC labs (e.g. SOC + Wazuh
-# without fileshare), so a missing prime profile must NOT fatally refuse
-# lab startup — it just means the prime seed cannot meaningfully run, and
-# the lab should come up with SOC empty plus a CAPABILITY diagnostic.
-# Kept module-level as a stable constant: the seed gate below diffs it
-# directly against `ctx.selected_profiles`, the scenario-realized surface
-# (issue #550 — not the config ceiling), and a future operation (e.g. an
-# explicit `aptl scenario prime start` entrypoint) can still wire the same
-# set into a hard `_runtime_require` via the config-bound
-# `required_profiles_enabled` predicate in `aptl.core.contracts` without
-# redefining it.
-_PRIME_REQUIRED_PROFILES = frozenset(
-    {"wazuh", "enterprise", "victim", "kali", "fileshare", "soc"}
-)
-
-_SEED_SOC_RERUN_ACTION = (
-    "Re-run scripts/seed-prime.sh manually once SOC containers are healthy"
-)
+_SEED_SOC_RERUN_ACTION = "Re-run the selected scenario seed once services are healthy"
 
 
 @_runtime_require(
@@ -2832,54 +2867,56 @@ _SEED_SOC_RERUN_ACTION = (
     description="config_is_loaded(ctx.config)",
 )
 def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
-    """Seed SOC tools when the configured profile set can support it."""
+    """Run optional adapter-owned scenario seeding after service readiness."""
+    from aptl.backends.scenario_startup import ScenarioStartupPlan
+
+    plan = ctx.scenario_startup
+    if not isinstance(plan, ScenarioStartupPlan):
+        return None
     if ctx.skip_seed:
-        log.info("Step 13: Skipping SOC seeding (--skip-seed)")
+        log.info("Step 13: Skipping scenario seeding (--skip-seed)")
     else:
-        log.info("Step 13: Seeding SOC tools...")
-        # Runtime guard above.
-        assert ctx.config is not None
-        if "soc" not in ctx.selected_profiles:
-            log.debug("SOC profile not selected by this scenario, skipping seed")
-        elif not _PRIME_REQUIRED_PROFILES.issubset(ctx.selected_profiles):
-            _emit_missing_prime_profiles(ctx)
+        log.info("Step 13: Seeding selected scenario...")
+        required = set(plan.required_profiles)
+        if set(plan.activation_profiles).isdisjoint(ctx.selected_profiles):
+            log.debug("Scenario seed profiles are not selected; skipping seed")
+        elif not required.issubset(ctx.selected_profiles):
+            _emit_missing_seed_profiles(ctx, required)
         else:
-            _run_seed_soc_script(ctx)
+            _run_scenario_seed_script(ctx, plan)
     return None
 
 
-def _emit_missing_prime_profiles(ctx: _LabStartContext) -> None:
-    """Emit the non-fatal diagnostic for a selected-but-incomplete prime set.
+def _emit_missing_seed_profiles(
+    ctx: _LabStartContext, required_profiles: set[str]
+) -> None:
+    """Emit a non-fatal diagnostic for an incomplete adapter seed surface."""
 
-    Diffs against ``ctx.selected_profiles`` — the scenario-realized
-    surface — not the config ceiling: a profile can be missing here
-    because the selected scenario never included it, not only because it
-    is disabled in ``aptl.json`` (issue #550), so the operator guidance
-    below must name both possible causes.
-    """
-    missing = sorted(_PRIME_REQUIRED_PROFILES - ctx.selected_profiles)
+    missing = sorted(required_profiles - ctx.selected_profiles)
     _emit_diagnostic(
         ctx,
         step="seed_soc",
         impact=DiagnosticImpact.CAPABILITY,
         severity=DiagnosticSeverity.WARNING,
         message=(
-            "Prime SOC seed needs the full prime profile set; "
+            "Scenario seed needs its full profile set; "
             f"missing: {', '.join(missing)}. SOC tools will start empty."
         ),
         operator_action=(
-            "Enable the missing prime profiles in aptl.json if they are "
+            "Enable the missing profiles in aptl.json if they are "
             "disabled, or start a scenario that selects them — the "
             "current scenario may intentionally omit them. Alternatively "
-            "run `scripts/seed-prime.sh` manually once the prime stack "
-            "is up."
+            "re-run the selected scenario seed once its services are up."
         ),
     )
 
 
-def _run_seed_soc_script(ctx: _LabStartContext) -> None:
-    """Run ``seed-prime.sh`` and convert soft failures to diagnostics."""
-    seed_script = ctx.project_dir / "scripts" / "seed-prime.sh"
+def _run_scenario_seed_script(ctx: _LabStartContext, plan: object) -> None:
+    """Run one validated adapter script and convert soft failures to diagnostics."""
+    from aptl.backends.scenario_startup import ScenarioStartupPlan, seed_script_path
+
+    assert isinstance(plan, ScenarioStartupPlan)
+    seed_script = seed_script_path(ctx.project_dir, plan)
     if not seed_script.exists():
         log.warning("SOC profile enabled but seed script not found at %s", seed_script)
         _emit_diagnostic(
@@ -2888,19 +2925,39 @@ def _run_seed_soc_script(ctx: _LabStartContext) -> None:
             impact=DiagnosticImpact.CAPABILITY,
             severity=DiagnosticSeverity.WARNING,
             message=(
-                "SOC profile enabled but seed-prime.sh not found; "
+                "Scenario seed script was not found; "
                 "SOC tools will start empty"
             ),
             operator_action=(
-                "Restore scripts/seed-prime.sh and re-run it once SOC "
-                "containers are healthy"
+                "Restore the installed scenario assets and re-run the seed once "
+                "services are healthy"
             ),
         )
     else:
-        _execute_seed_soc_script(ctx, seed_script)
+        _execute_seed_soc_script(ctx, seed_script, plan)
 
 
-def _execute_seed_soc_script(ctx: _LabStartContext, seed_script: Path) -> None:
+def _scenario_seed_environment(ctx: _LabStartContext, plan: object) -> dict[str, str]:
+    """Return receipt-resolved, non-secret container bindings for one seed."""
+    from aptl.backends.scenario_startup import ScenarioStartupPlan
+
+    assert isinstance(plan, ScenarioStartupPlan)
+    if plan.container_environment and ctx.backend is None:
+        raise OSError("deployment backend is unavailable")
+    environment = {**os.environ, **ctx.raw_env}
+    for binding in plan.container_environment:
+        assert ctx.backend is not None
+        info = ctx.backend.container_inspect(binding.semantic_name)
+        external_name = info.get("Name") if isinstance(info, Mapping) else None
+        if not isinstance(external_name, str) or not external_name.strip("/"):
+            raise OSError("scenario seed container binding is unavailable")
+        environment[binding.variable] = external_name.removeprefix("/")
+    return environment
+
+
+def _execute_seed_soc_script(
+    ctx: _LabStartContext, seed_script: Path, plan: object
+) -> None:
     """Execute the SOC seed script and emit non-fatal diagnostics."""
     try:
         from aptl.utils.shell import run_shell_script
@@ -2908,7 +2965,7 @@ def _execute_seed_soc_script(ctx: _LabStartContext, seed_script: Path) -> None:
         seed_result = run_shell_script(
             seed_script,
             cwd=ctx.project_dir,
-            env={**os.environ, **ctx.raw_env},
+            env=_scenario_seed_environment(ctx, plan),
             timeout=1200,
         )
         if seed_result.returncode != 0:
@@ -2941,7 +2998,7 @@ def _execute_seed_soc_script(ctx: _LabStartContext, seed_script: Path) -> None:
             impact=DiagnosticImpact.CAPABILITY,
             severity=DiagnosticSeverity.WARNING,
             message="SOC seeding could not run; see lab logs",
-            operator_action=("Inspect scripts/seed-prime.sh permissions and tooling"),
+            operator_action=("Inspect the selected scenario seed assets and tooling"),
         )
 
 

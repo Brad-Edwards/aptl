@@ -95,8 +95,9 @@ class TechVaultNativeEvidenceOwner:
         self._now = selected_dependencies.now
         self._sleep = selected_dependencies.sleep
         self._cortex_url = published_url(realization, "cortex", 9001, "http")
-        self._thehive_url = published_url(realization, "thehive", 9000, "https")
-        self._thehive_ca_cert = str(project_dir / "config/soc_certs/lab-ca.pem")
+        # The pinned pack declares this listener as HTTP. Legacy static
+        # Compose's TLS projection is not authority over the selected SDL.
+        self._thehive_url = published_url(realization, "thehive", 9000, "http")
         self._indexer_url = published_url(realization, "wazuh-indexer", 9200, "https")
         self._connector_key = generated_output(
             realization,
@@ -238,7 +239,6 @@ class TechVaultNativeEvidenceOwner:
             connector = self._request_json(
                 f"{thehive_url}/api/v1/status",
                 auth_header=f"Bearer {self._thehive_api_key}",
-                ca_cert_path=self._thehive_ca_cert,
                 timeout=30,
             )
             if connector_projection(connector) is not None:

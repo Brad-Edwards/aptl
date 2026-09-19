@@ -14,13 +14,11 @@ the admitted RAES plan gives that same node an exact, read-write Docker
 continues to apply.
 
 Issue #956's
-[runtime-authority containment preflight](issue-956-sdl-runtime-authority-containment-preflight.md)
-governs the broader realization boundary. In particular, this note's `soc`,
-management-only shape, absent-port/network-join, and unprivileged-holder rules
-are limitations of the shared local Docker implementation described here, not
-universal SDL restrictions. Preserve this note's exact joins, image identity,
-observation, and lifecycle machinery when a stronger contained target supports
-broader authored authority.
+[runtime-authority materialization preflight](issue-956-sdl-runtime-authority-materialization-preflight.md)
+governs the broader realization boundary. In particular, SDL runtime authority
+is realized by ordinary `aptl lab start`; it is not narrowed to create a secure
+host boundary. `aptl seat start` owns the secure appliance boundary. Preserve
+this note's exact joins, image identity, observation, and lifecycle machinery.
 
 ## Architecture Decisions
 

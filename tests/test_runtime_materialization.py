@@ -1,4 +1,4 @@
-"""Runtime-authority materialization and containment regression tests (#956)."""
+"""Runtime-authority materialization regression tests (#956)."""
 
 from __future__ import annotations
 
@@ -7,12 +7,10 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 from raes.runtime_configuration import RuntimeConfiguration
 
 from aptl.core.deployment._compose_node_generation import _operational_config
 from aptl.core.deployment.docker_compose import DockerComposeBackend
-from aptl.core.deployment.ssh_compose import SSHComposeBackend
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
     DeploymentNodeRealization,
@@ -20,31 +18,16 @@ from aptl.core.deployment.realization import (
 )
 from aptl.core.deployment.runtime_materialization import (
     SHARED_DOCKER_PROFILE,
-    RuntimeContainmentEvidence,
     RuntimeMaterializationProfile,
     effective_runtime_contract_issues,
     qualify_runtime_materialization,
 )
-from aptl.core.runtime_authority_policy import (
-    RuntimeAuthorityPolicy,
-    load_runtime_authority_policy,
-)
 from aptl.core.scenario_bundle import PackIdentity
 from aptl.runtime_authority import DeploymentDockerAuthorityAdmission
-from aptl.utils.pathsafe import PathContainmentError
 
 
 _DIGEST_A = "sha256:" + "a" * 64
-_DIGEST_B = "sha256:" + "b" * 64
-_QUALIFIED_PROFILE = RuntimeMaterializationProfile(
-    name="test-qualified-docker",
-    containment_evidence=RuntimeContainmentEvidence(
-        profile_id="test-only-profile",
-        target_identity="test-only-target",
-        boundary_attestation_ref="test-only-attestation",
-        negative_probe_ref="test-only-negative-probe",
-    ),
-)
+_QUALIFIED_PROFILE = RuntimeMaterializationProfile(name="test-compose")
 
 
 def _node(runtime: RuntimeConfiguration, *, image_backed: bool = True):
@@ -75,7 +58,6 @@ def _spec(
     *,
     image_backed: bool = True,
     authority: bool = False,
-    pack_digest: str = _DIGEST_A,
 ) -> DeploymentRealizationSpec:
     node, images = _node(runtime, image_backed=image_backed)
     admissions = ()
@@ -101,77 +83,8 @@ def _spec(
         networks=(),
         images=images,
         docker_authority_admissions=admissions,
-        pack_identity=PackIdentity("fixture", "1.0.0", pack_digest),
+        pack_identity=PackIdentity("fixture", "1.0.0", _DIGEST_A),
     )
-
-
-def _policy_payload(*, pack_digest: str = _DIGEST_A) -> dict[str, object]:
-    return {
-        "schema_version": "aptl.runtime-authority-policy/v1",
-        "target": {
-            "profile_id": "fixture-isolated-daemon",
-            "provider": "ssh-compose",
-            "ssh_host": "range.example.test",
-            "daemon_id": "daemon-fixture",
-            "endpoint_source": "/var/run/docker.sock",
-        },
-        "grants": [
-            {
-                "pack_id": "fixture",
-                "pack_version": "1.0.0",
-                "pack_set_digest": pack_digest,
-                "component_address": "provision.node.workload",
-                "authority_id": "authority",
-                "endpoint_source": "/var/run/docker.sock",
-                "image_template_ids": ["worker", "app"],
-                "delegated_template_ids": ["worker"],
-            }
-        ],
-    }
-
-
-def test_runtime_authority_policy_is_strict_and_delegation_only_narrows() -> None:
-    payload = _policy_payload()
-    payload["grants"][0]["delegated_template_ids"] = ["unknown"]
-
-    with pytest.raises(ValidationError, match="delegated"):
-        RuntimeAuthorityPolicy.model_validate(payload)
-
-    payload = _policy_payload()
-    payload["unexpected"] = True
-    with pytest.raises(ValidationError, match="unexpected"):
-        RuntimeAuthorityPolicy.model_validate(payload)
-
-    payload = _policy_payload()
-    payload["target"]["ssh_host"] = "localhost"
-    with pytest.raises(ValidationError, match="remote non-loopback"):
-        RuntimeAuthorityPolicy.model_validate(payload)
-
-
-def test_runtime_authority_policy_loads_nofollow_and_absence_means_zero_grants(
-    tmp_path: Path,
-) -> None:
-    assert load_runtime_authority_policy(tmp_path, None).grants == ()
-
-    policy_path = tmp_path / "policy.json"
-    policy_path.write_text(json.dumps(_policy_payload()), encoding="utf-8")
-    policy = load_runtime_authority_policy(tmp_path, "policy.json")
-    assert policy.target.daemon_id == "daemon-fixture"
-
-    link = tmp_path / "policy-link.json"
-    link.symlink_to(policy_path)
-    with pytest.raises(PathContainmentError):
-        load_runtime_authority_policy(tmp_path, "policy-link.json")
-
-
-def test_backend_runtime_authority_policy_cannot_be_replaced(tmp_path: Path) -> None:
-    backend = DockerComposeBackend(tmp_path)
-    policy = RuntimeAuthorityPolicy.empty()
-
-    backend.configure_runtime_authority_policy(policy)
-
-    with pytest.raises(ValueError, match="already configured"):
-        backend.configure_runtime_authority_policy(policy)
 
 
 def test_compose_lowering_preserves_supported_runtime_security_fields() -> None:
@@ -244,7 +157,7 @@ def test_compose_lowering_preserves_supported_runtime_security_fields() -> None:
     }
 
 
-def test_shared_daemon_rejects_high_authority_with_precise_limitation() -> None:
+def test_shared_daemon_accepts_faithfully_lowerable_privilege() -> None:
     runtime = RuntimeConfiguration.model_validate(
         {"container": {"privileged": True}}
     )
@@ -252,17 +165,12 @@ def test_shared_daemon_rejects_high_authority_with_precise_limitation() -> None:
     issues = qualify_runtime_materialization(
         _spec(runtime),
         profile=SHARED_DOCKER_PROFILE,
-        policy=RuntimeAuthorityPolicy.empty(),
     )
 
-    assert len(issues) == 1
-    assert issues[0].node_address == "provision.node.workload"
-    assert issues[0].field == "runtime.container.privileged"
-    assert issues[0].backend_profile == "shared-docker"
-    assert "isolated" in issues[0].limitation
+    assert issues == ()
 
 
-def test_shared_daemon_rejects_authored_host_bind_as_escape_surface() -> None:
+def test_shared_daemon_accepts_faithfully_lowerable_host_bind() -> None:
     runtime = RuntimeConfiguration.model_validate(
         {
             "mounts": [
@@ -279,12 +187,9 @@ def test_shared_daemon_rejects_authored_host_bind_as_escape_surface() -> None:
     issues = qualify_runtime_materialization(
         _spec(runtime),
         profile=SHARED_DOCKER_PROFILE,
-        policy=RuntimeAuthorityPolicy.empty(),
     )
 
-    assert len(issues) == 1
-    assert issues[0].field == "runtime.mounts[0]"
-    assert "isolated" in issues[0].limitation
+    assert issues == ()
 
 
 def test_effective_model_rejects_undeclared_host_bind_without_runtime_fields() -> None:
@@ -363,7 +268,6 @@ def test_generic_substrate_rejects_non_volume_mount_before_materialization() -> 
     issues = qualify_runtime_materialization(
         _spec(runtime, image_backed=False),
         profile=_QUALIFIED_PROFILE,
-        policy=RuntimeAuthorityPolicy.model_validate(_policy_payload()),
     )
 
     assert len(issues) == 1
@@ -379,7 +283,6 @@ def test_generic_substrate_rejects_unimplemented_field_before_materialization() 
     issues = qualify_runtime_materialization(
         _spec(runtime, image_backed=False),
         profile=_QUALIFIED_PROFILE,
-        policy=RuntimeAuthorityPolicy.model_validate(_policy_payload()),
     )
 
     assert len(issues) == 1
@@ -387,7 +290,7 @@ def test_generic_substrate_rejects_unimplemented_field_before_materialization() 
     assert "generic substrate" in issues[0].limitation
 
 
-def test_isolated_profile_accepts_faithful_image_backed_authority() -> None:
+def test_shared_profile_accepts_faithful_image_backed_authority() -> None:
     runtime = RuntimeConfiguration.model_validate(
         {
             "container": {
@@ -401,14 +304,12 @@ def test_isolated_profile_accepts_faithful_image_backed_authority() -> None:
             },
         }
     )
-    policy = RuntimeAuthorityPolicy.model_validate(_policy_payload())
-
     assert qualify_runtime_materialization(
-        _spec(runtime), profile=_QUALIFIED_PROFILE, policy=policy
+        _spec(runtime), profile=SHARED_DOCKER_PROFILE
     ) == ()
 
 
-def test_operator_grant_does_not_rewrite_or_filter_authored_runtime() -> None:
+def test_admission_does_not_rewrite_or_filter_authored_runtime() -> None:
     runtime = RuntimeConfiguration.model_validate(
         {
             "container": {
@@ -427,8 +328,7 @@ def test_operator_grant_does_not_rewrite_or_filter_authored_runtime() -> None:
 
     issues = qualify_runtime_materialization(
         spec,
-        profile=_QUALIFIED_PROFILE,
-        policy=RuntimeAuthorityPolicy.model_validate(_policy_payload()),
+        profile=SHARED_DOCKER_PROFILE,
     )
 
     assert issues == ()
@@ -441,19 +341,15 @@ def test_operator_grant_does_not_rewrite_or_filter_authored_runtime() -> None:
     assert config["cap_drop"] == ["CHOWN"]
 
 
-def test_raw_socket_requires_exact_grant_and_pack_digest() -> None:
+def test_declared_raw_socket_authority_is_accepted_on_normal_lab_backend() -> None:
     runtime = RuntimeConfiguration.model_validate({})
-    policy = RuntimeAuthorityPolicy.model_validate(_policy_payload())
 
     issues = qualify_runtime_materialization(
-        _spec(runtime, authority=True, pack_digest=_DIGEST_B),
-        profile=_QUALIFIED_PROFILE,
-        policy=policy,
+        _spec(runtime, authority=True),
+        profile=SHARED_DOCKER_PROFILE,
     )
 
-    assert len(issues) == 1
-    assert issues[0].field == "runtime.orchestration_authorities"
-    assert "grant" in issues[0].limitation
+    assert issues == ()
 
 
 def test_unsupported_compose_field_is_never_silently_dropped() -> None:
@@ -464,7 +360,6 @@ def test_unsupported_compose_field_is_never_silently_dropped() -> None:
     issues = qualify_runtime_materialization(
         _spec(runtime),
         profile=_QUALIFIED_PROFILE,
-        policy=RuntimeAuthorityPolicy.model_validate(_policy_payload()),
     )
 
     assert len(issues) == 1
@@ -491,7 +386,6 @@ def test_unimplemented_capability_dimensions_are_never_silently_dropped(
     issues = qualify_runtime_materialization(
         _spec(runtime),
         profile=_QUALIFIED_PROFILE,
-        policy=RuntimeAuthorityPolicy.model_validate(_policy_payload()),
     )
 
     assert len(issues) == 1
@@ -615,109 +509,3 @@ def test_static_undeclared_host_bind_is_rejected_before_ownership(
     assert ownership_calls == []
     assert "field=runtime.mounts" in result.error
     assert "undeclared runtime authority" in result.error
-
-
-def _isolated_backend(tmp_path: Path) -> SSHComposeBackend:
-    backend = SSHComposeBackend(
-        tmp_path,
-        host="range.example.test",
-        user="aptl",
-    )
-    backend.configure_runtime_authority_policy(
-        RuntimeAuthorityPolicy.model_validate(_policy_payload())
-    )
-    return backend
-
-
-def _exclusive_daemon_run(argv: list[str], **_kwargs: object):
-    if argv[:3] == ["docker", "info", "--format"]:
-        output = "daemon-fixture\n"
-    elif argv[:3] == ["docker", "ps", "-aq"]:
-        output = ""
-    elif argv[:4] == ["docker", "volume", "ls", "-q"]:
-        output = ""
-    elif argv[:4] == ["docker", "network", "ls", "--format"]:
-        output = "bridge\nhost\nnone\n"
-    else:  # pragma: no cover - makes new qualification probes explicit
-        raise AssertionError(argv)
-    return subprocess.CompletedProcess(argv, 0, output, "")
-
-
-def test_empty_ssh_daemon_does_not_claim_contained_high_authority(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runtime = RuntimeConfiguration.model_validate(
-        {
-            "container": {
-                "privileged": True,
-                "security_opt": ["seccomp=unconfined"],
-                "namespaces": {"pid": "host"},
-            }
-        }
-    )
-    backend = _isolated_backend(tmp_path)
-    monkeypatch.setattr(backend, "_run", _exclusive_daemon_run)
-
-    failure = backend._runtime_materialization_preflight(
-        _spec(runtime, authority=True)
-    )
-
-    assert failure is not None
-    assert "backend=shared-docker" in failure.error
-    assert "isolated scenario-exclusive daemon" in failure.error
-    assert backend._runtime_containment_evidence == {
-        "daemon_id": "daemon-fixture",
-        "provider": "ssh-compose",
-        "containment_profile": "shared-docker",
-        "foreign_containers": 0,
-        "foreign_volumes": 0,
-        "foreign_networks": 0,
-    }
-
-
-def test_isolated_target_rejects_foreign_daemon_resources_as_escape_surface(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    backend = _isolated_backend(tmp_path)
-
-    def run_with_foreign_volume(argv: list[str], **kwargs: object):
-        result = _exclusive_daemon_run(argv, **kwargs)
-        if argv[:4] == ["docker", "volume", "ls", "-q"]:
-            return subprocess.CompletedProcess(argv, 0, "operator-secrets\n", "")
-        return result
-
-    monkeypatch.setattr(backend, "_run", run_with_foreign_volume)
-
-    failure = backend._runtime_materialization_preflight(
-        _spec(RuntimeConfiguration.model_validate({}), authority=True)
-    )
-
-    assert failure is not None
-    assert failure.success is False
-    assert failure.error == (
-        "Isolated Docker target contains foreign volumes; refusing runtime authority."
-    )
-    assert backend._runtime_containment_evidence == {}
-
-
-def test_isolated_target_revalidates_exact_daemon_identity(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    backend = _isolated_backend(tmp_path)
-    daemon_ids = iter(["daemon-fixture\n", "replacement-daemon\n"])
-
-    def changing_daemon(argv: list[str], **kwargs: object):
-        if argv[:3] == ["docker", "info", "--format"]:
-            return subprocess.CompletedProcess(argv, 0, next(daemon_ids), "")
-        return _exclusive_daemon_run(argv, **kwargs)
-
-    monkeypatch.setattr(backend, "_run", changing_daemon)
-
-    assert backend.bind_local_docker_socket().success is True
-    result = backend.revalidate_local_docker_socket()
-
-    assert result.success is False
-    assert result.error == "Docker control endpoint identity changed."

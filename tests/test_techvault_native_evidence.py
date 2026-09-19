@@ -145,6 +145,8 @@ def _request(url, **kwargs):
             "report": {"full": {"scenario_role": "attacker", "secret": "drop"}},
         }
     if url.endswith("/api/v1/status"):
+        assert url.startswith("http://127.0.0.1:9000/")
+        assert "ca_cert_path" not in kwargs
         return {"services": [{"name": "Cortex", "status": "OK"}]}
     if url.endswith("/_search"):
         return {
@@ -220,9 +222,8 @@ def test_cortex_owner_uses_runtime_thehive_api_key_without_admin_fallback(tmp_pa
     assert result.status is CollectorStatus.OK
     status_request = next(item for item in requests if item[0].endswith("/status"))
     assert status_request[1]["auth_header"] == "Bearer operator-api-key"
-    assert status_request[1]["ca_cert_path"] == str(
-        tmp_path / "config/soc_certs/lab-ca.pem"
-    )
+    assert status_request[0].startswith("http://127.0.0.1:9000/")
+    assert "ca_cert_path" not in status_request[1]
 
 
 def test_cortex_owner_polls_until_thehive_connector_refreshes(tmp_path):

@@ -6,6 +6,7 @@ directly.
 """
 
 import os
+import re
 import secrets
 import string
 import tempfile
@@ -58,6 +59,7 @@ class DotenvHydrationResult:
 
 _ALNUM = string.ascii_letters + string.digits
 _EXPORT_PREFIX = "export "
+_ENVIRONMENT_VARIABLE_NAME = re.compile(r"[A-Za-z_]\w*", flags=re.ASCII)
 _WAZUH_FILEBEAT_TEMPLATE = Path("config/wazuh_cluster/filebeat_wazuh_module.yml")
 _WAZUH_DASHBOARD_TEMPLATE = Path("config/wazuh_dashboard/wazuh.yml")
 
@@ -265,6 +267,49 @@ def _write_dotenv(path: Path, content: str) -> None:
     finally:
         if tmp_path.exists():
             tmp_path.unlink()
+
+
+def update_dotenv_values(path: Path, updates: dict[str, str]) -> tuple[str, ...]:
+    """Atomically apply validated values while preserving unrelated dotenv lines.
+
+    This is the generic credential-boundary write used by content-identified
+    scenario adapters.  Callers supply already-resolved values; neither names
+    nor secret bytes are logged or returned.
+    """
+
+    if any(
+        _ENVIRONMENT_VARIABLE_NAME.fullmatch(key) is None
+        or "\n" in value
+        or "\r" in value
+        for key, value in updates.items()
+    ):
+        raise ValueError("invalid dotenv update")
+    if not updates:
+        return ()
+
+    original = path.read_text(encoding="utf-8") if path.exists() else ""
+    current = load_dotenv(path) if path.exists() else {}
+    changed = tuple(sorted(key for key, value in updates.items() if current.get(key) != value))
+    if not changed:
+        return ()
+
+    pending = set(updates)
+    lines: list[str] = []
+    for line in original.splitlines():
+        key = _line_key(line)
+        if key in updates:
+            lines.append(_assignment(key, updates[key]))
+            pending.discard(key)
+        else:
+            lines.append(line)
+    if pending:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.append("# Added by the selected scenario startup adapter.")
+        lines.extend(_assignment(key, updates[key]) for key in sorted(pending))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _write_dotenv(path, "\n".join(lines) + "\n")
+    return changed
 
 
 def hydrate_dotenv(path: Path) -> DotenvHydrationResult:

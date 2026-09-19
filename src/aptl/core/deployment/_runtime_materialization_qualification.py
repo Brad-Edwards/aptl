@@ -2,18 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import PurePosixPath
-
-from aptl.core.deployment._runtime_materialization_authority import authority_issues
 from aptl.core.deployment._runtime_materialization_types import (
     RuntimeMaterializationIssue,
     RuntimeMaterializationProfile,
     materialization_issue,
 )
 from aptl.core.deployment.realization import DeploymentRealizationSpec
-from aptl.core.runtime_authority_policy import RuntimeAuthorityPolicy
-
-_DOCKER_SOCKET = "/var/run/docker.sock"
 _COMPOSE_FIELDS = frozenset(
     {
         "entrypoint",
@@ -42,20 +36,6 @@ _COMPOSE_FIELDS = frozenset(
 _COMPOSE_UNSUPPORTED_FIELDS = frozenset(
     {"masked_paths", "read_only_paths", "publish_all_ports"}
 )
-_HIGH_AUTHORITY_CONTAINER_FIELDS = frozenset(
-    {
-        "privileged",
-        "namespaces",
-        "devices",
-        "device_cgroup_rules",
-        "seccomp_profile",
-        "security_opt",
-        "cgroup_parent",
-        "runtime_name",
-    }
-)
-
-
 def _present(value: object) -> bool:
     """Whether a runtime value selects material state rather than omission."""
 
@@ -226,38 +206,6 @@ def _unsupported_container_issue(
     )
 
 
-def _high_authority_container_issue(
-    address: str,
-    fields: dict[str, object],
-    capabilities: object | None,
-    profile: RuntimeMaterializationProfile,
-) -> RuntimeMaterializationIssue | None:
-    """Require independent containment for high-authority settings."""
-
-    selected = next(
-        (name for name in fields if name in _HIGH_AUTHORITY_CONTAINER_FIELDS), None
-    )
-    if (
-        selected is None
-        and capabilities is not None
-        and getattr(capabilities, "add", ())
-    ):
-        selected = "linux_capabilities"
-    if selected is None or profile.containment_evidence is not None:
-        return None
-    field = (
-        "runtime.linux_capabilities"
-        if selected == "linux_capabilities"
-        else f"runtime.container.{selected}"
-    )
-    return materialization_issue(
-        address,
-        field,
-        profile,
-        "requires an independently qualified isolated execution target",
-    )
-
-
 def _container_issues(
     node: object,
     *,
@@ -283,7 +231,6 @@ def _container_issues(
                 _namespace_issue(address, runtime, profile),
                 _custom_init_issue(address, runtime, profile),
                 _unsupported_container_issue(address, fields, profile),
-                _high_authority_container_issue(address, fields, capabilities, profile),
             )
             if candidate is not None
         ),
@@ -359,28 +306,6 @@ def _mount_propagation_issue(
     )
 
 
-def _mount_authority_issue(
-    address: str,
-    field: str,
-    mount: object,
-    profile: RuntimeMaterializationProfile,
-) -> RuntimeMaterializationIssue | None:
-    """Require an exact authority grant or independent containment for binds."""
-
-    kind = _enum_value(getattr(mount, "source_kind", ""))
-    source = str(getattr(mount, "source", "") or "")
-    if kind != "bind":
-        return None
-    limitation = (
-        "Docker control access requires an exact orchestration-authority grant"
-        if PurePosixPath(source) == PurePosixPath(_DOCKER_SOCKET)
-        else "host bind access requires an independently qualified isolated execution target"
-    )
-    if source != _DOCKER_SOCKET and profile.containment_evidence is not None:
-        return None
-    return materialization_issue(address, field, profile, limitation)
-
-
 def _mount_issue(
     node: object,
     index: int,
@@ -405,7 +330,6 @@ def _mount_issue(
                     profile=profile,
                 ),
                 _mount_propagation_issue(address, field, mount, profile),
-                _mount_authority_issue(address, field, mount, profile),
             )
             if candidate is not None
         ),
@@ -443,7 +367,6 @@ def qualify_runtime_materialization(
     realization: DeploymentRealizationSpec,
     *,
     profile: RuntimeMaterializationProfile,
-    policy: RuntimeAuthorityPolicy,
 ) -> tuple[RuntimeMaterializationIssue, ...]:
     """Qualify the complete graph without mutating deployment state."""
 
@@ -466,5 +389,4 @@ def qualify_runtime_materialization(
             profile=profile,
         )
     )
-    issues.extend(authority_issues(realization, profile=profile, policy=policy))
     return tuple(issues)

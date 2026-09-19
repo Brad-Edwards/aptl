@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -23,6 +24,7 @@ from aptl.utils.pathsafe import (
     PathContainmentError,
     create_exclusive_nofollow,
     listdir_contained_nofollow,
+    open_dir_contained_nofollow,
     read_contained_nofollow,
 )
 
@@ -203,6 +205,35 @@ class WorkspaceOwnership:
                 "immutable ownership receipt is unavailable"
             ) from exc
 
+    def retire_deleted_volume(self, receipt: ResourceReceipt) -> None:
+        """Retire a verified receipt only after teardown proved its volume absent.
+
+        Docker volume names are reusable native identifiers. A completed
+        ``stop -v`` removes the old object, so retaining its receipt would
+        make the next clean start conflict with the new attempt's identity.
+        The caller must first verify native absence; this method rechecks the
+        exact receipt bytes and removes only its contained file.
+        """
+
+        if (
+            receipt.kind != "volume"
+            or receipt.workspace_id != self.workspace_id
+            or receipt.project_name != self.project_name
+        ):
+            raise OwnershipConflictError("volume receipt scope mismatch")
+        relative = self._receipt_path("volume", receipt.native_id)
+        try:
+            if read_contained_nofollow(self.root, relative) != _receipt_bytes(receipt):
+                raise OwnershipConflictError("immutable ownership receipt conflicts")
+            directory_fd = open_dir_contained_nofollow(self.root, relative.parent)
+            try:
+                os.unlink(relative.name, dir_fd=directory_fd)
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+        except (OSError, PathContainmentError) as exc:
+            raise OwnershipConflictError("volume receipt retirement failed") from exc
+
     def receipts(self, kind: str) -> tuple[ResourceReceipt, ...]:
         """Load all strict receipts for one native resource kind."""
 
@@ -290,6 +321,7 @@ def write_compose_ownership_override(
     overrides, semantic_by_service, external_by_semantic = _service_overrides(
         ownership, services, labels
     )
+    _add_receipted_container_names(ownership, external_by_semantic)
     _scope_container_network_modes(services, overrides, external_by_semantic)
     network_overrides, expected_networks = _resource_overrides(
         ownership, networks, labels=labels
@@ -303,7 +335,10 @@ def write_compose_ownership_override(
         **({"volumes": volume_overrides} if volume_overrides else {}),
     }
     payload = yaml.safe_dump(document, sort_keys=True).encode("utf-8")
-    digest = hashlib.sha256(attempt_id.encode("utf-8")).hexdigest()[:16]
+    # A bounded apply retry can add direct-container receipts before writing a
+    # new override. Both versions remain immutable, but they cannot share a
+    # path merely because the start attempt is the same.
+    digest = hashlib.sha256(attempt_id.encode("utf-8") + payload).hexdigest()[:16]
     relative = Path(".aptl/lifecycle/compose-ownership") / f"{digest}.yml"
     _write_override_payload(ownership.root, relative, payload)
     expected = {
@@ -339,6 +374,25 @@ def _service_overrides(
             "labels": labels,
         }
     return overrides, semantic_by_service, external_by_semantic
+
+
+def _add_receipted_container_names(
+    ownership: WorkspaceOwnership,
+    external_by_semantic: dict[str, str],
+) -> None:
+    """Add directly materialized containers to reference rewriting.
+
+    A Compose-managed sidecar may join the network namespace of an image-free
+    node that was started directly by the generic materializer. That node is
+    absent from the final Compose file set, so its immutable ownership receipt
+    is the authoritative semantic-to-external-name mapping.
+    """
+
+    for receipt in ownership.receipts("container"):
+        existing = external_by_semantic.get(receipt.semantic_name)
+        if existing is not None and existing != receipt.external_name:
+            raise OwnershipConflictError("container semantic binding conflicts")
+        external_by_semantic[receipt.semantic_name] = receipt.external_name
 
 
 def _scope_container_network_modes(

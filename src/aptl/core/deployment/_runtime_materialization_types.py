@@ -6,21 +6,10 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class RuntimeContainmentEvidence:
-    """Independent boundary evidence carried by a qualified backend profile."""
-
-    profile_id: str
-    target_identity: str
-    boundary_attestation_ref: str
-    negative_probe_ref: str
-
-
-@dataclass(frozen=True)
 class RuntimeMaterializationProfile:
-    """The selected backend's proven runtime-authority capability envelope."""
+    """The selected backend's runtime-materialization capability envelope."""
 
     name: str
-    containment_evidence: RuntimeContainmentEvidence | None = None
 
 
 SHARED_DOCKER_PROFILE = RuntimeMaterializationProfile(name="shared-docker")

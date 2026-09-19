@@ -12,7 +12,6 @@ from pathlib import Path
 
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment.errors import BackendTimeoutError
-from aptl.core.deployment._ssh_runtime_authority import SSHRuntimeAuthorityMixin
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.ssh_compose")
@@ -22,7 +21,7 @@ _HOST_RE = re.compile(r"^[\w.\-]+$|^\[[\w:]+\]$")
 _USER_RE = re.compile(r"^[\w\-]+$")
 
 
-class SSHComposeBackend(SSHRuntimeAuthorityMixin, DockerComposeBackend):
+class SSHComposeBackend(DockerComposeBackend):
     """SSH Remote Docker Compose deployment backend.
 
     Extends DockerComposeBackend to run all Docker commands against a
@@ -70,8 +69,6 @@ class SSHComposeBackend(SSHRuntimeAuthorityMixin, DockerComposeBackend):
         self._docker_host = f"ssh://{user}@{host}"
         if ssh_port != 22:
             self._docker_host = f"ssh://{user}@{host}:{ssh_port}"
-        self._remote_target_qualified = False
-        self._runtime_containment_evidence: dict[str, object] = {}
 
     @property
     def host(self) -> str:

@@ -467,9 +467,17 @@ def test_volume_cleanup_uses_receipt_and_never_prefix_discovery(tmp_path: Path) 
         ]
     )
 
+    present = True
+
     def fake_run(argv, **_kwargs):
-        stdout = inspected if argv[:3] == ["docker", "volume", "inspect"] else ""
-        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+        nonlocal present
+        if argv[:3] == ["docker", "volume", "rm"]:
+            present = False
+        inspect_cmd = argv[:3] == ["docker", "volume", "inspect"]
+        stdout = inspected if inspect_cmd and present else ""
+        return subprocess.CompletedProcess(
+            argv, 0 if not inspect_cmd or present else 1, stdout=stdout, stderr=""
+        )
 
     backend._run = MagicMock(side_effect=fake_run)
 
@@ -477,6 +485,35 @@ def test_volume_cleanup_uses_receipt_and_never_prefix_discovery(tmp_path: Path) 
     commands = [call.args[0] for call in backend._run.call_args_list]
     assert ["docker", "volume", "rm", volume] in commands
     assert all("ls" not in command for command in commands)
+    assert ownership.receipts("volume") == ()
+
+
+def test_clean_volume_cleanup_retires_already_absent_receipt(tmp_path: Path) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl")
+    ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+    backend._docker_daemon_id = "daemon-a"
+    volume = f"{ownership.project_name}_data"
+    receipt = ResourceReceipt(
+        kind="volume",
+        native_id=volume,
+        external_name=volume,
+        semantic_name="data",
+        node_address="data",
+        workspace_id=ownership.workspace_id,
+        project_name=ownership.project_name,
+        daemon_id="daemon-a",
+        attempt_id="run-a",
+    )
+    ownership.record(receipt)
+    backend._run = MagicMock(
+        return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="")
+    )
+
+    assert backend._remove_owned_volumes() == []
+    assert ownership.receipts("volume") == ()
+
+    ownership.record(ResourceReceipt(**{**receipt.__dict__, "attempt_id": "run-b"}))
+    assert ownership.receipts("volume")[0].attempt_id == "run-b"
 
 
 def test_isolated_daemon_children_are_receipted_before_observation(
@@ -549,6 +586,44 @@ volumes:
     assert override["volumes"]["data"]["labels"]["aptl.workspace.id"] == (
         ownership.workspace_id
     )
+
+
+def test_compose_override_scopes_network_mode_to_receipted_direct_container(
+    tmp_path: Path,
+) -> None:
+    compose = tmp_path / "docker-compose.yml"
+    compose.write_text(
+        """services:
+  capture:
+    image: example.invalid/capture:1
+    network_mode: container:aptl-kali
+"""
+    )
+    ownership = WorkspaceOwnership.ensure(tmp_path, "aptl")
+    direct_name = ownership.container_name("aptl-kali")
+    ownership.record(
+        ResourceReceipt(
+            kind="container",
+            native_id=_ID_A,
+            external_name=direct_name,
+            semantic_name="aptl-kali",
+            node_address="provision.node.kali",
+            workspace_id=ownership.workspace_id,
+            project_name=ownership.project_name,
+            daemon_id="daemon-a",
+            attempt_id="run-a",
+        )
+    )
+
+    override_path, _semantic, expected = write_compose_ownership_override(
+        ownership, attempt_id="run-a", compose_files=(compose,)
+    )
+
+    override = yaml.safe_load(override_path.read_text(encoding="utf-8"))
+    assert override["services"]["capture"]["network_mode"] == (
+        f"container:{direct_name}"
+    )
+    assert direct_name in expected["container"]
 
 
 @pytest.mark.parametrize("kind", ["network", "volume"])

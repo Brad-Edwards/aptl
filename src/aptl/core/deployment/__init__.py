@@ -37,7 +37,6 @@ from aptl.core.deployment.realization import (
     DeploymentStatefulConsumer,
 )
 from aptl.core.deployment.ssh_compose import SSHComposeBackend
-from aptl.core.runtime_authority_policy import load_runtime_authority_policy
 
 if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
@@ -87,17 +86,11 @@ def get_backend(
     """
     provider = config.deployment.provider
     project_name = config.deployment.project_name
-    policy = load_runtime_authority_policy(
-        project_dir,
-        config.deployment.runtime_authority_policy,
-    )
-
     if provider == "docker-compose":
         return DockerComposeBackend(
             project_dir=project_dir,
             project_name=project_name,
             offline_staged=offline_staged,
-            runtime_authority_policy=policy,
         )
 
     if provider == "ssh-compose":
@@ -110,7 +103,7 @@ def get_backend(
             raise ValueError("deployment.ssh_host is required for ssh-compose provider")
         if not dep.ssh_user:
             raise ValueError("deployment.ssh_user is required for ssh-compose provider")
-        backend = SSHComposeBackend(
+        return SSHComposeBackend(
             project_dir=project_dir,
             host=dep.ssh_host,
             user=dep.ssh_user,
@@ -119,8 +112,6 @@ def get_backend(
             remote_dir=dep.remote_dir,
             project_name=project_name,
         )
-        backend.configure_runtime_authority_policy(policy)
-        return backend
 
     raise ValueError(
         f"Unknown deployment provider: {provider!r}. "

@@ -74,6 +74,15 @@ def _admitted_surface(
     )
 
 
+def _admitted_start_fixture(bundle_root: Path):
+    """Model a non-pack admission without invoking scenario-specific adapters."""
+    from aptl.core.scenario_bundle import project_tree_bundle
+
+    return SimpleNamespace(
+        bundle=project_tree_bundle(bundle_root, bundle_root / "fixture.sdl.yaml")
+    )
+
+
 def _raes_start_after_backend_retry(
     *_args,
     before_backend_retry=None,
@@ -1631,7 +1640,10 @@ class TestOrchestrateLabStart:
         )
         mocks["admit"] = mocker.patch(
             "aptl.core.lab.admit_start_surface",
-            return_value=(object(), mocks["admitted_surface"]),
+            return_value=(
+                _admitted_start_fixture(pack_root),
+                mocks["admitted_surface"],
+            ),
         )
 
         # Mock RAES runtime handoff start. The planned profile set is part of
@@ -2212,7 +2224,10 @@ class TestAdmittedStartSurface:
         ctx = self._ctx(tmp_path)
         admit = mocker.patch(
             "aptl.core.lab.admit_start_surface",
-            return_value=(object(), _admitted_surface(tmp_path / "pack")),
+            return_value=(
+                _admitted_start_fixture(tmp_path / "pack"),
+                _admitted_surface(tmp_path / "pack"),
+            ),
         )
 
         assert _load_admitted_start_surface(ctx) is None
@@ -2227,7 +2242,10 @@ class TestAdmittedStartSurface:
         ctx = self._ctx(tmp_path, scenario_path=selected)
         admit = mocker.patch(
             "aptl.core.lab.admit_start_surface",
-            return_value=(object(), _admitted_surface(tmp_path, env_pack=False)),
+            return_value=(
+                _admitted_start_fixture(tmp_path),
+                _admitted_surface(tmp_path, env_pack=False),
+            ),
         )
 
         assert _load_admitted_start_surface(ctx) is None
@@ -2239,7 +2257,7 @@ class TestAdmittedStartSurface:
         from aptl.core.lab import _load_admitted_start_surface
 
         ctx = self._ctx(tmp_path)
-        admitted = object()
+        admitted = _admitted_start_fixture(tmp_path / "pack")
         surface = _admitted_surface(
             tmp_path / "pack",
             selected_profiles=("otel",),
@@ -2976,6 +2994,7 @@ class TestStartupClassificationWiring:
         )
 
     def _ctx(self, tmp_path, *, config=None, selected_profiles=None):
+        from aptl.backends.scenario_startup import ScenarioStartupPlan
         from aptl.core.lab import _LabStartContext
 
         cfg = config or self._make_config()
@@ -2994,6 +3013,18 @@ class TestStartupClassificationWiring:
             ssh_key_path=Path("/tmp/aptl_lab_key"),
             selected_profiles=selected_profiles,
             backend=MagicMock(),
+            scenario_startup=ScenarioStartupPlan(
+                seed_script="scripts/seed-prime.sh",
+                required_profiles=(
+                    "wazuh",
+                    "enterprise",
+                    "victim",
+                    "kali",
+                    "fileshare",
+                    "soc",
+                ),
+                activation_profiles=("soc",),
+            ),
         )
 
     # -- redaction at the diagnostic boundary --------------------------
@@ -5097,17 +5128,10 @@ class TestStopLabCleanupIsContractFree:
 
 
 class TestSeedSocPrimeProfileDiagnostic:
-    """Soft check against `_PRIME_REQUIRED_PROFILES`, diffed against
-    `ctx.selected_profiles` (the scenario-realized surface, issue #550) at
-    the SOC seed boundary. ADR-005 supports selective SOC labs, so a
-    missing prime profile must NOT fatally refuse lab startup — it
-    surfaces as a CAPABILITY diagnostic and the step returns None. The
-    config-bound `required_profiles_enabled` predicate in
-    `aptl.core.contracts` remains available as a hard contract for a
-    future explicit prime-scenario entrypoint; this boundary uses plain
-    set containment against the selected surface instead."""
+    """Soft checks use the adapter's required scenario profile surface."""
 
     def _ctx(self, tmp_path: Path, *, soc: bool, selected_profiles=None, **extra):
+        from aptl.backends.scenario_startup import ScenarioStartupPlan
         from aptl.core.config import AptlConfig
         from aptl.core.env import EnvVars
         from aptl.core.lab import _LabStartContext
@@ -5131,6 +5155,18 @@ class TestSeedSocPrimeProfileDiagnostic:
             ),
             config=cfg,
             selected_profiles=selected_profiles,
+            scenario_startup=ScenarioStartupPlan(
+                seed_script="scripts/seed-prime.sh",
+                required_profiles=(
+                    "wazuh",
+                    "enterprise",
+                    "victim",
+                    "kali",
+                    "fileshare",
+                    "soc",
+                ),
+                activation_profiles=("soc",),
+            ),
         )
 
     def test_partial_prime_set_emits_capability_diagnostic(self, tmp_path):

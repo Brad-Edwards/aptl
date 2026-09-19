@@ -161,30 +161,36 @@ def _write_metadata_member(
     target.chmod(0o400)
 
 
+def _extract_metadata_members(archive: tarfile.TarFile, destination: Path) -> None:
+    """Validate member paths and cumulative size before writing each member."""
+
+    seen: set[PurePosixPath] = set()
+    total_size = 0
+    members = archive.getmembers()
+    if not members or len(members) > _MAX_METADATA_MEMBERS:
+        raise ValueError("invalid member count")
+    for member in members:
+        relative = _metadata_member_path(member)
+        if relative is None:
+            continue
+        if relative in seen:
+            raise ValueError("duplicate member")
+        seen.add(relative)
+        if member.isreg():
+            total_size += member.size
+            if total_size > _MAX_METADATA_BYTES:
+                raise ValueError("metadata is too large")
+        _write_metadata_member(archive, member, destination, relative)
+
+
 def _extract_metadata_archive(payload: bytes, destination: Path) -> None:
     """Extract a bounded regular-file-only metadata archive into a new directory."""
 
     if not payload or len(payload) > _MAX_METADATA_BYTES:
         raise AppliancePublicInstallError("public release metadata archive is invalid")
-    seen: set[PurePosixPath] = set()
-    total_size = 0
     try:
         with tarfile.open(fileobj=io.BytesIO(payload), mode="r:") as archive:
-            members = archive.getmembers()
-            if not members or len(members) > _MAX_METADATA_MEMBERS:
-                raise ValueError("invalid member count")
-            for member in members:
-                relative = _metadata_member_path(member)
-                if relative is None:
-                    continue
-                if relative in seen:
-                    raise ValueError("duplicate member")
-                seen.add(relative)
-                if member.isreg():
-                    total_size += member.size
-                    if total_size > _MAX_METADATA_BYTES:
-                        raise ValueError("metadata is too large")
-                _write_metadata_member(archive, member, destination, relative)
+            _extract_metadata_members(archive, destination)
     except AppliancePublicInstallError:
         raise
     except (OSError, tarfile.TarError, ValueError) as exc:

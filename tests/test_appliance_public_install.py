@@ -108,20 +108,22 @@ def test_public_release_install_rejects_unsafe_metadata_member(tmp_path: Path) -
     release_key.write_text("release-public")
     qualification_key.write_text("qualification-public")
 
+    selection = PublicReleaseSelection(
+        repository="Brad-Edwards/aptl",
+        tag="v5.5.0",
+        release_id="aptl-v5.5.0-x86_64",
+    )
+    dependencies = PublicReleaseInstallDependencies(
+        fetch_metadata=lambda *_args, **_kwargs: payload.getvalue()
+    )
     with pytest.raises(AppliancePublicInstallError, match="metadata archive"):
         install_public_release(
-            selection=PublicReleaseSelection(
-                repository="Brad-Edwards/aptl",
-                tag="v5.5.0",
-                release_id="aptl-v5.5.0-x86_64",
-            ),
+            selection=selection,
             release_public_key=release_key,
             qualification_public_key=qualification_key,
             seat_root=tmp_path / "seat",
             cache_dir=tmp_path / "cache",
-            dependencies=PublicReleaseInstallDependencies(
-                fetch_metadata=lambda *_args, **_kwargs: payload.getvalue()
-            ),
+            dependencies=dependencies,
         )
 
     assert not (tmp_path / "outside").exists()

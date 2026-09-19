@@ -19,7 +19,9 @@ from aptl.core.evidence.adapters.techvault_native_support import (
 class TechVaultNativeCortexMixin:
     """Provide the bounded Cortex/TheHive query owned by TechVault evidence."""
 
-    def cortex_query(self, start_iso: str, end_iso: str) -> Mapping[str, object] | None:
+    def cortex_query(
+        self, _start_iso: str, _end_iso: str
+    ) -> Mapping[str, object] | None:
         """Execute the exact analyzer and read TheHive's connector status."""
 
         prerequisites = self._cortex_prerequisites()

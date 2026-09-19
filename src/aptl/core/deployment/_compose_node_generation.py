@@ -33,9 +33,7 @@ from aptl.core.deployment._compose_runtime_orchestration import (
     docker_socket_volume,
 )
 from aptl.core.deployment._compose_node_topology import (
-    dynamic_ip_range as _dynamic_ip_range,
     network_namespace_container as _network_namespace_container,
-    pinned_addresses_by_network as _pinned_addresses_by_network,
     render_networks as _render_networks,
     service_dependencies as _service_dependencies,
     service_networks as _service_networks,

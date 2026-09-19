@@ -76,6 +76,7 @@ def wazuh_agent_readiness(
     if context is None:
         return None
     declared, roster, recorded = context
+    observation_window = (start_iso, end_iso)
     hosts = [
         _wazuh_host_readiness(
             execute,
@@ -84,8 +85,7 @@ def wazuh_agent_readiness(
             sources,
             roster,
             recorded,
-            start_iso,
-            end_iso,
+            observation_window,
         )
         for node, (enrollment_name, sources) in sorted(declared.items())
     ]
@@ -131,8 +131,7 @@ def _wazuh_host_readiness(
     sources: tuple[str, ...],
     roster: tuple[tuple[str, str, str], ...],
     recorded: dict[str, str],
-    start_iso: str,
-    end_iso: str,
+    observation_window: tuple[str, str],
 ) -> dict[str, object] | None:
     """Correlate one host with its unique member, telemetry, and baseline."""
 
@@ -141,7 +140,7 @@ def _wazuh_host_readiness(
     if len(members) != 1 or identity is None:
         return None
     _name, agent_id, status = members[0]
-    events = telemetry_events(execute, agent_id, start_iso, end_iso)
+    events = telemetry_events(execute, agent_id, *observation_window)
     if events is None:
         return None
     host_id = str(identity.get("agent_id", ""))

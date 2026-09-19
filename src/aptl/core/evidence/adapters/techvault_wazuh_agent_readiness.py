@@ -98,9 +98,7 @@ def _readiness_document(
 ) -> bytes | None:
     """Encode a complete per-host readiness payload within its bound."""
 
-    if payload is None:
-        return None
-    hosts = payload.get("hosts")
+    hosts = payload.get("hosts") if payload is not None else None
     if not isinstance(hosts, Sequence) or isinstance(hosts, (str, bytes)):
         return None
     rows = [host for host in hosts if isinstance(host, Mapping)]

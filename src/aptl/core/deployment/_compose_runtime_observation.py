@@ -11,7 +11,6 @@ from aptl.core.deployment._compose_runtime_observation_helpers import (
     authority_mount_is_valid as _authority_mount_is_valid,
     child_query as _child_query,
     container_ids as _container_ids,
-    inspect_environment as _inspect_environment,
     inspect_has_endpoint_override as _inspect_has_endpoint_override,
     inspect_has_socket_route as _inspect_has_socket_route,
     inspect_is_privileged as _inspect_is_privileged,

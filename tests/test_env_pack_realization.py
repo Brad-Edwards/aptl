@@ -669,7 +669,9 @@ def test_network_without_pinned_addresses_emits_no_ip_range():
 def test_pinned_address_in_the_dynamic_half_fails_loudly():
     """A pin that would still collide with the dynamic pool raises, not silently ships."""
 
-    from aptl.core.deployment._compose_node_generation import _dynamic_ip_range
+    from aptl.core.deployment._compose_node_topology import (
+        dynamic_ip_range as _dynamic_ip_range,
+    )
 
     with pytest.raises(ValueError, match="no longer isolates"):
         _dynamic_ip_range("172.20.0.0/24", "172.20.0.1", {"172.20.0.200"})
@@ -966,9 +968,7 @@ def test_pack_script_content_for_an_image_node_is_staged_executable(
         )
     )
 
-    override = image_node_content_override(
-        spec, tmp_path / "pack", tmp_path / "engine"
-    )
+    override = image_node_content_override(spec, tmp_path / "pack", tmp_path / "engine")
 
     source = Path(override["services"]["tempo"]["volumes"][0]["source"])
     assert source.stat().st_mode & 0o111 == 0o111

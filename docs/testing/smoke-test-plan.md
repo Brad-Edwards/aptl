@@ -176,16 +176,20 @@ and a bounded recent-event view without credentials or session data.
 
 ### QA-DETECT: Attack and expected Wazuh rule
 
-Open a Kali shell with `aptl container shell aptl-kali`. Send a SQL-injection
-request to the realized TechVault portal:
+Use the generated `.mcp.json` configuration with an MCP client to call
+`mcp-red`'s `kali_run_command`. Direct `aptl container shell aptl-kali` is
+refused while required capture is active; a separate SSH command would not
+create the MCP-side session-census entry required by transcript finalization.
+Send this SQL-injection request from the realized Kali target:
 
 ```bash
-curl -sf 'http://172.20.1.20:8080/login?username=admin%27%20UNION%20SELECT%201,2,3--&password=x'
+curl -sf -o /dev/null -w '%{http_code}\n' 'http://172.20.1.20:8080/login?username=admin%27%20UNION%20SELECT%201,2,3--&password=x'
 ```
 
 In Wazuh, find the resulting alert within the test time window.
 
-Expected: the alert is attributable to this action and the expected custom
+Expected: `kali_run_command` reports target-backed success and HTTP `200`;
+the alert is attributable to this action and the expected custom
 Wazuh rule is `302010` (SQL injection). Capture the action time, source, alert
 id, rule id, description, and event time.
 
@@ -272,7 +276,10 @@ name, index pattern, query bounds, and matching document id.
 ### QA-MCP-SOAR: `mcp-soar`
 
 Use the SOAR tools to list/get the real-alert workflow and retrieve or execute
-the `QA-SOAR` run with the recorded real alert data.
+the `QA-SOAR` run with the recorded real alert data. For
+`soar_execute_workflow`, pass the alert object itself as `body`; wrapping it
+in `{"execution_argument": ...}` makes the workflow receive a nested object
+and leaves `$exec.rule.id` and the other alert fields empty.
 
 Expected: the live Shuffle target returns the same workflow and a terminal
 successful execution. Capture the tool names, workflow id, execution id, alert

@@ -20,6 +20,12 @@ from aptl.backends.scenario_startup_policy import (
     _validated_policy,
     write_scenario_startup_override,
 )
+from aptl.backends.scenario_service_policy import (
+    ScenarioComposeServicePolicy,
+    ServiceFileMount,
+    _resolved_services as resolve_service_policy,
+    write_scenario_service_override,
+)
 import pytest
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
@@ -110,6 +116,97 @@ def test_qualified_techvault_policy_waits_for_declared_healthy_dependencies(
         )
         is None
     )
+
+
+def test_qualified_techvault_service_policy_binds_generated_tls_files(tmp_path) -> None:
+    spec = _startup_spec()
+    shuffle_nodes = tuple(
+        DeploymentNodeRealization(
+            address=f"provision.node.{name}",
+            name=name,
+            service_name=name,
+            container_name=f"aptl-{name}",
+            networks=("security-net",),
+        )
+        for name in ("shuffle-frontend", "shuffle-orborus")
+    )
+    shuffle_images = tuple(
+        DeploymentImageRealization(
+            address=node.address,
+            service_name=node.service_name or "",
+            source_name=node.name,
+            source_version="test",
+            image_ref=f"example/{node.name}:test",
+            mode="pull",
+            policy_rule="test",
+        )
+        for node in shuffle_nodes
+    )
+    spec = DeploymentRealizationSpec(
+        profiles=spec.profiles,
+        nodes=(*spec.nodes, *shuffle_nodes),
+        networks=spec.networks,
+        images=(*spec.images, *shuffle_images),
+        pack_identity=spec.pack_identity,
+    )
+    for name in (
+        "config/soc_certs/shuffle-frontend/server.pem",
+        "config/soc_certs/shuffle-frontend/server.key",
+        "config/soc_certs/thehive/keystore.p12",
+        "config/soc_certs/thehive/keystore.p12.password",
+        "config/thehive/application.conf",
+    ):
+        target = tmp_path / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("test", encoding="utf-8")
+
+    resolver = lambda name: f"workspace-{name}"
+    path = write_scenario_service_override(
+        spec, tmp_path, container_name_for_semantic=resolver
+    )
+    assert path is not None
+    services = yaml.safe_load(path.read_text(encoding="utf-8"))["services"]
+    assert {item["target"] for item in services["thehive"]["volumes"]} == {
+        "/etc/thehive/keystore.p12",
+        "/etc/thehive/application.conf",
+    }
+    assert {item["target"] for item in services["shuffle-frontend"]["volumes"]} == {
+        "/etc/nginx/fullchain.cert.pem",
+        "/etc/nginx/privkey.pem",
+    }
+    assert services["thehive"]["env_file"] == [
+        str(tmp_path / "config/soc_certs/thehive/keystore.p12.password")
+    ]
+    assert services["shuffle-orborus"]["environment"] == {
+        "ORBORUS_CONTAINER_NAME": "workspace-aptl-shuffle-orborus"
+    }
+    assert all(
+        item["read_only"] is True
+        for service in services.values()
+        for item in service.get("volumes", ())
+    )
+    assert (
+        write_scenario_service_override(
+            _startup_spec(digest="sha256:" + "0" * 64), tmp_path
+        )
+        is None
+    )
+
+
+def test_service_policy_rejects_missing_or_escaping_files(
+    tmp_path, monkeypatch
+) -> None:
+    from aptl_techvault.startup import provider
+
+    monkeypatch.setattr(
+        provider,
+        "compose_service_policy",
+        lambda: ScenarioComposeServicePolicy(
+            mounts=(ServiceFileMount("thehive", "../outside", "/etc/thehive/x"),)
+        ),
+    )
+    with pytest.raises(ScenarioStartupProviderError, match="result-invalid"):
+        resolve_service_policy(_startup_spec(), tmp_path)
 
 
 def test_startup_policy_cannot_add_undeclared_dependency_or_service() -> None:

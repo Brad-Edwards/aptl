@@ -13,6 +13,12 @@ from aptl.backends.scenario_startup_policy import (
     StartupHealthDependency,
     StartupHealthProbe,
 )
+from aptl.backends.scenario_service_policy import (
+    ScenarioComposeServicePolicy,
+    ServiceEnvironmentFile,
+    ServiceFileMount,
+    ServiceContainerNameEnvironment,
+)
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 from aptl.core.scenario_bundle import ScenarioBundle
 from aptl_techvault.log_sources import realize_log_sources
@@ -89,6 +95,49 @@ class TechVaultStartupProvider:
                 StartupHealthDependency("thehive", "thehive-cassandra"),
                 StartupHealthDependency("thehive", "thehive-es"),
                 StartupHealthDependency("thehive", "cortex"),
+            ),
+        )
+
+    @staticmethod
+    def compose_service_policy() -> ScenarioComposeServicePolicy:
+        """Connect SDL-owned certificate files to upstream image TLS paths.
+
+        The pack delivers these generated files at portable locations. The
+        image-specific paths and TheHive Play config belong to this adapter.
+        """
+
+        return ScenarioComposeServicePolicy(
+            mounts=(
+                ServiceFileMount(
+                    "shuffle-frontend",
+                    "config/soc_certs/shuffle-frontend/server.pem",
+                    "/etc/nginx/fullchain.cert.pem",
+                ),
+                ServiceFileMount(
+                    "shuffle-frontend",
+                    "config/soc_certs/shuffle-frontend/server.key",
+                    "/etc/nginx/privkey.pem",
+                ),
+                ServiceFileMount(
+                    "thehive",
+                    "config/soc_certs/thehive/keystore.p12",
+                    "/etc/thehive/keystore.p12",
+                ),
+                ServiceFileMount(
+                    "thehive",
+                    "config/thehive/application.conf",
+                    "/etc/thehive/application.conf",
+                ),
+            ),
+            environment_files=(
+                ServiceEnvironmentFile(
+                    "thehive", "config/soc_certs/thehive/keystore.p12.password"
+                ),
+            ),
+            container_name_environment=(
+                ServiceContainerNameEnvironment(
+                    "shuffle-orborus", "ORBORUS_CONTAINER_NAME", "shuffle-orborus"
+                ),
             ),
         )
 

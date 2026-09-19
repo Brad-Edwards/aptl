@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import subprocess
 from pathlib import Path
 
@@ -80,3 +81,15 @@ def test_manual_seed_entrypoints_load_their_required_credentials():
         assert 'source "$SCRIPT_DIR/aptl-env.sh"' in text
         for key in keys:
             assert key in text
+
+
+def test_seeded_soar_case_preserves_exact_alert_id_and_mcp_uses_flat_argument():
+    seed = (PROJECT_ROOT / "scripts" / "seed-shuffle.sh").read_text()
+    assert r"Wazuh alert id \$exec.id; rule \$exec.rule.id" in seed
+
+    config = json.loads(
+        (PROJECT_ROOT / "mcp" / "mcp-soar" / "docker-lab-config.json").read_text()
+    )
+    description = config["queries"]["execute_workflow"]["description"]
+    assert "body itself becomes the execution argument" in description
+    assert '"execution_argument"' not in description

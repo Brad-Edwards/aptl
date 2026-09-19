@@ -26,10 +26,11 @@ def _node_readiness_diagnostics(
     nodes: Sequence[Mapping[str, Any]],
     containers: Sequence[Mapping[str, Any]],
     selected: set[str],
-) -> tuple[list[str], set[str]]:
-    """Return (hard-failure diagnostics, matched container names) for realized nodes."""
+) -> tuple[list[str], set[str], dict[str, str]]:
+    """Return failures, matched names, and semantic-to-observed node names."""
     diagnostics: list[str] = []
     matched_names: set[str] = set()
+    semantic_names: dict[str, str] = {}
     for node in nodes:
         # Only nodes whose profile is in the started subset get a container; a
         # declared node in a non-selected profile (e.g. mail/reverse when those
@@ -43,9 +44,43 @@ def _node_readiness_diagnostics(
             )
             continue
         matched_names.add(container.get("name", ""))
+        semantic_name = node.get("container_name")
+        if isinstance(semantic_name, str) and semantic_name:
+            semantic_names[semantic_name] = str(container.get("name", ""))
         diagnostics.extend(
             _container_health_diagnostics(node.get("name", "?"), container)
         )
+    return diagnostics, matched_names, semantic_names
+
+
+def _apparatus_readiness_diagnostics(
+    planned: Sequence[Mapping[str, str]],
+    containers: Sequence[Mapping[str, Any]],
+) -> tuple[list[str], set[str]]:
+    """Read back only helpers derived from the admitted scenario contract."""
+    diagnostics: list[str] = []
+    matched_names: set[str] = set()
+    for apparatus in planned:
+        name = apparatus["name"]
+        label_key = apparatus["label_key"]
+        label_value = apparatus["label_value"]
+        match = next(
+            (
+                container
+                for container in containers
+                if isinstance(container.get("labels"), Mapping)
+                and container["labels"].get("aptl.lifecycle.project")
+                and container["labels"].get("aptl.workspace.id")
+                and container["labels"].get(label_key) == label_value
+                and container.get("name", "") not in matched_names
+            ),
+            None,
+        )
+        if match is None:
+            diagnostics.append(f"admitted apparatus {name!r} has no live container")
+            continue
+        matched_names.add(str(match.get("name", "")))
+        diagnostics.extend(_container_health_diagnostics(name, match))
     return diagnostics, matched_names
 
 
@@ -114,7 +149,7 @@ def _container_health_diagnostics(
 def _live_container_for_node(
     node: Mapping[str, Any], containers: Sequence[Mapping[str, Any]]
 ) -> Mapping[str, Any] | None:
-    """Match a realized node to a live container by normalized alias."""
+    """Prefer backend identity labels, retaining legacy alias-only snapshots."""
     node_keys: set[str] = set()
     raw_values = [node.get("name", ""), *node.get("aliases", ())]
     for raw in raw_values:
@@ -123,6 +158,18 @@ def _live_container_for_node(
             node_keys.add(norm)
             node_keys.add(norm.removeprefix("aptl-"))
     for container in containers:
+        labels = container.get("labels")
+        if isinstance(labels, Mapping):
+            address = labels.get("aptl.node.address")
+            if address:
+                if address == node.get("address"):
+                    return container
+                continue
+            service = labels.get("com.docker.compose.service")
+            if service:
+                if normalize_identifier(str(service)) in node_keys:
+                    return container
+                continue
         cname = normalize_identifier(str(container.get("name", "")))
         if cname in node_keys or cname.removeprefix("aptl-") in node_keys:
             return container

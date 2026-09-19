@@ -70,6 +70,12 @@ class ComposeSeedAttributionMixin:
         the same project-scoped name as foreign.
         """
 
+        with self._project_volume_lock:
+            self._ensure_labeled_project_volume_locked(logical_volume)
+
+    def _ensure_labeled_project_volume_locked(self, logical_volume: str) -> None:
+        """Inspect/create/receipt one volume as an indivisible local operation."""
+
         ownership = self._ensure_resource_ownership()
         attempt_id = self._resource_attempt_id
         if attempt_id is None:
@@ -80,9 +86,7 @@ class ComposeSeedAttributionMixin:
             timeout=_SEED_TIMEOUT,
         )
         if inspect.returncode == 0:
-            self._verify_existing_project_volume(
-                logical_volume, volume, inspect.stdout
-            )
+            self._verify_existing_project_volume(logical_volume, volume, inspect.stdout)
         else:
             self._create_project_volume(
                 logical_volume, volume, ownership=ownership, attempt_id=attempt_id
@@ -142,9 +146,7 @@ class ComposeSeedAttributionMixin:
                 create.returncode,
                 redacted_stderr_hint(create.stderr),
             )
-            raise BackendSeedError(
-                f"Creating named volume '{logical_volume}' failed"
-            )
+            raise BackendSeedError(f"Creating named volume '{logical_volume}' failed")
         if create.stdout.strip() != volume:
             raise BackendSeedError(
                 f"Creating named volume '{logical_volume}' returned no identity"

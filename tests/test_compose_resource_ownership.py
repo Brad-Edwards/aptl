@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pathlib import Path
+from threading import Event
 from unittest.mock import MagicMock
 
 import pytest
@@ -79,6 +81,61 @@ def test_receipts_are_immutable_and_bound_to_daemon_and_attempt(tmp_path: Path) 
         ownership.record(conflicting)
     with pytest.raises(OwnershipConflictError, match="daemon identity"):
         ownership.candidates("aptl-victim", kind="container", daemon_id="daemon-b")
+
+
+def test_shared_volume_creation_waits_for_ownership_receipt(tmp_path: Path) -> None:
+    """Another node cannot observe a volume before its creator records it."""
+
+    backend = DockerComposeBackend(tmp_path)
+    ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+    backend._docker_daemon_id = "daemon-a"
+    volume = f"{ownership.project_name}_shared"
+    created, release, second_entered = Event(), Event(), Event()
+    state: dict[str, object] = {}
+    creates = []
+
+    def run(command, *, timeout):
+        if command[:3] == ["docker", "volume", "inspect"]:
+            labels = state.get("labels")
+            return subprocess.CompletedProcess(
+                command, int(labels is None), json.dumps(labels) if labels else "", ""
+            )
+        assert command[:3] == ["docker", "volume", "create"]
+        creates.append(command)
+        state["labels"] = {
+            command[index + 1].split("=", 1)[0]: command[index + 1].split("=", 1)[1]
+            for index, value in enumerate(command)
+            if value == "--label"
+        }
+        created.set()
+        assert release.wait(timeout=5)
+        return subprocess.CompletedProcess(command, 0, volume + "\n", "")
+
+    backend._run = run
+    backend._raw_volume_inspect = lambda _name: {
+        "Name": volume,
+        "Labels": state["labels"],
+    }
+
+    def second() -> None:
+        second_entered.set()
+        backend._ensure_labeled_project_volume("shared")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first_result = pool.submit(backend._ensure_labeled_project_volume, "shared")
+        try:
+            assert created.wait(timeout=5)
+            second_result = pool.submit(second)
+            assert second_entered.wait(timeout=5)
+            with pytest.raises(TimeoutError):
+                second_result.result(timeout=0.1)
+        finally:
+            release.set()
+        first_result.result(timeout=5)
+        second_result.result(timeout=5)
+
+    assert len(creates) == 1
+    assert len(ownership.receipts("volume")) == 1
 
 
 def test_container_action_uses_recorded_id_and_rejects_replacement(

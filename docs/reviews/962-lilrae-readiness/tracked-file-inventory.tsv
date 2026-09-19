@@ -1345,6 +1345,7 @@ tests/test_deployment_stateful_realization.py	tests-follow-owner	Retain meaningf
 tests/test_detection.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_deterministic_archive.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_docker_compose_port_bindings.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_docker_image_identity.py	tests-follow-owner	Retain exact pinned child-image identity tests with deployment authority
 tests/test_endpoints.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_env.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_env_fuzz.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

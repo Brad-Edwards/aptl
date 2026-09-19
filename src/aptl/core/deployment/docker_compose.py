@@ -5,6 +5,7 @@ Query, realization, and cleanup helpers live in focused sibling modules.
 
 import os
 import subprocess
+import threading
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -95,6 +96,9 @@ class DockerComposeBackend(
         self._project_name = self._logical_project_name
         self._resource_ownership: WorkspaceOwnership | None = None
         self._resource_attempt_id: str | None = None
+        # Concurrent node materialization can share a named volume. Serialize
+        # its creation and receipt publication within this backend instance.
+        self._project_volume_lock = threading.Lock()
         self._offline_staged = offline_staged
         self._appliance_boundary: (
             tuple[

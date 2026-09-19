@@ -5,15 +5,17 @@ past its size budget, and so the readiness contract released with
 ``raes-env-packs`` 6.1.0 reads as one unit: what each demand asks for, and the
 admitted realization facts the probes are pointed at.
 
-Every value handed to a probe comes from the admitted realization -- the
-authored canonical URL, the admitted network address, the declared forwarding
-agents and their declared log sources. Nothing here is derived from a container
-name pattern, a DNS zone, or a legacy Compose file.
+Every expectation handed to a probe comes from the admitted realization -- the
+authored canonical URL, subnet, forwarding agents and declared log sources.
+MISP's dynamic address is observed from its owned container and checked against
+that subnet. Nothing here is derived from a container name pattern, a DNS zone,
+or a legacy Compose file.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
+from ipaddress import ip_address, ip_network
 from urllib.parse import urlparse
 
 from pathlib import Path
@@ -32,9 +34,10 @@ from aptl.core.evidence.adapters.techvault_readiness_probes import (
 
 #: Where the certificate check runs. The fact the demand asks for is whether
 #: the leaf verifies for the authored host against the lab CA, and the probe
-#: pins that host to the admitted address rather than resolving it, so the
-#: result depends on the certificate rather than on which container happens to
-#: have a resolver. MISP's own container is used because it is the one node
+#: pins that host to the observed address on MISP's admitted network rather
+#: than resolving it, so the result depends on the certificate rather than on
+#: which container happens to have a resolver. MISP's own container is used
+#: because it is the one node
 #: guaranteed to hold both the lab CA -- it is a declared consumer of it -- and
 #: the HTTP client its own image health check already relies on.
 MISP_TLS_VERIFIER_CONTAINER = "aptl-misp"
@@ -44,18 +47,18 @@ _WAZUH_AGENT_IMPLEMENTATION = "wazuh_agent"
 _TAILED_PATH = "tailed_path"
 
 
-def misp_readiness(execute: object, realization: object) -> Mapping[str, object] | None:
+def misp_readiness(backend: object, realization: object) -> Mapping[str, object] | None:
     """Observe MISP application, database and cache readiness, or nothing."""
 
     canonical_url = _authored_base_url(realization)
-    address = _node_address(realization, _MISP_NODE)
+    address = _deployed_node_address(backend, realization, _MISP_NODE)
     if canonical_url is None or address is None:
         return None
     host = urlparse(canonical_url).hostname
     if not host:
         return None
     return misp_readiness_probe(
-        execute,
+        getattr(backend, "container_exec_with_input", None),
         canonical_url=canonical_url,
         canonical_host=host,
         misp_address=address,
@@ -247,7 +250,10 @@ def _bound_datastore(
 def _redis_persistence(datastore: object | None) -> tuple[bool, str] | None:
     """Project the persistence posture from an admitted Redis datastore."""
 
-    if datastore is None or not str(getattr(datastore, "engine", "")).endswith("redis"):
+    if datastore is None:
+        return None
+    engine = getattr(datastore, "engine", "")
+    if str(getattr(engine, "value", engine)) != "redis":
         return None
     persistence = getattr(datastore, "persistence", None)
     eviction = getattr(persistence, "eviction", None)
@@ -276,6 +282,12 @@ def _misp_cache_binding(realization: object) -> tuple[str, str] | None:
         == "data_source"
         and str(getattr(binding, "target_node_ref", ""))
         and str(getattr(binding, "target_service_ref", ""))
+        and _bound_datastore(
+            realization,
+            str(binding.target_node_ref),
+            str(binding.target_service_ref),
+        )
+        is not None
     }
     return targets.pop() if len(targets) == 1 else None
 
@@ -366,21 +378,61 @@ def _authored_base_url(realization: object) -> str | None:
     return None
 
 
-def _node_address(realization: object, name: str) -> str | None:
-    """Return one node's single admitted network address."""
+def _deployed_node_address(
+    backend: object, realization: object, name: str
+) -> str | None:
+    """Observe one owned endpoint on the node's single admitted network.
 
-    for node in getattr(realization, "nodes", ()) or ():
-        if str(getattr(node, "name", "")) != name:
-            continue
-        addresses = {
-            str(attachment.address)
-            for attachment in getattr(node, "network_attachments", ()) or ()
-            if str(getattr(attachment, "address", ""))
-        }
-        # An ambiguous address would make the pinned certificate check point at
-        # an arbitrary interface, so it fails closed rather than picking one.
-        return addresses.pop() if len(addresses) == 1 else None
-    return None
+    The released TechVault pack declares MISP's subnet but intentionally does
+    not assign it a static address. Docker's assigned address is accepted only
+    when it belongs to that subnet and to the uniquely attached owned node.
+    """
+
+    nodes = [
+        node
+        for node in getattr(realization, "nodes", ()) or ()
+        if str(getattr(node, "name", "")) == name
+    ]
+    if len(nodes) != 1:
+        return None
+    node = nodes[0]
+    declared_networks = tuple(getattr(node, "networks", ()) or ())
+    if len(declared_networks) != 1:
+        return None
+    networks = [
+        network
+        for network in getattr(realization, "networks", ()) or ()
+        if str(getattr(network, "name", "")) == declared_networks[0]
+    ]
+    if len(networks) != 1:
+        return None
+    try:
+        subnet = ip_network(str(getattr(networks[0], "cidr", "")), strict=True)
+    except ValueError:
+        return None
+    inspect = getattr(backend, "container_inspect", None)
+    if not callable(inspect):
+        return None
+    info = inspect(str(getattr(node, "container_name", "")))
+    if not isinstance(info, Mapping):
+        return None
+    settings = info.get("NetworkSettings")
+    attachments = settings.get("Networks") if isinstance(settings, Mapping) else None
+    if not isinstance(attachments, Mapping) or len(attachments) != 1:
+        return None
+    attachment = next(iter(attachments.values()))
+    if not isinstance(attachment, Mapping):
+        return None
+    aliases = attachment.get("Aliases")
+    if not isinstance(aliases, list) or name not in aliases:
+        return None
+    address = attachment.get("IPAddress")
+    if not isinstance(address, str):
+        return None
+    try:
+        return address if ip_address(address) in subnet else None
+    except ValueError:
+        return None
 
 
 __all__ = (

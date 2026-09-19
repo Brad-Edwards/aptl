@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import json
 import secrets
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlunsplit
@@ -52,6 +54,7 @@ from aptl.core.evidence.adapters.techvault_native_support import (
     webapp_endpoint,
 )
 from aptl.utils.curl_safe import basic_auth_header, curl_json
+from aptl_techvault.telemetry_stimulus import emit_missing_agent_events
 
 _CORTEX_REGISTRATION = "aptl.collector.cortex-enrichment"
 _MISP_READINESS_REGISTRATION = "aptl.collector.misp-authenticated-api-readiness"
@@ -170,23 +173,66 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
     ) -> Mapping[str, object] | None:
         """Observe MISP, its database and its cache through the admitted plan."""
 
-        return misp_readiness(
-            getattr(self._backend, "container_exec_with_input", None),
-            self._realization,
-        )
+        return misp_readiness(self._backend, self._realization)
 
     def wazuh_agent_readiness_query(
         self, start_iso: str, end_iso: str
     ) -> Mapping[str, object] | None:
         """Correlate each declared endpoint agent with the manager's roster."""
 
-        return wazuh_agent_readiness(
-            getattr(self._backend, "container_exec_with_input", None),
-            self._realization,
-            self._project_dir,
-            start_iso,
-            end_iso,
-        )
+        def observe() -> Mapping[str, object] | None:
+            return wazuh_agent_readiness(
+                getattr(self._backend, "container_exec_with_input", None),
+                self._realization,
+                self._project_dir,
+                start_iso,
+                end_iso,
+            )
+
+        observed = observe()
+        if observed is None:
+            return None
+        hosts = observed.get("hosts", ())
+        missing = [
+            str(host["node_ref"])
+            for host in hosts
+            if isinstance(host, Mapping) and host.get("telemetry_fresh") is False
+        ]
+        if not missing:
+            return observed
+        declared = {
+            node: sources
+            for node, (_enrollment, sources) in declared_endpoint_agents(
+                self._realization
+            ).items()
+        }
+        try:
+            emitted = emit_missing_agent_events(
+                self._backend, self._realization, missing, declared, self.trigger_sqli
+            )
+        except Exception:
+            emitted = False
+        if not emitted:
+            return observed
+        try:
+            deadline = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
+        except ValueError:
+            return observed
+        sleep = self._sleep or time.sleep
+        for _attempt in range(30):
+            if datetime.fromisoformat(self._now().replace("Z", "+00:00")) >= deadline:
+                break
+            sleep(2.0)
+            observed = observe()
+            if observed is None:
+                return None
+            hosts = observed.get("hosts", ())
+            if all(
+                isinstance(host, Mapping) and host.get("telemetry_fresh") is True
+                for host in hosts
+            ):
+                return observed
+        return observed
 
     def suricata_readiness_query(
         self, _start_iso: str, _end_iso: str

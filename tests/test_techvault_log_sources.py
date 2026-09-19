@@ -13,6 +13,8 @@ from aptl_techvault.log_sources import (
     _postgres_candidate,
     _rocky_syslog_candidate,
     _rocky_rsyslog_config,
+    _samba_ad_candidate,
+    _samba_ad_config,
     _samba_candidate,
     _samba_dropin,
     realize_log_sources,
@@ -35,21 +37,23 @@ def _node(scenario, name: str):
 
 def test_only_declared_live_log_source_shapes_select_native_producers(scenario):
     selected = {}
-    for name in ("db", "workstation", "fileshare", "victim", "misp"):
+    for name in ("ad", "db", "workstation", "fileshare", "victim", "misp"):
         runtime = scenario.nodes[name].runtime
         sources = _declared_tailed_files(runtime)
         selected[name] = (
             _postgres_candidate(runtime, sources),
             _rocky_syslog_candidate(runtime, sources),
             _samba_candidate(runtime, sources),
+            _samba_ad_candidate(runtime, sources),
         )
 
     assert selected == {
-        "db": (True, False, False),
-        "workstation": (False, True, False),
-        "fileshare": (False, False, True),
-        "victim": (False, True, False),
-        "misp": (False, False, False),
+        "ad": (False, False, False, True),
+        "db": (True, False, False, False),
+        "workstation": (False, True, False, False),
+        "fileshare": (False, False, True, False),
+        "victim": (False, True, False, False),
+        "misp": (False, False, False, False),
     }
 
 
@@ -254,3 +258,57 @@ def test_samba_provider_preserves_exact_pack_config_and_uses_native_audit_class(
     ) in argvs
     assert ("stat", "-c", "%s", "/var/log/samba/log.samba") in argvs
     assert not any(cmd[:1] == ("touch",) for cmd in argvs)
+
+
+def test_domain_samba_config_is_idempotent_and_rejects_conflicting_log_authority():
+    original = "# Global parameters\n[global]\n\trealm = TECHVAULT.LOCAL\n\n[sysvol]\n\tpath = /var/lib/samba/sysvol\n"
+
+    configured = _samba_ad_config(original)
+
+    assert configured is not None
+    assert "\tlog file = /var/log/samba/log.samba\n" in configured
+    assert "\tlog level = 1 auth_audit:5\n" in configured
+    assert _samba_ad_config(configured) == configured
+    assert (
+        _samba_ad_config(original.replace("[global]\n", "[global]\n\tlog level = 9\n"))
+        is None
+    )
+
+
+def test_domain_samba_provider_proves_a_new_native_audit_event(scenario):
+    class DomainBackend(_Backend):
+        def __init__(self):
+            super().__init__()
+            self.config = "[global]\n\trealm = TECHVAULT.LOCAL\n\n[sysvol]\n\tpath = /var/lib/samba/sysvol\n"
+            self.audit_size = 100
+
+        def container_exec(self, name, cmd, *, timeout=None):
+            if cmd[:1] == ["cat"] and cmd[1] in {
+                "/etc/samba/smb.conf",
+                "/var/lib/samba/smb.conf.provisioned",
+            }:
+                self.commands.append((name, tuple(cmd)))
+                return SimpleNamespace(returncode=0, stdout=self.config)
+            if cmd[:3] == ["stat", "-c", "%s"]:
+                self.commands.append((name, tuple(cmd)))
+                return SimpleNamespace(returncode=0, stdout=f"{self.audit_size}\n")
+            if cmd[:1] == ["smbclient"]:
+                self.commands.append((name, tuple(cmd)))
+                self.audit_size += 100
+                return SimpleNamespace(returncode=1, stdout="")
+            return super().container_exec(name, cmd, timeout=timeout)
+
+    backend = DomainBackend()
+
+    assert (
+        realize_log_sources(backend, (_node(scenario, "ad"), _node(scenario, "kali")))
+        == []
+    )
+    assert len(backend.payloads) == 2
+    assert all("log level = 1 auth_audit:5" in payload for payload in backend.payloads)
+    assert ("aptl-ad", ("smbcontrol", "all", "reload-config")) in backend.commands
+    assert any(
+        cmd[:3] == ("smbclient", "-N", "-U")
+        and cmd[4:] == ("//ad/sysvol", "-c", "quit")
+        for _, cmd in backend.commands
+    )

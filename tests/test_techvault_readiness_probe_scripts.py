@@ -203,6 +203,12 @@ def test_no_probe_puts_a_credential_in_a_child_process_argv(
     """
 
     recorded = _argv_recorder(tmp_path, setup)
+    if setup == "redis-cli":
+        # The real cache image has sha256sum; macOS test runners do not. This
+        # argv-focused test only needs identical hashes to reach redis-cli.
+        digest = tmp_path / "bin/sha256sum"
+        digest.write_text("#!/bin/sh\nprintf '%064d  -\\n' 0\n", encoding="utf-8")
+        digest.chmod(0o755)
     config = tmp_path / "redis.conf"
     config.write_text(
         f"user default reset on >{_SECRET} ~* +@read +@write "

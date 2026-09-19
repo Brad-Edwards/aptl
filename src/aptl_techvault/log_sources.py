@@ -64,6 +64,10 @@ def realize_log_sources(
             reason = _realize_postgres_log(backend, container, sources)
         elif _rocky_syslog_candidate(runtime, sources):
             reason = _realize_rocky_syslog(backend, container)
+        elif _samba_ad_candidate(runtime, sources):
+            reason = _realize_samba_ad_logs(
+                backend, container, smb_clients[0] if len(smb_clients) == 1 else ""
+            )
         elif _samba_candidate(runtime, sources):
             reason = _realize_samba_logs(
                 backend, container, smb_clients[0] if len(smb_clients) == 1 else ""
@@ -130,6 +134,18 @@ def _samba_candidate(runtime: object, sources: frozenset[str]) -> bool:
         and any(
             _value(getattr(service, "protocol", "")) == "smb"
             for service in getattr(runtime, "file_services", ())
+        )
+    )
+
+
+def _samba_ad_candidate(runtime: object, sources: frozenset[str]) -> bool:
+    """Select the domain provider only when its Samba sources are declared."""
+
+    return bool(
+        {"/var/log/samba/log.samba", "/var/log/samba/log.smbd"} <= sources
+        and any(
+            _value(getattr(authority, "kind", "")) == "domain"
+            for authority in getattr(runtime, "identity_authorities", ())
         )
     )
 
@@ -502,6 +518,84 @@ def _realize_samba_logs(
         return "Samba guest-share probe failed"
     if not _await_file_growth(backend, container, audit_path, before):
         return "Samba audit log did not receive an authentication event"
+    return None
+
+
+def _samba_ad_config(original: str) -> str | None:
+    """Add native audit logging without replacing the provisioned AD config."""
+
+    lines = original.splitlines(keepends=True)
+    global_headers = [
+        index for index, line in enumerate(lines) if line.strip() == "[global]"
+    ]
+    if len(global_headers) != 1:
+        return None
+    start = global_headers[0]
+    end = next(
+        (
+            index
+            for index in range(start + 1, len(lines))
+            if lines[index].startswith("[")
+        ),
+        len(lines),
+    )
+    expected = {
+        "log file": "/var/log/samba/log.samba",
+        "log level": "1 auth_audit:5",
+    }
+    present: dict[str, str] = {}
+    for line in lines[start + 1 : end]:
+        key, separator, value = line.partition("=")
+        key = key.strip().lower()
+        if separator and key in expected:
+            if key in present:
+                return None
+            present[key] = value.strip()
+    if any(present.get(key, value) != value for key, value in expected.items()):
+        return None
+    if len(present) == len(expected):
+        return original
+    additions = [
+        f"\t{key} = {value}\n" for key, value in expected.items() if key not in present
+    ]
+    return "".join(lines[: start + 1] + additions + lines[start + 1 :])
+
+
+def _realize_samba_ad_logs(
+    backend: LogSourceBackend, container: str, smb_client_container: str
+) -> str | None:
+    """Make the domain provider's declared audit path receive real SMB events."""
+
+    config_paths = (
+        "/var/lib/samba/smb.conf.provisioned",
+        "/etc/samba/smb.conf",
+    )
+    for path in config_paths:
+        original = _read_file(backend, container, path)
+        configured = _samba_ad_config(original) if original is not None else None
+        if configured is None:
+            return "domain Samba configuration is unsupported"
+        if configured != original and not _write_container_file(
+            backend, container, path, configured
+        ):
+            return "domain Samba audit configuration failed"
+    if not _ok(backend, container, ["smbcontrol", "all", "reload-config"]):
+        return "domain Samba configuration reload failed"
+    if not smb_client_container:
+        return "declared SMB probe client is unavailable"
+    audit_path = "/var/log/samba/log.samba"
+    before = _file_size(backend, container, audit_path)
+    marker = f"aptl-readiness-{secrets.token_hex(8)}"
+    # Guest authorization is expected to fail on the domain controller. The
+    # native audit record, not smbclient's exit status, proves the producer.
+    _exec(
+        backend,
+        smb_client_container,
+        ["smbclient", "-N", "-U", marker, "//ad/sysvol", "-c", "quit"],
+        60,
+    )
+    if not _await_file_growth(backend, container, audit_path, before):
+        return "domain Samba audit log did not receive an authentication event"
     return None
 
 

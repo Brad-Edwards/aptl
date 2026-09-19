@@ -76,7 +76,7 @@ cleanup() {
     trap - EXIT
     if [ -n "$id" ]; then
         curl -ksf -H "@$headers" -X POST "$base/events/delete/$id" \
-            >/dev/null 2>&1 || true
+            >/dev/null 2>&1 || status=1
     fi
     rm -f "$headers"
     exit "$status"
@@ -87,10 +87,10 @@ printf 'Authorization: %s\nAccept: application/json\n' "${ADMIN_KEY}" > "$header
 created="$(curl -ksf -H "@$headers" -X POST "$base/events/add" \
     -H 'Content-Type: application/json' \
     -d "{\"Event\":{\"info\":\"$marker\",\"distribution\":\"0\",\"analysis\":\"0\",\"threat_level_id\":\"4\"}}")"
-id="$(printf '%s' "$created" | sed -nE 's/.*"id":"?([0-9]+)"?.*/\1/p' | head -n 1)"
+id="$(printf '%s' "$created" | jq -er '.Event.id | tostring | select(test("^[0-9]+$"))')"
 [ -n "$id" ]
 read_back="$(curl -ksf -H "@$headers" "$base/events/view/$id")"
-printf '%s' "$read_back" | grep -Fq "$marker"
+printf '%s' "$read_back" | jq -e --arg marker "$marker" '.Event.info == $marker' >/dev/null
 echo "api_write_read_ok=true"
 """
 
@@ -335,6 +335,10 @@ MAX_BYTES = 32 * 1024 * 1024
 def instant(value):
     if value.endswith("Z"):
         value = value[:-1] + "+00:00"
+    elif len(value) >= 5 and value[-5] in "+-" and value[-4:].isdigit():
+        # Wazuh writes offsets as +0000; fromisoformat requires +00:00 on
+        # Python versions used by our agent containers.
+        value = value[:-2] + ":" + value[-2:]
     parsed = datetime.fromisoformat(value)
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError("timestamp is not timezone-aware")

@@ -1242,10 +1242,13 @@ src/aptl/workbench/relay.py	optional-participant	Provider/workbench extension; g
 src/aptl/workbench/runtime.py	optional-participant	Provider/workbench extension; generic supervision remains backend-owned
 src/aptl_techvault/README.md	core-runtime	Retain in APTL core runtime; no migration
 src/aptl_techvault/__init__.py	core-runtime	Retain in APTL core runtime; no migration
+src/aptl_techvault/log_sources.py	core-runtime	TechVault-native log producers stay behind the startup adapter
 src/aptl_techvault/participant_smoke.py	core-runtime	Retain in APTL core runtime; no migration
+src/aptl_techvault/redis_acl_observation.py	core-runtime	TechVault cache authorization observation stays behind the adapter
 src/aptl_techvault/runtime_parameters.py	core-runtime	Retain in APTL core runtime; no migration
 src/aptl_techvault/serving.py	core-runtime	Retain in APTL core runtime; no migration
 src/aptl_techvault/startup.py	core-runtime	TechVault-specific startup binding stays outside generic core
+src/aptl_techvault/telemetry_stimulus.py	core-runtime	TechVault-native readiness traffic stays behind the scenario adapter
 src/aptl_techvault/verification.py	core-runtime	Retain in APTL core runtime; no migration
 tests/__init__.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/_bundle_fixtures.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1536,6 +1539,7 @@ tests/test_techvault_curated_variants.py	tests-follow-owner	Retain meaningful bo
 tests/test_techvault_dns_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_evidence_sources.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_live_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_techvault_log_sources.py	tests-follow-owner	Retain TechVault log-producer contract coverage with its scenario owner
 tests/test_techvault_readiness_probe_scripts.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_readiness_sources.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_native_evidence.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1545,6 +1549,7 @@ tests/test_techvault_scenario_verifier.py	tests-follow-owner	Retain meaningful b
 tests/test_techvault_startup_adapter.py	tests-follow-owner	Retain startup-adapter seam coverage with its scenario owner
 tests/test_techvault_static_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_telemetry_spine.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_techvault_telemetry_stimulus.py	tests-follow-owner	Retain native TechVault telemetry-stimulation contract coverage with its scenario owner
 tests/test_telemetry.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_traffic_mirror.py	tests-follow-owner	Retain admitted traffic-mirror realization and reporting coverage with the backend owner
 tests/test_version.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

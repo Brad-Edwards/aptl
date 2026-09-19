@@ -16,6 +16,7 @@ from aptl.appliance.seat.readiness import (
     publish_readiness_challenge,
     wait_for_guest_readiness,
 )
+from aptl.appliance.seat.context import StartSeatOptions
 from tests.test_appliance_boundary_inventory import _guest
 
 
@@ -28,6 +29,10 @@ def _challenge() -> GuestReadinessChallenge:
         launch_descriptor_digest="sha256:" + "b" * 64,
         nonce="c" * 64,
     )
+
+
+def test_default_readiness_deadline_covers_the_cold_start_budget() -> None:
+    assert StartSeatOptions().readiness_timeout_seconds == 1800
 
 
 def test_readiness_response_roundtrip_is_bound_to_current_start() -> None:

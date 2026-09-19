@@ -23,7 +23,7 @@ class StartSeatOptions:
     mappings: tuple[BoundaryEndpoint, ...] | None = None
     forbidden_reachability_probe: Callable[[], bool] | None = None
     guest_readiness_probe: Callable[[], GuestBoundaryObservation] | None = None
-    readiness_timeout_seconds: float = 600
+    readiness_timeout_seconds: float = 1800
     reserve_outer_mappings: bool = True
     access_enrollment: SeatAccessEnrollment | None = None
     access_identity_file: Path | None = None

@@ -16,11 +16,31 @@ if test ! -f "$images_loaded"; then
     chmod 0600 "$marker"
     mv "$marker" "$images_loaded"
 fi
-/usr/local/bin/aptl appliance proxy-loopback \
+candidate_trust=false
+if python3 - /run/aptl-launch/appliance-launch.json <<'PYTHON'
+import json
+import pathlib
+import sys
+
+descriptor = pathlib.Path(sys.argv[1])
+with descriptor.open('rb') as handle:
+    document = json.load(handle)
+candidate = (descriptor.parent / document['release_dir'] / 'candidate-manifest.json').resolve()
+raise SystemExit(not candidate.is_file())
+PYTHON
+then
+    candidate_trust=true
+fi
+
+set -- /usr/local/bin/aptl appliance proxy-loopback \
     --launch-descriptor /run/aptl-launch/appliance-launch.json \
     --release-public-key /run/aptl-launch/release-public.pem \
     --qualification-public-key /run/aptl-launch/qualification-public.pem \
-    --adapter-address 10.0.2.15 &
+    --adapter-address 10.0.2.15
+if test "$candidate_trust" = true; then
+    set -- "$@" --candidate-trust
+fi
+"$@" &
 proxy_pid=$!
 cleanup() {
     kill "$proxy_pid" 2>/dev/null || true
@@ -38,19 +58,7 @@ set -- /usr/local/bin/aptl lab start \
     /run/aptl-launch/readiness-challenge.json \
     --appliance-readiness-device \
     /dev/virtio-ports/org.aptl.readiness
-
-if python3 - /run/aptl-launch/appliance-launch.json <<'PYTHON'
-import json
-import pathlib
-import sys
-
-descriptor = pathlib.Path(sys.argv[1])
-with descriptor.open('rb') as handle:
-    document = json.load(handle)
-candidate = (descriptor.parent / document['release_dir'] / 'candidate-manifest.json').resolve()
-raise SystemExit(not candidate.is_file())
-PYTHON
-then
+if test "$candidate_trust" = true; then
     set -- "$@" --appliance-candidate-trust
 fi
 

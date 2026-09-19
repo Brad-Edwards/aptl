@@ -66,15 +66,23 @@ def proxy_loopback(
     release_public_key: Path = typer.Option(..., "--release-public-key"),
     qualification_public_key: Path = typer.Option(..., "--qualification-public-key"),
     adapter_address: str = typer.Option(DEFAULT_QEMU_GUEST_ADDRESS, "--adapter-address"),
+    candidate_trust: bool = typer.Option(False, "--candidate-trust"),
 ) -> None:
     """Expose verified guest loopback publications on the private VM adapter."""
 
     try:
-        launch = verify_launch_descriptor(
-            launch_descriptor,
-            release_public_key,
-            qualification_public_key,
-        )
+        if candidate_trust:
+            from aptl.appliance.candidate import verify_candidate_launch_descriptor
+
+            launch = verify_candidate_launch_descriptor(
+                launch_descriptor, release_public_key
+            )
+        else:
+            launch = verify_launch_descriptor(
+                launch_descriptor,
+                release_public_key,
+                qualification_public_key,
+            )
         bindings = build_proxy_bindings(
             launch.boundary_policy,
             adapter_address=adapter_address,

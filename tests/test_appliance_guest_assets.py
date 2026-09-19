@@ -74,6 +74,7 @@ def test_guest_scripts_are_valid_and_have_no_network_install_path() -> None:
     assert "--appliance-release-public-key" in first_boot
     assert "--appliance-qualification-public-key" in first_boot
     assert "/usr/local/bin/aptl appliance proxy-loopback" in first_boot
+    assert 'set -- "$@" --candidate-trust' in first_boot
     assert "set -- /usr/local/bin/aptl lab start" in first_boot
     assert "exec aptl lab start" not in first_boot
 

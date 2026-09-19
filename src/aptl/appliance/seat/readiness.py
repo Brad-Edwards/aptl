@@ -194,7 +194,7 @@ def wait_for_guest_readiness(
     challenge: GuestReadinessChallenge,
     *,
     process_alive: Callable[[], bool],
-    timeout_seconds: float = 600,
+    timeout_seconds: float = 1800,
 ) -> GuestBoundaryObservation:
     """Wait for one bounded current response while the tracked VM remains alive."""
 

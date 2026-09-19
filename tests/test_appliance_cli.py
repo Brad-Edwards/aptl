@@ -29,6 +29,53 @@ def test_appliance_help_lists_local_overlay_creation() -> None:
     assert "fetch-distribution" in result.stdout
 
 
+@pytest.mark.parametrize("candidate_trust", [False, True])
+def test_guest_proxy_uses_the_explicit_release_trust_mode(
+    tmp_path: Path, monkeypatch, candidate_trust: bool
+) -> None:
+    from aptl.appliance import candidate
+
+    calls: list[tuple[str, tuple[Path, ...]]] = []
+    release = SimpleNamespace(boundary_policy=object())
+
+    def production(*args: Path):
+        calls.append(("production", args))
+        return release
+
+    def qualification(*args: Path):
+        calls.append(("candidate", args))
+        return release
+
+    monkeypatch.setattr("aptl.cli.appliance.verify_launch_descriptor", production)
+    monkeypatch.setattr(candidate, "verify_candidate_launch_descriptor", qualification)
+    monkeypatch.setattr(
+        "aptl.cli.appliance.build_proxy_bindings", lambda policy, **_: (policy,)
+    )
+    monkeypatch.setattr("aptl.cli.appliance.serve_proxy_bindings", lambda _: None)
+    descriptor = tmp_path / "launch.json"
+    public_key = tmp_path / "release.pem"
+    qualification_key = tmp_path / "qualification.pem"
+    command = [
+        "appliance", "proxy-loopback", "--launch-descriptor", str(descriptor),
+        "--release-public-key", str(public_key),
+        "--qualification-public-key", str(qualification_key),
+    ]
+    if candidate_trust:
+        command.append("--candidate-trust")
+
+    result = runner.invoke(app, command)
+
+    assert result.exit_code == 0, result.output
+    assert calls == [
+        (
+            "candidate" if candidate_trust else "production",
+            (descriptor, public_key)
+            if candidate_trust
+            else (descriptor, public_key, qualification_key),
+        )
+    ]
+
+
 def test_appliance_doctor_reports_missing_build_tools_without_installing(
     tmp_path: Path, monkeypatch
 ) -> None:

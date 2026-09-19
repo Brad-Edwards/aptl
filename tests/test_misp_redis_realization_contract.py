@@ -13,6 +13,8 @@ from raes.parser import parse_sdl_file
 from aptl.core.deployment._misp_cache_credential import (
     MISP_CACHE_CONFIG_OUTPUT,
     MISP_CACHE_PASSWORD_OUTPUT,
+    MISP_CACHE_RUNTIME_CONFIG_DIR,
+    MISP_CACHE_RUNTIME_CONFIG_PATH,
     realize_misp_cache_credential,
 )
 from aptl.core.deployment._misp_server_tls import (
@@ -24,6 +26,7 @@ from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
 )
 from aptl.core.soc_ca import derive_soc_service_certs
+from aptl_techvault.redis_acl_observation import _REDIS_ACL_READBACK_SCRIPT
 from tests.helpers import techvault_scenario_path
 from tests.test_env_pack_realization import _realize_pack
 
@@ -88,15 +91,17 @@ def test_the_cache_is_authenticated_without_putting_the_secret_in_argv(realizati
     cache = next(node for node in realization.nodes if node.name == "misp-redis")
     command = list(cache.runtime.container.command)
 
-    assert command == ["redis-server", "/run/aptl-redis/redis.conf"]
+    assert MISP_CACHE_RUNTIME_CONFIG_PATH.startswith("/run/")
+    assert command == ["redis-server", MISP_CACHE_RUNTIME_CONFIG_PATH]
     assert list(cache.runtime.container.entrypoint) == [
         "/bin/sh",
         "-ec",
-        "install -d -m 0755 -o root -g root /run/aptl-redis && "
+        f"install -d -m 0755 -o root -g root {MISP_CACHE_RUNTIME_CONFIG_DIR} && "
         "install -m 0400 -o redis -g redis /etc/redis/redis.conf "
-        '/run/aptl-redis/redis.conf && exec docker-entrypoint.sh "$@"',
+        f'{MISP_CACHE_RUNTIME_CONFIG_PATH} && exec docker-entrypoint.sh "$@"',
         "--",
     ]
+    assert _REDIS_ACL_READBACK_SCRIPT.count(MISP_CACHE_RUNTIME_CONFIG_PATH) == 2
     assert "/tmp/" not in " ".join(cache.runtime.container.entrypoint)
     # `--requirepass <value>` would work, and would also publish the credential
     # in the container's command line and in `docker inspect`.

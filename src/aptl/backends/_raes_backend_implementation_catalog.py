@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from aptl.core.deployment._misp_cache_credential import (
     MISP_CACHE_PASSWORD_OUTPUT,
+    MISP_CACHE_RUNTIME_CONFIG_DIR,
+    MISP_CACHE_RUNTIME_CONFIG_PATH,
 )
 from aptl.backends._raes_backend_implementation_types import (
     BackendBaseSelection,
@@ -21,8 +23,6 @@ from aptl.backends._raes_backend_implementation_types import (
 )
 
 _HALF_GIB_JVM_OPTIONS = "-Xms512m -Xmx512m"
-_REDIS_STAGED_CONFIG_DIR = "/run/aptl-redis"
-_REDIS_STAGED_CONFIG_PATH = f"{_REDIS_STAGED_CONFIG_DIR}/redis.conf"
 
 
 BACKEND_IMPLEMENTATION_PROFILES = (
@@ -282,14 +282,14 @@ BACKEND_IMPLEMENTATION_PROFILES = (
             "runtime-container-entrypoint": [
                 "/bin/sh",
                 "-ec",
-                f"install -d -m 0755 -o root -g root {_REDIS_STAGED_CONFIG_DIR} && "
+                f"install -d -m 0755 -o root -g root {MISP_CACHE_RUNTIME_CONFIG_DIR} && "
                 "install -m 0400 -o redis -g redis /etc/redis/redis.conf "
-                f'{_REDIS_STAGED_CONFIG_PATH} && exec docker-entrypoint.sh "$@"',
+                f'{MISP_CACHE_RUNTIME_CONFIG_PATH} && exec docker-entrypoint.sh "$@"',
                 "--",
             ],
             "runtime-container-command": [
                 "redis-server",
-                _REDIS_STAGED_CONFIG_PATH,
+                MISP_CACHE_RUNTIME_CONFIG_PATH,
             ],
         },
     ),

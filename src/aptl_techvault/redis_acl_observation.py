@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from aptl.backends._runtime_concern_disclosure import _disclose
+from aptl.core.deployment._misp_cache_credential import MISP_CACHE_RUNTIME_CONFIG_PATH
 
 if TYPE_CHECKING:
     from raes.runtime_configuration import RuntimeConfiguration
@@ -19,11 +20,11 @@ if TYPE_CHECKING:
 # is corroborated by authenticated read/write and denied-admin probes instead.
 _REDIS_ACL_READBACK_SCRIPT = r"""
 set -eu
-pass="$(sed -nE 's/^user default reset on >([A-Za-z0-9_-]+) .+$/\1/p' /tmp/aptl-redis.conf)"
+pass="$(sed -nE 's/^user default reset on >([A-Za-z0-9_-]+) .+$/\1/p' __APTL_REDIS_CONFIG__)"
 [ -n "$pass" ]
 expected="user default reset on >$pass ~* +@read +@write +@connection +@transaction -@dangerous"
 expected_hash="$(printf '%s\nappendonly no\nmaxmemory-policy noeviction\n' "$expected" | sha256sum)"
-actual_hash="$(sha256sum /tmp/aptl-redis.conf)"
+actual_hash="$(sha256sum __APTL_REDIS_CONFIG__)"
 [ "${expected_hash%% *}" = "${actual_hash%% *}" ]
 unauth="$(redis-cli --raw PING 2>&1)"
 case "$unauth" in NOAUTH*) ;; *) exit 1 ;; esac
@@ -42,7 +43,7 @@ echo 'config=exact'
 echo 'auth=PONG'
 echo 'rw=verified'
 echo 'admin=denied'
-""".strip()
+""".strip().replace("__APTL_REDIS_CONFIG__", MISP_CACHE_RUNTIME_CONFIG_PATH)
 
 
 def observe_redis_app_authorizations(

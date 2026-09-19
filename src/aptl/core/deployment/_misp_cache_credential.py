@@ -45,6 +45,11 @@ MISP_CACHE_CONFIG_RELPATH = "redis.conf"
 MISP_CACHE_CONFIG_CONTAINER_PATH = (
     f"{MISP_CACHE_CONFIG_MOUNT_DESTINATION}/{MISP_CACHE_CONFIG_RELPATH}"
 )
+# The selected Redis implementation copies the mounted root-only config here
+# before dropping privileges. The implementation profile and live readback must
+# use one path contract or valid Redis startup cannot be corroborated.
+MISP_CACHE_RUNTIME_CONFIG_DIR = "/run/aptl-redis"
+MISP_CACHE_RUNTIME_CONFIG_PATH = f"{MISP_CACHE_RUNTIME_CONFIG_DIR}/redis.conf"
 MISP_CACHE_PASSWORD_OUTPUT = "cache-password"
 MISP_CACHE_CONFIG_OUTPUT = "cache-server-config"
 

@@ -55,3 +55,5 @@ After ADR-035 and SCN-010, ACES SDL owns scenario authoring and topology declara
 - IMPLEMENTS → CODE_FILE `src/aptl_techvault/log_sources.py` (Native log configuration staged under a root-owned guest path)
 - TESTS → TEST `tests/test_misp_redis_realization_contract.py` (Credential-free argv and protected Redis staging path)
 - TESTS → TEST `tests/test_techvault_log_sources.py` (Protected rsyslog staging and native producer behavior)
+- IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/_misp_cache_credential.py` (Shared protected Redis runtime config path contract)
+- IMPLEMENTS → CODE_FILE `src/aptl_techvault/redis_acl_observation.py` (Live authorization readback from the selected config path)

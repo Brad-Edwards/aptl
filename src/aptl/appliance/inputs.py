@@ -85,6 +85,8 @@ def _resolve_archive_image_roles(
     for reference in sorted(set(references.values())):
         if "@sha256:" in reference:
             identity = registry_image_id(image_archive, image_files, reference)
+            if reference.partition("@")[0] not in images.get(identity, ()):
+                raise ValueError("pinned Docker runtime tag is missing or differs")
         else:
             matches = [
                 identity for identity, tags in images.items() if reference in tags
@@ -136,13 +138,46 @@ def acquire_canonical_images(
                     text=True,
                     timeout=60,
                 )
+        pinned_runtime_tags = {
+            reference.partition("@")[0]: reference
+            for reference in references.values()
+            if "@sha256:" in reference
+        }
+        for runtime_tag, pinned_reference in sorted(pinned_runtime_tags.items()):
+            pinned_id = subprocess.run(
+                ["docker", "image", "inspect", "--format", "{{.Id}}", pinned_reference],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            ).stdout.strip()
+            if not pinned_id:
+                raise ValueError("pinned Docker image identity is missing")
+            tagged = subprocess.run(
+                ["docker", "image", "inspect", "--format", "{{.Id}}", runtime_tag],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if tagged.returncode != 0:
+                subprocess.run(
+                    ["docker", "tag", pinned_reference, runtime_tag],
+                    check=True,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=60,
+                )
+            elif tagged.stdout.strip() != pinned_id:
+                raise ValueError("Docker runtime tag differs from pinned image")
+        save_references = set(references.values()) | set(pinned_runtime_tags)
         subprocess.run(
             [
                 "docker",
                 "save",
                 "--output",
                 str(image_archive),
-                *sorted(set(references.values())),
+                *sorted(save_references),
             ],
             check=True,
             stdin=subprocess.DEVNULL,

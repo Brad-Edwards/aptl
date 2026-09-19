@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from aptl.appliance import inputs
+from aptl.appliance import input_images, inputs
 from aptl.appliance.offline import OfflinePayloadError, build_offline_payload
 
 
@@ -133,14 +133,14 @@ def test_canonical_payload_admits_only_locked_system_packages(tmp_path: Path) ->
 def test_archive_roles_use_saved_config_ids_not_docker_store_ids(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    registry_ref = "example/remote@sha256:" + "a" * 64
+    registry_ref = "example/remote:fixed@sha256:" + "a" * 64
     references = {
         "scenario.local": "example/local:latest",
         "scenario.remote": registry_ref,
     }
     images = {
         "sha256:" + "b" * 64: ("example/local:latest",),
-        "sha256:" + "c" * 64: (),
+        "sha256:" + "c" * 64: ("example/remote:fixed",),
     }
     monkeypatch.setattr(
         inputs,
@@ -164,6 +164,39 @@ def test_archive_roles_reject_an_ambiguous_saved_tag(tmp_path: Path) -> None:
                 "sha256:" + "b" * 64: ("example/local:latest",),
                 "sha256:" + "c" * 64: ("example/local:latest",),
             },
+            tmp_path / "images.tar",
+            {},
+        )
+
+
+def test_pinned_image_without_runtime_tag_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reference = "example/remote:fixed@sha256:" + "a" * 64
+    identity = "sha256:" + "b" * 64
+    monkeypatch.setattr(inputs, "registry_image_id", lambda *args: identity)
+    with pytest.raises(ValueError, match="runtime tag"):
+        inputs._resolve_archive_image_roles(
+            {"scenario.remote": reference},
+            {identity: ()},
+            tmp_path / "images.tar",
+            {},
+        )
+
+    monkeypatch.setattr(
+        input_images,
+        "canonical_image_references",
+        lambda project, bundle: {"scenario.remote": reference},
+    )
+    monkeypatch.setattr(
+        input_images, "registry_image_id", lambda *args, **kwargs: identity
+    )
+    with pytest.raises(ValueError, match="canonical image reference"):
+        input_images.validate_image_sources(
+            tmp_path,
+            object(),
+            {identity: ()},
+            {"scenario.remote": identity},
             tmp_path / "images.tar",
             {},
         )

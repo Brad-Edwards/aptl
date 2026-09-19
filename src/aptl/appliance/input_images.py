@@ -127,7 +127,9 @@ def validate_image_sources(
                 reference,
                 architecture=architecture,
             )
-            valid = identity == expected
+            valid = identity == expected and reference.partition("@")[0] in images.get(
+                identity, ()
+            )
         else:
             valid = reference in images.get(identity, ())
         if not valid:

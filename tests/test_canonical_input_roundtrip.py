@@ -148,6 +148,55 @@ def test_image_acquisition_records_exact_daemon_identity_and_archive_closure(
     assert any(command[:2] == ["docker", "save"] for command in calls)
 
 
+def test_image_acquisition_saves_pinned_runtime_tag(tmp_path, monkeypatch) -> None:
+    image_archive = tmp_path / "output" / "oci-images.tar"
+    image_roles = tmp_path / "output" / "image-roles.json"
+    reference = "example.test/participant:fixed@sha256:" + "a" * 64
+    runtime_tag = reference.partition("@")[0]
+    identity = "sha256:" + "b" * 64
+    calls = []
+
+    monkeypatch.setattr(inputs, "resolve_asset_source", lambda: (tmp_path, True))
+    monkeypatch.setattr(inputs, "materialize", lambda project: project.mkdir())
+    monkeypatch.setattr(inputs, "env_pack_bundle", lambda path: object())
+    monkeypatch.setattr(
+        inputs,
+        "canonical_image_references",
+        lambda project, bundle: {"scenario.participant": reference},
+    )
+
+    def run(argv, **kwargs):
+        calls.append(argv)
+        if argv[:5] == ["docker", "image", "inspect", "--format", "{{.Id}}"]:
+            return subprocess.CompletedProcess(
+                argv, 1 if argv[-1] == runtime_tag else 0, stdout=identity + "\n"
+            )
+        return subprocess.CompletedProcess(argv, 0, stdout="")
+
+    monkeypatch.setattr(inputs.subprocess, "run", run)
+    monkeypatch.setattr(inputs, "archive_files", lambda path: {})
+    monkeypatch.setattr(
+        inputs,
+        "docker_archive_images",
+        lambda path, files: {identity: (runtime_tag,)},
+    )
+    monkeypatch.setattr(inputs, "registry_image_id", lambda *args: identity)
+    monkeypatch.setattr(inputs, "_validate_image_sources", lambda *args: None)
+
+    roles = inputs.acquire_canonical_images(
+        image_archive=image_archive, image_roles=image_roles
+    )
+
+    assert roles == {"scenario.participant": identity}
+    assert ["docker", "tag", reference, runtime_tag] in calls
+    assert any(
+        command[:2] == ["docker", "save"]
+        and reference in command
+        and runtime_tag in command
+        for command in calls
+    )
+
+
 def test_canonical_staging_roundtrip_binds_acquired_bytes_and_rejects_tampering(
     tmp_path, monkeypatch
 ):

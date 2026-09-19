@@ -280,7 +280,7 @@ class DockerComposeBackend(
         *,
         timeout: int | None = None,
     ) -> subprocess.CompletedProcess:
-        """Run one fixed command with non-secret structured stdin."""
+        """Run one fixed command with a payload supplied only over stdin."""
 
         kwargs = self._subprocess_kwargs(streaming=False, timeout=timeout)
         kwargs["input"] = payload

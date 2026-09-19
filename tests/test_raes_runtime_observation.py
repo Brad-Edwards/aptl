@@ -796,6 +796,100 @@ _PACKAGES_PATH = CONCERN_PAYLOAD_PATH["runtime-packages"]
 _FILESYSTEM_PATH = CONCERN_PAYLOAD_PATH["runtime-filesystem-inventory"]
 _SERVICE_UNITS_PATH = CONCERN_PAYLOAD_PATH["runtime-service-manager-units"]
 _SOFTWARE_PATH = CONCERN_PAYLOAD_PATH["runtime-software-components"]
+_APP_AUTH_PATH = CONCERN_PAYLOAD_PATH["runtime-app-authorizations"]
+
+
+def _redis_acl_runtime() -> RuntimeConfiguration:
+    """A single logical cache client with only the authored read/write grant."""
+
+    return _runtime(
+        app_authorizations=[
+            {
+                "app_authorization_id": "cache-authorization",
+                "resource_vocabulary": "redis_acl",
+                "auth_enabled": True,
+                "principals": [
+                    {
+                        "principal_id": "cache-client",
+                        "kind": "service_account",
+                        "credential_classification": "redacted",
+                    }
+                ],
+                "roles": [{"role_id": "cache-role"}],
+                "permission_grants": [
+                    {
+                        "grant_id": "cache-grant",
+                        "role_ref": "cache-role",
+                        "resource_kind": "redis_acl",
+                        "actions": ["read", "write"],
+                        "resource_patterns": ["*"],
+                        "effect": "allow",
+                    }
+                ],
+                "role_mappings": [
+                    {
+                        "mapping_id": "cache-mapping",
+                        "role_ref": "cache-role",
+                        "users": ["cache-client"],
+                    }
+                ],
+            }
+        ]
+    )
+
+
+def test_techvault_redis_authorization_requires_bounded_live_acl():
+    from aptl_techvault.startup import TechVaultStartupProvider
+
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                "sh": (
+                    0,
+                    "config=exact\nauth=PONG\nrw=verified\nadmin=denied\n",
+                )
+            }
+        },
+    )
+
+    observed = TechVaultStartupProvider.observe_runtime(
+        backend,
+        SimpleNamespace(
+            name="misp-redis",
+            container_name=_CONTAINER,
+            runtime=_redis_acl_runtime(),
+        ),
+    )
+
+    assert _APP_AUTH_PATH in observed
+
+
+def test_techvault_redis_authorization_rejects_admin_access():
+    from aptl_techvault.startup import TechVaultStartupProvider
+
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                "sh": (
+                    0,
+                    "config=exact\nauth=PONG\nrw=verified\nadmin=allowed\n",
+                )
+            }
+        },
+    )
+
+    observed = TechVaultStartupProvider.observe_runtime(
+        backend,
+        SimpleNamespace(
+            name="misp-redis",
+            container_name=_CONTAINER,
+            runtime=_redis_acl_runtime(),
+        ),
+    )
+
+    assert _APP_AUTH_PATH not in observed
 
 
 def test_wazuh_software_component_requires_guest_version_and_agent_type():

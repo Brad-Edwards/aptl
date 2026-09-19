@@ -174,8 +174,10 @@ def test_acquire_native_evidence_persists_only_immediate_native_bindings(
 
     native = (
         _binding("aptl.collector.cortex-enrichment", "cortex"),
+        _binding("aptl.collector.misp-authenticated-api-readiness", "misp"),
         _binding("aptl.collector.suricata-rule-readiness", "readiness"),
         _binding("aptl.collector.suricata-wazuh-sqli", "sqli"),
+        _binding("aptl.collector.wazuh-agent-readiness", "wazuh"),
     )
     transcript = _binding("aptl.collector.redteam-session-transcript", "transcript")
     plan = SimpleNamespace(
@@ -207,7 +209,7 @@ def test_acquire_native_evidence_persists_only_immediate_native_bindings(
     start = datetime(2026, 9, 14, tzinfo=UTC)
     times = tuple(
         (start + timedelta(seconds=offset)).isoformat().replace("+00:00", "Z")
-        for offset in range(6)
+        for offset in range(10)
     )
 
     result = acquisition.acquire_native_evidence(
@@ -228,7 +230,7 @@ def test_acquire_native_evidence_persists_only_immediate_native_bindings(
     assert {report.registration_id for report in result.reports} == {
         item.registration_id for item in native
     }
-    assert len(result.records) == 3
+    assert len(result.records) == 5
     assert (
         store.get_run_path("run-1") / "evidence/capture-plans/capture-plan-test.json"
     ).read_bytes() == plan.canonical_bytes
@@ -381,6 +383,36 @@ def test_lab_start_native_step_rejects_failed_truth_refresh(tmp_path, monkeypatc
     assert result is not None
     assert result.success is False
     assert result.error == "aptl.scenario-evidence.required-native-evaluation-failed"
+
+
+def test_native_failure_messages_expose_codes_not_evidence_payloads():
+    from aptl.core.lab import _native_capture_failure, _native_evaluation_failure
+
+    capture = SimpleNamespace(
+        reports=(
+            SimpleNamespace(
+                registration_id="aptl.collector.wazuh-agent-readiness",
+                status=CollectorStatus.SOURCE_UNAVAILABLE,
+                diagnostic_code="not-ready",
+                payload="secret-body",
+            ),
+        )
+    )
+    refresh = SimpleNamespace(
+        diagnostics=(
+            SimpleNamespace(
+                code="aptl.evaluator.native-evidence-truth-incomplete",
+                message="secret-body",
+            ),
+        )
+    )
+
+    capture_error = _native_capture_failure(capture)
+    evaluation_error = _native_evaluation_failure(refresh)
+
+    assert "wazuh-agent-readiness=source-unavailable" in capture_error
+    assert "aptl.evaluator.native-evidence-truth-incomplete" in evaluation_error
+    assert "secret-body" not in capture_error + evaluation_error
 
 
 def test_lab_start_native_step_rejects_failed_required_acquisition(

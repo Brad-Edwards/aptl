@@ -7,6 +7,8 @@ from aptl.backends.scenario_startup import (
     ENTRY_POINT_GROUP,
     ScenarioStartupProviderError,
     _safe_relative_script,
+    observe_scenario_runtime_concerns,
+    run_scenario_runtime,
     resolve_scenario_startup,
 )
 import pytest
@@ -51,6 +53,58 @@ def test_exact_release_resolves_seed_and_runtime_bindings() -> None:
 
 def test_changed_pack_digest_gets_no_startup_behavior() -> None:
     assert resolve_scenario_startup(_bundle(digest="sha256:" + "0" * 64)) is None
+
+
+def test_runtime_hook_only_runs_for_the_qualified_pack(monkeypatch) -> None:
+    from aptl_techvault.startup import provider
+
+    calls = []
+    monkeypatch.setattr(
+        provider,
+        "realize_runtime",
+        lambda backend, nodes: calls.append((backend, nodes)) or [],
+    )
+    backend = object()
+    nodes = (object(),)
+
+    assert run_scenario_runtime(_bundle().pack_identity, backend, nodes) == []
+    assert calls == [(backend, nodes)]
+    assert (
+        run_scenario_runtime(
+            _bundle(digest="sha256:" + "0" * 64).pack_identity,
+            backend,
+            nodes,
+        )
+        == []
+    )
+    assert calls == [(backend, nodes)]
+
+
+def test_runtime_observation_only_runs_for_the_qualified_pack(monkeypatch) -> None:
+    from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
+
+    from aptl_techvault.startup import provider
+
+    path = CONCERN_PAYLOAD_PATH["runtime-container-autoremove"]
+    calls = []
+    monkeypatch.setattr(
+        provider,
+        "observe_runtime",
+        lambda backend, node: calls.append((backend, node)) or {path: False},
+    )
+    backend = object()
+    node = object()
+
+    assert observe_scenario_runtime_concerns(
+        _bundle().pack_identity, backend, node
+    ) == {path: False}
+    assert (
+        observe_scenario_runtime_concerns(
+            _bundle(digest="sha256:" + "0" * 64).pack_identity, backend, node
+        )
+        == {}
+    )
+    assert calls == [(backend, node)]
 
 
 @pytest.mark.parametrize(

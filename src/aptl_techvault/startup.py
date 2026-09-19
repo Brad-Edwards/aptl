@@ -8,9 +8,11 @@ from aptl.backends.scenario_startup import (
     EnvironmentAlias,
     ScenarioStartupPlan,
 )
+from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 from aptl.core.scenario_bundle import ScenarioBundle
+from aptl_techvault.log_sources import realize_log_sources
+from aptl_techvault.redis_acl_observation import observe_redis_app_authorizations
 from aptl_techvault.runtime_parameters import TECHVAULT_PACK_SET_DIGEST
-
 
 
 class TechVaultStartupProvider:
@@ -50,6 +52,27 @@ class TechVaultStartupProvider:
                 ),
             ),
         )
+
+    @staticmethod
+    def realize_runtime(backend: object, nodes: tuple[object, ...]) -> list[str]:
+        """Produce the pack's declared native logs before agent readback."""
+
+        return realize_log_sources(backend, nodes)
+
+    @staticmethod
+    def observe_runtime(backend: object, node: object) -> dict[tuple[str, ...], object]:
+        """Corroborate TechVault's generated cache ACL without exposing it."""
+
+        if getattr(node, "name", "") != "misp-redis":
+            return {}
+        runtime = getattr(node, "runtime", None)
+        container = getattr(node, "container_name", "")
+        if runtime is None or not container:
+            return {}
+        observed = observe_redis_app_authorizations(backend, container, runtime)
+        if observed is None:
+            return {}
+        return {CONCERN_PAYLOAD_PATH["runtime-app-authorizations"]: observed}
 
 
 provider = TechVaultStartupProvider()

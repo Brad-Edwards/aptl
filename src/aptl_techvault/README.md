@@ -7,6 +7,7 @@ package, behind the entry points APTL discovers it through.
 | --- | --- | --- |
 | `aptl.pack_backend_interactions` | `techvault.aptl` | which pack components belong to which operator start group |
 | `aptl.scenario_runtime_parameters` | `techvault` | fresh runtime-owned bindings for the exact qualified pack release |
+| `aptl.scenario_startup` | `techvault` | content-qualified startup and native log-producer realization |
 | `aptl.scenario_verifiers` | `techvault.aptl` | the semantic answer key: is the declared defensive stack realized, does the attacker reach its peers |
 | `aptl.participant_mcp_smoke_plans` | `guided-purple.techvault-attacker-target` | the exact MCP operations that qualify a participant |
 
@@ -33,13 +34,14 @@ tests assert each of those.
 
 ## What it does not do
 
-It generates no activity in the range. An earlier check drove `nmap` and failed
-SSH authentication from the attacker node and then read Wazuh back, to prove an
-event traversed the sensor and the SIEM. Those alerts and sensor records outlived
-the run, because the live gate's destructive cleanup runs before its boot rather
-than after, so a validated range was no longer in a clean pre-attack state. What
-remains is observation: the declared nodes are realized and the attacker reaches
-its shared-network peers.
+It generates no attack traffic in the range. An earlier check drove `nmap` and
+failed SSH authentication from the attacker node and then read Wazuh back.
+Those alerts outlived the check, so the live gate no longer performs that
+attack-like test. Startup does emit bounded, benign events to prove that the
+declared system and Samba log producers write to the paths Wazuh tails. These
+events can remain in the logs; they are not evidence of an attack or of Wazuh
+ingestion. The verifier otherwise observes the declared nodes and attacker
+reachability without exercising an attack path.
 
 It also owns no windows, deadlines, polling, credentials or backend access. Those
 are framework concerns reached through the operations surface.

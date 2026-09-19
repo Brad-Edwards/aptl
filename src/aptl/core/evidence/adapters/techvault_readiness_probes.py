@@ -118,23 +118,32 @@ echo "database_role_access_ok=true"
 # assumed from the image's defaults.
 _MISP_CACHE_SCRIPT = r"""
 set -eu
-pass="$(sed -nE 's/^requirepass[[:space:]]+([^[:space:]]+)$/\1/p' /etc/redis/redis.conf)"
+pass="$(sed -nE 's/^user default reset on >([A-Za-z0-9_-]+) ~\* \+@read \+@write \+@connection \+@transaction -@dangerous$/\1/p' /etc/redis/redis.conf)"
 [ -n "$pass" ]
+expected="user default reset on >$pass ~* +@read +@write +@connection +@transaction -@dangerous"
+expected_hash="$(printf '%s\nappendonly no\nmaxmemory-policy noeviction\n' "$expected" | sha256sum)"
+actual_hash="$(sha256sum /etc/redis/redis.conf)"
+[ "${expected_hash%% *}" = "${actual_hash%% *}" ]
 # An unauthenticated ping must be refused, or "authenticated access" would be
 # indistinguishable from an open cache.
-if redis-cli ping 2>&1 | grep -qiv 'NOAUTH'; then
-    echo "cache is not requiring authentication" >&2
-    exit 1
-fi
+unauth="$(redis-cli --raw ping 2>&1)"
+case "$unauth" in
+    NOAUTH*) ;;
+    *) echo "cache is not requiring authentication" >&2; exit 1 ;;
+esac
 # REDISCLI_AUTH is redis-cli's own non-argv credential channel. `-a "$pass"`
 # would publish the generated cache credential in /proc/<pid>/cmdline for every
 # invocation below.
 REDISCLI_AUTH="$pass"
 export REDISCLI_AUTH
 redis-cli --no-auth-warning ping | grep -Fxq PONG
-aof="$(redis-cli --no-auth-warning config get appendonly | tail -n 1)"
-evict="$(redis-cli --no-auth-warning config get maxmemory-policy | tail -n 1)"
-[ -n "$aof" ] && [ -n "$evict" ]
+# The exact mounted config supplies these directives, and the admitted Redis
+# command starts from that file. The application ACL cannot run CONFIG SET or
+# even CONFIG GET, so probing effective settings through the app account would
+# grant it authority beyond the authored read/write role.
+aof="$(sed -n 's/^appendonly //p' /etc/redis/redis.conf)"
+evict="$(sed -n 's/^maxmemory-policy //p' /etc/redis/redis.conf)"
+[ "$aof" = no ] && [ "$evict" = noeviction ]
 echo "cache_authenticated=true"
 echo "cache_persistence_policy=$aof"
 echo "cache_eviction_policy=$evict"

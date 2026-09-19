@@ -1383,9 +1383,7 @@ def _prepare_scenario_startup(
         }
         changed = update_dotenv_values(ctx.project_dir / ".env", updates)
         if changed:
-            log.info(
-                "Applied %d scenario startup environment binding(s)", len(changed)
-            )
+            log.info("Applied %d scenario startup environment binding(s)", len(changed))
         ctx.raw_env = load_dotenv(ctx.project_dir / ".env")
         ctx.env = env_vars_from_dict(ctx.raw_env)
         ctx.scenario_startup = plan
@@ -2924,10 +2922,7 @@ def _run_scenario_seed_script(ctx: _LabStartContext, plan: object) -> None:
             step="seed_soc",
             impact=DiagnosticImpact.CAPABILITY,
             severity=DiagnosticSeverity.WARNING,
-            message=(
-                "Scenario seed script was not found; "
-                "SOC tools will start empty"
-            ),
+            message=("Scenario seed script was not found; SOC tools will start empty"),
             operator_action=(
                 "Restore the installed scenario assets and re-run the seed once "
                 "services are healthy"
@@ -3035,9 +3030,32 @@ def _step_acquire_required_native_evidence(
         failure = (
             _refresh_required_native_evidence(ctx, admitted, capture.records)
             if capture.disposition is AcquisitionDisposition.SEALED_READY
-            else LabResult(success=False, error=_NATIVE_CAPTURE_FAILED)
+            else LabResult(
+                success=False,
+                error=_native_capture_failure(capture),
+            )
         )
     return failure
+
+
+def _native_capture_failure(capture: object) -> str:
+    """Expose only bounded collector ids/statuses, never captured payloads."""
+
+    failures = []
+    for report in getattr(capture, "reports", ()):
+        registration = str(getattr(report, "registration_id", ""))
+        status = str(getattr(getattr(report, "status", None), "value", ""))
+        if (
+            status not in {"ok", "empty_ok"}
+            and re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", registration)
+            and re.fullmatch(r"[A-Za-z0-9_.-]{1,50}", status)
+        ):
+            failures.append(f"{registration}={status}")
+    return (
+        f"{_NATIVE_CAPTURE_FAILED}: {', '.join(failures[:5])}"
+        if failures
+        else _NATIVE_CAPTURE_FAILED
+    )
 
 
 def _log_native_evidence_reports(capture: object) -> None:
@@ -3125,8 +3143,26 @@ def _refresh_required_native_evidence(
             if refresh.status is OperationState.SUCCEEDED:
                 ctx.raes_outcome.final_snapshot = refresh.snapshot
             else:
-                failure = LabResult(success=False, error=_NATIVE_EVALUATION_FAILED)
+                failure = LabResult(
+                    success=False,
+                    error=_native_evaluation_failure(refresh),
+                )
     return failure
+
+
+def _native_evaluation_failure(refresh: object) -> str:
+    """Surface stable RAES diagnostic codes without exposing evidence bodies."""
+
+    codes = []
+    for diagnostic in getattr(refresh, "diagnostics", ()):
+        code = str(getattr(diagnostic, "code", ""))
+        if re.fullmatch(r"[A-Za-z0-9_.-]{1,120}", code) and code not in codes:
+            codes.append(code)
+    return (
+        f"{_NATIVE_EVALUATION_FAILED}: {', '.join(codes[:5])}"
+        if codes
+        else _NATIVE_EVALUATION_FAILED
+    )
 
 
 def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:

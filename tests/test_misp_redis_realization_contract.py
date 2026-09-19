@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from importlib.metadata import version
 from pathlib import Path
+import re
 
 import pytest
 from raes.parser import parse_sdl_file
@@ -215,7 +216,7 @@ def _cache_artifact() -> DeploymentGeneratedArtifactRealization:
         name="misp-cache-credential",
         generator="rendered_config",
         lifecycle="reuse_valid",
-        provenance="techvault:misp-cache-credential/v1",
+        provenance="techvault:misp-cache-credential/v2",
         outputs=(
             DeploymentGeneratedArtifactOutput(
                 name=MISP_CACHE_PASSWORD_OUTPUT,
@@ -238,13 +239,26 @@ def _cache_paths(tmp_path: Path) -> tuple[Path, Path]:
     return root / "cache-password", root / "redis.conf"
 
 
+def _cache_acl_token(config_file: Path) -> str | None:
+    """Inspect the ACL shape without exposing a generated credential on failure."""
+
+    match = re.fullmatch(
+        r"user default reset on >([A-Za-z0-9_-]{43,128}) "
+        r"~\* \+@read \+@write \+@connection \+@transaction -@dangerous\n"
+        r"appendonly no\nmaxmemory-policy noeviction\n",
+        config_file.read_text(encoding="utf-8"),
+    )
+    return match.group(1) if match else None
+
+
 def test_the_cache_credential_is_generated_owner_only_and_reused(tmp_path):
     assert realize_misp_cache_credential(_cache_artifact(), tmp_path) is None
     password_file, config_file = _cache_paths(tmp_path)
 
     password = password_file.read_text(encoding="utf-8").strip()
     assert password
-    assert config_file.read_text(encoding="utf-8") == f"requirepass {password}\n"
+    credential_matches = _cache_acl_token(config_file) == password
+    assert credential_matches
     assert password_file.stat().st_mode & 0o777 == 0o600
     assert config_file.stat().st_mode & 0o777 == 0o600
     # Redis parses its config by whitespace, so a credential with a space in it
@@ -267,7 +281,8 @@ def test_a_drifted_cache_config_is_regenerated_rather_than_reused(tmp_path):
 
     regenerated = password_file.read_text(encoding="utf-8").strip()
     assert regenerated != original
-    assert config_file.read_text(encoding="utf-8") == f"requirepass {regenerated}\n"
+    credential_matches = _cache_acl_token(config_file) == regenerated
+    assert credential_matches
 
 
 def test_a_symlinked_cache_output_is_never_reused(tmp_path):

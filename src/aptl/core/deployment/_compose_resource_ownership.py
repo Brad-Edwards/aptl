@@ -40,7 +40,8 @@ _RECEIPT_MALFORMED = "ownership receipt inventory is malformed"
 # list a staging inode while another node is publishing its receipt. The staging
 # file grants no authority; only the final exact .json name is decoded below.
 _RECEIPT_PUBLISH_TEMP = re.compile(
-    r"^\.[0-9a-f]{64}\.json\.[0-9]+\.[0-9]+\.tmp(?:\.[0-9]+)?$"
+    r"^\.[0-9a-f]{64}\.json\.\d+\.\d+\.tmp(?:\.\d+)?$",
+    flags=re.ASCII,
 )
 _OVERRIDE_UNAVAILABLE = "Compose ownership override is unavailable"
 

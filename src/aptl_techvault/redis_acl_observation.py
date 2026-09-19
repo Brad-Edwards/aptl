@@ -64,7 +64,7 @@ def observe_redis_app_authorizations(
     lines = str(getattr(result, "stdout", "") or "").splitlines()
     if any("=" not in line for line in lines):
         return None
-    fields = dict(line.split("=", 1) for line in lines)
+    fields = {key: value for key, value in (line.split("=", 1) for line in lines)}
     if (
         len(lines) != 4
         or fields.get("config") != "exact"
@@ -122,4 +122,6 @@ def _supported_read_write_acl(authorization: object) -> bool:
 
 
 def _value(value: object) -> str:
+    """Normalize RAES enum-like values for exact ACL declaration checks."""
+
     return str(getattr(value, "value", value) or "")

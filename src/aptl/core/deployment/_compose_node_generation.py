@@ -54,9 +54,7 @@ GENERATED_COMPOSE_RELPATH = Path(".aptl") / "realization" / "compose-base.yml"
 STATIC_COMPOSE_FILENAME = "docker-compose.yml"
 
 
-def render_realization_compose(
-    spec: DeploymentRealizationSpec, realization_root: Path | None = None
-) -> dict[str, object]:
+def render_realization_compose(spec: DeploymentRealizationSpec) -> dict[str, object]:
     """Return a Compose document for the spec's image-backed nodes and networks.
 
     Image-free nodes (no backing image) are omitted: the generic materializer
@@ -64,8 +62,8 @@ def render_realization_compose(
     is itself an emitted service, so the document never references an undefined
     service.
 
-    ``realization_root`` is accepted for the generated-file caller. Authority
-    holders receive the exact host-root-equivalent endpoint they declared.
+    Authority holders receive the exact host-root-equivalent endpoint they
+    declared.
     """
 
     image_by_address = {image.address: image for image in spec.images}
@@ -192,7 +190,6 @@ _DEFAULT_IMAGE_NODE_ULIMITS = {
 }
 
 
-
 def write_realization_compose(
     spec: DeploymentRealizationSpec, scenario_root: Path
 ) -> Path:
@@ -201,7 +198,7 @@ def write_realization_compose(
     path = scenario_root / GENERATED_COMPOSE_RELPATH
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        yaml.safe_dump(render_realization_compose(spec, scenario_root), sort_keys=True),
+        yaml.safe_dump(render_realization_compose(spec), sort_keys=True),
         encoding="utf-8",
         newline="\n",
     )

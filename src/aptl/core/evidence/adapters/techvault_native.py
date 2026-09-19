@@ -183,6 +183,8 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
         """Correlate each declared endpoint agent with the manager's roster."""
 
         def observe() -> Mapping[str, object] | None:
+            """Read the manager roster using the admitted scenario identities."""
+
             return wazuh_agent_readiness(
                 getattr(self._backend, "container_exec_with_input", None),
                 self._realization,

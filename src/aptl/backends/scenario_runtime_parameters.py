@@ -19,10 +19,14 @@ class RuntimeParameterProviderError(RuntimeError):
 
 
 def _entry_points() -> list[metadata.EntryPoint]:
+    """Find installed providers without importing scenario-owned modules."""
+
     return list(metadata.entry_points(group=ENTRY_POINT_GROUP))
 
 
 def _load(entry_point: metadata.EntryPoint) -> object:
+    """Load one provider while converting import failures to stable errors."""
+
     try:
         provider = entry_point.load()
         if isinstance(provider, type):
@@ -38,6 +42,8 @@ def _load(entry_point: metadata.EntryPoint) -> object:
 
 
 def _compatible(provider: object, bundle: ScenarioBundle) -> bool:
+    """Accept only providers bound to this exact pack release."""
+
     identity = bundle.pack_identity
     if identity is None:
         return False
@@ -58,6 +64,8 @@ def _compatible(provider: object, bundle: ScenarioBundle) -> bool:
 
 
 def _validated_parameters(value: object) -> Mapping[str, object] | None:
+    """Copy a provider result after validating its parameter names."""
+
     if value is None:
         return None
     if not isinstance(value, Mapping) or any(

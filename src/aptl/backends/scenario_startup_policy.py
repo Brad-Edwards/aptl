@@ -59,6 +59,8 @@ class ScenarioComposeStartupPolicy:
 
 
 def _valid_test(test: object) -> bool:
+    """Permit only bounded exec-form Compose health commands."""
+
     return bool(
         isinstance(test, tuple)
         and 2 <= len(test) <= 8
@@ -68,6 +70,8 @@ def _valid_test(test: object) -> bool:
 
 
 def _valid_budget(value: object) -> bool:
+    """Restrict each health timing field to a positive bounded integer."""
+
     return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 900
 
 
@@ -113,6 +117,8 @@ def _apply_probes(
 def _condition_map(
     declared: list[str] | dict[str, dict[str, str]],
 ) -> dict[str, dict[str, str]]:
+    """Preserve declared Compose dependency conditions as a mutable map."""
+
     if isinstance(declared, dict):
         return {name: dict(value) for name, value in declared.items()}
     return {name: {"condition": "service_started"} for name in declared}
@@ -169,6 +175,8 @@ def _validated_policy(
 
 
 def _resolved_services(spec: DeploymentRealizationSpec) -> dict[str, dict[str, object]]:
+    """Resolve an exact-pack policy into bounded Compose service fields."""
+
     provider = _runtime_provider(spec.pack_identity)
     resolver = getattr(provider, "compose_startup_policy", None) if provider else None
     if resolver is None:

@@ -289,11 +289,10 @@ class TestFilesystem:
         fake_input = _FakeInputExec(lambda _container, argv, _payload: 1)
         fake = _FakeExec(lambda _container, argv: (1, ""))
         sleeps = []
+        executor = _executor(fake, sleep=sleeps.append, input_fn=fake_input)
 
         with pytest.raises(MaterializationCommandError):
-            _executor(fake, sleep=sleeps.append, input_fn=fake_input).place_file(
-                "n.node", "/tmp/a", "value"
-            )
+            executor.place_file("n.node", "/tmp/a", "value")
 
         assert len(fake_input.calls) == 5
         assert fake.argvs() == [["sha256sum", "/tmp/a"]] * 5

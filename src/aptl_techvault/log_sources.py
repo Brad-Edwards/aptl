@@ -17,6 +17,8 @@ from typing import Protocol
 
 
 class LogSourceBackend(Protocol):
+    """Container execution capabilities needed for native log realization."""
+
     def container_exec(
         self, name: str, cmd: list[str], *, timeout: int | None = None
     ) -> object: ...
@@ -28,6 +30,9 @@ class LogSourceBackend(Protocol):
 
 _SAFE_CLUSTER = re.compile(r"[A-Za-z0-9_.-]+")
 _SAMBA_DROPIN = "/etc/systemd/system/smbd.service.d/60-aptl-log-sources.conf"
+_SAMBA_AUDIT_LOG = "/var/log/samba/log.samba"
+_SAMBA_MAIN_LOG = "/var/log/samba/log.smbd"
+_SMBD_SERVICE = "smbd.service"
 _CHECK_MARKER = "aptl-log-source-readback"
 _RSYSLOG_CONFIG = "/etc/rsyslog.conf"
 # Stage under a root-owned parent, not the guest's publicly writable /tmp.
@@ -36,6 +41,7 @@ _JOURNALD_DROPIN = "/etc/systemd/journald.conf.d/60-aptl-forward.conf"
 _JOURNALD_PAYLOAD = "[Journal]\nForwardToSyslog=yes\n"
 _SYSLOG_ALIAS = "/etc/systemd/system/syslog.service"
 _RSYSLOG_UNIT = "/usr/lib/systemd/system/rsyslog.service"
+_RSYSLOG_SERVICE = "rsyslog.service"
 
 
 def realize_log_sources(
@@ -79,10 +85,14 @@ def realize_log_sources(
 
 
 def _value(value: object) -> str:
+    """Normalize RAES enum-like values before comparing declarations."""
+
     return str(getattr(value, "value", value) or "")
 
 
 def _declared_tailed_files(runtime: object) -> frozenset[str]:
+    """Find paths both inventoried as files and tailed by Wazuh agents."""
+
     inventory = {
         str(entry.path)
         for entry in getattr(runtime, "filesystem_inventory", ())
@@ -100,6 +110,8 @@ def _declared_tailed_files(runtime: object) -> frozenset[str]:
 
 
 def _has_unit(runtime: object, unit_name: str) -> bool:
+    """Check whether the SDL declares a systemd unit by name."""
+
     return any(
         getattr(unit, "unit_name", "") == unit_name
         for unit in getattr(runtime, "service_manager_units", ())
@@ -107,6 +119,8 @@ def _has_unit(runtime: object, unit_name: str) -> bool:
 
 
 def _postgres_candidate(runtime: object, sources: frozenset[str]) -> bool:
+    """Select a declared PostgreSQL producer with an inventoried log path."""
+
     return bool(
         _has_unit(runtime, "postgresql.service")
         and any(
@@ -118,6 +132,8 @@ def _postgres_candidate(runtime: object, sources: frozenset[str]) -> bool:
 
 
 def _rocky_syslog_candidate(runtime: object, sources: frozenset[str]) -> bool:
+    """Select the Rocky syslog producer only for its declared log paths."""
+
     return bool(
         {"/var/log/secure", "/var/log/messages"} <= sources
         and _has_unit(runtime, "sshd.service")
@@ -129,9 +145,11 @@ def _rocky_syslog_candidate(runtime: object, sources: frozenset[str]) -> bool:
 
 
 def _samba_candidate(runtime: object, sources: frozenset[str]) -> bool:
+    """Select standalone Samba only when its native logs are declared."""
+
     return bool(
-        {"/var/log/samba/log.smbd", "/var/log/samba/log.samba"} <= sources
-        and _has_unit(runtime, "smbd.service")
+        {_SAMBA_MAIN_LOG, _SAMBA_AUDIT_LOG} <= sources
+        and _has_unit(runtime, _SMBD_SERVICE)
         and any(
             _value(getattr(service, "protocol", "")) == "smb"
             for service in getattr(runtime, "file_services", ())
@@ -143,7 +161,7 @@ def _samba_ad_candidate(runtime: object, sources: frozenset[str]) -> bool:
     """Select the domain provider only when its Samba sources are declared."""
 
     return bool(
-        {"/var/log/samba/log.samba", "/var/log/samba/log.smbd"} <= sources
+        {_SAMBA_AUDIT_LOG, _SAMBA_MAIN_LOG} <= sources
         and any(
             _value(getattr(authority, "kind", "")) == "domain"
             for authority in getattr(runtime, "identity_authorities", ())
@@ -154,18 +172,24 @@ def _samba_ad_candidate(runtime: object, sources: frozenset[str]) -> bool:
 def _exec(
     backend: LogSourceBackend, container: str, command: list[str], timeout: int = 30
 ) -> object:
+    """Run a bounded command in a realized container."""
+
     return backend.container_exec(container, command, timeout=timeout)
 
 
 def _ok(
     backend: LogSourceBackend, container: str, command: list[str], timeout: int = 30
 ) -> bool:
+    """Return whether the bounded container command succeeded."""
+
     return getattr(_exec(backend, container, command, timeout), "returncode", 1) == 0
 
 
 def _stdout(
     backend: LogSourceBackend, container: str, command: list[str], timeout: int = 30
 ) -> str | None:
+    """Read trimmed output only from a successful container command."""
+
     result = _exec(backend, container, command, timeout)
     if getattr(result, "returncode", 1) != 0:
         return None
@@ -173,6 +197,8 @@ def _stdout(
 
 
 def _read_file(backend: LogSourceBackend, container: str, path: str) -> str | None:
+    """Read a guest file without mistaking a failed cat for empty content."""
+
     result = _exec(backend, container, ["cat", path])
     if getattr(result, "returncode", 1) != 0:
         return None
@@ -180,6 +206,8 @@ def _read_file(backend: LogSourceBackend, container: str, path: str) -> str | No
 
 
 def _await_nonempty_file(backend: LogSourceBackend, container: str, path: str) -> bool:
+    """Wait briefly for a native producer to write a nonempty file."""
+
     for attempt in range(20):
         if _ok(backend, container, ["test", "-s", path]):
             return True
@@ -200,6 +228,8 @@ def _await_active_unit(backend: LogSourceBackend, container: str, unit: str) -> 
 
 
 def _file_size(backend: LogSourceBackend, container: str, path: str) -> int:
+    """Read a guest file's size, treating a missing file as empty."""
+
     output = _stdout(backend, container, ["stat", "-c", "%s", path])
     try:
         return max(0, int(output or "0"))
@@ -210,6 +240,8 @@ def _file_size(backend: LogSourceBackend, container: str, path: str) -> int:
 def _await_file_growth(
     backend: LogSourceBackend, container: str, path: str, before: int
 ) -> bool:
+    """Confirm a fresh producer event increased the guest file size."""
+
     for attempt in range(40):
         if _file_size(backend, container, path) > before:
             return True
@@ -221,6 +253,8 @@ def _await_file_growth(
 def _await_log_event(
     backend: LogSourceBackend, container: str, path: str, marker: str
 ) -> bool:
+    """Wait for an exact probe marker in a native guest log."""
+
     command = ["grep", "-Fq", marker, path]
     for attempt in range(40):
         if _ok(backend, container, command):
@@ -233,6 +267,8 @@ def _await_log_event(
 def _postgres_settings(
     backend: LogSourceBackend, container: str
 ) -> tuple[str, str, str] | None:
+    """Read PostgreSQL's effective logging directory, file, and collector."""
+
     result = _stdout(
         backend,
         container,
@@ -253,6 +289,8 @@ def _postgres_settings(
 def _realize_postgres_log(
     backend: LogSourceBackend, container: str, sources: frozenset[str]
 ) -> str | None:
+    """Configure and corroborate the one declared PostgreSQL log producer."""
+
     selected = [
         path
         for path in sources
@@ -355,6 +393,8 @@ def _rocky_rsyslog_config(original: str) -> str | None:
 def _write_container_file(
     backend: LogSourceBackend, container: str, path: str, payload: str
 ) -> bool:
+    """Write a root-owned guest config under an explicit parent directory."""
+
     parent = str(PurePosixPath(path).parent)
     if not _ok(backend, container, ["mkdir", "-p", parent]):
         return False
@@ -416,21 +456,21 @@ def _configure_syslog_bridge(backend: LogSourceBackend, container: str) -> str |
         return "syslog socket service alias failed"
     if not _ok(backend, container, ["systemctl", "daemon-reload"], 120):
         return "syslog service reload failed"
-    stopped = _ok(backend, container, ["systemctl", "stop", "rsyslog.service"], 120)
+    stopped = _ok(backend, container, ["systemctl", "stop", _RSYSLOG_SERVICE], 120)
     if not stopped and _ok(
-        backend, container, ["systemctl", "is-active", "--quiet", "rsyslog.service"]
+        backend, container, ["systemctl", "is-active", "--quiet", _RSYSLOG_SERVICE]
     ):
         return "rsyslog service stop failed"
     _ok(backend, container, ["systemctl", "start", "syslog.socket"], 120)
     if not _await_active_unit(backend, container, "syslog.socket"):
         return "syslog socket failed"
-    enabled = _ok(backend, container, ["systemctl", "enable", "rsyslog.service"], 120)
+    enabled = _ok(backend, container, ["systemctl", "enable", _RSYSLOG_SERVICE], 120)
     if not enabled and not _ok(
-        backend, container, ["systemctl", "is-enabled", "--quiet", "rsyslog.service"]
+        backend, container, ["systemctl", "is-enabled", "--quiet", _RSYSLOG_SERVICE]
     ):
         return "rsyslog service could not be enabled"
-    _ok(backend, container, ["systemctl", "start", "rsyslog.service"], 120)
-    if not _await_active_unit(backend, container, "rsyslog.service"):
+    _ok(backend, container, ["systemctl", "start", _RSYSLOG_SERVICE], 120)
+    if not _await_active_unit(backend, container, _RSYSLOG_SERVICE):
         return "rsyslog service did not start"
     _ok(backend, container, ["systemctl", "restart", "systemd-journald.service"], 120)
     if not _await_active_unit(backend, container, "systemd-journald.service"):
@@ -452,6 +492,8 @@ def _verify_syslog_paths(backend: LogSourceBackend, container: str) -> str | Non
 
 
 def _realize_rocky_syslog(backend: LogSourceBackend, container: str) -> str | None:
+    """Configure Rocky's native syslog path and verify fresh events."""
+
     if not _ok(backend, container, ["test", "-x", "/usr/sbin/rsyslogd"]):
         return "rsyslog is absent from the selected base image"
     for step in (
@@ -472,8 +514,8 @@ def _samba_dropin() -> str:
         "[Service]\n"
         "ExecStart=\n"
         "ExecStart=/usr/sbin/smbd --foreground --no-process-group $SMBDOPTIONS "
-        '"--option=log file=/var/log/samba/log.smbd" '
-        '"--option=log level=1 auth_audit:5@/var/log/samba/log.samba" '
+        f'"--option=log file={_SAMBA_MAIN_LOG}" '
+        f'"--option=log level=1 auth_audit:5@{_SAMBA_AUDIT_LOG}" '
         '"--option=debug syslog format=yes"\n'
     )
 
@@ -481,6 +523,8 @@ def _samba_dropin() -> str:
 def _realize_samba_logs(
     backend: LogSourceBackend, container: str, smb_client_container: str
 ) -> str | None:
+    """Enable standalone Samba audit output and verify a guest SMB event."""
+
     payload = _samba_dropin()
     expected = hashlib.sha256(payload.encode()).hexdigest()
     digest = _stdout(backend, container, ["sha256sum", _SAMBA_DROPIN])
@@ -498,17 +542,17 @@ def _realize_samba_logs(
             backend, container, ["systemctl", "daemon-reload"]
         ):
             return "Samba service override failed"
-        if not _ok(backend, container, ["systemctl", "restart", "smbd.service"], 120):
+        if not _ok(backend, container, ["systemctl", "restart", _SMBD_SERVICE], 120):
             return "Samba service restart failed"
     if not _ok(
-        backend, container, ["systemctl", "is-active", "--quiet", "smbd.service"]
+        backend, container, ["systemctl", "is-active", "--quiet", _SMBD_SERVICE]
     ):
         return "Samba service is inactive"
-    if not _await_nonempty_file(backend, container, "/var/log/samba/log.smbd"):
+    if not _await_nonempty_file(backend, container, _SAMBA_MAIN_LOG):
         return "Samba main log is empty"
     if not smb_client_container:
         return "declared SMB probe client is unavailable"
-    audit_path = "/var/log/samba/log.samba"
+    audit_path = _SAMBA_AUDIT_LOG
     before = _file_size(backend, container, audit_path)
     if not _ok(
         backend,
@@ -541,7 +585,7 @@ def _samba_ad_config(original: str) -> str | None:
         len(lines),
     )
     expected = {
-        "log file": "/var/log/samba/log.samba",
+        "log file": _SAMBA_AUDIT_LOG,
         "log level": "1 auth_audit:5",
     }
     present: dict[str, str] = {}
@@ -584,7 +628,7 @@ def _realize_samba_ad_logs(
         return "domain Samba configuration reload failed"
     if not smb_client_container:
         return "declared SMB probe client is unavailable"
-    audit_path = "/var/log/samba/log.samba"
+    audit_path = _SAMBA_AUDIT_LOG
     before = _file_size(backend, container, audit_path)
     marker = f"aptl-readiness-{secrets.token_hex(8)}"
     # Guest authorization is expected to fail on the domain controller. The

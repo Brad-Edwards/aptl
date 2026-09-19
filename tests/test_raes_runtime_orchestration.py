@@ -726,7 +726,7 @@ def test_generated_compose_lowers_the_declared_host_root_socket(tmp_path) -> Non
 
     from aptl.core.deployment._compose_node_generation import render_realization_compose
 
-    service = render_realization_compose(_spec(), tmp_path)["services"]["orborus"]
+    service = render_realization_compose(_spec())["services"]["orborus"]
 
     assert service["volumes"] == [
         {
@@ -751,9 +751,7 @@ def test_generated_compose_preserves_existing_volumes_when_adding_socket(
         lambda _runtime: {"volumes": [declared]},
     )
 
-    service = generation.render_realization_compose(_spec(), tmp_path)["services"][
-        "orborus"
-    ]
+    service = generation.render_realization_compose(_spec())["services"]["orborus"]
 
     assert service["volumes"] == [
         declared,

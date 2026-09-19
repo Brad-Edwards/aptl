@@ -139,6 +139,18 @@ def test_receipt_inventory_ignores_only_in_progress_atomic_publication(
         ownership.receipts("container")
 
 
+def test_receipt_publish_temp_name_remains_ascii_only() -> None:
+    """Unicode numerals must not be mistaken for publisher-owned temp files."""
+
+    from aptl.core.deployment._compose_resource_ownership import (
+        _RECEIPT_PUBLISH_TEMP,
+    )
+
+    prefix = "." + "a" * 64 + ".json."
+    assert _RECEIPT_PUBLISH_TEMP.fullmatch(prefix + "123.4.tmp")
+    assert not _RECEIPT_PUBLISH_TEMP.fullmatch(prefix + "١٢٣.4.tmp")
+
+
 def test_shared_volume_creation_waits_for_ownership_receipt(tmp_path: Path) -> None:
     """Another node cannot observe a volume before its creator records it."""
 

@@ -90,6 +90,8 @@ def _safe_command_operation(cmd: list[str]) -> str:
 
 
 def _timed_out_operation(cmd: list[str], timeout: int | None) -> BackendTimeoutError:
+    """Build a redacted timeout diagnostic from a safe Docker verb only."""
+
     operation = _safe_command_operation(cmd)
     log.error("%s timed out after %ss", operation, timeout)
     return BackendTimeoutError(f"{operation} timed out after {timeout}s")

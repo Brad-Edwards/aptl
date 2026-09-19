@@ -116,9 +116,11 @@ echo "database_role_access_ok=true"
 # cache container, so the generated value stays where it was delivered. The
 # declared persistence posture is read back from the running server rather than
 # assumed from the image's defaults.
-_MISP_CACHE_SCRIPT = r"""
+_MISP_CACHE_SCRIPT = (
+    r"""
 set -eu
-pass="$(sed -nE 's/^user default reset on >([A-Za-z0-9_-]+) ~\* \+@read \+@write \+@connection \+@transaction -@dangerous$/\1/p' /etc/redis/redis.conf)"
+pass="$(sed -nE 's/^user default reset on >([A-Za-z0-9_-]+) ~\* \+@read """
+    r"""\+@write \+@connection \+@transaction -@dangerous$/\1/p' /etc/redis/redis.conf)"
 [ -n "$pass" ]
 expected="user default reset on >$pass ~* +@read +@write +@connection +@transaction -@dangerous"
 expected_hash="$(printf '%s\nappendonly no\nmaxmemory-policy noeviction\n' "$expected" | sha256sum)"
@@ -148,6 +150,7 @@ echo "cache_authenticated=true"
 echo "cache_persistence_policy=$aof"
 echo "cache_eviction_policy=$evict"
 """
+)
 
 
 # Certificate identity is proven for the name the scenario authored, not for

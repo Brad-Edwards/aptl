@@ -30,6 +30,8 @@ _SOURCES = {
 
 
 def _exec(backend: object, container: str, argv: list[str]) -> object | None:
+    """Run a bounded guest probe without treating executor failure as success."""
+
     execute = getattr(backend, "container_exec", None)
     if not callable(execute):
         return None
@@ -40,6 +42,8 @@ def _exec(backend: object, container: str, argv: list[str]) -> object | None:
 
 
 def _size(backend: object, container: str, path: str) -> int | None:
+    """Read the current size of a declared native log path."""
+
     result = _exec(backend, container, ["stat", "-c", "%s", path])
     if result is None or getattr(result, "returncode", 1) != 0:
         return None
@@ -50,6 +54,8 @@ def _size(backend: object, container: str, path: str) -> int | None:
 
 
 def _grew(backend: object, container: str, path: str, before: int) -> bool:
+    """Wait for a fresh native event to increase the log size."""
+
     for attempt in range(21):
         current = _size(backend, container, path)
         if current is not None and current > before:
@@ -60,6 +66,8 @@ def _grew(backend: object, container: str, path: str, before: int) -> bool:
 
 
 def _run(backend: object, container: str, argv: list[str]) -> bool:
+    """Return whether one bounded guest action exited successfully."""
+
     result = _exec(backend, container, argv)
     return result is not None and getattr(result, "returncode", 1) == 0
 
@@ -78,7 +86,7 @@ def _guest_share(realization: object) -> str | None:
             if getattr(share, "guest_ok", False)
             and _SAFE_SHARE.fullmatch(str(getattr(share, "name", "")))
         ]
-        return sorted(shares)[0] if shares else None
+        return min(shares) if shares else None
     return None
 
 
@@ -89,6 +97,8 @@ def _stimulate(
     marker: str,
     trigger_sqli: Callable[[], Mapping[str, object] | None],
 ) -> bool:
+    """Exercise the declared product source without fabricating log content."""
+
     if node in {"victim", "workstation"}:
         return _run(
             backend, f"aptl-{node}", ["logger", "-p", "authpriv.notice", marker]

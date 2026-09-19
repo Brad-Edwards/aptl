@@ -60,10 +60,14 @@ class ScenarioStartupPlan:
 
 
 def _entry_points() -> list[metadata.EntryPoint]:
+    """Find installed startup providers without importing them eagerly."""
+
     return list(metadata.entry_points(group=ENTRY_POINT_GROUP))
 
 
 def _load(entry_point: metadata.EntryPoint) -> object:
+    """Load one provider and redact implementation failures."""
+
     try:
         provider = entry_point.load()
         if isinstance(provider, type):
@@ -79,6 +83,8 @@ def _load(entry_point: metadata.EntryPoint) -> object:
 
 
 def _string_tuple(provider: object, name: str) -> tuple[str, ...]:
+    """Require a provider identity field to be a nonempty-string tuple."""
+
     value = getattr(provider, name, None)
     if not isinstance(value, tuple) or any(
         not isinstance(item, str) or not item for item in value
@@ -88,6 +94,8 @@ def _string_tuple(provider: object, name: str) -> tuple[str, ...]:
 
 
 def _compatible_identity(provider: object, identity: PackIdentity) -> bool:
+    """Check the extension contract and immutable pack identity."""
+
     if (
         getattr(provider, "extension_api_version", None) != EXTENSION_API_VERSION
         or getattr(provider, "supported_pack_id", None) != identity.pack_id
@@ -100,11 +108,15 @@ def _compatible_identity(provider: object, identity: PackIdentity) -> bool:
 
 
 def _compatible(provider: object, bundle: ScenarioBundle) -> bool:
+    """Match an adapter only when the bundle carries a qualified pack."""
+
     identity = bundle.pack_identity
     return identity is not None and _compatible_identity(provider, identity)
 
 
 def _safe_relative_script(value: object) -> str:
+    """Reject absolute or escaping seed script paths from an adapter."""
+
     if (
         not isinstance(value, str)
         or not value
@@ -119,6 +131,8 @@ def _safe_relative_script(value: object) -> str:
 
 
 def _validated_aliases(value: object) -> tuple[EnvironmentAlias, ...]:
+    """Validate unique, well-formed operator environment aliases."""
+
     if not isinstance(value, tuple) or any(
         not isinstance(item, EnvironmentAlias) for item in value
     ):
@@ -137,6 +151,8 @@ def _validated_aliases(value: object) -> tuple[EnvironmentAlias, ...]:
 def _validated_container_environment(
     value: object,
 ) -> tuple[ContainerEnvironmentBinding, ...]:
+    """Validate semantic container bindings before exposing them to seed."""
+
     if not isinstance(value, tuple) or any(
         not isinstance(item, ContainerEnvironmentBinding) for item in value
     ):
@@ -155,6 +171,8 @@ def _validated_container_environment(
 
 
 def _validated_plan(value: object) -> ScenarioStartupPlan:
+    """Normalize one adapter plan and reject malformed profile sets."""
+
     if not isinstance(value, ScenarioStartupPlan):
         raise ScenarioStartupProviderError("provider-result-invalid")
     profiles = value.required_profiles

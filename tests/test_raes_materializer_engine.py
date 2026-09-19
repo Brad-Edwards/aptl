@@ -237,7 +237,8 @@ class TestMaterializeNode:
 
         result = materialize_node("provision.node.example", (op,), _Broken())
 
-        assert result is not None and not result.success
+        assert result is not None
+        assert not result.success
         assert "step=copy" in caplog.text
         assert "cause=BackendSeedError" in caplog.text
         assert "do-not-log" not in caplog.text

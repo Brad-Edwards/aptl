@@ -86,7 +86,7 @@ def test_generated_compose_uses_only_the_admitted_shuffle_runtime(
     realization = _realize_pack(tmp_path)
     # The pinned pack now admits the Orborus authority alongside Shuffle.
     spec = realization.deployment_spec(sorted(realization.profiles))
-    document = render_realization_compose(spec, tmp_path)
+    document = render_realization_compose(spec)
     backend = document["services"]["shuffle-backend"]
 
     assert backend["profiles"] == ["soc"]

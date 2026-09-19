@@ -114,21 +114,17 @@ def test_qualified_techvault_policy_waits_for_declared_healthy_dependencies(
 
 def test_startup_policy_cannot_add_undeclared_dependency_or_service() -> None:
     spec = _startup_spec()
+    undeclared_edge = ScenarioComposeStartupPolicy(
+        probes=(StartupHealthProbe("thehive-cassandra", ("CMD", "true")),),
+        dependencies=(StartupHealthDependency("cortex", "thehive-cassandra"),),
+    )
     with pytest.raises(ScenarioStartupProviderError, match="result-invalid"):
-        _validated_policy(
-            ScenarioComposeStartupPolicy(
-                probes=(StartupHealthProbe("thehive-cassandra", ("CMD", "true")),),
-                dependencies=(StartupHealthDependency("cortex", "thehive-cassandra"),),
-            ),
-            spec,
-        )
+        _validated_policy(undeclared_edge, spec)
+    foreign_service = ScenarioComposeStartupPolicy(
+        probes=(StartupHealthProbe("foreign", ("CMD", "true")),),
+    )
     with pytest.raises(ScenarioStartupProviderError, match="result-invalid"):
-        _validated_policy(
-            ScenarioComposeStartupPolicy(
-                probes=(StartupHealthProbe("foreign", ("CMD", "true")),),
-            ),
-            spec,
-        )
+        _validated_policy(foreign_service, spec)
 
 
 @pytest.mark.parametrize(
@@ -141,18 +137,18 @@ def test_startup_policy_cannot_add_undeclared_dependency_or_service() -> None:
     ],
 )
 def test_startup_policy_rejects_malformed_health_probes(probe) -> None:
+    policy = ScenarioComposeStartupPolicy(probes=(probe,))
+    spec = _startup_spec()
     with pytest.raises(ScenarioStartupProviderError, match="result-invalid"):
-        _validated_policy(
-            ScenarioComposeStartupPolicy(probes=(probe,)), _startup_spec()
-        )
+        _validated_policy(policy, spec)
 
 
 def test_startup_policy_rejects_duplicate_health_probe() -> None:
     probe = StartupHealthProbe("thehive", ("CMD", "true"))
+    policy = ScenarioComposeStartupPolicy(probes=(probe, probe))
+    spec = _startup_spec()
     with pytest.raises(ScenarioStartupProviderError, match="result-invalid"):
-        _validated_policy(
-            ScenarioComposeStartupPolicy(probes=(probe, probe)), _startup_spec()
-        )
+        _validated_policy(policy, spec)
 
 
 def test_exact_release_resolves_seed_and_runtime_bindings() -> None:

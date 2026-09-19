@@ -9,25 +9,19 @@ credential may reach a descendant process's argv.
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 from pathlib import Path
 
 import pytest
 
-PROBES = (
-    Path(__file__).resolve().parents[1]
-    / "src/aptl/core/evidence/adapters/techvault_readiness_probes.py"
-)
+from aptl.core.evidence.adapters import techvault_readiness_probes as probes
+
 _START = "2026-01-01T00:00:00Z"
 _END = "2026-01-01T00:05:00Z"
 
 
 def _script(name: str) -> str:
-    source = PROBES.read_text(encoding="utf-8")
-    match = re.search(rf'{name} = r"""(.*?)"""', source, re.S)
-    assert match is not None, name
-    return match.group(1)
+    return getattr(probes, name)
 
 
 def _archive(tmp_path: Path, rows: list[object]) -> str:

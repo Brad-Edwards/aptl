@@ -112,7 +112,7 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
     # child correlation before APTL can admit its Docker authority. Strip only
     # that downstream declaration so the generic Compose surface remains covered.
     spec = realization.deployment_spec(sorted(realization.profiles))
-    document = render_realization_compose(spec, tmp_path)
+    document = render_realization_compose(spec)
 
     services = document["services"]
     # Image-backed SOC nodes are emitted as services...

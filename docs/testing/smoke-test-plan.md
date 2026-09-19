@@ -113,15 +113,37 @@ The Wazuh dashboard certificate names `wazuh.dashboard`, not `localhost`.
 Configure a temporary browser or operating-system resolver entry mapping
 `wazuh.dashboard` to `127.0.0.1`, and use the dashboard host port reported by
 `aptl lab info` (`443` is only the default). The other SOC UI certificates
-include `localhost`; use each service's actual loopback publication from the
-current path's `qa-start-status.json` rather than assuming a default port.
-Confirm that the browser reports a valid hostname and a chain to the
-corresponding path-specific root before recording a UI result.
+include `localhost`, but MISP's authored browser origin is
+`https://misp.techvault.local` on port 443. Its loopback publication (normally
+`https://localhost:8443`) is usable by API/MCP clients but is **not** a browser
+login URL: MISP redirects the form to its canonical origin, which the browser
+blocks under `form-action 'self'` when opened on the loopback publication.
+Do not weaken CSP or change the authored in-world base URL to make this pass.
+
+On a native-Linux Docker host, select the MISP container's security-network IP
+from this path's `qa-start-status.json` and map `misp.techvault.local` to that
+IP in the test browser only. Open `https://misp.techvault.local/`, not the
+loopback publication. For example, the IP can be read without guessing a
+container name:
+
+```bash
+jq -r '.containers[] | select(.name | endswith("-misp")) |
+  .networks | to_entries[] | select(.key | endswith("_aptl-security")) |
+  .value' qa-start-status.json
+```
+
+The browser must have a route to that in-range address. Docker Desktop hosts
+may not expose the bridge address directly; use a browser in an environment
+with a route to the scenario network and the same canonical origin, or record
+`QA-MISP` as `FAIL`. Do not count a successful API call or the broken loopback
+login page as a browser result. For Shuffle and TheHive, use each service's
+actual loopback publication from `qa-start-status.json`. Confirm a valid
+hostname and chain to the path-specific root before recording any UI result.
 
 Do not click through a certificate warning, disable certificate validation, or
 use an insecure client flag to make a QA row pass. Remove the temporary trust
-entries and hostname mapping after that path's `QA-TEARDOWN`; path B must import
-its own newly generated roots rather than reuse path A's trust.
+entries and hostname mappings after that path's `QA-TEARDOWN`; path B must
+import its own newly generated roots rather than reuse path A's trust.
 
 ## Required actions
 
@@ -240,10 +262,11 @@ alert id, observable type/value, analyzer name, job id, and terminal result.
 
 ### QA-MISP: Seeded threat intelligence and round trip
 
-Open MISP at `https://localhost:<reported-host-port>` (default `8443`), confirm
-the expected seeded TechVault content is present, then add a harmless release-QA
-indicator in a dedicated QA event or select a seeded indicator. Retrieve the
-same indicator through a second supported surface, preferably
+Open MISP at the canonical browser origin specified above. Confirm the seeded
+`APTL Lab - Known Threat Actors` event and its TechVault-scenario Kali
+indicator `172.20.4.30`, then add a harmless release-QA indicator in a
+dedicated QA event or select that seeded indicator. Retrieve the same
+indicator through a second supported surface, preferably
 `mcp-threatintel` in `QA-MCP-TI`.
 
 Expected: MISP is usable and seeded, and the exact indicator can be pushed or

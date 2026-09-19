@@ -39,6 +39,13 @@ afterEach(() => {
 });
 
 describe('captureFilePath — OBS-003 per-run routing', () => {
+  it('uses the configured Python run archive for MCP-side captures', () => {
+    const tid = 'a'.repeat(32);
+    writeFileSync(join(tmpDir, 'trace-context.json'), JSON.stringify({ trace_id: tid }));
+    expect(captureFilePath({ ...env, APTL_MCP_RUN_STORE_BASE: join(tmpDir, 'archive') })).toBe(
+      join(tmpDir, 'archive', tid, 'mcp-side', 'tool-calls.jsonl'),
+    );
+  });
   it('routes to runs/<trace_id>/mcp-side/tool-calls.jsonl when scenario active', () => {
     const tid = 'a'.repeat(32);
     writeFileSync(

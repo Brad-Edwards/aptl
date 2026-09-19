@@ -410,7 +410,7 @@ class GuestAdmission:
 
     def _service_environment(self, project: Path, artifact: Path) -> dict[str, str]:
         """Load private service leases and the canonical ports for one MCP."""
-        from aptl.core.lab import _server_config_port_refs
+        from aptl.core.lab import _expected_transcript_store, _server_config_port_refs
         from aptl.workbench.credentials import EphemeralCredentialBroker
 
         with open_contained_nofollow(project, ".mcp.json") as handle:
@@ -430,6 +430,9 @@ class GuestAdmission:
             "HOME": str(self.binding.management_home),
             "APTL_MCP_DISABLE_DOTENV": "1",
             "APTL_STATE_DIR": str(project / ".aptl"),
+            "APTL_MCP_RUN_STORE_BASE": str(
+                _expected_transcript_store(project).resolve()
+            ),
             "APTL_MCP_ADMITTED_RUN_ID": self.binding.run_id,
             "APTL_MCP_REQUIRE_REMOTE_CLOSE": "1",
         }

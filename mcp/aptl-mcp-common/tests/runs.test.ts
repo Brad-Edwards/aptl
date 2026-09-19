@@ -46,6 +46,19 @@ describe('session-scoped path helpers', () => {
     );
   });
 
+  it('routes all capture paths to the Python-configured run store', () => {
+    const env = { APTL_MCP_RUN_STORE_BASE: '/project/runs' };
+    expect(mcpSideDir('/project/.aptl', RUN_ID, env)).toBe(
+      `/project/runs/${RUN_ID}/mcp-side`
+    );
+    expect(kaliSideSessionDir('/project/.aptl', RUN_ID, 'sess-1', env)).toBe(
+      `/project/runs/${RUN_ID}/kali-side/sess-1`
+    );
+    expect(mcpSessionJsonl('/project/.aptl', RUN_ID, 'sess-1', env)).toBe(
+      `/project/runs/${RUN_ID}/mcp-side/sessions/sess-1.jsonl`
+    );
+  });
+
   it.each(['../escape', 'has/slash', 'sess..', '..'])(
     'rejects unsafe session id %s',
     (bad) => {
@@ -83,6 +96,15 @@ describe('loadActiveTraceId / resolveActiveRunDir', () => {
     );
     expect(loadActiveTraceId({ APTL_STATE_DIR: tmp })).toBe(tid);
     expect(resolveActiveRunDir({ APTL_STATE_DIR: tmp })).toBe(join(tmp, 'runs', tid));
+  });
+
+  it('uses the admitted run store while still reading trace context from state', () => {
+    const tid = 'd'.repeat(32);
+    writeFileSync(join(tmp, 'trace-context.json'), JSON.stringify({ trace_id: tid }));
+    expect(resolveActiveRunDir({
+      APTL_STATE_DIR: tmp,
+      APTL_MCP_RUN_STORE_BASE: join(tmp, 'archive'),
+    })).toBe(join(tmp, 'archive', tid));
   });
 
   it('returns undefined when the file is malformed', () => {
@@ -152,6 +174,15 @@ describe('createPtyTeeWriter', () => {
     );
     expect(existsSync(file)).toBe(true);
     expect(readFileSync(file, 'utf-8')).toBe('');
+  });
+
+  it('creates the census in the configured run archive, not the state tree', () => {
+    const tid = 'a'.repeat(32);
+    writeFileSync(join(tmp, 'trace-context.json'), JSON.stringify({ trace_id: tid }));
+    const archive = join(tmp, 'archive');
+    createPtyTeeWriter('sess-1', { ...env, APTL_MCP_RUN_STORE_BASE: archive });
+    expect(existsSync(join(archive, tid, 'mcp-side/sessions/sess-1.jsonl'))).toBe(true);
+    expect(existsSync(join(tmp, 'runs', tid, 'mcp-side/sessions/sess-1.jsonl'))).toBe(false);
   });
 
   it('appends one JSONL line per chunk to mcp-side/sessions/<session>.jsonl', async () => {

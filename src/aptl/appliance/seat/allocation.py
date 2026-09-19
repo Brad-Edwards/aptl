@@ -21,7 +21,10 @@ from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 _LOCK_NAME = "\0aptl-seat-mapping-allocation-v1"
 _RESOURCE_PREFIX = b"name=opt/aptl/resource-reservation,string="
 _RESOURCE_VALUE = re.compile(rb"^(\d+):(\d+):(\d+)$")
+_MIN_HOST_MEMORY_HEADROOM_BYTES = 8 * 1024**3
 T = TypeVar("T")
+
+
 class _FileAllocatorLock:
     """Advisory allocator lock for non-Linux development hosts."""
 
@@ -228,10 +231,15 @@ def _require_resource_capacity(
             "resource-capacity-exhausted",
             "concurrent seat resource reservations exceed host capacity",
         )
-    if any(needed > free for needed, free in zip(requested, available, strict=True)):
+    host_memory_headroom = max(_MIN_HOST_MEMORY_HEADROOM_BYTES, capacity[1] // 10)
+    if (
+        requested[0] > available[0]
+        or requested[1] + host_memory_headroom > available[1]
+        or requested[2] > available[2]
+    ):
         raise SeatLauncherError(
             "resource-capacity-exhausted",
-            "available host resources are below the seat reservation",
+            "available host resources cannot satisfy the seat reservation and host memory headroom",
         )
 
 

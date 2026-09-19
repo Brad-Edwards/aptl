@@ -70,6 +70,8 @@ def test_require_host_prerequisites_raises(tmp_path: Path) -> None:
             requirements,
             seat_root=tmp_path,
             memory_bytes=1024,
+            available_vcpus=16,
+            free_disk_bytes=200 * 1024**3,
             kvm_available=True,
             qemu_img_available=True,
             qemu_system_available=True,

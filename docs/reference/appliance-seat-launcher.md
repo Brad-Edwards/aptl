@@ -115,7 +115,10 @@ RAM, and disk reservation in
 a fixed `fw_cfg` argument. Before launch, the allocator sums every visible APTL
 QEMU reservation and rejects the new seat if the concurrent total would exceed
 host capacity. This makes the two-seat path an admitted resource allocation,
-not two independent minimum checks racing each other.
+not two independent minimum checks racing each other. The available-memory
+check also preserves host headroom of at least 8 GiB or 10% of physical RAM,
+whichever is greater. A seat is refused before QEMU launches if it would
+consume that reserve; this protects the host SSH service and other workloads.
 
 Start the seat VM and validate host exposure. Readiness is not inferred from a
 live PID or listener: the tracked QEMU instance, real forbidden-reachability

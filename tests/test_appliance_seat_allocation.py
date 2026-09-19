@@ -126,6 +126,28 @@ def test_resource_admission_accounts_for_running_seats(tmp_path: Path) -> None:
     assert exc.value.code == "resource-capacity-exhausted"
 
 
+def test_resource_admission_preserves_host_memory_headroom(tmp_path: Path) -> None:
+    resources = (8, 32 * 1024**3, 100 * 1024**3)
+    capacity = (16, 128 * 1024**3, 500 * 1024**3)
+    with pytest.raises(SeatLauncherError) as exc:
+        _require_resource_capacity(
+            resources,
+            seat_root=tmp_path,
+            reservations=(0, 0, 0),
+            capacity=capacity,
+            available=(16, 40 * 1024**3, 400 * 1024**3),
+        )
+    assert exc.value.code == "resource-capacity-exhausted"
+
+    _require_resource_capacity(
+        resources,
+        seat_root=tmp_path,
+        reservations=(0, 0, 0),
+        capacity=capacity,
+        available=(16, 48 * 1024**3, 400 * 1024**3),
+    )
+
+
 def test_resource_reservations_are_discovered_from_qemu_argv(tmp_path: Path) -> None:
     process = tmp_path / "42"
     process.mkdir()

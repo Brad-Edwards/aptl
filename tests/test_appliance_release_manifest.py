@@ -8,6 +8,7 @@ import io
 import json
 import tarfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -1090,3 +1091,39 @@ def test_launch_descriptor_is_create_once_and_reverified_before_runtime(
             release_public,
             qualification_public,
         )
+
+
+def test_guest_release_launch_authenticates_qualification_without_large_rescan(
+    tmp_path: Path,
+) -> None:
+    release = tmp_path / "release"
+    manifest, release_public_pem = _write_signed_release(release)
+    release_public = tmp_path / "release-public.pem"
+    release_public.write_bytes(release_public_pem)
+    qualification_public = tmp_path / "qualification-public.pem"
+    descriptor = tmp_path / "appliance-launch.json"
+    prepare_launch_descriptor(
+        release,
+        release_public,
+        qualification_public,
+        descriptor,
+        host_observation_id="sha256:" + "9" * 64,
+    )
+    with patch(
+        "aptl.appliance.launch.verify_release_directory",
+        side_effect=AssertionError("large artifacts must be host-verified"),
+    ):
+        assert (
+            verify_launch_descriptor(
+                descriptor, release_public, qualification_public
+            ).release_root
+            == release
+        )
+
+    qualification = next(
+        item for item in manifest.artifacts if item.kind == "participant-qualification"
+    )
+    with (release / qualification.path).open("ab") as handle:
+        handle.write(b"\n")
+    with pytest.raises(ApplianceManifestError, match="qualification artifact differs"):
+        verify_launch_descriptor(descriptor, release_public, qualification_public)

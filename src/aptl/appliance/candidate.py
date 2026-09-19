@@ -308,9 +308,19 @@ def seal_candidate(
 def verify_candidate_directory(
     candidate_dir: Path, public_key_path: Path
 ) -> tuple[ApplianceCandidateManifest, ApplianceReleaseInspection]:
-    """Verify a candidate while retaining its qualification-only trust label."""
+    """Verify the complete candidate, including the offline payload closure."""
 
     root = candidate_dir.resolve(strict=True)
+    manifest, inspection = _verify_candidate_metadata(root, public_key_path)
+    _validate_candidate(root, manifest)
+    return manifest, inspection
+
+
+def _verify_candidate_metadata(
+    root: Path, public_key_path: Path
+) -> tuple[ApplianceCandidateManifest, ApplianceReleaseInspection]:
+    """Authenticate the signed candidate identity without reading large artifacts."""
+
     manifest = model_validate_json_strict(
         ApplianceCandidateManifest,
         read_release_artifact(root, CANDIDATE_MANIFEST),
@@ -334,7 +344,6 @@ def verify_candidate_directory(
         key.verify(base64.b64decode(signature.signature, validate=True), payload)
     except (InvalidSignature, ValueError) as exc:
         raise ApplianceManifestError("candidate signature is invalid") from exc
-    _validate_candidate(root, manifest)
     return manifest, ApplianceReleaseInspection(
         release_id=manifest.candidate_id,
         aptl_version=manifest.source.aptl_version,
@@ -359,6 +368,25 @@ def prepare_candidate_launch_descriptor(
     """Create a launch projection visibly tied to candidate trust."""
 
     manifest, inspection = verify_candidate_directory(candidate_dir, public_key_path)
+    return _prepare_verified_candidate_launch_descriptor(
+        candidate_dir,
+        output_path,
+        manifest,
+        inspection,
+        host_observation_id=host_observation_id,
+    )
+
+
+def _prepare_verified_candidate_launch_descriptor(
+    candidate_dir: Path,
+    output_path: Path,
+    manifest: ApplianceCandidateManifest,
+    inspection: ApplianceReleaseInspection,
+    *,
+    host_observation_id: str,
+) -> ApplianceLaunchDescriptor:
+    """Project a candidate fully verified by the current host staging operation."""
+
     root = candidate_dir.resolve()
     output_parent = output_path.parent.resolve()
     try:
@@ -394,7 +422,12 @@ def prepare_candidate_launch_descriptor(
 def verify_candidate_launch_descriptor(
     descriptor_path: Path, public_key_path: Path
 ) -> VerifiedCandidateLaunch:
-    """Reverify a candidate descriptor; production verification never calls this."""
+    """Verify the signed guest launch projection after full host admission.
+
+    The host already verified every large artifact before starting this VM.
+    The guest authenticates the manifest and its consumed boundary policy; it
+    does not re-extract the offline payload over the read-only 9p share.
+    """
 
     descriptor = model_validate_json_strict(
         ApplianceLaunchDescriptor,
@@ -403,7 +436,7 @@ def verify_candidate_launch_descriptor(
     root = (descriptor_path.parent.resolve() / descriptor.release_dir).resolve()
     if not root.is_relative_to(descriptor_path.parent.resolve()):
         raise ApplianceManifestError("candidate launch path is unsafe")
-    manifest, inspection = verify_candidate_directory(root, public_key_path)
+    manifest, inspection = _verify_candidate_metadata(root, public_key_path)
     by_kind = {item.kind: item for item in manifest.artifacts}
     expected = descriptor.model_copy(
         update={
@@ -425,8 +458,13 @@ def verify_candidate_launch_descriptor(
         raise ApplianceManifestError(
             "candidate launch descriptor differs from manifest"
         )
-    policy = model_validate_json_strict(
-        ApplianceBoundaryPolicy,
-        _read_release_artifact(root, descriptor.boundary_policy_path),
-    )
+    policy_payload = _read_release_artifact(root, descriptor.boundary_policy_path)
+    if (
+        f"sha256:{hashlib.sha256(policy_payload).hexdigest()}"
+        != manifest.boundary.policy_digest
+    ):
+        raise ApplianceManifestError("candidate launch boundary policy differs")
+    policy = model_validate_json_strict(ApplianceBoundaryPolicy, policy_payload)
+    if policy.host_mcp_contract != descriptor.host_mcp_contract:
+        raise ApplianceManifestError("candidate launch transport policy differs")
     return VerifiedCandidateLaunch(descriptor, root, policy)

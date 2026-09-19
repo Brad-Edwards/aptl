@@ -7,6 +7,7 @@ import io
 import json
 import tarfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -249,6 +250,38 @@ def test_candidate_is_signed_launchable_and_never_production_shaped(
             public,
             qualification_public_key_path=public,
         )
+
+
+def test_guest_candidate_launch_verifies_signed_consumed_policy_without_reextracting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "aptl.appliance.candidate.validate_canonical_payload", lambda *_: None
+    )
+    candidate, template, private, public = _candidate(tmp_path)
+    prepare_candidate_manifest(candidate, template)
+    seal_candidate(candidate, private)
+    descriptor = tmp_path / "launch" / "appliance-launch.json"
+    prepare_candidate_launch_descriptor(
+        candidate, public, descriptor, host_observation_id="sha256:" + "d" * 64
+    )
+    with patch(
+        "aptl.appliance.candidate._validate_candidate",
+        side_effect=AssertionError("large artifacts must be host-verified"),
+    ):
+        assert (
+            verify_candidate_launch_descriptor(descriptor, public).release_root
+            == candidate
+        )
+
+    manifest = json.loads((candidate / "candidate-manifest.json").read_text())
+    boundary = next(
+        item for item in manifest["artifacts"] if item["kind"] == "boundary-policy"
+    )
+    with (candidate / boundary["path"]).open("ab") as handle:
+        handle.write(b"\n")
+    with pytest.raises(ApplianceManifestError, match="boundary policy differs"):
+        verify_candidate_launch_descriptor(descriptor, public)
 
 
 def test_candidate_can_bind_an_untagged_exact_source_revision(

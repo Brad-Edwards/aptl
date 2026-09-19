@@ -150,16 +150,12 @@ def test_overlay_creation_is_bound_to_release_and_launch_digests(
 
     with (
         patch(
-            "aptl.appliance.seat.lifecycle._load_delivery_manifest",
-            return_value=_manifest_stub(),
-        ),
-        patch(
             "aptl.appliance.seat.lifecycle.create_disposable_overlay",
             side_effect=lambda root, request: captured.append((root, request)),
         ),
         patch("aptl.appliance.seat.lifecycle.initialize_overlay_state") as initialize,
     ):
-        _ensure_overlay(paths, record, candidate_trust=False)
+        _ensure_overlay(paths, record, _manifest_stub())
 
     assert len(captured) == 1
     root, request = captured[0]
@@ -188,13 +184,13 @@ def test_stage_persists_seat_record(tmp_path: Path) -> None:
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_verified_release",
-            return_value=(_inspection(), _policy()),
+            return_value=(_inspection(), _policy(), _manifest_stub()),
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_release_documents",
             return_value=(_manifest_stub(), object()),
         ),
-        patch("aptl.appliance.seat.lifecycle.prepare_launch_descriptor"),
+        patch("aptl.appliance.seat.lifecycle._prepare_verified_launch_descriptor"),
         patch(
             "aptl.appliance.seat.lifecycle._launch_descriptor_digest",
             return_value="sha256:" + "d" * 64,
@@ -258,13 +254,13 @@ def test_stage_persists_explicit_outer_mapping(tmp_path: Path) -> None:
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_verified_release",
-            return_value=(_inspection(), _policy()),
+            return_value=(_inspection(), _policy(), _manifest_stub()),
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_release_documents",
             return_value=(_manifest_stub(), object()),
         ),
-        patch("aptl.appliance.seat.lifecycle.prepare_launch_descriptor"),
+        patch("aptl.appliance.seat.lifecycle._prepare_verified_launch_descriptor"),
         patch(
             "aptl.appliance.seat.lifecycle._launch_descriptor_digest",
             return_value="sha256:" + "d" * 64,
@@ -299,7 +295,7 @@ def test_start_marks_ready_when_boundary_passes(tmp_path: Path) -> None:
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_verified_release",
-            return_value=(_inspection(), _policy()),
+            return_value=(_inspection(), _policy(), _manifest_stub()),
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_release_documents",
@@ -310,7 +306,7 @@ def test_start_marks_ready_when_boundary_passes(tmp_path: Path) -> None:
         patch("aptl.appliance.seat.lifecycle.start_vm") as start_vm,
         patch("aptl.appliance.seat.lifecycle.write_vm_pid"),
         patch("aptl.appliance.seat.lifecycle.read_vm_pid", return_value=4242),
-        patch("aptl.appliance.seat.lifecycle.prepare_launch_descriptor"),
+        patch("aptl.appliance.seat.lifecycle._prepare_verified_launch_descriptor"),
         patch("aptl.appliance.seat.lifecycle.run_appliance_boundary_gate") as gate,
         patch(
             "aptl.appliance.seat.lifecycle._launch_descriptor_digest",
@@ -354,7 +350,7 @@ def test_start_fails_closed_without_real_boundary_probes(tmp_path: Path) -> None
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_verified_release",
-            return_value=(_inspection(), _policy()),
+            return_value=(_inspection(), _policy(), _manifest_stub()),
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_release_documents",
@@ -365,7 +361,7 @@ def test_start_fails_closed_without_real_boundary_probes(tmp_path: Path) -> None
         patch("aptl.appliance.seat.lifecycle.start_vm") as start_vm,
         patch("aptl.appliance.seat.lifecycle.write_vm_pid"),
         patch("aptl.appliance.seat.lifecycle.read_vm_pid", return_value=4242),
-        patch("aptl.appliance.seat.lifecycle.prepare_launch_descriptor"),
+        patch("aptl.appliance.seat.lifecycle._prepare_verified_launch_descriptor"),
         patch(
             "aptl.appliance.seat.lifecycle._launch_descriptor_digest",
             return_value="sha256:" + "d" * 64,
@@ -584,7 +580,7 @@ def test_start_marks_recoverable_failure_when_boundary_fails(tmp_path: Path) -> 
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_verified_release",
-            return_value=(_inspection(), _policy()),
+            return_value=(_inspection(), _policy(), _manifest_stub()),
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_release_documents",

@@ -11,10 +11,10 @@ from pathlib import Path
 
 from aptl.appliance.bootstrap import initialize_overlay_state
 from aptl.appliance.build import OverlayCreateRequest, create_disposable_overlay
-from aptl.appliance.launch import prepare_launch_descriptor
+from aptl.appliance.launch import _prepare_verified_launch_descriptor
 from aptl.appliance.candidate import (
     ApplianceCandidateManifest,
-    prepare_candidate_launch_descriptor,
+    _prepare_verified_candidate_launch_descriptor,
     verify_candidate_directory,
 )
 from aptl.appliance.manifest import (
@@ -188,7 +188,11 @@ def _validated_mappings(
 
 def _load_verified_release(
     paths: SeatPaths, *, candidate_trust: bool = False
-) -> tuple[ApplianceReleaseInspection, ApplianceBoundaryPolicy]:
+) -> tuple[
+    ApplianceReleaseInspection,
+    ApplianceBoundaryPolicy,
+    ApplianceCandidateManifest | ApplianceReleaseManifest,
+]:
     """Verify the release directory and load the signed boundary policy."""
 
     if candidate_trust:
@@ -219,7 +223,7 @@ def _load_verified_release(
         host_observation_id="pending",
     )
     policy = load_boundary_policy(policy_path, binding)
-    return inspection, policy
+    return inspection, policy, manifest
 
 
 def release_requires_host_access(
@@ -242,25 +246,11 @@ def release_requires_host_access(
         overlay_path=placeholder / "seat.qcow2",
         overlay_state_dir=placeholder / "seat.state",
     )
-    _inspection, policy = _load_verified_release(
+    _inspection, policy, _manifest = _load_verified_release(
         paths,
         candidate_trust=candidate_trust,
     )
     return policy.host_mcp_contract == "aptl.restricted-ssh-mcp/v1"
-
-
-def _load_delivery_manifest(
-    paths: SeatPaths, *, candidate_trust: bool
-) -> ApplianceCandidateManifest | ApplianceReleaseManifest:
-    """Load the already-verified production or qualification-only document."""
-
-    if candidate_trust:
-        manifest, _inspection = verify_candidate_directory(
-            paths.release_dir, paths.release_public_key
-        )
-        return manifest
-    manifest, _signature = _load_release_documents(paths.release_dir)
-    return manifest
 
 
 def _seat_paths(
@@ -313,8 +303,9 @@ def stage_seat(
         release_public_key=release_public_key,
         qualification_public_key=qualification_public_key,
     )
-    inspection, policy = _load_verified_release(paths, candidate_trust=candidate_trust)
-    manifest = _load_delivery_manifest(paths, candidate_trust=candidate_trust)
+    inspection, policy, manifest = _load_verified_release(
+        paths, candidate_trust=candidate_trust
+    )
     require_host_prerequisites(
         manifest.host_prerequisites,
         seat_root=seat_root,
@@ -353,18 +344,19 @@ def stage_seat(
         paths.launch_dir / "qualification-public.pem",
     )
     if candidate_trust:
-        prepare_candidate_launch_descriptor(
+        _prepare_verified_candidate_launch_descriptor(
             paths.release_dir,
-            paths.release_public_key,
             paths.launch_descriptor,
+            manifest,
+            inspection,
             host_observation_id=bundle.observation_id,
         )
     else:
-        prepare_launch_descriptor(
+        _prepare_verified_launch_descriptor(
             paths.release_dir,
-            paths.release_public_key,
-            paths.qualification_public_key,
             paths.launch_descriptor,
+            manifest,
+            inspection,
             host_observation_id=bundle.observation_id,
         )
     digest = _launch_descriptor_digest(paths.launch_descriptor)
@@ -402,13 +394,14 @@ def _relative_to_root(root: Path, path: Path, *, label: str) -> str:
 
 
 def _ensure_overlay(
-    paths: SeatPaths, record: SeatRecord, *, candidate_trust: bool
+    paths: SeatPaths,
+    record: SeatRecord,
+    manifest: ApplianceCandidateManifest | ApplianceReleaseManifest,
 ) -> None:
     """Create the disposable overlay when the seat has none yet."""
 
     if paths.overlay_path.exists():
         return
-    manifest = _load_delivery_manifest(paths, candidate_trust=candidate_trust)
     golden_path = next(
         artifact.path
         for artifact in manifest.artifacts
@@ -579,10 +572,7 @@ def start_seat(
         qualification_public_key=qualification_public_key,
     )
     if _requires_automatic_mappings(record, seat_id, launch_options):
-        _inspection, automatic_policy = _load_verified_release(
-            paths, candidate_trust=launch_options.candidate_trust
-        )
-        automatic_manifest = _load_delivery_manifest(
+        _inspection, automatic_policy, automatic_manifest = _load_verified_release(
             paths, candidate_trust=launch_options.candidate_trust
         )
 
@@ -629,7 +619,7 @@ def start_seat(
         raise SeatLauncherError(
             "trust-mode-mismatch", "staged seat trust mode differs from start"
         )
-    inspection, policy = _load_verified_release(
+    inspection, policy, manifest = _load_verified_release(
         paths, candidate_trust=launch_options.candidate_trust
     )
     _require_access_options(policy, launch_options)
@@ -644,10 +634,7 @@ def start_seat(
     starting = record.model_copy(update={"lifecycle_state": "starting"})
     persist_seat_record(seat_root, starting)
     try:
-        _ensure_overlay(paths, record, candidate_trust=launch_options.candidate_trust)
-        manifest = _load_delivery_manifest(
-            paths, candidate_trust=launch_options.candidate_trust
-        )
+        _ensure_overlay(paths, record, manifest)
         readiness_socket = contained_path(
             paths.seat_root,
             f"runtime/{seat_id}.readiness.sock",

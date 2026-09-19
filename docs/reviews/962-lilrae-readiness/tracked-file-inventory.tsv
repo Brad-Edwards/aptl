@@ -1248,7 +1248,7 @@ src/aptl_techvault/redis_acl_observation.py	core-runtime	TechVault cache authori
 src/aptl_techvault/runtime_parameters.py	core-runtime	Retain in APTL core runtime; no migration
 src/aptl_techvault/serving.py	core-runtime	Retain in APTL core runtime; no migration
 src/aptl_techvault/startup.py	core-runtime	TechVault-specific startup binding stays outside generic core
-src/aptl_techvault/telemetry_stimulus.py	core-runtime	TechVault-native readiness traffic stays behind the scenario adapter
+src/aptl/core/evidence/adapters/techvault_telemetry_stimulus.py	core-runtime	TechVault-native readiness traffic stays behind the existing evidence adapter
 src/aptl_techvault/verification.py	core-runtime	Retain in APTL core runtime; no migration
 tests/__init__.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/_bundle_fixtures.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

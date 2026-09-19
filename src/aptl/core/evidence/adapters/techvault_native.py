@@ -54,7 +54,9 @@ from aptl.core.evidence.adapters.techvault_native_support import (
     webapp_endpoint,
 )
 from aptl.utils.curl_safe import basic_auth_header, curl_json
-from aptl_techvault.telemetry_stimulus import emit_missing_agent_events
+from aptl.core.evidence.adapters.techvault_telemetry_stimulus import (
+    emit_missing_agent_events,
+)
 
 _CORTEX_REGISTRATION = "aptl.collector.cortex-enrichment"
 _MISP_READINESS_REGISTRATION = "aptl.collector.misp-authenticated-api-readiness"

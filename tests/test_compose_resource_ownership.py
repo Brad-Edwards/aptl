@@ -669,6 +669,60 @@ def test_isolated_daemon_children_are_receipted_before_observation(
         backend._resolve_owned_container_id("worker")
 
 
+def test_receipted_container_resolution_retries_only_inconclusive_inspect(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl")
+    ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+    backend._docker_daemon_id = "daemon-a"
+    external_name = ownership.container_name("worker")
+    ownership.record(
+        ResourceReceipt(
+            kind="container",
+            native_id=_ID_A,
+            external_name=external_name,
+            semantic_name="worker",
+            node_address="provision.node.worker",
+            workspace_id=ownership.workspace_id,
+            project_name=ownership.project_name,
+            daemon_id="daemon-a",
+            attempt_id="run-a",
+        )
+    )
+    current = {
+        "Id": _ID_A,
+        "Name": f"/{external_name}",
+        "Config": {
+            "Labels": {
+                "aptl.workspace.id": ownership.workspace_id,
+                "aptl.lifecycle.project": ownership.project_name,
+            }
+        },
+    }
+    sleeps: list[float] = []
+    monkeypatch.setattr(
+        "aptl.core.deployment._compose_resource_resolution.time.sleep",
+        sleeps.append,
+    )
+    backend._raw_container_inspect = MagicMock(side_effect=[{}, current])
+
+    assert backend._resolve_owned_container_id("worker") == _ID_A
+    assert sleeps == [0.2]
+    assert backend._raw_container_inspect.call_count == 2
+
+    backend._raw_container_inspect = MagicMock(
+        return_value={
+            **current,
+            "Config": {"Labels": {"aptl.workspace.id": "foreign"}},
+        }
+    )
+    sleeps.clear()
+    with pytest.raises(OwnershipConflictError, match="labels changed"):
+        backend._resolve_owned_container_id("worker")
+    assert sleeps == []
+    assert backend._raw_container_inspect.call_count == 1
+
+
 def test_uncorrelated_child_template_never_queries_foreign_containers(
     tmp_path: Path,
 ) -> None:

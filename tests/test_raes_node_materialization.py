@@ -39,7 +39,9 @@ class _FakeBackend:
     def container_exec(self, name, cmd, *, timeout=None):
         # Emulate the real container: mutations accumulate, observers read back.
         if cmd[:1] == ["dpkg-query"]:
-            return SimpleNamespace(returncode=0, stdout="\n".join(sorted(self.installed)) + "\n")
+            return SimpleNamespace(
+                returncode=0, stdout="\n".join(sorted(self.installed)) + "\n"
+            )
         if "install" in cmd:
             self.installed.update(a for a in cmd if a in {"curl", "wazuh-manager"})
             return SimpleNamespace(returncode=0, stdout="")
@@ -50,9 +52,13 @@ class _FakeBackend:
             self.users.add(cmd[-1])
             return SimpleNamespace(returncode=0, stdout="")
         if cmd[:1] == ["getent"]:
-            return SimpleNamespace(returncode=0 if cmd[-1] in self.groups else 1, stdout="")
+            return SimpleNamespace(
+                returncode=0 if cmd[-1] in self.groups else 1, stdout=""
+            )
         if cmd[:1] == ["id"]:
-            return SimpleNamespace(returncode=0 if cmd[-1] in self.users else 1, stdout="")
+            return SimpleNamespace(
+                returncode=0 if cmd[-1] in self.users else 1, stdout=""
+            )
         return SimpleNamespace(returncode=0, stdout="")
 
 
@@ -202,6 +208,35 @@ def test_realize_nodes_runs_nodes_concurrently():
 
     assert realize_nodes(nodes, backend) is None
     assert len(backend.started) == node_count
+
+
+def test_first_boot_node_materialization_caps_concurrent_docker_work():
+    """More declared nodes do not fan out beyond the bounded daemon budget."""
+    import threading
+    import time
+
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    class _BoundedBackend(_ThreadSafeBackend):
+        def start_base_container(self, spec):
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+            try:
+                time.sleep(0.02)
+                super().start_base_container(spec)
+            finally:
+                with lock:
+                    active -= 1
+
+    backend = _BoundedBackend()
+    nodes = [_named_node(f"box-{i}") for i in range(9)]
+
+    assert realize_nodes(nodes, backend) is None
+    assert 2 <= peak <= 4
 
 
 def test_realize_nodes_returns_first_failure_in_declared_order():

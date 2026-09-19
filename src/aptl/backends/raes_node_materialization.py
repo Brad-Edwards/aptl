@@ -20,9 +20,11 @@ from typing import Protocol
 # configure services) shells out to Docker, and the project networks are already
 # created before this step. Serial materialization made a full range's boot the
 # SUM of every node's runtime apt install (~1 min each); a bounded pool makes it
-# the slowest single node instead. The cap keeps concurrent apt/network load
-# sane on a laptop-class host (issue #875).
-_MAX_MATERIALIZATION_WORKERS = 8
+# the slowest wave instead. Eight simultaneous first-boot apt and Docker
+# operations coincided with intermittent ownership readback and content-copy
+# failures in the official TechVault lab; four still parallelize independent nodes
+# without saturating the daemon's inspection and exec path (issue #956).
+_MAX_MATERIALIZATION_WORKERS = 4
 
 from raes.runtime_configuration import RuntimeConfiguration
 

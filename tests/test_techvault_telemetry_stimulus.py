@@ -5,7 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from aptl_techvault.telemetry_stimulus import _SOURCES, emit_missing_agent_events
+from aptl.core.evidence.adapters.techvault_telemetry_stimulus import (
+    _SOURCES,
+    emit_missing_agent_events,
+)
 
 
 class _Backend:
@@ -43,7 +46,9 @@ def _realization():
 def test_every_silent_agent_uses_a_native_producer_and_checks_its_declared_file(
     monkeypatch,
 ):
-    from aptl_techvault import telemetry_stimulus
+    from aptl.core.evidence.adapters import (
+        techvault_telemetry_stimulus as telemetry_stimulus,
+    )
 
     monkeypatch.setattr(
         telemetry_stimulus,
@@ -76,7 +81,9 @@ def test_every_silent_agent_uses_a_native_producer_and_checks_its_declared_file(
 
 
 def test_a_missing_declared_source_cannot_be_stimulated(monkeypatch):
-    from aptl_techvault import telemetry_stimulus
+    from aptl.core.evidence.adapters import (
+        techvault_telemetry_stimulus as telemetry_stimulus,
+    )
 
     monkeypatch.setattr(
         telemetry_stimulus,

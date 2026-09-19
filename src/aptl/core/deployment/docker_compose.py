@@ -101,9 +101,7 @@ class DockerComposeBackend(
         self._runtime_authority_policy = (
             runtime_authority_policy or RuntimeAuthorityPolicy.empty()
         )
-        self._runtime_authority_policy_configured = (
-            runtime_authority_policy is not None
-        )
+        self._runtime_authority_policy_configured = runtime_authority_policy is not None
         self._appliance_boundary: (
             tuple[
                 ApplianceBoundaryPolicy,
@@ -336,6 +334,18 @@ class DockerComposeBackend(
         Returns:
             LabStatus with container information.
         """
+        try:
+            ownership = WorkspaceOwnership.load(
+                self._project_dir, self._logical_project_name
+            )
+        except OwnershipConflictError:
+            return LabStatus(
+                running=False,
+                error="Backend resource ownership state is unavailable.",
+            )
+        if ownership is not None:
+            self._resource_ownership = ownership
+            self._project_name = ownership.project_name
         return self._project_container_status()
 
     def kill(self, profiles: list[str]) -> tuple[bool, str]:

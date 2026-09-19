@@ -38,8 +38,19 @@ def observe_local_identity(
     inventory = runtime.local_identity
     if inventory is None:
         return None
+    expected_members = {group.name: set(group.members) for group in inventory.groups}
+    for user in inventory.users:
+        for group_name in user.supplemental_groups:
+            if group_name in expected_members:
+                expected_members[group_name].add(user.username)
     if not all(
-        _group_matches(backend, container_name, group) for group in inventory.groups
+        _group_matches(
+            backend,
+            container_name,
+            group,
+            expected_members=expected_members[group.name],
+        )
+        for group in inventory.groups
     ) or not all(
         _user_matches(backend, container_name, user) for user in inventory.users
     ):
@@ -51,7 +62,11 @@ def observe_local_identity(
 
 
 def _group_matches(
-    backend: "DeploymentBackend", container_name: str, group: object
+    backend: "DeploymentBackend",
+    container_name: str,
+    group: object,
+    *,
+    expected_members: set[str],
 ) -> bool:
     """Return whether guest group identity and membership match exactly."""
 
@@ -59,12 +74,11 @@ def _group_matches(
     row = _exec_stdout(backend, container_name, ["getent", "group", name])
     fields = row.strip().split(":") if row is not None else []
     declared_gid = getattr(group, "gid", None)
-    declared_members = set(getattr(group, "members", ()))
     return bool(
         len(fields) == 4
         and fields[0] == name
         and (declared_gid is None or fields[2] == str(declared_gid))
-        and {item for item in fields[3].split(",") if item} == declared_members
+        and {item for item in fields[3].split(",") if item} == expected_members
     )
 
 
@@ -100,10 +114,12 @@ def _passwd_fields_match(fields: list[str], user: object) -> bool:
 def _group_records_match(primary: str | None, groups: str | None, user: object) -> bool:
     """Compare a user's primary and supplemental guest group records."""
 
-    expected = {user.primary_group, *user.supplemental_groups}
+    observed_primary = primary.strip() if primary is not None else ""
+    declared_primary = user.primary_group
+    expected = {observed_primary, *user.supplemental_groups}
     return bool(
-        primary is not None
-        and primary.strip() == user.primary_group
+        observed_primary
+        and (not declared_primary or observed_primary == declared_primary)
         and groups is not None
         and set(groups.split()) == expected
     )

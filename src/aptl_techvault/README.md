@@ -6,6 +6,7 @@ package, behind the entry points APTL discovers it through.
 | Entry-point group | Name | What it supplies |
 | --- | --- | --- |
 | `aptl.pack_backend_interactions` | `techvault.aptl` | which pack components belong to which operator start group |
+| `aptl.scenario_runtime_parameters` | `techvault` | fresh runtime-owned bindings for the exact qualified pack release |
 | `aptl.scenario_verifiers` | `techvault.aptl` | the semantic answer key: is the declared defensive stack realized, does the attacker reach its peers |
 | `aptl.participant_mcp_smoke_plans` | `guided-purple.techvault-attacker-target` | the exact MCP operations that qualify a participant |
 

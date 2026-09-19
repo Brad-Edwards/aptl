@@ -1602,6 +1602,42 @@ services:
             for entry in mock_run.call_args_list
         )
 
+    def test_new_backend_status_loads_durable_workspace_project_name(self, tmp_path):
+        """A new CLI process observes the namespace a prior start created."""
+        project_dir = tmp_path / "installed-lab"
+        ownership = WorkspaceOwnership.ensure(project_dir, "test")
+        backend = DockerComposeBackend(project_dir, project_name="test")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            status = backend.status()
+
+        assert status.running is False
+        assert backend.project_name == ownership.project_name
+        commands = [entry.args[0] for entry in mock_run.call_args_list]
+        assert any(
+            f"label=com.docker.compose.project={ownership.project_name}" in command
+            for command in commands
+        )
+        assert any(
+            f"label=aptl.lifecycle.project={ownership.project_name}" in command
+            for command in commands
+        )
+
+    def test_status_fails_closed_for_corrupt_workspace_identity(self, tmp_path):
+        project_dir = tmp_path / "installed-lab"
+        state = project_dir / ".aptl/lifecycle/workspace-ownership-v1.json"
+        state.parent.mkdir(parents=True)
+        state.write_text("not-json", encoding="utf-8")
+        backend = DockerComposeBackend(project_dir, project_name="test")
+
+        with patch("subprocess.run") as mock_run:
+            status = backend.status()
+
+        assert status.running is False
+        assert "ownership" in status.error.lower()
+        mock_run.assert_not_called()
+
     def test_status_parses_multiple_project_rows(self, tmp_path):
         backend = self._make_backend(tmp_path)
         rows = "\n".join(

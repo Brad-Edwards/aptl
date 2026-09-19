@@ -1618,7 +1618,16 @@ class TestOrchestrateLabStart:
         pack_root = tmp_path / ".aptl" / "staged-packs" / "fixture"
         pack_root.mkdir(parents=True)
         mocks["admitted_surface"] = _admitted_surface(
-            pack_root, selected_profiles=("wazuh", "victim", "kali", "otel")
+            pack_root,
+            selected_profiles=(
+                "wazuh",
+                "victim",
+                "kali",
+                "otel",
+                "soc",
+                "enterprise",
+                "fileshare",
+            ),
         )
         mocks["admit"] = mocker.patch(
             "aptl.core.lab.admit_start_surface",
@@ -1631,7 +1640,15 @@ class TestOrchestrateLabStart:
             "aptl.core.lab.start_raes_scenario",
             return_value=_raes_outcome(
                 success=True,
-                selected_profiles=("wazuh", "victim", "kali", "otel"),
+                selected_profiles=(
+                    "wazuh",
+                    "victim",
+                    "kali",
+                    "otel",
+                    "soc",
+                    "enterprise",
+                    "fileshare",
+                ),
             ),
         )
 
@@ -1656,6 +1673,10 @@ class TestOrchestrateLabStart:
             "aptl.core.lab.subprocess.run",
             return_value=MagicMock(returncode=0, stdout="", stderr=""),
         )
+        seed_script = tmp_path / "scripts" / "seed-prime.sh"
+        seed_script.parent.mkdir(exist_ok=True)
+        seed_script.write_text("#!/bin/sh\nexit 0\n")
+        seed_script.chmod(0o755)
 
         # Mock container IP resolution for the SSH readiness step —
         # lab targets are addressed by container IP (issue #293).
@@ -1760,6 +1781,28 @@ class TestOrchestrateLabStart:
             "several minutes while images build."
         )
         progress.assert_any_call("Waiting for Wazuh services to become ready.")
+
+    def test_product_neutral_progress_omits_adapter_specific_phases(self, tmp_path):
+        """An admitted scenario with no adapter profiles stays product-neutral."""
+
+        from aptl.core.lab import (
+            _LabStartContext,
+            _start_progress_message,
+            _step_build_mcps,
+            _step_generate_certs,
+            _step_start_containers,
+            _step_wait_for_services,
+        )
+
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.admitted_surface = object()
+
+        assert _start_progress_message(ctx, _step_generate_certs) is None
+        assert _start_progress_message(ctx, _step_wait_for_services) is None
+        assert _start_progress_message(ctx, _step_build_mcps) is None
+        assert "Starting containers" in str(
+            _start_progress_message(ctx, _step_start_containers)
+        )
 
     def test_orchestrates_selected_scenario_path(self, mocker, tmp_path):
         """Selected RAES SDL paths should reach the startup handoff."""
@@ -3694,6 +3737,18 @@ class TestStartupClassificationWiring:
 
     # -- build_mcps (capability) ---------------------------------------
 
+    def test_product_neutral_start_skips_mcp_build(self, tmp_path, mocker):
+        from aptl.core.lab import _step_build_mcps
+
+        ctx = self._ctx(tmp_path, selected_profiles=set())
+        ctx.admitted_surface = object()
+        run_script = mocker.patch("aptl.utils.shell.run_shell_script")
+
+        assert _step_build_mcps(ctx) is None
+
+        run_script.assert_not_called()
+        assert ctx.diagnostics == []
+
     def test_build_mcps_missing_script_emits_capability_warning(self, tmp_path):
         from aptl.core.lab import _step_build_mcps
         from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
@@ -4160,6 +4215,18 @@ class TestStartupClassificationWiring:
         assert ctx.diagnostics == []
 
     # -- mcp_config_sync (capability) ----------------------------------
+
+    def test_product_neutral_start_skips_mcp_config_sync(self, tmp_path, mocker):
+        from aptl.core.lab import _step_sync_mcp_config
+
+        ctx = self._ctx(tmp_path, selected_profiles=set())
+        ctx.admitted_surface = object()
+        sync = mocker.patch("aptl.core.lab._sync_mcp_config_keys")
+
+        assert _step_sync_mcp_config(ctx) is None
+
+        sync.assert_not_called()
+        assert ctx.diagnostics == []
 
     def test_mcp_config_sync_exception_emits_capability_warning(self, tmp_path, mocker):
         from aptl.core.lab import _step_sync_mcp_config

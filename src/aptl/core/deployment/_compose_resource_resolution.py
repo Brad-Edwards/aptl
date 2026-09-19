@@ -28,12 +28,25 @@ _COMPOSE_PROJECT_LABEL = "com.docker.compose.project"
 class ComposeResourceResolutionMixin:
     """Resolve daemon-native resources only through durable receipts."""
 
+    def _load_resource_ownership(self) -> WorkspaceOwnership | None:
+        """Load an existing workspace scope without publishing new state."""
+
+        ownership = self._resource_ownership
+        if ownership is None:
+            ownership = WorkspaceOwnership.load(
+                self._project_dir, self._logical_project_name
+            )
+            if ownership is not None:
+                self._resource_ownership = ownership
+                self._project_name = ownership.project_name
+        return ownership
+
     def _ensure_resource_ownership(
         self, *, attempt_id: str | None = None
     ) -> WorkspaceOwnership:
         """Load the durable workspace scope before backend mutation."""
 
-        ownership = self._resource_ownership
+        ownership = self._load_resource_ownership()
         if ownership is None:
             ownership = WorkspaceOwnership.ensure(
                 self._project_dir, self._logical_project_name

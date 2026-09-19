@@ -1111,8 +1111,12 @@ def _step_resolve_host_ports(ctx: _LabStartContext) -> LabResult | None:
     """
     from aptl.core import _port_bindings as port_bindings, host_ports
 
-    active_profiles = None
-    if ctx.config is not None:
+    active_profiles = (
+        set(ctx.admitted_surface.selected_profiles)
+        if ctx.admitted_surface is not None
+        else None
+    )
+    if active_profiles is None and ctx.config is not None:
         active_profiles = set(ctx.config.containers.enabled_profiles())
     assert ctx.backend is not None
     existing_bindings = port_bindings.project_port_bindings(ctx.backend)
@@ -1335,6 +1339,7 @@ def _load_admitted_start_surface(
         assert admitted is not None and surface is not None
         ctx.admitted_start = admitted
         ctx.admitted_surface = surface
+        ctx.selected_profiles = set(surface.selected_profiles)
         ctx.stateful_artifact_ownership = surface.stateful_artifact_ownership
     return failure
 
@@ -1509,6 +1514,9 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 5: Rendering credentialized service config...")
     # Contract above is the runtime guard; this assert is a typing hint.
     assert ctx.env is not None
+    if ctx.admitted_surface is not None and "wazuh" not in ctx.selected_profiles:
+        log.debug("Wazuh profile not selected, skipping credential rendering")
+        return None
     # The rendered files (.aptl/config/...) are Docker bind-mount sources
     # resolved on the *daemon's* filesystem. With the SSH-remote backend
     # the daemon is on another host, so rendering locally would leave the
@@ -1574,6 +1582,9 @@ def _step_seed_suricata_volumes(
     legacy UID-991-owned ``.aptl/suricata/rules/misp`` bind dir.
     """
     log.info("Step 5b: Seeding Suricata runtime volumes...")
+    if ctx.admitted_surface is not None and "soc" not in ctx.selected_profiles:
+        log.debug("SOC profile not selected, skipping Suricata volume seeding")
+        return None
     from aptl.core.deployment import SSHComposeBackend
 
     if isinstance(ctx.backend, SSHComposeBackend):
@@ -1663,6 +1674,9 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
 def _step_generate_certs(ctx: _LabStartContext) -> LabResult | None:
     """Generate SSL certificates required by the base stack."""
     log.info("Step 6: Generating SSL certificates...")
+    if ctx.admitted_surface is not None and "wazuh" not in ctx.selected_profiles:
+        log.debug("Wazuh profile not selected, skipping certificate generation")
+        return None
     if _WAZUH_CERTIFICATE_OWNERSHIP <= ctx.stateful_artifact_ownership:
         return None
     cert_result = ensure_ssl_certs(ctx.project_dir)
@@ -1697,6 +1711,9 @@ def _step_generate_soc_certs(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 6c: Generating SOC stack lab CA + service certs...")
     # runtime guard above; this assert is for the type-checker.
     assert ctx.config is not None
+    if ctx.admitted_surface is not None and "soc" not in ctx.selected_profiles:
+        log.debug("SOC profile not selected, skipping SOC CA generation")
+        return None
     if _scenario_is_env_pack(ctx):
         # The pack declares the SOC CA + service certs as certificate_bundle
         # generated artifacts, produced and validated during realization.
@@ -1786,6 +1803,9 @@ def _step_pull_images(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 7: Pre-pulling container images...")
     # Contract above is the runtime guard.
     assert ctx.backend is not None
+    if ctx.admitted_surface is not None and "wazuh" not in ctx.selected_profiles:
+        log.debug("Wazuh profile not selected, skipping Wazuh image pulls")
+        return None
     images = [
         f"wazuh/wazuh-manager:{WAZUH_IMAGE_VERSION}",
         f"wazuh/wazuh-indexer:{WAZUH_IMAGE_VERSION}",
@@ -2735,6 +2755,9 @@ def _step_pin_terminal_host_keys(ctx: _LabStartContext) -> LabResult | None:
 
 def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
     """Build local MCP server artifacts after the lab is running."""
+    if ctx.admitted_surface is not None and not ctx.selected_profiles:
+        log.debug("No adapter profiles selected, skipping MCP artifact build")
+        return None
     if ctx.offline_staged:
         log.info("Using pre-staged MCP server artifacts")
         return None
@@ -3058,9 +3081,16 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
     # so the MCPs authenticate without manual rewiring after a fresh
     # `lab stop -v` + `lab start`.
     log.info("Step 14: Syncing MCP client config with seeded API keys...")
+    if ctx.admitted_surface is not None and not ctx.selected_profiles:
+        log.debug("No adapter profiles selected, skipping MCP client configuration")
+        return None
     try:
         _sync_mcp_config_keys(ctx.project_dir, ctx.resolved_ports)
-        if ctx.admitted_start is not None and ctx.backend is not None:
+        if (
+            ctx.admitted_start is not None
+            and ctx.backend is not None
+            and "kali" in ctx.selected_profiles
+        ):
             _sync_native_mcp_ingress(ctx.project_dir, ctx.backend, ctx.run_id)
     except Exception:
         # Exception text may include API key names — keep it in the log
@@ -3282,6 +3312,33 @@ _LAB_START_PROGRESS_MESSAGES = {
     "_step_write_run_record": "Writing the terminal run reproducibility record.",
 }
 
+_LAB_START_PROGRESS_PROFILES = {
+    "_step_seed_suricata_volumes": frozenset({"soc"}),
+    "_step_generate_certs": frozenset({"wazuh"}),
+    "_step_generate_soc_certs": frozenset({"soc"}),
+    "_step_pull_images": frozenset({"wazuh"}),
+    "_step_wait_for_services": frozenset({"wazuh"}),
+    "_step_activate_capture_apparatus": frozenset({"kali"}),
+    "_step_seed_soc": frozenset({"soc"}),
+}
+
+
+def _start_progress_message(
+    ctx: _LabStartContext, step: Callable[[_LabStartContext], LabResult | None]
+) -> str | None:
+    """Return a progress message only for capabilities this run admitted."""
+
+    name = step.__name__
+    if ctx.admitted_surface is not None:
+        required = _LAB_START_PROGRESS_PROFILES.get(name)
+        if required is not None and required.isdisjoint(ctx.selected_profiles):
+            return None
+        if name in {"_step_build_mcps", "_step_sync_mcp_config"} and not (
+            ctx.selected_profiles
+        ):
+            return None
+    return _LAB_START_PROGRESS_MESSAGES.get(name)
+
 
 def _emit_progress(ctx: _LabStartContext, message: str) -> None:
     """Emit a participant-facing progress update when a caller opted in."""
@@ -3351,7 +3408,7 @@ def _orchestrate_lab_start_owned(
     )
 
     for step in _LAB_START_STEPS:
-        progress_message = _LAB_START_PROGRESS_MESSAGES.get(step.__name__)
+        progress_message = _start_progress_message(ctx, step)
         if progress_message:
             _emit_progress(ctx, progress_message)
         try:

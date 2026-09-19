@@ -312,7 +312,9 @@ def emit_lab_access_summary(
     # Grafana. Prefer what is actually bound; fall back to the caller's list
     # only when the query returns nothing, which means it failed rather than
     # that the range published nothing.
-    resolved_ports = live_resolved_ports(project_dir) or resolved_ports or []
+    caller_reported_no_ports = resolved_ports == []
+    live_ports = live_resolved_ports(project_dir)
+    resolved_ports = live_ports or resolved_ports or []
     if active_services is None:
         active_services = live_services(project_dir)
     env_path = project_dir / ".env"
@@ -329,11 +331,15 @@ def emit_lab_access_summary(
     )
     typer.echo("")
     typer.echo("Access:")
-    if dashboard_port is not None:
+    if dashboard_port is not None and not (
+        caller_reported_no_ports and not live_ports and not active_services
+    ):
         typer.echo(f"  Wazuh Dashboard: https://localhost:{dashboard_port}")
         typer.echo("    username: admin")
         typer.echo("    password: see INDEXER_PASSWORD in .env")
-    if grafana_port is not None:
+    if grafana_port is not None and not (
+        caller_reported_no_ports and not live_ports and not active_services
+    ):
         typer.echo(f"  Grafana: http://localhost:{grafana_port}")
         typer.echo("    username: admin")
         typer.echo("    password: see GRAFANA_ADMIN_PASSWORD in .env")

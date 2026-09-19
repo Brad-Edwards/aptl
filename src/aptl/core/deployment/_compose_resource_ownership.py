@@ -106,6 +106,26 @@ class WorkspaceOwnership:
     project_name: str
 
     @classmethod
+    def load(
+        cls, project_dir: Path, logical_project_name: str
+    ) -> "WorkspaceOwnership | None":
+        """Load an existing workspace identity without creating project state."""
+
+        root = canonical_lifecycle_project_root(project_dir)
+        logical = validate_compose_project_name(logical_project_name)
+        try:
+            payload = read_contained_nofollow(root, _WORKSPACE_STATE)
+        except FileNotFoundError:
+            return None
+        except PathContainmentError as exc:
+            if exc.reason == REASON_NOT_FOUND:
+                return None
+            raise OwnershipConflictError(_WORKSPACE_UNAVAILABLE) from exc
+        except OSError as exc:
+            raise OwnershipConflictError(_WORKSPACE_UNAVAILABLE) from exc
+        return cls._from_payload(root, logical, payload)
+
+    @classmethod
     def ensure(
         cls, project_dir: Path, logical_project_name: str
     ) -> "WorkspaceOwnership":
@@ -114,17 +134,21 @@ class WorkspaceOwnership:
         root = canonical_lifecycle_project_root(project_dir)
         root.mkdir(parents=True, exist_ok=True)
         logical = validate_compose_project_name(logical_project_name)
+        existing = cls.load(root, logical)
+        if existing is not None:
+            return existing
         try:
-            payload = read_contained_nofollow(root, _WORKSPACE_STATE)
-        except FileNotFoundError:
             payload = _create_workspace_state(root)
-        except PathContainmentError as exc:
-            if exc.reason == REASON_NOT_FOUND:
-                payload = _create_workspace_state(root)
-            else:
-                raise OwnershipConflictError(_WORKSPACE_UNAVAILABLE) from exc
         except OSError as exc:
             raise OwnershipConflictError(_WORKSPACE_UNAVAILABLE) from exc
+        return cls._from_payload(root, logical, payload)
+
+    @classmethod
+    def _from_payload(
+        cls, root: Path, logical: str, payload: bytes
+    ) -> "WorkspaceOwnership":
+        """Construct the stable effective namespace from validated state."""
+
         workspace_id = _decode_workspace_state(payload)
         suffix = f"-w{workspace_id[:12]}"
         effective = validate_compose_project_name(

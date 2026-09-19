@@ -1,0 +1,29 @@
+name: materialization-envelope-smoke
+description: >
+  Product-neutral smoke scenario for the public APTL materialization path.
+  It exercises scenario admission, backend substrate selection, package and
+  local-identity realization, filesystem realization, networking, native
+  readback, lifecycle status, and teardown without depending on a scenario
+  adapter.
+nodes:
+  smoke-net:
+    type: switch
+    description: Isolated smoke-test network.
+  smoke-box:
+    type: compute
+    os: linux
+    runtime:
+      packages:
+        - {manager: apt, name: curl, version: "*"}
+      local_identity:
+        groups:
+          - {name: analysts}
+        users:
+          - {username: analyst, supplemental_groups: [analysts]}
+      filesystem_inventory:
+        - {path: /var/lib/aptl-smoke, entry_type: directory, owner_user: analyst, owner_group: analysts, mode: "0750"}
+infrastructure:
+  smoke-net:
+    properties: {cidr: 172.31.250.0/24, gateway: 172.31.250.1, internal: true}
+  smoke-box:
+    links: [smoke-net]

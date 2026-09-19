@@ -609,9 +609,7 @@ def test_container_security_contract_is_read_back_from_daemon_state():
 
 def test_container_privilege_is_not_disclosed_when_daemon_state_differs():
     runtime = _runtime(container={"privileged": True})
-    backend = _Backend(
-        {_CONTAINER: _inspect(host_config={"Privileged": False})}
-    )
+    backend = _Backend({_CONTAINER: _inspect(host_config={"Privileged": False})})
 
     codes, _provenance, observations = _gate(
         runtime, backend, "runtime-container-privileged"
@@ -827,7 +825,9 @@ def test_declared_package_corroborates_through_its_installed_provider():
     the installed package that provides it rather than calling the declaration
     unrealized (issue #1006).
     """
-    runtime = _runtime(packages=[{"manager": "apt", "name": "dnsutils", "version": "*"}])
+    runtime = _runtime(
+        packages=[{"manager": "apt", "name": "dnsutils", "version": "*"}]
+    )
     direct = (
         "dpkg-query",
         "-W",
@@ -861,7 +861,9 @@ def test_declared_package_corroborates_through_its_installed_provider():
 
 def test_declared_package_with_no_provider_is_still_rejected():
     """Resolving through providers must not become 'assume it is there'."""
-    runtime = _runtime(packages=[{"manager": "apt", "name": "dnsutils", "version": "*"}])
+    runtime = _runtime(
+        packages=[{"manager": "apt", "name": "dnsutils", "version": "*"}]
+    )
     direct = (
         "dpkg-query",
         "-W",
@@ -1067,6 +1069,44 @@ def test_local_identity_is_disclosed_only_after_guest_account_readback():
                 ),
                 ("id", "-gn", "alice"): (0, "analyst\n"),
                 ("id", "-Gn", "alice"): (0, "analyst wheel\n"),
+            }
+        },
+    )
+
+    codes, _provenance, observations = _gate(runtime, backend, "runtime-local-identity")
+
+    assert codes == []
+    assert (
+        CONCERN_PAYLOAD_PATH["runtime-local-identity"]
+        in observations[_ADDRESS].concerns
+    )
+
+
+def test_local_identity_observes_backend_selected_primary_group_and_membership():
+    """An omitted primary group stays open and supplemental joins still read back."""
+
+    runtime = _runtime(
+        local_identity={
+            "groups": [{"name": "analysts"}],
+            "users": [
+                {
+                    "username": "alice",
+                    "supplemental_groups": ["analysts"],
+                }
+            ],
+        }
+    )
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                ("getent", "group", "analysts"): (0, "analysts:x:1000:alice\n"),
+                ("getent", "passwd", "alice"): (
+                    0,
+                    "alice:x:1001:1001::/home/alice:/bin/bash\n",
+                ),
+                ("id", "-gn", "alice"): (0, "alice\n"),
+                ("id", "-Gn", "alice"): (0, "alice analysts\n"),
             }
         },
     )

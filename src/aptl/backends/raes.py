@@ -256,9 +256,11 @@ def admit_raes_scenario(
     bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
     scenario = parse_sdl_file(bundle.sdl_path)
     if parameters is None:
-        from aptl_techvault.runtime_parameters import runtime_parameters_for_bundle
+        from aptl.backends.scenario_runtime_parameters import (
+            resolve_runtime_parameters,
+        )
 
-        parameters = runtime_parameters_for_bundle(bundle)
+        parameters = resolve_runtime_parameters(bundle)
     capture_plan = empty_capture_plan()
     if getattr(scenario, "evidence_requirements", None):
         # Bind variables before deciding capture support, and pass the same

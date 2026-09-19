@@ -148,6 +148,19 @@ def test_seat_stage_success_emits_json() -> None:
     assert '"staged":true' in result.stdout.replace(" ", "")
 
 
+def test_seat_stage_resolves_relative_root(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    record = _seat_record().model_copy(update={"lifecycle_state": "staged"})
+    with patch("aptl.cli.seat.stage_seat", return_value=record) as stage:
+        result = runner.invoke(
+            app,
+            ["seat", "stage", "--seat-root", "relative-seat", *_common_seat_args()[2:]],
+        )
+
+    assert result.exit_code == 0, result.output
+    assert stage.call_args.args[0] == tmp_path / "relative-seat"
+
+
 def test_seat_stage_parses_typed_outer_mapping() -> None:
     record = _seat_record().model_copy(update={"lifecycle_state": "staged"})
     with patch("aptl.cli.seat.stage_seat", return_value=record) as stage:

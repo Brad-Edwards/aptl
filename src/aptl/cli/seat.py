@@ -85,7 +85,7 @@ def _parse_mappings(values: list[str] | None) -> tuple[BoundaryEndpoint, ...] | 
 def _resolved_seat_root(seat_root: Path | None) -> Path:
     """Resolve an explicit root or the current user's private default."""
 
-    return seat_root if seat_root is not None else default_seat_root()
+    return (seat_root if seat_root is not None else default_seat_root()).resolve()
 
 
 def _resolved_release_inputs(

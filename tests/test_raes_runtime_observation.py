@@ -16,6 +16,7 @@ from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from raes.explicitness import ExplicitnessClass, ExplicitnessProvenance
 from raes.runtime_configuration import RuntimeConfiguration
 from raes_contracts.planning import (
@@ -121,6 +122,7 @@ def _inspect(
     entrypoint=None,
     command=None,
     autoremove=False,
+    host_config=None,
 ):
     """Build a realized-container ``docker inspect`` dict."""
 
@@ -140,6 +142,7 @@ def _inspect(
             "RestartPolicy": {"Name": restart},
             "Memory": memory,
             "AutoRemove": autoremove,
+            **(host_config or {}),
         },
         "Mounts": list(mounts),
     }
@@ -501,6 +504,124 @@ def test_container_entrypoint_and_command_are_read_from_daemon_state():
         assert CONCERN_PAYLOAD_PATH[kind] in observations[_ADDRESS].concerns
 
 
+def test_container_security_contract_is_read_back_from_daemon_state():
+    runtime = _runtime(
+        container={
+            "privileged": True,
+            "read_only_rootfs": True,
+            "shm_size": "64 MiB",
+            "namespaces": {
+                "pid": "host",
+                "ipc": "private",
+                "userns": "host",
+                "uts": "host",
+                "cgroup": "private",
+            },
+            "devices": [
+                {
+                    "host_path": "/dev/net/tun",
+                    "container_path": "/dev/net/tun",
+                    "permissions": "rwm",
+                }
+            ],
+            "device_cgroup_rules": ["c 10:200 rwm"],
+            "seccomp_profile": "unconfined",
+            "security_opt": ["no-new-privileges=false"],
+            "cgroup_parent": "scenario.slice",
+            "runtime_name": "runc",
+            "group_add": ["1000"],
+            "extra_hosts": [{"hostname": "db", "address": "10.0.0.5"}],
+            "dns": ["10.0.0.2"],
+            "dns_options": ["use-vc"],
+            "dns_search": ["scenario.test"],
+            "log_driver": "json-file",
+            "log_options": {"max-size": "10m"},
+            "init_process": {"enabled": True},
+        }
+    )
+    backend = _Backend(
+        {
+            _CONTAINER: _inspect(
+                host_config={
+                    "Privileged": True,
+                    "ReadonlyRootfs": True,
+                    "ShmSize": 67108864,
+                    "PidMode": "host",
+                    "IpcMode": "private",
+                    "UsernsMode": "host",
+                    "UTSMode": "host",
+                    "CgroupnsMode": "private",
+                    "Devices": [
+                        {
+                            "PathOnHost": "/dev/net/tun",
+                            "PathInContainer": "/dev/net/tun",
+                            "CgroupPermissions": "rwm",
+                        }
+                    ],
+                    "DeviceCgroupRules": ["c 10:200 rwm"],
+                    "SecurityOpt": [
+                        "no-new-privileges=false",
+                        "seccomp=unconfined",
+                        "label=disable",
+                    ],
+                    "CgroupParent": "scenario.slice",
+                    "Runtime": "runc",
+                    "GroupAdd": ["1000"],
+                    "ExtraHosts": ["db:10.0.0.5"],
+                    "Dns": ["10.0.0.2"],
+                    "DnsOptions": ["use-vc"],
+                    "DnsSearch": ["scenario.test"],
+                    "LogConfig": {
+                        "Type": "json-file",
+                        "Config": {"max-size": "10m"},
+                    },
+                    "Init": True,
+                }
+            )
+        }
+    )
+    kinds = (
+        "runtime-container-privileged",
+        "runtime-container-read-only-rootfs",
+        "runtime-container-shm-size",
+        "runtime-container-namespaces",
+        "runtime-container-devices",
+        "runtime-container-device-cgroup-rules",
+        "runtime-container-seccomp-profile",
+        "runtime-container-security-opt",
+        "runtime-container-cgroup-parent",
+        "runtime-container-runtime-name",
+        "runtime-container-group-add",
+        "runtime-container-extra-hosts",
+        "runtime-container-dns",
+        "runtime-container-dns-options",
+        "runtime-container-dns-search",
+        "runtime-container-log-driver",
+        "runtime-container-log-options",
+        "runtime-container-init-process",
+    )
+
+    for kind in kinds:
+        assert kind in DAEMON_READBACK_RUNTIME_CONCERNS
+        codes, _provenance, observations = _gate(runtime, backend, kind)
+        assert codes == [], kind
+        assert CONCERN_PAYLOAD_PATH[kind] in observations[_ADDRESS].concerns
+
+
+def test_container_privilege_is_not_disclosed_when_daemon_state_differs():
+    runtime = _runtime(container={"privileged": True})
+    backend = _Backend({_CONTAINER: _inspect(host_config={"Privileged": False})})
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-container-privileged"
+    )
+
+    assert CONCERN_PAYLOAD_PATH["runtime-container-privileged"] not in (
+        observations[_ADDRESS].concerns
+    )
+    assert _GATE_REJECT in codes
+
+
 def test_verified_autoremove_receipt_realizes_removed_completed_node():
     runtime = _runtime(container={"autoremove": True, "entrypoint": ["/usr/bin/init"]})
     completed = _inspect(entrypoint=["/usr/bin/init"], autoremove=False)
@@ -675,6 +796,181 @@ Max open files            65536                65536                files
 _PACKAGES_PATH = CONCERN_PAYLOAD_PATH["runtime-packages"]
 _FILESYSTEM_PATH = CONCERN_PAYLOAD_PATH["runtime-filesystem-inventory"]
 _SERVICE_UNITS_PATH = CONCERN_PAYLOAD_PATH["runtime-service-manager-units"]
+_SOFTWARE_PATH = CONCERN_PAYLOAD_PATH["runtime-software-components"]
+_APP_AUTH_PATH = CONCERN_PAYLOAD_PATH["runtime-app-authorizations"]
+
+
+def _redis_acl_runtime() -> RuntimeConfiguration:
+    """A single logical cache client with only the authored read/write grant."""
+
+    return _runtime(
+        app_authorizations=[
+            {
+                "app_authorization_id": "cache-authorization",
+                "resource_vocabulary": "redis_acl",
+                "auth_enabled": True,
+                "principals": [
+                    {
+                        "principal_id": "cache-client",
+                        "kind": "service_account",
+                        "credential_classification": "redacted",
+                    }
+                ],
+                "roles": [{"role_id": "cache-role"}],
+                "permission_grants": [
+                    {
+                        "grant_id": "cache-grant",
+                        "role_ref": "cache-role",
+                        "resource_kind": "redis_acl",
+                        "actions": ["read", "write"],
+                        "resource_patterns": ["*"],
+                        "effect": "allow",
+                    }
+                ],
+                "role_mappings": [
+                    {
+                        "mapping_id": "cache-mapping",
+                        "role_ref": "cache-role",
+                        "users": ["cache-client"],
+                    }
+                ],
+            }
+        ]
+    )
+
+
+def test_techvault_redis_authorization_requires_bounded_live_acl():
+    from aptl_techvault.startup import TechVaultStartupProvider
+
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                "sh": (
+                    0,
+                    "config=exact\nauth=PONG\nrw=verified\nadmin=denied\n",
+                )
+            }
+        },
+    )
+
+    observed = TechVaultStartupProvider.observe_runtime(
+        backend,
+        SimpleNamespace(
+            name="misp-redis",
+            container_name=_CONTAINER,
+            runtime=_redis_acl_runtime(),
+        ),
+    )
+
+    assert _APP_AUTH_PATH in observed
+
+
+def test_techvault_redis_authorization_rejects_admin_access():
+    from aptl_techvault.startup import TechVaultStartupProvider
+
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                "sh": (
+                    0,
+                    "config=exact\nauth=PONG\nrw=verified\nadmin=allowed\n",
+                )
+            }
+        },
+    )
+
+    observed = TechVaultStartupProvider.observe_runtime(
+        backend,
+        SimpleNamespace(
+            name="misp-redis",
+            container_name=_CONTAINER,
+            runtime=_redis_acl_runtime(),
+        ),
+    )
+
+    assert _APP_AUTH_PATH not in observed
+
+
+@pytest.mark.parametrize(
+    "readback",
+    [
+        "config=exact\nauth=PONG\nrw=verified\nadmin=allowed\n",
+        "config=exact\nauth=PONG\nrw=verified\nadmin=denied\nextra=value\n",
+        "config=exact\nauth=PONG\nrw=verified\nadmin=denied\nadmin=denied\n",
+        "config=exact\nauth=PONG\nrw=verified\nadmin\n",
+    ],
+)
+def test_techvault_redis_authorization_rejects_malformed_readback(readback):
+    from aptl_techvault.redis_acl_observation import _readback_verified
+
+    assert not _readback_verified(SimpleNamespace(stdout=readback))
+
+
+def test_wazuh_software_component_requires_guest_version_and_agent_type():
+    runtime = _runtime(
+        software_components=[
+            {
+                "component_id": "wazuh-agent",
+                "name": "Wazuh agent",
+                "component_type": "application",
+                "presence": "required",
+                "version": "4.12.0",
+            }
+        ]
+    )
+    info_command = ("/var/ossec/bin/wazuh-control", "info")
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                info_command: (
+                    0,
+                    'WAZUH_VERSION="v4.12.0"\nWAZUH_TYPE="agent"\n',
+                )
+            }
+        },
+    )
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-software-components"
+    )
+
+    assert codes == []
+    assert _SOFTWARE_PATH in observations[_ADDRESS].concerns
+
+
+def test_wazuh_software_component_rejects_wrong_guest_version():
+    runtime = _runtime(
+        software_components=[
+            {
+                "component_id": "wazuh-agent",
+                "name": "Wazuh agent",
+                "component_type": "application",
+                "presence": "required",
+                "version": "4.12.0",
+            }
+        ]
+    )
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                ("/var/ossec/bin/wazuh-control", "info"): (
+                    0,
+                    'WAZUH_VERSION="v4.11.0"\nWAZUH_TYPE="agent"\n',
+                )
+            }
+        },
+    )
+
+    codes, _provenance, observations = _gate(
+        runtime, backend, "runtime-software-components"
+    )
+
+    assert _GATE_REJECT in codes
+    assert _SOFTWARE_PATH not in observations[_ADDRESS].concerns
 
 
 def test_declared_package_is_disclosed_only_after_guest_query_matches():
@@ -705,7 +1001,9 @@ def test_declared_package_corroborates_through_its_installed_provider():
     the installed package that provides it rather than calling the declaration
     unrealized (issue #1006).
     """
-    runtime = _runtime(packages=[{"manager": "apt", "name": "dnsutils", "version": "*"}])
+    runtime = _runtime(
+        packages=[{"manager": "apt", "name": "dnsutils", "version": "*"}]
+    )
     direct = (
         "dpkg-query",
         "-W",
@@ -739,7 +1037,9 @@ def test_declared_package_corroborates_through_its_installed_provider():
 
 def test_declared_package_with_no_provider_is_still_rejected():
     """Resolving through providers must not become 'assume it is there'."""
-    runtime = _runtime(packages=[{"manager": "apt", "name": "dnsutils", "version": "*"}])
+    runtime = _runtime(
+        packages=[{"manager": "apt", "name": "dnsutils", "version": "*"}]
+    )
     direct = (
         "dpkg-query",
         "-W",
@@ -945,6 +1245,44 @@ def test_local_identity_is_disclosed_only_after_guest_account_readback():
                 ),
                 ("id", "-gn", "alice"): (0, "analyst\n"),
                 ("id", "-Gn", "alice"): (0, "analyst wheel\n"),
+            }
+        },
+    )
+
+    codes, _provenance, observations = _gate(runtime, backend, "runtime-local-identity")
+
+    assert codes == []
+    assert (
+        CONCERN_PAYLOAD_PATH["runtime-local-identity"]
+        in observations[_ADDRESS].concerns
+    )
+
+
+def test_local_identity_observes_backend_selected_primary_group_and_membership():
+    """An omitted primary group stays open and supplemental joins still read back."""
+
+    runtime = _runtime(
+        local_identity={
+            "groups": [{"name": "analysts"}],
+            "users": [
+                {
+                    "username": "alice",
+                    "supplemental_groups": ["analysts"],
+                }
+            ],
+        }
+    )
+    backend = _Backend(
+        {_CONTAINER: _inspect()},
+        exec_results={
+            _CONTAINER: {
+                ("getent", "group", "analysts"): (0, "analysts:x:1000:alice\n"),
+                ("getent", "passwd", "alice"): (
+                    0,
+                    "alice:x:1001:1001::/home/alice:/bin/bash\n",
+                ),
+                ("id", "-gn", "alice"): (0, "alice\n"),
+                ("id", "-Gn", "alice"): (0, "alice analysts\n"),
             }
         },
     )
@@ -1930,6 +2268,49 @@ def test_wazuh_agent_enrolls_under_the_declared_agent_name():
     # what the agent reads when it registers.
     enrollment = payload.split("<enrollment>", 1)[1].split("</enrollment>", 1)[0]
     assert f"<agent_name>{agent_name}</agent_name>" in enrollment
+
+
+def test_wazuh_agent_accepts_separate_declared_ingestion_and_enrollment_targets():
+    """A two-endpoint SDL declaration drives both Wazuh connection roles."""
+    from aptl.core.deployment._wazuh_agent_configuration import wazuh_config
+    from aptl.core.deployment._wazuh_agent_realization import _manager_host
+
+    agent = SimpleNamespace(
+        name="workstation-forwarder",
+        ship_targets=(
+            SimpleNamespace(
+                target_node_ref="events-manager",
+                ingestion_port=1514,
+                protocol="tcp",
+            ),
+            SimpleNamespace(target_node_ref="enrollment-manager", enrollment_port=1515),
+        ),
+        sources=(),
+    )
+
+    payload = wazuh_config(agent)
+
+    assert _manager_host(agent) == "events-manager"
+    assert payload is not None
+    assert "<address>events-manager</address>" in payload
+    assert "<manager_address>enrollment-manager</manager_address>" in payload
+    assert "<port>1515</port>" in payload
+
+
+def test_wazuh_agent_rejects_ambiguous_declared_targets():
+    from aptl.core.deployment._wazuh_agent_configuration import wazuh_config
+    from aptl.core.deployment._wazuh_agent_realization import _manager_host
+
+    ingestion = SimpleNamespace(target_node_ref="manager", ingestion_port=1514)
+    enrollment = SimpleNamespace(target_node_ref="manager", enrollment_port=1515)
+    for targets in (
+        (ingestion, ingestion),
+        (ingestion, enrollment, enrollment),
+        (ingestion, SimpleNamespace(target_node_ref="unused")),
+    ):
+        agent = SimpleNamespace(ship_targets=targets)
+        assert _manager_host(agent) is None
+        assert wazuh_config(agent) is None
 
 
 def test_wazuh_apt_bootstrap_downloads_key_into_private_directory():

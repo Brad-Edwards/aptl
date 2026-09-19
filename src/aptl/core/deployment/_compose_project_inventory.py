@@ -6,6 +6,7 @@ import json
 import re
 from typing import Any
 
+from aptl.core.deployment._compose_resource_ownership import OwnershipConflictError
 from aptl.core.deployment.errors import BackendObservationError, BackendTimeoutError
 from aptl.core.lab_types import LabStatus
 from aptl.utils.redaction import redact
@@ -128,6 +129,13 @@ class ComposeProjectInventoryMixin(object):
     def _project_container_status(self) -> LabStatus:
         """Return checked, all-state inventory for the configured project."""
 
+        try:
+            self._load_resource_ownership()
+        except OwnershipConflictError:
+            return LabStatus(
+                running=False,
+                error="Backend resource ownership state is unavailable.",
+            )
         by_id: dict[str, dict[str, Any]] = {}
         failure: str | None = None
         for label in _PROJECT_OWNERSHIP_LABELS:

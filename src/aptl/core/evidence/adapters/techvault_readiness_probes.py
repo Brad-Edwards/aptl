@@ -76,7 +76,7 @@ cleanup() {
     trap - EXIT
     if [ -n "$id" ]; then
         curl -ksf -H "@$headers" -X POST "$base/events/delete/$id" \
-            >/dev/null 2>&1 || true
+            >/dev/null 2>&1 || status=1
     fi
     rm -f "$headers"
     exit "$status"
@@ -87,10 +87,10 @@ printf 'Authorization: %s\nAccept: application/json\n' "${ADMIN_KEY}" > "$header
 created="$(curl -ksf -H "@$headers" -X POST "$base/events/add" \
     -H 'Content-Type: application/json' \
     -d "{\"Event\":{\"info\":\"$marker\",\"distribution\":\"0\",\"analysis\":\"0\",\"threat_level_id\":\"4\"}}")"
-id="$(printf '%s' "$created" | sed -nE 's/.*"id":"?([0-9]+)"?.*/\1/p' | head -n 1)"
+id="$(printf '%s' "$created" | jq -er '.Event.id | tostring | select(test("^[0-9]+$"))')"
 [ -n "$id" ]
 read_back="$(curl -ksf -H "@$headers" "$base/events/view/$id")"
-printf '%s' "$read_back" | grep -Fq "$marker"
+printf '%s' "$read_back" | jq -e --arg marker "$marker" '.Event.info == $marker' >/dev/null
 echo "api_write_read_ok=true"
 """
 
@@ -116,29 +116,41 @@ echo "database_role_access_ok=true"
 # cache container, so the generated value stays where it was delivered. The
 # declared persistence posture is read back from the running server rather than
 # assumed from the image's defaults.
-_MISP_CACHE_SCRIPT = r"""
+_MISP_CACHE_SCRIPT = (
+    r"""
 set -eu
-pass="$(sed -nE 's/^requirepass[[:space:]]+([^[:space:]]+)$/\1/p' /etc/redis/redis.conf)"
+pass="$(sed -nE 's/^user default reset on >([A-Za-z0-9_-]+) ~\* \+@read """
+    r"""\+@write \+@connection \+@transaction -@dangerous$/\1/p' /etc/redis/redis.conf)"
 [ -n "$pass" ]
+expected="user default reset on >$pass ~* +@read +@write +@connection +@transaction -@dangerous"
+expected_hash="$(printf '%s\nappendonly no\nmaxmemory-policy noeviction\n' "$expected" | sha256sum)"
+actual_hash="$(sha256sum /etc/redis/redis.conf)"
+[ "${expected_hash%% *}" = "${actual_hash%% *}" ]
 # An unauthenticated ping must be refused, or "authenticated access" would be
 # indistinguishable from an open cache.
-if redis-cli ping 2>&1 | grep -qiv 'NOAUTH'; then
-    echo "cache is not requiring authentication" >&2
-    exit 1
-fi
+unauth="$(redis-cli --raw ping 2>&1)"
+case "$unauth" in
+    NOAUTH*) ;;
+    *) echo "cache is not requiring authentication" >&2; exit 1 ;;
+esac
 # REDISCLI_AUTH is redis-cli's own non-argv credential channel. `-a "$pass"`
 # would publish the generated cache credential in /proc/<pid>/cmdline for every
 # invocation below.
 REDISCLI_AUTH="$pass"
 export REDISCLI_AUTH
 redis-cli --no-auth-warning ping | grep -Fxq PONG
-aof="$(redis-cli --no-auth-warning config get appendonly | tail -n 1)"
-evict="$(redis-cli --no-auth-warning config get maxmemory-policy | tail -n 1)"
-[ -n "$aof" ] && [ -n "$evict" ]
+# The exact mounted config supplies these directives, and the admitted Redis
+# command starts from that file. The application ACL cannot run CONFIG SET or
+# even CONFIG GET, so probing effective settings through the app account would
+# grant it authority beyond the authored read/write role.
+aof="$(sed -n 's/^appendonly //p' /etc/redis/redis.conf)"
+evict="$(sed -n 's/^maxmemory-policy //p' /etc/redis/redis.conf)"
+[ "$aof" = no ] && [ "$evict" = noeviction ]
 echo "cache_authenticated=true"
 echo "cache_persistence_policy=$aof"
 echo "cache_eviction_policy=$evict"
 """
+)
 
 
 # Certificate identity is proven for the name the scenario authored, not for
@@ -326,6 +338,10 @@ MAX_BYTES = 32 * 1024 * 1024
 def instant(value):
     if value.endswith("Z"):
         value = value[:-1] + "+00:00"
+    elif len(value) >= 5 and value[-5] in "+-" and value[-4:].isdigit():
+        # Wazuh writes offsets as +0000; fromisoformat requires +00:00 on
+        # Python versions used by our agent containers.
+        value = value[:-2] + ":" + value[-2:]
     parsed = datetime.fromisoformat(value)
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError("timestamp is not timezone-aware")

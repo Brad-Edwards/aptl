@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import json
 import secrets
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlunsplit
@@ -52,6 +54,9 @@ from aptl.core.evidence.adapters.techvault_native_support import (
     webapp_endpoint,
 )
 from aptl.utils.curl_safe import basic_auth_header, curl_json
+from aptl.core.evidence.adapters.techvault_telemetry_stimulus import (
+    emit_missing_agent_events,
+)
 
 _CORTEX_REGISTRATION = "aptl.collector.cortex-enrichment"
 _MISP_READINESS_REGISTRATION = "aptl.collector.misp-authenticated-api-readiness"
@@ -109,8 +114,7 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
         self._now = selected_dependencies.now
         self._sleep = selected_dependencies.sleep
         self._cortex_url = published_url(realization, "cortex", 9001, "http")
-        self._thehive_url = published_url(realization, "thehive", 9000, "https")
-        self._thehive_ca_cert = str(project_dir / "config/soc_certs/lab-ca.pem")
+        self._thehive_url = published_url(realization, "thehive", 9000, "http")
         self._indexer_url = published_url(realization, "wazuh-indexer", 9200, "https")
         self._connector_key = generated_output(
             realization,
@@ -171,15 +175,20 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
     ) -> Mapping[str, object] | None:
         """Observe MISP, its database and its cache through the admitted plan."""
 
-        return misp_readiness(
-            getattr(self._backend, "container_exec_with_input", None),
-            self._realization,
-        )
+        return misp_readiness(self._backend, self._realization)
 
     def wazuh_agent_readiness_query(
         self, start_iso: str, end_iso: str
     ) -> Mapping[str, object] | None:
         """Correlate each declared endpoint agent with the manager's roster."""
+
+        observed = self._observe_agent_readiness(start_iso, end_iso)
+        return self._refresh_agent_telemetry(observed, start_iso, end_iso)
+
+    def _observe_agent_readiness(
+        self, start_iso: str, end_iso: str
+    ) -> Mapping[str, object] | None:
+        """Read the manager roster using the admitted scenario identities."""
 
         return wazuh_agent_readiness(
             getattr(self._backend, "container_exec_with_input", None),
@@ -187,6 +196,72 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
             self._project_dir,
             start_iso,
             end_iso,
+        )
+
+    def _refresh_agent_telemetry(
+        self,
+        observed: Mapping[str, object] | None,
+        start_iso: str,
+        end_iso: str,
+    ) -> Mapping[str, object] | None:
+        """Stimulate only stale declared hosts, then await native freshness."""
+
+        if observed is None:
+            return None
+        hosts = observed.get("hosts", ())
+        missing = [
+            str(host["node_ref"])
+            for host in hosts
+            if isinstance(host, Mapping) and host.get("telemetry_fresh") is False
+        ]
+        deadline = self._agent_refresh_deadline(missing, end_iso)
+        if deadline is None:
+            return observed
+        sleep = self._sleep or time.sleep
+        for _attempt in range(30):
+            if datetime.fromisoformat(self._now().replace("Z", "+00:00")) >= deadline:
+                break
+            sleep(2.0)
+            observed = self._observe_agent_readiness(start_iso, end_iso)
+            if observed is None or self._all_agent_telemetry_fresh(observed):
+                break
+        return observed
+
+    def _agent_refresh_deadline(
+        self, missing: list[str], end_iso: str
+    ) -> datetime | None:
+        """Start bounded re-observation only after real stimulus was emitted."""
+
+        if not missing or not self._emit_missing_agent_events(missing):
+            return None
+        try:
+            return datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    def _emit_missing_agent_events(self, missing: list[str]) -> bool:
+        """Trigger real source activity for stale admitted endpoint agents."""
+
+        declared = {
+            node: sources
+            for node, (_enrollment, sources) in declared_endpoint_agents(
+                self._realization
+            ).items()
+        }
+        try:
+            return emit_missing_agent_events(
+                self._backend, self._realization, missing, declared, self.trigger_sqli
+            )
+        except Exception:
+            return False
+
+    @staticmethod
+    def _all_agent_telemetry_fresh(observed: Mapping[str, object]) -> bool:
+        """Require every corroborated host to carry a fresh telemetry marker."""
+
+        return all(
+            isinstance(host, Mapping) and host.get("telemetry_fresh") is True
+            for host in observed.get("hosts", ())
         )
 
     def suricata_readiness_query(

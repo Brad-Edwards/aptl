@@ -281,6 +281,7 @@ class AptlRealization(object):
             generated_artifacts=self.generated_artifacts,
             persistent_volumes=self.persistent_volumes,
             capture_apparatus=capture_apparatus,
+            pack_identity=self.pack_identity,
         )
 
     def details(self) -> dict[str, object]:

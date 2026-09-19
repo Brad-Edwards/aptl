@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
+from aptl.core.deployment._compose_owner_labels import complete_owner_labels
 from aptl.core.deployment._compose_resource_ownership import (
     OwnershipConflictError,
     ResourceReceipt,
@@ -132,7 +133,11 @@ class ComposeReceiptCaptureMixin:
         """Require one receipt and a fresh resolver match per discovered object."""
 
         for selector in selectors:
-            if len(ownership.candidates(selector, kind=kind, daemon_id=daemon_id)) != 1:
+            # A stopped/recreated network retains an immutable historical
+            # receipt under its old native ID. The resolver inspects every
+            # candidate and requires exactly one *live* identity; counting
+            # historical candidates here rejects a correctly owned restart.
+            if not ownership.candidates(selector, kind=kind, daemon_id=daemon_id):
                 raise OwnershipConflictError(_FOREIGN_NAMESPACE)
             resolver(selector)
 
@@ -307,7 +312,7 @@ class ComposeReceiptCaptureMixin:
             else None
         )
         if (
-            not self._complete_owner_labels(
+            not complete_owner_labels(
                 ownership,
                 labels,
                 attempt_id=attempt_id,
@@ -385,7 +390,7 @@ class ComposeReceiptCaptureMixin:
         external_name = info.get("name") if isinstance(info, dict) else None
         if (
             info.get("id") != native_id
-            or not self._complete_owner_labels(
+            or not complete_owner_labels(
                 ownership,
                 labels,
                 attempt_id=attempt_id,
@@ -453,7 +458,7 @@ class ComposeReceiptCaptureMixin:
             if isinstance(labels, dict)
             else None
         )
-        if info.get("Name") != native_name or not self._complete_owner_labels(
+        if info.get("Name") != native_name or not complete_owner_labels(
             ownership,
             labels,
             attempt_id=attempt_id,
@@ -474,25 +479,4 @@ class ComposeReceiptCaptureMixin:
                 attempt_id=attempt_id,
                 managed_by="compose",
             )
-        )
-
-    @staticmethod
-    def _complete_owner_labels(
-        ownership: WorkspaceOwnership,
-        labels: object,
-        *,
-        attempt_id: str,
-        compose_kind: str,
-        semantic_name: object,
-    ) -> bool:
-        """Return whether Compose and workspace owner labels are complete."""
-
-        if not isinstance(labels, dict) or not isinstance(semantic_name, str):
-            return False
-        expected = ownership.labels(attempt_id=attempt_id)
-        return bool(
-            semantic_name
-            and labels.get(_COMPOSE_PROJECT_LABEL) == ownership.project_name
-            and labels.get(f"com.docker.compose.{compose_kind}") == semantic_name
-            and all(labels.get(name) == value for name, value in expected.items())
         )

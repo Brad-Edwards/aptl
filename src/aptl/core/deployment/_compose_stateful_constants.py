@@ -70,7 +70,7 @@ WAZUH_MANAGER_SERVICE = "wazuh.manager"
 ENVIRONMENT_DELIVERY_PROVENANCES = frozenset(
     {
         "techvault:cortex-service-credentials/v1",
-        "techvault:misp-cache-credential/v1",
+        "techvault:misp-cache-credential/v2",
     }
 )
 

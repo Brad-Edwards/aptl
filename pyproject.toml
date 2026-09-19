@@ -114,12 +114,18 @@ build = [
     "editables>=0.5",
 ]
 
-# Per-scenario adapters. The framework under `src/aptl` holds no scenario
-# knowledge; everything specific to one scenario on this backend lives in its
-# own top-level package and is reached only through these entry points. A
-# second scenario adds a package and its entries here, never a framework edit.
+# Per-scenario runtime, startup and verification adapters. The generic
+# materializer under `src/aptl` does not branch on scenario identities. Native
+# evidence remains a built-in adapter with registrations in core; these entry
+# points do not yet make the entire framework package scenario-neutral.
 [project.entry-points."aptl.pack_backend_interactions"]
 "techvault.aptl" = "aptl_techvault.serving:provider"
+
+[project.entry-points."aptl.scenario_runtime_parameters"]
+"techvault" = "aptl_techvault.runtime_parameters:provider"
+
+[project.entry-points."aptl.scenario_startup"]
+"techvault" = "aptl_techvault.startup:provider"
 
 [project.entry-points."aptl.scenario_verifiers"]
 "techvault.aptl" = "aptl_techvault.verification:verifier"

@@ -179,13 +179,13 @@ def bundle_realization(
         AptlPlanningOptions,
         plan_aptl_scenario,
     )
-    from aptl_techvault.runtime_parameters import runtime_parameters_for_bundle
+    from aptl.backends.scenario_runtime_parameters import resolve_runtime_parameters
 
     execution_plan = plan_aptl_scenario(
         target=target,
         bundle=bundle,
         scenario=scenario,
-        options=AptlPlanningOptions(parameters=runtime_parameters_for_bundle(bundle)),
+        options=AptlPlanningOptions(parameters=resolve_runtime_parameters(bundle)),
     )
     realization = interpret_provisioning_plan(
         plan=execution_plan.provisioning, config=config, bundle=bundle

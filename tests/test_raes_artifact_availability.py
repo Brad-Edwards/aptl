@@ -13,6 +13,7 @@ the local image cache. These tests pin the two properties that matter:
 
 from __future__ import annotations
 
+import hashlib
 import textwrap
 from pathlib import Path
 
@@ -177,6 +178,64 @@ def test_facts_are_scoped_to_the_declaring_address(tmp_path):
     assert availability.requirements[0].address == "provision.node.target"
     assert availability.requirements[0].available_artifact_digests == []
     assert "artifact.unavailable-exact-artifact" in _codes(scenario, availability)
+
+
+def test_materialization_inspection_is_read_only_until_graph_qualification(
+    tmp_path: Path,
+) -> None:
+    from raes.artifact_requirements import ArtifactRequirement
+
+    from aptl.backends.raes_artifact_availability import (
+        _materialized_specifications,
+    )
+    from aptl.backends.raes_artifact_mechanisms import materialization_profile
+
+    dockerfile = tmp_path / "containers" / "component" / "Dockerfile"
+    dockerfile.parent.mkdir(parents=True)
+    dockerfile.write_text("FROM scratch\n", encoding="utf-8")
+    digest = "sha256:" + hashlib.sha256(dockerfile.read_bytes()).hexdigest()
+    profile = materialization_profile()
+    requirement = ArtifactRequirement.model_validate(
+        {
+            "requirement_id": "component",
+            "explicitness": "constrained",
+            "materialization_specifications": [
+                {
+                    "specification_id": "component",
+                    "profile": profile.model_dump(mode="json"),
+                    "digest": digest,
+                }
+            ],
+            "permitted_routes": [
+                {
+                    "mechanism": profile.model_dump(mode="json"),
+                    "acquisition": "none",
+                    "timing": "backend-preparation",
+                }
+            ],
+        }
+    )
+
+    class BuildProbe:
+        calls = 0
+
+        def materialize_component_image(self, *_args):
+            self.calls += 1
+            return _OTHER_DIGEST
+
+    probe = BuildProbe()
+    inspected = _materialized_specifications(
+        requirement, probe, tmp_path, {}, materialize=False
+    )
+
+    assert inspected == ([digest], [])
+    assert probe.calls == 0
+
+    materialized = _materialized_specifications(
+        requirement, probe, tmp_path, {}, materialize=True
+    )
+    assert materialized == ([digest], [_OTHER_DIGEST])
+    assert probe.calls == 1
 
 
 def test_shipped_scenario_declares_artifact_demand_for_every_imaged_node(tmp_path):

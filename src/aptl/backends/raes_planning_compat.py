@@ -54,6 +54,7 @@ from aptl.backends.raes_runtime_attestation import (
 from aptl.backends._raes_backend_implementation_profiles import (
     backend_profile_selected_concerns,
 )
+from aptl.backends import _raes_runtime_container_observation as container_observation
 
 TECHVAULT_PACK_ID = "techvault"
 TECHVAULT_PACK_VERSION = "0.1.0"
@@ -72,6 +73,7 @@ DAEMON_READBACK_RUNTIME_CONCERNS = frozenset(
         *ARTIFACT_ATTESTED_RUNTIME_CONCERNS,
         "linux-capabilities",
         "published-ports",
+        *container_observation.RUNTIME_CONTAINER_DAEMON_CONCERNS,
         "runtime-container-autoremove",
         "runtime-container-command",
         "runtime-container-entrypoint",
@@ -487,8 +489,6 @@ def plan_aptl_scenario(
         if selected.snapshot is None
         else manager.plan(scenario, selected.snapshot, **plan_options)
     )
-
-
 __all__ = [
     "AptlRuntimeManager",
     "AptlPlanningOptions",

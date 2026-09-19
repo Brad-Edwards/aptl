@@ -14,17 +14,12 @@ from raes.runtime_configuration import RuntimeConfiguration
 
 from aptl.backends._runtime_concern_disclosure import _disclose
 from aptl.backends._raes_guest_package_observation import observe_packages
+from aptl.backends._raes_guest_process_limits import observe_process_resource_limits
 from aptl.backends.raes_package_managers import manifest_query_argv
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
 
-_PROCESS_LIMITS_PATH = "/proc/1/limits"
-_PROCESS_LIMITS_MAX_BYTES = 16 * 1024
-_PROCESS_LIMIT_LABELS = {
-    "Max open files": "open_file_descriptors",
-    "Max locked memory": "locked_memory_bytes",
-}
 _DEPENDENCY_MANIFEST_MAX_BYTES = 1024 * 1024
 
 
@@ -38,8 +33,19 @@ def observe_local_identity(
     inventory = runtime.local_identity
     if inventory is None:
         return None
+    expected_members = {group.name: set(group.members) for group in inventory.groups}
+    for user in inventory.users:
+        for group_name in user.supplemental_groups:
+            if group_name in expected_members:
+                expected_members[group_name].add(user.username)
     if not all(
-        _group_matches(backend, container_name, group) for group in inventory.groups
+        _group_matches(
+            backend,
+            container_name,
+            group,
+            expected_members=expected_members[group.name],
+        )
+        for group in inventory.groups
     ) or not all(
         _user_matches(backend, container_name, user) for user in inventory.users
     ):
@@ -51,7 +57,11 @@ def observe_local_identity(
 
 
 def _group_matches(
-    backend: "DeploymentBackend", container_name: str, group: object
+    backend: "DeploymentBackend",
+    container_name: str,
+    group: object,
+    *,
+    expected_members: set[str],
 ) -> bool:
     """Return whether guest group identity and membership match exactly."""
 
@@ -59,12 +69,11 @@ def _group_matches(
     row = _exec_stdout(backend, container_name, ["getent", "group", name])
     fields = row.strip().split(":") if row is not None else []
     declared_gid = getattr(group, "gid", None)
-    declared_members = set(getattr(group, "members", ()))
     return bool(
         len(fields) == 4
         and fields[0] == name
         and (declared_gid is None or fields[2] == str(declared_gid))
-        and {item for item in fields[3].split(",") if item} == declared_members
+        and {item for item in fields[3].split(",") if item} == expected_members
     )
 
 
@@ -100,10 +109,12 @@ def _passwd_fields_match(fields: list[str], user: object) -> bool:
 def _group_records_match(primary: str | None, groups: str | None, user: object) -> bool:
     """Compare a user's primary and supplemental guest group records."""
 
-    expected = {user.primary_group, *user.supplemental_groups}
+    observed_primary = primary.strip() if primary is not None else ""
+    declared_primary = user.primary_group
+    expected = {observed_primary, *user.supplemental_groups}
     return bool(
-        primary is not None
-        and primary.strip() == user.primary_group
+        observed_primary
+        and (not declared_primary or observed_primary == declared_primary)
         and groups is not None
         and set(groups.split()) == expected
     )
@@ -147,112 +158,6 @@ def _dependency_manifest_matches(
     return bool(payload) and _exec_ok(backend, container_name, command)
 
 
-def observe_process_resource_limits(
-    backend: "DeploymentBackend",
-    container_name: str,
-    runtime: RuntimeConfiguration,
-) -> object | None:
-    """Read the effective PID-1 limits that Compose applies to its subtree.
-
-    APTL's image-backed substrate selects ``nofile`` and ``memlock`` defaults
-    even when the open SDL leaves the collection empty.  Reading procfs through
-    the provider avoids a workload-controlled executable while still observes
-    the effective guest values.  Both selected dimensions must be present.
-    """
-
-    policy = runtime.operational_policy
-    limits = policy.resource_limits if policy is not None else None
-    if limits is not None and limits.process_limits:
-        # Authored process subjects require a dedicated subject resolver.  Do
-        # not pretend PID 1 proves an arbitrary authored process selection.
-        return None
-    payload = backend.container_file_read(
-        container_name,
-        _PROCESS_LIMITS_PATH,
-        max_bytes=_PROCESS_LIMITS_MAX_BYTES,
-    )
-    observed = _parse_process_limits(payload)
-    if observed.keys() != set(_PROCESS_LIMIT_LABELS.values()):
-        return None
-    records = [
-        {
-            "resource": resource,
-            "soft": observed[resource][0],
-            "hard": observed[resource][1],
-            "subject": {"name": "container"},
-            "scope": "subtree",
-        }
-        for resource in sorted(observed)
-    ]
-    return _disclose("process-resource-limits", records)
-
-
-def _parse_process_limits(
-    payload: bytes | None,
-) -> dict[str, tuple[int | str, int | str]]:
-    """Parse the bounded procfs limit rows APTL selects and observes."""
-
-    text = _decode_process_limits(payload)
-    observed: dict[str, tuple[int | str, int | str]] = {}
-    valid = text is not None
-    for line in text.splitlines() if text is not None else ():
-        valid, row = _process_limit_row(line)
-        if not valid:
-            break
-        if row is not None:
-            resource, soft, hard = row
-            observed[resource] = (soft, hard)
-    return observed if valid else {}
-
-
-def _decode_process_limits(payload: bytes | None) -> str | None:
-    """Decode a bounded procfs limits payload as strict UTF-8."""
-
-    if payload is None:
-        return None
-    try:
-        return payload.decode("utf-8", errors="strict")
-    except UnicodeDecodeError:
-        return None
-
-
-def _process_limit_row(
-    line: str,
-) -> tuple[bool, tuple[str, int | str, int | str] | None]:
-    """Parse one selected procfs limit row and distinguish irrelevant rows."""
-
-    selected = next(
-        (
-            (label, resource)
-            for label, resource in _PROCESS_LIMIT_LABELS.items()
-            if line.startswith(label)
-        ),
-        None,
-    )
-    if selected is None:
-        return True, None
-    label, resource = selected
-    columns = line[len(label) :].split()
-    if len(columns) != 3:
-        return False, None
-    soft = _limit_value(columns[0])
-    hard = _limit_value(columns[1])
-    valid = soft is not None and hard is not None
-    return valid, (resource, soft, hard) if valid else None
-
-
-def _limit_value(value: str) -> int | str | None:
-    """Parse a finite non-negative process limit or the unlimited sentinel."""
-
-    if value == "unlimited":
-        return value
-    try:
-        parsed = int(value)
-    except ValueError:
-        return None
-    return parsed if parsed >= 0 else None
-
-
 def observe_filesystem_inventory(
     backend: "DeploymentBackend",
     container_name: str,
@@ -270,6 +175,53 @@ def observe_filesystem_inventory(
     return _disclose(
         "runtime-filesystem-inventory",
         [entry.model_dump(mode="json", by_alias=True) for entry in entries],
+    )
+
+
+def observe_software_components(
+    backend: "DeploymentBackend",
+    container_name: str,
+    runtime: RuntimeConfiguration,
+) -> object | None:
+    """Corroborate the supported Wazuh agent component in the guest."""
+
+    components = tuple(runtime.software_components)
+    if len(components) != 1 or not _supported_wazuh_agent(components[0]):
+        return None
+    component = components[0]
+    output = _exec_stdout(
+        backend, container_name, ["/var/ossec/bin/wazuh-control", "info"]
+    )
+    if output is None or not _wazuh_info_matches(
+        output, str(getattr(component, "version", "") or "")
+    ):
+        return None
+    return _disclose(
+        "runtime-software-components",
+        [component.model_dump(mode="json", by_alias=True)],
+    )
+
+
+def _supported_wazuh_agent(component: object) -> bool:
+    """Admit only the one Wazuh agent shape this observer can corroborate."""
+
+    return bool(
+        getattr(component, "component_id", "") == "wazuh-agent"
+        and _value(getattr(component, "component_type", "")) == "application"
+        and _value(getattr(component, "presence", "")) == "required"
+        and str(getattr(component, "version", "") or "")
+    )
+
+
+def _wazuh_info_matches(output: str, version: str) -> bool:
+    """Require one exact agent type and version in guest Wazuh output."""
+
+    lines = output.splitlines()
+    return bool(
+        sum(line == f'WAZUH_VERSION="v{version}"' for line in lines) == 1
+        and sum(line == 'WAZUH_TYPE="agent"' for line in lines) == 1
+        and sum(line.startswith("WAZUH_VERSION=") for line in lines) == 1
+        and sum(line.startswith("WAZUH_TYPE=") for line in lines) == 1
     )
 
 

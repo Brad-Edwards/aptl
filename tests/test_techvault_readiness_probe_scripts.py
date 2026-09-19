@@ -9,25 +9,19 @@ credential may reach a descendant process's argv.
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 from pathlib import Path
 
 import pytest
 
-PROBES = (
-    Path(__file__).resolve().parents[1]
-    / "src/aptl/core/evidence/adapters/techvault_readiness_probes.py"
-)
+from aptl.core.evidence.adapters import techvault_readiness_probes as probes
+
 _START = "2026-01-01T00:00:00Z"
 _END = "2026-01-01T00:05:00Z"
 
 
 def _script(name: str) -> str:
-    source = PROBES.read_text(encoding="utf-8")
-    match = re.search(rf'{name} = r"""(.*?)"""', source, re.S)
-    assert match is not None, name
-    return match.group(1)
+    return getattr(probes, name)
 
 
 def _archive(tmp_path: Path, rows: list[object]) -> str:
@@ -128,7 +122,7 @@ def test_another_agents_event_cannot_forge_freshness_from_its_body(tmp_path):
         tmp_path,
         [
             _event("099", "2026-01-01T00:01:00Z", body='GET /?q="id":"001"'),
-            _event("099", "2026-01-01T00:02:00Z", body='agent.id=001 id:001'),
+            _event("099", "2026-01-01T00:02:00Z", body="agent.id=001 id:001"),
         ],
     )
 
@@ -203,8 +197,19 @@ def test_no_probe_puts_a_credential_in_a_child_process_argv(
     """
 
     recorded = _argv_recorder(tmp_path, setup)
+    if setup == "redis-cli":
+        # The real cache image has sha256sum; macOS test runners do not. This
+        # argv-focused test only needs identical hashes to reach redis-cli.
+        digest = tmp_path / "bin/sha256sum"
+        digest.write_text("#!/bin/sh\nprintf '%064d  -\\n' 0\n", encoding="utf-8")
+        digest.chmod(0o755)
     config = tmp_path / "redis.conf"
-    config.write_text(f"requirepass {_SECRET}\n", encoding="utf-8")
+    config.write_text(
+        f"user default reset on >{_SECRET} ~* +@read +@write "
+        "+@connection +@transaction -@dangerous\nappendonly no\n"
+        "maxmemory-policy noeviction\n",
+        encoding="utf-8",
+    )
     script = _script(script_name).replace("/etc/redis/redis.conf", str(config))
 
     environment = {

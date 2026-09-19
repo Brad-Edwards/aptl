@@ -8,9 +8,6 @@ import os
 from pathlib import PurePosixPath
 
 DOCKER_SOCKET_PATH = "/var/run/docker.sock"
-MEDIATED_DOCKER_SOCKET_RELPATH = PurePosixPath(
-    ".aptl/realization/docker-authority/docker.sock"
-)
 
 
 @dataclass(frozen=True)
@@ -39,6 +36,8 @@ class DeploymentDockerAuthorityAdmission:
     endpoint_target: str
     endpoint_read_write: bool
     spawn_requirements: tuple[DeploymentSpawnImageRequirement, ...]
+    authority_id: str = ""
+    image_template_ids: tuple[str, ...] = ()
     allowed_mount_targets: tuple[str, ...] = ()
     allowed_networks: tuple[str, ...] = ()
 
@@ -82,36 +81,6 @@ def mount_exposes_or_mentions_docker_socket(
     )
 
 
-def is_mediated_authority_socket(
-    *, source: object, target: object, read_write: bool
-) -> bool:
-    """Whether one socket bind is the admitted *mediated* authority grant.
-
-    A holder must see a read-write Docker socket at the path its scenario
-    declared -- that is the declaration being satisfied. What it must not see is
-    the host's own socket: the Docker API is a host-root API, so granting it
-    directly would hand a compromise of that workload the host. APTL puts an
-    authorization boundary in front of it instead, so the source is the
-    apparatus's socket and never `/var/run/docker.sock` (issue #912).
-
-    This is the single definition of "canonical" for the effective Compose
-    model, the daemon readback, and the excess-mount gate, so none of them can
-    come to disagree about what a valid grant looks like.
-    """
-
-    if (
-        target != DOCKER_SOCKET_PATH
-        or not read_write
-        or not isinstance(source, str)
-        or not source.startswith("/")
-        or bind_source_exposes_docker_socket(source)
-    ):
-        return False
-    source_parts = PurePosixPath(os.path.normpath(source)).parts
-    required_parts = MEDIATED_DOCKER_SOCKET_RELPATH.parts
-    return source_parts[-len(required_parts) :] == required_parts
-
-
 def has_undeclared_runtime_mounts(
     realized_mounts: Sequence[object],
     *,
@@ -134,10 +103,10 @@ def has_undeclared_runtime_mounts(
             bind_type="bind",
         )
         if exposes_socket:
-            canonical = is_mediated_authority_socket(
-                source=realized.get("Source"),
-                target=realized.get("Destination"),
-                read_write=realized.get("RW") is True,
+            canonical = bool(
+                realized.get("Source") == DOCKER_SOCKET_PATH
+                and realized.get("Destination") == DOCKER_SOCKET_PATH
+                and realized.get("RW") is True
             )
             if not (docker_authority_admitted and canonical):
                 return True

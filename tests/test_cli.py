@@ -154,11 +154,13 @@ class TestLabStartCommand:
         assert result.exit_code == 0
         mock_orchestrate.assert_called_once()
         assert "Credentials file: .env" in result.stdout
-        assert "Wazuh Dashboard: https://localhost:443" in result.stdout
-        assert "see INDEXER_PASSWORD in .env" in result.stdout
+        assert "Wazuh Dashboard" not in result.stdout
+        assert "Grafana" not in result.stdout
 
-    def test_lab_info_prints_access_summary(self, runner, tmp_path):
-        """lab info should reprint access URLs and credential locations."""
+    def test_lab_info_without_a_running_service_omits_access_urls(
+        self, runner, tmp_path
+    ):
+        """lab info must not invent product-specific endpoints."""
         from aptl.cli.main import app
 
         (tmp_path / ".env").touch()
@@ -167,7 +169,8 @@ class TestLabStartCommand:
 
         assert result.exit_code == 0
         assert f"Credentials file: {tmp_path / '.env'}" in result.stdout
-        assert "Grafana: http://localhost:3100" in result.stdout
+        assert "Wazuh Dashboard" not in result.stdout
+        assert "Grafana" not in result.stdout
 
     def test_lab_info_omits_reverse_access_when_service_is_not_running(
         self, runner, tmp_path, mocker

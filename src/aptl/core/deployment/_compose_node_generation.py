@@ -21,13 +21,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from aptl.core.deployment._compose_docker_authority import (
-    AUTHORITY_OWNER_LABEL_KEY,
-    AUTHORITY_OWNER_LABEL_VALUE,
-    AUTHORITY_SERVICE,
-    authority_requested,
-    authority_socket_path,
-)
+
+from aptl.core.deployment._compose_runtime_config import _operational_config
 from aptl.core.deployment._compose_runtime_orchestration import (
     docker_authority_admissions_by_address,
     docker_socket_volume,
@@ -59,19 +54,7 @@ GENERATED_COMPOSE_RELPATH = Path(".aptl") / "realization" / "compose-base.yml"
 STATIC_COMPOSE_FILENAME = "docker-compose.yml"
 
 
-def _require_healthy_authority(service: dict[str, object]) -> None:
-    """Make an authority holder wait for its mediating apparatus."""
-
-    depends = service.get("depends_on")
-    if not isinstance(depends, dict):
-        depends = {name: {"condition": "service_started"} for name in depends or ()}
-    depends[AUTHORITY_SERVICE] = {"condition": "service_healthy"}
-    service["depends_on"] = depends
-
-
-def render_realization_compose(
-    spec: DeploymentRealizationSpec, realization_root: Path | None = None
-) -> dict[str, object]:
+def render_realization_compose(spec: DeploymentRealizationSpec) -> dict[str, object]:
     """Return a Compose document for the spec's image-backed nodes and networks.
 
     Image-free nodes (no backing image) are omitted: the generic materializer
@@ -79,18 +62,12 @@ def render_realization_compose(
     is itself an emitted service, so the document never references an undefined
     service.
 
-    ``realization_root`` locates the mediated Docker socket an authority holder
-    is given in place of the host's own. It is required whenever the spec
-    carries an authority; a holder is never rendered with an unmediated socket.
+    Authority holders receive the exact host-root-equivalent endpoint they
+    declared.
     """
 
     image_by_address = {image.address: image for image in spec.images}
     admissions = docker_authority_admissions_by_address(spec)
-    mediated_socket = (
-        authority_socket_path(realization_root)
-        if realization_root is not None and authority_requested(spec)
-        else None
-    )
     emitted_services: dict[str, str] = {
         node.service_name: node.address
         for node in spec.nodes
@@ -115,7 +92,6 @@ def render_realization_compose(
         service_names,
         completion_services,
         admissions,
-        mediated_socket,
         canonical_aliases,
     )
 
@@ -132,7 +108,6 @@ def _render_services(
     service_names: set[str],
     completion_services: set[str],
     admissions: dict[str, DeploymentDockerAuthorityAdmission],
-    mediated_socket: Path | None,
     canonical_aliases: dict[str, tuple[str, ...]],
 ) -> dict[str, dict[str, object]]:
     """Render image-backed services with carried authority and aliases."""
@@ -146,7 +121,6 @@ def _render_services(
                 service_names,
                 completion_services,
                 docker_authority_admission=admissions.get(node.address),
-                mediated_socket=mediated_socket,
                 network_aliases=canonical_aliases.get(node.service_name, ()),
             )
     return services
@@ -159,7 +133,6 @@ def _render_service(
     completion_services: set[str],
     *,
     docker_authority_admission: DeploymentDockerAuthorityAdmission | None,
-    mediated_socket: Path | None = None,
     network_aliases: tuple[str, ...] = (),
 ) -> dict[str, object]:
     """Render one image node into a Compose service definition."""
@@ -191,20 +164,8 @@ def _render_service(
     if depends:
         service["depends_on"] = depends
     service.update(_operational_config(node.runtime))
-    socket_volume = docker_socket_volume(docker_authority_admission, mediated_socket)
+    socket_volume = docker_socket_volume(docker_authority_admission)
     if socket_volume is not None:
-        # The mediated socket is bind-mounted as a *file*, so it has to exist
-        # on the host before this container is created -- Docker would
-        # otherwise create a directory in its place and the holder would find
-        # no socket at all. Waiting for the apparatus to report healthy is what
-        # makes that ordering deterministic rather than a race.
-        _require_healthy_authority(service)
-        labels = service.setdefault("labels", {})
-        if not isinstance(labels, dict):
-            raise ValueError(
-                f"Generated service labels are not a mapping for {node.address}."
-            )
-        labels[AUTHORITY_OWNER_LABEL_KEY] = AUTHORITY_OWNER_LABEL_VALUE
         volumes = service.setdefault("volumes", [])
         if not isinstance(volumes, list):
             raise ValueError(
@@ -229,121 +190,6 @@ _DEFAULT_IMAGE_NODE_ULIMITS = {
 }
 
 
-def _truthy(value: object) -> bool:
-    """Return whether a ``bool | str | None`` RAES flag is enabled."""
-
-    if isinstance(value, bool):
-        return value
-    return isinstance(value, str) and value.strip().lower() in {"true", "1", "yes"}
-
-
-_OPERATOR_SECRET_CLASSIFICATION = "operator_secret"
-
-
-def _environment_config(runtime: object) -> dict[str, str]:
-    """Return the Compose ``environment`` map from a node's declared env.
-
-    A variable classified ``operator_secret`` carries no value in the SDL (a real
-    deployment credential is authored empty and supplied by the operator, never
-    baked into the pack); it is emitted as a Compose interpolation reference
-    ``NAME=${NAME}`` so Docker resolves it from the operator ``.env`` at up time,
-    exactly as the graph-owned Wazuh services already did. Every other
-    classification — including the planted range credentials classified
-    ``secret_fixture`` — carries its authored value as content (issue #875).
-    """
-
-    environment: dict[str, str] = {}
-    for variable in getattr(runtime, "environment", ()):
-        name = getattr(variable, "name", "")
-        if not name:
-            continue
-        if getattr(variable, "value_from", None) is not None:
-            # Generated values are delivered by the admitted artifact binding;
-            # an empty entry here would override Compose's env_file value.
-            continue
-        raw = getattr(variable, "value_classification", "")
-        classification = str(getattr(raw, "value", raw) or "")
-        if classification == _OPERATOR_SECRET_CLASSIFICATION:
-            environment[name] = f"${{{name}}}"
-        else:
-            environment[name] = variable.value
-    return environment
-
-
-# RuntimeContainer sequence fields that translate one-to-one into the Compose
-# field of the same name, copied as a list.
-_CONTAINER_SEQUENCE_FIELDS = ("command", "entrypoint", "security_opt", "dns")
-
-
-def _operational_config(runtime: object) -> dict[str, object]:
-    """Translate a node's declared runtime desired-state into Compose fields.
-
-    APTL is a faithful translator here, not an authority: it emits only what the
-    SDL declared through RAES's own runtime vocabulary (``container`` command and
-    flags, ``environment`` variables, ``linux_capabilities``). It never supplies
-    implementation-specific defaults of its own, so a node runs exactly the
-    operational shape its pack declared (issue #875). Bare nodes declare no
-    runtime and get nothing here.
-    """
-
-    if runtime is None:
-        return {}
-    config: dict[str, object] = {}
-    environment = _environment_config(runtime)
-    if environment:
-        config["environment"] = environment
-    policy = getattr(runtime, "operational_policy", None)
-    if policy is not None:
-        restart = getattr(policy, "restart", None)
-        restart_value = str(getattr(restart, "value", restart) or "")
-        if restart_value:
-            config["restart"] = restart_value.replace("_", "-")
-        limits = getattr(policy, "resource_limits", None)
-        memory = getattr(limits, "memory", None) if limits is not None else None
-        if memory is not None:
-            config["mem_limit"] = memory
-    config.update(_container_config(getattr(runtime, "container", None)))
-    capabilities = _capability_config(runtime)
-    if capabilities:
-        config["cap_add"] = capabilities
-    return config
-
-
-def _container_config(container: object) -> dict[str, object]:
-    """Return the Compose fields a node's declared ``container`` runtime sets."""
-
-    if container is None:
-        return {}
-    config: dict[str, object] = {}
-    for field in _CONTAINER_SEQUENCE_FIELDS:
-        value = getattr(container, field, None)
-        if value:
-            config[field] = list(value)
-    if getattr(container, "shm_size", None):
-        config["shm_size"] = container.shm_size
-    if _truthy(getattr(container, "privileged", None)):
-        config["privileged"] = True
-    if _truthy(getattr(container, "autoremove", None)):
-        # A node declaring autoremove is a one-shot (an init job that runs to
-        # completion and exits, e.g. an index bootstrap). Compose has no
-        # service-level --rm, so restart: "no" lets post-start reconciliation
-        # first observe its successful exit and then remove it (issue #992).
-        config["restart"] = "no"
-    return config
-
-
-def _capability_config(runtime: object) -> list[str]:
-    """Return the Compose ``cap_add`` list a node's declared runtime asks for.
-
-    RAES uses the kernel CAP_* form; Docker's cap_add wants it without the
-    prefix (NET_ADMIN, not CAP_NET_ADMIN).
-    """
-
-    capabilities = getattr(runtime, "linux_capabilities", None)
-    added = list(getattr(capabilities, "add", ()) or ()) if capabilities else []
-    return [capability.removeprefix("CAP_") for capability in added]
-
-
 def write_realization_compose(
     spec: DeploymentRealizationSpec, scenario_root: Path
 ) -> Path:
@@ -352,7 +198,7 @@ def write_realization_compose(
     path = scenario_root / GENERATED_COMPOSE_RELPATH
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        yaml.safe_dump(render_realization_compose(spec, scenario_root), sort_keys=True),
+        yaml.safe_dump(render_realization_compose(spec), sort_keys=True),
         encoding="utf-8",
         newline="\n",
     )

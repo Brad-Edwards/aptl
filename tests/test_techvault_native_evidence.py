@@ -6,6 +6,9 @@ import json
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
+
+from aptl.core.evidence.adapters import techvault_native
 
 from aptl.core.deployment.realization import (
     DeploymentPublishedPort,
@@ -184,12 +187,47 @@ def _owner(tmp_path, backend=None, request_json=_request):
     )
 
 
-def test_native_owner_wires_only_the_three_native_registrations(tmp_path):
+def test_native_owner_wires_exactly_the_native_registrations(tmp_path):
+    """Every source the native owner offers can actually produce its evidence.
+
+    A source without the state it compares against would accept whatever it
+    observed, so the MISP readiness source is offered only when the plan admits
+    MISP. This realization does not, and its absence leaves the demand
+    uncovered rather than covered by something that cannot decide it.
+    """
+
     assert set(_owner(tmp_path).sources()) == {
         "aptl.collector.cortex-enrichment",
         "aptl.collector.suricata-rule-readiness",
         "aptl.collector.suricata-wazuh-sqli",
+        "aptl.collector.wazuh-agent-readiness",
     }
+
+
+def test_the_misp_source_appears_once_the_plan_admits_a_state_to_compare(tmp_path):
+    """And it carries the admitted values, not defaults of its own."""
+
+    from aptl.core.evidence.adapters.techvault_misp_readiness import AdmittedMispState
+    from aptl.core.evidence.adapters.techvault_native_readiness import (
+        admitted_misp_state,
+    )
+
+    owner = _owner(tmp_path)
+    admitted = AdmittedMispState(
+        canonical_url="https://misp.techvault.local",
+        database_identity="misp",
+        database_role="misp",
+        cache_persistence_policy="no",
+        cache_eviction_policy="noeviction",
+    )
+    with mock.patch.object(
+        techvault_native, "admitted_misp_state", return_value=admitted
+    ):
+        sources = owner.sources()
+
+    assert "aptl.collector.misp-authenticated-api-readiness" in sources
+    # The helper reads the admitted plan; it invents nothing when MISP is absent.
+    assert admitted_misp_state(owner._realization) is None
 
 
 def test_cortex_owner_executes_exact_analyzer_and_projects_no_full_report(tmp_path):

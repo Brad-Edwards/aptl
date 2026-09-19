@@ -7,12 +7,21 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class SemanticRuntimeSelector:
-    """One typed runtime record that identifies an implementation family."""
+    """One typed runtime record that identifies an implementation family.
+
+    ``authorization_required`` narrows a family by whether the authored record
+    binds an authorization. ``None`` ignores the axis; ``True`` matches only a
+    record naming an ``authorization_ref``, and ``False`` only one that does
+    not. It exists because the same product needs different mechanics depending
+    on whether the scenario declared that the service authenticates, and that
+    is a portable semantic fact rather than a product-keyed special case.
+    """
 
     collection: str
     field_name: str
     value: str
     version: str = ""
+    authorization_required: bool | None = None
 
 
 @dataclass(frozen=True)

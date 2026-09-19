@@ -200,8 +200,10 @@ class TestWiring:
                 "aptl.collector.wazuh-alerts",
                 "aptl.collector.tempo-traces",
                 "aptl.collector.cortex-enrichment",
+                "aptl.collector.misp-authenticated-api-readiness",
                 "aptl.collector.redteam-session-transcript",
                 "aptl.collector.suricata-rule-readiness",
                 "aptl.collector.suricata-wazuh-sqli",
+                "aptl.collector.wazuh-agent-readiness",
             }
         )

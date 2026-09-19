@@ -29,6 +29,34 @@ def _runtime(scenario: dict, node: str) -> dict:
     return scenario["nodes"][node].get("runtime") or {}
 
 
+#: Every host the released pack gives its own enrolled Wazuh endpoint agent.
+#: `ad` also declares a second, syslog-only forwarder; the endpoint agent is the
+#: one that enrolls, so it is selected by target service rather than by position.
+_ENDPOINT_AGENT_NODES = (
+    "ad",
+    "db",
+    "dns",
+    "fileshare",
+    "suricata",
+    "victim",
+    "webapp",
+    "workstation",
+)
+
+
+def _endpoint_agent(scenario: dict, node: str) -> dict:
+    """Return the node's enrolling endpoint agent, not merely its first one."""
+
+    agents = _runtime(scenario, node)["forwarding_agents"]
+    enrolling = [
+        agent
+        for agent in agents
+        if any(target.get("enrollment_port") for target in agent.get("ship_targets", []))
+    ]
+    assert len(enrolling) == 1, node
+    return enrolling[0]
+
+
 def test_suricata_eve_output_is_the_file_its_forwarder_tails(scenario):
     """The detection-to-SIEM hand-off is one declared path, stated on both ends."""
 
@@ -44,17 +72,30 @@ def test_suricata_eve_output_is_the_file_its_forwarder_tails(scenario):
     assert tailed["parse_format"] == "eve_json"
 
 
-def test_both_wazuh_agents_ship_to_the_declared_manager(scenario):
-    """A forwarder that ships nowhere is not a telemetry path."""
+def test_every_endpoint_agent_ships_and_enrolls_against_the_declared_manager(scenario):
+    """A forwarder that ships nowhere, or enrolls nowhere, is not a telemetry path.
 
-    for node in ("suricata", "db"):
-        agent = _runtime(scenario, node)["forwarding_agents"][0]
-        assert agent["agent_kind"] == "log_forwarder"
+    The released pack states events and enrollment as two separate ship targets
+    against two separate manager services, so a host that can deliver events but
+    cannot establish its own identity no longer passes as a joined path.
+    """
+
+    for node in _ENDPOINT_AGENT_NODES:
+        agent = _endpoint_agent(scenario, node)
+        assert agent["agent_kind"] == "log_forwarder", node
         targets = agent["ship_targets"]
         assert targets, node
         assert all(t["target_node_ref"] == "wazuh-manager" for t in targets), node
-        # An ingestion endpoint is what ADR-050 requires of a log forwarder.
-        assert all(t.get("ingestion_port") for t in targets), node
+
+        events = [t for t in targets if t.get("ingestion_port")]
+        enrollment = [t for t in targets if t.get("enrollment_port")]
+        assert len(events) == 1, node
+        assert len(enrollment) == 1, node
+        assert events[0]["target_service_ref"] == "agent-events", node
+        assert enrollment[0]["target_service_ref"] == "agent-enrollment", node
+        # Enrollment establishes the host's own identity, so its material is an
+        # operator secret rather than ordinary scenario configuration.
+        assert enrollment[0]["enrollment_identity_classification"] == "operator_secret"
 
 
 def test_the_manager_ingestion_port_is_a_listener_it_actually_declares(scenario):
@@ -72,11 +113,26 @@ def test_the_manager_ingestion_port_is_a_listener_it_actually_declares(scenario)
     }
     shipped_ports = {
         target["ingestion_port"]
-        for node in ("suricata", "db")
-        for target in _runtime(scenario, node)["forwarding_agents"][0]["ship_targets"]
+        for node in _ENDPOINT_AGENT_NODES
+        for target in _endpoint_agent(scenario, node)["ship_targets"]
+        if target.get("ingestion_port")
     }
 
     assert shipped_ports == {services[name] for name in ingestion_roles}
+
+    enrollment_roles = {
+        listener["service"]
+        for listener in manager["listeners"]
+        if listener["role"] == "agent_enrollment"
+    }
+    enrollment_ports = {
+        target["enrollment_port"]
+        for node in _ENDPOINT_AGENT_NODES
+        for target in _endpoint_agent(scenario, node)["ship_targets"]
+        if target.get("enrollment_port")
+    }
+
+    assert enrollment_ports == {services[name] for name in enrollment_roles}
 
 
 def test_misp_intelligence_becomes_loadable_suricata_content(scenario):

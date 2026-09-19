@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from collections.abc import Mapping, Sequence
 
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
+from aptl.core.deployment._compose_docker_authority import (
+    AUTHORITY_SERVICE,
+    authority_declaration_error,
+)
 from aptl.runtime_authority import (
     DOCKER_SOCKET_PATH,
     DeploymentDockerAuthorityAdmission,
     DeploymentSpawnImageRequirement,
+    is_mediated_authority_socket,
     mount_exposes_or_mentions_docker_socket,
 )
 
@@ -36,15 +43,24 @@ def _spawn_requirement_is_complete(
     *,
     node_address: str,
 ) -> bool:
-    """Whether a carried child contract contains every field core code consumes."""
+    """Whether a carried child contract contains every field core code consumes.
 
+    Image identity and the execution deadline are required of every carried
+    requirement. The correlation pair is required only when one was authored:
+    a template the pack pinned without declaring an expected child inventory
+    carries neither a label nor a count, and demanding them would reject the
+    very requirement that exists to gate what the authority may launch.
+    """
+
+    correlated = bool(requirement.child_label) or bool(requirement.expected_count)
     return bool(
         _spawn_requirement_identity_is_complete(
             requirement,
             node_address=node_address,
+            correlated=correlated,
         )
         and _positive_int(requirement.execution_timeout_seconds)
-        and _positive_int(requirement.expected_count)
+        and (not correlated or _positive_int(requirement.expected_count))
     )
 
 
@@ -52,6 +68,7 @@ def _spawn_requirement_identity_is_complete(
     requirement: DeploymentSpawnImageRequirement,
     *,
     node_address: str,
+    correlated: bool,
 ) -> bool:
     """Whether a child contract carries its complete immutable identity."""
 
@@ -61,8 +78,7 @@ def _spawn_requirement_identity_is_complete(
         and requirement.authority_id
         and requirement.template_id
         and requirement.image_ref
-        and label_name
-        and label_value
+        and (not correlated or (label_name and label_value))
     )
 
 
@@ -72,10 +88,33 @@ def _positive_int(value: object) -> bool:
     return bool(isinstance(value, int) and not isinstance(value, bool) and value > 0)
 
 
+def _declared_node_networks(node: object) -> set[str]:
+    """Return the carried network names from either node representation."""
+
+    return {
+        str(network) for network in getattr(node, "networks", ()) or () if str(network)
+    } | {
+        str(getattr(attachment, "network", ""))
+        for attachment in getattr(node, "network_attachments", ()) or ()
+        if str(getattr(attachment, "network", ""))
+    }
+
+
 def docker_socket_volume(
     admission: DeploymentDockerAuthorityAdmission | None,
+    mediated_socket: Path | None = None,
 ) -> dict[str, object] | None:
-    """Return the sole admitted Compose socket bind for one node."""
+    """Return the sole admitted Compose socket bind for one node.
+
+    The declared endpoint is satisfied either way -- the holder sees a
+    read-write Docker socket at the path its scenario declared. What differs is
+    which socket: with a mediated source the holder reaches the authorization
+    boundary, and the host's own socket never enters the container at all.
+
+    ``mediated_socket`` is absent only where no apparatus was composed, which
+    the authority declaration check refuses separately rather than silently
+    falling back to the host socket here.
+    """
 
     if admission is None:
         return None
@@ -84,9 +123,14 @@ def docker_socket_volume(
             "aptl.provisioner.runtime-authority-admission-invalid: "
             f"Docker authority is not admitted on {admission.node_address}."
         )
+    if mediated_socket is None:
+        raise ValueError(
+            "aptl.provisioner.docker-authority-unmediated: "
+            f"Docker authority on {admission.node_address} has no mediated socket."
+        )
     return {
         "type": "bind",
-        "source": DOCKER_SOCKET_PATH,
+        "source": str(mediated_socket),
         "target": DOCKER_SOCKET_PATH,
         "read_only": False,
     }
@@ -99,35 +143,9 @@ def docker_authority_admissions(
 
     admissions = realization.docker_authority_admissions
     nodes = {node.address: node for node in realization.nodes}
-    addresses = [admission.node_address for admission in admissions]
-    services = [admission.service_name for admission in admissions]
-    labels = [
-        requirement.child_label
+    valid = _authority_identifiers_are_unique(admissions) and all(
+        _authority_admission_is_complete(admission, nodes.get(admission.node_address))
         for admission in admissions
-        for requirement in admission.spawn_requirements
-    ]
-    valid = bool(
-        len(addresses) == len(set(addresses))
-        and len(services) == len(set(services))
-        and len(labels) == len(set(labels))
-        and all(
-            admission.node_address in nodes
-            and nodes[admission.node_address].service_name == admission.service_name
-            and _admission_endpoint_is_supported(admission)
-            # No non-emptiness requirement: an authority may declare its
-            # privilege without declaring an expected child inventory, and a
-            # realized child is an observation, so there is nothing to carry
-            # before anything has run. Every contract that *is* carried is still
-            # checked in full below.
-            and all(
-                _spawn_requirement_is_complete(
-                    requirement,
-                    node_address=admission.node_address,
-                )
-                for requirement in admission.spawn_requirements
-            )
-            for admission in admissions
-        )
     )
     if admissions and not valid:
         raise ValueError(
@@ -135,6 +153,48 @@ def docker_authority_admissions(
             "Docker authority graph admission is incomplete or stale."
         )
     return admissions
+
+
+def _authority_identifiers_are_unique(
+    admissions: tuple[DeploymentDockerAuthorityAdmission, ...],
+) -> bool:
+    """Return whether one authority owns unique node, service, and child ids."""
+
+    addresses = [admission.node_address for admission in admissions]
+    services = [admission.service_name for admission in admissions]
+    labels = [
+        requirement.child_label
+        for admission in admissions
+        for requirement in admission.spawn_requirements
+        if requirement.child_label
+    ]
+    return bool(
+        len(admissions) <= 1
+        and len(addresses) == len(set(addresses))
+        and len(services) == len(set(services))
+        and len(labels) == len(set(labels))
+    )
+
+
+def _authority_admission_is_complete(
+    admission: DeploymentDockerAuthorityAdmission, node: object | None
+) -> bool:
+    """Validate one carried authority against its realized node and children."""
+
+    if node is None:
+        return False
+    return bool(
+        getattr(node, "service_name", None) == admission.service_name
+        and set(admission.allowed_networks) == _declared_node_networks(node)
+        and _admission_endpoint_is_supported(admission)
+        and all(
+            _spawn_requirement_is_complete(
+                requirement,
+                node_address=admission.node_address,
+            )
+            for requirement in admission.spawn_requirements
+        )
+    )
 
 
 def docker_authority_admissions_by_address(
@@ -177,14 +237,19 @@ def _environment_names(raw: object) -> set[str]:
 
 
 def _mount_is_exact_socket(mount: object) -> bool:
-    """Whether one effective mount is the canonical admitted socket bind."""
+    """Whether one effective mount is the canonical admitted socket bind.
 
-    return bool(
-        isinstance(mount, Mapping)
-        and mount.get("type") == "bind"
-        and mount.get("source") == DOCKER_SOCKET_PATH
-        and mount.get("target") == DOCKER_SOCKET_PATH
-        and mount.get("read_only", False) is False
+    The declared path is what the holder must see; the host's own socket is
+    what it must not be given. A bind whose source is the host socket is the
+    unmediated grant this issue removed, so it is not canonical (issue #912).
+    """
+
+    if not isinstance(mount, Mapping):
+        return False
+    return bool(mount.get("type") == "bind") and is_mediated_authority_socket(
+        source=mount.get("source"),
+        target=mount.get("target"),
+        read_write=mount.get("read_only", False) is False,
     )
 
 
@@ -234,10 +299,49 @@ def _authority_service_errors(
     return errors
 
 
+def _mount_is_host_socket(mount: object) -> bool:
+    """Whether one mount is the apparatus's exact daemon-socket grant."""
+
+    return bool(
+        isinstance(mount, Mapping)
+        and mount.get("type") == "bind"
+        and mount.get("source") == DOCKER_SOCKET_PATH
+        and mount.get("target") == DOCKER_SOCKET_PATH
+        and mount.get("read_only", False) is False
+    )
+
+
+def _apparatus_service_errors(
+    raw_service: Mapping[object, object],
+    socket_mounts: list[object],
+) -> list[str]:
+    """Validate the sole backend-owned service allowed to hold the host socket."""
+
+    errors: list[str] = []
+    if len(socket_mounts) != 1 or not _mount_is_host_socket(socket_mounts[0]):
+        errors.append(
+            "Docker authority apparatus must have exactly one canonical host socket bind."
+        )
+    if raw_service.get("network_mode") != "none":
+        errors.append("Docker authority apparatus must use network_mode none.")
+    if raw_service.get("read_only") is not True:
+        errors.append("Docker authority apparatus root filesystem must be read-only.")
+    if raw_service.get("privileged") is True:
+        errors.append("Docker authority apparatus must not be privileged.")
+    if raw_service.get("cap_drop") != ["ALL"]:
+        errors.append("Docker authority apparatus must drop all capabilities.")
+    security = raw_service.get("security_opt")
+    if not isinstance(security, Sequence) or "no-new-privileges:true" not in security:
+        errors.append("Docker authority apparatus must prevent privilege escalation.")
+    return errors
+
+
 def _effective_service_errors(
     service_name: object,
     raw_service: object,
     holders: Mapping[str, str],
+    *,
+    apparatus_expected: bool,
 ) -> list[str]:
     """Return authority-containment errors for one effective service."""
 
@@ -248,7 +352,9 @@ def _effective_service_errors(
             for mount in _service_volumes(raw_service)
             if _mount_mentions_socket(mount)
         ]
-        if service_name in holders:
+        if service_name == AUTHORITY_SERVICE and apparatus_expected:
+            errors = _apparatus_service_errors(raw_service, socket_mounts)
+        elif service_name in holders:
             errors = _authority_service_errors(
                 service_name,
                 raw_service,
@@ -282,13 +388,20 @@ def effective_orchestration_model_errors(
     errors = [
         error
         for service_name, raw_service in services.items()
-        for error in _effective_service_errors(service_name, raw_service, holders)
+        for error in _effective_service_errors(
+            service_name,
+            raw_service,
+            holders,
+            apparatus_expected=bool(admissions),
+        )
     ]
     errors.extend(
         f"Docker authority service {holder} is absent from Compose model."
         for holder in holders
         if holder not in services
     )
+    if admissions and AUTHORITY_SERVICE not in services:
+        errors.append("Docker authority apparatus is absent from Compose model.")
     return errors
 
 
@@ -357,6 +470,9 @@ class ComposeRuntimeOrchestrationRouteMixin:
     ) -> LabResult | None:
         """Validate the route and bind its endpoint as one ordered preflight."""
 
+        error = authority_declaration_error(realization)
+        if error is not None:
+            return LabResult(success=False, error=error)
         failure = self._validate_runtime_orchestration_route(realization)
         if failure is None:
             failure = self._bind_runtime_orchestration(realization)

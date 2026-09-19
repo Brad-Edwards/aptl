@@ -900,6 +900,7 @@ src/aptl/backends/raes_stateful_realization.py	core-candidate	Migrate only after
 src/aptl/backends/raes_substrate.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/scenario_runtime_parameters.py	core-candidate	Generic content-identified runtime-parameter adapter discovery; retain behind scenario-independent contract
 src/aptl/backends/scenario_startup.py	core-candidate	Generic content-identified startup adapter discovery; retain behind scenario-independent contract
+src/aptl/backends/scenario_startup_policy.py	core-candidate	Generic content-identified startup readiness policy; retain behind scenario-independent contract
 src/aptl/cli/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/_common.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/appliance.py	core-candidate	Migrate only after public-import, history and scenario-independence verification

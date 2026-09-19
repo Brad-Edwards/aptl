@@ -18,6 +18,10 @@ from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
 
 _TC_PREFERENCE = "492"
+# Docker may take longer than a bare tc invocation to create the short-lived
+# helper while the SOC stack is starting. Keep the provider call bounded, but
+# do not mistake Docker startup contention for an unavailable mirror.
+_TC_HELPER_TIMEOUT = 60
 _SAFE_INTERFACE = re.compile(r"^[A-Za-z0-9_.-]{1,15}$")
 _UNAVAILABLE = "aptl.capture-apparatus.traffic-mirror-unavailable"
 
@@ -42,7 +46,8 @@ class ComposeTrafficMirrorMixin:
         return bool(
             getattr(self, "supports_local_artifacts", True)
             and _ensure_helper(self, DEFAULT_BOUNDARY_HELPER_IMAGE) is None
-            and self._run(self._tc_command("-V"), timeout=5).returncode == 0
+            and self._run(self._tc_command("-V"), timeout=_TC_HELPER_TIMEOUT).returncode
+            == 0
         )
 
     def _realize_traffic_mirrors(
@@ -60,7 +65,7 @@ class ComposeTrafficMirrorMixin:
 
         qdisc = self._run(
             self._tc_command("qdisc", "replace", "dev", source, "clsact"),
-            timeout=10,
+            timeout=_TC_HELPER_TIMEOUT,
         )
         active = qdisc.returncode == 0
         for direction in ("ingress", "egress"):
@@ -80,7 +85,7 @@ class ComposeTrafficMirrorMixin:
                     "pref",
                     _TC_PREFERENCE,
                 ),
-                timeout=10,
+                timeout=_TC_HELPER_TIMEOUT,
             )
             added = self._run(
                 self._tc_command(
@@ -101,7 +106,7 @@ class ComposeTrafficMirrorMixin:
                     "dev",
                     sensor,
                 ),
-                timeout=10,
+                timeout=_TC_HELPER_TIMEOUT,
             )
             if added.returncode != 0:
                 active = False
@@ -206,7 +211,7 @@ class ComposeTrafficMirrorMixin:
         for direction in ("ingress", "egress"):
             observed = self._run(
                 self._tc_command("filter", "show", "dev", source, direction),
-                timeout=10,
+                timeout=_TC_HELPER_TIMEOUT,
             )
             output = observed.stdout or ""
             if (

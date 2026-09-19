@@ -13,6 +13,13 @@ the admitted RAES plan gives that same node an exact, read-write Docker
 `RuntimeOrchestrationAuthority`. Every other raw-socket prohibition in ADR-049
 continues to apply.
 
+Issue #956's
+[runtime-authority materialization preflight](issue-956-sdl-runtime-authority-materialization-preflight.md)
+governs the broader realization boundary. In particular, SDL runtime authority
+is realized by ordinary `aptl lab start`; it is not narrowed to create a secure
+host boundary. `aptl seat start` owns the secure appliance boundary. Preserve
+this note's exact joins, image identity, observation, and lifecycle machinery.
+
 ## Architecture Decisions
 
 - Preserve the existing authority chain:

@@ -285,6 +285,29 @@ class TestCreateExclusiveNofollowDurability:
         # No stranded temporary publish inode remains.
         assert list(tmp_path.glob(".rec.json*")) == []
 
+    @pytest.mark.parametrize("write_fails", [False, True])
+    def test_stale_temp_collision_uses_and_cleans_retry_name(
+        self, tmp_path, monkeypatch, write_fails
+    ):
+        import aptl.utils.pathsafe as pathsafe
+
+        monkeypatch.setattr(pathsafe, "_TMP_COUNTER", iter((0, 1)))
+        stale = tmp_path / f".record.json.{os.getpid()}.0.tmp"
+        stale.write_bytes(b"stale")
+        if write_fails:
+
+            def fail_write(fd, data):
+                raise OSError("simulated disk failure")
+
+            monkeypatch.setattr(pathsafe, "write_all", fail_write)
+            with pytest.raises(OSError, match="simulated disk failure"):
+                create_exclusive_nofollow(tmp_path, "record.json", b"new")
+            assert not (tmp_path / "record.json").exists()
+        else:
+            create_exclusive_nofollow(tmp_path, "record.json", b"new")
+            assert (tmp_path / "record.json").read_bytes() == b"new"
+        assert list(tmp_path.glob(".record.json*")) == []
+
     def test_parent_directory_is_fsynced(self, tmp_path):
         fsynced_modes = []
         real_fsync = os.fsync

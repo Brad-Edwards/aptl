@@ -129,7 +129,6 @@ class TechVaultNativeCortexMixin:
             connector = self._request_json(
                 f"{thehive_url}/api/v1/status",
                 auth_header=f"Bearer {self._thehive_api_key}",
-                ca_cert_path=self._thehive_ca_cert,
                 timeout=30,
             )
             if connector_projection(connector) is not None:

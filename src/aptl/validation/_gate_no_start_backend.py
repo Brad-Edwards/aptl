@@ -97,6 +97,17 @@ class _NoStartBackend(object):
         self._content_paths: dict[str, Path] = {}
         self._image_free_destinations: dict[str, str] = {}
 
+    @staticmethod
+    def qualify_runtime_materialization(
+        realization: object,
+        *,
+        scenario_root: Path,
+    ) -> LabResult:
+        """Accept typed materialization for the non-mutating static gate."""
+
+        del realization, scenario_root
+        return LabResult(success=True)
+
     def realize(
         self,
         realization: object,

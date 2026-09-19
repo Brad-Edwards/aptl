@@ -112,7 +112,7 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
     # child correlation before APTL can admit its Docker authority. Strip only
     # that downstream declaration so the generic Compose surface remains covered.
     spec = realization.deployment_spec(sorted(realization.profiles))
-    document = render_realization_compose(spec, tmp_path)
+    document = render_realization_compose(spec)
 
     services = document["services"]
     # Image-backed SOC nodes are emitted as services...
@@ -172,15 +172,14 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
 
     # depends_on never references a service the document does not define.
     defined = set(services)
-    # The Docker authority apparatus is deliberately a separate backend-owned
-    # Compose file merged into the same validated file set. It is the sole
-    # permitted dependency external to the generated scenario base.
+    # Every dependency comes from the admitted scenario graph; plain lab start
+    # does not insert a mediation service around declared Docker authority.
     external_dependencies: set[str] = set()
     for service in services.values():
         for dependency in service.get("depends_on", []):
             if dependency not in defined:
                 external_dependencies.add(dependency)
-    assert external_dependencies == {"docker-authority-proxy"}
+    assert external_dependencies == set()
 
     # The backend-neutral release no longer authors a Cortex initializer node.
     # The generated model must not resurrect the removed implementation detail.

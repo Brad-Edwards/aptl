@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
-import subprocess
 from types import SimpleNamespace
 from importlib.metadata import version
 from pathlib import Path
+import re
 
 import pytest
 from raes.parser import parse_sdl_file
 
 from aptl.core.deployment._misp_cache_credential import (
-    MISP_CACHE_CONFIG_CONTAINER_PATH,
     MISP_CACHE_CONFIG_OUTPUT,
     MISP_CACHE_PASSWORD_OUTPUT,
+    MISP_CACHE_RUNTIME_CONFIG_DIR,
+    MISP_CACHE_RUNTIME_CONFIG_PATH,
     realize_misp_cache_credential,
 )
 from aptl.core.deployment._misp_server_tls import (
@@ -25,11 +26,11 @@ from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
 )
 from aptl.core.soc_ca import derive_soc_service_certs
+from aptl_techvault.redis_acl_observation import _REDIS_ACL_READBACK_SCRIPT
 from tests.helpers import techvault_scenario_path
 from tests.test_env_pack_realization import _realize_pack
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-FIXUP_SCRIPT = PROJECT_ROOT / "scripts" / "envpack-soar-fixups.sh"
 
 
 def _enum(value: object) -> object:
@@ -90,7 +91,18 @@ def test_the_cache_is_authenticated_without_putting_the_secret_in_argv(realizati
     cache = next(node for node in realization.nodes if node.name == "misp-redis")
     command = list(cache.runtime.container.command)
 
-    assert command == ["redis-server", MISP_CACHE_CONFIG_CONTAINER_PATH]
+    assert MISP_CACHE_RUNTIME_CONFIG_PATH.startswith("/run/")
+    assert command == ["redis-server", MISP_CACHE_RUNTIME_CONFIG_PATH]
+    assert list(cache.runtime.container.entrypoint) == [
+        "/bin/sh",
+        "-ec",
+        f"install -d -m 0755 -o root -g root {MISP_CACHE_RUNTIME_CONFIG_DIR} && "
+        "install -m 0400 -o redis -g redis /etc/redis/redis.conf "
+        f'{MISP_CACHE_RUNTIME_CONFIG_PATH} && exec docker-entrypoint.sh "$@"',
+        "--",
+    ]
+    assert _REDIS_ACL_READBACK_SCRIPT.count(MISP_CACHE_RUNTIME_CONFIG_PATH) == 2
+    assert "/tmp/" not in " ".join(cache.runtime.container.entrypoint)
     # `--requirepass <value>` would work, and would also publish the credential
     # in the container's command line and in `docker inspect`.
     assert "--requirepass" not in command
@@ -211,7 +223,7 @@ def _cache_artifact() -> DeploymentGeneratedArtifactRealization:
         name="misp-cache-credential",
         generator="rendered_config",
         lifecycle="reuse_valid",
-        provenance="techvault:misp-cache-credential/v1",
+        provenance="techvault:misp-cache-credential/v2",
         outputs=(
             DeploymentGeneratedArtifactOutput(
                 name=MISP_CACHE_PASSWORD_OUTPUT,
@@ -234,13 +246,26 @@ def _cache_paths(tmp_path: Path) -> tuple[Path, Path]:
     return root / "cache-password", root / "redis.conf"
 
 
+def _cache_acl_token(config_file: Path) -> str | None:
+    """Inspect the ACL shape without exposing a generated credential on failure."""
+
+    match = re.fullmatch(
+        r"user default reset on >([A-Za-z0-9_-]{43,128}) "
+        r"~\* \+@read \+@write \+@connection \+@transaction -@dangerous\n"
+        r"appendonly no\nmaxmemory-policy noeviction\n",
+        config_file.read_text(encoding="utf-8"),
+    )
+    return match.group(1) if match else None
+
+
 def test_the_cache_credential_is_generated_owner_only_and_reused(tmp_path):
     assert realize_misp_cache_credential(_cache_artifact(), tmp_path) is None
     password_file, config_file = _cache_paths(tmp_path)
 
     password = password_file.read_text(encoding="utf-8").strip()
     assert password
-    assert config_file.read_text(encoding="utf-8") == f"requirepass {password}\n"
+    credential_matches = _cache_acl_token(config_file) == password
+    assert credential_matches
     assert password_file.stat().st_mode & 0o777 == 0o600
     assert config_file.stat().st_mode & 0o777 == 0o600
     # Redis parses its config by whitespace, so a credential with a space in it
@@ -263,7 +288,8 @@ def test_a_drifted_cache_config_is_regenerated_rather_than_reused(tmp_path):
 
     regenerated = password_file.read_text(encoding="utf-8").strip()
     assert regenerated != original
-    assert config_file.read_text(encoding="utf-8") == f"requirepass {regenerated}\n"
+    credential_matches = _cache_acl_token(config_file) == regenerated
+    assert credential_matches
 
 
 def test_a_symlinked_cache_output_is_never_reused(tmp_path):
@@ -354,36 +380,12 @@ def test_a_symlinked_bundle_leaf_is_not_staged(tmp_path):
 # --------------------------------------------------------------------------
 
 
-def test_the_fixup_script_no_longer_repairs_misp_or_its_cache():
-    """The branch this issue retires must be absent, not merely unreachable."""
+def test_no_post_realization_misp_or_cache_repair_script_survives():
+    """The obsolete container-recreating path is absent from the installed assets."""
 
-    fixup = FIXUP_SCRIPT.read_text(encoding="utf-8")
-
-    for removed in (
-        "fix_misp",
-        "fix_misp_redis",
-        "wait_misp",
-        "_misp_redis_password",
-        "_capture_misp_publication",
-        "aptl-misp",
-        "redispassword",
-        "MISP_API_KEY",
-    ):
-        assert removed not in fixup, removed
-    # No container recreation, database reset, or volume deletion survives for
-    # any service: those were the mutations, not just the MISP ones.
-    assert "DROP DATABASE" not in fixup
-    assert "docker volume rm" not in fixup
-    # The independently tracked Shuffle and TheHive TLS branches stay.
-    assert "fix_shuffle_frontend_tls" in fixup
-    assert "fix_thehive_tls" in fixup
-
-
-def test_the_fixup_script_is_still_valid_shell():
-    result = subprocess.run(
-        ["bash", "-n", str(FIXUP_SCRIPT)], capture_output=True, text=True
-    )
-    assert result.returncode == 0, result.stderr
+    assert not (PROJECT_ROOT / "scripts" / "envpack-soar-fixups.sh").exists()
+    seed = (PROJECT_ROOT / "scripts" / "seed-prime.sh").read_text(encoding="utf-8")
+    assert "envpack-soar-fixups.sh" not in seed
 
 
 # --------------------------------------------------------------------------

@@ -34,7 +34,6 @@ from __future__ import annotations
 ASSET_ROOTS: tuple[str, ...] = (
     "docker-compose.yml",
     "docker-compose.observability.yml",
-    "docker-compose.authority.yml",
     "docker-compose.capture.yml",
     ".dockerignore",
     "generate-indexer-certs.yml",

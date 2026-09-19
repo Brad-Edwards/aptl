@@ -39,7 +39,9 @@ class _FakeBackend:
     def container_exec(self, name, cmd, *, timeout=None):
         # Emulate the real container: mutations accumulate, observers read back.
         if cmd[:1] == ["dpkg-query"]:
-            return SimpleNamespace(returncode=0, stdout="\n".join(sorted(self.installed)) + "\n")
+            return SimpleNamespace(
+                returncode=0, stdout="\n".join(sorted(self.installed)) + "\n"
+            )
         if "install" in cmd:
             self.installed.update(a for a in cmd if a in {"curl", "wazuh-manager"})
             return SimpleNamespace(returncode=0, stdout="")
@@ -50,9 +52,13 @@ class _FakeBackend:
             self.users.add(cmd[-1])
             return SimpleNamespace(returncode=0, stdout="")
         if cmd[:1] == ["getent"]:
-            return SimpleNamespace(returncode=0 if cmd[-1] in self.groups else 1, stdout="")
+            return SimpleNamespace(
+                returncode=0 if cmd[-1] in self.groups else 1, stdout=""
+            )
         if cmd[:1] == ["id"]:
-            return SimpleNamespace(returncode=0 if cmd[-1] in self.users else 1, stdout="")
+            return SimpleNamespace(
+                returncode=0 if cmd[-1] in self.users else 1, stdout=""
+            )
         return SimpleNamespace(returncode=0, stdout="")
 
 

@@ -10,8 +10,10 @@ The credential reaches both ends of the declared binding without ever entering
 host or container argv: the Redis server reads it from an owner-only
 configuration file mounted read-only, and MISP receives the same value as
 ``REDIS_PASSWORD`` through the existing generated-artifact environment
-delivery. ``redis-server --requirepass <value>`` would put the secret in the
-container's command line and in ``docker inspect`` output, so it is not used.
+delivery. MISP's image authenticates with a password alone, so its native Redis
+user is ``default``; the server config resets that user's permissions to the
+declared read/write scope. A ``--requirepass`` argument would both expose the
+secret in ``docker inspect`` and leave the default user's broad permissions.
 """
 
 from __future__ import annotations
@@ -30,7 +32,7 @@ from aptl.core.deployment._compose_stateful_constants import (
 )
 from aptl.core.deployment.realization import DeploymentGeneratedArtifactRealization
 
-MISP_CACHE_CREDENTIAL_PROFILE = "techvault:misp-cache-credential/v1"
+MISP_CACHE_CREDENTIAL_PROFILE = "techvault:misp-cache-credential/v2"
 
 #: The server reads its credential from this path; only the path, never the
 #: credential, appears in the container command.
@@ -43,6 +45,11 @@ MISP_CACHE_CONFIG_RELPATH = "redis.conf"
 MISP_CACHE_CONFIG_CONTAINER_PATH = (
     f"{MISP_CACHE_CONFIG_MOUNT_DESTINATION}/{MISP_CACHE_CONFIG_RELPATH}"
 )
+# The selected Redis implementation copies the mounted root-only config here
+# before dropping privileges. The implementation profile and live readback must
+# use one path contract or valid Redis startup cannot be corroborated.
+MISP_CACHE_RUNTIME_CONFIG_DIR = "/run/aptl-redis"
+MISP_CACHE_RUNTIME_CONFIG_PATH = f"{MISP_CACHE_RUNTIME_CONFIG_DIR}/redis.conf"
 MISP_CACHE_PASSWORD_OUTPUT = "cache-password"
 MISP_CACHE_CONFIG_OUTPUT = "cache-server-config"
 
@@ -54,7 +61,17 @@ _EXPECTED_OUTPUTS = {
 # credential containing whitespace or a quote would change the directive rather
 # than the value. token_urlsafe emits only [A-Za-z0-9_-].
 _TOKEN = re.compile(r"[A-Za-z0-9_-]{43,128}")
-_CONFIG_DIRECTIVE = "requirepass"
+_ACL_RULES = "~* +@read +@write +@connection +@transaction -@dangerous"
+
+
+def _acl_config(password: str) -> str:
+    """Bind MISP's password-only client to a bounded Redis default user."""
+
+    return (
+        f"user default reset on >{password} {_ACL_RULES}\n"
+        "appendonly no\n"
+        "maxmemory-policy noeviction\n"
+    )
 
 
 def realize_misp_cache_credential(
@@ -89,9 +106,7 @@ def realize_misp_cache_credential(
             / _EXPECTED_OUTPUTS[MISP_CACHE_CONFIG_OUTPUT],
         )
         password = _read_valid_token(password_path)
-        if password is None or not _config_matches(
-            config_path, password
-        ):
+        if password is None or not _config_matches(config_path, password):
             password = secrets.token_urlsafe(32)
             _write_output(
                 scenario_root,
@@ -101,7 +116,7 @@ def realize_misp_cache_credential(
             _write_output(
                 scenario_root,
                 _EXPECTED_OUTPUTS[MISP_CACHE_CONFIG_OUTPUT],
-                f"{_CONFIG_DIRECTIVE} {password}\n",
+                _acl_config(password),
             )
     except (OSError, ValueError):
         return "MISP cache credential generation failed."
@@ -141,7 +156,7 @@ def _config_matches(path: Path, password: str) -> bool:
         content = path.read_text(encoding="utf-8")
     except OSError:
         return False
-    return content == f"{_CONFIG_DIRECTIVE} {password}\n"
+    return content == _acl_config(password)
 
 
 __all__ = (

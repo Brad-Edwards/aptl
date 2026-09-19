@@ -56,13 +56,9 @@ class SSHComposeBackend(DockerComposeBackend):
         if ssh_key is not None:
             key_path = Path(ssh_key)
             if not key_path.is_absolute():
-                raise ValueError(
-                    f"ssh_key must be an absolute path, got {ssh_key!r}"
-                )
+                raise ValueError(f"ssh_key must be an absolute path, got {ssh_key!r}")
             if ".." in key_path.parts:
-                raise ValueError(
-                    f"ssh_key must not contain '..', got {ssh_key!r}"
-                )
+                raise ValueError(f"ssh_key must not contain '..', got {ssh_key!r}")
 
         super().__init__(project_dir=project_dir, project_name=project_name)
         self._host = host

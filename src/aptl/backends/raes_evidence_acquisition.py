@@ -44,8 +44,10 @@ if TYPE_CHECKING:
 NATIVE_TECHVAULT_REGISTRATIONS = frozenset(
     {
         "aptl.collector.cortex-enrichment",
+        "aptl.collector.misp-authenticated-api-readiness",
         "aptl.collector.suricata-rule-readiness",
         "aptl.collector.suricata-wazuh-sqli",
+        "aptl.collector.wazuh-agent-readiness",
     }
 )
 _ACTIVE_AUTHORITY_DIR = ".aptl/capture-authorities"

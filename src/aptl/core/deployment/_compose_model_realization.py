@@ -12,16 +12,13 @@ this module owns only the file-set and model concerns.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 import json
 from pathlib import Path
 
 import yaml
 
 from aptl.core.deployment._compose_content_realization import CONTENT_SEEDER_IMAGE
-from aptl.core.deployment._compose_docker_authority import (
-    authority_compose_file,
-    authority_requested,
-)
 from aptl.core.deployment._compose_node_generation import (
     STATIC_COMPOSE_FILENAME,
     base_compose_file,
@@ -29,6 +26,7 @@ from aptl.core.deployment._compose_node_generation import (
 from aptl.core.deployment._compose_port_realization import write_port_override
 from aptl.core.deployment._compose_stateful_realization import (
     effective_stateful_model_errors,
+    stateful_override_payload,
 )
 from aptl.core.deployment._compose_runtime_orchestration import (
     effective_orchestration_model_errors,
@@ -69,19 +67,31 @@ class ComposeRealizationModelMixin:
         content_override = self._write_image_node_content_override(
             realization, scenario_root, realization_root
         )
+        startup_override = None
+        if not (scenario_root / STATIC_COMPOSE_FILENAME).exists():
+            # The adapter registry imports deployment DTOs; resolve it only
+            # after the deployment package has completed import initialization.
+            from aptl.backends.scenario_startup_policy import (
+                write_scenario_startup_override,
+            )
+
+            startup_override = write_scenario_startup_override(
+                realization, realization_root
+            )
         overrides = tuple(
             path
-            for path in (port_override, stateful_override, content_override)
+            for path in (
+                port_override,
+                stateful_override,
+                content_override,
+                startup_override,
+            )
             if path is not None
         )
         if (
             not overrides
             and "otel" not in realization.profiles
             and not realization.capture_apparatus
-            # An admitted Docker authority always needs its mediating
-            # apparatus composed; without it the holder has no socket to be
-            # given, and the only one available would be the host's own.
-            and not authority_requested(realization)
         ):
             return compose_files
         base_files = compose_files or (
@@ -90,23 +100,7 @@ class ComposeRealizationModelMixin:
         files = self._with_observability_files(
             (*base_files, *overrides), realization.profiles
         )
-        files = self._with_capture_apparatus_files(files, realization)
-        return self._with_docker_authority_files(files, realization, realization_root)
-
-    def _with_docker_authority_files(
-        self,
-        files: tuple[Path, ...],
-        realization: DeploymentRealizationSpec,
-        realization_root: Path,
-    ) -> tuple[Path, ...]:
-        """Compose the authorization boundary an admitted authority reaches."""
-
-        if not authority_requested(realization):
-            return files
-        apparatus = authority_compose_file(
-            realization_root, realization, realization_root, self.project_name
-        )
-        return files if apparatus in files else (*files, apparatus)
+        return self._with_capture_apparatus_files(files, realization)
 
     @staticmethod
     def _write_image_node_content_override(
@@ -205,12 +199,20 @@ class ComposeRealizationModelMixin:
             compose_files=compose_files,
             scenario_root=scenario_root,
         )
-        stateful = bool(
-            realization.generated_artifacts or realization.persistent_volumes
+        image_addresses = {image.address for image in realization.images}
+        has_image_services = any(
+            node.address in image_addresses and node.service_name
+            for node in realization.nodes
+        )
+        needs_effective_model = bool(
+            has_image_services
+            or realization.generated_artifacts
+            or realization.persistent_volumes
+            or realization_has_docker_authority(realization)
         )
         error = (
             self._effective_compose_model_error(command, realization, realization_root)
-            if stateful or realization_has_docker_authority(realization)
+            if needs_effective_model
             else self._compose_syntax_error(command)
         )
         return LabResult(success=False, error=error) if error is not None else None
@@ -250,4 +252,31 @@ class ComposeRealizationModelMixin:
             realization,
         )
         errors.extend(effective_orchestration_model_errors(payload, realization))
+        from aptl.core.deployment.runtime_materialization import (
+            effective_runtime_contract_issues,
+        )
+
+        profile = self._runtime_materialization_profile(realization)
+        stateful_payload = stateful_override_payload(
+            realization_root,
+            self.project_name,
+            realization,
+        )
+        stateful_services = stateful_payload.get("services", {})
+        validated_service_volumes = {
+            str(service_name): tuple(volumes)
+            for service_name, service in stateful_services.items()
+            if isinstance(service, Mapping)
+            and isinstance((volumes := service.get("volumes")), Sequence)
+            and not isinstance(volumes, (str, bytes))
+        }
+        errors.extend(
+            issue.render()
+            for issue in effective_runtime_contract_issues(
+                payload,
+                realization,
+                profile=profile,
+                validated_service_volumes=validated_service_volumes,
+            )
+        )
         return "; ".join(errors[:5]) if errors else None

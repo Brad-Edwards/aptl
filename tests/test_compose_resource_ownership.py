@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 import yaml
 
+from aptl.core.deployment._compose_owner_labels import complete_owner_labels
 from aptl.core.deployment._compose_resource_ownership import (
     OwnershipConflictError,
     ResourceReceipt,
@@ -39,6 +40,32 @@ def test_workspace_identity_is_stable_and_scopes_backend_names(tmp_path: Path) -
     assert len(first.project_name) <= 63
     assert first.container_name("aptl-victim") != other.container_name("aptl-victim")
     assert first.container_name("aptl-victim").endswith("-victim")
+
+
+def test_compose_receipt_requires_the_full_owner_label_tuple(tmp_path: Path) -> None:
+    ownership = WorkspaceOwnership.ensure(tmp_path, "aptl")
+    labels = {
+        **ownership.labels(attempt_id="run-a"),
+        "com.docker.compose.project": ownership.project_name,
+        "com.docker.compose.service": "victim",
+    }
+
+    assert complete_owner_labels(
+        ownership,
+        labels,
+        attempt_id="run-a",
+        compose_kind="service",
+        semantic_name="victim",
+    )
+    for key in labels:
+        incomplete = {**labels, key: "foreign"}
+        assert not complete_owner_labels(
+            ownership,
+            incomplete,
+            attempt_id="run-a",
+            compose_kind="service",
+            semantic_name="victim",
+        )
 
 
 def test_workspace_identity_rejects_corrupt_or_symlinked_state(tmp_path: Path) -> None:

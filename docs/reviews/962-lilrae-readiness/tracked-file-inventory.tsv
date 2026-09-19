@@ -796,11 +796,13 @@ src/aptl/backends/_raes_backend_implementation_types.py	backend-owned-runtime	Re
 src/aptl/backends/_raes_conformance_probe.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_content_spec.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_dataset_content.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_docker_materializer_observations.py	core-candidate	Keep Docker guest read-after-write observations with generic materialization
 src/aptl/backends/_raes_docker_observation_values.py	backend-owned-runtime	Retain pure Docker materialization readback value parsing
 src/aptl/backends/_raes_evaluator_engine.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_evaluator_progress.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_guest_os_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_guest_package_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_guest_process_limits.py	core-candidate	Keep bounded process-limit readback with generic RAES guest observation
 src/aptl/backends/_raes_image_policy.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_manifest_resources.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_native_evidence_acquisition.py	backend-observability	Retain admitted native evidence request orchestration and acquisition
@@ -817,8 +819,10 @@ src/aptl/backends/_raes_realization_diagnostics.py	core-candidate	Migrate only a
 src/aptl/backends/_raes_runtime_environment_observation.py	backend-owned-runtime	Retain protected runtime environment disclosure from provider readback
 src/aptl/backends/_raes_runtime_network_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_scenario_queries.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_start_failure.py	core-candidate	Keep redacted scenario-start failure translation with generic RAES admission
 src/aptl/backends/_raes_scenario_resolution.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_service_index_placement.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_shuffle_implementation_catalog.py	backend-owned-runtime	Retain Shuffle implementation profiles selected only under open authority
 src/aptl/backends/_raes_stateful_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_stateful_values.py	backend-owned-runtime	Retain authored value readers used by stateful realization
 src/aptl/backends/_raes_transcript_parsing.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -994,6 +998,8 @@ src/aptl/core/deployment/_compose_project_inventory.py	core-candidate	Migrate on
 src/aptl/core/deployment/_compose_queries.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_realization_networks.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_ownership_override.py	backend-substrate	Keep scoped Compose ownership override construction with deployment authority
+src/aptl/core/deployment/_compose_owner_labels.py	backend-substrate	Keep exact Compose and workspace owner label checks with receipt capture
 src/aptl/core/deployment/_compose_receipt_capture.py	backend-substrate	Post-baseline native resource receipt capture; retain with deployment authority
 src/aptl/core/deployment/_compose_resource_ownership.py	backend-substrate	Post-baseline native resource ownership mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_resource_resolution.py	backend-substrate	Post-baseline native resource resolution mechanism; retain with deployment authority

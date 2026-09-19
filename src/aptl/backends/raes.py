@@ -33,6 +33,10 @@ from aptl.backends._raes_runtime_materialization_admission import (
     qualify_admitted_runtime,
 )
 from aptl.backends._raes_runtime_target_options import RuntimeTargetOptions
+from aptl.backends._raes_start_failure import (
+    INSTANTIATION_FAILURE_MESSAGE as INSTANTIATION_FAILURE_MESSAGE,
+    start_failure_outcome as _start_failure_outcome,
+)
 from aptl.backends.raes_diagnostics import render_raes_diagnostics
 from aptl.backends.raes_execution_helpers import (
     evaluation_results as collect_evaluation_results,
@@ -86,13 +90,6 @@ log = get_logger("raes-backend")
 # while routing real planning through the narrow compatibility subclass.
 RuntimeManager = AptlRuntimeManager
 
-# Fixed disclosure for a rejected variable binding: the rejected value can be an
-# operator secret, so no admission failure — here or in lab start's pre-mutation
-# admission — may echo it back (issue #951 moved that second call site).
-INSTANTIATION_FAILURE_MESSAGE = (
-    "RAES runtime variable binding failed before deployment. Provide every "
-    "required variable using its declared type and allowed values."
-)
 _RETRYABLE_APPLY_DIAGNOSTIC_CODES = frozenset({"aptl.provisioner.backend-start-failed"})
 
 
@@ -200,35 +197,6 @@ def start_raes_scenario(
         ValueError,
     ) as exc:
         return _start_failure_outcome(exc, resolved_scenario)
-
-
-def _start_failure_outcome(exc: Exception, resolved_scenario: Path) -> AcesStartOutcome:
-    """Map a scenario-start failure onto its unretryable failure outcome.
-
-    Each cause keeps the disclosure it always had: a pack acquisition failure and
-    a runtime handoff failure report the redacted exception, while a variable
-    binding failure reports the fixed instantiation message rather than the
-    binding it rejected.
-    """
-
-    if isinstance(exc, AdmissionRejection):
-        error = render_raes_diagnostics(
-            list(exc.diagnostics), stage_label="Scenario evidence admission failed"
-        )
-    elif isinstance(exc, EnvPackError):
-        error = redact(f"RAES scenario pack acquisition failed: {exc}")
-    elif isinstance(exc, SDLInstantiationError):
-        error = INSTANTIATION_FAILURE_MESSAGE
-    else:
-        error = redact(f"RAES runtime handoff failed: {exc}")
-    return AcesStartOutcome(
-        lab_result=LabResult(success=False, error=error),
-        final_snapshot=RuntimeSnapshot(),
-        realization_details={},
-        selected_profiles=[],
-        scenario_path=resolved_scenario,
-        retryable=False,
-    )
 
 
 def admit_raes_scenario(

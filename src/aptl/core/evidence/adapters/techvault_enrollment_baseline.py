@@ -25,31 +25,42 @@ from aptl.core.credentials import (
     _ensure_secure_dir,
 )
 
-ENROLLMENT_BASELINE_RELPATH = Path(".aptl/realization/wazuh-agent-identity/baseline.json")
+ENROLLMENT_BASELINE_RELPATH = Path(
+    ".aptl/realization/wazuh-agent-identity/baseline.json"
+)
 
 
 def enrollment_baseline(scenario_root: Path) -> dict[str, str] | None:
     """Return the baseline, empty when absent and ``None`` when unreadable."""
 
+    result: dict[str, str] | None = None
     try:
         path = _canonical_generated_path(scenario_root, ENROLLMENT_BASELINE_RELPATH)
     except ValueError:
-        return None
-    try:
-        recorded = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return {}
-    except (OSError, ValueError):
-        return None
-    if not isinstance(recorded, dict) or any(
-        not isinstance(node, str)
-        or not node
-        or not isinstance(identifier, str)
-        or not identifier
+        pass
+    else:
+        try:
+            recorded = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            result = {}
+        except (OSError, ValueError):
+            pass
+        else:
+            if _valid_baseline(recorded):
+                result = dict(recorded)
+    return result
+
+
+def _valid_baseline(recorded: object) -> bool:
+    """Return whether the decoded baseline is a non-empty string mapping."""
+
+    return isinstance(recorded, dict) and all(
+        isinstance(node, str)
+        and bool(node)
+        and isinstance(identifier, str)
+        and bool(identifier)
         for node, identifier in recorded.items()
-    ):
-        return None
-    return dict(recorded)
+    )
 
 
 def clear_enrollment_baseline(scenario_root: Path | None) -> list[str]:
@@ -74,9 +85,7 @@ def clear_enrollment_baseline(scenario_root: Path | None) -> list[str]:
     return []
 
 
-def record_enrollment_baseline(
-    scenario_root: Path, observed: dict[str, str]
-) -> bool:
+def record_enrollment_baseline(scenario_root: Path, observed: dict[str, str]) -> bool:
     """Record ids for hosts not yet baselined, never overwriting an existing one.
 
     An existing entry is deliberately immutable here: overwriting it would erase

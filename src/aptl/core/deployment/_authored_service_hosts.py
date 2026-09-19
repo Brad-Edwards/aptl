@@ -29,16 +29,24 @@ def authored_service_hosts(
 
     hosts: dict[str, set[str]] = {}
     for node in realization.nodes:
-        for application in getattr(node.runtime, "platform_applications", ()) or ():
-            for setting in getattr(application, "settings", ()) or ():
-                if not str(getattr(setting, "setting_id", "")).endswith(
-                    _CANONICAL_URL_SUFFIX
-                ):
-                    continue
+        found = _node_service_hosts(node.runtime)
+        if found:
+            hosts.setdefault(node.name, set()).update(found)
+    return {name: tuple(sorted(found)) for name, found in hosts.items()}
+
+
+def _node_service_hosts(runtime: object) -> set[str]:
+    """Return canonical HTTPS hosts authored by one node runtime."""
+
+    found: set[str] = set()
+    for application in getattr(runtime, "platform_applications", ()) or ():
+        for setting in getattr(application, "settings", ()) or ():
+            setting_id = str(getattr(setting, "setting_id", ""))
+            if setting_id.endswith(_CANONICAL_URL_SUFFIX):
                 host = _secure_host(str(getattr(setting, "value", "")))
                 if host is not None:
-                    hosts.setdefault(node.name, set()).add(host)
-    return {name: tuple(sorted(found)) for name, found in hosts.items()}
+                    found.add(host)
+    return found
 
 
 def _secure_host(value: str) -> str | None:

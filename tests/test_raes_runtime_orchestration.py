@@ -771,8 +771,9 @@ def test_an_authority_holder_is_never_rendered_without_its_mediation() -> None:
 
     from aptl.core.deployment._compose_node_generation import render_realization_compose
 
+    spec = _spec()
     with pytest.raises(ValueError, match="docker-authority-unmediated"):
-        render_realization_compose(_spec())
+        render_realization_compose(spec)
 
 
 def test_generated_compose_preserves_existing_volumes_when_adding_socket(

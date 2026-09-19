@@ -64,27 +64,14 @@ class WazuhAgentReadinessSource:
 
     def fetch(self, start_iso: str, end_iso: str) -> SourceResult:
         payload = self._query(start_iso, end_iso)
-        if payload is None:
-            return _failure(CollectorStatus.SOURCE_UNAVAILABLE)
-        hosts = payload.get("hosts")
-        if not isinstance(hosts, Sequence) or isinstance(hosts, (str, bytes)):
-            return _failure()
-        rows = [host for host in hosts if isinstance(host, Mapping)]
-        if len(rows) != len(hosts) or not _hosts_are_ready(rows, self._expected_nodes):
-            return _failure()
-        document = {
-            "wazuh_agent_ready": True,
-            "hosts": sorted(
-                (
-                    {name: row[name] for name in sorted(_REQUIRED_HOST_FIELDS)}
-                    for row in rows
-                ),
-                key=lambda row: str(row["node_ref"]),
-            ),
-        }
-        raw = json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
-        if len(raw) > _MAX_READINESS_BYTES:
-            return _failure()
+        raw = _readiness_document(payload, self._expected_nodes)
+        if raw is None:
+            status = (
+                CollectorStatus.SOURCE_UNAVAILABLE
+                if payload is None
+                else CollectorStatus.MID_RUN_LOSS
+            )
+            return _failure(status)
         return SourceResult(
             status=CollectorStatus.OK,
             chunks=(raw,),
@@ -106,6 +93,33 @@ class WazuhAgentReadinessSource:
         )
 
 
+def _readiness_document(
+    payload: Mapping[str, object] | None, expected_nodes: Sequence[str]
+) -> bytes | None:
+    """Encode a complete per-host readiness payload within its bound."""
+
+    if payload is None:
+        return None
+    hosts = payload.get("hosts")
+    if not isinstance(hosts, Sequence) or isinstance(hosts, (str, bytes)):
+        return None
+    rows = [host for host in hosts if isinstance(host, Mapping)]
+    if len(rows) != len(hosts) or not _hosts_are_ready(rows, expected_nodes):
+        return None
+    document = {
+        "wazuh_agent_ready": True,
+        "hosts": sorted(
+            (
+                {name: row[name] for name in sorted(_REQUIRED_HOST_FIELDS)}
+                for row in rows
+            ),
+            key=lambda row: str(row["node_ref"]),
+        ),
+    }
+    raw = json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
+    return raw if len(raw) <= _MAX_READINESS_BYTES else None
+
+
 def _hosts_are_ready(
     rows: Sequence[Mapping[str, object]], expected_nodes: Sequence[str]
 ) -> bool:
@@ -113,25 +127,41 @@ def _hosts_are_ready(
 
     if not expected_nodes:
         return False
-    for row in rows:
-        if not _host_row_is_ready(row):
-            return False
+    if any(not _host_row_is_ready(row) for row in rows):
+        return False
     node_refs = [str(row["node_ref"]) for row in rows]
     agent_ids = [str(row["agent_id"]) for row in rows]
     enrollment_names = [str(row["enrollment_name"]) for row in rows]
     # One member per host, and no member claimed by two hosts: either direction
     # makes per-host attribution ambiguous.
-    if len(set(node_refs)) != len(node_refs):
-        return False
-    if len(set(agent_ids)) != len(agent_ids):
-        return False
-    if len(set(enrollment_names)) != len(enrollment_names):
-        return False
-    return set(node_refs) == set(expected_nodes)
+    identities_are_unique = all(
+        len(set(values)) == len(values)
+        for values in (node_refs, agent_ids, enrollment_names)
+    )
+    return identities_are_unique and set(node_refs) == set(expected_nodes)
 
 
 def _host_row_is_ready(row: Mapping[str, object]) -> bool:
     """Return whether one host row is complete, typed, active and affirmative."""
+
+    if not _host_row_has_valid_types(row):
+        return False
+    freshness_agrees = bool(row["telemetry_fresh"]) == (
+        int(row["telemetry_event_count"]) > 0
+    )
+    identities_present = all(
+        str(row[name]).strip() for name in ("node_ref", "enrollment_name", "agent_id")
+    )
+    return bool(
+        freshness_agrees
+        and identities_present
+        and str(row["status"]) == _ACTIVE_STATUS
+        and all(row[name] is True for name in _REQUIRED_HOST_TRUE)
+    )
+
+
+def _host_row_has_valid_types(row: Mapping[str, object]) -> bool:
+    """Return whether every required field has its exact admitted type."""
 
     for name, expected in _REQUIRED_HOST_FIELDS.items():
         value = row.get(name)
@@ -140,15 +170,7 @@ def _host_row_is_ready(row: Mapping[str, object]) -> bool:
             expected is int and isinstance(value, bool)
         ):
             return False
-    # The freshness flag has to agree with the count it summarises; a row that
-    # claims fresh telemetry while reporting none observed is contradictory.
-    if bool(row["telemetry_fresh"]) != (int(row["telemetry_event_count"]) > 0):
-        return False
-    if any(not str(row[name]).strip() for name in ("node_ref", "enrollment_name", "agent_id")):
-        return False
-    if str(row["status"]) != _ACTIVE_STATUS:
-        return False
-    return all(row[name] is True for name in _REQUIRED_HOST_TRUE)
+    return True
 
 
 def _failure(status: CollectorStatus = CollectorStatus.MID_RUN_LOSS) -> SourceResult:

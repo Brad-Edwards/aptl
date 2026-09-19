@@ -91,15 +91,12 @@ class ComposeRealizationModelMixin:
             (*base_files, *overrides), realization.profiles
         )
         files = self._with_capture_apparatus_files(files, realization)
-        return self._with_docker_authority_files(
-            files, realization, scenario_root, realization_root
-        )
+        return self._with_docker_authority_files(files, realization, realization_root)
 
     def _with_docker_authority_files(
         self,
         files: tuple[Path, ...],
         realization: DeploymentRealizationSpec,
-        scenario_root: Path,
         realization_root: Path,
     ) -> tuple[Path, ...]:
         """Compose the authorization boundary an admitted authority reaches."""

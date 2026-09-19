@@ -44,9 +44,7 @@ _WAZUH_AGENT_IMPLEMENTATION = "wazuh_agent"
 _TAILED_PATH = "tailed_path"
 
 
-def misp_readiness(
-    execute: object, realization: object
-) -> Mapping[str, object] | None:
+def misp_readiness(execute: object, realization: object) -> Mapping[str, object] | None:
     """Observe MISP application, database and cache readiness, or nothing."""
 
     canonical_url = _authored_base_url(realization)
@@ -74,61 +72,92 @@ def wazuh_agent_readiness(
 ) -> Mapping[str, object] | None:
     """Correlate each declared endpoint agent with one active manager member."""
 
+    context = _wazuh_readiness_context(execute, realization, scenario_root)
+    if context is None:
+        return None
+    declared, roster, recorded = context
+    hosts = [
+        _wazuh_host_readiness(
+            execute,
+            node,
+            enrollment_name,
+            sources,
+            roster,
+            recorded,
+            start_iso,
+            end_iso,
+        )
+        for node, (enrollment_name, sources) in sorted(declared.items())
+    ]
+    complete_hosts = [host for host in hosts if host is not None]
+    if len(complete_hosts) != len(hosts):
+        return None
+    return {"hosts": complete_hosts}
+
+
+def _wazuh_readiness_context(
+    execute: object,
+    realization: object,
+    scenario_root: Path,
+) -> (
+    tuple[
+        dict[str, tuple[str, tuple[str, ...]]],
+        tuple[tuple[str, str, str], ...],
+        dict[str, str],
+    ]
+    | None
+):
+    """Load the declared agents, manager roster, and immutable id baseline."""
+
+    context = None
     declared = declared_endpoint_agents(realization)
     roster = wazuh_roster(execute) if declared else None
-    if not declared or roster is None:
-        return None
-    # Record first, then read: the first capture on a fresh installation has no
-    # recorded identity to compare against, and reporting every host as
-    # re-enrolled would mean readiness could never succeed once. Recording the
-    # observation establishes the baseline, and `record_enrollment_baseline`
-    # never overwrites an existing entry, so every later capture is compared
-    # against the identity that was there before it.
-    observed_ids: dict[str, str] = _observed_agent_ids(execute, declared)
-    if observed_ids and not record_enrollment_baseline(scenario_root, observed_ids):
-        return None
-    recorded = enrollment_baseline(scenario_root)
-    if recorded is None:
-        return None
-    hosts = []
-    for node, (enrollment_name, sources) in sorted(declared.items()):
-        # Every row the manager returned for this name, not one of them: a
-        # second member answering to the same name makes attribution ambiguous
-        # and must reach the source's uniqueness check rather than be chosen
-        # between here.
-        members = [row for row in roster if row[0] == enrollment_name]
-        identity = agent_identity(execute, f"aptl-{node}", sources)
-        if len(members) != 1 or identity is None:
-            return None
-        _name, agent_id, status = members[0]
-        host_id = str(identity.get("agent_id", ""))
-        events = telemetry_events(execute, agent_id, start_iso, end_iso)
-        if events is None:
-            return None
-        baseline = recorded.get(node)
-        hosts.append(
-            {
-                "node_ref": node,
-                "enrollment_name": enrollment_name,
-                "agent_id": agent_id,
-                "status": status,
-                "sources_readable": identity.get("sources_readable") is True,
-                # Three separate identities have to agree: what the manager
-                # holds, what the host retained, and what was recorded before
-                # any restart. A re-enrolment moves the first two together and
-                # is caught only by the third.
-                "enrollment_preserved": bool(
-                    baseline is not None
-                    and host_id == agent_id
-                    and host_id == baseline
-                ),
-                # Events the manager actually attributed to this id inside the
-                # capture window, not a connection state standing in for them.
-                "telemetry_fresh": events > 0,
-                "telemetry_event_count": events,
-            }
+    if declared and roster is not None:
+        observed_ids = _observed_agent_ids(execute, declared)
+        baseline_ready = not observed_ids or record_enrollment_baseline(
+            scenario_root, observed_ids
         )
-    return {"hosts": hosts}
+        if baseline_ready:
+            recorded = enrollment_baseline(scenario_root)
+            if recorded is not None:
+                context = (declared, roster, recorded)
+    return context
+
+
+def _wazuh_host_readiness(
+    execute: object,
+    node: str,
+    enrollment_name: str,
+    sources: tuple[str, ...],
+    roster: tuple[tuple[str, str, str], ...],
+    recorded: dict[str, str],
+    start_iso: str,
+    end_iso: str,
+) -> dict[str, object] | None:
+    """Correlate one host with its unique member, telemetry, and baseline."""
+
+    members = [row for row in roster if row[0] == enrollment_name]
+    identity = agent_identity(execute, f"aptl-{node}", sources)
+    if len(members) != 1 or identity is None:
+        return None
+    _name, agent_id, status = members[0]
+    events = telemetry_events(execute, agent_id, start_iso, end_iso)
+    if events is None:
+        return None
+    host_id = str(identity.get("agent_id", ""))
+    baseline = recorded.get(node)
+    return {
+        "node_ref": node,
+        "enrollment_name": enrollment_name,
+        "agent_id": agent_id,
+        "status": status,
+        "sources_readable": identity.get("sources_readable") is True,
+        "enrollment_preserved": bool(
+            baseline is not None and host_id == agent_id and host_id == baseline
+        ),
+        "telemetry_fresh": events > 0,
+        "telemetry_event_count": events,
+    }
 
 
 def _observed_agent_ids(
@@ -194,22 +223,39 @@ def _cache_persistence(realization: object) -> tuple[bool, str] | None:
     if binding is None:
         return None
     target_node, target_service = binding
+    datastore = _bound_datastore(realization, target_node, target_service)
+    return _redis_persistence(datastore)
+
+
+def _bound_datastore(
+    realization: object, target_node: str, target_service: str
+) -> object | None:
+    """Return the datastore selected by one exact authored binding."""
 
     for node in getattr(realization, "nodes", ()) or ():
         if str(getattr(node, "name", "")) != target_node:
             continue
         runtime = getattr(node, "runtime", None)
         for datastore in getattr(runtime, "datastore_services", ()) or ():
-            if str(getattr(datastore, "service", "")) != target_service:
-                continue
-            persistence = getattr(datastore, "persistence", None)
-            eviction = getattr(persistence, "eviction", None)
-            if persistence is None or eviction is None:
-                continue
-            if str(getattr(datastore, "engine", "")).endswith("redis"):
-                value = str(getattr(eviction, "value", eviction))
-                return bool(getattr(persistence, "aof", False)), value
+            if (
+                str(getattr(datastore, "service", "")) == target_service
+                and _redis_persistence(datastore) is not None
+            ):
+                return datastore
     return None
+
+
+def _redis_persistence(datastore: object | None) -> tuple[bool, str] | None:
+    """Project the persistence posture from an admitted Redis datastore."""
+
+    if datastore is None or not str(getattr(datastore, "engine", "")).endswith("redis"):
+        return None
+    persistence = getattr(datastore, "persistence", None)
+    eviction = getattr(persistence, "eviction", None)
+    if persistence is None or eviction is None:
+        return None
+    value = str(getattr(eviction, "value", eviction))
+    return bool(getattr(persistence, "aof", False)), value
 
 
 def _misp_cache_binding(realization: object) -> tuple[str, str] | None:
@@ -247,22 +293,47 @@ def declared_endpoint_agents(
 
     declared: dict[str, tuple[str, tuple[str, ...]]] = {}
     for node in getattr(realization, "nodes", ()) or ():
-        runtime = getattr(node, "runtime", None)
-        for agent in getattr(runtime, "forwarding_agents", ()) or ():
-            if not _is_enrolling_wazuh_agent(agent):
-                continue
-            sources = tuple(
-                str(source.location)
-                for source in getattr(agent, "sources", ()) or ()
-                if str(getattr(getattr(source, "kind", ""), "value", getattr(source, "kind", "")))
-                == _TAILED_PATH
-                and str(getattr(source, "location", ""))
-            )
-            node_name = str(node.name)
-            if not sources or node_name in declared:
-                return {}
-            declared[node_name] = (str(agent.name), sources)
+        valid, agent = _node_endpoint_agent(node)
+        if not valid:
+            return {}
+        if agent is not None:
+            declared[str(node.name)] = agent
     return declared
+
+
+def _node_endpoint_agent(
+    node: object,
+) -> tuple[bool, tuple[str, tuple[str, ...]] | None]:
+    """Return one node's unique enrolling agent, rejecting ambiguity."""
+
+    runtime = getattr(node, "runtime", None)
+    agents = [
+        agent
+        for agent in getattr(runtime, "forwarding_agents", ()) or ()
+        if _is_enrolling_wazuh_agent(agent)
+    ]
+    valid = len(agents) <= 1
+    result = None
+    if valid and agents:
+        agent = agents[0]
+        sources = tuple(
+            str(source.location)
+            for source in getattr(agent, "sources", ()) or ()
+            if _source_is_tailed_path(source)
+        )
+        valid = bool(sources)
+        if valid:
+            result = (str(agent.name), sources)
+    return valid, result
+
+
+def _source_is_tailed_path(source: object) -> bool:
+    """Return whether a source is a non-empty authored tailed path."""
+
+    kind = getattr(source, "kind", "")
+    return str(getattr(kind, "value", kind)) == _TAILED_PATH and bool(
+        str(getattr(source, "location", ""))
+    )
 
 
 def _is_enrolling_wazuh_agent(agent: object) -> bool:
@@ -287,7 +358,9 @@ def _authored_base_url(realization: object) -> str | None:
     for node in getattr(realization, "nodes", ()) or ():
         if str(getattr(node, "name", "")) != _MISP_NODE:
             continue
-        for variable in getattr(getattr(node, "runtime", None), "environment", ()) or ():
+        for variable in (
+            getattr(getattr(node, "runtime", None), "environment", ()) or ()
+        ):
             if str(getattr(variable, "name", "")) == _BASE_URL:
                 value = str(getattr(variable, "value", ""))
                 return value or None

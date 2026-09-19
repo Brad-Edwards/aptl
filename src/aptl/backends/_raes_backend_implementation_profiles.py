@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from aptl.backends._raes_backend_implementation_catalog import (
     BACKEND_IMPLEMENTATION_PROFILES,
+)
+from aptl.backends._raes_backend_implementation_images import (
     NODE22_SYSTEMD_BASE_IMAGE,
     SAMBA_AD_BASE_IMAGE,
     WAZUH_DEBIAN_BASE_IMAGE,
@@ -216,9 +218,7 @@ def _record_matches(record: object, selector: SemanticRuntimeSelector) -> bool:
     )
 
 
-def _authorization_matches(
-    record: object, selector: SemanticRuntimeSelector
-) -> bool:
+def _authorization_matches(record: object, selector: SemanticRuntimeSelector) -> bool:
     """Return whether the record's authorization posture matches the selector."""
 
     if selector.authorization_required is None:

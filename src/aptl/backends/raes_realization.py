@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -354,7 +352,18 @@ def _canonical_ordering_dependencies(
     )
     if resolved == candidate.ordering_dependencies:
         return candidate
-    return replace(candidate, ordering_dependencies=resolved)
+    return DeploymentGeneratedArtifactRealization(
+        address=candidate.address,
+        name=candidate.name,
+        generator=candidate.generator,
+        lifecycle=candidate.lifecycle,
+        provenance=candidate.provenance,
+        outputs=candidate.outputs,
+        consumers=candidate.consumers,
+        environment_consumers=candidate.environment_consumers,
+        ordering_dependencies=resolved,
+        refresh_dependencies=candidate.refresh_dependencies,
+    )
 
 
 def _same_generated_artifact_contract(

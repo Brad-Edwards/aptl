@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Mapping
+from typing import Protocol, cast
 
 _MAX_PROBE_BYTES = 64 * 1024
 _PROBE_TIMEOUT_SECONDS = 60
@@ -24,6 +25,26 @@ MISP_CONTAINER = "aptl-misp"
 MISP_DB_CONTAINER = "aptl-misp-db"
 MISP_CACHE_CONTAINER = "aptl-misp-redis"
 WAZUH_MANAGER_CONTAINER = "aptl-wazuh-manager"
+
+
+class _ProbeExecutor(Protocol):
+    """Callable shape exposed by the deployment backend's stdin executor."""
+
+    def __call__(
+        self,
+        container: str,
+        command: list[str],
+        input_text: str,
+        *,
+        timeout: int,
+    ) -> object: ...
+
+
+def _probe_executor(execute: object) -> _ProbeExecutor | None:
+    """Return a statically callable executor after the runtime boundary check."""
+
+    return cast(_ProbeExecutor, execute) if callable(execute) else None
+
 
 # MISP's own container holds ADMIN_KEY in its admitted environment, so the
 # authenticated write/read happens there and the key never leaves it. The probe
@@ -172,9 +193,10 @@ def _run_probe(
 ) -> dict[str, object] | None:
     """Run one bounded probe script and parse its ``key=value`` lines."""
 
-    if not callable(execute):
+    runner = _probe_executor(execute)
+    if runner is None:
         return None
-    result = execute(
+    result = runner(
         container,
         ["sh", "-s", "--", *arguments],
         script,
@@ -229,9 +251,10 @@ echo "sources_readable=true"
 def wazuh_roster(execute: object) -> tuple[tuple[str, str, str], ...] | None:
     """Return every ``(enrollment_name, agent_id, status)`` row the manager holds."""
 
-    if not callable(execute):
+    runner = _probe_executor(execute)
+    if runner is None:
         return None
-    result = execute(
+    result = runner(
         WAZUH_MANAGER_CONTAINER,
         ["sh", "-s"],
         _WAZUH_ROSTER_SCRIPT,

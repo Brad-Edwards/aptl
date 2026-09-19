@@ -96,7 +96,8 @@ def test_the_cache_is_authenticated_without_putting_the_secret_in_argv(realizati
     assert "--requirepass" not in command
 
     artifact = next(
-        item for item in realization.generated_artifacts
+        item
+        for item in realization.generated_artifacts
         if item.name == "misp-cache-credential"
     )
     consumer = artifact.consumers[0]
@@ -105,7 +106,8 @@ def test_the_cache_is_authenticated_without_putting_the_secret_in_argv(realizati
     assert consumer.selected_outputs == (MISP_CACHE_CONFIG_OUTPUT,)
 
     password = next(
-        output for output in artifact.outputs
+        output
+        for output in artifact.outputs
         if output.name == MISP_CACHE_PASSWORD_OUTPUT
     )
     # Producer-private means no consumer can bind it: MISP receives the value
@@ -137,7 +139,8 @@ def test_the_leaf_is_delivered_where_the_selected_image_reads_it(realization):
     """A mounted certificate the image never reads is not an activated one."""
 
     artifact = next(
-        item for item in realization.generated_artifacts
+        item
+        for item in realization.generated_artifacts
         if item.name == "misp-server-tls"
     )
     consumer = artifact.consumers[0]
@@ -156,12 +159,11 @@ def test_the_leaf_is_delivered_where_the_selected_image_reads_it(realization):
     )
     # The pack's own neutral delivery is untouched and still authoritative.
     bundle = next(
-        item for item in realization.generated_artifacts
+        item
+        for item in realization.generated_artifacts
         if item.name == "techvault-soc-certificates"
     )
-    misp_consumer = next(
-        item for item in bundle.consumers if item.node_name == "misp"
-    )
+    misp_consumer = next(item for item in bundle.consumers if item.node_name == "misp")
     assert misp_consumer.mount_destination == "/opt/techvault/soc-certs"
 
 
@@ -185,12 +187,15 @@ def test_unrelated_https_settings_do_not_expand_certificate_identity():
     from aptl.core.deployment._authored_service_hosts import authored_service_hosts
 
     setting = SimpleNamespace(
-        setting_id="incident-webhook-url", value="https://collector.example.invalid/hook"
+        setting_id="incident-webhook-url",
+        value="https://collector.example.invalid/hook",
     )
     runtime = SimpleNamespace(
         platform_applications=(SimpleNamespace(settings=(setting,)),)
     )
-    realization = SimpleNamespace(nodes=(SimpleNamespace(name="misp", runtime=runtime),))
+    realization = SimpleNamespace(
+        nodes=(SimpleNamespace(name="misp", runtime=runtime),)
+    )
 
     assert authored_service_hosts(realization) == {}
 
@@ -429,7 +434,9 @@ def _ordering_spec():
         return DeploymentGeneratedArtifactRealization(
             address=address,
             name=name,
-            generator="certificate_bundle" if "certificates" in name else "rendered_config",
+            generator="certificate_bundle"
+            if "certificates" in name
+            else "rendered_config",
             lifecycle="reuse_valid",
             provenance="techvault:soc-certificate-profile/v1",
             outputs=(),
@@ -456,7 +463,7 @@ def _ordering_spec():
 
 
 @pytest.mark.integration
-def test_stateful_preflight_accepts_the_delivery_dependency(tmp_path_factory):
+def test_stateful_preflight_accepts_the_delivery_dependency(tmp_path):
     """Execution ordering is not the only thing that reads the dependency.
 
     `stateful_realization_errors` validates every ordering reference against
@@ -467,7 +474,7 @@ def test_stateful_preflight_accepts_the_delivery_dependency(tmp_path_factory):
 
     from aptl.core.deployment._compose_stateful_graph import stateful_realization_errors
 
-    realization = _realize_pack(tmp_path_factory.mktemp("misp-preflight"))
+    realization = _realize_pack(tmp_path)
     delivery = next(
         item
         for item in realization.generated_artifacts

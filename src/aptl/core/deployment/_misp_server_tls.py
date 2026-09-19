@@ -63,8 +63,16 @@ def realize_misp_server_tls(
         or artifact.lifecycle != "reuse_valid"
         or actual != expected
     )
-    if invalid_contract:
-        return "MISP server TLS artifact does not match its producer contract."
+    error = (
+        "MISP server TLS artifact does not match its producer contract."
+        if invalid_contract
+        else _stage_misp_server_tls(scenario_root)
+    )
+    return error
+
+
+def _stage_misp_server_tls(scenario_root: Path) -> str | None:
+    """Copy the authored leaf into the selected image's native layout."""
 
     try:
         root = _canonical_generated_path(scenario_root, MISP_SERVER_TLS_ROOT_RELPATH)
@@ -75,7 +83,9 @@ def realize_misp_server_tls(
             )
             content = source.read_text(encoding="utf-8")
             if not content.strip():
-                return "MISP server TLS material is missing from the certificate bundle."
+                return (
+                    "MISP server TLS material is missing from the certificate bundle."
+                )
             target = _canonical_generated_path(
                 scenario_root, MISP_SERVER_TLS_ROOT_RELPATH / relative
             )

@@ -40,9 +40,7 @@ AUTHORITY_SOCKET_RELDIR = Path(MEDIATED_DOCKER_SOCKET_RELPATH.parent.as_posix())
 AUTHORITY_SOCKET_NAME = MEDIATED_DOCKER_SOCKET_RELPATH.name
 AUTHORITY_OWNER_LABEL_KEY = "org.aptl.docker-authority"
 AUTHORITY_OWNER_LABEL_VALUE = "managed"
-AUTHORITY_OWNER_LABEL = (
-    f"{AUTHORITY_OWNER_LABEL_KEY}={AUTHORITY_OWNER_LABEL_VALUE}"
-)
+AUTHORITY_OWNER_LABEL = f"{AUTHORITY_OWNER_LABEL_KEY}={AUTHORITY_OWNER_LABEL_VALUE}"
 _SOCKET_DIR_PLACEHOLDER = "generated:docker-authority-socket-dir"
 
 
@@ -76,7 +74,9 @@ def _runtime_identity() -> tuple[int, int, int]:
     return os.getuid(), os.getgid(), socket_info.st_gid
 
 
-def admitted_authority_images(realization: DeploymentRealizationSpec) -> tuple[str, ...]:
+def admitted_authority_images(
+    realization: DeploymentRealizationSpec,
+) -> tuple[str, ...]:
     """Return every exact image reference the admitted authorities may run.
 
     An authority with no admitted spawn requirement contributes nothing, so the
@@ -120,9 +120,7 @@ def authority_compose_file(
     """Write the apparatus model with engine-anchored sources and image policy."""
 
     root = project_dir.resolve()
-    model = yaml.safe_load(
-        (root / AUTHORITY_COMPOSE_FILE).read_text(encoding="utf-8")
-    )
+    model = yaml.safe_load((root / AUTHORITY_COMPOSE_FILE).read_text(encoding="utf-8"))
     service = model["services"][AUTHORITY_SERVICE]
     service["build"]["context"] = str(root)
 
@@ -140,9 +138,7 @@ def authority_compose_file(
     service["environment"]["APTL_DOCKER_AUTHORITY_IMAGES"] = "\n".join(
         admitted_authority_images(realization)
     )
-    service["environment"]["APTL_DOCKER_AUTHORITY_OWNER_LABEL"] = (
-        AUTHORITY_OWNER_LABEL
-    )
+    service["environment"]["APTL_DOCKER_AUTHORITY_OWNER_LABEL"] = AUTHORITY_OWNER_LABEL
     service["environment"]["APTL_DOCKER_AUTHORITY_NETWORKS"] = "\n".join(
         admitted_authority_networks(realization, project_name)
     )
@@ -168,19 +164,19 @@ def authority_declaration_error(
     available would be the host's own.
     """
 
-    if not authority_requested(realization):
-        return None
-    if len(realization.docker_authority_admissions) != 1:
-        return "aptl.docker-authority.multiple-authorities-unsupported"
-    holders = {
-        admission.service_name
-        for admission in realization.docker_authority_admissions
-    }
-    if AUTHORITY_SERVICE in holders or AUTHORITY_CONTAINER in {
-        node.container_name for node in realization.nodes
-    }:
-        return "aptl.docker-authority.ownership-conflict"
-    return None
+    error = None
+    if authority_requested(realization):
+        if len(realization.docker_authority_admissions) != 1:
+            error = "aptl.docker-authority.multiple-authorities-unsupported"
+        else:
+            holders = {
+                admission.service_name
+                for admission in realization.docker_authority_admissions
+            }
+            container_names = {node.container_name for node in realization.nodes}
+            if AUTHORITY_SERVICE in holders or AUTHORITY_CONTAINER in container_names:
+                error = "aptl.docker-authority.ownership-conflict"
+    return error
 
 
 __all__ = (

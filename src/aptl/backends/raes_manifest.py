@@ -35,7 +35,6 @@ from raes_backend_protocols.capabilities import (
 from raes_backend_protocols.manifest import backend_manifest_v2_model
 from raes_contracts.apparatus import (
     ConceptBinding,
-    ProcessResourceLimitCapability,
     RealizationObservationCapability,
     RealizationSupportDeclaration,
     RealizationSupportMode,
@@ -51,6 +50,7 @@ from raes_contracts.contracts import (
 )
 from raes_contracts.realization_envelope import BackendRealizationEnvelopeModel
 from aptl.backends.raes_artifact_mechanisms import aptl_artifact_mechanisms
+from aptl.backends._raes_manifest_resources import APTL_PROCESS_RESOURCE_LIMITS
 from aptl.backends.identity import APTL_RAES_TARGET_NAME, APTL_RAES_TARGET_VERSION
 from aptl.backends.raes_operating_systems import APTL_OPERATING_SYSTEMS
 from aptl.backends.raes_planning_compat import DAEMON_READBACK_RUNTIME_CONCERNS
@@ -58,8 +58,6 @@ from aptl.backends.raes_realization_envelope import build_aptl_realization_envel
 from raes_contracts.vocabulary import (
     ObservationStrength,
     ParticipantFeatureSupportLevel,
-    ProcessResourceLimitKind,
-    ProcessResourceLimitScope,
     WorkflowFeature,
     WorkflowStatePredicateFeature,
 )
@@ -77,23 +75,6 @@ from aptl.core.experiment.capture_registry import (
 )
 
 APTL_EXPERIMENT_ACTION_TIMEOUT_TARGET = "participant-runtime.action-timeout-seconds"
-
-APTL_PROCESS_RESOURCE_LIMITS = (
-    ProcessResourceLimitCapability(
-        resource=ProcessResourceLimitKind.OPEN_FILE_DESCRIPTORS,
-        scopes=frozenset({ProcessResourceLimitScope.SUBTREE}),
-        minimum=0,
-        maximum=None,
-        supports_unlimited=True,
-    ),
-    ProcessResourceLimitCapability(
-        resource=ProcessResourceLimitKind.LOCKED_MEMORY_BYTES,
-        scopes=frozenset({ProcessResourceLimitScope.SUBTREE}),
-        minimum=0,
-        maximum=None,
-        supports_unlimited=True,
-    ),
-)
 
 _EXPERIMENT_CONFIGURATION_REGISTRY = ConfigurationTargetRegistryModel(
     owner=BindingOwnerModel(

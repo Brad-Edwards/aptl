@@ -5,18 +5,15 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from aptl.core.certs import CertResult, ensure_ssl_certs
+from aptl.core.certs import ensure_ssl_certs
 from aptl.core.deployment._authored_service_hosts import authored_service_hosts
 from aptl.core.soc_ca import derive_soc_service_certs, ensure_soc_certs
 from aptl.core.credentials import (
     RENDERED_MANAGER_RELPATH,
-    _atomic_write_secure,
     _canonical_generated_path,
-    _ensure_secure_dir,
     sync_manager_config,
 )
 from aptl.core.deployment._compose_stateful_constants import (
-    CERTIFICATE_PROVENANCE,
     CERTIFICATE_ROOT_RELPATH,
     MIN_OVERRIDE_COMPOSE_VERSION,
     SOC_CERT_PROFILE,
@@ -28,11 +25,16 @@ from aptl.core.deployment._compose_stateful_graph import (
     owned_wazuh_services,
     stateful_realization_errors,
 )
+from aptl.core.deployment._compose_stateful_artifact_helpers import (
+    artifact_environment_bindings as _artifact_environment_bindings,
+    artifacts_in_dependency_order as _artifacts_in_dependency_order,
+    certificate_bundle_failure as _certificate_bundle_failure,
+    write_artifact_environment_files as _write_artifact_environment_files,
+)
 from aptl.core.deployment._compose_stateful_constants import (
     ENVIRONMENT_DELIVERY_PROVENANCES as _ENVIRONMENT_DELIVERY_PROVENANCES,
 )
 from aptl.core.deployment._compose_stateful_model import (
-    artifact_environment_file_path,
     artifact_source_path as _artifact_source_path,
     effective_stateful_model_errors as _effective_stateful_model_errors,
     stateful_override_payload as _stateful_override_payload,
@@ -59,82 +61,16 @@ from aptl.core.deployment._flag_signing_keys import (
     realize_flag_signing_keys,
 )
 from aptl.core.deployment._ssh_key_bundle import realize_ssh_key_bundle
-from aptl.core.deployment._stateful_certificates import validate_certificate_bundle
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
     DeploymentRealizationSpec,
-    valid_environment_variable_name,
 )
 from aptl.core.lab_types import LabResult
 
 artifact_source_path = _artifact_source_path
 effective_stateful_model_errors = _effective_stateful_model_errors
 stateful_override_payload = _stateful_override_payload
-
-
-def _artifacts_in_dependency_order(
-    artifacts: tuple[DeploymentGeneratedArtifactRealization, ...],
-) -> tuple[DeploymentGeneratedArtifactRealization, ...]:
-    """Order artifacts so each one is produced after what it depends on.
-
-    The realization spec sorts artifacts by address because that is a stable
-    canonical order for a document, not a safe execution order: an artifact
-    whose address happens to sort earlier than its producer would otherwise run
-    first and read material that does not exist yet.
-
-    Ties are broken by address so the result stays deterministic, and a
-    dependency that names nothing in this set is ignored rather than treated as
-    a cycle -- ordering references also point at persistent volumes, which are
-    realized separately. A genuine cycle cannot be ordered, so the remaining
-    artifacts keep their canonical order and their own producers fail closed
-    rather than being silently dropped.
-    """
-
-    remaining = {artifact.address: artifact for artifact in artifacts}
-    dependencies = {
-        address: {
-            resolved
-            for reference in artifact.ordering_dependencies
-            if (resolved := _resolve_ordering_reference(reference, remaining))
-        }
-        for address, artifact in remaining.items()
-    }
-    ordered: list[DeploymentGeneratedArtifactRealization] = []
-    produced: set[str] = set()
-    while remaining:
-        ready = sorted(
-            address
-            for address, needs in dependencies.items()
-            if address in remaining and needs <= produced
-        )
-        if not ready:
-            ordered.extend(remaining[address] for address in sorted(remaining))
-            break
-        for address in ready:
-            ordered.append(remaining.pop(address))
-            produced.add(address)
-    return tuple(ordered)
-
-
-def _resolve_ordering_reference(
-    reference: str, artifacts: dict[str, DeploymentGeneratedArtifactRealization]
-) -> str | None:
-    """Resolve one ordering reference to an artifact address in this set.
-
-    Authored dependencies arrive as resolved addresses, while a backend-selected
-    artifact names its producer the way the SDL does, as
-    ``generated_artifacts.<name>``. Both forms identify the same artifact, so
-    both resolve here instead of one of them silently matching nothing.
-    """
-
-    if reference in artifacts:
-        return reference
-    name = reference.rsplit(".", 1)[-1]
-    matches = [
-        address for address, artifact in artifacts.items() if artifact.name == name
-    ]
-    return matches[0] if len(matches) == 1 else None
 
 
 class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
@@ -198,9 +134,7 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         """
 
         failure: LabResult | None = None
-        for artifact in _artifacts_in_dependency_order(
-            realization.generated_artifacts
-        ):
+        for artifact in _artifacts_in_dependency_order(realization.generated_artifacts):
             failure = self._realize_one_generated_artifact(
                 artifact, scenario_root, realization
             )
@@ -279,18 +213,27 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         ``project_dir/.env``) and the per-node flag-signing keys (#875).
         """
 
+        result: LabResult | None
         if artifact.provenance == FLAG_SIGNING_PROFILE_V2:
-            return self._realize_flag_signing_keys(artifact, scenario_root)
-        if artifact.provenance == CORTEX_SERVICE_CREDENTIALS_PROFILE:
+            result = self._realize_flag_signing_keys(artifact, scenario_root)
+        elif artifact.provenance == CORTEX_SERVICE_CREDENTIALS_PROFILE:
             error = realize_cortex_service_credentials(artifact, scenario_root)
-            return LabResult(success=False, error=error) if error is not None else None
-        if artifact.provenance == MISP_CACHE_CREDENTIAL_PROFILE:
+            result = (
+                LabResult(success=False, error=error) if error is not None else None
+            )
+        elif artifact.provenance == MISP_CACHE_CREDENTIAL_PROFILE:
             error = realize_misp_cache_credential(artifact, scenario_root)
-            return LabResult(success=False, error=error) if error is not None else None
-        if artifact.provenance == MISP_SERVER_TLS_PROFILE:
+            result = (
+                LabResult(success=False, error=error) if error is not None else None
+            )
+        elif artifact.provenance == MISP_SERVER_TLS_PROFILE:
             error = realize_misp_server_tls(artifact, scenario_root)
-            return LabResult(success=False, error=error) if error is not None else None
-        return self._realize_wazuh_config(artifact, scenario_root)
+            result = (
+                LabResult(success=False, error=error) if error is not None else None
+            )
+        else:
+            result = self._realize_wazuh_config(artifact, scenario_root)
+        return result
 
     def _realize_wazuh_config(
         self,
@@ -498,87 +441,3 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
             return self._run(command, timeout=timeout)
         except BackendTimeoutError as exc:
             raise subprocess.TimeoutExpired(command, timeout) from exc
-
-
-def _artifact_environment_bindings(
-    artifact: DeploymentGeneratedArtifactRealization,
-    scenario_root: Path,
-) -> dict[str, list[tuple[str, Path]]]:
-    """Validate and group exact generated-output environment bindings."""
-
-    root = artifact_source_path(scenario_root, artifact)
-    outputs = {output.name: root / output.path for output in artifact.outputs}
-    by_service: dict[str, list[tuple[str, Path]]] = {}
-    for consumer in artifact.environment_consumers:
-        if not valid_environment_variable_name(consumer.environment_variable):
-            raise ValueError("invalid generated environment variable")
-        source = outputs.get(consumer.output_name)
-        if source is None or not source.is_file():
-            raise ValueError("missing declared generated output")
-        by_service.setdefault(consumer.service_name, []).append(
-            (consumer.environment_variable, source)
-        )
-    return by_service
-
-
-def _write_artifact_environment_files(
-    artifact: DeploymentGeneratedArtifactRealization,
-    scenario_root: Path,
-    by_service: dict[str, list[tuple[str, Path]]],
-) -> None:
-    """Write validated output bindings as owner-only Compose env files."""
-
-    for service_name, bindings in by_service.items():
-        target = artifact_environment_file_path(scenario_root, artifact, service_name)
-        relative = target.relative_to(scenario_root.resolve())
-        target = _canonical_generated_path(scenario_root, relative)
-        _ensure_secure_dir(target.parent)
-        lines = []
-        for variable, source in sorted(bindings):
-            value = source.read_text(encoding="utf-8").strip()
-            if not value or "\n" in value or "\r" in value:
-                raise ValueError("invalid generated environment value")
-            lines.append(f"{variable}={value}")
-        _atomic_write_secure(target, "\n".join(lines) + "\n")
-        target.chmod(0o600)
-
-
-def _certificate_bundle_failure(
-    artifact: DeploymentGeneratedArtifactRealization,
-    scenario_root: Path,
-    result: CertResult,
-) -> LabResult | None:
-    """Return the first failure in a generated certificate bundle, or ``None``.
-
-    The cryptographic bundle validator reads the in-tree provenance file
-    (config/certs.yml). An env-pack declares its bundle by profile identity
-    (techvault:wazuh-*-certificate-profile/v1), not a provenance document, so it
-    is validated by generator success + declared-output presence; the cert
-    generator issues the material itself, it is not accepted from the pack
-    (issue #875).
-    """
-
-    failure: LabResult | None = None
-    if not result.success:
-        failure = LabResult(
-            success=False,
-            error="Certificate artifact generation failed.",
-        )
-    elif any(
-        not (result.certs_dir / output.path).is_file() for output in artifact.outputs
-    ):
-        failure = LabResult(
-            success=False,
-            error=(
-                f"Generated artifact {artifact.address} is missing declared output."
-            ),
-        )
-    elif artifact.provenance == CERTIFICATE_PROVENANCE:
-        errors = validate_certificate_bundle(
-            result.certs_dir,
-            artifact.outputs,
-            scenario_root / artifact.provenance,
-        )
-        if errors:
-            failure = LabResult(success=False, error=errors[0])
-    return failure

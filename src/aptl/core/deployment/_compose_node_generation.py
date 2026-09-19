@@ -18,11 +18,9 @@ to start and be addressable.
 
 from __future__ import annotations
 
-import ipaddress
 from pathlib import Path
 
 import yaml
-from aptl.core.deployment._compose_realization_networks import _compose_network_key
 from aptl.core.deployment._compose_docker_authority import (
     AUTHORITY_OWNER_LABEL_KEY,
     AUTHORITY_OWNER_LABEL_VALUE,
@@ -33,6 +31,14 @@ from aptl.core.deployment._compose_docker_authority import (
 from aptl.core.deployment._compose_runtime_orchestration import (
     docker_authority_admissions_by_address,
     docker_socket_volume,
+)
+from aptl.core.deployment._compose_node_topology import (
+    dynamic_ip_range as _dynamic_ip_range,
+    network_namespace_container as _network_namespace_container,
+    pinned_addresses_by_network as _pinned_addresses_by_network,
+    render_networks as _render_networks,
+    service_dependencies as _service_dependencies,
+    service_networks as _service_networks,
 )
 from aptl.core.deployment._compose_service_health import runtime_expects_completion
 from aptl.core.deployment._compose_stateful_constants import (
@@ -105,25 +111,47 @@ def render_realization_compose(
         wazuh_identity.indexer_service: (WAZUH_INDEXER_SERVICE,),
     }
 
-    services: dict[str, dict[str, object]] = {}
-    for node in spec.nodes:
-        if not node.service_name or node.address not in image_by_address:
-            continue
-        services[node.service_name] = _render_service(
-            node,
-            image_by_address[node.address],
-            service_names,
-            completion_services,
-            docker_authority_admission=admissions.get(node.address),
-            mediated_socket=mediated_socket,
-            network_aliases=canonical_aliases.get(node.service_name, ()),
-        )
+    services = _render_services(
+        spec,
+        image_by_address,
+        service_names,
+        completion_services,
+        admissions,
+        mediated_socket,
+        canonical_aliases,
+    )
 
     document: dict[str, object] = {"services": services}
     networks = _render_networks(spec)
     if networks:
         document["networks"] = networks
     return document
+
+
+def _render_services(
+    spec: DeploymentRealizationSpec,
+    image_by_address: dict[str, DeploymentImageRealization],
+    service_names: set[str],
+    completion_services: set[str],
+    admissions: dict[str, DeploymentDockerAuthorityAdmission],
+    mediated_socket: Path | None,
+    canonical_aliases: dict[str, tuple[str, ...]],
+) -> dict[str, dict[str, object]]:
+    """Render image-backed services with carried authority and aliases."""
+
+    services: dict[str, dict[str, object]] = {}
+    for node in spec.nodes:
+        if node.service_name and node.address in image_by_address:
+            services[node.service_name] = _render_service(
+                node,
+                image_by_address[node.address],
+                service_names,
+                completion_services,
+                docker_authority_admission=admissions.get(node.address),
+                mediated_socket=mediated_socket,
+                network_aliases=canonical_aliases.get(node.service_name, ()),
+            )
+    return services
 
 
 def _render_service(
@@ -318,165 +346,6 @@ def _capability_config(runtime: object) -> list[str]:
     return [capability.removeprefix("CAP_") for capability in added]
 
 
-def _service_networks(
-    node: DeploymentNodeRealization, *, aliases: tuple[str, ...] = ()
-) -> dict[str, dict[str, object]]:
-    """Return the Compose ``networks`` attachment map for a node."""
-
-    attachments = node.network_attachments or tuple(
-        _Attachment(network) for network in node.networks
-    )
-    networks: dict[str, dict[str, object]] = {}
-    for attachment in attachments:
-        key = _compose_network_key(attachment.network)
-        if not key:
-            continue
-        options: dict[str, object] = {}
-        address = getattr(attachment, "ipv4_address", None)
-        if address:
-            options["ipv4_address"] = address
-        selected_aliases = [alias for alias in aliases if alias != node.service_name]
-        if selected_aliases:
-            options["aliases"] = selected_aliases
-        networks[key] = options
-    return networks
-
-
-def _network_namespace_container(node: DeploymentNodeRealization) -> str | None:
-    """Return the container whose netns this node joins, or ``None``.
-
-    A node declaring ``runtime.container.namespaces.network.target_node_ref``
-    (RAES ``RuntimeNetworkNamespace``) shares another node's network namespace.
-    The target is an image-free node the generic materializer starts before
-    Compose runs (ADR-048 ordering), so Compose references it by container name
-    via ``network_mode: container:<name>``. The name derivation matches the
-    image-free substrate's (``aptl-<ref>``, not doubling an existing prefix) so
-    both sides agree on the container identity (issue #875 / #906).
-    """
-
-    runtime = node.runtime
-    container = getattr(runtime, "container", None) if runtime is not None else None
-    namespaces = (
-        getattr(container, "namespaces", None) if container is not None else None
-    )
-    network = getattr(namespaces, "network", None) if namespaces is not None else None
-    ref = getattr(network, "target_node_ref", None) if network is not None else None
-    if not ref:
-        return None
-    tail = ref.rsplit(".", 1)[-1]
-    return tail if tail.startswith("aptl-") else f"aptl-{tail}"
-
-
-def _service_dependencies(
-    node: DeploymentNodeRealization,
-    service_names: set[str],
-    completion_services: set[str],
-) -> list[str] | dict[str, dict[str, str]]:
-    """Return ordering dependencies restricted to emitted services."""
-
-    depends: list[str] = []
-    for dependency in node.ordering_dependencies:
-        name = dependency.rsplit(".", 1)[-1]
-        if name in service_names and name != node.service_name and name not in depends:
-            depends.append(name)
-    if not any(name in completion_services for name in depends):
-        return depends
-    return {
-        name: {
-            "condition": (
-                "service_completed_successfully"
-                if name in completion_services
-                else "service_started"
-            )
-        }
-        for name in depends
-    }
-
-
-def _pinned_addresses_by_network(
-    spec: DeploymentRealizationSpec,
-) -> dict[str, set[str]]:
-    """Return, per network name, the set of statically-pinned node IPs.
-
-    A node pins an address by declaring ``ipv4_address`` on a network
-    attachment (SDL ``static_address_assignments``). These are the addresses
-    Docker's dynamic allocator must be kept away from.
-    """
-
-    pinned: dict[str, set[str]] = {}
-    for node in spec.nodes:
-        for attachment in node.network_attachments:
-            if attachment.ipv4_address:
-                pinned.setdefault(attachment.network, set()).add(
-                    attachment.ipv4_address
-                )
-    return pinned
-
-
-def _dynamic_ip_range(cidr: str, gateway: str | None, pinned: set[str]) -> str | None:
-    """Return an IPAM ``ip_range`` confining dynamic allocation off the pins.
-
-    Docker assigns dynamic addresses from the bottom of the subnet and does not
-    reserve the static IPs of not-yet-started containers, so a dynamically-placed
-    node (a DNS-reachable SOC service) can seize an address another node pinned in
-    the SDL, and the pinned container then fails networking with "Address already
-    in use" (issue #875). Restricting the dynamic pool to the subnet's upper half
-    keeps it clear of the low, pinned addresses.
-
-    Returns ``None`` when no confinement is needed (nothing pinned). Raises when a
-    pinned address or the gateway falls in the upper half, rather than emitting a
-    range that would still collide — a loud signal that the split no longer holds
-    for this topology.
-    """
-
-    if not pinned:
-        return None
-    subnet = ipaddress.ip_network(cidr, strict=False)
-    upper = list(subnet.subnets(prefixlen_diff=1))[1]
-    intruders = sorted(
-        str(address)
-        for address in (*pinned, *((gateway,) if gateway else ()))
-        if ipaddress.ip_address(address) in upper
-    )
-    if intruders:
-        raise ValueError(
-            f"network {cidr}: pinned/gateway address(es) {', '.join(intruders)} "
-            f"fall in the dynamic pool {upper}; the upper-half split no longer "
-            "isolates static addresses from dynamic allocation (issue #875)."
-        )
-    return str(upper)
-
-
-def _render_networks(spec: DeploymentRealizationSpec) -> dict[str, dict[str, object]]:
-    """Return the Compose ``networks`` section for the realized networks."""
-
-    pinned_by_network = _pinned_addresses_by_network(spec)
-    networks: dict[str, dict[str, object]] = {}
-    for network in spec.networks:
-        key = _compose_network_key(network.name)
-        if not key:
-            continue
-        definition: dict[str, object] = {"driver": "bridge"}
-        if network.internal:
-            definition["internal"] = True
-        ipam_config: dict[str, str] = {}
-        if network.cidr:
-            ipam_config["subnet"] = network.cidr
-            ip_range = _dynamic_ip_range(
-                network.cidr,
-                network.gateway,
-                pinned_by_network.get(network.name, set()),
-            )
-            if ip_range:
-                ipam_config["ip_range"] = ip_range
-        if network.gateway:
-            ipam_config["gateway"] = network.gateway
-        if ipam_config:
-            definition["ipam"] = {"config": [ipam_config]}
-        networks[key] = definition
-    return networks
-
-
 def write_realization_compose(
     spec: DeploymentRealizationSpec, scenario_root: Path
 ) -> Path:
@@ -485,9 +354,7 @@ def write_realization_compose(
     path = scenario_root / GENERATED_COMPOSE_RELPATH
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        yaml.safe_dump(
-            render_realization_compose(spec, scenario_root), sort_keys=True
-        ),
+        yaml.safe_dump(render_realization_compose(spec, scenario_root), sort_keys=True),
         encoding="utf-8",
         newline="\n",
     )
@@ -514,13 +381,3 @@ def base_compose_file(
     if static.exists():
         return static
     return write_realization_compose(spec, realization_root or content_root)
-
-
-class _Attachment:
-    """Minimal network attachment for a node that declares only bare names."""
-
-    __slots__ = ("network", "ipv4_address")
-
-    def __init__(self, network: str) -> None:
-        self.network = network
-        self.ipv4_address = None

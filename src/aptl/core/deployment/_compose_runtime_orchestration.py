@@ -92,9 +92,7 @@ def _declared_node_networks(node: object) -> set[str]:
     """Return the carried network names from either node representation."""
 
     return {
-        str(network)
-        for network in getattr(node, "networks", ()) or ()
-        if str(network)
+        str(network) for network in getattr(node, "networks", ()) or () if str(network)
     } | {
         str(getattr(attachment, "network", ""))
         for attachment in getattr(node, "network_attachments", ()) or ()
@@ -145,6 +143,23 @@ def docker_authority_admissions(
 
     admissions = realization.docker_authority_admissions
     nodes = {node.address: node for node in realization.nodes}
+    valid = _authority_identifiers_are_unique(admissions) and all(
+        _authority_admission_is_complete(admission, nodes.get(admission.node_address))
+        for admission in admissions
+    )
+    if admissions and not valid:
+        raise ValueError(
+            "aptl.provisioner.runtime-authority-admission-invalid: "
+            "Docker authority graph admission is incomplete or stale."
+        )
+    return admissions
+
+
+def _authority_identifiers_are_unique(
+    admissions: tuple[DeploymentDockerAuthorityAdmission, ...],
+) -> bool:
+    """Return whether one authority owns unique node, service, and child ids."""
+
     addresses = [admission.node_address for admission in admissions]
     services = [admission.service_name for admission in admissions]
     labels = [
@@ -153,38 +168,33 @@ def docker_authority_admissions(
         for requirement in admission.spawn_requirements
         if requirement.child_label
     ]
-    valid = bool(
+    return bool(
         len(admissions) <= 1
         and len(addresses) == len(set(addresses))
         and len(services) == len(set(services))
         and len(labels) == len(set(labels))
+    )
+
+
+def _authority_admission_is_complete(
+    admission: DeploymentDockerAuthorityAdmission, node: object | None
+) -> bool:
+    """Validate one carried authority against its realized node and children."""
+
+    if node is None:
+        return False
+    return bool(
+        getattr(node, "service_name", None) == admission.service_name
+        and set(admission.allowed_networks) == _declared_node_networks(node)
+        and _admission_endpoint_is_supported(admission)
         and all(
-            admission.node_address in nodes
-            and nodes[admission.node_address].service_name == admission.service_name
-            and set(admission.allowed_networks)
-            == _declared_node_networks(nodes[admission.node_address])
-            and _admission_endpoint_is_supported(admission)
-            # No non-emptiness requirement: an authority may declare its
-            # privilege without declaring an expected child inventory, and a
-            # realized child is an observation, so there is nothing to carry
-            # before anything has run. Every contract that *is* carried is still
-            # checked in full below.
-            and all(
-                _spawn_requirement_is_complete(
-                    requirement,
-                    node_address=admission.node_address,
-                )
-                for requirement in admission.spawn_requirements
+            _spawn_requirement_is_complete(
+                requirement,
+                node_address=admission.node_address,
             )
-            for admission in admissions
+            for requirement in admission.spawn_requirements
         )
     )
-    if admissions and not valid:
-        raise ValueError(
-            "aptl.provisioner.runtime-authority-admission-invalid: "
-            "Docker authority graph admission is incomplete or stale."
-        )
-    return admissions
 
 
 def docker_authority_admissions_by_address(

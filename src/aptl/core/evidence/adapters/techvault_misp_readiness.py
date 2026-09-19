@@ -112,19 +112,14 @@ class MispAuthenticatedApiReadinessSource:
 
     def fetch(self, start_iso: str, end_iso: str) -> SourceResult:
         payload = self._query(start_iso, end_iso)
-        if payload is None:
-            return _failure(CollectorStatus.SOURCE_UNAVAILABLE)
-        if not _valid_readiness_payload(payload):
-            return _failure()
-        if self._admitted.mismatches(payload):
-            return _failure()
-        document = {
-            "misp_authenticated_api_ready": True,
-            **{name: payload[name] for name in sorted(_REQUIRED_FIELDS)},
-        }
-        raw = json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
-        if len(raw) > _MAX_READINESS_BYTES:
-            return _failure()
+        raw = _readiness_document(payload, self._admitted)
+        if raw is None:
+            status = (
+                CollectorStatus.SOURCE_UNAVAILABLE
+                if payload is None
+                else CollectorStatus.MID_RUN_LOSS
+            )
+            return _failure(status)
         return SourceResult(
             status=CollectorStatus.OK,
             chunks=(raw,),
@@ -141,6 +136,25 @@ class MispAuthenticatedApiReadinessSource:
                 ]
             },
         )
+
+
+def _readiness_document(
+    payload: Mapping[str, object] | None, admitted: AdmittedMispState
+) -> bytes | None:
+    """Encode one complete, admitted readiness payload within its bound."""
+
+    if (
+        payload is None
+        or not _valid_readiness_payload(payload)
+        or admitted.mismatches(payload)
+    ):
+        return None
+    document = {
+        "misp_authenticated_api_ready": True,
+        **{name: payload[name] for name in sorted(_REQUIRED_FIELDS)},
+    }
+    raw = json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
+    return raw if len(raw) <= _MAX_READINESS_BYTES else None
 
 
 def _valid_readiness_payload(payload: Mapping[str, object]) -> bool:

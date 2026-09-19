@@ -34,7 +34,7 @@ log = get_logger("continuity")
 
 # Default targets remain the in-process-agent namespaces protected by the
 # continuity command.  The command only reads/mutates existing iptables state;
-# it never grants CAP_NET_ADMIN.  TechVault 6.0.1 closes that capability scope,
+# it never grants CAP_NET_ADMIN.  TechVault 6.1.0 closes that capability scope,
 # so a backend that cannot inspect a target reports AUDIT_FAILED rather than
 # silently adding privilege to make the audit succeed.
 _DEFAULT_TARGETS = (

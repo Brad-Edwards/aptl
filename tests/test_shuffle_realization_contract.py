@@ -10,10 +10,7 @@ from pathlib import Path
 from raes.parser import parse_sdl_file
 
 from tests.helpers import techvault_scenario_path
-from tests.test_env_pack_realization import (
-    _realize_pack,
-    _without_downstream_orborus_authority,
-)
+from tests.test_env_pack_realization import _realize_pack
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -39,7 +36,7 @@ def _enum_value(value: object) -> object:
 def test_released_pack_supplies_shuffle_semantics_and_leaves_mechanics_open(
     tmp_path: Path,
 ) -> None:
-    assert version("raes-env-packs") == "6.0.1"
+    assert version("raes-env-packs") == "6.1.0"
     scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
     backend = scenario.nodes["shuffle-backend"].runtime
     opensearch = scenario.nodes["shuffle-opensearch"].runtime
@@ -90,13 +87,11 @@ def test_generated_compose_uses_only_the_admitted_shuffle_runtime(
 
     realization = _realize_pack(tmp_path)
     # Issue #913 covers APTL's selection of Shuffle backend mechanics under the
-    # released pack's open authority. The independent
-    # Orborus authority remains fail-closed until env-packs #285 supplies its
-    # immutable, correlated child closure required by APTL #949.
-    spec = _without_downstream_orborus_authority(realization).deployment_spec(
-        sorted(realization.profiles)
-    )
-    document = render_realization_compose(spec)
+    # released pack's open authority. The independent Orborus authority is now
+    # authored by the pack (env-packs #285, released in 6.1.0), so the spec is
+    # used as realized rather than with that authority stripped out.
+    spec = realization.deployment_spec(sorted(realization.profiles))
+    document = render_realization_compose(spec, tmp_path)
     backend = document["services"]["shuffle-backend"]
 
     assert backend["profiles"] == ["soc"]
@@ -298,122 +293,6 @@ exit 0
     assert not any("aptl-mcp-endpoints" in line for line in operations)
 
 
-def test_soar_fixups_preserve_and_verify_realized_misp_publication(
-    tmp_path: Path,
-) -> None:
-    """Post-realization MISP replacement keeps the canonical loopback binding."""
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    docker_log = tmp_path / "docker.log"
-    docker = fake_bin / "docker"
-    docker.write_text(
-        """#!/bin/sh
-printf '%s\n' "$*" >> "$APTL_TEST_DOCKER_LOG"
-if [ "$1" = inspect ] && [ "$2" = aptl-misp ]; then
-    case "$*" in
-        *PortBindings*) printf '127.0.0.1 8443\n' ;;
-        *Config.Image*) printf 'misp-image\n' ;;
-        *NetworkSettings.Networks*) printf 'aptl-net\n' ;;
-        *Config.Labels*) printf 'com.docker.compose.project=aptl\n' ;;
-    esac
-    exit 0
-fi
-if [ "$1" = inspect ] && [ "$2" = aptl-shuffle-backend ]; then
-    exit 0
-fi
-if [ "$1" = inspect ]; then
-    exit 1
-fi
-if [ "$1" = exec ] && [ "$2" = aptl-misp ]; then
-    printf '200\n'
-fi
-if [ "$1" = exec ] && [ "$2" = aptl-shuffle-backend ]; then
-    printf '{"name":"Shuffle"}\n'
-fi
-exit 0
-""",
-        encoding="utf-8",
-    )
-    docker.chmod(0o755)
-    env = {
-        **os.environ,
-        "PATH": f"{fake_bin}:{os.environ['PATH']}",
-        "APTL_PROJECT_DIR": str(PROJECT_ROOT),
-        "APTL_TEST_DOCKER_LOG": str(docker_log),
-    }
-
-    result = subprocess.run(
-        [PROJECT_ROOT / "scripts" / "envpack-soar-fixups.sh"],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=env,
-    )
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    operations = docker_log.read_text(encoding="utf-8").splitlines()
-    replacement = next(
-        line for line in operations if line.startswith("run -d --name aptl-misp ")
-    )
-    assert "--publish 127.0.0.1:8443:443/tcp" in replacement
-    assert sum("PortBindings" in line for line in operations) == 2
-
-
-def test_soar_fixups_fail_when_misp_replacement_loses_publication(
-    tmp_path: Path,
-) -> None:
-    """A running replacement is not accepted when port readback changes."""
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    docker_log = tmp_path / "docker.log"
-    replacement_marker = tmp_path / "misp-replaced"
-    docker = fake_bin / "docker"
-    docker.write_text(
-        """#!/bin/sh
-printf '%s\n' "$*" >> "$APTL_TEST_DOCKER_LOG"
-if [ "$1" = inspect ] && [ "$2" = aptl-misp ]; then
-    case "$*" in
-        *PortBindings*)
-            if [ -f "$APTL_TEST_REPLACEMENT_MARKER" ]; then exit 0; fi
-            printf '127.0.0.1 8443\n'
-            ;;
-        *Config.Image*) printf 'misp-image\n' ;;
-        *NetworkSettings.Networks*) printf 'aptl-net\n' ;;
-        *Config.Labels*) printf 'com.docker.compose.project=aptl\n' ;;
-    esac
-    exit 0
-fi
-if [ "$1" = run ] && echo "$*" | grep -q -- '--name aptl-misp'; then
-    : > "$APTL_TEST_REPLACEMENT_MARKER"
-fi
-if [ "$1" = inspect ]; then exit 1; fi
-exit 0
-""",
-        encoding="utf-8",
-    )
-    docker.chmod(0o755)
-    env = {
-        **os.environ,
-        "PATH": f"{fake_bin}:{os.environ['PATH']}",
-        "APTL_PROJECT_DIR": str(PROJECT_ROOT),
-        "APTL_TEST_DOCKER_LOG": str(docker_log),
-        "APTL_TEST_REPLACEMENT_MARKER": str(replacement_marker),
-    }
-
-    result = subprocess.run(
-        [PROJECT_ROOT / "scripts" / "envpack-soar-fixups.sh"],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=env,
-    )
-
-    assert result.returncode == 1
-    assert "did not preserve its realized publication" in result.stdout
-    operations = docker_log.read_text(encoding="utf-8").splitlines()
-    assert not any(line.startswith("exec aptl-shuffle-backend ") for line in operations)
-
-
 def test_soar_fixups_activate_the_generated_soc_tls_material() -> None:
     """Frozen-pack SOC consumers must use the paths their images read."""
 
@@ -428,8 +307,16 @@ def test_soar_fixups_activate_the_generated_soc_tls_material() -> None:
     )
 
     assert "fix_shuffle_frontend_tls" in fixup
-    assert "_misp_redis_password" in fixup
+    # Issue #912 retired the MISP and Redis branch entirely: the released pack
+    # now authors those concerns, so the script must not repair, recreate, or
+    # even mention a credential for them.
+    assert "fix_misp" not in fixup
+    assert "wait_misp" not in fixup
+    assert "_misp_redis_password" not in fixup
+    assert "aptl-misp" not in fixup
     assert "redispassword" not in fixup
+    assert "DROP DATABASE" not in fixup
+    assert "docker volume rm" not in fixup
     assert "/etc/nginx/fullchain.cert.pem:ro" in fixup
     assert "/etc/nginx/privkey.pem:ro" in fixup
     assert "fix_thehive_tls" in fixup

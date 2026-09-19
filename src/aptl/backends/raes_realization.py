@@ -309,6 +309,7 @@ def _merge_backend_generated_artifacts(
     for candidate in (
         artifact for node in nodes for artifact in node.backend_generated_artifacts
     ):
+        candidate = _canonical_ordering_dependencies(candidate, by_name)
         existing = by_name.get(candidate.name)
         if existing is None:
             merged.append(candidate)
@@ -324,6 +325,45 @@ def _merge_backend_generated_artifacts(
             )
         )
     return merged
+
+
+def _canonical_ordering_dependencies(
+    candidate: DeploymentGeneratedArtifactRealization,
+    authored: dict[str, DeploymentGeneratedArtifactRealization],
+) -> DeploymentGeneratedArtifactRealization:
+    """Rewrite a backend artifact's ordering references to realized addresses.
+
+    A backend profile names its producer the way the SDL does
+    (``generated_artifacts.<name>``) because it is selected per node and cannot
+    see the address realization will assign. Everything downstream -- stateful
+    validation, cycle detection, and execution ordering -- compares exact
+    addresses, so the reference is canonicalized once here rather than resolved
+    differently by each of them. A reference naming nothing authored is left as
+    it is, so validation still reports it instead of it quietly disappearing.
+    """
+
+    if not candidate.ordering_dependencies:
+        return candidate
+    resolved = tuple(
+        authored[reference.rsplit(".", 1)[-1]].address
+        if reference not in authored and reference.rsplit(".", 1)[-1] in authored
+        else reference
+        for reference in candidate.ordering_dependencies
+    )
+    if resolved == candidate.ordering_dependencies:
+        return candidate
+    return DeploymentGeneratedArtifactRealization(
+        address=candidate.address,
+        name=candidate.name,
+        generator=candidate.generator,
+        lifecycle=candidate.lifecycle,
+        provenance=candidate.provenance,
+        outputs=candidate.outputs,
+        consumers=candidate.consumers,
+        environment_consumers=candidate.environment_consumers,
+        ordering_dependencies=resolved,
+        refresh_dependencies=candidate.refresh_dependencies,
+    )
 
 
 def _same_generated_artifact_contract(

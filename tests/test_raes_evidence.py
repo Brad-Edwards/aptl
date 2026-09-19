@@ -18,9 +18,11 @@ from aptl.core.experiment.errors import AdmissionRejection
 
 _DEMAND_IDS = {
     "cortex-enrichment-readback",
+    "misp-authenticated-api-readiness",
     "redteam-session-transcript",
     "suricata-local-rule-readiness",
     "suricata-login-sqli-alert",
+    "wazuh-agent-readiness",
 }
 
 
@@ -36,7 +38,7 @@ def scenario():
     )
 
 
-def test_manifest_exactly_admits_all_four_released_techvault_demands(scenario):
+def test_manifest_exactly_admits_every_released_techvault_demand(scenario):
     from aptl.backends.raes_manifest import create_aptl_manifest
 
     demands = compile_scenario_capture_demands(scenario)
@@ -47,9 +49,11 @@ def test_manifest_exactly_admits_all_four_released_techvault_demands(scenario):
     assert observation is not None
     assert {offer.offer_id for offer in observation.capture_offers} == {
         "aptl.collector.cortex-enrichment",
+        "aptl.collector.misp-authenticated-api-readiness",
         "aptl.collector.redteam-session-transcript",
         "aptl.collector.suricata-rule-readiness",
         "aptl.collector.suricata-wazuh-sqli",
+        "aptl.collector.wazuh-agent-readiness",
     }
 
 

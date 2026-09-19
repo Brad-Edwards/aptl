@@ -253,7 +253,7 @@ def test_cortex_credentials_are_generated_distinctly_and_reused(tmp_path: Path) 
     backend._docker_daemon_id = "test-daemon"
     artifact = _cortex_credentials_spec().generated_artifacts[0]
 
-    assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
+    assert backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION) is None
     root = tmp_path / ".aptl/realization/cortex-service-credentials"
     initializer = (root / "cortex/initializer-api-key").read_text().strip()
     connector = (root / "cortex/connector-api-key").read_text().strip()
@@ -263,7 +263,7 @@ def test_cortex_credentials_are_generated_distinctly_and_reused(tmp_path: Path) 
     assert (root.stat().st_mode & 0o777) == 0o700
     assert ((root / "cortex/connector-api-key").stat().st_mode & 0o777) == 0o600
 
-    assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
+    assert backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION) is None
     assert (root / "cortex/initializer-api-key").read_text().strip() == initializer
     assert (root / "cortex/connector-api-key").read_text().strip() == connector
 
@@ -274,7 +274,7 @@ def test_cortex_credentials_bind_only_declared_environment_names(
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     spec = _cortex_credentials_spec()
     artifact = spec.generated_artifacts[0]
-    assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
+    assert backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION) is None
 
     payload = stateful_override_payload(tmp_path, "aptl-test", spec)
 
@@ -301,7 +301,7 @@ def test_generated_environment_file_rejects_variable_name_injection(
         environment_consumers=(injected, *artifact.environment_consumers[1:]),
     )
 
-    failure = backend._realize_one_generated_artifact(artifact, tmp_path)
+    failure = backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION)
 
     assert failure is not None
     assert failure.success is False
@@ -647,7 +647,7 @@ def test_certificate_materialization_rejects_symlinked_output_before_docker(
     )
 
     result = backend._realize_certificate_bundle(
-        _spec().generated_artifacts[0], tmp_path
+        _spec().generated_artifacts[0], tmp_path, _spec()
     )
 
     assert result is not None
@@ -1507,6 +1507,12 @@ def test_authenticated_readiness_accepts_an_applied_manager_config(
 # -- ssh_key_bundle dispatch and image-free delivery (issue #875) -------------
 
 
+#: A realization with no nodes: these tests exercise generator dispatch and
+#: containment, not the authored-host derivation the certificate bundle reads
+#: from the spec, and a scenario with no nodes authors no hosts.
+_EMPTY_REALIZATION = DeploymentRealizationSpec(profiles=(), nodes=(), networks=())
+
+
 def _ssh_artifact(consumers=()) -> DeploymentGeneratedArtifactRealization:
     """An ssh_key_bundle artifact shaped like the TechVault declaration."""
 
@@ -1572,7 +1578,7 @@ def test_ssh_key_bundle_is_generated_under_its_canonical_contained_root(
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     staged = _stub_ssh_generator(monkeypatch)
 
-    assert backend._realize_one_generated_artifact(_ssh_artifact(), tmp_path) is None
+    assert backend._realize_one_generated_artifact(_ssh_artifact(), tmp_path, _EMPTY_REALIZATION) is None
 
     assert staged == [
         tmp_path.resolve() / SSH_KEY_BUNDLE_ROOT_RELPATH / "techvault-ssh-keys"
@@ -1587,7 +1593,7 @@ def test_ssh_key_bundle_generation_failure_fails_the_realization_closed(
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     _stub_ssh_generator(monkeypatch, error="ssh-keygen unavailable")
 
-    result = backend._realize_one_generated_artifact(_ssh_artifact(), tmp_path)
+    result = backend._realize_one_generated_artifact(_ssh_artifact(), tmp_path, _EMPTY_REALIZATION)
 
     assert result is not None
     assert result.success is False
@@ -1624,7 +1630,7 @@ def test_an_unsupported_generator_kind_is_refused(tmp_path: Path) -> None:
         **{**_ssh_artifact().__dict__, "generator": "quantum_entropy_bundle"}
     )
 
-    result = backend._realize_one_generated_artifact(artifact, tmp_path)
+    result = backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION)
 
     assert result is not None
     assert result.success is False
@@ -1825,7 +1831,7 @@ def test_the_soc_service_set_is_derived_from_the_declared_bundle_outputs(
     artifact = _soc_artifact()
     requested = _stub_soc_certs(monkeypatch, written=[o.path for o in artifact.outputs])
 
-    assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
+    assert backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION) is None
 
     # Root-level CA output names no service; each first path segment does.
     assert requested == [("misp", "thehive")]
@@ -1840,7 +1846,7 @@ def test_a_soc_bundle_missing_a_declared_output_fails_closed(
     artifact = _soc_artifact()
     _stub_soc_certs(monkeypatch, written=["lab-ca.pem", "misp/server.pem"])
 
-    result = backend._realize_one_generated_artifact(artifact, tmp_path)
+    result = backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION)
 
     assert result is not None
     assert result.success is False
@@ -1853,7 +1859,7 @@ def test_a_failed_soc_generator_fails_closed(tmp_path: Path, monkeypatch) -> Non
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     _stub_soc_certs(monkeypatch, success=False, error="no openssl")
 
-    result = backend._realize_one_generated_artifact(_soc_artifact(), tmp_path)
+    result = backend._realize_one_generated_artifact(_soc_artifact(), tmp_path, _EMPTY_REALIZATION)
 
     assert result is not None
     assert result.success is False
@@ -1892,7 +1898,7 @@ def test_flag_signing_keys_are_generated_under_their_canonical_root(
         lambda artifact, staging_root: staged.append(staging_root),
     )
 
-    assert backend._realize_one_generated_artifact(_flag_artifact(), tmp_path) is None
+    assert backend._realize_one_generated_artifact(_flag_artifact(), tmp_path, _EMPTY_REALIZATION) is None
 
     assert staged == [tmp_path.resolve() / FLAG_SIGNING_ROOT_RELPATH / "flag-keys"]
 
@@ -1908,7 +1914,7 @@ def test_a_flag_signing_generation_failure_fails_closed(
         lambda artifact, staging_root: "unsupported signing profile",
     )
 
-    result = backend._realize_one_generated_artifact(_flag_artifact(), tmp_path)
+    result = backend._realize_one_generated_artifact(_flag_artifact(), tmp_path, _EMPTY_REALIZATION)
 
     assert result is not None
     assert result.success is False
@@ -1942,7 +1948,7 @@ def test_a_generated_artifact_path_outside_the_bundle_is_refused(
         lambda root, artifact: tmp_path.parent / "elsewhere" / "keys",
     )
 
-    result = backend._realize_one_generated_artifact(artifact_factory(), tmp_path)
+    result = backend._realize_one_generated_artifact(artifact_factory(), tmp_path, _EMPTY_REALIZATION)
 
     assert result is not None
     assert result.success is False

@@ -520,6 +520,42 @@ def test_isolated_daemon_children_are_receipted_before_observation(
         backend._resolve_owned_container_id("worker")
 
 
+def test_child_observation_is_always_scoped_to_proxy_owned_containers(
+    tmp_path: Path,
+) -> None:
+    """Image-only contracts must not absorb unrelated host containers."""
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl")
+    requirement = DeploymentSpawnImageRequirement(
+        node_address="provision.node.orborus",
+        authority_id="orborus",
+        template_id="worker",
+        image_ref="example.invalid/worker@sha256:" + "c" * 64,
+        execution_timeout_seconds=30,
+        child_label="",
+        expected_count=0,
+    )
+    backend._run = MagicMock(
+        return_value=subprocess.CompletedProcess([], 0, stdout="", stderr="")
+    )
+
+    failure, identifiers = backend._correlated_child_ids(
+        requirement, require_children=False
+    )
+
+    assert failure is None
+    assert identifiers == ()
+    assert backend._run.call_args.args[0] == [
+        "docker",
+        "ps",
+        "-aq",
+        "--filter",
+        f"ancestor={requirement.image_ref}",
+        "--filter",
+        "label=org.aptl.docker-authority=managed",
+    ]
+
+
 def test_compose_override_labels_networks_and_volumes_and_plans_exact_names(
     tmp_path: Path,
 ) -> None:

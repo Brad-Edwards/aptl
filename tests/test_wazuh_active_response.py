@@ -60,6 +60,10 @@ IN_NODE_FORWARDING_AGENTS: tuple[str, ...] = (
     "aptl-db",
     "aptl-suricata",
     "aptl-victim",
+    # raes-env-packs 6.1.0 gives the workstation its own enrolled endpoint
+    # agent for /var/log/secure and /var/log/messages, so the AR contract has
+    # to hold there too (issue #912).
+    "aptl-workstation",
 )
 
 # Every Wazuh agent in the lab — used for "the AR contract is honored

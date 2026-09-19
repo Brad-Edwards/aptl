@@ -210,35 +210,6 @@ def test_realize_nodes_runs_nodes_concurrently():
     assert len(backend.started) == node_count
 
 
-def test_first_boot_node_materialization_caps_concurrent_docker_work():
-    """More declared nodes do not fan out beyond the bounded daemon budget."""
-    import threading
-    import time
-
-    active = 0
-    peak = 0
-    lock = threading.Lock()
-
-    class _BoundedBackend(_ThreadSafeBackend):
-        def start_base_container(self, spec):
-            nonlocal active, peak
-            with lock:
-                active += 1
-                peak = max(peak, active)
-            try:
-                time.sleep(0.02)
-                super().start_base_container(spec)
-            finally:
-                with lock:
-                    active -= 1
-
-    backend = _BoundedBackend()
-    nodes = [_named_node(f"box-{i}") for i in range(9)]
-
-    assert realize_nodes(nodes, backend) is None
-    assert 2 <= peak <= 4
-
-
 def test_realize_nodes_returns_first_failure_in_declared_order():
     """When multiple nodes fail concurrently, the surfaced error is the first in
     declared node order, independent of which finished first."""

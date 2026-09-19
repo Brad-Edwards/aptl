@@ -46,3 +46,8 @@ After ADR-035 and SCN-010, ACES SDL owns scenario authoring and topology declara
 - TESTS → TEST `tests/test_runtime_materialization.py` (Supported and unsupported materialization, lowering, ordering, and effective-model coverage)
 - TESTS → TEST `tests/test_raes_artifact_availability.py` (Read-only inspection and deferred component-build ordering coverage)
 - TESTS → TEST `tests/test_raes_runtime_orchestration.py` (Exact raw-socket joins and unrestricted authored holder topology coverage)
+- IMPLEMENTS → CODE_FILE `src/aptl/backends/scenario_startup_policy.py` (Pack-qualified, declared-edge-only startup health policy)
+- IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/_compose_model_realization.py` (Validated startup overlay in the generated Compose file set)
+- IMPLEMENTS → CODE_FILE `src/aptl_techvault/startup.py` (TechVault-specific health probes through the adapter seam)
+- TESTS → TEST `tests/test_techvault_startup_adapter.py` (Content-qualified startup policy and undeclared-edge rejection)
+- TESTS → TEST `tests/test_imagefree_admission_integration.py` (Product-neutral real-Docker materialization envelope)

@@ -67,9 +67,25 @@ class ComposeRealizationModelMixin:
         content_override = self._write_image_node_content_override(
             realization, scenario_root, realization_root
         )
+        startup_override = None
+        if not (scenario_root / STATIC_COMPOSE_FILENAME).exists():
+            # The adapter registry imports deployment DTOs; resolve it only
+            # after the deployment package has completed import initialization.
+            from aptl.backends.scenario_startup_policy import (
+                write_scenario_startup_override,
+            )
+
+            startup_override = write_scenario_startup_override(
+                realization, realization_root
+            )
         overrides = tuple(
             path
-            for path in (port_override, stateful_override, content_override)
+            for path in (
+                port_override,
+                stateful_override,
+                content_override,
+                startup_override,
+            )
             if path is not None
         )
         if (
@@ -195,9 +211,7 @@ class ComposeRealizationModelMixin:
             or realization_has_docker_authority(realization)
         )
         error = (
-            self._effective_compose_model_error(
-                command, realization, realization_root
-            )
+            self._effective_compose_model_error(command, realization, realization_root)
             if needs_effective_model
             else self._compose_syntax_error(command)
         )

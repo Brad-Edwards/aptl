@@ -52,6 +52,47 @@ from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.docker_compose")
 _DOCKER_TIMEOUT = 30
+_DOCKER_COMMAND_GROUPS = frozenset({"compose", "image", "volume", "network"})
+_DOCKER_COMMAND_ACTIONS = frozenset(
+    {
+        "build",
+        "config",
+        "create",
+        "down",
+        "inspect",
+        "ls",
+        "ps",
+        "pull",
+        "rm",
+        "up",
+        "version",
+    }
+)
+
+
+def _safe_command_operation(cmd: list[str]) -> str:
+    """Classify a Docker timeout without logging command arguments or secrets."""
+
+    if not cmd or cmd[0] != "docker":
+        return "backend command"
+    if len(cmd) < 2:
+        return "docker command"
+    verb = cmd[1]
+    if verb in _DOCKER_COMMAND_GROUPS:
+        action = next(
+            (part for part in cmd[2:] if part in _DOCKER_COMMAND_ACTIONS),
+            "command",
+        )
+        return f"docker {verb} {action}"
+    if verb in {"exec", "inspect", "ps", "run", "start", "stop", "kill"}:
+        return f"docker {verb}"
+    return "docker command"
+
+
+def _timed_out_operation(cmd: list[str], timeout: int | None) -> BackendTimeoutError:
+    operation = _safe_command_operation(cmd)
+    log.error("%s timed out after %ss", operation, timeout)
+    return BackendTimeoutError(f"{operation} timed out after {timeout}s")
 
 
 class DockerComposeBackend(
@@ -249,9 +290,7 @@ class DockerComposeBackend(
         try:
             return subprocess.run(cmd, **kwargs)
         except subprocess.TimeoutExpired as exc:
-            raise BackendTimeoutError(
-                f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
-            ) from exc
+            raise _timed_out_operation(cmd, timeout) from exc
 
     def _run_streaming(
         self,
@@ -269,9 +308,7 @@ class DockerComposeBackend(
         try:
             return subprocess.run(cmd, **kwargs).returncode
         except subprocess.TimeoutExpired as exc:
-            raise BackendTimeoutError(
-                f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
-            ) from exc
+            raise _timed_out_operation(cmd, timeout) from exc
 
     def _run_with_input(
         self,
@@ -287,9 +324,7 @@ class DockerComposeBackend(
         try:
             return subprocess.run(cmd, **kwargs)
         except subprocess.TimeoutExpired as exc:
-            raise BackendTimeoutError(
-                f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
-            ) from exc
+            raise _timed_out_operation(cmd, timeout) from exc
 
     def stop(self, profiles: list[str], *, remove_volumes: bool = False) -> LabResult:
         """Stop lab services via docker compose down.

@@ -130,6 +130,20 @@ class TestRunRaisesBackendTimeoutError:
             with pytest.raises(BackendTimeoutError):
                 backend._run_streaming(["docker", "logs", "x"], timeout=5)
 
+    def test_timeout_names_only_bounded_operation_not_arguments(self, tmp_path, caplog):
+        backend = DockerComposeBackend(project_dir=tmp_path)
+        secret = "private-token-do-not-log"
+        command = ["docker", "compose", "-f", secret, "up", "-d"]
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd=command, timeout=5)
+            with pytest.raises(BackendTimeoutError) as failure:
+                backend._run(command, timeout=5)
+
+        assert "docker compose up timed out after 5s" in str(failure.value)
+        assert "docker compose up timed out after 5s" in caplog.text
+        assert secret not in str(failure.value)
+        assert secret not in caplog.text
+
 
 def test_container_file_read_rejects_symlink_created_by_docker_cp(
     tmp_path, monkeypatch
@@ -1562,7 +1576,7 @@ services:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout=(
-                    "{\"Names\": \"aptl-victim\", \"Image\": \"victim:latest\", \"ID\": \"abc\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"com.docker.compose.project=test\", \"Ports\": \"\"}"
+                    '{"Names": "aptl-victim", "Image": "victim:latest", "ID": "abc", "Status": "Up 1 minute", "State": "running", "Labels": "com.docker.compose.project=test", "Ports": ""}'
                 ),
                 stderr="",
             )
@@ -1578,7 +1592,7 @@ services:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout=(
-                    "{\"Names\": \"aptl-victim\", \"Image\": \"victim:latest\", \"ID\": \"abc\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"com.docker.compose.project=test\", \"Ports\": \"\"}"
+                    '{"Names": "aptl-victim", "Image": "victim:latest", "ID": "abc", "Status": "Up 1 minute", "State": "running", "Labels": "com.docker.compose.project=test", "Ports": ""}'
                 ),
                 stderr="",
             )
@@ -1639,8 +1653,8 @@ services:
         backend = self._make_backend(tmp_path)
         rows = "\n".join(
             (
-                "{\"Names\": \"aptl-victim\", \"Image\": \"victim:latest\", \"ID\": \"aaa\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"com.docker.compose.project=test\", \"Ports\": \"\"}",
-                "{\"Names\": \"aptl-kali\", \"Image\": \"kali:latest\", \"ID\": \"bbb\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"aptl.lifecycle.project=test\", \"Ports\": \"\"}",
+                '{"Names": "aptl-victim", "Image": "victim:latest", "ID": "aaa", "Status": "Up 1 minute", "State": "running", "Labels": "com.docker.compose.project=test", "Ports": ""}',
+                '{"Names": "aptl-kali", "Image": "kali:latest", "ID": "bbb", "Status": "Up 1 minute", "State": "running", "Labels": "aptl.lifecycle.project=test", "Ports": ""}',
             )
         )
 
@@ -3872,9 +3886,7 @@ class _FakeAd:
             return self._ok(cmd) if self.provisioned else self._fail(cmd)
         if cmd[0] == "smbclient":
             fields = dict(
-                line.split("=", 1)
-                for line in payload.splitlines()
-                if "=" in line
+                line.split("=", 1) for line in payload.splitlines() if "=" in line
             )
             authenticated = self.authentication_works and self.passwords.get(
                 fields.get("username", "")
@@ -4400,7 +4412,7 @@ class TestAccountProvisionerOrderingContract:
         assert provision_call < marker_write
         # And the marker the backend probes matches the one the script writes.
         assert 'provisioned_marker="$private_root/.provisioned"' in script
-        assert 'private_root=/var/lib/samba/private' in script
+        assert "private_root=/var/lib/samba/private" in script
 
 
 class TestDeclaredCredentialClassIsRealized:

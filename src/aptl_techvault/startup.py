@@ -8,6 +8,11 @@ from aptl.backends.scenario_startup import (
     EnvironmentAlias,
     ScenarioStartupPlan,
 )
+from aptl.backends.scenario_startup_policy import (
+    ScenarioComposeStartupPolicy,
+    StartupHealthDependency,
+    StartupHealthProbe,
+)
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 from aptl.core.scenario_bundle import ScenarioBundle
 from aptl_techvault.log_sources import realize_log_sources
@@ -50,6 +55,40 @@ class TechVaultStartupProvider:
                 ContainerEnvironmentBinding(
                     "WAZUH_MANAGER_CONTAINER", "aptl-wazuh-manager"
                 ),
+            ),
+        )
+
+    @staticmethod
+    def compose_startup_policy() -> ScenarioComposeStartupPolicy:
+        """Wait for TechVault's stateful backends before dependent JVM services.
+
+        The pack declares these dependency edges, but its generated Compose
+        base otherwise starts dependents as soon as their containers exist.
+        Cassandra can still be initializing then, causing TheHive to exit on
+        the first user-visible boot. These probes strengthen only those edges.
+        """
+
+        return ScenarioComposeStartupPolicy(
+            probes=(
+                StartupHealthProbe(
+                    "thehive-cassandra",
+                    ("CMD", "cqlsh", "-e", "describe cluster"),
+                ),
+                StartupHealthProbe(
+                    "thehive-es",
+                    ("CMD", "curl", "-fsS", "http://localhost:9200/_cluster/health"),
+                ),
+                StartupHealthProbe(
+                    "cortex",
+                    ("CMD", "curl", "-fsS", "http://localhost:9001/api/status"),
+                    start_period_seconds=180,
+                ),
+            ),
+            dependencies=(
+                StartupHealthDependency("cortex", "thehive-es"),
+                StartupHealthDependency("thehive", "thehive-cassandra"),
+                StartupHealthDependency("thehive", "thehive-es"),
+                StartupHealthDependency("thehive", "cortex"),
             ),
         )
 

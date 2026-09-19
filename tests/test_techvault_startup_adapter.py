@@ -3,6 +3,8 @@
 from importlib import metadata
 from pathlib import Path
 
+import yaml
+
 from aptl.backends.scenario_startup import (
     ENTRY_POINT_GROUP,
     ScenarioStartupProviderError,
@@ -11,7 +13,19 @@ from aptl.backends.scenario_startup import (
     run_scenario_runtime,
     resolve_scenario_startup,
 )
+from aptl.backends.scenario_startup_policy import (
+    ScenarioComposeStartupPolicy,
+    StartupHealthDependency,
+    StartupHealthProbe,
+    _validated_policy,
+    write_scenario_startup_override,
+)
 import pytest
+from aptl.core.deployment.realization import (
+    DeploymentImageRealization,
+    DeploymentNodeRealization,
+    DeploymentRealizationSpec,
+)
 from aptl.core.scenario_bundle import PackIdentity, ScenarioBundle, ScenarioSourceKind
 from aptl_techvault.runtime_parameters import TECHVAULT_PACK_SET_DIGEST
 
@@ -24,6 +38,97 @@ def _bundle(*, digest: str = TECHVAULT_PACK_SET_DIGEST) -> ScenarioBundle:
         source_kind=ScenarioSourceKind.ENV_PACK,
         pack_identity=PackIdentity("techvault", "0.1.0", digest),
     )
+
+
+def _startup_spec(
+    *, digest: str = TECHVAULT_PACK_SET_DIGEST
+) -> DeploymentRealizationSpec:
+    dependencies = {
+        "cortex": ("provision.node.thehive-es",),
+        "thehive": (
+            "provision.node.thehive-cassandra",
+            "provision.node.thehive-es",
+            "provision.node.cortex",
+        ),
+    }
+    names = ("thehive-cassandra", "thehive-es", "cortex", "thehive")
+    nodes = tuple(
+        DeploymentNodeRealization(
+            address=f"provision.node.{name}",
+            name=name,
+            service_name=name,
+            container_name=f"aptl-{name}",
+            networks=("security-net",),
+            ordering_dependencies=dependencies.get(name, ()),
+        )
+        for name in names
+    )
+    images = tuple(
+        DeploymentImageRealization(
+            address=node.address,
+            service_name=node.service_name or "",
+            source_name=node.name,
+            source_version="test",
+            image_ref=f"example/{node.name}:test",
+            mode="pull",
+            policy_rule="test",
+        )
+        for node in nodes
+    )
+    return DeploymentRealizationSpec(
+        profiles=("soc",),
+        nodes=nodes,
+        networks=(),
+        images=images,
+        pack_identity=PackIdentity("techvault", "0.1.0", digest),
+    )
+
+
+def test_qualified_techvault_policy_waits_for_declared_healthy_dependencies(
+    tmp_path,
+) -> None:
+    path = write_scenario_startup_override(_startup_spec(), tmp_path)
+
+    assert path is not None
+    services = yaml.safe_load(path.read_text(encoding="utf-8"))["services"]
+    assert services["thehive-cassandra"]["healthcheck"]["test"] == [
+        "CMD",
+        "cqlsh",
+        "-e",
+        "describe cluster",
+    ]
+    assert services["cortex"]["depends_on"]["thehive-es"] == {
+        "condition": "service_healthy"
+    }
+    assert services["thehive"]["depends_on"] == {
+        name: {"condition": "service_healthy"}
+        for name in ("thehive-cassandra", "thehive-es", "cortex")
+    }
+    assert (
+        write_scenario_startup_override(
+            _startup_spec(digest="sha256:" + "0" * 64), tmp_path
+        )
+        is None
+    )
+
+
+def test_startup_policy_cannot_add_undeclared_dependency_or_service() -> None:
+    spec = _startup_spec()
+    with pytest.raises(ScenarioStartupProviderError, match="result-invalid"):
+        _validated_policy(
+            ScenarioComposeStartupPolicy(
+                probes=(StartupHealthProbe("thehive-cassandra", ("CMD", "true")),),
+                dependencies=(StartupHealthDependency("cortex", "thehive-cassandra"),),
+            ),
+            spec,
+        )
+    with pytest.raises(ScenarioStartupProviderError, match="result-invalid"):
+        _validated_policy(
+            ScenarioComposeStartupPolicy(
+                probes=(StartupHealthProbe("foreign", ("CMD", "true")),),
+            ),
+            spec,
+        )
 
 
 def test_exact_release_resolves_seed_and_runtime_bindings() -> None:

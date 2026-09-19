@@ -35,6 +35,13 @@ _SAFE_VALUE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:@/+\-=]{0,254}$")
 _KINDS = frozenset({"container", "network", "volume"})
 _WORKSPACE_UNAVAILABLE = "workspace ownership state is unavailable"
 _RECEIPT_MALFORMED = "ownership receipt inventory is malformed"
+# The path-safe create-once publisher stages bytes in this same directory before
+# atomically linking the final .json name. Concurrent node materialization may
+# list a staging inode while another node is publishing its receipt. The staging
+# file grants no authority; only the final exact .json name is decoded below.
+_RECEIPT_PUBLISH_TEMP = re.compile(
+    r"^\.[0-9a-f]{64}\.json\.[0-9]+\.[0-9]+\.tmp(?:\.[0-9]+)?$"
+)
 _OVERRIDE_UNAVAILABLE = "Compose ownership override is unavailable"
 
 
@@ -256,6 +263,8 @@ class WorkspaceOwnership:
             ) from exc
         receipts: list[ResourceReceipt] = []
         for name in names:
+            if _RECEIPT_PUBLISH_TEMP.fullmatch(name):
+                continue
             if not name.endswith(".json"):
                 raise OwnershipConflictError(_RECEIPT_MALFORMED)
             try:

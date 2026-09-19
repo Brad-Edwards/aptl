@@ -83,6 +83,62 @@ def test_receipts_are_immutable_and_bound_to_daemon_and_attempt(tmp_path: Path) 
         ownership.candidates("aptl-victim", kind="container", daemon_id="daemon-b")
 
 
+def test_receipt_inventory_ignores_only_in_progress_atomic_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A concurrent reader never mistakes the publisher's temp inode for a receipt."""
+
+    from aptl.utils import pathsafe
+
+    ownership = WorkspaceOwnership.ensure(tmp_path, "aptl")
+    receipt = ResourceReceipt(
+        kind="container",
+        native_id=_ID_A,
+        external_name=ownership.container_name("worker"),
+        semantic_name="worker",
+        node_address="provision.node.worker",
+        workspace_id=ownership.workspace_id,
+        project_name=ownership.project_name,
+        daemon_id="daemon-a",
+        attempt_id="run-a",
+    )
+    staged, release = Event(), Event()
+    original_write_all = pathsafe.write_all
+
+    def pause_while_temp_inode_is_visible(fd, data):
+        staged.set()
+        assert release.wait(timeout=5)
+        original_write_all(fd, data)
+
+    monkeypatch.setattr(pathsafe, "write_all", pause_while_temp_inode_is_visible)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        publication = pool.submit(ownership.record, receipt)
+        try:
+            assert staged.wait(timeout=5)
+            receipt_dir = tmp_path / ".aptl/lifecycle/resource-receipts-v1/container"
+            staged_names = [path.name for path in receipt_dir.iterdir()]
+            assert len(staged_names) == 1
+            assert staged_names[0].endswith(".tmp")
+            assert ownership.receipts("container") == ()
+            assert (
+                ownership.candidates("worker", kind="container", daemon_id="daemon-a")
+                == ()
+            )
+        finally:
+            release.set()
+        publication.result(timeout=5)
+
+    assert ownership.receipts("container") == (receipt,)
+    unexpected = receipt_dir / ".unexpected.tmp"
+    unexpected.write_text("foreign", encoding="utf-8")
+    with pytest.raises(OwnershipConflictError, match="inventory is malformed"):
+        ownership.receipts("container")
+    unexpected.unlink()
+    (receipt_dir / "not-a-receipt.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(OwnershipConflictError, match="inventory is malformed"):
+        ownership.receipts("container")
+
+
 def test_shared_volume_creation_waits_for_ownership_receipt(tmp_path: Path) -> None:
     """Another node cannot observe a volume before its creator records it."""
 

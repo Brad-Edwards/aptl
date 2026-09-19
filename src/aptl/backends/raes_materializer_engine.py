@@ -37,6 +37,9 @@ from aptl.backends.raes_materializer import (
     StartServiceUnitOp,
 )
 from aptl.core.lab_types import LabResult
+from aptl.utils.logging import get_logger
+
+log = get_logger("raes-materializer")
 
 
 class MaterializationExecutor(Protocol):
@@ -345,10 +348,27 @@ def materialize_node(
     for op in operations:
         try:
             _execute_op(op, node_address, executor)
-        except Exception:
+        except Exception as exc:
             # Admission boundary: translate every internal/backend failure into
             # the RAES LabResult envelope; the raw detail is deliberately not
             # echoed (redaction + no verbatim message).
+            nested = exc.__cause__ or exc.__context__
+            safe_step = ""
+            if isinstance(op, PlacePackArtifactOp):
+                if exc.args == (f"pack content copy failed on {node_address}",):
+                    safe_step = "copy"
+                elif exc.args == (
+                    f"generic materialization step 'prep content dir' failed on {node_address}",
+                ):
+                    safe_step = "prepare-directory"
+            log.error(
+                "Materialization %s at %s failed: %s%s%s",
+                type(op).__name__,
+                node_address,
+                type(exc).__name__,
+                f"; step={safe_step}" if safe_step else "",
+                f"; cause={type(nested).__name__}" if nested is not None else "",
+            )
             return LabResult(
                 success=False,
                 error=render_raes_diagnostics(

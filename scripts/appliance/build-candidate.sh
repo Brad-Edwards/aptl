@@ -102,14 +102,20 @@ for image in "${images[@]}"; do
   read -r package canonical <<<"$image"
   if test "$candidate_mode" = release; then
     pull_tag "$package" "$canonical"
-  else
-    docker image inspect "$canonical" >/dev/null
   fi
 done
 
+acquire_args=()
+if test "$candidate_mode" = local; then
+  : "${APTL_LOCAL_IMAGE_LOCK_FILE:?local image lock is required}"
+  test -s "$APTL_LOCAL_IMAGE_LOCK_FILE"
+  acquire_args+=(--local-image-lock "$APTL_LOCAL_IMAGE_LOCK_FILE")
+fi
+
 cd "$root"
 "$root/venv/bin/aptl" appliance acquire-images \
-  --image-archive input/oci-images.tar --image-roles input/image-roles.json
+  --image-archive input/oci-images.tar --image-roles input/image-roles.json \
+  "${acquire_args[@]}"
 "$root/venv/bin/aptl" appliance assemble-inputs \
   --staging-dir offline-staging --wheelhouse wheelhouse \
   --image-archive input/oci-images.tar --image-roles input/image-roles.json \

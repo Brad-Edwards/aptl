@@ -118,8 +118,25 @@ def test_local_candidate_path_uses_exact_commit_and_no_registry_dependency() -> 
     assert "acquire-guest-system-packages.sh" in builder
     assert "--system-packages system-packages" in builder
     assert "--system-packages-lock" in builder
-    assert 'docker image inspect "$canonical"' in builder
+    assert "--local-image-lock" in builder
+    assert "APTL_LOCAL_IMAGE_LOCK_FILE" in wrapper
+    assert "APTL_LOCAL_IMAGE_TAG_SUFFIX" in wrapper
     assert "APTL_IMAGE_NAMESPACE" not in wrapper
+
+
+def test_local_image_builds_pin_unique_tags_and_exact_parent_images() -> None:
+    builder = (ROOT / "scripts/appliance/build-local-images.sh").read_text()
+    assert '"${canonical%:*}" "$APTL_LOCAL_IMAGE_TAG_SUFFIX"' in builder
+    assert 'docker image inspect --format \'{{.Id}}\' "$output_ref"' in builder
+    assert 'build+=(--build-arg "APTL_PARENT_IMAGE=$parent_image")' in builder
+    for name in (
+        "generic-samba-ad-wazuh-agent-base",
+        "generic-systemd-wazuh-agent-base",
+        "generic-systemd-wazuh-agent-base-debian",
+    ):
+        dockerfile = (ROOT / "containers" / name / "Dockerfile").read_text()
+        assert "ARG APTL_PARENT_IMAGE=" in dockerfile
+        assert "FROM ${APTL_PARENT_IMAGE}" in dockerfile
 
 
 def test_node22_image_preloads_exact_mcp_locks_for_offline_materialization() -> None:

@@ -100,8 +100,59 @@ def _resolve_archive_image_roles(
     return {role: resolved[reference] for role, reference in references.items()}
 
 
+def _load_local_image_lock(path: Path) -> dict[str, tuple[str, str]]:
+    """Read exact local build tags and config IDs before using shared Docker tags."""
+
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("local image lock is not a regular file")
+    result: dict[str, tuple[str, str]] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        fields = line.split()
+        if len(fields) != 3:
+            raise ValueError("local image lock entry is invalid")
+        canonical, unique, image_id = fields
+        if (
+            canonical in result
+            or unique == canonical
+            or not canonical.startswith(("aptl/", "aptl-"))
+            or not unique.startswith(canonical.rsplit(":", 1)[0] + ":local-")
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", image_id) is None
+        ):
+            raise ValueError("local image lock entry is invalid")
+        result[canonical] = (unique, image_id)
+    if not result:
+        raise ValueError("local image lock is empty")
+    return result
+
+
+def _restore_local_image_tags(images: dict[str, tuple[str, str]]) -> None:
+    """Retag only the locked image IDs, never an untrusted mutable :latest."""
+
+    for canonical, (unique, expected_id) in sorted(images.items()):
+        actual_id = subprocess.run(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", unique],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        ).stdout.strip()
+        if actual_id != expected_id:
+            raise ValueError("local image build identity changed")
+        subprocess.run(
+            ["docker", "tag", unique, canonical],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=60,
+        )
+
+
 def acquire_canonical_images(
-    *, image_archive: Path, image_roles: Path
+    *,
+    image_archive: Path,
+    image_roles: Path,
+    local_image_lock: Path | None = None,
 ) -> dict[str, str]:
     """Resolve and save the complete wheel-authored TechVault image closure."""
 
@@ -117,6 +168,18 @@ def acquire_canonical_images(
         materialize(project)
         bundle = env_pack_bundle(Path(work) / "packs")
         references = canonical_image_references(project, bundle)
+        local_images = (
+            _load_local_image_lock(local_image_lock)
+            if local_image_lock is not None
+            else {}
+        )
+        if local_images and set(local_images) != {
+            reference
+            for reference in references.values()
+            if reference.startswith(("aptl/", "aptl-"))
+        }:
+            raise ValueError("local image lock differs from canonical image closure")
+        _restore_local_image_tags(local_images)
         for reference in sorted(set(references.values())):
             inspected = subprocess.run(
                 ["docker", "image", "inspect", reference],
@@ -174,25 +237,38 @@ def acquire_canonical_images(
             elif tagged.stdout.strip() != pinned_id:
                 raise ValueError("Docker runtime tag differs from pinned image")
         save_references = set(references.values()) | set(pinned_runtime_tags)
-        subprocess.run(
-            [
-                "docker",
-                "save",
-                "--output",
-                str(image_archive),
-                *sorted(save_references),
-            ],
-            check=True,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=7200,
-        )
-        image_files = archive_files(image_archive)
-        images = docker_archive_images(image_archive, image_files)
-        roles = _resolve_archive_image_roles(
-            references, images, image_archive, image_files
-        )
+        for attempt in range(3 if local_images else 1):
+            _restore_local_image_tags(local_images)
+            subprocess.run(
+                [
+                    "docker",
+                    "save",
+                    "--output",
+                    str(image_archive),
+                    *sorted(save_references),
+                ],
+                check=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=7200,
+            )
+            image_files = archive_files(image_archive)
+            images = docker_archive_images(image_archive, image_files)
+            roles = _resolve_archive_image_roles(
+                references, images, image_archive, image_files
+            )
+            mismatched = [
+                role
+                for role, reference in references.items()
+                if reference in local_images
+                and roles[role] != local_images[reference][1]
+            ]
+            if not mismatched:
+                break
+            if attempt == 2:
+                raise ValueError("saved Docker archive differs from local image lock")
+            image_archive.unlink()
         if set(roles.values()) != set(images):
             raise ValueError("saved Docker archive differs from resolved image closure")
         _validate_image_sources(

@@ -148,6 +148,57 @@ def test_image_acquisition_records_exact_daemon_identity_and_archive_closure(
     assert any(command[:2] == ["docker", "save"] for command in calls)
 
 
+def test_local_image_acquisition_retags_locked_build_and_retries_stale_save(
+    tmp_path, monkeypatch
+) -> None:
+    image_archive = tmp_path / "output" / "oci-images.tar"
+    image_roles = tmp_path / "output" / "image-roles.json"
+    canonical = "aptl/generic-systemd-base-debian:latest"
+    unique = "aptl/generic-systemd-base-debian:local-test-123"
+    expected = "sha256:" + "a" * 64
+    stale = "sha256:" + "b" * 64
+    lock = tmp_path / "local-images.txt"
+    lock.write_text(f"{canonical} {unique} {expected}\n")
+    calls = []
+    saved = iter((stale, expected))
+
+    monkeypatch.setattr(inputs, "resolve_asset_source", lambda: (tmp_path, True))
+    monkeypatch.setattr(inputs, "materialize", lambda project: project.mkdir())
+    monkeypatch.setattr(inputs, "env_pack_bundle", lambda path: object())
+    monkeypatch.setattr(
+        inputs,
+        "canonical_image_references",
+        lambda project, bundle: {"scenario.db": canonical},
+    )
+
+    def run(argv, **kwargs):
+        calls.append(argv)
+        if argv[:5] == ["docker", "image", "inspect", "--format", "{{.Id}}"]:
+            return subprocess.CompletedProcess(argv, 0, stdout=expected + "\n")
+        if argv[:2] == ["docker", "save"]:
+            image_archive.write_bytes(b"saved archive")
+        return subprocess.CompletedProcess(argv, 0, stdout="")
+
+    monkeypatch.setattr(inputs.subprocess, "run", run)
+    monkeypatch.setattr(inputs, "archive_files", lambda path: {})
+    monkeypatch.setattr(
+        inputs,
+        "docker_archive_images",
+        lambda path, files: {next(saved): (canonical,)},
+    )
+    monkeypatch.setattr(inputs, "_validate_image_sources", lambda *args: None)
+
+    roles = inputs.acquire_canonical_images(
+        image_archive=image_archive,
+        image_roles=image_roles,
+        local_image_lock=lock,
+    )
+
+    assert roles == {"scenario.db": expected}
+    assert calls.count(["docker", "tag", unique, canonical]) >= 2
+    assert sum(call[:2] == ["docker", "save"] for call in calls) == 2
+
+
 @pytest.mark.parametrize(
     "repository", ["example.test/participant:fixed", "example.test/participant"]
 )

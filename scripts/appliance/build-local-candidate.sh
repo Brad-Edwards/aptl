@@ -12,5 +12,17 @@ export APTL_BASE_IMAGE_SHA256=${APTL_BASE_IMAGE_SHA256:-sha256:8196be9d7958059cb
 export APTL_BASE_IMAGE_SIZE_BYTES=${APTL_BASE_IMAGE_SIZE_BYTES:-863306240}
 export APTL_GUEST_PYTHON_VERSION=${APTL_GUEST_PYTHON_VERSION:-3.14}
 
+install -d -m 0700 build
+local_image_lock_dir=$(mktemp -d -p "$PWD/build" aptl-local-images.XXXXXXXX)
+cleanup_local_image_lock() {
+  if test -f "$local_image_lock_dir/images.txt"; then
+    unlink "$local_image_lock_dir/images.txt"
+  fi
+  rmdir "$local_image_lock_dir"
+}
+trap cleanup_local_image_lock EXIT
+export APTL_LOCAL_IMAGE_LOCK_FILE="$local_image_lock_dir/images.txt"
+export APTL_LOCAL_IMAGE_TAG_SUFFIX="$(git rev-parse --short=12 HEAD)-$$"
+
 scripts/appliance/build-local-images.sh
 scripts/appliance/build-candidate.sh

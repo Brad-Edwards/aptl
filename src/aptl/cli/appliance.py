@@ -762,6 +762,7 @@ def assemble_inputs(
 def acquire_images(
     image_archive: Path = typer.Option(..., "--image-archive"),
     image_roles: Path = typer.Option(..., "--image-roles"),
+    local_image_lock: Path | None = typer.Option(None, "--local-image-lock"),
 ) -> None:
     """Acquire and content-pin the full canonical TechVault image closure."""
 
@@ -771,6 +772,7 @@ def acquire_images(
         roles = acquire_canonical_images(
             image_archive=image_archive,
             image_roles=image_roles,
+            local_image_lock=local_image_lock,
         )
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         _fail("canonical image acquisition failed", exc)

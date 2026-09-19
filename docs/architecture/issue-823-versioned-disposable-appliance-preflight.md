@@ -11,6 +11,15 @@ No new ADR is needed. The unresolved risk is treating an image file, a Docker
 cache, and a participant seat as the same artifact. They have different
 owners, mutability, integrity, and reset semantics.
 
+For #1022, apply [ADR-059](../adrs/adr-059-canonical-techvault-delivery-and-host-mcp-access.md)
+and the [seat delivery preflight](issue-1022-appliance-seat-delivery-preflight.md).
+Full-TechVault from #868 replaces the historical guided-profile delivery scope
+below. ADR-059 permits user-owned host client authentication and restricted MCP
+transport; guest-only secret guidance below concerns guest service/bootstrap
+credentials, not the user's provider authentication. APP-1 and APP-2 retain
+their schema ownership. The #1022 note records APP-3 admission gaps without
+treating the existing verifier as proof of a qualified appliance.
+
 ## Architecture Decisions And Guardrails
 
 - The local reference form is a hardware-virtualized QEMU/KVM guest managed by
@@ -35,12 +44,13 @@ owners, mutability, integrity, and reset semantics.
   new readiness taxonomy. The signed manifest is the canonical source for
   `aptl` version reporting, artifact checksums, and rollback eligibility.
 - A build from the same annotated APTL tag must produce the same **release
-  shape**: the same manifest identity, guest OS/base digest, profile and policy
+  shape**: the same manifest schema, guest OS/base digest, profile and policy
   bindings, package/image/MCP content identities, file ownership contract, and
   launch contract. It need not produce byte-identical disk images, timestamps,
   filesystem UUIDs, generated keys, Docker object IDs, or qualification run
   records. Build provenance must record the resolved immutable commit, not only
-  a mutable tag name.
+  a mutable tag name. Different disk or evidence bytes yield different signed
+  manifest identities; qualification and publication use the exact tested bytes.
 - Use the existing staged asset closure. `ParticipantProfileManifest`,
   `ParticipantAssetLock`, `load_participant_profile()`, and
   `hatch_build.py`/`aptl.core.assets` already define how tracked APTL assets,

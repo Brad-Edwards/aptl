@@ -167,6 +167,7 @@ def _render_service(
     service: dict[str, object] = {
         "image": image.image_ref,
         "container_name": node.container_name or f"aptl-{node.name}",
+        "labels": {"aptl.node.address": node.address},
     }
     if node.profiles:
         service["profiles"] = sorted(node.profiles)

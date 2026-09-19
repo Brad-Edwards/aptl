@@ -8,6 +8,7 @@ from aptl.core.appliance_boundary import (
     ApplianceBoundaryBinding,
     ApplianceBoundaryPolicy,
 )
+from aptl.core.appliance_boundary_inventory import GuestBoundaryObservation
 from aptl.core.deployment._compose_boundary import (
     realize_boundary as _realize_boundary,
 )
@@ -19,10 +20,12 @@ from aptl.core.deployment.boundary import (
     BoundaryEnforcementSpec,
     BoundaryNetwork,
     BoundaryWorkload,
+    PlatformBoundaryBootstrapSpec,
 )
 from aptl.core.deployment.boundary_compiler import (
     BoundaryCompileError,
     compile_raes_boundary,
+    compile_platform_bootstrap,
     compile_platform_boundary,
 )
 from aptl.core.deployment.realization import DeploymentRealizationSpec
@@ -109,11 +112,21 @@ class ComposeBoundaryRealizationMixin:
         self,
         policy: ApplianceBoundaryPolicy,
         binding: ApplianceBoundaryBinding,
+        *,
+        isolated_daemon: bool = False,
     ) -> None:
         """Install trusted release and launcher projections for realization."""
 
+        if isolated_daemon and (
+            not self._offline_staged
+            or self._docker_socket_identity is None
+            or self._docker_socket_path != "/var/run/docker.sock"
+            or self._docker_daemon_id != binding.guest_daemon_id
+        ):
+            raise ValueError("isolated guest Docker daemon is not bound")
         self._appliance_boundary = (policy, binding)
         self._boundary_helper_image = binding.boundary_helper_image
+        self._attempt_isolated_docker_daemon = isolated_daemon
 
     def realize_boundary(self, policy: BoundaryEnforcementSpec) -> LabResult:
         """Apply and observe policy on the selected Docker daemon host."""
@@ -130,8 +143,14 @@ class ComposeBoundaryRealizationMixin:
     def _record_boundary_receipt(self, policy: BoundaryEnforcementSpec) -> None:
         """Store only normalized enforcement identity needed by qualification."""
 
+        if isinstance(policy, PlatformBoundaryBootstrapSpec):
+            # A deny-only floor is not the final observed platform authority.
+            self._boundary_receipts.pop("platform", None)
+            self._boundary_specs.pop("platform", None)
+            return
         if policy.authority == "raes" and not policy.rules:
             self._boundary_receipts.pop("raes", None)
+            self._boundary_specs.pop("raes", None)
             return
         binding = (
             self._appliance_boundary[1]
@@ -149,17 +168,62 @@ class ComposeBoundaryRealizationMixin:
             "families": ("bridge", "inet"),
             "default_deny": policy.authority == "platform",
         }
+        self._boundary_specs[policy.authority] = policy
+
+    def observe_appliance_boundary(
+        self,
+        realization: DeploymentRealizationSpec,
+    ) -> GuestBoundaryObservation:
+        """Perform fresh guest-side enforcement, traffic, and authority checks."""
+
+        from aptl.appliance.guest_observation import collect_guest_observation
+
+        configured = getattr(self, "_appliance_boundary", None)
+        if configured is None:
+            raise ValueError("appliance boundary is not configured")
+        policy, binding = configured
+        return collect_guest_observation(
+            backend=self,
+            policy=policy,
+            binding=binding,
+            boundary_specs=dict(self._boundary_specs),
+            boundary_receipts=dict(self._boundary_receipts),
+            realization=realization,
+        )
 
     def _realize_authority_boundaries(
         self,
         realization: DeploymentRealizationSpec,
     ) -> LabResult | None:
-        """Apply platform policy first, then the independent RAES authority."""
+        """Install the platform deny floor before any scenario node can run."""
 
-        platform = self._realize_platform_boundary()
+        platform = self._realize_platform_baseline()
         if platform is not None:
             return platform
         return self._realize_raes_boundary(realization)
+
+    def _realize_platform_baseline(self) -> LabResult | None:
+        """Enforce signed zones with no grants until anchors can be observed."""
+
+        configured = getattr(self, "_appliance_boundary", None)
+        if configured is None:
+            return None
+        policy, binding = configured
+        try:
+            networks = self._project_boundary_network_observations()
+            enforcement = compile_platform_bootstrap(
+                policy,
+                policy_digest=binding.policy_digest,
+                networks=networks,
+                owner=self._project_name,
+            )
+        except BoundaryCompileError:
+            return LabResult(
+                success=False,
+                error="Platform boundary networks were not observed exactly.",
+            )
+        result = self.realize_boundary(enforcement)
+        return None if result.success else result
 
     def _realize_platform_boundary(self) -> LabResult | None:
         """Compile and enforce the configured signed platform policy."""

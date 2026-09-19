@@ -837,6 +837,56 @@ def test_spawned_child_contract_requires_attempt_isolated_daemon_before_mutation
     backend._run.assert_not_called()
 
 
+def test_verified_appliance_guest_daemon_admits_runtime_spawned_children(
+    tmp_path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, offline_staged=True)
+    backend._docker_socket_identity = (1, 2)
+    backend._docker_socket_path = "/var/run/docker.sock"
+    backend._docker_daemon_id = "guest-daemon"
+    backend.revalidate_local_docker_socket = MagicMock(
+        return_value=LabResult(success=True)
+    )
+    backend.configure_appliance_boundary(
+        MagicMock(),
+        SimpleNamespace(
+            guest_daemon_id="guest-daemon",
+            boundary_helper_image="example.test/helper:fixed",
+        ),
+        isolated_daemon=True,
+    )
+
+    assert backend._runtime_orchestration_preflight(_spec()) is None
+    backend.revalidate_local_docker_socket.assert_called_once()
+
+
+@pytest.mark.parametrize("mismatch", ["unbound", "wrong-daemon", "remote-socket"])
+def test_appliance_guest_isolation_rejects_unbound_or_redirected_daemon(
+    tmp_path,
+    mismatch,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, offline_staged=True)
+    backend._docker_socket_identity = None if mismatch == "unbound" else (1, 2)
+    backend._docker_socket_path = (
+        "/run/user/1000/docker.sock"
+        if mismatch == "remote-socket"
+        else "/var/run/docker.sock"
+    )
+    backend._docker_daemon_id = (
+        "other-daemon" if mismatch == "wrong-daemon" else "guest-daemon"
+    )
+    with pytest.raises(ValueError, match="isolated guest Docker daemon"):
+        backend.configure_appliance_boundary(
+            MagicMock(),
+            SimpleNamespace(
+                guest_daemon_id="guest-daemon",
+                boundary_helper_image="example.test/helper:fixed",
+            ),
+            isolated_daemon=True,
+        )
+    assert not getattr(backend, "_attempt_isolated_docker_daemon", False)
+
+
 def test_effective_compose_rejects_duplicate_or_endpoint_redirects() -> None:
     mount = {
         "type": "bind",

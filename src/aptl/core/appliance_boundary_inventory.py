@@ -174,7 +174,10 @@ def _append_host_findings(
             host.payload_digest != binding.payload_digest,
             "boundary.host-payload-digest-mismatch",
         ),
-        (host.boot_id != binding.boot_id, "boundary.host-boot-identity-mismatch"),
+        (
+            host.boot_id != (binding.host_boot_id or binding.boot_id),
+            "boundary.host-boot-identity-mismatch",
+        ),
     )
     findings.extend(reason for mismatch, reason in comparisons if mismatch)
     if not host.complete:
@@ -202,7 +205,7 @@ def _append_guest_findings(
             "boundary.guest-raes-plan-digest-mismatch",
         ),
         (
-            guest.boot_id != binding.boot_id,
+            guest.boot_id != (binding.guest_boot_id or binding.boot_id),
             "boundary.guest-boot-identity-mismatch",
         ),
         (
@@ -311,6 +314,8 @@ def _inventory(
             "egress_proxy": binding.egress_proxy_image,
         },
         "boot_id": binding.boot_id,
+        "host_boot_id": binding.host_boot_id or binding.boot_id,
+        "guest_boot_id": binding.guest_boot_id or binding.boot_id,
         "host": (
             {"observation_id": host.observation_id, "complete": host.complete}
             if host is not None

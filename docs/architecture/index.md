@@ -191,3 +191,4 @@ The victim and kali containers publish no host ports; use
 - [Issue #821 In-Appliance Participant Workbench](issue-821-participant-workbench-preflight.md)
 - [Issue #823 Versioned Disposable Lab Appliance](issue-823-versioned-disposable-appliance-preflight.md)
 - [Issue #824 Kiosk Launcher, Reset, And Recovery](issue-824-kiosk-launcher-reset-recovery-preflight.md)
+- [Issue #1022 Appliance Seat Delivery](issue-1022-appliance-seat-delivery-preflight.md)

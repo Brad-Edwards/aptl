@@ -62,7 +62,7 @@ def audit_host_process_inventory(
     *,
     docker_daemon_running: bool | None = None,
 ) -> HostExposureReport:
-    """Ensure the seat host does not require Docker for launcher operations."""
+    """Observe host Docker without treating unrelated workloads as exposure."""
 
     findings: list[str] = []
     if hostenv.host_os() != hostenv.OS_LINUX:
@@ -72,8 +72,10 @@ def audit_host_process_inventory(
         if docker_daemon_running is None
         else docker_daemon_running
     )
-    if docker_running:
-        findings.append("host.exposure.docker-daemon-present")
+    # A responding host daemon is not part of a seat's authority boundary and
+    # is therefore neither required nor forbidden.  VM argv and guest
+    # admission checks prove that the launcher does not consume its socket.
+    _ = docker_running
     return HostExposureReport(passed=not findings, findings=tuple(findings))
 
 

@@ -18,9 +18,7 @@ def _ensure_seat_root(seat_root: Path) -> None:
     """Create or validate an owner-only seat root directory."""
 
     if seat_root.is_symlink():
-        raise SeatLauncherError(
-            "corrupt-seat-state", "seat root must not be a symlink"
-        )
+        raise SeatLauncherError("corrupt-seat-state", "seat root must not be a symlink")
     try:
         seat_root.mkdir(mode=0o700, parents=True, exist_ok=True)
         seat_root.chmod(0o700)
@@ -32,9 +30,7 @@ def _ensure_seat_root(seat_root: Path) -> None:
     if not stat.S_ISDIR(info.st_mode):
         raise SeatLauncherError("corrupt-seat-state", "seat root is not a directory")
     if stat.S_IMODE(info.st_mode) & 0o077:
-        raise SeatLauncherError(
-            "corrupt-seat-state", "seat root must be owner-only"
-        )
+        raise SeatLauncherError("corrupt-seat-state", "seat root must be owner-only")
 
 
 def seat_state_path(seat_root: Path) -> Path:

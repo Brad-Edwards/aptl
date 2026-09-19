@@ -120,6 +120,9 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
     assert services["misp"]["image"]
     assert services["misp"]["container_name"] == "aptl-misp"
     assert services["misp"]["profiles"] == ["soc"]
+    assert services["suricata"]["labels"]["aptl.node.address"] == (
+        "provision.node.suricata"
+    )
     misp = next(node for node in realization.nodes if node.name == "misp")
     assert misp.image.policy_rule == "backend-open-profile"
     assert set(misp.backend_selected_concerns) == {

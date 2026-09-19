@@ -96,6 +96,7 @@ web = [
 build = [
     { name = "editables" },
     { name = "hatchling" },
+    { name = "pip" },
 ]
 ci = [
     { name = "build" },
@@ -146,6 +147,7 @@ provides-extras = ["s3", "parquet", "web", "dev", "docs"]
 build = [
     { name = "editables", specifier = ">=0.5" },
     { name = "hatchling", specifier = ">=1.27.0" },
+    { name = "pip", specifier = ">=26.2.1" },
 ]
 ci = [
     { name = "build", specifier = ">=1.2.0" },

@@ -26,9 +26,15 @@ _ALLOWED_TOP_LEVEL = frozenset(
         "appliance-release.env",
         "aptl-appliance-first-boot",
         "aptl-appliance-first-boot.service",
+        "aptl-launch.mount",
     }
 )
-_CANONICAL_TOP_LEVEL = _ALLOWED_TOP_LEVEL | {"inputs.json", "requirements.txt"}
+_CANONICAL_TOP_LEVEL = _ALLOWED_TOP_LEVEL | {
+    "inputs.json",
+    "requirements.txt",
+    "system-packages",
+    "system-packages.sha256",
+}
 _SCENARIO_RE = re.compile(r"^[a-z0-9][a-z0-9.-]*$")
 _INVALID_RELEASE_ENV = "invalid non-secret appliance release environment"
 
@@ -155,11 +161,11 @@ def _write_tar(staging: Path, paths: list[Path], candidate: Path) -> None:
     """Write a deterministic USTAR archive from already-validated paths."""
 
     try:
-        with tarfile.open(candidate, "w", format=tarfile.USTAR_FORMAT) as archive:
+        with tarfile.open(candidate, "w", format=tarfile.PAX_FORMAT) as archive:
             for path in paths:
                 relative = path.relative_to(staging).as_posix()
                 _add_tar_member(archive, path, relative)
-    except (OSError, tarfile.TarError) as exc:
+    except (OSError, tarfile.TarError, ValueError) as exc:
         raise OfflinePayloadError("offline payload could not be assembled") from exc
 
 

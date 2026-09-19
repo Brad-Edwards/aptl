@@ -70,6 +70,8 @@ grc:
       paths:
         - docker-compose.yml
         - containers/base/**
+        - appliance/guest/**
+        - src/aptl/appliance/**
         - src/aptl/cli/**
       # src/aptl/cli (python) -> application; docker-compose.yml -> docker-compose;
       # containers/base/Dockerfile.* -> dockerfile.
@@ -79,6 +81,7 @@ grc:
       description: Red/blue MCP servers and orchestrator that AI agents drive — the agent authorization and command-filtering surface.
       paths:
         - mcp/**
+        - src/aptl/workbench/**
       # mcp/** is first-party TypeScript -> application (Dockerfiles under mcp/ are
       # vendored node_modules only).
       surfaces: [application]

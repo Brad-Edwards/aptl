@@ -75,6 +75,12 @@ Core APTL code is product-neutral. TechVault-specific runtime parameters,
 participant smoke behavior, and pack conventions enter through the installed
 adapter seam. Core materialization code consumes RAES and deployment models and
 must not import `aptl_techvault` or branch on TechVault node/service names.
+For a generated Compose model, an exact pack-qualified adapter may add health
+probes and require an already-declared dependency to become healthy before its
+dependent service starts. The generic seam rejects foreign services and new
+dependency edges; it grants no extra topology or runtime authority. TechVault
+uses this for Cassandra, Elasticsearch, and Cortex during a fresh boot. An
+in-tree Compose file retains its own authored startup conditions.
 
 Tests use a small product-neutral SDL fixture to exercise the materialization
 envelope. Release validation also requires the official TechVault scenario to

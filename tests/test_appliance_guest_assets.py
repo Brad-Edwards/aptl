@@ -107,6 +107,7 @@ def test_first_boot_service_uses_guest_only_mutable_state() -> None:
     assert "After=docker.service" in service
     assert "Requires=docker.service" in service
     assert "ExecStart=/usr/local/libexec/aptl-appliance-first-boot" in service
+    assert "Environment=HOME=/var/lib/aptl" in service
     assert "ProtectHome=true" in service
     assert "ReadWritePaths=/var/lib/aptl /opt/aptl/project" in service
     assert "Requires=run-aptl\\x2dlaunch.mount" in service

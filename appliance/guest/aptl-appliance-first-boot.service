@@ -9,6 +9,7 @@ Wants=network-online.target
 [Service]
 Type=exec
 ExecStart=/usr/local/libexec/aptl-appliance-first-boot
+Environment=HOME=/var/lib/aptl
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true

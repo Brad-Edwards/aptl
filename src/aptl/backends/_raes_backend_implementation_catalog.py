@@ -21,6 +21,8 @@ from aptl.backends._raes_backend_implementation_types import (
 )
 
 _HALF_GIB_JVM_OPTIONS = "-Xms512m -Xmx512m"
+_REDIS_STAGED_CONFIG_DIR = "/run/aptl-redis"
+_REDIS_STAGED_CONFIG_PATH = f"{_REDIS_STAGED_CONFIG_DIR}/redis.conf"
 
 
 BACKEND_IMPLEMENTATION_PROFILES = (
@@ -274,19 +276,20 @@ BACKEND_IMPLEMENTATION_PROFILES = (
         ),
         runtime_selections={
             # The bind-mounted owner-only file is readable by container root,
-            # not by the image's redis account. Stage an owner-only copy for
-            # that account before the stock entrypoint drops privileges. Only
-            # paths, never the credential, enter the process command line.
+            # not by the image's redis account. Stage an owner-only copy under
+            # a root-owned /run directory before the stock entrypoint drops
+            # privileges. Only paths, never the credential, enter argv.
             "runtime-container-entrypoint": [
                 "/bin/sh",
                 "-ec",
+                f"install -d -m 0755 -o root -g root {_REDIS_STAGED_CONFIG_DIR} && "
                 "install -m 0400 -o redis -g redis /etc/redis/redis.conf "
-                '/tmp/aptl-redis.conf && exec docker-entrypoint.sh "$@"',
+                f'{_REDIS_STAGED_CONFIG_PATH} && exec docker-entrypoint.sh "$@"',
                 "--",
             ],
             "runtime-container-command": [
                 "redis-server",
-                "/tmp/aptl-redis.conf",
+                _REDIS_STAGED_CONFIG_PATH,
             ],
         },
     ),

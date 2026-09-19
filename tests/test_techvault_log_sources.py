@@ -161,6 +161,9 @@ def test_rocky_provider_starts_rsyslog_and_proves_both_logs_receive_events(scena
         "/etc/systemd/system/syslog.service",
     ) in argvs
     assert ("systemctl", "restart", "systemd-journald.service") in argvs
+    assert ("mkdir", "-p", "/run/aptl") in argvs
+    assert ("rsyslogd", "-N1", "-f", "/run/aptl/rsyslog.conf") in argvs
+    assert not any("/tmp/aptl-rsyslog.conf" in part for cmd in argvs for part in cmd)
     assert not any(cmd[:1] == ("touch",) for cmd in argvs)
 
 

@@ -51,3 +51,7 @@ After ADR-035 and SCN-010, ACES SDL owns scenario authoring and topology declara
 - IMPLEMENTS → CODE_FILE `src/aptl_techvault/startup.py` (TechVault-specific health probes through the adapter seam)
 - TESTS → TEST `tests/test_techvault_startup_adapter.py` (Content-qualified startup policy and undeclared-edge rejection)
 - TESTS → TEST `tests/test_imagefree_admission_integration.py` (Product-neutral real-Docker materialization envelope)
+- IMPLEMENTS → CODE_FILE `src/aptl/backends/_raes_backend_implementation_catalog.py` (Redis runtime config staged outside a publicly writable directory)
+- IMPLEMENTS → CODE_FILE `src/aptl_techvault/log_sources.py` (Native log configuration staged under a root-owned guest path)
+- TESTS → TEST `tests/test_misp_redis_realization_contract.py` (Credential-free argv and protected Redis staging path)
+- TESTS → TEST `tests/test_techvault_log_sources.py` (Protected rsyslog staging and native producer behavior)

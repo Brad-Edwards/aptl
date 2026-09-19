@@ -30,7 +30,8 @@ _SAFE_CLUSTER = re.compile(r"[A-Za-z0-9_.-]+")
 _SAMBA_DROPIN = "/etc/systemd/system/smbd.service.d/60-aptl-log-sources.conf"
 _CHECK_MARKER = "aptl-log-source-readback"
 _RSYSLOG_CONFIG = "/etc/rsyslog.conf"
-_RSYSLOG_STAGING = "/tmp/aptl-rsyslog.conf"
+# Stage under a root-owned parent, not the guest's publicly writable /tmp.
+_RSYSLOG_STAGING = "/run/aptl/rsyslog.conf"
 _JOURNALD_DROPIN = "/etc/systemd/journald.conf.d/60-aptl-forward.conf"
 _JOURNALD_PAYLOAD = "[Journal]\nForwardToSyslog=yes\n"
 _SYSLOG_ALIAS = "/etc/systemd/system/syslog.service"

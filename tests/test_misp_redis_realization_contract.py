@@ -88,14 +88,16 @@ def test_the_cache_is_authenticated_without_putting_the_secret_in_argv(realizati
     cache = next(node for node in realization.nodes if node.name == "misp-redis")
     command = list(cache.runtime.container.command)
 
-    assert command == ["redis-server", "/tmp/aptl-redis.conf"]
+    assert command == ["redis-server", "/run/aptl-redis/redis.conf"]
     assert list(cache.runtime.container.entrypoint) == [
         "/bin/sh",
         "-ec",
+        "install -d -m 0755 -o root -g root /run/aptl-redis && "
         "install -m 0400 -o redis -g redis /etc/redis/redis.conf "
-        '/tmp/aptl-redis.conf && exec docker-entrypoint.sh "$@"',
+        '/run/aptl-redis/redis.conf && exec docker-entrypoint.sh "$@"',
         "--",
     ]
+    assert "/tmp/" not in " ".join(cache.runtime.container.entrypoint)
     # `--requirepass <value>` would work, and would also publish the credential
     # in the container's command line and in `docker inspect`.
     assert "--requirepass" not in command

@@ -614,7 +614,7 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
     assert manifest.evaluator.supports_scoring is False
     assert manifest.evaluator.supports_objectives is True
     assert manifest.evaluator.supported_evidence_channels == frozenset(
-        {"api_response", "log"}
+        {"api_response", "file_artifact", "log"}
     )
     assert manifest.has_participant_runtime is True
     assert manifest.participant_runtime is not None

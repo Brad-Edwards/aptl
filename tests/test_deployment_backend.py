@@ -1350,7 +1350,13 @@ services:
     def test_stop_with_volumes_fails_when_seeded_volume_cannot_be_removed(
         self, tmp_path
     ):
+        from aptl.core.evidence.adapters.techvault_enrollment_baseline import (
+            enrollment_baseline,
+            record_enrollment_baseline,
+        )
+
         backend = self._make_backend(tmp_path)
+        record_enrollment_baseline(tmp_path, {"db": "001"})
         (tmp_path / "docker-compose.yml").write_text("volumes:\n  seeded_data:\n")
         ownership = backend._resource_ownership
         assert ownership is not None
@@ -1392,6 +1398,9 @@ services:
 
         assert result.success is False
         assert "failed to remove receipt-owned volume" in result.error
+        # The identity still describes retained volume state. Clearing it on a
+        # failed reset would let a later capture bless a re-enrolment as fresh.
+        assert enrollment_baseline(tmp_path) == {"db": "001"}
 
     def test_stop_removes_leftover_project_networks(self, tmp_path):
         backend = self._make_backend(tmp_path)

@@ -9,10 +9,8 @@ from aptl.backends.scenario_startup import (
     ScenarioStartupPlan,
 )
 from aptl.core.scenario_bundle import ScenarioBundle
+from aptl_techvault.runtime_parameters import TECHVAULT_PACK_SET_DIGEST
 
-_PACK_SET_DIGEST = (
-    "sha256:edd3bb6252990aeaf506904767182d5a3ef2b3828a498fe64c897dccaf954934"
-)
 
 
 class TechVaultStartupProvider:
@@ -21,7 +19,7 @@ class TechVaultStartupProvider:
     extension_api_version = EXTENSION_API_VERSION
     supported_pack_id = "techvault"
     supported_pack_versions = ("0.1.0",)
-    supported_pack_set_digests = (_PACK_SET_DIGEST,)
+    supported_pack_set_digests = (TECHVAULT_PACK_SET_DIGEST,)
 
     @staticmethod
     def resolve(_bundle: ScenarioBundle) -> ScenarioStartupPlan:

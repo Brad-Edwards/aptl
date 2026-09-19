@@ -39,6 +39,7 @@ class DeploymentDockerAuthorityAdmission:
     authority_id: str = ""
     image_template_ids: tuple[str, ...] = ()
     allowed_mount_targets: tuple[str, ...] = ()
+    allowed_networks: tuple[str, ...] = ()
 
 
 def bind_source_exposes_docker_socket(source: object) -> bool:

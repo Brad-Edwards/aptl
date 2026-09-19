@@ -277,7 +277,9 @@ class ComposeRealizationMixin(
             ]
             if not consumers and not environment_consumers:
                 continue
-            failure = self._realize_one_generated_artifact(artifact, realization_root)
+            failure = self._realize_one_generated_artifact(
+                artifact, realization_root, realization
+            )
             if failure is None:
                 failure = _append_image_free_artifact_ops(
                     ops_by_address, artifact, consumers, realization_root

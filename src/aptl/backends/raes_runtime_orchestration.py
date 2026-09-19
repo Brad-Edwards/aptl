@@ -195,12 +195,19 @@ def _children_by_template_image(
 def _spawn_image_requirement(
     authority: RuntimeOrchestrationAuthority,
     template: object,
-    child: object,
+    child: object | None,
     *,
     node_address: str,
     timeout: int,
 ) -> DeploymentSpawnImageRequirement:
-    """Validate and lower one exact template/realized-child pair."""
+    """Validate and lower one template, with its realized child when declared.
+
+    The image identity check is unconditional: an authority that can reach the
+    daemon must only be able to launch images the pack pinned by digest.
+    Correlation is validated only when the pack declared a child to correlate
+    against, and an uncorrelated requirement carries no label and no count so
+    observation cannot invent either.
+    """
 
     image_ref = str(getattr(template, "image_ref", "") or "")
     if not _DIGEST_IMAGE.fullmatch(image_ref):
@@ -208,6 +215,27 @@ def _spawn_image_requirement(
             "aptl.provisioner.spawn-image-identity-invalid: "
             f"mutable child image on {node_address}."
         )
+    child_label, expected_count = (
+        _child_correlation(child, image_ref, node_address=node_address)
+        if child is not None
+        else ("", 0)
+    )
+    return DeploymentSpawnImageRequirement(
+        node_address=node_address,
+        authority_id=str(authority.orchestration_authority_id),
+        template_id=str(getattr(template, "template_id", "")),
+        image_ref=image_ref,
+        execution_timeout_seconds=timeout,
+        child_label=child_label,
+        expected_count=expected_count,
+    )
+
+
+def _child_correlation(
+    child: object, image_ref: str, *, node_address: str
+) -> tuple[str, int]:
+    """Validate one declared child and return its exact label and count."""
+
     label_match = _CHILD_LABEL.fullmatch(str(getattr(child, "evidence_ref", "") or ""))
     count = getattr(child, "count", None)
     child_image_ref = str(getattr(child, "image_ref", "") or "")
@@ -225,15 +253,7 @@ def _spawn_image_requirement(
         )
     assert label_match is not None
     assert isinstance(count, int)
-    return DeploymentSpawnImageRequirement(
-        node_address=node_address,
-        authority_id=str(authority.orchestration_authority_id),
-        template_id=str(getattr(template, "template_id", "")),
-        image_ref=image_ref,
-        execution_timeout_seconds=timeout,
-        child_label=f"{label_match.group(1)}={label_match.group(2)}",
-        expected_count=count,
-    )
+    return f"{label_match.group(1)}={label_match.group(2)}", count
 
 
 def spawn_image_requirements(
@@ -241,35 +261,62 @@ def spawn_image_requirements(
     *,
     node_address: str,
 ) -> tuple[DeploymentSpawnImageRequirement, ...]:
-    """Return digest-qualified child-image requirements with provenance."""
+    """Return digest-qualified child-image requirements with provenance.
+
+    Two authored shapes reach here and they mean different things.
+
+    An authority that declares *spawn templates* has named the exact images it
+    is allowed to launch. Each one is pinned to a digest and pre-staged, so a
+    mutable tag cannot be resolved at spawn time on a daemon the authority
+    holds root-equivalent access to. This applies whether or not the pack also
+    declares an expected child inventory: the images are the security contract,
+    and skipping them would grant the socket while leaving everything launched
+    through it ungated.
+
+    An authority that declares *realized children* has additionally stated what
+    should be observed. Only then is there a label and a count to correlate; a
+    template without one is prepared and identity-checked, but its running
+    children are not counted, because the pack has not said how many there
+    should be.
+
+    An authority that declares neither -- privilege stated for transparency
+    with no inventory at all -- yields no requirement, as before. Children
+    without templates remain a rejected closure: they name workloads whose
+    images the pack never pinned.
+    """
 
     requirements: list[DeploymentSpawnImageRequirement] = []
     for authority, _interface in docker_control_authorities(
         runtime, node_address=node_address
     ):
-        # A realized child is, per RAES, "an observed, realized child workload",
-        # and the field defaults to empty. An authority that declares only its
-        # privilege has declared no observation contract, so there is nothing to
-        # correlate and no child image to pre-stage. Requiring one here asked for
-        # runtime observation at plan time and refused every boot of a pack that
-        # states the privilege for transparency without an expected inventory.
-        # The admission, and every mount and access control on it, is unaffected.
-        if not authority.realized_children:
+        if not authority.spawn_templates and not authority.realized_children:
             continue
         timeout = _bounded_execution_timeout(authority, node_address=node_address)
-        children = _children_by_template_image(authority, node_address=node_address)
+        children = (
+            _children_by_template_image(authority, node_address=node_address)
+            if authority.realized_children
+            else {}
+        )
         for template in authority.spawn_templates:
             image_ref = str(template.image_ref or "")
             requirements.append(
                 _spawn_image_requirement(
                     authority,
                     template,
-                    children[image_ref],
+                    children.get(image_ref),
                     node_address=node_address,
                     timeout=timeout,
                 )
             )
     return tuple(requirements)
+
+
+def _node_networks(node: DeploymentNodeRealization) -> set[str]:
+    """Return every network selected through either node representation."""
+
+    return set(node.networks) | {
+        attachment.network for attachment in node.network_attachments
+    }
 
 
 def _allowed_mount_targets(node: DeploymentNodeRealization) -> set[str]:
@@ -320,6 +367,7 @@ def admit_docker_authorities(
                     str(template.template_id) for template in authority.spawn_templates
                 ),
                 allowed_mount_targets=tuple(sorted(allowed_mount_targets)),
+                allowed_networks=tuple(sorted(_node_networks(node))),
             )
         )
     requirements = [
@@ -327,7 +375,13 @@ def admit_docker_authorities(
         for admission in admissions
         for requirement in admission.spawn_requirements
     ]
-    labels = [requirement.child_label for requirement in requirements]
+    # Only authored correlations carry a label; an uncorrelated template has
+    # none, and several of those are not a collision.
+    labels = [
+        requirement.child_label
+        for requirement in requirements
+        if requirement.child_label
+    ]
     if len(labels) != len(set(labels)):
         raise ValueError(
             "aptl.provisioner.spawn-child-correlation-invalid: "

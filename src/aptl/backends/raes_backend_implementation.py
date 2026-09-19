@@ -29,13 +29,11 @@ from aptl.backends._raes_backend_implementation_types import (
     BackendBaseSelection,
     BackendImplementationProfile,
 )
-from aptl.backends.raes_diagnostics import diagnostic
-from aptl.core.deployment._cortex_service_credentials import (
-    CORTEX_SERVICE_CREDENTIALS_PROFILE,
+from aptl.backends._raes_backend_generated_artifacts import (
+    selected_generated_artifacts as _selected_generated_artifacts,
 )
+from aptl.backends.raes_diagnostics import diagnostic
 from aptl.core.deployment.realization import (
-    DeploymentGeneratedArtifactEnvironmentConsumer,
-    DeploymentGeneratedArtifactOutput,
     DeploymentGeneratedArtifactRealization,
     DeploymentImageRealization,
 )
@@ -115,6 +113,7 @@ def _admit_backend_implementation(
         if not _runtime_additions_authorized(plan, resource.address, additions):
             diagnostics.append(_implementation_not_authorized(resource.address))
         else:
+            additions = _resolved_authored_settings(additions, original)
             selected_runtime = _selected_runtime(payload, additions)
             if selected_runtime is None:
                 diagnostics.append(_implementation_invalid(resource.address))
@@ -152,6 +151,57 @@ def _runtime_additions_authorized(
     return all(
         _runtime_concern_is_open(plan, address, concern) for concern in additions
     )
+
+
+#: An environment value may name an authored application setting instead of
+#: carrying a literal. The scenario then owns the value while the backend still
+#: owns the binding: MISP's participant-visible URL is authored as
+#: ``misp-canonical-url`` and must not be re-decided here as ``localhost``.
+_SETTING_REFERENCE = "platform_application_setting"
+
+
+def _resolved_authored_settings(
+    additions: dict[str, object], runtime: RuntimeConfiguration
+) -> dict[str, object]:
+    """Replace setting-referencing environment values with their authored value.
+
+    A reference that resolves to no authored setting is left as it is, so the
+    runtime model rejects the unresolved reference rather than a silently
+    invented default reaching a container.
+    """
+
+    environment = additions.get("runtime-environment")
+    if not isinstance(environment, list):
+        return additions
+    settings = _authored_settings(runtime)
+    resolved = []
+    for variable in environment:
+        reference = (
+            variable.get("value_from", {}).get(_SETTING_REFERENCE)
+            if isinstance(variable, dict)
+            else None
+        )
+        if reference is None or reference not in settings:
+            resolved.append(variable)
+            continue
+        replacement = {
+            key: value for key, value in variable.items() if key != "value_from"
+        }
+        replacement["value"] = settings[reference]
+        resolved.append(replacement)
+    return {**additions, "runtime-environment": resolved}
+
+
+def _authored_settings(runtime: RuntimeConfiguration) -> dict[str, str]:
+    """Return every authored platform-application setting that carries a value."""
+
+    return {
+        str(setting.setting_id): str(setting.value)
+        for application in getattr(runtime, "platform_applications", ())
+        for setting in getattr(application, "settings", ())
+        if str(getattr(setting, "setting_id", ""))
+        and str(getattr(setting, "value", ""))
+    }
 
 
 def _selected_runtime(
@@ -193,6 +243,7 @@ def _implementation_result(
             resource=resource,
             service_name=service_name,
             additions=additions,
+            runtime=selected_runtime,
         ),
     )
 
@@ -221,59 +272,6 @@ def _selected_image(
         context_path=str(component_root / context) if context else None,
         provenance={"backend_profile": 1},
     )
-
-
-def _selected_generated_artifacts(
-    *,
-    profile_id: str,
-    resource: PlannedResource,
-    service_name: str,
-    additions: dict[str, object],
-) -> tuple[DeploymentGeneratedArtifactRealization, ...]:
-    """Return prerequisites introduced by an admitted backend selection.
-
-    The TheHive profile introduces a generated-value reference only when APTL
-    selects the otherwise-absent runtime environment.  Its backing credential
-    artifact is therefore part of that same OPEN-authority choice.  It must not
-    be inferred from the product identity alone: an authored/closed environment
-    never reaches this function with ``runtime-environment`` in ``additions``.
-    """
-
-    artifacts: list[DeploymentGeneratedArtifactRealization] = []
-    if profile_id == "thehive-5.4" and "runtime-environment" in additions:
-        artifacts.append(
-            DeploymentGeneratedArtifactRealization(
-                address="backend.generated-artifact.cortex-service-credentials",
-                name="cortex-service-credentials",
-                generator="rendered_config",
-                lifecycle="reuse_valid",
-                provenance=CORTEX_SERVICE_CREDENTIALS_PROFILE,
-                outputs=(
-                    DeploymentGeneratedArtifactOutput(
-                        name="initializer-api-key",
-                        path="cortex/initializer-api-key",
-                        sensitivity="secret",
-                        disposition="producer_private",
-                    ),
-                    DeploymentGeneratedArtifactOutput(
-                        name="connector-api-key",
-                        path="cortex/connector-api-key",
-                        sensitivity="secret",
-                    ),
-                ),
-                consumers=(),
-                environment_consumers=(
-                    DeploymentGeneratedArtifactEnvironmentConsumer(
-                        target_address=resource.address,
-                        node_name=resource.address.rsplit(".", 1)[-1],
-                        service_name=service_name,
-                        output_name="connector-api-key",
-                        environment_variable="TH_CORTEX_KEYS",
-                    ),
-                ),
-            )
-        )
-    return tuple(artifacts)
 
 
 def _compute_substrate_is_open(plan: ProvisioningPlan, address: str) -> bool:

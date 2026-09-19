@@ -126,7 +126,10 @@ def test_node22_image_preloads_exact_mcp_locks_for_offline_materialization() -> 
     dockerfile = (
         ROOT / "containers/generic-systemd-node22-base/Dockerfile"
     ).read_text()
-    assert "COPY mcp /opt/aptl/npm-source" in dockerfile
+    assert "COPY requirements/runtime.txt /opt/aptl/runtime-requirements.txt" in dockerfile
+    assert "python3 -m pip download --no-deps --require-hashes" in dockerfile
+    assert "mcp-red-sources.tar" in dockerfile
+    assert "mcp-blue-sources.tar" in dockerfile
     assert "npm_config_cache=/opt/aptl/npm-cache" in dockerfile
     assert "aptl-mcp-common mcp-casemgmt mcp-indexer mcp-network" in dockerfile
     assert "mcp-red mcp-reverse mcp-soar mcp-threatintel mcp-wazuh" in dockerfile

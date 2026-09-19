@@ -148,11 +148,16 @@ def test_image_acquisition_records_exact_daemon_identity_and_archive_closure(
     assert any(command[:2] == ["docker", "save"] for command in calls)
 
 
-def test_image_acquisition_saves_pinned_runtime_tag(tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize(
+    "repository", ["example.test/participant:fixed", "example.test/participant"]
+)
+def test_image_acquisition_saves_pinned_runtime_tag(
+    tmp_path, monkeypatch, repository
+) -> None:
     image_archive = tmp_path / "output" / "oci-images.tar"
     image_roles = tmp_path / "output" / "image-roles.json"
-    reference = "example.test/participant:fixed@sha256:" + "a" * 64
-    runtime_tag = reference.partition("@")[0]
+    reference = repository + "@sha256:" + "a" * 64
+    runtime_tag = input_images.runtime_image_tag(reference)
     identity = "sha256:" + "b" * 64
     calls = []
 

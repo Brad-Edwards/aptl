@@ -45,6 +45,13 @@ def _pin_third_party(reference: str) -> str:
     return pinned
 
 
+def runtime_image_tag(reference: str) -> str:
+    """Return Docker's explicit runtime tag for a pinned registry reference."""
+
+    name = reference.partition("@")[0]
+    return name if ":" in name.rsplit("/", 1)[-1] else name + ":latest"
+
+
 def canonical_image_references(project: Path, bundle: ScenarioBundle) -> dict[str, str]:
     """Read scenario references and authored child images from canonical sources."""
     realization = bundle_realization(project, AptlConfig(), bundle)
@@ -127,7 +134,7 @@ def validate_image_sources(
                 reference,
                 architecture=architecture,
             )
-            valid = identity == expected and reference.partition("@")[0] in images.get(
+            valid = identity == expected and runtime_image_tag(reference) in images.get(
                 identity, ()
             )
         else:

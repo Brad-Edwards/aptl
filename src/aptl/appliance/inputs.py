@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from aptl.appliance.input_images import (
     canonical_image_references,
+    runtime_image_tag,
     validate_image_sources as _validate_image_sources,
 )
 from aptl.appliance.input_profile import _entry, _write_full_profile
@@ -85,7 +86,7 @@ def _resolve_archive_image_roles(
     for reference in sorted(set(references.values())):
         if "@sha256:" in reference:
             identity = registry_image_id(image_archive, image_files, reference)
-            if reference.partition("@")[0] not in images.get(identity, ()):
+            if runtime_image_tag(reference) not in images.get(identity, ()):
                 raise ValueError("pinned Docker runtime tag is missing or differs")
         else:
             matches = [
@@ -139,7 +140,7 @@ def acquire_canonical_images(
                     timeout=60,
                 )
         pinned_runtime_tags = {
-            reference.partition("@")[0]: reference
+            runtime_image_tag(reference): reference
             for reference in references.values()
             if "@sha256:" in reference
         }

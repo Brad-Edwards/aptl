@@ -133,14 +133,14 @@ def test_canonical_payload_admits_only_locked_system_packages(tmp_path: Path) ->
 def test_archive_roles_use_saved_config_ids_not_docker_store_ids(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    registry_ref = "example/remote:fixed@sha256:" + "a" * 64
+    registry_ref = "example/remote@sha256:" + "a" * 64
     references = {
         "scenario.local": "example/local:latest",
         "scenario.remote": registry_ref,
     }
     images = {
         "sha256:" + "b" * 64: ("example/local:latest",),
-        "sha256:" + "c" * 64: ("example/remote:fixed",),
+        "sha256:" + "c" * 64: ("example/remote:latest",),
     }
     monkeypatch.setattr(
         inputs,

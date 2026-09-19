@@ -93,3 +93,13 @@ def test_seeded_soar_case_preserves_exact_alert_id_and_mcp_uses_flat_argument():
     description = config["queries"]["execute_workflow"]["description"]
     assert "body itself becomes the execution argument" in description
     assert '"execution_argument"' not in description
+
+
+def test_thehive_seed_uses_declared_https_endpoint_and_mounted_ca():
+    script = (PROJECT_ROOT / "scripts" / "thehive-apikey.sh").read_text()
+    assert 'THEHIVE_URL="${THEHIVE_URL:-https://localhost:9000}"' in script
+    assert (
+        'THEHIVE_CA_CERT="${THEHIVE_CA_CERT:-/opt/techvault/soc-certs/lab-ca.pem}"'
+        in script
+    )
+    assert 'curl --cacert "$THEHIVE_CA_CERT"' in script

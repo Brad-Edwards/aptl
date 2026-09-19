@@ -12,10 +12,6 @@ secret:
     # secret. Restoring this loot is the whole point of #581 parity.
     - 'scenarios/fixtures/techvault-content/**'
   ignored_matches:
-    # The Redis realization test interpolates a freshly generated temporary
-    # credential into its expected config line; no credential is checked in.
-    - name: redis-generated-credential-test-assertion
-      match: 'requirepass {password}'
     # Docker Compose uses this text only as the diagnostic when the required
     # Grafana credential variable is absent. It is an error message, not the
     # credential value (incident 37287193).

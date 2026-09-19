@@ -5,6 +5,7 @@ from __future__ import annotations
 import ipaddress
 import json
 import os
+import shutil
 import signal
 import subprocess
 import time
@@ -242,9 +243,31 @@ def _tracked_pid_alive(pid: int) -> bool:
 
     try:
         os.kill(pid, 0)
+    except PermissionError:
+        return True
     except OSError:
         return False
     return True
+
+
+def _process_executable(pid: int) -> str:
+    """Resolve argv when a non-dumpable QEMU denies procfs exe readlink."""
+
+    try:
+        return os.readlink(f"/proc/{pid}/exe")
+    except OSError:
+        command = Path(f"/proc/{pid}/cmdline").read_bytes().partition(b"\0")[0]
+        if not command:
+            raise OSError("process command line is empty")
+        executable = os.fsdecode(command)
+        resolved = (
+            os.path.realpath(executable)
+            if os.path.isabs(executable)
+            else shutil.which(executable)
+        )
+        if not resolved:
+            raise OSError("process executable is unavailable")
+        return os.path.realpath(resolved)
 
 
 def _read_process_identity(pid: int) -> VmProcessIdentity | None:
@@ -254,7 +277,7 @@ def _read_process_identity(pid: int) -> VmProcessIdentity | None:
         stat_payload = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
         after_name = stat_payload.rsplit(")", 1)[1].split()
         start_time_ticks = int(after_name[19])
-        executable = os.readlink(f"/proc/{pid}/exe")
+        executable = _process_executable(pid)
         return VmProcessIdentity(
             pid=pid,
             start_time_ticks=start_time_ticks,
@@ -336,11 +359,30 @@ def write_vm_pid(seat_root: Path, pid: int | None) -> None:
     os.replace(temporary, path)
 
 
+def _clear_unverified_vm_pid(seat_root: Path) -> None:
+    """Clear a dead tracker, but never hide a live process we cannot identify."""
+
+    path = vm_pid_path(seat_root)
+    if not path.is_file():
+        return
+    try:
+        hinted_pid = int(json.loads(path.read_text(encoding="utf-8"))["pid"])
+    except (KeyError, OSError, TypeError, ValueError):
+        hinted_pid = None
+    if hinted_pid is not None and _tracked_pid_alive(hinted_pid):
+        raise SeatLauncherError(
+            "vm-process-unverifiable",
+            "tracked VM process identity could not be verified",
+        )
+    write_vm_pid(seat_root, None)
+
+
 def stop_vm(seat_root: Path, *, timeout: float = 20.0) -> bool:
     """Terminate the tracked VM process when present."""
 
     pid = read_vm_pid(seat_root)
     if pid is None:
+        _clear_unverified_vm_pid(seat_root)
         return False
     try:
         os.kill(pid, signal.SIGTERM)

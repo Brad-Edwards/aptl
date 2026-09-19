@@ -55,6 +55,8 @@ def test_guest_scripts_are_valid_and_have_no_network_install_path() -> None:
 
     scanner = scripts[2].read_text()
     assert "for executable in docker node python3 systemctl sshd" in scanner
+    assert "docker buildx version" in scanner
+    assert "docker compose version" in scanner
     assert "test -x /opt/aptl/python/bin/aptl" in scanner
     assert "/usr/local/bin/aptl --version" in scanner
     assert "/var/lib/cloud/instances" in scanner
@@ -95,10 +97,12 @@ def test_guest_system_package_acquisition_is_version_and_digest_locked() -> None
     )
     assert "ubuntu:26.04@sha256:" in acquisition
     assert "docker.io=29.1.3-0ubuntu4.1" in acquisition
+    assert "docker-buildx=0.30.1-0ubuntu1" in acquisition
+    assert "docker-compose-v2=2.40.3+ds1-0ubuntu1" in acquisition
     assert "nodejs=22.22.1+dfsg+~cs22.19.15-1ubuntu1" in acquisition
     assert "openssh-server=1:10.2p1-2ubuntu3.6" in acquisition
     assert "sha256sum --check --strict" in acquisition
-    assert len(lock) == 57
+    assert len(lock) == 59
     assert all(len(line.split("  ", 1)[0]) == 64 for line in lock)
 
 def test_first_boot_service_uses_guest_only_mutable_state() -> None:

@@ -1,5 +1,7 @@
 78de3c5c3ec5657bcbdc10c2b2bcd9cedd78e6814182566f1522af422b26d3ce  adduser_3.153ubuntu1_all.deb
 25f1410e781533bf19d22aa9181c6b57043c005cc30b635edf8a2afebe590fc0  containerd_2.2.2-0ubuntu1.1_amd64.deb
+96f1bf0fb16cefcd9063c2034b949383e46b1b47c26a376e3a569e42ffdf281e  docker-buildx_0.30.1-0ubuntu1_amd64.deb
+fb8bbea5614c65cbdf426a7fd13bfeaf0f777a8f4d62758fbbfa4f051be330da  docker-compose-v2_2.40.3+ds1-0ubuntu1_amd64.deb
 7a77548bd669f232ec8852092623303be32c55538401ff047b4d1e0bb5ea721d  docker.io_29.1.3-0ubuntu4.1_amd64.deb
 187b16f9375f53ce6a1618a29de52bb177b620589ada29e4a3e25de5d594e66f  iptables_1.8.11-2ubuntu3_amd64.deb
 ea96881e73419442e42e1007c6326771df4c20bbf0d87f3d425dd4aa8b77ea6c  libada-url0-3_3.4.3-1_amd64.deb

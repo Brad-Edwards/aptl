@@ -31,6 +31,8 @@ for executable in docker node python3 systemctl sshd
 do
     command -v "$executable" >/dev/null
 done
+docker buildx version >/dev/null
+docker compose version >/dev/null
 test -x /opt/aptl/python/bin/aptl
 /usr/local/bin/aptl --version >/dev/null
 case "$(node --version)" in

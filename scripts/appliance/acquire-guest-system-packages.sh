@@ -20,6 +20,8 @@ docker run --rm \
     apt-get install --download-only --no-install-recommends -y \
       -o Dir::Cache::archives=/output \
       docker.io=29.1.3-0ubuntu4.1 \
+      docker-buildx=0.30.1-0ubuntu1 \
+      docker-compose-v2=2.40.3+ds1-0ubuntu1 \
       nodejs=22.22.1+dfsg+~cs22.19.15-1ubuntu1 \
       openssh-server=1:10.2p1-2ubuntu3.6 >/dev/null
     chmod 0644 /output/*.deb

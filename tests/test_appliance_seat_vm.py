@@ -22,6 +22,7 @@ from aptl.appliance.seat.vm import (
     stop_vm,
     write_vm_pid,
 )
+from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 
 
@@ -55,6 +56,23 @@ def test_process_identity_falls_back_to_posix_ps_without_procfs() -> None:
     assert identity.pid == os.getpid()
     assert identity.start_time_ticks > 0
     assert identity.executable
+
+
+def test_process_identity_uses_cmdline_when_exe_readlink_is_denied() -> None:
+    current = __import__("aptl.appliance.seat.vm", fromlist=["_read_process_identity"])
+    pid = os.getpid()
+    expected = current._read_process_identity(pid)
+    original_readlink = os.readlink
+
+    def deny_proc_exe(path: str) -> str:
+        if path == f"/proc/{pid}/exe":
+            raise PermissionError("procfs executable is restricted")
+        return original_readlink(path)
+
+    with patch("aptl.appliance.seat.vm.os.readlink", side_effect=deny_proc_exe):
+        identity = current._read_process_identity(pid)
+
+    assert identity == expected
 
 
 def test_read_vm_pid_rejects_reused_process_identity(tmp_path: Path) -> None:
@@ -359,6 +377,27 @@ def test_qemu_argv_rejects_option_separator_in_paths(tmp_path: Path) -> None:
 
 def test_stop_vm_returns_false_when_untracked(tmp_path: Path) -> None:
     assert stop_vm(tmp_path) is False
+
+
+def test_stop_vm_clears_stale_pid_file(tmp_path: Path) -> None:
+    (tmp_path / "vm.pid").write_text(
+        '{"executable":"/usr/bin/qemu-system-x86_64","pid":999999,"start_time_ticks":1}\n',
+        encoding="utf-8",
+    )
+
+    assert stop_vm(tmp_path) is False
+    assert not (tmp_path / "vm.pid").exists()
+
+
+def test_stop_vm_rejects_unverifiable_live_process(tmp_path: Path) -> None:
+    (tmp_path / "vm.pid").write_text(
+        f'{{"executable":"/usr/bin/qemu-system-x86_64","pid":{os.getpid()},"start_time_ticks":1}}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SeatLauncherError, match="tracked VM process identity"):
+        stop_vm(tmp_path)
+    assert (tmp_path / "vm.pid").exists()
 
 
 def test_stop_vm_clears_pid_when_process_exits(tmp_path: Path) -> None:

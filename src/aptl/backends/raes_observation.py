@@ -70,6 +70,7 @@ from aptl.backends.raes_runtime_attestation import (
     observe_techvault_attested_concerns,
 )
 from aptl.backends.raes_runtime_observation import observe_runtime_concerns
+from aptl.backends.scenario_startup import observe_scenario_runtime_concerns
 from aptl.core.deployment._compose_service_health import runtime_expects_completion
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.utils.logging import get_logger
@@ -221,6 +222,11 @@ def _add_techvault_runtime_attestations(
             concerns = {}
         if concerns:
             observed_node.concerns.update(concerns)
+        adapter_concerns = observe_scenario_runtime_concerns(
+            realization.pack_identity, backend, node
+        )
+        if adapter_concerns:
+            observed_node.concerns.update(adapter_concerns)
 
 
 def _node_content_verification(

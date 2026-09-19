@@ -11,6 +11,7 @@ from typing import Any
 from aptl.appliance.payload_content import hash_file_nofollow
 from aptl.core.scenario_bundle import ScenarioBundle
 from aptl.validation.curated_live_proof import ExpectedMatrix
+from aptl.validation.participant_mcp_smoke import resolve_participant_mcp_smoke_plan
 from aptl.validation.participant_profile_models import (
     AssetLockEntry,
     ParticipantAssetLock,
@@ -34,10 +35,8 @@ def _entry(
 def _profile_checks() -> list[dict[str, Any]]:
     """Describe the real tools, browser operations and delivery checks."""
     checks = []
-    from aptl_techvault.participant_smoke import FULL_TECHVAULT_SMOKE_OPERATIONS
-
     profiles = tuple(profile_for(role) for role in ("red", "blue"))
-    for operation in FULL_TECHVAULT_SMOKE_OPERATIONS:
+    for operation in resolve_participant_mcp_smoke_plan("techvault-full.techvault"):
         checks.append(
             {
                 "check_id": operation.check_id,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import TYPE_CHECKING, Any
 
 from aptl.core.deployment._compose_resource_ownership import (
@@ -23,17 +24,31 @@ if TYPE_CHECKING:
 
 _DOCKER_TIMEOUT = 30
 _COMPOSE_PROJECT_LABEL = "com.docker.compose.project"
+_CONTAINER_INSPECT_RETRY_DELAYS = (0.2, 0.5, 1.0)
 
 
 class ComposeResourceResolutionMixin:
     """Resolve daemon-native resources only through durable receipts."""
+
+    def _load_resource_ownership(self) -> WorkspaceOwnership | None:
+        """Load an existing workspace scope without publishing new state."""
+
+        ownership = self._resource_ownership
+        if ownership is None:
+            ownership = WorkspaceOwnership.load(
+                self._project_dir, self._logical_project_name
+            )
+            if ownership is not None:
+                self._resource_ownership = ownership
+                self._project_name = ownership.project_name
+        return ownership
 
     def _ensure_resource_ownership(
         self, *, attempt_id: str | None = None
     ) -> WorkspaceOwnership:
         """Load the durable workspace scope before backend mutation."""
 
-        ownership = self._resource_ownership
+        ownership = self._load_resource_ownership()
         if ownership is None:
             ownership = WorkspaceOwnership.ensure(
                 self._project_dir, self._logical_project_name
@@ -65,14 +80,29 @@ class ComposeResourceResolutionMixin:
         )
         if not candidates:
             raise OwnershipConflictError("container ownership is unrecorded")
-        verified = tuple(
-            receipt.native_id
-            for receipt in candidates
-            if self._container_receipt_is_current(ownership, receipt)
-        )
-        if len(verified) != 1:
-            raise OwnershipConflictError("container ownership is absent or ambiguous")
-        return verified[0]
+        # Docker can briefly return an empty/failed inspect during a busy
+        # first boot even though the immutable receipt and container still
+        # exist. Repeat only that inconclusive read of the same native IDs.
+        # A changed identity, label or semantic binding raises immediately;
+        # retries never grant authority from a mutable name or missing receipt.
+        for attempt, delay in enumerate((0, *_CONTAINER_INSPECT_RETRY_DELAYS)):
+            if delay:
+                time.sleep(delay)
+            try:
+                verified = tuple(
+                    receipt.native_id
+                    for receipt in candidates
+                    if self._container_receipt_is_current(ownership, receipt)
+                )
+            except BackendTimeoutError:
+                if attempt == len(_CONTAINER_INSPECT_RETRY_DELAYS):
+                    raise
+                continue
+            if len(verified) == 1:
+                return verified[0]
+            if len(verified) > 1:
+                break
+        raise OwnershipConflictError("container ownership is absent or ambiguous")
 
     def _container_receipt_is_current(
         self, ownership: WorkspaceOwnership, receipt: ResourceReceipt
@@ -220,13 +250,17 @@ class ComposeResourceResolutionMixin:
             ownership = self._ensure_resource_ownership()
             failures = []
             for receipt in ownership.receipts("volume"):
-                if not self._raw_volume_inspect(receipt.native_id):
+                if self._raw_volume_inspect(receipt.native_id):
+                    volume = self._resolve_owned_volume_name(receipt.native_id)
+                    if self._run(
+                        ["docker", "volume", "rm", volume], timeout=_DOCKER_TIMEOUT
+                    ).returncode:
+                        failures.append("failed to remove receipt-owned volume")
+                        continue
+                if self._raw_volume_inspect(receipt.native_id):
+                    failures.append("failed to verify receipt-owned volume removal")
                     continue
-                volume = self._resolve_owned_volume_name(receipt.native_id)
-                if self._run(
-                    ["docker", "volume", "rm", volume], timeout=_DOCKER_TIMEOUT
-                ).returncode:
-                    failures.append("failed to remove receipt-owned volume")
+                ownership.retire_deleted_volume(receipt)
             return failures
         except (OwnershipConflictError, BackendTimeoutError, OSError):
             return ["failed to establish volume cleanup authority"]
@@ -303,6 +337,10 @@ class ComposeResourceResolutionMixin:
             raise BackendSeedError(
                 f"failed to recover owned base container for node {spec.node_address}"
             )
+        for logical_volume in dict.fromkeys(
+            mount.source for mount in spec.volume_mounts
+        ):
+            self._ensure_labeled_project_volume(logical_volume)
         command = self._base_container_create_command(
             spec,
             network_bindings,

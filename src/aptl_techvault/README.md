@@ -6,6 +6,8 @@ package, behind the entry points APTL discovers it through.
 | Entry-point group | Name | What it supplies |
 | --- | --- | --- |
 | `aptl.pack_backend_interactions` | `techvault.aptl` | which pack components belong to which operator start group |
+| `aptl.scenario_runtime_parameters` | `techvault` | fresh runtime-owned bindings for the exact qualified pack release |
+| `aptl.scenario_startup` | `techvault` | content-qualified startup and native log-producer realization |
 | `aptl.scenario_verifiers` | `techvault.aptl` | the semantic answer key: is the declared defensive stack realized, does the attacker reach its peers |
 | `aptl.participant_mcp_smoke_plans` | `guided-purple.techvault-attacker-target` | the exact MCP operations that qualify a participant |
 
@@ -24,24 +26,29 @@ the separate question of whether the scenario's expectations actually held.
 
 It ships inside the `aptl-labs` distribution and releases with it, so `pipx
 install aptl-labs` gives an operator every extension surface TechVault owns with
-nothing further to install. The boundary that matters is in the code, not the
-packaging: no module under `aptl.` holds scenario knowledge, every surface here
-is reached only through installed entry-point metadata, and a second scenario
-adds a package beside this one rather than editing the framework. Conformance
-tests assert each of those.
+nothing further to install. The materialization boundary is in the code, not
+the packaging: generic materialization consumes the admitted RAES model
+without branching on TechVault names, while runtime parameters, startup
+behavior and verification are reached through installed entry-point metadata.
+Native evidence is an older built-in adapter under
+`aptl.core.evidence.adapters`, with registrations still declared in APTL core;
+this is not yet complete package-level scenario isolation.
 
-## What it does not do
+## Startup verification traffic
 
-It generates no activity in the range. An earlier check drove `nmap` and failed
-SSH authentication from the attacker node and then read Wazuh back, to prove an
-event traversed the sensor and the SIEM. Those alerts and sensor records outlived
-the run, because the live gate's destructive cleanup runs before its boot rather
-than after, so a validated range was no longer in a clean pre-attack state. What
-remains is observation: the declared nodes are realized and the attacker reaches
-its shared-network peers.
+The adapter verifier no longer runs the old `nmap` and failed-SSH checks; their
+alerts outlived verification. Startup is nevertheless **not a zero-event
+baseline**. The released SDL requires native evidence of a participant-equivalent
+SQL-injection request, an authenticated MISP API write/read, and endpoint
+telemetry. Those checks create bounded activity and may leave records in the
+range. Startup also emits bounded syslog, database, DNS, SMB and HTTP activity
+to prove that every declared Wazuh source has a working producer and fresh
+manager-attributed telemetry. None of these records should be mistaken for
+participant activity.
 
-It also owns no windows, deadlines, polling, credentials or backend access. Those
-are framework concerns reached through the operations surface.
+The framework owns capture windows and deadlines. The adapter receives scoped
+backend operations, performs bounded readiness polling, and keeps credential
+values inside their owning services rather than returning them as evidence.
 
 ## Compatibility
 

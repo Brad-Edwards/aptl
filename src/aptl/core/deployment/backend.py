@@ -100,6 +100,16 @@ class DeploymentBackend(HostInventoryBackend, ContainerOpsBackend, Protocol):
         """
         ...
 
+    def qualify_runtime_materialization(
+        self,
+        realization: DeploymentRealizationSpec,
+        *,
+        scenario_root: Path,
+    ) -> LabResult:
+        """Read-only qualification that must precede artifact mutation."""
+
+        ...
+
     def realize_boundary(self, policy: BoundaryEnforcementSpec) -> LabResult:
         """Apply and read back one project-owned appliance boundary policy."""
 

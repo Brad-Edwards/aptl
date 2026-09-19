@@ -5,6 +5,7 @@ from __future__ import annotations
 import secrets
 from collections.abc import Mapping
 
+from aptl.backends.scenario_runtime_parameters import EXTENSION_API_VERSION
 from aptl.core.scenario_bundle import ScenarioBundle
 
 TECHVAULT_PACK_SET_DIGEST = (
@@ -45,4 +46,25 @@ def runtime_parameters_for_bundle(
     }
 
 
-__all__ = ["TECHVAULT_PACK_SET_DIGEST", "runtime_parameters_for_bundle"]
+class TechVaultRuntimeParameterProvider:
+    """Bind runtime-owned values only for the exact qualified pack release."""
+
+    extension_api_version = EXTENSION_API_VERSION
+    supported_pack_id = "techvault"
+    supported_pack_versions = (_TECHVAULT_PACK_VERSION,)
+    supported_pack_set_digests = (TECHVAULT_PACK_SET_DIGEST,)
+
+    @staticmethod
+    def resolve(bundle: ScenarioBundle) -> Mapping[str, object] | None:
+        return runtime_parameters_for_bundle(bundle)
+
+
+provider = TechVaultRuntimeParameterProvider()
+
+
+__all__ = [
+    "TECHVAULT_PACK_SET_DIGEST",
+    "TechVaultRuntimeParameterProvider",
+    "provider",
+    "runtime_parameters_for_bundle",
+]

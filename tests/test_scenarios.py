@@ -55,25 +55,21 @@ def test_startup_catalog_contains_only_raes_sdl_paths():
     assert all("/archive/" not in entry.path for entry in catalog.scenarios)
 
 
-def test_clean_install_workflow_starts_a_catalog_scenario():
-    """The packaged clean-install smoke test must use a live catalog entry."""
-    from aptl.core.scenario_catalog import load_scenario_catalog
-
+def test_clean_install_workflow_starts_the_product_neutral_envelope():
+    """CI exercises materialization independently of TechVault's adapter."""
     workflow = (PROJECT_ROOT / ".github" / "workflows" / "checks.yml").read_text()
     job_match = re.search(
         r"(?ms)^  clean-install-lab-boot:.*?(?=^  [a-z][a-z0-9-]*:|\Z)",
         workflow,
     )
     assert job_match is not None
-    scenario_matches = re.findall(
-        r"\baptl\"? lab start --scenario ([a-z0-9-]+)", job_match.group()
-    )
-    assert len(scenario_matches) == 1
-
-    catalog_ids = {
-        entry.id for entry in load_scenario_catalog(PROJECT_ROOT).scenarios
-    }
-    assert scenario_matches[0] in catalog_ids
+    job = job_match.group()
+    fixture = "materialization-envelope.sdl.yaml"
+    assert (PROJECT_ROOT / "tests" / "fixtures" / fixture).is_file()
+    assert f"tests/fixtures/{fixture}" in job
+    assert f"--scenario-path scenarios/{fixture}" in job
+    assert 'aptl" lab status' in job
+    assert 'aptl" lab stop --volumes --yes' in job
 
 
 def test_archived_legacy_yaml_is_reference_only():

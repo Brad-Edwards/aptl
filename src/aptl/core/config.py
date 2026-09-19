@@ -200,7 +200,6 @@ class DeploymentConfig(BaseModel):
 
         return validate_compose_project_name(value)
 
-
 _TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 

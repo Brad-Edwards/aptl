@@ -13,7 +13,6 @@ from aptl.core.deployment._compose_runtime_observation_helpers import (
     container_ids as _container_ids,
     inspect_has_endpoint_override as _inspect_has_endpoint_override,
     inspect_has_socket_route as _inspect_has_socket_route,
-    inspect_is_privileged as _inspect_is_privileged,
     inspect_mounts as _inspect_mounts,
     spawn_failure as _spawn_failure,
 )
@@ -191,34 +190,16 @@ class ComposeRuntimeOrchestrationObservationMixin(
     ) -> tuple[LabResult | None, tuple[str, ...]]:
         """Query one exact image-label pair and enforce its declared count."""
 
-        # Without an authored child there is no label to filter on, so the
-        # query narrows to the exact authored image alone. Dropping the filter
-        # widens what is observed, never what is accepted: every container it
-        # returns is still checked against the pinned image identity below.
-        query = _child_query(requirement)
-        try:
-            result = self._run(
-                query,
-                timeout=requirement.execution_timeout_seconds,
-            )
-        except BackendTimeoutError:
-            result = None
-        failure = None
-        container_ids: tuple[str, ...] = ()
-        if result is None or result.returncode != 0:
-            failure = _spawn_failure("Spawned-child observation failed", requirement)
-        else:
-            container_ids = _container_ids(result.stdout)
-            if container_ids and getattr(
-                self, "_attempt_isolated_docker_daemon", False
-            ):
-                failure = self._record_child_receipts(container_ids, requirement)
+        # An uncorrelated template identifies an allowed image, not a spawned
+        # child. A shared daemon cannot attribute other containers with that
+        # image to this lab, so never inspect foreign containers by image alone.
+        if not requirement.child_label:
+            return None, ()
+        failure, container_ids = self._query_correlated_child_ids(requirement)
         # A count can only be enforced against an authored one. A template
         # without a declared child inventory says which image may run, not how
         # many may run, so its children are identity-checked and not counted.
-        count_required = bool(requirement.child_label) and bool(
-            container_ids or require_children
-        )
+        count_required = bool(container_ids or require_children)
         if (
             failure is None
             and count_required
@@ -229,6 +210,29 @@ class ComposeRuntimeOrchestrationObservationMixin(
                 requirement,
             )
         return failure, container_ids
+
+    def _query_correlated_child_ids(
+        self, requirement: DeploymentSpawnImageRequirement
+    ) -> tuple[LabResult | None, tuple[str, ...]]:
+        """Query exact child labels and capture isolated-daemon ownership."""
+
+        query = _child_query(requirement)
+        try:
+            result = self._run(
+                query,
+                timeout=requirement.execution_timeout_seconds,
+            )
+        except BackendTimeoutError:
+            result = None
+        if result is None or result.returncode != 0:
+            return _spawn_failure("Spawned-child observation failed", requirement), ()
+        container_ids = _container_ids(result.stdout)
+        if container_ids and getattr(self, "_attempt_isolated_docker_daemon", False):
+            return (
+                self._record_child_receipts(container_ids, requirement),
+                container_ids,
+            )
+        return None, container_ids
 
     def _record_child_receipts(
         self,
@@ -339,7 +343,6 @@ class ComposeRuntimeOrchestrationObservationMixin(
         configuration_ok = bool(
             _authority_mount_is_valid(_inspect_mounts(info), admission)
             and not _inspect_has_endpoint_override(info)
-            and not _inspect_is_privileged(info)
             and daemon_id
         )
         if not configuration_ok:
@@ -353,9 +356,9 @@ class ComposeRuntimeOrchestrationObservationMixin(
         drive the daemon over its API -- Shuffle's orborus is one -- and exec
         answers 126/127 when the binary is absent. There is then nothing to
         corroborate, and the caller has already established the boundary: the
-        mount is exactly the admitted socket, no endpoint override redirects
-        it, and the holder is unprivileged, so the daemon it reaches is this
-        one. A CLI that does answer, for a different daemon, is still a failure.
+        mount is exactly the admitted host socket and no endpoint override
+        redirects it. A CLI that does answer, for a different daemon, is still
+        a failure.
         """
 
         try:
@@ -378,10 +381,8 @@ class ComposeRuntimeOrchestrationObservationMixin(
 
     @staticmethod
     def _inspected_container_has_docker_authority(info: object) -> bool:
-        """Whether inspect output exposes the socket, an override, or privilege."""
+        """Whether inspect output exposes Docker control, not mere privilege."""
 
         return bool(
-            _inspect_has_socket_route(info)
-            or _inspect_has_endpoint_override(info)
-            or _inspect_is_privileged(info)
+            _inspect_has_socket_route(info) or _inspect_has_endpoint_override(info)
         )

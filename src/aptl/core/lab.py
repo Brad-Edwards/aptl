@@ -42,6 +42,7 @@ from aptl.core.env import (
     find_placeholder_env_values,
     hydrate_dotenv,
     load_dotenv,
+    update_dotenv_values,
 )
 
 # Re-export the lifecycle DTO types from the leaf module (#266 + ADR-030).
@@ -96,12 +97,14 @@ if TYPE_CHECKING:
     from raes_contracts.contracts import ExperimentEvidenceRecordModel
 
     from aptl.backends._raes_scenario_queries import AdmittedStartSurface
+    from aptl.backends.scenario_startup import ScenarioStartupPlan
     from aptl.backends.raes_realization_model import AptlRealization
     from aptl.backends.raes import AcesStartOutcome
     from aptl.backends.raes_start_model import AcesRunTarget, AdmittedScenarioStart
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.experiment.capture_plan import CapturePlan
     from aptl.core.experiment.capture_registry import CaptureBinding
+    from aptl.core.scenario_bundle import ScenarioBundle
 
 log = get_logger("lab")
 
@@ -944,6 +947,9 @@ class _LabStartContext(object):
     # use sites to keep the RAES import lazy.
     admitted_start: object = None
     admitted_surface: "AdmittedStartSurface | None" = None
+    # Optional content-identified startup enrichment selected through the
+    # installed scenario adapter. Core treats the validated plan generically.
+    scenario_startup: object = None
     # Required native evidence is acquired after service readiness and retained
     # here so the run record can reference the exact persisted capture set.
     native_evidence_acquisition: object = None
@@ -1123,8 +1129,12 @@ def _step_resolve_host_ports(ctx: _LabStartContext) -> LabResult | None:
     """
     from aptl.core import _port_bindings as port_bindings, host_ports
 
-    active_profiles = None
-    if ctx.config is not None:
+    active_profiles = (
+        set(ctx.admitted_surface.selected_profiles)
+        if ctx.admitted_surface is not None
+        else None
+    )
+    if active_profiles is None and ctx.config is not None:
         active_profiles = set(ctx.config.containers.enabled_profiles())
     assert ctx.backend is not None
     existing_bindings = port_bindings.project_port_bindings(ctx.backend)
@@ -1402,12 +1412,69 @@ def _load_admitted_start_surface(
                 f"{redact(str(exc))}"
             ),
         )
+    if failure is None and admitted is not None:
+        failure = getattr(admitted, "runtime_materialization_failure", None)
     if failure is None:
         assert admitted is not None and surface is not None
         ctx.admitted_start = admitted
         ctx.admitted_surface = surface
+        ctx.selected_profiles = set(surface.selected_profiles)
         ctx.stateful_artifact_ownership = surface.stateful_artifact_ownership
+        failure = _prepare_scenario_startup(ctx, admitted.bundle)
     return failure
+
+
+def _prepare_scenario_startup(
+    ctx: _LabStartContext, bundle: "ScenarioBundle"
+) -> LabResult | None:
+    """Resolve optional pack startup behavior and bind credential aliases."""
+
+    from aptl.backends.scenario_startup import (
+        ScenarioStartupProviderError,
+        resolve_scenario_startup,
+    )
+
+    try:
+        plan = resolve_scenario_startup(bundle)
+        if plan is None:
+            return None
+        return _bind_scenario_startup_environment(ctx, plan)
+    except (OSError, ValueError, ScenarioStartupProviderError):
+        log.warning("Scenario startup adapter preparation failed")
+        return LabResult(
+            success=False,
+            error="Scenario startup adapter preparation failed.",
+        )
+
+
+def _bind_scenario_startup_environment(
+    ctx: _LabStartContext, plan: ScenarioStartupPlan
+) -> LabResult | None:
+    """Bind only declared aliases to the generated project environment."""
+
+    missing = sorted(
+        alias.source
+        for alias in plan.environment_aliases
+        if not ctx.raw_env.get(alias.source)
+    )
+    if missing:
+        return LabResult(
+            success=False,
+            error=(
+                "Scenario startup adapter requires unavailable operator "
+                f"environment source(s): {', '.join(missing)}."
+            ),
+        )
+    updates = {
+        alias.target: ctx.raw_env[alias.source] for alias in plan.environment_aliases
+    }
+    changed = update_dotenv_values(ctx.project_dir / ".env", updates)
+    if changed:
+        log.info("Applied %d scenario startup environment binding(s)", len(changed))
+    ctx.raw_env = load_dotenv(ctx.project_dir / ".env")
+    ctx.env = env_vars_from_dict(ctx.raw_env)
+    ctx.scenario_startup = plan
+    return None
 
 
 def _ssh_key_step_failure(result: SSHKeyResult, what: str) -> LabResult | None:
@@ -1580,6 +1647,9 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 5: Rendering credentialized service config...")
     # Contract above is the runtime guard; this assert is a typing hint.
     assert ctx.env is not None
+    if ctx.admitted_surface is not None and "wazuh" not in ctx.selected_profiles:
+        log.debug("Wazuh profile not selected, skipping credential rendering")
+        return None
     # The rendered files (.aptl/config/...) are Docker bind-mount sources
     # resolved on the *daemon's* filesystem. With the SSH-remote backend
     # the daemon is on another host, so rendering locally would leave the
@@ -1645,6 +1715,9 @@ def _step_seed_suricata_volumes(
     legacy UID-991-owned ``.aptl/suricata/rules/misp`` bind dir.
     """
     log.info("Step 5b: Seeding Suricata runtime volumes...")
+    if ctx.admitted_surface is not None and "soc" not in ctx.selected_profiles:
+        log.debug("SOC profile not selected, skipping Suricata volume seeding")
+        return None
     from aptl.core.deployment import SSHComposeBackend
 
     if isinstance(ctx.backend, SSHComposeBackend):
@@ -1734,7 +1807,12 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
 def _step_generate_certs(ctx: _LabStartContext) -> LabResult | None:
     """Generate SSL certificates required by the base stack."""
     log.info("Step 6: Generating SSL certificates...")
-    if _WAZUH_CERTIFICATE_OWNERSHIP <= ctx.stateful_artifact_ownership:
+    skip_profile = (
+        ctx.admitted_surface is not None and "wazuh" not in ctx.selected_profiles
+    )
+    if skip_profile:
+        log.debug("Wazuh profile not selected, skipping certificate generation")
+    if skip_profile or _WAZUH_CERTIFICATE_OWNERSHIP <= ctx.stateful_artifact_ownership:
         return None
     cert_result = ensure_ssl_certs(ctx.project_dir)
     if cert_result.success:
@@ -1768,6 +1846,9 @@ def _step_generate_soc_certs(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 6c: Generating SOC stack lab CA + service certs...")
     # runtime guard above; this assert is for the type-checker.
     assert ctx.config is not None
+    if ctx.admitted_surface is not None and "soc" not in ctx.selected_profiles:
+        log.debug("SOC profile not selected, skipping SOC CA generation")
+        return None
     if _scenario_is_env_pack(ctx):
         # The pack declares the SOC CA + service certs as certificate_bundle
         # generated artifacts, produced and validated during realization.
@@ -1857,6 +1938,9 @@ def _step_pull_images(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 7: Pre-pulling container images...")
     # Contract above is the runtime guard.
     assert ctx.backend is not None
+    if ctx.admitted_surface is not None and "wazuh" not in ctx.selected_profiles:
+        log.debug("Wazuh profile not selected, skipping Wazuh image pulls")
+        return None
     images = [
         f"wazuh/wazuh-manager:{WAZUH_IMAGE_VERSION}",
         f"wazuh/wazuh-indexer:{WAZUH_IMAGE_VERSION}",
@@ -2806,8 +2890,12 @@ def _step_pin_terminal_host_keys(ctx: _LabStartContext) -> LabResult | None:
 
 def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
     """Build local MCP server artifacts after the lab is running."""
-    if ctx.offline_staged:
-        log.info("Using pre-staged MCP server artifacts")
+    no_adapter_profiles = ctx.admitted_surface is not None and not ctx.selected_profiles
+    if no_adapter_profiles or ctx.offline_staged:
+        if no_adapter_profiles:
+            log.debug("No adapter profiles selected, skipping MCP artifact build")
+        else:
+            log.info("Using pre-staged MCP server artifacts")
         return None
     log.info("Step 12: Building MCP servers...")
     mcp_script = ctx.project_dir / "mcp" / "build-all-mcps.sh"
@@ -2853,26 +2941,7 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
     return None
 
 
-# Issue #214: the prime scenario seed (`scripts/seed-prime.sh`) provisions
-# TheHive cases, MISP feeds, and Shuffle workflows that span the full
-# prime profile set. ADR-005 supports selective SOC labs (e.g. SOC + Wazuh
-# without fileshare), so a missing prime profile must NOT fatally refuse
-# lab startup — it just means the prime seed cannot meaningfully run, and
-# the lab should come up with SOC empty plus a CAPABILITY diagnostic.
-# Kept module-level as a stable constant: the seed gate below diffs it
-# directly against `ctx.selected_profiles`, the scenario-realized surface
-# (issue #550 — not the config ceiling), and a future operation (e.g. an
-# explicit `aptl scenario prime start` entrypoint) can still wire the same
-# set into a hard `_runtime_require` via the config-bound
-# `required_profiles_enabled` predicate in `aptl.core.contracts` without
-# redefining it.
-_PRIME_REQUIRED_PROFILES = frozenset(
-    {"wazuh", "enterprise", "victim", "kali", "fileshare", "soc"}
-)
-
-_SEED_SOC_RERUN_ACTION = (
-    "Re-run scripts/seed-prime.sh manually once SOC containers are healthy"
-)
+_SEED_SOC_RERUN_ACTION = "Re-run the selected scenario seed once services are healthy"
 
 
 @_runtime_require(
@@ -2880,54 +2949,56 @@ _SEED_SOC_RERUN_ACTION = (
     description="config_is_loaded(ctx.config)",
 )
 def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
-    """Seed SOC tools when the configured profile set can support it."""
+    """Run optional adapter-owned scenario seeding after service readiness."""
+    from aptl.backends.scenario_startup import ScenarioStartupPlan
+
+    plan = ctx.scenario_startup
+    if not isinstance(plan, ScenarioStartupPlan):
+        return None
     if ctx.skip_seed:
-        log.info("Step 13: Skipping SOC seeding (--skip-seed)")
+        log.info("Step 13: Skipping scenario seeding (--skip-seed)")
     else:
-        log.info("Step 13: Seeding SOC tools...")
-        # Runtime guard above.
-        assert ctx.config is not None
-        if "soc" not in ctx.selected_profiles:
-            log.debug("SOC profile not selected by this scenario, skipping seed")
-        elif not _PRIME_REQUIRED_PROFILES.issubset(ctx.selected_profiles):
-            _emit_missing_prime_profiles(ctx)
+        log.info("Step 13: Seeding selected scenario...")
+        required = set(plan.required_profiles)
+        if set(plan.activation_profiles).isdisjoint(ctx.selected_profiles):
+            log.debug("Scenario seed profiles are not selected; skipping seed")
+        elif not required.issubset(ctx.selected_profiles):
+            _emit_missing_seed_profiles(ctx, required)
         else:
-            _run_seed_soc_script(ctx)
+            _run_scenario_seed_script(ctx, plan)
     return None
 
 
-def _emit_missing_prime_profiles(ctx: _LabStartContext) -> None:
-    """Emit the non-fatal diagnostic for a selected-but-incomplete prime set.
+def _emit_missing_seed_profiles(
+    ctx: _LabStartContext, required_profiles: set[str]
+) -> None:
+    """Emit a non-fatal diagnostic for an incomplete adapter seed surface."""
 
-    Diffs against ``ctx.selected_profiles`` — the scenario-realized
-    surface — not the config ceiling: a profile can be missing here
-    because the selected scenario never included it, not only because it
-    is disabled in ``aptl.json`` (issue #550), so the operator guidance
-    below must name both possible causes.
-    """
-    missing = sorted(_PRIME_REQUIRED_PROFILES - ctx.selected_profiles)
+    missing = sorted(required_profiles - ctx.selected_profiles)
     _emit_diagnostic(
         ctx,
         step="seed_soc",
         impact=DiagnosticImpact.CAPABILITY,
         severity=DiagnosticSeverity.WARNING,
         message=(
-            "Prime SOC seed needs the full prime profile set; "
+            "Scenario seed needs its full profile set; "
             f"missing: {', '.join(missing)}. SOC tools will start empty."
         ),
         operator_action=(
-            "Enable the missing prime profiles in aptl.json if they are "
+            "Enable the missing profiles in aptl.json if they are "
             "disabled, or start a scenario that selects them — the "
             "current scenario may intentionally omit them. Alternatively "
-            "run `scripts/seed-prime.sh` manually once the prime stack "
-            "is up."
+            "re-run the selected scenario seed once its services are up."
         ),
     )
 
 
-def _run_seed_soc_script(ctx: _LabStartContext) -> None:
-    """Run ``seed-prime.sh`` and convert soft failures to diagnostics."""
-    seed_script = ctx.project_dir / "scripts" / "seed-prime.sh"
+def _run_scenario_seed_script(ctx: _LabStartContext, plan: object) -> None:
+    """Run one validated adapter script and convert soft failures to diagnostics."""
+    from aptl.backends.scenario_startup import ScenarioStartupPlan, seed_script_path
+
+    assert isinstance(plan, ScenarioStartupPlan)
+    seed_script = seed_script_path(ctx.project_dir, plan)
     if not seed_script.exists():
         log.warning("SOC profile enabled but seed script not found at %s", seed_script)
         _emit_diagnostic(
@@ -2935,20 +3006,37 @@ def _run_seed_soc_script(ctx: _LabStartContext) -> None:
             step="seed_soc",
             impact=DiagnosticImpact.CAPABILITY,
             severity=DiagnosticSeverity.WARNING,
-            message=(
-                "SOC profile enabled but seed-prime.sh not found; "
-                "SOC tools will start empty"
-            ),
+            message=("Scenario seed script was not found; SOC tools will start empty"),
             operator_action=(
-                "Restore scripts/seed-prime.sh and re-run it once SOC "
-                "containers are healthy"
+                "Restore the installed scenario assets and re-run the seed once "
+                "services are healthy"
             ),
         )
     else:
-        _execute_seed_soc_script(ctx, seed_script)
+        _execute_seed_soc_script(ctx, seed_script, plan)
 
 
-def _execute_seed_soc_script(ctx: _LabStartContext, seed_script: Path) -> None:
+def _scenario_seed_environment(ctx: _LabStartContext, plan: object) -> dict[str, str]:
+    """Return receipt-resolved, non-secret container bindings for one seed."""
+    from aptl.backends.scenario_startup import ScenarioStartupPlan
+
+    assert isinstance(plan, ScenarioStartupPlan)
+    if plan.container_environment and ctx.backend is None:
+        raise OSError("deployment backend is unavailable")
+    environment = {**os.environ, **ctx.raw_env}
+    for binding in plan.container_environment:
+        assert ctx.backend is not None
+        info = ctx.backend.container_inspect(binding.semantic_name)
+        external_name = info.get("Name") if isinstance(info, Mapping) else None
+        if not isinstance(external_name, str) or not external_name.strip("/"):
+            raise OSError("scenario seed container binding is unavailable")
+        environment[binding.variable] = external_name.removeprefix("/")
+    return environment
+
+
+def _execute_seed_soc_script(
+    ctx: _LabStartContext, seed_script: Path, plan: object
+) -> None:
     """Execute the SOC seed script and emit non-fatal diagnostics."""
     try:
         from aptl.utils.shell import run_shell_script
@@ -2956,7 +3044,7 @@ def _execute_seed_soc_script(ctx: _LabStartContext, seed_script: Path) -> None:
         seed_result = run_shell_script(
             seed_script,
             cwd=ctx.project_dir,
-            env={**os.environ, **ctx.raw_env},
+            env=_scenario_seed_environment(ctx, plan),
             timeout=1200,
         )
         if seed_result.returncode != 0:
@@ -2989,7 +3077,7 @@ def _execute_seed_soc_script(ctx: _LabStartContext, seed_script: Path) -> None:
             impact=DiagnosticImpact.CAPABILITY,
             severity=DiagnosticSeverity.WARNING,
             message="SOC seeding could not run; see lab logs",
-            operator_action=("Inspect scripts/seed-prime.sh permissions and tooling"),
+            operator_action=("Inspect the selected scenario seed assets and tooling"),
         )
 
 
@@ -3026,9 +3114,32 @@ def _step_acquire_required_native_evidence(
         failure = (
             _refresh_required_native_evidence(ctx, admitted, capture.records)
             if capture.disposition is AcquisitionDisposition.SEALED_READY
-            else LabResult(success=False, error=_NATIVE_CAPTURE_FAILED)
+            else LabResult(
+                success=False,
+                error=_native_capture_failure(capture),
+            )
         )
     return failure
+
+
+def _native_capture_failure(capture: object) -> str:
+    """Expose only bounded collector ids/statuses, never captured payloads."""
+
+    failures = []
+    for report in getattr(capture, "reports", ()):
+        registration = str(getattr(report, "registration_id", ""))
+        status = str(getattr(getattr(report, "status", None), "value", ""))
+        if (
+            status not in {"ok", "empty_ok"}
+            and re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", registration)
+            and re.fullmatch(r"[A-Za-z0-9_.-]{1,50}", status)
+        ):
+            failures.append(f"{registration}={status}")
+    return (
+        f"{_NATIVE_CAPTURE_FAILED}: {', '.join(failures[:5])}"
+        if failures
+        else _NATIVE_CAPTURE_FAILED
+    )
 
 
 def _log_native_evidence_reports(capture: object) -> None:
@@ -3116,8 +3227,26 @@ def _refresh_required_native_evidence(
             if refresh.status is OperationState.SUCCEEDED:
                 ctx.raes_outcome.final_snapshot = refresh.snapshot
             else:
-                failure = LabResult(success=False, error=_NATIVE_EVALUATION_FAILED)
+                failure = LabResult(
+                    success=False,
+                    error=_native_evaluation_failure(refresh),
+                )
     return failure
+
+
+def _native_evaluation_failure(refresh: object) -> str:
+    """Surface stable RAES diagnostic codes without exposing evidence bodies."""
+
+    codes = []
+    for diagnostic in getattr(refresh, "diagnostics", ()):
+        code = str(getattr(diagnostic, "code", ""))
+        if re.fullmatch(r"[A-Za-z0-9_.-]{1,120}", code) and code not in codes:
+            codes.append(code)
+    return (
+        f"{_NATIVE_EVALUATION_FAILED}: {', '.join(codes[:5])}"
+        if codes
+        else _NATIVE_EVALUATION_FAILED
+    )
 
 
 def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
@@ -3129,9 +3258,16 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
     # so the MCPs authenticate without manual rewiring after a fresh
     # `lab stop -v` + `lab start`.
     log.info("Step 14: Syncing MCP client config with seeded API keys...")
+    if ctx.admitted_surface is not None and not ctx.selected_profiles:
+        log.debug("No adapter profiles selected, skipping MCP client configuration")
+        return None
     try:
         _sync_mcp_config_keys(ctx.project_dir, ctx.resolved_ports)
-        if ctx.admitted_start is not None and ctx.backend is not None:
+        if (
+            ctx.admitted_start is not None
+            and ctx.backend is not None
+            and "kali" in ctx.selected_profiles
+        ):
             _sync_native_mcp_ingress(ctx.project_dir, ctx.backend, ctx.run_id)
     except Exception:
         # Exception text may include API key names — keep it in the log
@@ -3353,6 +3489,33 @@ _LAB_START_PROGRESS_MESSAGES = {
     "_step_write_run_record": "Writing the terminal run reproducibility record.",
 }
 
+_LAB_START_PROGRESS_PROFILES = {
+    "_step_seed_suricata_volumes": frozenset({"soc"}),
+    "_step_generate_certs": frozenset({"wazuh"}),
+    "_step_generate_soc_certs": frozenset({"soc"}),
+    "_step_pull_images": frozenset({"wazuh"}),
+    "_step_wait_for_services": frozenset({"wazuh"}),
+    "_step_activate_capture_apparatus": frozenset({"kali"}),
+    "_step_seed_soc": frozenset({"soc"}),
+}
+
+
+def _start_progress_message(
+    ctx: _LabStartContext, step: Callable[[_LabStartContext], LabResult | None]
+) -> str | None:
+    """Return a progress message only for capabilities this run admitted."""
+
+    name = step.__name__
+    if ctx.admitted_surface is not None:
+        required = _LAB_START_PROGRESS_PROFILES.get(name)
+        if required is not None and required.isdisjoint(ctx.selected_profiles):
+            return None
+        if name in {"_step_build_mcps", "_step_sync_mcp_config"} and not (
+            ctx.selected_profiles
+        ):
+            return None
+    return _LAB_START_PROGRESS_MESSAGES.get(name)
+
 
 def _emit_progress(ctx: _LabStartContext, message: str) -> None:
     """Emit a participant-facing progress update when a caller opted in."""
@@ -3428,7 +3591,7 @@ def _orchestrate_lab_start_owned(
     )
 
     for step in _LAB_START_STEPS:
-        progress_message = _LAB_START_PROGRESS_MESSAGES.get(step.__name__)
+        progress_message = _start_progress_message(ctx, step)
         if progress_message:
             _emit_progress(ctx, progress_message)
         try:

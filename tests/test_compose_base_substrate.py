@@ -541,6 +541,7 @@ class TestStartBaseContainerVolumesAndPorts:
 
     def test_volume_mount_uses_the_project_scoped_volume_name(self, tmp_path):
         backend = _backend(tmp_path)
+        backend._ensure_labeled_project_volume = MagicMock()
         spec = BaseContainerSpec(
             node_address="provision.node.misp-suricata-sync",
             container_name="aptl-misp-suricata-sync",
@@ -568,9 +569,13 @@ class TestStartBaseContainerVolumesAndPorts:
             f"{backend.project_name}_suricata_misp_rules:/var/lib/suricata/rules/misp"
             in argv
         )
+        backend._ensure_labeled_project_volume.assert_called_once_with(
+            "suricata_misp_rules"
+        )
 
     def test_read_only_volume_mount_appends_ro_suffix(self, tmp_path):
         backend = _backend(tmp_path)
+        backend._ensure_labeled_project_volume = MagicMock()
         spec = BaseContainerSpec(
             node_address="provision.node.misp-suricata-sync",
             container_name="aptl-misp-suricata-sync",
@@ -598,6 +603,9 @@ class TestStartBaseContainerVolumesAndPorts:
         assert (
             f"{backend.project_name}_suricata_command_socket:/var/run/suricata:ro"
             in argv
+        )
+        backend._ensure_labeled_project_volume.assert_called_once_with(
+            "suricata_command_socket"
         )
 
     def test_published_port_defaults_host_port_to_container_port(self, tmp_path):

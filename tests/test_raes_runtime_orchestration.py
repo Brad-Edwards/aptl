@@ -27,6 +27,7 @@ from aptl.core.deployment._compose_runtime_orchestration import (
     effective_orchestration_model_errors,
 )
 from aptl.core.deployment.docker_compose import DockerComposeBackend
+from aptl.core.deployment._docker_image_identity import EXACT_IMAGE_INSPECT_FORMAT
 from aptl.core.config import AptlConfig
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
@@ -62,33 +63,8 @@ _IMAGE_ID = "sha256:" + "b" * 64
 _CHILD_INSPECT = f'["{_CHILD_REF}"]\t{_IMAGE_ID}\tlinux/amd64\n'
 
 
-#: What a correctly realized authority holder sees: a Docker socket at the
-#: declared path whose source is the mediating apparatus, never the host's own
-#: socket (issue #912).
-_MEDIATED_SOCKET = "/srv/aptl/.aptl/realization/docker-authority/docker.sock"
-
-
-def _authority_apparatus_service() -> dict[str, object]:
-    return {
-        "network_mode": "none",
-        "read_only": True,
-        "cap_drop": ["ALL"],
-        "security_opt": ["no-new-privileges:true"],
-        "volumes": [
-            {
-                "type": "bind",
-                "source": "/var/run/docker.sock",
-                "target": "/var/run/docker.sock",
-                "read_only": False,
-            },
-            {
-                "type": "bind",
-                "source": "/srv/.aptl/realization/docker-authority",
-                "target": "/run/aptl-docker-authority",
-                "read_only": False,
-            },
-        ],
-    }
+#: The admitted host-root-equivalent socket is exposed exactly as authored.
+_DOCKER_SOCKET = "/var/run/docker.sock"
 
 
 def _runtime(*, image_ref: str = _CHILD_REF) -> RuntimeConfiguration:
@@ -612,25 +588,26 @@ def test_ports_are_not_queried_when_nothing_declares_an_exact_binding(
     assert queried == []
 
 
-def test_graph_admission_rejects_participant_profile_authority_holder() -> None:
+def test_graph_admission_preserves_participant_profile_authority_holder() -> None:
     holder = replace(_spec().nodes[0], profiles=("kali",))
 
-    with pytest.raises(
-        ValueError, match="aptl.provisioner.runtime-authority-not-management-only"
-    ):
-        admit_docker_authorities((holder,))
+    admissions = admit_docker_authorities((holder,))
+
+    assert len(admissions) == 1
+    assert admissions[0].node_address == holder.address
 
 
-def test_graph_admission_rejects_participant_serving_authority_holder() -> None:
+def test_graph_admission_preserves_serving_holder_on_shared_network() -> None:
     holder = replace(
         _spec().nodes[0],
         services=(DeploymentServicePort(name="participant-api", port=8080),),
     )
 
-    with pytest.raises(
-        ValueError, match="aptl.provisioner.runtime-authority-not-management-only"
-    ):
-        admit_docker_authorities((holder,))
+    admissions = admit_docker_authorities((holder,))
+
+    assert len(admissions) == 1
+    assert holder.networks == ("security-net",)
+    assert admissions[0].node_address == holder.address
 
 
 def test_effective_model_rejects_missing_graph_admission() -> None:
@@ -640,7 +617,7 @@ def test_effective_model_rejects_missing_graph_admission() -> None:
                 "volumes": [
                     {
                         "type": "bind",
-                        "source": _MEDIATED_SOCKET,
+                        "source": _DOCKER_SOCKET,
                         "target": "/var/run/docker.sock",
                     }
                 ]
@@ -716,7 +693,11 @@ def test_public_plan_binds_authority_before_artifact_availability(
     from aptl.backends import raes
 
     calls: list[str] = []
-    bundle = SimpleNamespace(sdl_path=tmp_path / "scenario.yaml", root=tmp_path)
+    bundle = SimpleNamespace(
+        sdl_path=tmp_path / "scenario.yaml",
+        root=tmp_path,
+        pack_identity=None,
+    )
     scenario = SimpleNamespace(nodes={})
     monkeypatch.setattr(raes, "resolve_scenario_bundle", lambda *_args: bundle)
     monkeypatch.setattr(raes, "parse_sdl_file", lambda _path: scenario)
@@ -740,47 +721,28 @@ def test_public_plan_binds_authority_before_artifact_availability(
     assert calls == ["bind", "availability"]
 
 
-def test_generated_compose_lowers_one_mediated_socket_bind(tmp_path) -> None:
-    """The holder gets a socket at its declared path -- not the host's own.
+def test_generated_compose_lowers_the_declared_host_root_socket(tmp_path) -> None:
+    """The admitted host-root-equivalent holder gets the exact Docker socket."""
 
-    Bind-mounting `/var/run/docker.sock` satisfies the declaration and hands
-    over a host-root API at the same time, so the source is the mediating
-    apparatus's socket instead (issue #912).
-    """
-
-    from aptl.core.deployment._compose_docker_authority import authority_socket_path
     from aptl.core.deployment._compose_node_generation import render_realization_compose
 
-    service = render_realization_compose(_spec(), tmp_path)["services"]["orborus"]
+    service = render_realization_compose(_spec())["services"]["orborus"]
 
     assert service["volumes"] == [
         {
             "type": "bind",
-            "source": str(authority_socket_path(tmp_path)),
+            "source": _DOCKER_SOCKET,
             "target": "/var/run/docker.sock",
             "read_only": False,
         }
     ]
-    assert service["volumes"][0]["source"] != "/var/run/docker.sock"
     assert service.get("privileged") is not True
-    assert service["labels"]["org.aptl.docker-authority"] == "managed"
-
-
-def test_an_authority_holder_is_never_rendered_without_its_mediation() -> None:
-    """Fail closed: no mediated socket means no socket, never the host's."""
-
-    from aptl.core.deployment._compose_node_generation import render_realization_compose
-
-    spec = _spec()
-    with pytest.raises(ValueError, match="docker-authority-unmediated"):
-        render_realization_compose(spec)
 
 
 def test_generated_compose_preserves_existing_volumes_when_adding_socket(
     monkeypatch, tmp_path
 ) -> None:
     from aptl.core.deployment import _compose_node_generation as generation
-    from aptl.core.deployment._compose_docker_authority import authority_socket_path
 
     declared = {"type": "tmpfs", "target": "/work"}
     monkeypatch.setattr(
@@ -789,15 +751,13 @@ def test_generated_compose_preserves_existing_volumes_when_adding_socket(
         lambda _runtime: {"volumes": [declared]},
     )
 
-    service = generation.render_realization_compose(_spec(), tmp_path)["services"][
-        "orborus"
-    ]
+    service = generation.render_realization_compose(_spec())["services"]["orborus"]
 
     assert service["volumes"] == [
         declared,
         {
             "type": "bind",
-            "source": str(authority_socket_path(tmp_path)),
+            "source": _DOCKER_SOCKET,
             "target": "/var/run/docker.sock",
             "read_only": False,
         },
@@ -818,7 +778,7 @@ def test_authority_holder_without_compose_image_is_rejected_before_realization(
     )
 
 
-def test_spawned_child_contract_requires_attempt_isolated_daemon_before_mutation(
+def test_spawned_child_contract_allows_declared_authority_on_shared_daemon(
     tmp_path,
 ) -> None:
     backend = DockerComposeBackend(tmp_path)
@@ -827,13 +787,8 @@ def test_spawned_child_contract_requires_attempt_isolated_daemon_before_mutation
 
     result = backend._runtime_orchestration_preflight(_spec())
 
-    assert result is not None
-    assert result.success is False
-    assert result.error == (
-        "Backend resource ownership conflict: runtime-spawned children require "
-        "an attempt-isolated Docker daemon."
-    )
-    backend.bind_local_docker_socket.assert_not_called()
+    assert result is None
+    backend.bind_local_docker_socket.assert_called_once()
     backend._run.assert_not_called()
 
 
@@ -890,7 +845,7 @@ def test_appliance_guest_isolation_rejects_unbound_or_redirected_daemon(
 def test_effective_compose_rejects_duplicate_or_endpoint_redirects() -> None:
     mount = {
         "type": "bind",
-        "source": _MEDIATED_SOCKET,
+        "source": _DOCKER_SOCKET,
         "target": "/var/run/docker.sock",
         "read_only": False,
     }
@@ -911,14 +866,14 @@ def test_effective_compose_rejects_duplicate_or_endpoint_redirects() -> None:
     assert any("unauthorized service" in error for error in errors)
 
 
-def test_effective_compose_rejects_privileged_authority_holder() -> None:
+def test_effective_compose_preserves_privileged_authority_holder() -> None:
     render_payload = {
         "services": {
             "orborus": {
                 "volumes": [
                     {
                         "type": "bind",
-                        "source": _MEDIATED_SOCKET,
+                        "source": _DOCKER_SOCKET,
                         "target": "/var/run/docker.sock",
                         "read_only": False,
                     }
@@ -928,10 +883,7 @@ def test_effective_compose_rejects_privileged_authority_holder() -> None:
         }
     }
 
-    assert any(
-        "must not be privileged" in error
-        for error in effective_orchestration_model_errors(render_payload, _spec())
-    )
+    assert effective_orchestration_model_errors(render_payload, _spec()) == []
 
 
 @pytest.mark.parametrize("source", ["/", "/var/run", "/socket-alias"])
@@ -960,7 +912,7 @@ def test_effective_compose_rejects_socket_ancestor_and_alias_binds(
                 "volumes": [
                     {
                         "type": "bind",
-                        "source": _MEDIATED_SOCKET,
+                        "source": _DOCKER_SOCKET,
                         "target": "/var/run/docker.sock",
                     }
                 ]
@@ -981,85 +933,56 @@ def test_effective_compose_accepts_omitted_read_write_default() -> None:
                 "volumes": [
                     {
                         "type": "bind",
-                        "source": _MEDIATED_SOCKET,
+                        "source": _DOCKER_SOCKET,
                         "target": "/var/run/docker.sock",
                     }
                 ]
             },
-            "docker-authority-proxy": _authority_apparatus_service(),
         }
     }
 
     assert effective_orchestration_model_errors(payload, _spec()) == []
 
 
-def test_effective_compose_accepts_the_exact_backend_authority_apparatus() -> None:
-    """The backend service holding the real socket is intentionally bounded."""
-
-    payload = {
-        "services": {
-            "orborus": {
-                "volumes": [
-                    {
-                        "type": "bind",
-                        "source": _MEDIATED_SOCKET,
-                        "target": "/var/run/docker.sock",
-                        "read_only": False,
-                    }
-                ]
-            },
-            "docker-authority-proxy": _authority_apparatus_service(),
-        }
-    }
-
-    assert effective_orchestration_model_errors(payload, _spec()) == []
-
-
-def test_an_admitted_authority_admits_only_the_mediated_socket_mount() -> None:
-    """Admitting the authority does not admit the host's own socket.
-
-    An admission says the workload may orchestrate; it does not say the
-    workload may hold the Docker daemon's host socket, because that is a
-    host-root API and no amount of post-hoc observation constrains what is done
-    through it. The mount that is admitted is the mediated one (issue #912).
-    """
+def test_an_admitted_authority_admits_only_its_exact_host_socket_mount() -> None:
+    """The declared host socket is admitted, but no other route is."""
 
     runtime = _runtime()
-    mediated = {
+    host_socket = {
         "Type": "bind",
-        "Source": _MEDIATED_SOCKET,
+        "Source": _DOCKER_SOCKET,
         "Destination": "/var/run/docker.sock",
         "RW": True,
     }
-    host_socket = {**mediated, "Source": "/var/run/docker.sock"}
+    substitute = {**host_socket, "Source": "/tmp/other-docker.sock"}
 
     # Without an admission, neither is allowed.
-    assert _has_undeclared_mounts([mediated], [], runtime)
     assert _has_undeclared_mounts([host_socket], [], runtime)
+    assert _has_undeclared_mounts([substitute], [], runtime)
 
-    # With one, the mediated grant is admitted and the host socket is not.
+    # With one, only the exact host-root-equivalent grant is admitted.
     assert not _has_undeclared_mounts(
-        [mediated], [], runtime, docker_authority_admitted=True
+        [host_socket], [], runtime, docker_authority_admitted=True
     )
     assert _has_undeclared_mounts(
-        [host_socket], [], runtime, docker_authority_admitted=True
+        [substitute], [], runtime, docker_authority_admitted=True
     )
 
     # An admitted authority still admits nothing else alongside it.
     assert _has_undeclared_mounts(
-        [mediated, {"Type": "bind", "Destination": "/host", "RW": True}],
+        [host_socket, {"Type": "bind", "Destination": "/host", "RW": True}],
         [],
         runtime,
         docker_authority_admitted=True,
     )
     assert _has_undeclared_mounts(
-        [{**mediated, "Destination": "/tmp/docker.sock"}],
+        [{**host_socket, "Destination": "/tmp/docker.sock"}],
         [],
         runtime,
         docker_authority_admitted=True,
     )
     assert _has_undeclared_mounts(
-        [{**mediated, "RW": False}],
+        [{**host_socket, "RW": False}],
         [],
         runtime,
         docker_authority_admitted=True,
@@ -1115,7 +1038,7 @@ def test_authority_holder_accepts_only_its_carried_declared_mount_footprint(
         "Mounts": [
             {
                 "Type": "bind",
-                "Source": _MEDIATED_SOCKET,
+                "Source": _DOCKER_SOCKET,
                 "Destination": "/var/run/docker.sock",
                 "RW": True,
             },
@@ -1172,7 +1095,7 @@ def test_authority_attestation_survives_a_holder_without_a_docker_cli(
             "Mounts": [
                 {
                     "Type": "bind",
-                    "Source": _MEDIATED_SOCKET,
+                    "Source": _DOCKER_SOCKET,
                     "Destination": "/var/run/docker.sock",
                     "RW": True,
                 }
@@ -1433,6 +1356,10 @@ def test_online_child_image_is_pulled_and_verified_by_exact_reference(tmp_path) 
     commands = [call.args[0] for call in backend._run.call_args_list]
     assert commands[1] == ["docker", "pull", _CHILD_REF]
     assert commands[2][-1] == _CHILD_REF
+    # Docker omits Variant for images without an architecture variant. A
+    # direct .Variant lookup makes the entire inspect command fail on amd64.
+    assert '{{with index . "Variant"}}/{{.}}{{end}}' in commands[2][4]
+    assert commands[2][4] == EXACT_IMAGE_INSPECT_FORMAT
     assert backend._run.call_args_list[1].kwargs["timeout"] == 600
     assert backend._run.call_args_list[2].kwargs["timeout"] == 600
 
@@ -1496,7 +1423,7 @@ def test_post_start_authority_is_observed_on_same_daemon(tmp_path) -> None:
             "Mounts": [
                 {
                     "Type": "bind",
-                    "Source": _MEDIATED_SOCKET,
+                    "Source": _DOCKER_SOCKET,
                     "Destination": "/var/run/docker.sock",
                     "RW": True,
                 }
@@ -1526,7 +1453,7 @@ def test_post_start_authority_rejects_image_default_endpoint_override(tmp_path) 
             "Mounts": [
                 {
                     "Type": "bind",
-                    "Source": _MEDIATED_SOCKET,
+                    "Source": _DOCKER_SOCKET,
                     "Destination": "/var/run/docker.sock",
                     "RW": True,
                 }
@@ -1557,7 +1484,7 @@ def test_post_start_authority_rejects_undeclared_extra_bind(tmp_path) -> None:
             "Mounts": [
                 {
                     "Type": "bind",
-                    "Source": _MEDIATED_SOCKET,
+                    "Source": _DOCKER_SOCKET,
                     "Destination": "/var/run/docker.sock",
                     "RW": True,
                 },
@@ -1593,7 +1520,7 @@ def test_post_start_rejects_socket_propagation_to_another_service(tmp_path) -> N
     )
     holder_mount = {
         "Type": "bind",
-        "Source": _MEDIATED_SOCKET,
+        "Source": _DOCKER_SOCKET,
         "Destination": "/var/run/docker.sock",
         "RW": True,
     }
@@ -1636,7 +1563,7 @@ def test_post_start_rejects_socket_propagation_to_another_service(tmp_path) -> N
             "Mounts": [
                 {
                     "Type": "bind",
-                    "Source": _MEDIATED_SOCKET,
+                    "Source": _DOCKER_SOCKET,
                     "Destination": "/var/run/docker.sock",
                     "RW": True,
                 }
@@ -1663,15 +1590,9 @@ def test_post_start_rejects_socket_propagation_to_another_service(tmp_path) -> N
             "Config": {"Env": ["DOCKER_HOST=tcp://docker.example:2375"]},
             "HostConfig": {"Privileged": False},
         },
-        {
-            "Created": "2025-01-01T00:01:00Z",
-            "Mounts": [],
-            "Config": {"Env": []},
-            "HostConfig": {"Privileged": True},
-        },
     ],
 )
-def test_post_start_rejects_every_spawned_child_docker_authority(
+def test_post_start_rejects_every_spawned_child_docker_control_route(
     tmp_path, child_exposure: dict
 ) -> None:
     backend = DockerComposeBackend(tmp_path)
@@ -1683,7 +1604,7 @@ def test_post_start_rejects_every_spawned_child_docker_authority(
         "Mounts": [
             {
                 "Type": "bind",
-                "Source": _MEDIATED_SOCKET,
+                "Source": _DOCKER_SOCKET,
                 "Destination": "/var/run/docker.sock",
                 "RW": True,
             }
@@ -1719,10 +1640,16 @@ def test_post_start_rejects_every_spawned_child_docker_authority(
         "--filter",
         f"ancestor={_CHILD_REF}",
         "--filter",
-        "label=org.aptl.docker-authority=managed",
-        "--filter",
         "label=org.aptl.authority=worker-runtime",
     ]
+
+
+def test_authored_privilege_alone_is_not_docker_control_authority(tmp_path) -> None:
+    backend = DockerComposeBackend(tmp_path)
+
+    assert not backend._inspected_container_has_docker_authority(
+        {"HostConfig": {"Privileged": True}, "Mounts": [], "Config": {"Env": []}}
+    )
 
 
 def test_post_start_rejects_descendant_image_selected_by_ancestor_filter(
@@ -1737,7 +1664,7 @@ def test_post_start_rejects_descendant_image_selected_by_ancestor_filter(
         "Mounts": [
             {
                 "Type": "bind",
-                "Source": _MEDIATED_SOCKET,
+                "Source": _DOCKER_SOCKET,
                 "Destination": "/var/run/docker.sock",
                 "RW": True,
             }
@@ -1787,7 +1714,7 @@ def test_post_work_attestation_terminates_overdue_spawned_child(tmp_path) -> Non
         "Mounts": [
             {
                 "Type": "bind",
-                "Source": _MEDIATED_SOCKET,
+                "Source": _DOCKER_SOCKET,
                 "Destination": "/var/run/docker.sock",
                 "RW": True,
             }
@@ -1846,7 +1773,7 @@ def test_startup_child_attestation_uses_exact_label_and_allows_not_yet_spawned(
     )
     socket_mount = {
         "Type": "bind",
-        "Source": _MEDIATED_SOCKET,
+        "Source": _DOCKER_SOCKET,
         "Destination": "/var/run/docker.sock",
         "RW": True,
     }
@@ -1871,8 +1798,6 @@ def test_startup_child_attestation_uses_exact_label_and_allows_not_yet_spawned(
         "--filter",
         f"ancestor={_CHILD_REF}",
         "--filter",
-        "label=org.aptl.docker-authority=managed",
-        "--filter",
         "label=org.aptl.authority=worker-runtime",
     ]
 
@@ -1888,7 +1813,7 @@ def test_post_work_attestation_requires_exact_correlated_child_count(tmp_path) -
             "Mounts": [
                 {
                     "Type": "bind",
-                    "Source": _MEDIATED_SOCKET,
+                    "Source": _DOCKER_SOCKET,
                     "Destination": "/var/run/docker.sock",
                     "RW": True,
                 }

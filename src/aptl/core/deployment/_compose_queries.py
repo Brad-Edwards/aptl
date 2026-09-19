@@ -18,6 +18,7 @@ from aptl.core.deployment._proc_net_listeners import (
     ContainerListeners,
     read_container_listeners,
 )
+from aptl.core.deployment._compose_resource_ownership import OwnershipConflictError
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.docker_compose")
@@ -246,6 +247,11 @@ class ComposeQueryMixin(object):
     # Container interaction (CLI-004, ADR-023) ----------------------------
 
     def container_list(self, *, all_containers: bool = True) -> list[dict[str, Any]]:
+        try:
+            self._load_resource_ownership()
+        except OwnershipConflictError:
+            log.warning("container_list failed: workspace ownership unavailable")
+            return []
         cmd = ["docker", "compose", "-p", self._project_name, "ps"]
         if all_containers:
             cmd.append("-a")

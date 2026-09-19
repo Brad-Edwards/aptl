@@ -8,6 +8,7 @@ asserted here is what they reject.
 from __future__ import annotations
 
 import json
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -115,7 +116,7 @@ def test_admitted_cache_policy_comes_from_misps_bound_cache_node():
 
     def datastore(*, aof: bool, eviction: str):
         return SimpleNamespace(
-            engine="redis",
+            engine=SimpleNamespace(value="redis"),
             service="redis",
             persistence=SimpleNamespace(
                 aof=aof, eviction=SimpleNamespace(value=eviction)
@@ -125,7 +126,10 @@ def test_admitted_cache_policy_comes_from_misps_bound_cache_node():
     binding = SimpleNamespace(
         role="data_source", target_node_ref="misp-redis", target_service_ref="redis"
     )
-    application = SimpleNamespace(upstream_bindings=(binding,))
+    database_binding = SimpleNamespace(
+        role="data_source", target_node_ref="misp-db", target_service_ref="mysql"
+    )
+    application = SimpleNamespace(upstream_bindings=(database_binding, binding))
     misp_runtime = SimpleNamespace(
         platform_applications=(application,),
         environment=(
@@ -162,6 +166,45 @@ def test_admitted_cache_policy_comes_from_misps_bound_cache_node():
     )
 
     assert admitted_misp_state(realization) == _ADMITTED
+
+
+@pytest.mark.parametrize(
+    ("address", "aliases", "accepted"),
+    [
+        ("172.20.0.135", ["misp"], True),
+        ("172.20.1.135", ["misp"], False),
+        ("172.20.0.135", ["other-service"], False),
+        ("not-an-address", ["misp"], False),
+    ],
+)
+def test_misp_tls_target_is_owned_and_within_the_admitted_subnet(
+    address, aliases, accepted
+):
+    from aptl.core.evidence.adapters.techvault_native_readiness import (
+        _deployed_node_address,
+    )
+
+    realization = SimpleNamespace(
+        nodes=(
+            SimpleNamespace(
+                name="misp", container_name="aptl-misp", networks=("security-net",)
+            ),
+        ),
+        networks=(SimpleNamespace(name="security-net", cidr="172.20.0.0/24"),),
+    )
+    backend = SimpleNamespace(
+        container_inspect=lambda name: {
+            "NetworkSettings": {
+                "Networks": {
+                    "owned-security": {"IPAddress": address, "Aliases": aliases}
+                }
+            }
+        }
+        if name == "aptl-misp"
+        else None
+    )
+
+    assert (_deployed_node_address(backend, realization, "misp") == address) is accepted
 
 
 @pytest.mark.parametrize(
@@ -367,6 +410,56 @@ def test_telemetry_events_reports_what_the_manager_counted():
         return _Result("telemetry_event_count=4\n")
 
     assert telemetry_events(execute, "001", _START, _END) == 4
+
+
+def test_wazuh_telemetry_probe_counts_native_offsets_and_structured_agent_ids(
+    tmp_path,
+):
+    """Exercise the shipped shell/Python probe against Wazuh-shaped records."""
+
+    from aptl.core.evidence.adapters.techvault_readiness_probes import (
+        _WAZUH_TELEMETRY_SCRIPT,
+    )
+
+    archives = tmp_path / "archives.json"
+    alerts = tmp_path / "alerts.json"
+    archives.write_text(
+        "\n".join(
+            json.dumps(row)
+            for row in (
+                {
+                    "agent": {"id": "007"},
+                    "timestamp": "2026-01-01T00:02:00.000+0000",
+                },
+                {
+                    "agent": {"id": "008"},
+                    "timestamp": "2026-01-01T00:02:00.000+0000",
+                    "full_log": "untrusted text mentions agent 007",
+                },
+                {
+                    "agent": {"id": "007"},
+                    "timestamp": "2026-01-01T00:07:00.000+0000",
+                },
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    alerts.write_text("", encoding="utf-8")
+    script = _WAZUH_TELEMETRY_SCRIPT.replace(
+        "/var/ossec/logs/archives/archives.json", str(archives)
+    ).replace("/var/ossec/logs/alerts/alerts.json", str(alerts))
+
+    result = subprocess.run(
+        ["sh", "-s", "--", "007", _START, _END],
+        input=script,
+        text=True,
+        capture_output=True,
+        check=True,
+        timeout=10,
+    )
+
+    assert result.stdout == "telemetry_event_count=1\n"
 
 
 def test_an_unparseable_telemetry_count_is_not_read_as_zero_or_as_ready():

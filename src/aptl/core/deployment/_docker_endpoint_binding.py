@@ -61,6 +61,12 @@ def _resolve_local_docker_endpoint() -> tuple[str, str] | None:
 class DockerEndpointBindingMixin:
     """Pin Docker commands to one accessible local socket and daemon."""
 
+    @property
+    def bound_docker_daemon_id(self) -> str | None:
+        """Return the daemon identity only after local socket binding."""
+
+        return self._docker_daemon_id
+
     def bind_local_docker_socket(self) -> LabResult:
         """Bind all subsequent Docker commands to the exact local socket."""
 

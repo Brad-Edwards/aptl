@@ -1267,14 +1267,13 @@ def _configure_verified_appliance_launch(
                     ctx.appliance_release_public_key,
                     ctx.appliance_qualification_public_key,
                 )
+            if not _attest_private_appliance_daemon(descriptor_path):
+                raise ValueError("appliance launch is not in an isolated guest")
             boot_id = _read_appliance_boot_id()
-            daemon = subprocess.run(
-                ["docker", "info", "--format", "{{.ID}}"],
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            ).stdout.strip()
+            endpoint = ctx.backend.bind_local_docker_socket()
+            if not endpoint.success:
+                raise ValueError("appliance guest Docker endpoint is unavailable")
+            daemon = ctx.backend.bound_docker_daemon_id
             if not boot_id or not daemon:
                 raise ValueError("runtime identity is unavailable")
             descriptor = launch.descriptor
@@ -1292,6 +1291,7 @@ def _configure_verified_appliance_launch(
             ctx.backend.configure_appliance_boundary(
                 launch.boundary_policy,
                 binding,
+                isolated_daemon=True,
             )
             result = None
         except (
@@ -1311,6 +1311,38 @@ def _read_appliance_boot_id() -> str:
     """Read the Linux guest boot identity used by boundary enforcement."""
 
     return Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+
+
+def _attest_private_appliance_daemon(
+    descriptor_path: Path,
+    *,
+    launch_root: Path = Path("/run/aptl-launch"),
+    mountinfo_path: Path = Path("/proc/self/mountinfo"),
+) -> bool:
+    """Only a read-only virtio guest launch share may claim daemon isolation."""
+
+    if descriptor_path != launch_root / "appliance-launch.json":
+        return False
+    try:
+        mountinfo = mountinfo_path.read_text()
+    except OSError:
+        return False
+    for line in mountinfo.splitlines():
+        before, separator, after = line.partition(" - ")
+        if not separator:
+            continue
+        mount = before.split()
+        filesystem = after.split()
+        if (
+            len(mount) >= 6
+            and len(filesystem) >= 3
+            and mount[4] == str(launch_root)
+            and "ro" in mount[5].split(",")
+            and filesystem[:2] == ["9p", "aptl-launch"]
+            and "trans=virtio" in filesystem[2].split(",")
+        ):
+            return True
+    return False
 
 
 def _load_admitted_start_surface(

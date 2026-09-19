@@ -110,11 +110,21 @@ class ComposeBoundaryRealizationMixin:
         self,
         policy: ApplianceBoundaryPolicy,
         binding: ApplianceBoundaryBinding,
+        *,
+        isolated_daemon: bool = False,
     ) -> None:
         """Install trusted release and launcher projections for realization."""
 
+        if isolated_daemon and (
+            not self._offline_staged
+            or self._docker_socket_identity is None
+            or self._docker_socket_path != "/var/run/docker.sock"
+            or self._docker_daemon_id != binding.guest_daemon_id
+        ):
+            raise ValueError("isolated guest Docker daemon is not bound")
         self._appliance_boundary = (policy, binding)
         self._boundary_helper_image = binding.boundary_helper_image
+        self._attempt_isolated_docker_daemon = isolated_daemon
 
     def realize_boundary(self, policy: BoundaryEnforcementSpec) -> LabResult:
         """Apply and observe policy on the selected Docker daemon host."""

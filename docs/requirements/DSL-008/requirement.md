@@ -57,3 +57,6 @@ After ADR-035 and SCN-010, ACES SDL owns scenario authoring and topology declara
 - TESTS → TEST `tests/test_techvault_log_sources.py` (Protected rsyslog staging and native producer behavior)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/_misp_cache_credential.py` (Shared protected Redis runtime config path contract)
 - IMPLEMENTS → CODE_FILE `src/aptl_techvault/redis_acl_observation.py` (Live authorization readback from the selected config path)
+- IMPLEMENTS → CODE_FILE `src/aptl/validation/_gate_raes_cli.py` (Resolve the installed RAES CLI from the active Python environment for source and wheel validation)
+- TESTS → TEST `tests/test_techvault_static_gate.py` (RAES CLI resolution with and without virtual-environment PATH activation)
+- IMPLEMENTS → DOCUMENTATION `docs/testing/smoke-test-plan.md` (Capture the user-facing startup inventory and validate both installation paths)

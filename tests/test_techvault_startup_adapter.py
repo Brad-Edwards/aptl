@@ -24,6 +24,7 @@ from aptl.backends.scenario_service_policy import (
     ScenarioComposeServicePolicy,
     ServiceFileMount,
     _resolved_services as resolve_service_policy,
+    certificate_mount_aliases,
     write_scenario_service_override,
 )
 import pytest
@@ -207,6 +208,52 @@ def test_service_policy_rejects_missing_or_escaping_files(
     )
     with pytest.raises(ScenarioStartupProviderError, match="result-invalid"):
         resolve_service_policy(_startup_spec(), tmp_path)
+
+
+def test_certificate_aliases_require_the_same_declared_source_and_consumer(
+    tmp_path,
+) -> None:
+    names = (
+        "config/soc_certs/shuffle-frontend/server.pem",
+        "config/soc_certs/shuffle-frontend/server.key",
+        "config/soc_certs/thehive/keystore.p12",
+        "config/thehive/application.conf",
+    )
+    for name in names:
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("test", encoding="utf-8")
+    expected = {
+        "shuffle-frontend": {
+            (
+                str(tmp_path / "config/soc_certs/shuffle-frontend/server.pem"),
+                "/opt/techvault/soc-certs/shuffle-frontend/server.pem",
+            )
+        },
+        "thehive": {
+            (
+                str(tmp_path / "config/soc_certs/thehive/keystore.p12"),
+                "/opt/techvault/soc-certs/thehive/keystore.p12",
+            )
+        },
+    }
+
+    aliases = certificate_mount_aliases(_startup_spec(), tmp_path, expected)
+
+    assert aliases == {
+        "shuffle-frontend": {
+            (
+                str(tmp_path / "config/soc_certs/shuffle-frontend/server.pem"),
+                "/etc/nginx/fullchain.cert.pem",
+            )
+        },
+        "thehive": {
+            (
+                str(tmp_path / "config/soc_certs/thehive/keystore.p12"),
+                "/etc/thehive/keystore.p12",
+            )
+        },
+    }
 
 
 def test_startup_policy_cannot_add_undeclared_dependency_or_service() -> None:

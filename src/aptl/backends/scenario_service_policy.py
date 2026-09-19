@@ -76,6 +76,39 @@ def _target(value: str) -> str:
     return value
 
 
+def certificate_mount_aliases(
+    spec: DeploymentRealizationSpec,
+    root: Path,
+    expected: dict[str, set[tuple[str, str]]],
+) -> dict[str, set[tuple[str, str]]]:
+    """Authorize only exact adapter aliases of SDL-owned cert sources.
+
+    This is consumed by effective-model validation independently of the
+    generated override. An edited Compose file cannot authorize itself.
+    """
+
+    provider = _runtime_provider(spec.pack_identity)
+    resolver = getattr(provider, "compose_service_policy", None) if provider else None
+    if resolver is None:
+        return {}
+    if not callable(resolver):
+        raise ScenarioStartupProviderError(_INVALID)
+    policy = resolver()
+    if not isinstance(policy, ScenarioComposeServicePolicy):
+        raise ScenarioStartupProviderError(_INVALID)
+    aliases: dict[str, set[tuple[str, str]]] = {}
+    for mount in policy.mounts:
+        if not isinstance(mount, ServiceFileMount):
+            raise ScenarioStartupProviderError(_INVALID)
+        source = str(_project_file(root, mount.project_file))
+        authored_sources = {item[0] for item in expected.get(mount.service, set())}
+        if source in authored_sources:
+            aliases.setdefault(mount.service, set()).add(
+                (source, _target(mount.target))
+            )
+    return aliases
+
+
 def _resolved_services(
     spec: DeploymentRealizationSpec,
     root: Path,

@@ -181,7 +181,9 @@ _MANIFEST_QUERIES: dict[str, Callable[[str], list[str]]] = {
 }
 
 
-def manifest_install_argv(ecosystem: str, directory: str) -> list[str]:
+def manifest_install_argv(
+    ecosystem: str, directory: str, *, offline: bool = False
+) -> list[str]:
     """Return the argv that installs a project from its manifest's directory."""
 
     builder = _MANIFEST_INSTALLERS.get(ecosystem)
@@ -189,7 +191,10 @@ def manifest_install_argv(ecosystem: str, directory: str) -> list[str]:
         raise UnsupportedDependencyEcosystemError(
             f"no generic mechanism for dependency ecosystem {ecosystem!r}"
         )
-    return builder(directory)
+    argv = builder(directory)
+    if offline and ecosystem == "pip":
+        argv[3:3] = ["--no-index", "--no-deps", "--no-build-isolation"]
+    return argv
 
 
 def manifest_query_argv(ecosystem: str, name: str) -> list[str]:

@@ -76,7 +76,7 @@ build_image generic-samba-ad-base aptl/generic-samba-ad-base:latest \
 build_image generic-systemd-base aptl/generic-systemd-base:latest \
   containers/generic-systemd-base containers/generic-systemd-base/Dockerfile
 build_image generic-systemd-base-debian aptl/generic-systemd-base-debian:latest \
-  containers/generic-systemd-base-debian containers/generic-systemd-base-debian/Dockerfile
+  . containers/generic-systemd-base-debian/Dockerfile
 
 build_image generic-samba-ad-wazuh-agent-base \
   aptl/generic-samba-ad-wazuh-agent-base:latest . \

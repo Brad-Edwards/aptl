@@ -44,7 +44,7 @@ class _FakeExec:
         return [argv for _, argv in self.calls]
 
 
-def _executor(exec_fn, *, started=None, sleep=None):
+def _executor(exec_fn, *, started=None, sleep=None, offline_staged=False):
     def start_base(addr, image):
         if started is not None:
             started.append((addr, image))
@@ -56,6 +56,7 @@ def _executor(exec_fn, *, started=None, sleep=None):
         # Real time.sleep would make retry tests (and the unrelated failure
         # tests that now also exhaust the refresh retry) take ~15s each.
         sleep=sleep or (lambda seconds: None),
+        offline_staged=offline_staged,
     )
 
 
@@ -68,6 +69,26 @@ class TestBaseSubstrate:
 
 
 class TestPackages:
+    def test_preinstalled_packages_need_no_index_or_install(self):
+        def responder(container, argv):
+            if "dpkg-query" in argv:
+                return 0, "postgresql\n"
+            raise AssertionError(f"unexpected package command: {argv}")
+
+        fake = _FakeExec(responder)
+        _executor(fake).install_packages("n.db", "apt", ("postgresql",))
+        assert len(fake.calls) == 1
+
+    def test_offline_missing_package_fails_without_attempting_download(self):
+        fake = _FakeExec(lambda _container, _argv: (1, ""))
+        with pytest.raises(
+            MaterializationCommandError, match="offline image is missing"
+        ):
+            _executor(fake, offline_staged=True).install_packages(
+                "n.db", "apt", ("postgresql",)
+            )
+        assert len(fake.calls) == 1
+
     def test_install_runs_generic_manager_command_in_the_node_container(self):
         fake = _FakeExec()
         _executor(fake).install_packages(
@@ -262,8 +283,29 @@ class TestDependencyManifest:
             "n.node",
             InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml"),
         )
+        assert fake.calls[-1][1] == [
+            "pip",
+            "install",
+            "--break-system-packages",
+            "/app",
+        ]
+
+    def test_offline_install_uses_local_source_without_resolution(self):
+        fake = _FakeExec()
+        _executor(fake, offline_staged=True).install_dependency_manifest(
+            "n.node",
+            InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml"),
+        )
         argv = fake.calls[-1][1]
-        assert argv == ["pip", "install", "--break-system-packages", "/app"]
+        assert argv == [
+            "pip",
+            "install",
+            "--break-system-packages",
+            "--no-index",
+            "--no-deps",
+            "--no-build-isolation",
+            "/app",
+        ]
 
     def test_install_nonzero_raises_translatable_command_error(self):
         fake = _FakeExec(lambda c, a: (1, "error"))

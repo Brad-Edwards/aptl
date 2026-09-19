@@ -130,6 +130,7 @@ def realize_node(
             if scenario_root is not None
             else getattr(backend, "project_dir", None)
         ),
+        offline_staged=bool(getattr(backend, "_offline_staged", False)),
     )
     return materialize_node(node.address, ops, executor)
 

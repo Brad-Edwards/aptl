@@ -31,7 +31,7 @@ _GENERIC_BASE_IMAGE_BUILDS: dict[str, tuple[str, str]] = {
     ),
     "aptl/generic-systemd-base-debian:latest": (
         "containers/generic-systemd-base-debian/Dockerfile",
-        "containers/generic-systemd-base-debian",
+        ".",
     ),
     "aptl/generic-systemd-base:latest": (
         "containers/generic-systemd-base/Dockerfile",

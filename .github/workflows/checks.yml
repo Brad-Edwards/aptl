@@ -522,7 +522,7 @@ jobs:
             context: ./containers/generic-systemd-base
           - name: generic-systemd-base-debian
             dockerfile: containers/generic-systemd-base-debian/Dockerfile
-            context: ./containers/generic-systemd-base-debian
+            context: .
           - name: generic-systemd-node22-base
             dockerfile: containers/generic-systemd-node22-base/Dockerfile
             context: ./containers/generic-systemd-node22-base

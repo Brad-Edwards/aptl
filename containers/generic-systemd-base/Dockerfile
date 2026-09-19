@@ -10,7 +10,16 @@
 # cap SYS_ADMIN/SYS_NICE/SYS_RESOURCE, seccomp:unconfined, /usr/sbin/init).
 FROM rockylinux:9@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6
 
-RUN dnf -y install systemd systemd-sysv && dnf clean all && \
+# The mirrorlist has left first-time image builds waiting on unavailable mirrors.
+# Use Rocky's own HTTPS repository so an exact candidate build has a bounded,
+# deterministic source; no repository is contacted when the seat boots.
+RUN sed -i \
+        -e 's|^mirrorlist=|#mirrorlist=|' \
+        -e 's|^#baseurl=http://dl.rockylinux.org/|baseurl=https://dl.rockylinux.org/|' \
+        /etc/yum.repos.d/rocky.repo
+RUN dnf -y install systemd systemd-sysv \
+        openssh-server openssh-clients postgresql sudo rsyslog \
+    && dnf clean all && \
     (cd /lib/systemd/system/sysinit.target.wants/; \
         for i in *; do [ "$i" = systemd-tmpfiles-setup.service ] || rm -f "$i"; done) && \
     (cd /lib/systemd/system/multi-user.target.wants/; \

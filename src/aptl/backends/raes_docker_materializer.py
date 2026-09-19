@@ -90,6 +90,7 @@ class DockerMaterializationExecutor:
         copy_in: Callable[[str, str, str, bool], None] | None = None,
         scenario_root: Path | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        offline_staged: bool = False,
     ) -> None:
         self._run = run
         self._container_for = container_for
@@ -97,6 +98,7 @@ class DockerMaterializationExecutor:
         self._copy_in = copy_in
         self._scenario_root = scenario_root
         self._sleep = sleep
+        self._offline_staged = offline_staged
 
     # -- mutations -------------------------------------------------------
 
@@ -106,6 +108,15 @@ class DockerMaterializationExecutor:
     def install_packages(
         self, node_address: str, manager: str, packages: tuple[str, ...]
     ) -> None:
+        installed = self.observe_installed_packages(node_address, manager, packages)
+        missing = tuple(package for package in packages if package not in installed)
+        if not missing:
+            return
+        if self._offline_staged:
+            raise MaterializationCommandError(
+                f"offline image is missing declared {manager} packages on "
+                f"{node_address}: {', '.join(missing)}"
+            )
         refresh = refresh_argv(manager)
         if refresh is not None:
             self._require_ok_with_retry(
@@ -115,7 +126,7 @@ class DockerMaterializationExecutor:
                 _PACKAGE_INDEX_REFRESH_RETRY_DELAYS_SECONDS,
             )
         self._require_ok(
-            node_address, install_argv(manager, packages), "install packages"
+            node_address, install_argv(manager, missing), "install packages"
         )
 
     def ensure_group(self, node_address: str, name: str, gid: int | str | None) -> None:
@@ -231,7 +242,9 @@ class DockerMaterializationExecutor:
         directory = str(PurePosixPath(op.path).parent)
         self._require_ok(
             node_address,
-            manifest_install_argv(op.ecosystem, directory),
+            manifest_install_argv(
+                op.ecosystem, directory, offline=self._offline_staged
+            ),
             "install dependency manifest",
         )
 

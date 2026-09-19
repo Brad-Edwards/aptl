@@ -23,7 +23,7 @@ build_image aptl/generic-samba-ad-base:latest \
 build_image aptl/generic-systemd-base:latest \
   containers/generic-systemd-base containers/generic-systemd-base/Dockerfile
 build_image aptl/generic-systemd-base-debian:latest \
-  containers/generic-systemd-base-debian containers/generic-systemd-base-debian/Dockerfile
+  . containers/generic-systemd-base-debian/Dockerfile
 
 build_image aptl/generic-samba-ad-wazuh-agent-base:latest . \
   containers/generic-samba-ad-wazuh-agent-base/Dockerfile local

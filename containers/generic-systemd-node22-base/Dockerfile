@@ -5,6 +5,8 @@ FROM node:22-trixie@sha256:2082d2bf902c8835655c6bcfee3594c00ea900498a9f6e2b96d33
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         systemd systemd-sysv dbus gnupg openssh-server \
+        iputils-ping nmap python3 curl wget dnsutils netcat-openbsd \
+        smbclient ldap-utils sqlmap hydra python3-impacket \
     && apt-get clean \
     && find /var/lib/apt/lists -mindepth 1 -delete
 STOPSIGNAL SIGRTMIN+3

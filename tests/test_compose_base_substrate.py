@@ -75,7 +75,7 @@ class TestEnsureGenericBaseImage:
             "-t",
             "aptl/generic-systemd-base-debian:latest",
         ]
-        assert argv[-1] == str(tmp_path / "containers" / "generic-systemd-base-debian")
+        assert argv[-1] == str(tmp_path)
 
     def test_rebuilds_even_when_the_tag_already_exists(self, tmp_path):
         """Presence of `aptl/...:latest` is not evidence of freshness.

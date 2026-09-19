@@ -13,6 +13,7 @@ from aptl.appliance.seat.lifecycle import (
     StartSeatOptions,
     _ensure_overlay,
     _seat_paths,
+    release_requires_host_access,
     reconcile_seat_after_reboot,
     recover_seat,
     reset_seat,
@@ -102,6 +103,33 @@ def _listener_probe():
             protocol="tcp",
         ),
     )
+
+
+def test_host_access_decision_uses_signed_metadata_before_full_admission(
+    tmp_path: Path,
+) -> None:
+    release = tmp_path / "release"
+    release.mkdir()
+    public = tmp_path / "public.pem"
+    qualification = tmp_path / "qualification.pem"
+    manifest = _manifest_stub()
+    manifest.delivery.host_mcp_contract = "aptl.restricted-ssh-mcp/v1"
+    with (
+        patch(
+            "aptl.appliance.seat.lifecycle.verify_release_metadata",
+            return_value=manifest,
+        ) as metadata,
+        patch(
+            "aptl.appliance.seat.lifecycle.verify_release_directory",
+            side_effect=AssertionError("full verification belongs to staging"),
+        ),
+    ):
+        assert release_requires_host_access(
+            release_dir=release,
+            release_public_key=public,
+            qualification_public_key=qualification,
+        )
+    metadata.assert_called_once_with(release, public)
 
 
 def test_overlay_creation_is_bound_to_release_and_launch_digests(

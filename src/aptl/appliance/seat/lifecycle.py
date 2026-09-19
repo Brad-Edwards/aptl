@@ -15,12 +15,14 @@ from aptl.appliance.launch import _prepare_verified_launch_descriptor
 from aptl.appliance.candidate import (
     ApplianceCandidateManifest,
     _prepare_verified_candidate_launch_descriptor,
+    _verify_candidate_metadata,
     verify_candidate_directory,
 )
 from aptl.appliance.manifest import (
     ApplianceManifestError,
     ApplianceReleaseInspection,
     verify_release_directory,
+    verify_release_metadata,
     _load_release_documents,
 )
 from aptl.appliance.models import ApplianceReleaseManifest
@@ -233,24 +235,16 @@ def release_requires_host_access(
     qualification_public_key: Path,
     candidate_trust: bool = False,
 ) -> bool:
-    """Return whether one verified release requires host CLI enrollment."""
+    """Read signed transport metadata before the full host staging admission."""
 
-    placeholder = Path(".")
-    paths = SeatPaths(
-        seat_root=placeholder,
-        release_dir=release_dir,
-        release_public_key=release_public_key,
-        qualification_public_key=qualification_public_key,
-        launch_dir=placeholder,
-        launch_descriptor=placeholder / "appliance-launch.json",
-        overlay_path=placeholder / "seat.qcow2",
-        overlay_state_dir=placeholder / "seat.state",
-    )
-    _inspection, policy, _manifest = _load_verified_release(
-        paths,
-        candidate_trust=candidate_trust,
-    )
-    return policy.host_mcp_contract == "aptl.restricted-ssh-mcp/v1"
+    del qualification_public_key
+    if candidate_trust:
+        manifest, _inspection = _verify_candidate_metadata(
+            release_dir.resolve(strict=True), release_public_key
+        )
+    else:
+        manifest = verify_release_metadata(release_dir, release_public_key)
+    return manifest.delivery.host_mcp_contract == "aptl.restricted-ssh-mcp/v1"
 
 
 def _seat_paths(

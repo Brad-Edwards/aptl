@@ -894,6 +894,8 @@ src/aptl/backends/raes_service_index_schema.py	core-candidate	Migrate only after
 src/aptl/backends/raes_start_model.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_stateful_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_substrate.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/scenario_runtime_parameters.py	core-candidate	Generic content-identified runtime-parameter adapter discovery; retain behind scenario-independent contract
+src/aptl/backends/scenario_startup.py	core-candidate	Generic content-identified startup adapter discovery; retain behind scenario-independent contract
 src/aptl/cli/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/_common.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/appliance.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1227,11 +1229,13 @@ src/aptl_techvault/__init__.py	core-runtime	Retain in APTL core runtime; no migr
 src/aptl_techvault/participant_smoke.py	core-runtime	Retain in APTL core runtime; no migration
 src/aptl_techvault/runtime_parameters.py	core-runtime	Retain in APTL core runtime; no migration
 src/aptl_techvault/serving.py	core-runtime	Retain in APTL core runtime; no migration
+src/aptl_techvault/startup.py	core-runtime	TechVault-specific startup binding stays outside generic core
 src/aptl_techvault/verification.py	core-runtime	Retain in APTL core runtime; no migration
 tests/__init__.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/_bundle_fixtures.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/archival_fixtures.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/conftest.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/fixtures/materialization-envelope.sdl.yaml	tests-follow-owner	Exercise generic materialization without scenario adapter coupling
 tests/fixtures/mcp_transport_dispatch.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/fixtures/redaction_parity_corpus.json	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/fixtures/workbench_mcp_server.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1518,6 +1522,7 @@ tests/test_techvault_native_evidence.py	tests-follow-owner	Retain meaningful bou
 tests/test_techvault_pack_interaction_provider.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_runtime_parameters.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_scenario_verifier.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_techvault_startup_adapter.py	tests-follow-owner	Retain startup-adapter seam coverage with its scenario owner
 tests/test_techvault_static_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_telemetry_spine.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_telemetry.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

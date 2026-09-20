@@ -557,6 +557,8 @@ docs/specs/soc-feature-spec.md	docs-follow-owner	Separate current user guidance 
 docs/specs/web-component-kit.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/specs/web-gui-design-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/specs/web-gui-design.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/testing/issue-956-candidate-254bc40f-manual-qa.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/testing/issue-956-candidate-e23fec55-manual-qa.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/testing/property-based-parser-tests.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/testing/smoke-test-plan.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/troubleshooting/index.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs

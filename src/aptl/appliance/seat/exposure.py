@@ -29,13 +29,13 @@ class HostExposureReport:
     findings: tuple[str, ...]
 
 
-def _fsdev_options(argv: tuple[str, ...]) -> tuple[str, ...]:
-    """Return QEMU -fsdev option strings from a fixed argv list."""
+def _argument_options(argv: tuple[str, ...], flag: str) -> tuple[str, ...]:
+    """Return option strings for a repeated QEMU argument."""
 
     options: list[str] = []
     index = 0
     while index < len(argv):
-        if argv[index] == "-fsdev" and index + 1 < len(argv):
+        if argv[index] == flag and index + 1 < len(argv):
             options.append(argv[index + 1])
             index += 2
             continue
@@ -51,10 +51,21 @@ def audit_vm_argv(argv: tuple[str, ...]) -> HostExposureReport:
     for flag in FORBIDDEN_VM_FLAGS:
         if flag in joined:
             findings.append(f"host.exposure.forbidden-vm-flag:{flag}")
-    fsdev_joined = " ".join(_fsdev_options(argv))
+    fsdev_joined = " ".join(_argument_options(argv, "-fsdev"))
     for flag in FORBIDDEN_VM_WRITABLE_SHARE_FLAGS:
         if flag in fsdev_joined:
             findings.append(f"host.exposure.forbidden-vm-share:{flag}")
+    # Ordinary SLIRP NAT permits a guest to reach the physical host and other
+    # seats. Restriction blocks guest-originated traffic outside this VM while
+    # retaining the explicit hostfwd publications used by participant clients.
+    networks = _argument_options(argv, "-netdev")
+    if len(networks) != 1 or "-nic" in argv or "-net" in argv:
+        findings.append("host.exposure.unrestricted-vm-network")
+    else:
+        options = networks[0].split(",")
+        restrictions = [item for item in options if item.startswith("restrict=")]
+        if options[0] != "user" or restrictions != ["restrict=on"]:
+            findings.append("host.exposure.unrestricted-vm-network")
     return HostExposureReport(passed=not findings, findings=tuple(findings))
 
 

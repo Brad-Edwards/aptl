@@ -7,6 +7,12 @@ Additional isolation and controlled egress between workloads inside a guest are
 not promised; that work is tracked in #1127. The signed V2 boundary policy and
 runtime inventory identify this contract explicitly.
 
+The launcher uses restricted QEMU user networking: the guest cannot initiate
+connections to the physical host, another seat, or the external network. Only
+the declared host-to-guest port forwards remain available. The complete lab
+runs from its bundled offline inputs; this restriction does not separate
+workloads inside the VM.
+
 Issue #824 adds the host-side lifecycle adapter for one disposable appliance
 seat. It consumes the signed release, overlay, and launch contracts from
 [Disposable Appliance Release](appliance-release.md) without introducing a

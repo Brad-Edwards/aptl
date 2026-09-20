@@ -100,3 +100,34 @@ def test_audit_vm_argv_rejects_forbidden_usb_flag() -> None:
 
     assert report.passed is False
     assert "host.exposure.forbidden-vm-flag:-usb" in report.findings
+
+
+@pytest.mark.parametrize(
+    "network_arguments",
+    [
+        (),
+        ("-netdev", "user,id=participant"),
+        ("-netdev", "user,id=participant,restrict=off"),
+        ("-netdev", "user,id=participant,restrict=on,restrict=off"),
+        ("-netdev", "tap,id=participant,restrict=on"),
+        ("-netdev", "user,id=participant,restrict=on", "-netdev", "user,id=extra"),
+        (
+            "-netdev",
+            "user,id=participant,restrict=on",
+            "-netdev",
+            "user,id=extra,restrict=on",
+        ),
+        ("-nic", "user"),
+        ("-net", "user"),
+    ],
+)
+def test_launch_boundary_rejects_guest_access_to_physical_host(
+    network_arguments: tuple[str, ...],
+) -> None:
+    from aptl.appliance.seat.errors import SeatLauncherError
+
+    with pytest.raises(SeatLauncherError, match="host exposure inventory failed"):
+        require_host_exposure(
+            vm_argv=("qemu-system-x86_64", *network_arguments),
+            docker_daemon_running=False,
+        )

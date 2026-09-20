@@ -176,9 +176,7 @@ def test_qemu_argv_boots_with_immutable_uefi_firmware(tmp_path: Path) -> None:
         )
     )
 
-    assert (
-        f"if=pflash,format=raw,readonly=on,file={OVMF_CODE_PATH}" in argv
-    )
+    assert f"if=pflash,format=raw,readonly=on,file={OVMF_CODE_PATH}" in argv
 
 
 def test_qemu_argv_publishes_resource_reservation(tmp_path: Path) -> None:
@@ -319,6 +317,7 @@ def test_qemu_argv_uses_explicit_outer_to_guest_mappings(tmp_path: Path) -> None
     netdev = argv[argv.index("-netdev") + 1]
     assert "net=10.0.2.0/24" in netdev
     assert "dhcpstart=10.0.2.15" in netdev
+    assert "restrict=on" in netdev.split(",")
     assert "hostfwd=tcp:127.0.0.1:10443-10.0.2.15:443" in netdev
     assert "hostfwd=tcp:127.0.0.1:11443-10.0.2.15:9443" in netdev
 

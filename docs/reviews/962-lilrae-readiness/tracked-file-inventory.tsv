@@ -1769,3 +1769,27 @@ docs/requirements/SEC-008/requirement.md	requirements-follow-owner	Preserve exac
 docs/testing/platform-pr-gates.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 tests/test_assert_project_teardown.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_platform_ci_gates.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+docs/adrs/adr-060-vm-only-seat-containment.md	architecture-history	Preserve accepted VM-only containment decision
+docs/architecture/issue-1022-historical-branch-audit.md	architecture-history	Preserve audited branch comparison and scoped repair decisions
+docs/architecture/issue-825-hosted-backup-seat-preflight.md	architecture-history	Preserve hosted fallback delivery decisions
+docs/workshop/hosted-backup-seats.md	docs-follow-owner	Retain instructor provisioning and recovery guidance
+docs/workshop/arsenal-2026/README.md	docs-follow-owner	Preserve historical workshop archive context
+docs/workshop/arsenal-2026/facilitator.md	architecture-history	Preserve historical workshop evidence without treating it as current qualification
+docs/workshop/arsenal-2026/handout.md	architecture-history	Preserve historical participant workflow
+docs/workshop/arsenal-2026/qa.md	architecture-history	Preserve historical attack detect fix retest evidence
+tests/test_appliance_vm_containment.py	tests-follow-owner	Retain VM-only and legacy internal-boundary regression coverage
+tests/test_hosted_seat_helper.py	tests-follow-owner	Retain hosted provisioning regression coverage
+tests/test_seed_shuffle_script.py	tests-follow-owner	Retain fail-closed convergent SOAR seeding coverage
+tests/test_stage_hosted_seat_payload.py	tests-follow-owner	Retain private hosted payload staging coverage
+tools/workshop/hosted-seat-kali-node.patch	backend-substrate	Retain bounded hosted-seat compatibility patch
+tools/workshop/hosted_seat.py	backend-substrate	Retain hosted fallback provisioning tool
+tools/workshop/stage_hosted_seat_payload.py	backend-substrate	Retain private hosted payload staging tool
+tools/workshop/arsenal-2026/README.md	architecture-history	Preserve historical provisioning archive safety notes
+tools/workshop/arsenal-2026/aptl-range.service.txt	architecture-history	Preserve non-executable historical provisioning source
+tools/workshop/arsenal-2026/envpack-kali-fixups.sh.txt	architecture-history	Preserve non-executable historical provisioning source
+tools/workshop/arsenal-2026/envpack-soar-fixups.sh.txt	architecture-history	Preserve non-executable historical provisioning source
+tools/workshop/arsenal-2026/envpack-suricata-fixups.sh.txt	architecture-history	Preserve non-executable historical provisioning source
+tools/workshop/arsenal-2026/launch-ranges.sh.txt	architecture-history	Preserve non-executable historical provisioning source
+tools/workshop/arsenal-2026/provision-range.sh.txt	architecture-history	Preserve non-executable historical provisioning source
+tools/workshop/arsenal-2026/setup-purple-demo.sh.txt	architecture-history	Preserve non-executable historical provisioning source
+tools/workshop/arsenal-2026/setup-rdp.sh.txt	architecture-history	Preserve non-executable historical provisioning source

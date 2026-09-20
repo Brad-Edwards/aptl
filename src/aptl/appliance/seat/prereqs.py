@@ -72,7 +72,9 @@ def check_host_prerequisites(
     seat_root: Path,
     memory_bytes: int | None = None,
     available_vcpus: int | None = None,
+    total_disk_bytes: int | None = None,
     free_disk_bytes: int | None = None,
+    required_free_disk_bytes: int | None = None,
     kvm_available: bool | None = None,
     qemu_img_available: bool | None = None,
     qemu_system_available: bool | None = None,
@@ -122,18 +124,30 @@ def check_host_prerequisites(
         )
     )
     try:
-        available_disk = (
-            shutil.disk_usage(seat_root).free
-            if free_disk_bytes is None
-            else free_disk_bytes
+        disk_usage = shutil.disk_usage(seat_root)
+        disk_capacity = (
+            disk_usage.total if total_disk_bytes is None else total_disk_bytes
         )
+        available_disk = disk_usage.free if free_disk_bytes is None else free_disk_bytes
     except OSError:
-        available_disk = 0
+        disk_capacity = available_disk = 0
+    findings.append(
+        PrereqFinding(
+            code="low-disk-capacity",
+            passed=disk_capacity >= requirements.disk_bytes,
+            detail="host disk capacity is below the signed minimum",
+        )
+    )
+    required_free_disk = (
+        requirements.disk_bytes
+        if required_free_disk_bytes is None
+        else required_free_disk_bytes
+    )
     findings.append(
         PrereqFinding(
             code="low-disk",
-            passed=available_disk >= requirements.disk_bytes,
-            detail="free disk is below the signed minimum",
+            passed=available_disk >= required_free_disk,
+            detail="free disk is below the signed runtime ceiling",
         )
     )
     qemu_img_ok = (

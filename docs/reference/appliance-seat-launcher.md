@@ -24,7 +24,9 @@ The physical host must satisfy the signed release `host_prerequisites` block:
 
 - Linux with hardware virtualization (`/dev/kvm`)
 - `qemu-img`, `qemu-system-x86_64`, and read-only OVMF UEFI firmware
-- available CPU/RAM and free disk at or above the manifest minimums
+- available CPU/RAM at or above the manifest minimums, host disk capacity at
+  or above the signed minimum, and free disk at or above the signed peak-runtime
+  ceiling
 - No dependency on host Docker for seat operations
 
 Trust anchors:

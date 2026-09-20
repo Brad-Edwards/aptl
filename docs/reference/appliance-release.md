@@ -44,8 +44,11 @@ The release host needs Python 3.11 or later, the guest target Python, `qemu-img`
 and libguestfs tools providing `virt-customize`, `virt-resize`, and
 `virt-sysprep`. The pinned Ubuntu base image must
 already contain systemd, Python with pip, and Docker Engine. The supported
-participant profile requires at least 8 vCPUs, 32 GiB RAM, 250 GiB available
-disk, and hardware virtualization.
+participant profile requires at least 8 vCPUs, 32 GiB RAM, a 250 GiB-capacity
+disk, 120 GiB of free runtime headroom, and hardware virtualization. The sparse
+guest disk retains its 250 GiB virtual capacity; the launcher reserves the
+separately signed peak-runtime ceiling rather than requiring the full virtual
+capacity to be free.
 
 Run the non-mutating prerequisite report before acquiring large inputs:
 

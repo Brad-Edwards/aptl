@@ -327,10 +327,10 @@ def test_stage_persists_seat_record(tmp_path: Path) -> None:
         patch(
             "aptl.appliance.seat.lifecycle.require_host_prerequisites",
             return_value=object(),
-        ),
+        ) as prerequisites,
         patch(
             "aptl.appliance.seat.lifecycle._load_verified_release",
-            return_value=(_inspection(), _policy(), _manifest_stub()),
+            return_value=(_inspection(), _policy(), _manifest_stub(), 50 * 1024**3),
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_release_documents",
@@ -351,6 +351,7 @@ def test_stage_persists_seat_record(tmp_path: Path) -> None:
         )
 
     assert record.lifecycle_state == "staged"
+    assert prerequisites.call_args.kwargs["required_free_disk_bytes"] == 50 * 1024**3
     assert record.schema_version == "aptl.seat-record/v2"
     assert record.generation == 1
     assert {mapping.audience for mapping in record.mappings} == {
@@ -400,7 +401,7 @@ def test_stage_persists_explicit_outer_mapping(tmp_path: Path) -> None:
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_verified_release",
-            return_value=(_inspection(), _policy(), _manifest_stub()),
+            return_value=(_inspection(), _policy(), _manifest_stub(), 50 * 1024**3),
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_release_documents",
@@ -441,7 +442,7 @@ def test_start_marks_ready_when_boundary_passes(tmp_path: Path) -> None:
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_verified_release",
-            return_value=(_inspection(), _policy(), _manifest_stub()),
+            return_value=(_inspection(), _policy(), _manifest_stub(), 50 * 1024**3),
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_release_documents",
@@ -451,7 +452,10 @@ def test_start_marks_ready_when_boundary_passes(tmp_path: Path) -> None:
         patch("aptl.appliance.seat.lifecycle.require_host_exposure"),
         patch("aptl.appliance.seat.lifecycle.start_vm") as start_vm,
         patch("aptl.appliance.seat.lifecycle.write_vm_pid"),
-        patch("aptl.appliance.seat.lifecycle.read_vm_pid", return_value=4242),
+        patch(
+            "aptl.appliance.seat.lifecycle.read_vm_pid",
+            side_effect=(None, 4242),
+        ),
         patch("aptl.appliance.seat.lifecycle._prepare_verified_launch_descriptor"),
         patch("aptl.appliance.seat.lifecycle.run_appliance_boundary_gate") as gate,
         patch(
@@ -476,6 +480,7 @@ def test_start_marks_ready_when_boundary_passes(tmp_path: Path) -> None:
         )
 
     assert record.lifecycle_state == "ready"
+    assert start_vm.call_args.args[0].disk_reservation_bytes == 50 * 1024**3
     gate.assert_called_once()
 
 
@@ -496,7 +501,7 @@ def test_start_fails_closed_without_real_boundary_probes(tmp_path: Path) -> None
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_verified_release",
-            return_value=(_inspection(), _policy(), _manifest_stub()),
+            return_value=(_inspection(), _policy(), _manifest_stub(), 50 * 1024**3),
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_release_documents",
@@ -551,7 +556,7 @@ def test_start_stops_vm_and_preserves_host_access_failure(tmp_path: Path) -> Non
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_verified_release",
-            return_value=(_inspection(), _policy(), _manifest_stub()),
+            return_value=(_inspection(), _policy(), _manifest_stub(), 50 * 1024**3),
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_release_documents",
@@ -861,7 +866,7 @@ def test_start_marks_recoverable_failure_when_boundary_fails(tmp_path: Path) -> 
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_verified_release",
-            return_value=(_inspection(), _policy(), _manifest_stub()),
+            return_value=(_inspection(), _policy(), _manifest_stub(), 50 * 1024**3),
         ),
         patch(
             "aptl.appliance.seat.lifecycle._load_release_documents",

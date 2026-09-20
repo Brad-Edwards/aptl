@@ -26,6 +26,7 @@ from aptl.appliance.manifest import (
     _load_release_documents,
 )
 from aptl.appliance.models import ApplianceReleaseManifest
+from aptl.appliance.release_validation import read_release_artifact
 from aptl.appliance.seat.context import SeatPaths, StartSeatOptions
 from aptl.appliance.seat.access import (
     GuestAccessRequest,
@@ -75,6 +76,8 @@ from aptl.core.appliance_boundary import (
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.core.appliance_boundary_inventory import GuestBoundaryObservation
 from aptl.core.appliance_boundary_gate import BoundaryPhase, run_appliance_boundary_gate
+from aptl.utils.strict_json import model_validate_json_strict
+from aptl.validation.participant_profile_models import ParticipantProfileManifest
 
 SEAT_RECORD_SCHEMA = "aptl.seat-record/v2"
 SEAT_NOT_STAGED = "seat is not staged"
@@ -197,8 +200,9 @@ def _load_verified_release(
     ApplianceReleaseInspection,
     ApplianceBoundaryPolicy,
     ApplianceCandidateManifest | ApplianceReleaseManifest,
+    int,
 ]:
-    """Verify the release directory and load the signed boundary policy."""
+    """Verify the release and load its policy and runtime disk reservation."""
 
     if candidate_trust:
         manifest, inspection = verify_candidate_directory(
@@ -228,7 +232,22 @@ def _load_verified_release(
         host_observation_id="pending",
     )
     policy = load_boundary_policy(policy_path, binding)
-    return inspection, policy, manifest
+    profile_path = next(
+        artifact.path
+        for artifact in manifest.artifacts
+        if artifact.kind == "participant-profile"
+    )
+    try:
+        profile = model_validate_json_strict(
+            ParticipantProfileManifest,
+            read_release_artifact(paths.release_dir, profile_path),
+        )
+    except ValueError as exc:
+        raise ApplianceManifestError("participant profile is invalid") from exc
+    runtime_disk_bytes = profile.budgets.maximums.peak_runtime_disk_bytes
+    if runtime_disk_bytes > manifest.host_prerequisites.disk_bytes:
+        raise ApplianceManifestError("runtime disk ceiling exceeds host disk capacity")
+    return inspection, policy, manifest, runtime_disk_bytes
 
 
 def release_requires_host_access(
@@ -301,12 +320,13 @@ def stage_seat(
         release_public_key=release_public_key,
         qualification_public_key=qualification_public_key,
     )
-    inspection, policy, manifest = _load_verified_release(
+    inspection, policy, manifest, runtime_disk_bytes = _load_verified_release(
         paths, candidate_trust=candidate_trust
     )
     require_host_prerequisites(
         manifest.host_prerequisites,
         seat_root=seat_root,
+        required_free_disk_bytes=runtime_disk_bytes,
         **(prereq_overrides or {}),
     )
     boot_id = _read_host_boot_id()
@@ -586,9 +606,7 @@ def _start_with_selected_mappings(
     )
 
 
-def _fail_closed_start(
-    seat_root: Path, paths: SeatPaths, starting: SeatRecord
-) -> None:
+def _fail_closed_start(seat_root: Path, paths: SeatPaths, starting: SeatRecord) -> None:
     """Revoke access and stop any VM left by an unsuccessful start."""
 
     cleanup_failure: Exception | None = None
@@ -615,7 +633,8 @@ def _fail_closed_start(
             "failed-start-cleanup", "failed seat cleanup could not be fully proved"
         ) from cleanup_failure
     persist_seat_record(
-        seat_root, starting.model_copy(update={"lifecycle_state": "recoverable-failure"})
+        seat_root,
+        starting.model_copy(update={"lifecycle_state": "recoverable-failure"}),
     )
 
 
@@ -641,7 +660,12 @@ def start_seat(
         qualification_public_key=qualification_public_key,
     )
     if _requires_automatic_mappings(record, seat_id, launch_options):
-        _inspection, automatic_policy, automatic_manifest = _load_verified_release(
+        (
+            _inspection,
+            automatic_policy,
+            automatic_manifest,
+            automatic_runtime_disk_bytes,
+        ) = _load_verified_release(
             paths, candidate_trust=launch_options.candidate_trust
         )
 
@@ -659,7 +683,7 @@ def start_seat(
             resources=(
                 automatic_manifest.host_prerequisites.vcpus,
                 automatic_manifest.host_prerequisites.memory_bytes,
-                automatic_manifest.host_prerequisites.disk_bytes,
+                automatic_runtime_disk_bytes,
             ),
             seat_root=seat_root,
         )
@@ -688,7 +712,7 @@ def start_seat(
         raise SeatLauncherError(
             "trust-mode-mismatch", "staged seat trust mode differs from start"
         )
-    inspection, policy, manifest = _load_verified_release(
+    inspection, policy, manifest, runtime_disk_bytes = _load_verified_release(
         paths, candidate_trust=launch_options.candidate_trust
     )
     _require_access_options(policy, launch_options)
@@ -726,7 +750,7 @@ def start_seat(
             launch_mount=paths.launch_dir,
             vcpus=manifest.host_prerequisites.vcpus,
             memory_mib=manifest.host_prerequisites.memory_bytes // (1024 * 1024),
-            disk_reservation_bytes=manifest.host_prerequisites.disk_bytes,
+            disk_reservation_bytes=runtime_disk_bytes,
             readiness_socket=readiness_socket,
             access_socket=access_socket,
             mappings=record.mappings,
@@ -743,7 +767,7 @@ def start_seat(
                     resources=(
                         manifest.host_prerequisites.vcpus,
                         manifest.host_prerequisites.memory_bytes,
-                        manifest.host_prerequisites.disk_bytes,
+                        runtime_disk_bytes,
                     ),
                     seat_root=seat_root,
                     retained_disk_bytes=(

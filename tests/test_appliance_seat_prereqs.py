@@ -129,6 +129,39 @@ def test_prereqs_fail_on_low_disk_and_missing_tools(tmp_path: Path) -> None:
     assert "missing-uefi-firmware" in codes
 
 
+def test_prereqs_distinguish_disk_capacity_from_runtime_free_space(
+    tmp_path: Path,
+) -> None:
+    requirements = _requirements()
+    shared = {
+        "seat_root": tmp_path,
+        "memory_bytes": 32 * 1024**3,
+        "available_vcpus": 16,
+        "free_disk_bytes": 60 * 1024**3,
+        "required_free_disk_bytes": 50 * 1024**3,
+        "kvm_available": True,
+        "qemu_img_available": True,
+        "qemu_system_available": True,
+        "ovmf_available": True,
+    }
+
+    report = check_host_prerequisites(
+        requirements,
+        total_disk_bytes=200 * 1024**3,
+        **shared,
+    )
+    assert report.passed is True
+
+    capacity_failure = check_host_prerequisites(
+        requirements,
+        total_disk_bytes=80 * 1024**3,
+        **shared,
+    )
+    assert {item.code for item in capacity_failure.findings if not item.passed} == {
+        "low-disk-capacity"
+    }
+
+
 def test_prereqs_use_available_cpu_and_memory_capacity(tmp_path: Path) -> None:
     report = check_host_prerequisites(
         _requirements(),

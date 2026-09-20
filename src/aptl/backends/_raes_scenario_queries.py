@@ -66,8 +66,8 @@ def admit_start_surface(
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
     *,
-    bundle: "ScenarioBundle | None" = None,
-    startup_selection: "ScenarioStartupSelection | None" = None,
+    bundle: ScenarioBundle | None = None,
+    startup_selection: ScenarioStartupSelection | None = None,
 ) -> tuple["AdmittedScenarioStart", AdmittedStartSurface]:
     """Admit the scenario once and project the pre-start facts off it.
 

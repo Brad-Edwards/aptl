@@ -80,15 +80,14 @@ def test_startup_plan_rejects_unknown_capability() -> None:
         _validated_plan,
     )
 
+    plan = ScenarioStartupPlan(
+        seed_script="scripts/seed.sh",
+        required_profiles=("soc",),
+        activation_profiles=("soc",),
+        lifecycle_capabilities=frozenset({"execute-anything"}),
+    )
     with pytest.raises(ScenarioStartupProviderError):
-        _validated_plan(
-            ScenarioStartupPlan(
-                seed_script="scripts/seed.sh",
-                required_profiles=("soc",),
-                activation_profiles=("soc",),
-                lifecycle_capabilities=frozenset({"execute-anything"}),
-            )
-        )
+        _validated_plan(plan)
 
 
 def test_tiny_pack_environment_does_not_require_stack_templates(

@@ -210,13 +210,11 @@ def _validated_container_environment(
     return tuple(value)
 
 
-def _validated_plan(value: object) -> ScenarioStartupPlan:
-    """Normalize one adapter plan and reject malformed profile sets."""
+def _validated_profile_groups(
+    profiles: object, activation: object
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Validate required and activated Compose profiles as one contract."""
 
-    if not isinstance(value, ScenarioStartupPlan):
-        raise ScenarioStartupProviderError("provider-result-invalid")
-    profiles = value.required_profiles
-    activation = value.activation_profiles
     if any(
         not isinstance(group, tuple)
         or not group
@@ -225,39 +223,68 @@ def _validated_plan(value: object) -> ScenarioStartupPlan:
         for group in (profiles, activation)
     ) or not set(activation).issubset(profiles):
         raise ScenarioStartupProviderError("provider-result-invalid")
-    if not isinstance(value.lifecycle_capabilities, frozenset) or any(
-        not isinstance(item, StartupCapability) for item in value.lifecycle_capabilities
-    ):
-        raise ScenarioStartupProviderError("provider-result-invalid")
+    return profiles, activation
+
+
+def _validated_seed_keys(value: object) -> tuple[str, ...]:
+    """Allow declared seed values without Docker transport overrides."""
+
     if (
-        not isinstance(value.seed_environment_keys, tuple)
+        not isinstance(value, tuple)
         or any(
             not isinstance(key, str)
             or not valid_environment_variable_name(key)
             or key in DOCKER_TRANSPORT_KEYS
-            for key in value.seed_environment_keys
+            for key in value
         )
-        or len(set(value.seed_environment_keys)) != len(value.seed_environment_keys)
+        or len(set(value)) != len(value)
     ):
         raise ScenarioStartupProviderError("provider-result-invalid")
-    mcp_keys = value.mcp_server_keys
+    return value
+
+
+def _valid_mcp_credential(item: object) -> bool:
+    """Check one bounded MCP client's declared credential names."""
+
+    return (
+        isinstance(item, McpServerCredentials)
+        and bool(re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", item.server_id))
+        and isinstance(item.environment_keys, tuple)
+        and bool(item.environment_keys)
+        and all(
+            isinstance(key, str) and valid_environment_variable_name(key)
+            for key in item.environment_keys
+        )
+        and len(set(item.environment_keys)) == len(item.environment_keys)
+    )
+
+
+def _validated_mcp_keys(value: object) -> tuple[McpServerCredentials, ...]:
+    """Require unique, well-formed client credential declarations."""
+
     if (
-        not isinstance(mcp_keys, tuple)
-        or any(
-            not isinstance(item, McpServerCredentials)
-            or not re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", item.server_id)
-            or not isinstance(item.environment_keys, tuple)
-            or not item.environment_keys
-            or any(
-                not isinstance(key, str) or not valid_environment_variable_name(key)
-                for key in item.environment_keys
-            )
-            or len(set(item.environment_keys)) != len(item.environment_keys)
-            for item in mcp_keys
-        )
-        or len({item.server_id for item in mcp_keys}) != len(mcp_keys)
+        not isinstance(value, tuple)
+        or any(not _valid_mcp_credential(item) for item in value)
+        or len({item.server_id for item in value}) != len(value)
     ):
         raise ScenarioStartupProviderError("provider-result-invalid")
+    return value
+
+
+def _validated_plan(value: object) -> ScenarioStartupPlan:
+    """Normalize one adapter plan and reject malformed profile sets."""
+
+    if not isinstance(value, ScenarioStartupPlan):
+        raise ScenarioStartupProviderError("provider-result-invalid")
+    profiles, activation = _validated_profile_groups(
+        value.required_profiles, value.activation_profiles
+    )
+    if not isinstance(value.lifecycle_capabilities, frozenset) or any(
+        not isinstance(item, StartupCapability) for item in value.lifecycle_capabilities
+    ):
+        raise ScenarioStartupProviderError("provider-result-invalid")
+    seed_keys = _validated_seed_keys(value.seed_environment_keys)
+    mcp_keys = _validated_mcp_keys(value.mcp_server_keys)
     if not isinstance(value.native_mcp_ingress, bool) or (
         value.mcp_build_script is not None
         and not isinstance(value.mcp_build_script, str)
@@ -272,7 +299,7 @@ def _validated_plan(value: object) -> ScenarioStartupPlan:
             value.container_environment
         ),
         lifecycle_capabilities=frozenset(value.lifecycle_capabilities),
-        seed_environment_keys=tuple(value.seed_environment_keys),
+        seed_environment_keys=seed_keys,
         mcp_build_script=(
             _safe_relative_script(value.mcp_build_script)
             if value.mcp_build_script is not None

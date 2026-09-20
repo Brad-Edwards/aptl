@@ -124,14 +124,12 @@ class DeploymentNodeRealization(object):
     services: tuple[DeploymentServicePort, ...] = ()
     published_ports: tuple[DeploymentPublishedPort, ...] = ()
     ordering_dependencies: tuple[str, ...] = ()
-    # ADR-048: declared desired state the generic materializer realizes onto a
-    # base substrate. None until the node payload declares them.
+    # ADR-048: desired state for a generic materializer; absent until declared.
     os: str = ""
     os_version: str = ""
     runtime: RuntimeConfiguration | None = None
-    # ADR-051 route 3 (issue #876): started immutably from the verified config id
-    # (never a pull, never a moved tag) when the node authored an open
-    # dynamic-composition source.
+    # ADR-051 route 3: start authored dynamic composition from a verified
+    # immutable config id (issue #876), without a pull or mutable tag lookup.
     dynamic_composition: bool = False
     # Backend-owned base selected under open compute-substrate authority for an
     # otherwise image-free materialized node.
@@ -140,9 +138,8 @@ class DeploymentNodeRealization(object):
     backend_run_capabilities: tuple[str, ...] = ()
     backend_provider_kind: str = ""
     backend_provider_parameters: tuple[tuple[str, str], ...] = ()
-    # Deployment-serving membership is resolved once by the pack/backend
-    # interaction seam and copied through the DTO. Renderers never rediscover it
-    # from component names.
+    # The pack/backend seam resolves serving membership once; renderers reuse
+    # the DTO rather than infer it from component names.
     profiles: tuple[str, ...] = ()
 
 
@@ -498,5 +495,3 @@ class DeploymentRealizationSpec(object):
     startup_selection: ScenarioStartupSelection | None = field(
         default=None, repr=False, compare=False
     )
-    # ADR-048 routing is derived per node so mixed artifacts, builds and generic
-    # substrates never fall into one whole-graph materialization decision.

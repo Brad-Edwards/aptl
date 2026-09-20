@@ -15,7 +15,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generic, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, Optional
 
 import icontract
 import yaml
@@ -114,14 +114,13 @@ if TYPE_CHECKING:
 log = get_logger("lab")
 
 ProgressCallback = Callable[[str], None]
-_StageValue = TypeVar("_StageValue")
 
 
 @dataclass(frozen=True)
-class StartStageResult(Generic[_StageValue]):
+class StartStageResult:
     """Internal continuation value, diagnostics and bounded fatal message."""
 
-    value: _StageValue | None = None
+    value: StartSelection | None = None
     diagnostics: tuple[StartupDiagnostic, ...] = ()
     error: str | None = None
     message: str = ""
@@ -1160,7 +1159,7 @@ def _step_load_env(ctx: _LabStartContext) -> LabResult | None:
     return _validate_env_secrets(ctx.raw_env) if needs_stack_env else None
 
 
-def _select_start_source(ctx: _LabStartContext) -> StartStageResult[StartSelection]:
+def _select_start_source(ctx: _LabStartContext) -> StartStageResult:
     """Resolve config, bundle and exact adapter before stack-specific mutation."""
 
     from aptl.backends._raes_scenario_resolution import resolve_scenario_bundle
@@ -1179,10 +1178,13 @@ def _select_start_source(ctx: _LabStartContext) -> StartStageResult[StartSelecti
         config = load_config(config_path)
         bundle = resolve_scenario_bundle(ctx.project_dir, ctx.scenario_path, config)
         provider_selection = select_scenario_startup(bundle)
-    except (FileNotFoundError, OSError, ValueError, EnvPackError) as exc:
-        return StartStageResult(error=f"Scenario selection failed: {redact(str(exc))}")
-    except ScenarioStartupProviderError:
-        return StartStageResult(error="Scenario startup adapter selection failed.")
+    except (OSError, ValueError, EnvPackError, ScenarioStartupProviderError) as exc:
+        error = (
+            "Scenario startup adapter selection failed."
+            if isinstance(exc, ScenarioStartupProviderError)
+            else f"Scenario selection failed: {redact(str(exc))}"
+        )
+        return StartStageResult(error=error)
     return StartStageResult(
         value=StartSelection(
             config=config,
@@ -2136,19 +2138,8 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
         # second parse/plan pass (issues #432 and #550).
         before_backend_retry=_backend_retry_callback(ctx),
     )
-    if isinstance(outcome, AcesStartOutcome):
-        lab_result = outcome.lab_result
-    elif isinstance(outcome, LabResult):
-        lab_result = outcome
-    else:
-        return LabResult(
-            success=False, error="RAES runtime handoff returned no outcome"
-        )
-    if lab_result.success:
-        if not isinstance(outcome, AcesStartOutcome):
-            return LabResult(
-                success=False, error="RAES runtime handoff returned no snapshot"
-            )
+    result: LabResult | None
+    if isinstance(outcome, AcesStartOutcome) and outcome.lab_result.success:
         # Store the RAES start outcome for the run record step (REP-001).
         ctx.raes_outcome = outcome
         # Scope the post-start readiness checks to the profiles this scenario
@@ -2156,12 +2147,28 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
         # scenario starts a subset, so a config-flag gate would wait on (and
         # fail) services it never launched.
         ctx.selected_profiles = set(outcome.selected_profiles)
-        return None
-    log.error("Lab start failed: %s", lab_result.error)
-    return LabResult(
-        success=False,
-        error=_lab_start_failure_error(lab_result.error),
-    )
+        result = None
+    elif isinstance(outcome, AcesStartOutcome):
+        log.error("Lab start failed: %s", outcome.lab_result.error)
+        result = LabResult(
+            success=False,
+            error=_lab_start_failure_error(outcome.lab_result.error),
+        )
+    elif isinstance(outcome, LabResult):
+        if outcome.success:
+            result = LabResult(
+                success=False, error="RAES runtime handoff returned no snapshot"
+            )
+        else:
+            log.error("Lab start failed: %s", outcome.error)
+            result = LabResult(
+                success=False, error=_lab_start_failure_error(outcome.error)
+            )
+    else:
+        result = LabResult(
+            success=False, error="RAES runtime handoff returned no outcome"
+        )
+    return result
 
 
 @_runtime_require(
@@ -2950,26 +2957,9 @@ def _step_pin_terminal_host_keys(ctx: _LabStartContext) -> LabResult | None:
 
 def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
     """Build local MCP server artifacts after the lab is running."""
-    no_adapter_profiles = ctx.admitted_surface is not None and not ctx.selected_profiles
-    if no_adapter_profiles or ctx.offline_staged:
-        if no_adapter_profiles:
-            log.debug("No adapter profiles selected, skipping MCP artifact build")
-        else:
-            log.info("Using pre-staged MCP server artifacts")
+    relative_script = _selected_mcp_build_script(ctx)
+    if relative_script is None:
         return None
-    from aptl.backends.scenario_startup import ScenarioStartupPlan
-    from aptl.core.scenario_bundle import ScenarioSourceKind
-
-    surface = ctx.admitted_surface
-    if surface is not None and surface.source_kind is ScenarioSourceKind.ENV_PACK:
-        plan = ctx.scenario_startup
-        relative_script = (
-            plan.mcp_build_script if isinstance(plan, ScenarioStartupPlan) else None
-        )
-        if relative_script is None:
-            return None
-    else:
-        relative_script = "mcp/build-all-mcps.sh"
     log.info("Step 12: Building MCP servers...")
     mcp_script = ctx.project_dir / relative_script
     if not mcp_script.exists():
@@ -3012,6 +3002,30 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
             operator_action=("Inspect mcp/build-all-mcps.sh permissions and tooling"),
         )
     return None
+
+
+def _selected_mcp_build_script(ctx: _LabStartContext) -> str | None:
+    """Return the selected experience's script, if MCP build is applicable."""
+
+    no_adapter_profiles = ctx.admitted_surface is not None and not ctx.selected_profiles
+    if no_adapter_profiles or ctx.offline_staged:
+        if no_adapter_profiles:
+            log.debug("No adapter profiles selected, skipping MCP artifact build")
+        else:
+            log.info("Using pre-staged MCP server artifacts")
+        return None
+    from aptl.backends.scenario_startup import ScenarioStartupPlan
+    from aptl.core.scenario_bundle import ScenarioSourceKind
+
+    surface = ctx.admitted_surface
+    if surface is not None and surface.source_kind is ScenarioSourceKind.ENV_PACK:
+        plan = ctx.scenario_startup
+        relative_script = (
+            plan.mcp_build_script if isinstance(plan, ScenarioStartupPlan) else None
+        )
+        return relative_script
+    else:
+        return "mcp/build-all-mcps.sh"
 
 
 _SEED_SOC_RERUN_ACTION = "Re-run the selected scenario seed once services are healthy"
@@ -3107,30 +3121,62 @@ def _scenario_seed_environment(ctx: _LabStartContext, plan: object) -> dict[str,
     # The seed receives just toolchain/transport coordinates plus values its
     # content-qualified adapter declares. The whole controller environment and
     # project dotenv may contain unrelated operator secrets.
-    inherited = (
-        "PATH",
-        "HOME",
-        "USERPROFILE",
-        "SYSTEMROOT",
-        "WINDIR",
-        "TMPDIR",
-        "TEMP",
-        "TMP",
-    )
-    environment = {key: os.environ[key] for key in inherited if key in os.environ}
-    if ctx.backend is not None:
-        transport = ctx.backend.docker_transport_environment()
-        if not isinstance(transport, Mapping) or any(
-            key not in DOCKER_TRANSPORT_KEYS or not isinstance(value, str)
-            for key, value in transport.items()
-        ):
-            raise OSError("deployment backend Docker transport is unavailable")
-        environment.update(transport)
+    environment = {
+        key: os.environ[key]
+        for key in (
+            "PATH",
+            "HOME",
+            "USERPROFILE",
+            "SYSTEMROOT",
+            "WINDIR",
+            "TMPDIR",
+            "TEMP",
+            "TMP",
+        )
+        if key in os.environ
+    }
+    environment.update(_seed_backend_transport(ctx))
+    environment.update(_seed_declared_values(ctx, plan))
+    environment.update(_seed_container_bindings(ctx, plan))
+    return environment
+
+
+def _seed_backend_transport(ctx: _LabStartContext) -> dict[str, str]:
+    """Project only Docker coordinates from the selected deployment backend."""
+
+    from aptl.backends.scenario_startup import DOCKER_TRANSPORT_KEYS
+
+    if ctx.backend is None:
+        return {}
+    transport = ctx.backend.docker_transport_environment()
+    if not isinstance(transport, Mapping) or any(
+        key not in DOCKER_TRANSPORT_KEYS or not isinstance(value, str)
+        for key, value in transport.items()
+    ):
+        raise OSError("deployment backend Docker transport is unavailable")
+    return dict(transport)
+
+
+def _seed_declared_values(
+    ctx: _LabStartContext, plan: ScenarioStartupPlan
+) -> dict[str, str]:
+    """Project only values declared by the content-qualified adapter."""
+
+    environment: dict[str, str] = {}
     for key in plan.seed_environment_keys:
         if key in ctx.raw_env:
             environment[key] = ctx.raw_env[key]
         elif key in os.environ:
             environment[key] = os.environ[key]
+    return environment
+
+
+def _seed_container_bindings(
+    ctx: _LabStartContext, plan: ScenarioStartupPlan
+) -> dict[str, str]:
+    """Use backend receipts for declared semantic container names."""
+
+    environment: dict[str, str] = {}
     for binding in plan.container_environment:
         assert ctx.backend is not None
         info = ctx.backend.container_inspect(binding.semantic_name)
@@ -3716,7 +3762,7 @@ def _emit_progress(ctx: _LabStartContext, message: str) -> None:
 def _run_start_stage(
     ctx: _LabStartContext,
     step: Callable[[_LabStartContext], LabResult | None],
-) -> StartStageResult[None]:
+) -> StartStageResult:
     """Adapt one incumbent step to the coordinator's internal result shape."""
 
     before = len(ctx.diagnostics)

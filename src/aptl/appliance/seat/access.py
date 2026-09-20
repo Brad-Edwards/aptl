@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import secrets
-import shutil
 import socket
 import stat
 import time
@@ -19,6 +18,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from aptl.appliance.seat._device import write_character_device
+from aptl.appliance.seat.access_clients import configure_host_clients, enrolled_key
+from aptl.appliance.seat.access_state import remove_matching_invalidated_generation
 from aptl.core._soc_ca_io import _atomic_write
 from aptl.core.appliance_boundary import ApplianceBoundaryBinding
 from aptl.core.appliance_boundary_inventory import (
@@ -28,14 +29,14 @@ from aptl.core.appliance_boundary_inventory import (
 )
 from aptl.core.archival.legacy_manifest import LEGACY_REPRODUCIBILITY_SCHEMAS
 from aptl.utils.strict_json import model_validate_json_strict
-from aptl.workbench.access import CallerGrant, Identifier, SeatAccessRecord
-from aptl.workbench.preparation import EnrolledKey
-from aptl.workbench.profiles import WorkbenchConfigurationError
 from aptl.validation.participant_qualification_evidence import (
     QualificationCheckEvidence,
 )
+from aptl.workbench.access import CallerGrant, Identifier, SeatAccessRecord
+from aptl.workbench.profiles import WorkbenchConfigurationError
 
 MAX_ACCESS_MESSAGE_BYTES = 2 * 1024 * 1024
+_ACCESS_RECORD_NAME = "access.json"
 
 
 def _read_private_regular(path: Path) -> bytes:
@@ -402,73 +403,16 @@ def persist_host_access_bundle(seat_root: Path, bundle: GuestAccessBundle) -> Pa
     access_root = seat_root / "access"
     _ensure_private_access_root(access_root)
     root = access_root / f"generation-{bundle.generation}"
-    _remove_matching_invalidated_generation(root, bundle)
+    remove_matching_invalidated_generation(root, bundle)
     root.mkdir(parents=True, mode=0o700, exist_ok=False)
     for name, payload in {
-        "access.json": bundle.access.model_dump_json() + "\n",
+        _ACCESS_RECORD_NAME: bundle.access.model_dump_json() + "\n",
         "grant.json": bundle.grant.model_dump_json() + "\n",
         "ssh_host_ed25519_key.pub": bundle.host_public_key.rstrip() + "\n",
         "runtime-evidence.json": bundle.runtime_evidence.model_dump_json() + "\n",
     }.items():
         _atomic_write(root / name, payload.encode(), mode=0o600)
     return root
-
-
-def _remove_matching_invalidated_generation(
-    root: Path, bundle: GuestAccessBundle
-) -> None:
-    """Permit refresh only over this seat's revoked matching generation."""
-
-    if not root.exists() and not root.is_symlink():
-        return
-    try:
-        info = root.stat(follow_symlinks=False)
-        if (
-            root.is_symlink()
-            or not stat.S_ISDIR(info.st_mode)
-            or info.st_uid != os.getuid()
-            or stat.S_IMODE(info.st_mode) != 0o700
-        ):
-            raise OSError("existing access generation is unsafe")
-        allowed = {
-            "access.json",
-            "invalidated",
-            "runtime-evidence.json",
-            "ssh_host_ed25519_key.pub",
-        }
-        children = {child.name for child in root.iterdir()}
-        if "invalidated" not in children or not children <= allowed:
-            raise OSError("existing access generation is still active")
-        for child in root.iterdir():
-            child_info = child.stat(follow_symlinks=False)
-            if (
-                not stat.S_ISREG(child_info.st_mode)
-                or child_info.st_uid != os.getuid()
-                or stat.S_IMODE(child_info.st_mode) != 0o600
-            ):
-                raise OSError("existing access generation is unsafe")
-        previous = SeatAccessRecord.model_validate_json(
-            _read_private_regular(root / "access.json")
-        )
-        expected = (
-            bundle.access.owner_id,
-            bundle.seat_id,
-            bundle.instance_id,
-            bundle.generation,
-        )
-        observed = (
-            previous.owner_id,
-            previous.seat_id,
-            previous.instance_id,
-            previous.generation,
-        )
-        if previous.lifecycle_state != "needs-reset" or observed != expected:
-            raise OSError("invalidated access generation identity changed")
-        shutil.rmtree(root)
-    except (OSError, ValueError) as exc:
-        raise WorkbenchConfigurationError(
-            "existing access generation cannot be refreshed"
-        ) from exc
 
 
 def invalidate_host_access(seat_root: Path, *, reason: str) -> None:
@@ -480,7 +424,7 @@ def invalidate_host_access(seat_root: Path, *, reason: str) -> None:
     for generation in root.iterdir():
         if not generation.is_dir() or generation.is_symlink():
             continue
-        access_path = generation / "access.json"
+        access_path = generation / _ACCESS_RECORD_NAME
         if access_path.is_file() and not access_path.is_symlink():
             try:
                 record = SeatAccessRecord.model_validate_json(access_path.read_bytes())
@@ -494,76 +438,3 @@ def invalidate_host_access(seat_root: Path, *, reason: str) -> None:
                 access_path.unlink(missing_ok=True)
         (generation / "grant.json").unlink(missing_ok=True)
         _atomic_write(generation / "invalidated", (reason + "\n").encode(), mode=0o600)
-
-
-def configure_host_clients(
-    *,
-    bundle: GuestAccessBundle,
-    project_dir: Path,
-    identity_file: Path,
-    username: str,
-    clients: tuple[str, ...],
-) -> tuple[Path, ...]:
-    """Publish native Claude/Codex config using the VM-returned host pin."""
-
-    from aptl.workbench.access_clients import client_entries
-    from aptl.workbench.client_files import (
-        _private_directory,
-        _read,
-        publish_client_config,
-    )
-    from aptl.workbench.dispatch import key_fingerprint, normalize_public_key
-
-    if (
-        not clients
-        or len(set(clients)) != len(clients)
-        or any(client not in {"claude", "codex"} for client in clients)
-    ):
-        raise WorkbenchConfigurationError("select one or more supported MCP clients")
-    root = project_dir.resolve(strict=True)
-    public_key = normalize_public_key(bundle.host_public_key)
-    fingerprint = key_fingerprint(public_key)
-    if bundle.access.host_key_fingerprint != fingerprint:
-        raise WorkbenchConfigurationError("guest access host pin is inconsistent")
-    ssh = shutil.which("ssh")
-    if ssh is None:
-        raise WorkbenchConfigurationError("OpenSSH client is required")
-    _private_directory(root, ".aptl")
-    known = (
-        root
-        / ".aptl"
-        / (
-            f"{bundle.seat_id}-{bundle.generation}-"
-            f"{fingerprint[7:19].replace('/', '_')}.known_hosts"
-        )
-    )
-    endpoint = bundle.access.outer_endpoint
-    content = f"[{endpoint.address}]:{endpoint.port} {public_key}\n".encode()
-    existing = _read(root, known.relative_to(root).as_posix())
-    if existing is not None and existing.encode() != content:
-        raise WorkbenchConfigurationError("existing transport pin conflicts")
-    _atomic_write(known, content, mode=0o600)
-    entries = client_entries(
-        bundle.access,
-        bundle.grant,
-        ssh_executable=Path(ssh),
-        identity_file=identity_file,
-        known_hosts=known,
-        username=username,
-    )
-    return tuple(
-        publish_client_config(root, client, bundle.access, entries)
-        for client in clients
-    )
-
-
-def enrolled_key(request: GuestAccessRequest) -> EnrolledKey:
-    """Project the public request into the existing restricted transport model."""
-
-    item = request.enrollment
-    return EnrolledKey(
-        grant_id=item.grant_id,
-        public_key=item.public_key,
-        profile=item.profile,
-        expires_at=item.expires_at,
-    )

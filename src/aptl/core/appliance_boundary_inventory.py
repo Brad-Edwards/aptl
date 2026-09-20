@@ -257,15 +257,7 @@ def _append_enforcement_findings(
         return
     platform = by_authority.get("platform")
     if policy.internal_zone_isolation:
-        if platform is None:
-            findings.append(incomplete)
-        else:
-            if platform.source_digest != binding.policy_digest:
-                findings.append("boundary.guest-platform-source-mismatch")
-            if set(platform.families) != {"bridge", "inet"}:
-                findings.append(incomplete)
-            if not platform.default_deny_observed:
-                findings.append("boundary.guest-default-deny-missing")
+        _append_platform_enforcement_findings(platform, binding.policy_digest, findings)
     elif platform is not None:
         findings.append("boundary.guest-unexpected-platform-enforcement")
     raes = by_authority.get("raes")
@@ -273,6 +265,24 @@ def _append_enforcement_findings(
         findings.append("boundary.guest-raes-enforcement-missing")
     elif raes is not None and raes.source_digest != binding.raes_plan_digest:
         findings.append("boundary.guest-raes-source-mismatch")
+
+
+def _append_platform_enforcement_findings(
+    platform: BoundaryEnforcementObservation | None,
+    policy_digest: str,
+    findings: list[str],
+) -> None:
+    """Require complete, digest-bound platform firewall enforcement."""
+
+    if platform is None:
+        findings.append("boundary.guest-enforcement-incomplete")
+        return
+    if platform.source_digest != policy_digest:
+        findings.append("boundary.guest-platform-source-mismatch")
+    if set(platform.families) != {"bridge", "inet"}:
+        findings.append("boundary.guest-enforcement-incomplete")
+    if not platform.default_deny_observed:
+        findings.append("boundary.guest-default-deny-missing")
 
 
 def _append_probe_findings(

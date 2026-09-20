@@ -2,233 +2,53 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
 import shutil
 import subprocess
 import tempfile
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
+from aptl.appliance.access_service_support import (
+    _access_account,
+    _assign_management_state,
+    _descriptor_digest,
+    _ensure_host_key,
+    _prepare_dispatch_ca,
+    _prepare_dispatch_home,
+    _stage_dispatch_metadata,
+    _write_runtime_observation,
+)
 from aptl.appliance.launch import VerifiedApplianceLaunch, verify_launch_descriptor
 from aptl.appliance.seat.access import (
+    MAX_ACCESS_MESSAGE_BYTES,
     GuestAccessBundle,
     GuestAccessRequest,
     GuestRuntimeEvidence,
-    MAX_ACCESS_MESSAGE_BYTES,
     enrolled_key,
     publish_guest_access,
     read_guest_access_request,
 )
-from aptl.core._soc_ca_io import _atomic_write
-from aptl.core.config import load_config
 from aptl.core.appliance_boundary_inventory import (
     GuestBoundaryObservation,
     qualify_appliance_boundary,
 )
+from aptl.core.config import load_config
+from aptl.utils.strict_json import loads_strict
+from aptl.validation.participant_qualification import QualificationCheckEvidence
+from aptl.workbench.access import SeatEndpoint
 from aptl.workbench.guest_binding import (
-    ApplianceAccessObservation,
     ApplianceAccessPaths,
     observe_guest,
     verify_guest_observation,
 )
-from aptl.workbench.access import SeatEndpoint
 from aptl.workbench.preparation import TransportPreparation, prepare_guest_transport
 from aptl.workbench.profiles import WorkbenchConfigurationError
-from aptl.utils.strict_json import loads_strict
-from aptl.validation.participant_qualification import QualificationCheckEvidence
 
 if TYPE_CHECKING:
     from aptl.appliance.candidate import VerifiedCandidateLaunch
-
-
-class _AccessAccount(Protocol):
-    """POSIX account fields required by the guest access supervisor."""
-
-    pw_uid: int
-    pw_gid: int
-    pw_dir: str
-
-
-def _access_account(username: str) -> _AccessAccount:
-    """Resolve the guest dispatcher account without breaking portable imports."""
-
-    try:
-        import pwd
-    except ModuleNotFoundError as exc:
-        raise WorkbenchConfigurationError(
-            "guest access supervision requires POSIX"
-        ) from exc
-    try:
-        return pwd.getpwnam(username)
-    except KeyError as exc:
-        raise WorkbenchConfigurationError(
-            "guest access account is unavailable"
-        ) from exc
-
-
-def _descriptor_digest(path: Path) -> str:
-    """Return the SHA-256 identity of one staged launch descriptor."""
-
-    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
-
-
-def _ensure_host_key(path: Path) -> None:
-    """Generate one overlay-local host key without replacing an existing key."""
-
-    public = path.with_suffix(path.suffix + ".pub")
-    if path.exists() or public.exists():
-        if not path.is_file() or not public.is_file():
-            raise WorkbenchConfigurationError("guest host key state is incomplete")
-        return
-    path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
-    subprocess.run(
-        ["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(path)],
-        check=True,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        timeout=30,
-    )
-    path.chmod(0o600)
-    public.chmod(0o644)
-
-
-def _write_runtime_observation(
-    path: Path,
-    request: GuestAccessRequest,
-    guest: GuestBoundaryObservation,
-    *,
-    uid: int,
-    gid: int,
-) -> None:
-    """Persist a private host/guest boundary observation for the dispatcher."""
-
-    observation = ApplianceAccessObservation(
-        schema_version="aptl.mcp-boundary-observation/v1",
-        observed_at=datetime.now(UTC),
-        binding=request.binding,
-        host=request.host_observation,
-        guest=guest,
-    )
-    _atomic_write(path, (observation.model_dump_json() + "\n").encode(), mode=0o600)
-    os.chown(path, uid, gid)
-
-
-def _assign_management_state(project: Path, *, uid: int, gid: int) -> None:
-    """Give the dedicated dispatcher identity only the generated private state."""
-
-    run_store = Path(load_config(project / "aptl.json").run_storage.local_path)
-    if not run_store.is_absolute():
-        run_store = project / run_store
-    if (
-        run_store.resolve() == project.resolve()
-        or not run_store.resolve().is_relative_to(project.resolve())
-    ):
-        raise WorkbenchConfigurationError(
-            "guest run store escapes private project state"
-        )
-    targets = (project / ".aptl", project / ".mcp.json", run_store)
-    for target in targets:
-        if target.is_symlink() or not target.exists():
-            raise WorkbenchConfigurationError("guest management state is unsafe")
-        if target.is_dir():
-            for root, directories, files in os.walk(target, followlinks=False):
-                root_path = Path(root)
-                if any(
-                    (root_path / name).is_symlink() for name in (*directories, *files)
-                ):
-                    raise WorkbenchConfigurationError(
-                        "guest management state contains a symbolic link"
-                    )
-                os.chown(root_path, uid, gid, follow_symlinks=False)
-                for name in files:
-                    os.chown(root_path / name, uid, gid, follow_symlinks=False)
-        else:
-            os.chown(target, uid, gid, follow_symlinks=False)
-
-
-def _prepare_dispatch_home(home: Path, *, uid: int, gid: int) -> None:
-    """Give the dispatcher the lab-only SSH identity, not supervisor home access."""
-    from aptl.utils.pathsafe import read_contained_nofollow
-
-    directory = home / ".ssh"
-    target = directory / "aptl_lab_key"
-    if home.is_symlink() or directory.is_symlink() or target.is_symlink():
-        raise WorkbenchConfigurationError("dispatcher SSH identity path is unsafe")
-    payload = read_contained_nofollow(Path.home(), ".ssh/aptl_lab_key")
-    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-    directory.chmod(0o700)
-    _atomic_write(target, payload, mode=0o600)
-    os.chown(directory, uid, gid)
-    os.chown(target, uid, gid)
-
-
-def _prepare_dispatch_ca(project: Path, *, gid: int) -> None:
-    """Permit group traversal to the public root, leaving key material private."""
-    from aptl.core._soc_ca_io import _canonical_output_dir
-
-    directory = _canonical_output_dir(project)
-    if directory.is_symlink() or not directory.is_dir():
-        raise WorkbenchConfigurationError("guest public CA directory is unsafe")
-    os.chown(directory, -1, gid)
-    directory.chmod(0o710)
-
-
-def _stage_dispatch_metadata(
-    launch: VerifiedApplianceLaunch | VerifiedCandidateLaunch,
-    paths: ApplianceAccessPaths,
-    destination: Path,
-    *,
-    gid: int,
-) -> ApplianceAccessPaths:
-    """Project only signed metadata into root-owned, dispatcher-readable state.
-
-    The host launch share remains owner-only and read-only. Neither its large
-    artifacts nor its participant credentials belong in the dispatcher's view.
-    """
-    from aptl.appliance.manifest import verify_release_metadata
-    from aptl.appliance.release_validation import read_release_artifact
-    from aptl.utils.pathsafe import read_contained_nofollow
-
-    destination.mkdir(mode=0o700, parents=True, exist_ok=True)
-    release = destination / launch.descriptor.release_dir
-    release.mkdir(mode=0o700, parents=True)
-    names = [launch.descriptor.boundary_policy_path]
-    if paths.candidate_trust:
-        names.extend(("candidate-manifest.json", "candidate-manifest.sig.json"))
-    else:
-        manifest = verify_release_metadata(
-            launch.release_root, paths.release_public_key
-        )
-        names.extend(("manifest.json", "manifest.sig.json"))
-        names.extend(
-            a.path for a in manifest.artifacts if a.kind == "participant-qualification"
-        )
-    payloads = {
-        release / name: read_release_artifact(launch.release_root, name)
-        for name in names
-    }
-    copies = {
-        "launch_descriptor": destination / "appliance-launch.json",
-        "release_public_key": destination / "release-public.pem",
-        "qualification_public_key": destination / "qualification-public.pem",
-    }
-    for field, target in copies.items():
-        source = getattr(paths, field)
-        payloads[target] = read_contained_nofollow(source.parent, source.name)
-    for target, payload in payloads.items():
-        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        _atomic_write(target, payload, mode=0o640)
-        # Supervisor stays owner; dispatcher gets read-only group access.
-        os.chown(target, -1, gid)
-    for directory in (destination, *(p for p in destination.rglob("*") if p.is_dir())):
-        directory.chmod(0o750)
-        os.chown(directory, -1, gid)
-    return paths.model_copy(update=copies)
 
 
 def _run_qualification_attempt(

@@ -6,7 +6,7 @@ import os
 import sys
 
 from aptl.workbench.profiles import profile_for
-from aptl.workbench.relay import RelayLaunch, relay_mcp
+from aptl.workbench.relay import RelayLaunch, RelayPolling, relay_mcp
 
 SERVER = r"""
 import json,signal,sys
@@ -62,8 +62,10 @@ def test_real_pipe_relay_admits_inventory_denies_blue_and_revokes_live_session(
                     authorize=authorize,
                     cleanup_observer=cleanups.append,
                     check_revocation=check_revocation,
-                    poll_seconds=0.01,
-                    authorization_poll_seconds=1,
+                    polling=RelayPolling(
+                        revocation_seconds=0.01,
+                        authorization_seconds=1,
+                    ),
                 )
             finally:
                 tasks.remove(task)

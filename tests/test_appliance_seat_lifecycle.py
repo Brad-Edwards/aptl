@@ -581,6 +581,12 @@ def test_start_stops_vm_and_preserves_host_access_failure(tmp_path: Path) -> Non
     ):
         start_vm.return_value.pid = 4242
         gate.return_value = type("Result", (), {"passed": True, "findings": ()})()
+        options = StartSeatOptions(
+            listener_probe=_listener_probe,
+            forbidden_reachability_probe=lambda: True,
+            guest_readiness_probe=_guest,
+            reserve_outer_mappings=False,
+        )
         with pytest.raises(SeatLauncherError) as exc:
             start_seat(
                 seat_root,
@@ -588,12 +594,7 @@ def test_start_stops_vm_and_preserves_host_access_failure(tmp_path: Path) -> Non
                 release_dir=release,
                 release_public_key=public_key,
                 qualification_public_key=qualification_key,
-                options=StartSeatOptions(
-                    listener_probe=_listener_probe,
-                    forbidden_reachability_probe=lambda: True,
-                    guest_readiness_probe=_guest,
-                    reserve_outer_mappings=False,
-                ),
+                options=options,
             )
 
     assert exc.value.code == "invalid-host-access"

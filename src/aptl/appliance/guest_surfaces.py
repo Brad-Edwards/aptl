@@ -68,13 +68,13 @@ class _GuestSurfaceHandler(BaseHTTPRequestHandler):
 
     protocol_version = "HTTP/1.1"
 
-    def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler contract
+    def _handle_get(self) -> None:
         self._respond(include_body=True)
 
-    def do_HEAD(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler contract
+    def _handle_head(self) -> None:
         self._respond(include_body=False)
 
-    def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler contract
+    def _handle_post(self) -> None:
         self.send_response(HTTPStatus.METHOD_NOT_ALLOWED)
         self.send_header("Allow", "GET, HEAD")
         self.send_header("Content-Length", "0")
@@ -103,6 +103,14 @@ class _GuestSurfaceHandler(BaseHTTPRequestHandler):
 
     def log_message(self, _format: str, *args: object) -> None:
         """Keep request metadata out of guest logs."""
+
+
+for _method, _handler in {
+    "GET": _GuestSurfaceHandler._handle_get,
+    "HEAD": _GuestSurfaceHandler._handle_head,
+    "POST": _GuestSurfaceHandler._handle_post,
+}.items():
+    setattr(_GuestSurfaceHandler, f"do_{_method}", _handler)
 
 
 class _GuestSurfaceServer(ThreadingHTTPServer):

@@ -9,6 +9,7 @@ import yaml
 
 from aptl.appliance.payload_content import registry_image_id
 from aptl.backends.raes_base_substrate import NodePlanningOptions, base_container_spec
+from aptl.backends.raes_realization_model import AptlRealization
 from aptl.core.config import AptlConfig
 from aptl.core.deployment._compose_boundary import DEFAULT_BOUNDARY_HELPER_IMAGE
 from aptl.core.deployment._compose_content_realization import CONTENT_SEEDER_IMAGE
@@ -79,7 +80,7 @@ def compose_runtime_image_aliases(
     return aliases
 
 
-def _scenario_image_references(realization) -> dict[str, str]:
+def _scenario_image_references(realization: AptlRealization) -> dict[str, str]:
     """Collect the image selected for every realized scenario service."""
 
     references = {}
@@ -107,7 +108,9 @@ def _scenario_image_references(realization) -> dict[str, str]:
     return references
 
 
-def _shuffle_child_images(project: Path, realization) -> dict[str, str]:
+def _shuffle_child_images(
+    project: Path, realization: AptlRealization
+) -> dict[str, str]:
     """Validate and return the workflow engine's authored child images."""
 
     orchestrator = next(

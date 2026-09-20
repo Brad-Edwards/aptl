@@ -100,16 +100,51 @@ def check_host_prerequisites(
                 detail="hardware virtualization is unavailable",
             )
         )
+    findings.extend(
+        _resource_findings(
+            requirements,
+            seat_root=seat_root,
+            memory_bytes=memory_bytes,
+            available_vcpus=available_vcpus,
+            total_disk_bytes=total_disk_bytes,
+            free_disk_bytes=free_disk_bytes,
+            required_free_disk_bytes=required_free_disk_bytes,
+        )
+    )
+    findings.extend(
+        _tool_findings(
+            qemu_img_available=qemu_img_available,
+            qemu_system_available=qemu_system_available,
+            ovmf_available=ovmf_available,
+        )
+    )
+    return PrereqReport(
+        passed=all(item.passed for item in findings), findings=tuple(findings)
+    )
+
+
+def _resource_findings(
+    requirements: HostPrerequisites,
+    *,
+    seat_root: Path,
+    memory_bytes: int | None,
+    available_vcpus: int | None,
+    total_disk_bytes: int | None,
+    free_disk_bytes: int | None,
+    required_free_disk_bytes: int | None,
+) -> tuple[PrereqFinding, ...]:
+    """Measure memory, CPU, and disk capacity for one seat."""
+
     total_memory = (
         _read_available_memory_bytes() if memory_bytes is None else memory_bytes
     )
-    findings.append(
+    findings = [
         PrereqFinding(
             code="low-memory",
             passed=total_memory >= requirements.memory_bytes,
             detail="host memory is below the signed minimum",
         )
-    )
+    ]
     if available_vcpus is not None:
         cpu_capacity = available_vcpus
     elif hasattr(os, "sched_getaffinity"):
@@ -150,18 +185,29 @@ def check_host_prerequisites(
             detail="free disk is below the signed runtime ceiling",
         )
     )
+    return tuple(findings)
+
+
+def _tool_findings(
+    *,
+    qemu_img_available: bool | None,
+    qemu_system_available: bool | None,
+    ovmf_available: bool | None,
+) -> tuple[PrereqFinding, ...]:
+    """Probe the QEMU and firmware tooling required by seat launch."""
+
     qemu_img_ok = (
         _tool_available(("qemu-img", "--version"))
         if qemu_img_available is None
         else qemu_img_available
     )
-    findings.append(
+    findings = [
         PrereqFinding(
             code="missing-qemu-img",
             passed=qemu_img_ok,
             detail="qemu-img is required for overlay management",
         )
-    )
+    ]
     qemu_system_ok = (
         _tool_available(("qemu-system-x86_64", "--version"))
         if qemu_system_available is None
@@ -182,8 +228,7 @@ def check_host_prerequisites(
             detail=f"read-only UEFI firmware is required at {OVMF_CODE_PATH}",
         )
     )
-    passed = all(item.passed for item in findings)
-    return PrereqReport(passed=passed, findings=tuple(findings))
+    return tuple(findings)
 
 
 def require_host_prerequisites(

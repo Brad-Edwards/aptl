@@ -67,6 +67,14 @@ class RelayLaunch:
     server: ServerProfile
 
 
+@dataclass(frozen=True)
+class RelayPolling:
+    """Polling intervals for authorization and fast revocation checks."""
+
+    revocation_seconds: float = 0.25
+    authorization_seconds: float = 10
+
+
 class _Relay:
     """Serialize MCP calls through a continuously authorized child process."""
 
@@ -228,9 +236,8 @@ async def relay_mcp(
     launch: RelayLaunch,
     authorize: Callable[[], None],
     cleanup_observer: Callable[[bool], None],
-    poll_seconds: float = 0.25,
     check_revocation: Callable[[], None] | None = None,
-    authorization_poll_seconds: float = 10,
+    polling: RelayPolling = RelayPolling(),
 ) -> None:
     """Run only trusted guest argv; close and report every connection's cleanup.
 
@@ -248,11 +255,11 @@ async def relay_mcp(
         start_new_session=True,
         limit=_MAX_FRAME,
     )
-    relay = _Relay(
-        child, reader, writer, launch.server, authorize, check_revocation
-    )
+    relay = _Relay(child, reader, writer, launch.server, authorize, check_revocation)
     authorization_interval = (
-        authorization_poll_seconds if check_revocation is not None else poll_seconds
+        polling.authorization_seconds
+        if check_revocation is not None
+        else polling.revocation_seconds
     )
     tasks = [
         asyncio.create_task(coro)
@@ -265,7 +272,9 @@ async def relay_mcp(
     ]
     if check_revocation is not None:
         tasks.append(
-            asyncio.create_task(_watch_revocation(check_revocation, poll_seconds))
+            asyncio.create_task(
+                _watch_revocation(check_revocation, polling.revocation_seconds)
+            )
         )
     try:
         await asyncio.wait(tasks, timeout=3600, return_when=asyncio.FIRST_COMPLETED)

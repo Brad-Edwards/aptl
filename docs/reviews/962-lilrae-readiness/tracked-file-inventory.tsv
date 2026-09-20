@@ -1737,12 +1737,15 @@ scripts/appliance/verify-public-images.sh	optional-delivery	Keep anonymous GHCR 
 scripts/appliance/write-failed-candidate-proof.py	optional-delivery	Keep failed-update continuity evidence with delivery owner
 scripts/appliance/write-qualification-measurements.py	optional-delivery	Keep strict qualification measurement receipt with delivery owner
 src/aptl/appliance/access_service.py	optional-delivery	Keep guest-restricted MCP transport with delivery owner
+src/aptl/appliance/access_service_support.py	optional-delivery	Keep guest access filesystem and account preparation with delivery owner
 src/aptl/appliance/candidate.py	optional-delivery	Keep qualification-only candidate trust path with delivery owner
 src/aptl/appliance/guest_observation.py	optional-delivery	Keep authenticated guest observation with delivery owner
 src/aptl/appliance/guest_surfaces.py	optional-delivery	Keep authenticated guest-surface validation with delivery owner
 src/aptl/appliance/policy.py	optional-delivery	Keep full-TechVault appliance policy with delivery owner
 src/aptl/appliance/qualification.py	optional-delivery	Keep machine-derived qualification evidence with delivery owner
 src/aptl/appliance/seat/access.py	optional-delivery	Keep generation-scoped host access with delivery owner
+src/aptl/appliance/seat/access_clients.py	optional-delivery	Keep generation-scoped client publication with delivery owner
+src/aptl/appliance/seat/access_state.py	optional-delivery	Keep revoked generation validation with delivery owner
 tests/test_appliance_access_service.py	tests-follow-owner	Retain guest-restricted MCP service tests with migrated owner
 tests/test_appliance_candidate.py	tests-follow-owner	Retain candidate trust and tamper tests with migrated owner
 tests/test_appliance_guest_observation.py	tests-follow-owner	Retain guest observation tests with migrated owner

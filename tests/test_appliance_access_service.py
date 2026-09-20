@@ -132,8 +132,10 @@ def test_dispatch_home_gets_private_lab_identity_without_opening_supervisor_home
     assert source.parent.stat().st_mode & 0o777 == 0o700
     copied.unlink()
     copied.symlink_to(source)
+    uid = os.getuid()
+    gid = os.getgid()
     with pytest.raises(WorkbenchConfigurationError):
-        access_service._prepare_dispatch_home(home, uid=os.getuid(), gid=os.getgid())
+        access_service._prepare_dispatch_home(home, uid=uid, gid=gid)
 
 
 def test_dispatch_metadata_preserves_production_qualification_verification(tmp_path):

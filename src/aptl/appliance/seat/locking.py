@@ -6,7 +6,7 @@ import errno
 import os
 import stat
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
@@ -32,7 +32,7 @@ def _held_locks() -> dict[str, tuple[int, int]]:
 
 
 @contextmanager
-def seat_mutation_lock(seat_root: Path):
+def seat_mutation_lock(seat_root: Path) -> Iterator[None]:
     """Hold the owner-only lifecycle lock for exactly one seat root."""
 
     _ensure_seat_root(seat_root)
@@ -100,6 +100,8 @@ def serialized_seat_mutation(
 
     @wraps(function)
     def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
+        """Invoke the lifecycle mutation while holding its seat lock."""
+
         seat_root = args[0] if args else kwargs.get("seat_root")
         if not isinstance(seat_root, Path):
             raise TypeError("seat_root must be a pathlib.Path")

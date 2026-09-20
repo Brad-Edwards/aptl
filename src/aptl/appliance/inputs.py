@@ -177,28 +177,37 @@ def _saved_manifest_config_pairs(
         raise ValueError("saved Docker archive has no OCI image index")
     pairs: set[tuple[str, str]] = set()
     for descriptor in index["manifests"]:
-        if not isinstance(descriptor, dict):
-            raise ValueError("saved Docker archive has an invalid OCI descriptor")
-        manifest_id = descriptor.get("digest")
-        if (
-            not isinstance(manifest_id, str)
-            or re.fullmatch(_DIGEST_PATTERN, manifest_id) is None
-        ):
-            continue
-        manifest_path = "blobs/sha256/" + manifest_id.removeprefix(_DIGEST_PREFIX)
-        if manifest_path not in image_files:
-            continue
-        manifest = json.loads(read_archive_member(image_archive, manifest_path))
-        config = manifest.get("config") if isinstance(manifest, dict) else None
-        config_id = config.get("digest") if isinstance(config, dict) else None
-        if (
-            isinstance(config_id, str)
-            and re.fullmatch(_DIGEST_PATTERN, config_id) is not None
-        ):
-            pairs.add((manifest_id, config_id))
+        pair = _saved_manifest_config_pair(image_archive, image_files, descriptor)
+        if pair is not None:
+            pairs.add(pair)
     if not pairs:
         raise ValueError("saved Docker archive has no image identity mapping")
     return pairs
+
+
+def _saved_manifest_config_pair(
+    image_archive: Path,
+    image_files: dict[str, str],
+    descriptor: object,
+) -> tuple[str, str] | None:
+    """Resolve one valid OCI manifest/config identity pair when locally saved."""
+
+    if not isinstance(descriptor, dict):
+        raise ValueError("saved Docker archive has an invalid OCI descriptor")
+    manifest_id = descriptor.get("digest")
+    if not isinstance(manifest_id, str) or not re.fullmatch(
+        _DIGEST_PATTERN, manifest_id
+    ):
+        return None
+    manifest_path = "blobs/sha256/" + manifest_id.removeprefix(_DIGEST_PREFIX)
+    if manifest_path not in image_files:
+        return None
+    manifest = json.loads(read_archive_member(image_archive, manifest_path))
+    config = manifest.get("config") if isinstance(manifest, dict) else None
+    config_id = config.get("digest") if isinstance(config, dict) else None
+    if not isinstance(config_id, str) or not re.fullmatch(_DIGEST_PATTERN, config_id):
+        return None
+    return manifest_id, config_id
 
 
 def _require_available_images(references: dict[str, str]) -> None:

@@ -15,8 +15,8 @@ the admission boundary and translates into the RAES `LabResult` envelope.
 
 from __future__ import annotations
 
-import io
 import hashlib
+import io
 import shlex
 import tarfile
 import tempfile
@@ -25,6 +25,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+from aptl.backends._raes_docker_materializer_observations import (
+    DockerMaterializationObservationMixin,
+    _ExecOutcome,
+    _normalized_mode,
+)
 from aptl.backends.raes_materializer import (
     EnsureDirectoryOp,
     EnsureUserOp,
@@ -34,11 +39,6 @@ from aptl.backends.raes_materializer import (
     PlaceProjectContentOp,
     ProvisionDomainAuthorityOp,
     SetFilesystemMetadataOp,
-)
-from aptl.backends._raes_docker_materializer_observations import (
-    DockerMaterializationObservationMixin,
-    _ExecOutcome,
-    _normalized_mode,
 )
 from aptl.backends.raes_package_managers import (
     install_argv,
@@ -291,44 +291,72 @@ class DockerMaterializationExecutor(DockerMaterializationObservationMixin):
             _IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS,
         )
         with tempfile.TemporaryDirectory() as staging:
-            if op.is_directory:
-                staged = Path(staging) / "tree"
-                staged.mkdir()
-                with tarfile.open(
-                    fileobj=io.BytesIO(resolved.data), mode="r:*"
-                ) as archive:
-                    archive.extractall(staged, filter="data")
-            else:
-                staged = Path(staging) / PurePosixPath(op.dest_path).name
-                staged.write_bytes(resolved.data)
-            for path in (
-                staged,
-                *(sorted(staged.rglob("*")) if op.is_directory else ()),
-            ):
-                if path.is_symlink():
+            staged = self._stage_pack_artifact(Path(staging), resolved.data, op)
+            self._secure_pack_artifact(staged, op)
+            self._copy_pack_artifact(container, staged, node_address, op)
+
+    @staticmethod
+    def _stage_pack_artifact(
+        staging: Path, payload: bytes, op: PlacePackArtifactOp
+    ) -> Path:
+        """Expand or write a resolved pack artifact into private staging."""
+
+        if not op.is_directory:
+            staged = staging / PurePosixPath(op.dest_path).name
+            staged.write_bytes(payload)
+            return staged
+        staged = staging / "tree"
+        staged.mkdir()
+        with tarfile.open(fileobj=io.BytesIO(payload), mode="r:*") as archive:
+            archive.extractall(staged, filter="data")
+        return staged
+
+    @staticmethod
+    def _pack_artifact_mode(path: Path, op: PlacePackArtifactOp) -> int:
+        """Return the least-permissive executable or data mode for one path."""
+
+        executable = (
+            path.is_dir()
+            or bool(path.stat().st_mode & 0o111)
+            or (not op.is_directory and op.executable)
+        )
+        if op.sensitive:
+            return 0o700 if executable else 0o600
+        return 0o755 if executable else 0o644
+
+    def _secure_pack_artifact(self, staged: Path, op: PlacePackArtifactOp) -> None:
+        """Reject links and normalize every staged artifact mode."""
+
+        descendants = sorted(staged.rglob("*")) if op.is_directory else []
+        for path in (staged, *descendants):
+            if path.is_symlink():
+                raise MaterializationCommandError(
+                    "pack content contains a symbolic link"
+                )
+            path.chmod(self._pack_artifact_mode(path, op))
+
+    def _copy_pack_artifact(
+        self,
+        container: str,
+        staged: Path,
+        node_address: str,
+        op: PlacePackArtifactOp,
+    ) -> None:
+        """Retry the idempotent copy after ambiguous backend failures."""
+
+        if self._copy_in is None:
+            raise MaterializationCommandError("pack content copy is unavailable")
+        retries = _IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS
+        for attempt in range(len(retries) + 1):
+            try:
+                self._copy_in(container, str(staged), op.dest_path, op.is_directory)
+                return
+            except (BackendSeedError, BackendTimeoutError, OSError):
+                if attempt == len(retries):
                     raise MaterializationCommandError(
-                        "pack content contains a symbolic link"
-                    )
-                executable = (
-                    path.is_dir()
-                    or bool(path.stat().st_mode & 0o111)
-                    or (not op.is_directory and op.executable)
-                )
-                path.chmod(
-                    (0o700 if executable else 0o600)
-                    if op.sensitive
-                    else (0o755 if executable else 0o644)
-                )
-            for attempt in range(len(_IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS) + 1):
-                try:
-                    self._copy_in(container, str(staged), op.dest_path, op.is_directory)
-                    break
-                except (BackendSeedError, BackendTimeoutError, OSError):
-                    if attempt == len(_IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS):
-                        raise MaterializationCommandError(
-                            f"pack content copy failed on {node_address}"
-                        ) from None
-                    self._sleep(_IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS[attempt])
+                        f"pack content copy failed on {node_address}"
+                    ) from None
+                self._sleep(retries[attempt])
 
     def install_dependency_manifest(
         self, node_address: str, op: InstallDependencyManifestOp

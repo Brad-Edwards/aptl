@@ -16,25 +16,29 @@ def invoke_runtime_provider(
 ) -> list[str]:
     """Invoke post-start work and normalize its bounded failure list."""
 
+    result: list[str] = []
     runner = getattr(provider, "realize_runtime", None)
-    if runner is None:
-        return []
-    if not callable(runner):
-        return ["scenario runtime provider is malformed"]
-    try:
-        failures = runner(backend, nodes)
-    except Exception as exc:
-        log.warning(
-            "scenario runtime provider failed: selector=%s exception=%s",
-            getattr(identity, "pack_id", ""),
-            type(exc).__name__,
-        )
-        return ["scenario runtime provider failed"]
-    if not isinstance(failures, list) or any(
-        not isinstance(item, str) or not item for item in failures
-    ):
-        return ["scenario runtime provider returned an invalid result"]
-    return failures
+    if runner is not None:
+        if not callable(runner):
+            result = ["scenario runtime provider is malformed"]
+        else:
+            try:
+                failures = runner(backend, nodes)
+            except Exception as exc:
+                log.warning(
+                    "scenario runtime provider failed: selector=%s exception=%s",
+                    getattr(identity, "pack_id", ""),
+                    type(exc).__name__,
+                )
+                result = ["scenario runtime provider failed"]
+            else:
+                if not isinstance(failures, list) or any(
+                    not isinstance(item, str) or not item for item in failures
+                ):
+                    result = ["scenario runtime provider returned an invalid result"]
+                else:
+                    result = failures
+    return result
 
 
 def invoke_runtime_observer(

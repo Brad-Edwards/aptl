@@ -37,6 +37,7 @@ class ApplianceAccessPaths(BaseModel):
     release_public_key: Path
     qualification_public_key: Path
     runtime_observation: Path
+    candidate_trust: bool = False
 
 
 class ApplianceAccessObservation(BaseModel):
@@ -233,11 +234,18 @@ class GuestAdmission:
             from aptl.appliance.launch import verify_launch_descriptor
 
             paths = self.binding.appliance
-            self.verified_launch = verify_launch_descriptor(
-                paths.launch_descriptor,
-                paths.release_public_key,
-                paths.qualification_public_key,
-            )
+            if paths.candidate_trust:
+                from aptl.appliance.candidate import verify_candidate_launch_descriptor
+
+                self.verified_launch = verify_candidate_launch_descriptor(
+                    paths.launch_descriptor, paths.release_public_key
+                )
+            else:
+                self.verified_launch = verify_launch_descriptor(
+                    paths.launch_descriptor,
+                    paths.release_public_key,
+                    paths.qualification_public_key,
+                )
             if (
                 self.verified_launch.descriptor.host_mcp_contract
                 != "aptl.restricted-ssh-mcp/v1"
@@ -307,7 +315,7 @@ class GuestAdmission:
             "boundary_helper_image": descriptor.boundary_helper_image,
             "egress_proxy_image": descriptor.egress_proxy_image,
             "host_observation_id": descriptor.host_observation_id,
-            "boot_id": self.binding.access.guest_boot_id,
+            "guest_boot_id": self.binding.access.guest_boot_id,
             "guest_daemon_id": self.binding.access.guest_daemon_id,
             "raes_boundary_required": self.verified_launch.boundary_policy.internal_zone_isolation,
         }

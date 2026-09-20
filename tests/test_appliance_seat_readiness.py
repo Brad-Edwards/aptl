@@ -85,6 +85,23 @@ def test_guest_publishes_current_challenge_to_character_device(tmp_path: Path) -
     publish_guest_readiness(challenge_path, Path("/dev/null"), _guest())
 
 
+def test_guest_publishes_readiness_through_virtio_style_device_symlink(
+    tmp_path: Path,
+) -> None:
+    challenge_path = tmp_path / "readiness-challenge.json"
+    publish_readiness_challenge(
+        challenge_path,
+        seat_id="seat-01",
+        instance_id="a" * 32,
+        generation=2,
+        launch_descriptor_digest="sha256:" + "b" * 64,
+    )
+    device = tmp_path / "org.aptl.readiness"
+    device.symlink_to("/dev/null")
+
+    publish_guest_readiness(challenge_path, device, _guest())
+
+
 def test_guest_challenge_loader_rejects_leaf_symlink(tmp_path: Path) -> None:
     actual = tmp_path / "actual.json"
     publish_readiness_challenge(

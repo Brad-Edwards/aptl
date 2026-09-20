@@ -72,10 +72,9 @@ candidate_id=${candidate_identity[0]}
 candidate_manifest_digest=${candidate_identity[1]}
 golden_image_digest=${candidate_identity[2]}
 
-ssh-keygen -q -t ed25519 -N '' -f "$work/client-key"
-
 seat_roots=()
 start_pids=()
+client_keys=()
 cleanup() {
     if test -n "${sampler_pid:-}"; then
         kill "$sampler_pid" >/dev/null 2>&1 || true
@@ -83,8 +82,10 @@ cleanup() {
     for seat_root in "${seat_roots[@]}"; do
         "$work/venv/bin/aptl" seat stop --seat-root "$seat_root" >/dev/null 2>&1 || true
     done
-    rm -f "$work/qualification-private.pem" "$work/client-key" \
-        "$work/client-key.pub"
+    rm -f "$work/qualification-private.pem"
+    for identity in "${client_keys[@]}"; do
+        rm -f "$identity" "$identity.pub"
+    done
 }
 trap cleanup EXIT INT TERM
 
@@ -105,9 +106,12 @@ for index in $(seq 1 "$APTL_QUALIFICATION_SEATS"); do
     seat_root="$work/$seat_id"
     release_dir="$seat_root/launch/release"
     project="$work/client-$seat_id"
+    identity="$work/client-key-$index"
     install -d -m 0700 "$seat_root/launch" "$project"
     cp -al "$work/candidate" "$release_dir"
     seat_roots+=("$seat_root")
+    ssh-keygen -q -t ed25519 -N '' -f "$identity"
+    client_keys+=("$identity")
     participant_port=$((13000 + index))
     recovery_port=$((14000 + index))
     mcp_port=$((15000 + index))
@@ -120,8 +124,8 @@ for index in $(seq 1 "$APTL_QUALIFICATION_SEATS"); do
         --mapping "recovery,tcp,127.0.0.1,$recovery_port,127.0.0.1,8400" \
         --mapping "host-mcp,tcp,127.0.0.1,$mcp_port,127.0.0.1,2222" \
         --access-owner "qualification-$index" \
-        --access-public-key "$work/client-key.pub" \
-        --access-identity-file "$work/client-key" \
+        --access-public-key "$identity.pub" \
+        --access-identity-file "$identity" \
         --access-project-dir "$project" \
         --access-profile red --access-client claude --access-client codex \
         --qualification-candidate >"$work/$seat_id.start.json" &
@@ -226,8 +230,8 @@ warm_started=$(date +%s)
     --mapping "recovery,tcp,127.0.0.1,14001,127.0.0.1,8400" \
     --mapping "host-mcp,tcp,127.0.0.1,15001,127.0.0.1,2222" \
     --access-owner qualification-1 \
-    --access-public-key "$work/client-key.pub" \
-    --access-identity-file "$work/client-key" \
+    --access-public-key "$work/client-key-1.pub" \
+    --access-identity-file "$work/client-key-1" \
     --access-project-dir "$work/client-seat-1" \
     --access-profile red --access-client claude --access-client codex \
     --qualification-candidate >"$work/seat-1.recovery.json"
@@ -291,5 +295,8 @@ if test "$APTL_QUALIFICATION_SEATS" = 2; then
     rm "$work/qualification-private.pem"
     unset APTL_QUALIFICATION_SIGNING_KEY_PEM
 fi
-rm -f "$work/client-key" "$work/client-key.pub"
+for identity in "${client_keys[@]}"; do
+    rm -f "$identity" "$identity.pub"
+done
+client_keys=()
 trap - EXIT INT TERM

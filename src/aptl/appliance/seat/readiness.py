@@ -14,6 +14,7 @@ from typing import Literal
 import rfc8785
 from pydantic import BaseModel, ConfigDict, Field
 
+from aptl.appliance.seat._device import write_character_device
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.core.appliance_boundary_inventory import GuestBoundaryObservation
 from aptl.utils.strict_json import model_validate_json_strict
@@ -143,17 +144,8 @@ def publish_guest_readiness(
 
     challenge = load_guest_readiness_challenge(challenge_path)
     payload = encode_guest_readiness(challenge, observation)
-    flags = os.O_WRONLY | os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
     try:
-        descriptor = os.open(device_path, flags)
-        info = os.fstat(descriptor)
-        if not stat.S_ISCHR(info.st_mode):
-            os.close(descriptor)
-            raise OSError("readiness endpoint is not a character device")
-        with os.fdopen(descriptor, "wb", buffering=0) as device:
-            device.write(payload)
+        write_character_device(device_path, payload)
     except OSError as exc:
         raise SeatLauncherError(
             "boundary.guest-readiness-write-failed",

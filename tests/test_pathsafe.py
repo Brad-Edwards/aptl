@@ -69,6 +69,19 @@ class TestHappyPath:
 
         assert data == b"hello"
 
+    def test_reads_through_execute_only_intermediate_directory(self, tmp_path):
+        nested = tmp_path / "private-names"
+        nested.mkdir()
+        target = nested / "binding.json"
+        target.write_bytes(b"{}")
+        nested.chmod(0o111)
+        try:
+            assert (
+                read_contained_nofollow(tmp_path, "private-names/binding.json") == b"{}"
+            )
+        finally:
+            nested.chmod(0o700)
+
     def test_open_contained_nofollow_returns_a_closeable_binary_handle(self, tmp_path):
         (tmp_path / "f.txt").write_bytes(b"payload")
 

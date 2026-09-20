@@ -555,6 +555,24 @@ class TestDomainAuthority:
 
 
 class TestServices:
+    @pytest.mark.parametrize("already_active", [False, True])
+    def test_service_consumes_authored_configuration_even_if_base_auto_started_it(
+        self, already_active
+    ):
+        state = {"active": already_active, "config": "package-default"}
+
+        def systemctl(_container, argv):
+            if argv[:2] == ["systemctl", "start"] and state["active"]:
+                return (0, "")  # systemd start leaves an active daemon unchanged
+            # BIND's querylog startup option is one real example of authored
+            # state that a successful reload does not activate.
+            if argv[0] == "systemctl" and argv[1] in {"start", "restart"}:
+                state.update(active=True, config="authored")
+            return (0, "")
+
+        _executor(_FakeExec(systemctl)).start_service_unit("n.dns", "named.service")
+        assert state == {"active": True, "config": "authored"}
+
     def test_enable_and_start_run_systemctl(self):
         fake = _FakeExec()
         ex = _executor(fake)
@@ -562,7 +580,7 @@ class TestServices:
         ex.start_service_unit("n.node", "wazuh-manager.service")
         argvs = fake.argvs()
         assert ["systemctl", "enable", "wazuh-manager.service"] in argvs
-        assert ["systemctl", "start", "wazuh-manager.service"] in argvs
+        assert ["systemctl", "restart", "wazuh-manager.service"] in argvs
 
     def test_observe_active_and_enabled_parse_systemctl(self):
         active = _executor(_FakeExec(lambda c, a: (0, "active\n")))
@@ -638,6 +656,62 @@ class TestPackArtifactPlacement:
             copy_in=_copy_in,
             scenario_root=tmp_path,
         )
+
+    @pytest.mark.parametrize("directory", [False, True])
+    @pytest.mark.parametrize("sensitive", [False, True])
+    def test_pack_content_readability_does_not_inherit_private_umask(
+        self, tmp_path, stub_pack, directory, sensitive
+    ):
+        import os
+        from aptl.core.deployment.realization import DeploymentContentRealization
+        from aptl.core.deployment._compose_image_free_realization import (
+            _content_placement_op,
+        )
+
+        digest = "sha256:" + "a" * 64
+        stub_pack["config"] = _StubResolved(
+            _tar_bytes({"nested/named.conf": b"options {};\n"})
+            if directory
+            else b"options {};\n",
+            digest,
+        )
+
+        def copy(_container, source, _dest, is_directory):
+            root = Path(source)
+            paths = (root, *root.rglob("*")) if is_directory else (root,)
+            for path in paths:
+                expected = 0o755 if path.is_dir() else 0o644
+                if sensitive:
+                    expected &= 0o700
+                assert path.stat().st_mode & 0o777 == expected
+
+        executor = DockerMaterializationExecutor(
+            run=_FakeExec(),
+            container_for=lambda _: "dns",
+            start_base=lambda *_: None,
+            copy_in=copy,
+            scenario_root=tmp_path,
+        )
+        previous = os.umask(0o077)
+        try:
+            executor.place_pack_artifact(
+                "provision.node.dns",
+                _content_placement_op(
+                    DeploymentContentRealization(
+                        address="provision.content.dns-config",
+                        target_address="provision.node.dns",
+                        content_name="dns-config",
+                        volume_suffix="dns-config",
+                        dest_relpath="etc/bind",
+                        source_kind="pack-directory" if directory else "pack-file",
+                        artifact_id="config",
+                        artifact_digest=digest,
+                        sensitive=sensitive,
+                    )
+                ),
+            )
+        finally:
+            os.umask(previous)
 
     def test_file_artifact_bytes_are_staged_and_copied_into_the_node(
         self, tmp_path, stub_pack

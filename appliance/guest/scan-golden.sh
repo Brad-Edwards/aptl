@@ -35,6 +35,13 @@ docker buildx version >/dev/null
 docker compose version >/dev/null
 test -x /opt/aptl/python/bin/aptl
 /usr/local/bin/aptl --version >/dev/null
+# Exercise the immutable runtime through the identity that the enrolled SSH
+# transport actually uses. A root-only scan cannot detect missing traversal or
+# read bits introduced by the provisioner's private umask.
+su -s /bin/sh -c '
+    /usr/local/bin/aptl --version >/dev/null &&
+    test -r /opt/aptl/project/mcp/mcp-red/build/index.js
+' aptl-mcp
 case "$(node --version)" in
     v22.*) ;;
     *) exit 1 ;;

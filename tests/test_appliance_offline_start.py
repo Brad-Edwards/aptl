@@ -76,6 +76,7 @@ def test_offline_staged_realization_inspects_images_and_forbids_pull_or_build(
     assert "--pull" in up
     assert up[up.index("--pull") + 1] == "never"
     assert "--build" not in up
+    assert "--no-build" in up
 
 
 def test_offline_staged_realization_fails_before_start_when_image_is_missing(
@@ -420,6 +421,7 @@ def test_guest_readiness_and_access_are_published_from_one_observation(
         backend=backend,
         selected_profiles={"red", "blue"},
         admitted_start=SimpleNamespace(realization=realization),
+        run_id="run-current",
         appliance_readiness_challenge=tmp_path / "readiness.json",
         appliance_readiness_device=tmp_path / "readiness.sock",
         appliance_access_request=tmp_path / "access-request.json",
@@ -446,4 +448,26 @@ def test_guest_readiness_and_access_are_published_from_one_observation(
         observation,
     )
     assert serve_access.call_args.kwargs["candidate_trust"] is True
+    assert serve_access.call_args.kwargs["run_id"] == "run-current"
     assert serve_access.call_args.kwargs["observe_boundary"]() is observation
+
+
+def test_appliance_supervision_does_not_keep_the_startup_mutation_lock(
+    tmp_path, monkeypatch
+):
+    from aptl.core import lab
+    from aptl.core.lifecycle_guard import lifecycle_observation_lock
+
+    reached = []
+
+    def publish(context):
+        # The real guest transport acquires this shared lock before admission.
+        # Retaining startup's exclusive lock makes every connection fail.
+        with lifecycle_observation_lock(context.project_dir):
+            reached.append("admitted")
+
+    monkeypatch.setattr(lab, "_LAB_START_STEPS", ())
+    monkeypatch.setattr(lab, "_publish_appliance_guest_readiness", publish)
+    result = lab.orchestrate_lab_start(tmp_path)
+    assert result.success
+    assert reached == ["admitted"]

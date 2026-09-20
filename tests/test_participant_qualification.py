@@ -144,7 +144,7 @@ def _canonical_evidence(
         ],
     }
     run_record: dict[str, object] = {
-        "schema_version": "aptl.run-record/v1",
+        "schema_version": "aptl.run-record/v2",
         "run_id": "profile-proof",
         "outcome": "success",
         "backend_evidence": {

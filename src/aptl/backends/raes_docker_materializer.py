@@ -292,6 +292,24 @@ class DockerMaterializationExecutor(DockerMaterializationObservationMixin):
             else:
                 staged = Path(staging) / PurePosixPath(op.dest_path).name
                 staged.write_bytes(resolved.data)
+            for path in (
+                staged,
+                *(sorted(staged.rglob("*")) if op.is_directory else ()),
+            ):
+                if path.is_symlink():
+                    raise MaterializationCommandError(
+                        "pack content contains a symbolic link"
+                    )
+                executable = (
+                    path.is_dir()
+                    or bool(path.stat().st_mode & 0o111)
+                    or (not op.is_directory and op.executable)
+                )
+                path.chmod(
+                    (0o700 if executable else 0o600)
+                    if op.sensitive
+                    else (0o755 if executable else 0o644)
+                )
             for attempt in range(len(_IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS) + 1):
                 try:
                     self._copy_in(container, str(staged), op.dest_path, op.is_directory)
@@ -362,7 +380,14 @@ class DockerMaterializationExecutor(DockerMaterializationObservationMixin):
         )
 
     def start_service_unit(self, node_address: str, unit_name: str) -> None:
-        self._require_ok(node_address, ["systemctl", "start", unit_name], "start unit")
+        # A preinstalled package can auto-start with its default configuration
+        # before authored content is placed. Plain start preserves that stale
+        # process, and reload is insufficient for startup-only settings (BIND
+        # query logging is one example). Restart applies the complete authored
+        # state and also starts an inactive unit.
+        self._require_ok(
+            node_address, ["systemctl", "restart", unit_name], "start unit"
+        )
 
     # -- internals -------------------------------------------------------
 

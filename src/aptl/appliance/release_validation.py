@@ -26,6 +26,7 @@ from aptl.appliance.models import (
 )
 from aptl.appliance.versioning import aptl_wheel_version
 from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
+from aptl.core.archival.legacy_manifest import LEGACY_REPRODUCIBILITY_SCHEMAS
 from aptl.utils.pathsafe import (
     PathContainmentError,
     open_contained_nofollow,
@@ -418,7 +419,7 @@ def _qualification_runtime_matches(
         and qualification.run_record_sha256 == hashlib.sha256(run_payload).hexdigest()
         and qualification.snapshot_sha256
         == hashlib.sha256(snapshot_payload).hexdigest()
-        and run_record.get("schema_version") == "aptl.run-record/v1"
+        and run_record.get("schema_version") in LEGACY_REPRODUCIBILITY_SCHEMAS
         and run_record.get("outcome") == "success"
         and isinstance(selected, list)
         and all(isinstance(item, str) for item in selected)

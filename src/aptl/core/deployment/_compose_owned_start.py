@@ -189,7 +189,7 @@ class ComposeOwnedStartMixin:
         if build:
             command.append("--build")
         if self._offline_staged:
-            command.extend(["--pull", "never"])
+            command.extend(["--pull", "never", "--no-build"])
         command.append("-d")
         for service in exclude_services:
             command.extend(["--scale", f"{service}=0"])

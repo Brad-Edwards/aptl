@@ -87,6 +87,10 @@ class _ProxyHandler(socketserver.BaseRequestHandler):
             target = socket.create_connection(server.target, timeout=10)
         except OSError:
             return
+        # The timeout bounds only establishment.  Relayed services such as the MCP
+        # dispatcher may legitimately take longer than ten seconds to produce a
+        # frame, and an inherited socket timeout would tear down a healthy stream.
+        target.settimeout(None)
         _relay(self.request, target)
 
 

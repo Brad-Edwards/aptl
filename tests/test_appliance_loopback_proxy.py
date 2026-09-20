@@ -39,11 +39,25 @@ def test_proxy_bindings_reject_non_tcp_publication() -> None:
         build_proxy_bindings(policy, adapter_address="10.0.2.15")
 
 
-def test_proxy_relays_bytes_to_the_fixed_loopback_target() -> None:
+def test_proxy_relays_bytes_to_the_fixed_loopback_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as upstream:
         upstream.bind(("127.0.0.1", 0))
         upstream.listen(1)
         upstream_port = upstream.getsockname()[1]
+        target_connections: list[socket.socket] = []
+        create_connection = socket.create_connection
+
+        def observe_connection(
+            address: tuple[str, int], timeout: float | object = socket._GLOBAL_DEFAULT_TIMEOUT
+        ) -> socket.socket:
+            connection = create_connection(address, timeout=timeout)
+            if address == ("127.0.0.1", upstream_port):
+                target_connections.append(connection)
+            return connection
+
+        monkeypatch.setattr(socket, "create_connection", observe_connection)
 
         def echo() -> None:
             connection, _ = upstream.accept()
@@ -75,3 +89,5 @@ def test_proxy_relays_bytes_to_the_fixed_loopback_target() -> None:
 
     assert not proxy_thread.is_alive()
     assert not echo_thread.is_alive()
+    assert len(target_connections) == 1
+    assert target_connections[0].gettimeout() is None

@@ -51,6 +51,7 @@ class TransportPreparation(BaseModel):
     seat_id: Identifier
     instance_id: Identifier
     generation: int = Field(strict=True, ge=1)
+    run_id: str = Field(pattern=r"^(?:[a-f0-9]{32}|run_[0-9]{8}T[0-9]{6}Z)$")
     guest_endpoint: SeatEndpoint
     outer_endpoint: SeatEndpoint
     project_dir: Path
@@ -107,9 +108,15 @@ def prepare_guest_transport(
     containers = observe_guest_containers(backend)
     bundle = env_pack_bundle(project / ".aptl" / "transport-pack")
     verify_full_inventory(expected_bundle_matrix(project, config, bundle), containers)
-    authorities = load_active_transcript_authorities(project)
+    authorities = tuple(
+        authority
+        for authority in load_active_transcript_authorities(project)
+        if authority.get("run_id") == request.run_id
+    )
     if len(authorities) != 1:
-        raise WorkbenchConfigurationError("one live capture authority is required")
+        raise WorkbenchConfigurationError(
+            "the current run's live capture authority is required"
+        )
     now = datetime.now(UTC)
     record = SeatAccessRecord(
         schema_version="aptl.seat-access/v1",
@@ -137,7 +144,7 @@ def prepare_guest_transport(
         node_executable=request.node_executable,
         management_home=request.management_home,
         docker_socket=request.docker_socket,
-        run_id=authorities[0]["run_id"],
+        run_id=request.run_id,
         delivery=request.delivery,
         appliance=request.appliance,
     )

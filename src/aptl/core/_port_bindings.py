@@ -97,6 +97,21 @@ def project_port_bindings(
             backend, service, name
         ).items():
             candidates.setdefault(key, set()).update(host_ports)
+    # Directly-created operator relays are receipt-owned project containers,
+    # but ``docker compose ps`` cannot list them. Resolve their semantic names
+    # through the backend's receipt-verified inspection path so a retry keeps
+    # the relay's own publication instead of treating it as a foreign holder.
+    from aptl.core.deployment._operator_access_endpoints import (
+        OPERATOR_ACCESS_ENDPOINTS,
+    )
+
+    for endpoint in OPERATOR_ACCESS_ENDPOINTS.values():
+        key = (endpoint.relay_container, endpoint.listen_port, "tcp")
+        owned = _inspected_port_candidates(
+            backend, endpoint.relay_container, endpoint.relay_container
+        )
+        if key in owned:
+            candidates.setdefault(key, set()).update(owned[key])
     return {
         key: next(iter(host_ports))
         for key, host_ports in candidates.items()

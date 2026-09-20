@@ -60,7 +60,7 @@ test -f "$payload_dir/system-packages.sha256"
 set -- "$payload_dir"/wheelhouse/pip-*.whl
 test "$#" -eq 1
 test -f "$1"
-install -d -m 0755 /opt/aptl/python /usr/local/bin
+install -d -m 0755 /opt/aptl /opt/aptl/python /usr/local/bin
 PYTHONPATH="$1" python3 -m pip install --no-index --only-binary=:all: \
     --target /opt/aptl/python \
     --ignore-installed \
@@ -100,6 +100,9 @@ systemctl enable docker.service
 install -d -m 0755 /opt/aptl/project
 tar --extract --file "$payload_dir/project.tar" \
     --directory /opt/aptl/project --no-same-owner
+# Only immutable, scanned release inputs exist here. Runtime credentials and
+# evidence are created later under the first-boot service's private umask.
+chmod -R a+rX /opt/aptl/python /opt/aptl/project
 install -d -m 0755 /opt/aptl/offline
 install -m 0444 "$payload_dir/inputs.json" /opt/aptl/offline/inputs.json
 install -m 0444 "$payload_dir/oci-images.tar" \
@@ -114,7 +117,7 @@ install -m 0644 "$payload_dir/aptl-appliance-first-boot.service" \
     /etc/systemd/system/aptl-appliance-first-boot.service
 install -m 0644 "$payload_dir/aptl-launch.mount" \
     /etc/systemd/system/run-aptl\\x2dlaunch.mount
-install -d -m 0700 /var/lib/aptl
+install -d -m 0711 /var/lib/aptl
 if ! getent passwd aptl-mcp >/dev/null; then
     useradd --system --no-create-home --home-dir /var/lib/aptl/mcp \
         --shell /bin/sh aptl-mcp

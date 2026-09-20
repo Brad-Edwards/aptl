@@ -448,7 +448,7 @@ def _write_signed_release(root: Path) -> tuple[ApplianceReleaseManifest, bytes]:
     ).encode()
     run_record_payload = json.dumps(
         {
-            "schema_version": "aptl.run-record/v1",
+            "schema_version": "aptl.run-record/v2",
             "outcome": "success",
             "backend_evidence": {
                 "selected_profiles": [],

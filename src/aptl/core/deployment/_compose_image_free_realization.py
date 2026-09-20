@@ -283,6 +283,8 @@ def _content_placement_op(item: object) -> object | None:
             artifact_id=item.artifact_id,
             artifact_digest=item.artifact_digest,
             is_directory=item.source_kind == "pack-directory",
+            sensitive=item.sensitive,
+            executable=item.media_type in {"text/x-python", "text/x-shellscript"},
         )
     elif (
         item.source_kind in ("project-file", "project-directory")

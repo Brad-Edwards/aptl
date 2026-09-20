@@ -479,6 +479,17 @@ def test_lab_start_activates_admitted_transcript_before_ssh(tmp_path, monkeypatc
         activate_capture_apparatus=lambda **_kwargs: authority
     )
     prepared = []
+    retired = []
+    monkeypatch.setattr(
+        acquisition,
+        "load_active_transcript_authorities",
+        lambda _project: ({"run_id": "run-stale", "capture_plan_id": "old-plan"},),
+    )
+    monkeypatch.setattr(
+        acquisition,
+        "mark_transcript_finalization_failed",
+        lambda **kwargs: retired.append(kwargs),
+    )
     monkeypatch.setattr(
         acquisition,
         "persist_active_transcript_authority",
@@ -487,6 +498,12 @@ def test_lab_start_activates_admitted_transcript_before_ssh(tmp_path, monkeypatc
 
     assert _step_activate_capture_apparatus(context) is None
     assert context.transcript_capture_authority == authority
+    assert retired == [
+        {
+            "project_dir": tmp_path,
+            "state": {"run_id": "run-stale", "capture_plan_id": "old-plan"},
+        }
+    ]
     assert prepared[0]["binding"] is binding
     assert prepared[0]["run_id"] == "run-1"
 

@@ -7,6 +7,7 @@ from pathlib import Path
 import socket
 import tempfile
 import threading
+import time
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -225,8 +226,61 @@ def test_guest_access_channel_roundtrips_current_generation(tmp_path: Path) -> N
         assert not thread.is_alive()
 
 
+def test_guest_access_wait_tolerates_guest_setup_before_first_byte(
+    tmp_path: Path,
+) -> None:
+    del tmp_path
+    request = _request()
+    bundle = _bundle(_public_key()).model_copy(
+        update={
+            "nonce": request.nonce,
+            "seat_id": request.seat_id,
+            "instance_id": request.instance_id,
+            "generation": request.generation,
+        }
+    )
+    payload = encode_guest_access_bundle(bundle)
+    with tempfile.TemporaryDirectory(prefix="aptl-access-", dir="/tmp") as directory:
+        socket_path = Path(directory) / "s"
+        listening = threading.Event()
+
+        def publish() -> None:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(str(socket_path))
+                server.listen(1)
+                listening.set()
+                connection, _ = server.accept()
+                with connection:
+                    time.sleep(1.1)
+                    connection.sendall(payload)
+
+        thread = threading.Thread(target=publish)
+        thread.start()
+        assert listening.wait(timeout=2)
+
+        observed = wait_for_guest_access(
+            socket_path,
+            request,
+            process_alive=lambda: True,
+            timeout_seconds=3,
+        )
+        thread.join(timeout=2)
+
+        assert observed == bundle
+        assert not thread.is_alive()
+
+
 def test_guest_can_publish_access_bundle_to_virtio_character_device() -> None:
     publish_guest_access(Path("/dev/null"), _bundle(_public_key()))
+
+
+def test_guest_can_publish_access_bundle_through_virtio_style_device_symlink(
+    tmp_path: Path,
+) -> None:
+    device = tmp_path / "org.aptl.access"
+    device.symlink_to("/dev/null")
+
+    publish_guest_access(device, _bundle(_public_key()))
 
 
 def test_guest_access_wait_fails_if_vm_exits_before_channel_exists(
@@ -241,3 +295,19 @@ def test_guest_access_wait_fails_if_vm_exits_before_channel_exists(
             process_alive=lambda: False,
             timeout_seconds=0.1,
         )
+
+
+@pytest.mark.parametrize("schema_version", ["aptl.run-record/v1", "aptl.run-record/v2"])
+def test_guest_runtime_evidence_accepts_supported_reproducibility_records(
+    schema_version: str,
+) -> None:
+    bundle = _bundle(_public_key())
+    evidence = bundle.runtime_evidence
+
+    assert (
+        GuestRuntimeEvidence(
+            **evidence.model_dump(exclude={"run_record"}),
+            run_record={**evidence.run_record, "schema_version": schema_version},
+        ).run_record["schema_version"]
+        == schema_version
+    )

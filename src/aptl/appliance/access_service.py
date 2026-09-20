@@ -7,6 +7,7 @@ import os
 import pwd
 import shutil
 import subprocess
+import tempfile
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -96,7 +97,17 @@ def _write_runtime_observation(
 def _assign_management_state(project: Path, *, uid: int, gid: int) -> None:
     """Give the dedicated dispatcher identity only the generated private state."""
 
-    targets = (project / ".aptl", project / ".mcp.json")
+    run_store = Path(load_config(project / "aptl.json").run_storage.local_path)
+    if not run_store.is_absolute():
+        run_store = project / run_store
+    if (
+        run_store.resolve() == project.resolve()
+        or not run_store.resolve().is_relative_to(project.resolve())
+    ):
+        raise WorkbenchConfigurationError(
+            "guest run store escapes private project state"
+        )
+    targets = (project / ".aptl", project / ".mcp.json", run_store)
     for target in targets:
         if target.is_symlink() or not target.exists():
             raise WorkbenchConfigurationError("guest management state is unsafe")
@@ -114,6 +125,86 @@ def _assign_management_state(project: Path, *, uid: int, gid: int) -> None:
                     os.chown(root_path / name, uid, gid, follow_symlinks=False)
         else:
             os.chown(target, uid, gid, follow_symlinks=False)
+
+
+def _prepare_dispatch_home(home: Path, *, uid: int, gid: int) -> None:
+    """Give the dispatcher the lab-only SSH identity, not supervisor home access."""
+    from aptl.utils.pathsafe import read_contained_nofollow
+
+    directory = home / ".ssh"
+    target = directory / "aptl_lab_key"
+    if home.is_symlink() or directory.is_symlink() or target.is_symlink():
+        raise WorkbenchConfigurationError("dispatcher SSH identity path is unsafe")
+    payload = read_contained_nofollow(Path.home(), ".ssh/aptl_lab_key")
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    directory.chmod(0o700)
+    _atomic_write(target, payload, mode=0o600)
+    os.chown(directory, uid, gid)
+    os.chown(target, uid, gid)
+
+
+def _prepare_dispatch_ca(project: Path, *, gid: int) -> None:
+    """Permit group traversal to the public root, leaving key material private."""
+    from aptl.core._soc_ca_io import _canonical_output_dir
+
+    directory = _canonical_output_dir(project)
+    if directory.is_symlink() or not directory.is_dir():
+        raise WorkbenchConfigurationError("guest public CA directory is unsafe")
+    os.chown(directory, -1, gid)
+    directory.chmod(0o710)
+
+
+def _stage_dispatch_metadata(
+    launch: VerifiedApplianceLaunch | VerifiedCandidateLaunch,
+    paths: ApplianceAccessPaths,
+    destination: Path,
+    *,
+    gid: int,
+) -> ApplianceAccessPaths:
+    """Project only signed metadata into root-owned, dispatcher-readable state.
+
+    The host launch share remains owner-only and read-only. Neither its large
+    artifacts nor its participant credentials belong in the dispatcher's view.
+    """
+    from aptl.appliance.manifest import verify_release_metadata
+    from aptl.appliance.release_validation import read_release_artifact
+    from aptl.utils.pathsafe import read_contained_nofollow
+
+    destination.mkdir(mode=0o700, parents=True, exist_ok=True)
+    release = destination / launch.descriptor.release_dir
+    release.mkdir(mode=0o700, parents=True)
+    names = [launch.descriptor.boundary_policy_path]
+    if paths.candidate_trust:
+        names.extend(("candidate-manifest.json", "candidate-manifest.sig.json"))
+    else:
+        manifest = verify_release_metadata(
+            launch.release_root, paths.release_public_key
+        )
+        names.extend(("manifest.json", "manifest.sig.json"))
+        names.extend(
+            a.path for a in manifest.artifacts if a.kind == "participant-qualification"
+        )
+    payloads = {
+        release / name: read_release_artifact(launch.release_root, name)
+        for name in names
+    }
+    copies = {
+        "launch_descriptor": destination / "appliance-launch.json",
+        "release_public_key": destination / "release-public.pem",
+        "qualification_public_key": destination / "qualification-public.pem",
+    }
+    for field, target in copies.items():
+        source = getattr(paths, field)
+        payloads[target] = read_contained_nofollow(source.parent, source.name)
+    for target, payload in payloads.items():
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        _atomic_write(target, payload, mode=0o640)
+        # Supervisor stays owner; dispatcher gets read-only group access.
+        os.chown(target, -1, gid)
+    for directory in (destination, *(p for p in destination.rglob("*") if p.is_dir())):
+        directory.chmod(0o750)
+        os.chown(directory, -1, gid)
+    return paths.model_copy(update=copies)
 
 
 def _qualification_checks(
@@ -264,6 +355,7 @@ def serve_appliance_access(
     qualification_public_key: Path,
     device_path: Path,
     output_dir: Path,
+    run_id: str,
     project_dir: Path = Path("/opt/aptl/project"),
     state_dir: Path = Path("/var/lib/aptl/overlay"),
     username: str = "aptl-mcp",
@@ -294,6 +386,8 @@ def serve_appliance_access(
     host_key = state_dir / "ssh" / "ssh_host_ed25519_key"
     _ensure_host_key(host_key)
     _assign_management_state(project_dir, uid=account.pw_uid, gid=account.pw_gid)
+    _prepare_dispatch_home(Path(account.pw_dir), uid=account.pw_uid, gid=account.pw_gid)
+    _prepare_dispatch_ca(project_dir, gid=account.pw_gid)
     if output_dir.is_symlink():
         raise WorkbenchConfigurationError("guest access state is unsafe")
     if output_dir.exists():
@@ -306,11 +400,25 @@ def serve_appliance_access(
                 "old guest access state could not be revoked"
             ) from exc
     runtime_observation = output_dir / "runtime-observation.json"
+    output_dir.parent.mkdir(mode=0o711, parents=True, exist_ok=True)
+    metadata = _stage_dispatch_metadata(
+        launch,
+        ApplianceAccessPaths(
+            launch_descriptor=descriptor_path,
+            release_public_key=release_public_key,
+            qualification_public_key=qualification_public_key,
+            runtime_observation=runtime_observation,
+            candidate_trust=candidate_trust,
+        ),
+        Path(tempfile.mkdtemp(prefix="mcp-trust-", dir=output_dir.parent)),
+        gid=account.pw_gid,
+    )
     configuration = TransportPreparation(
         owner_id=request.enrollment.owner_id,
         seat_id=request.seat_id,
         instance_id=request.instance_id,
         generation=request.generation,
+        run_id=run_id,
         guest_endpoint=SeatEndpoint(
             address=request.guest_endpoint.address,
             port=request.guest_endpoint.port,
@@ -328,12 +436,7 @@ def serve_appliance_access(
         username=username,
         keys=(enrolled_key(request),),
         delivery="appliance",
-        appliance=ApplianceAccessPaths(
-            launch_descriptor=descriptor_path,
-            release_public_key=release_public_key,
-            qualification_public_key=qualification_public_key,
-            runtime_observation=runtime_observation,
-        ),
+        appliance=metadata,
     )
     binding = prepare_guest_transport(configuration, output_dir)
     for path in output_dir.iterdir():

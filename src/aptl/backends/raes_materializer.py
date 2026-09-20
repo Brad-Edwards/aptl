@@ -161,6 +161,8 @@ class PlacePackArtifactOp:
     artifact_id: str
     artifact_digest: str
     is_directory: bool = False
+    sensitive: bool = False
+    executable: bool = False
 
 
 @dataclass(frozen=True)

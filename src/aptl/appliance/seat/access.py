@@ -18,6 +18,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from aptl.appliance.seat._device import write_character_device
 from aptl.core._soc_ca_io import _atomic_write
 from aptl.core.appliance_boundary import ApplianceBoundaryBinding
 from aptl.core.appliance_boundary_inventory import (
@@ -25,6 +26,7 @@ from aptl.core.appliance_boundary_inventory import (
     GuestBoundaryObservation,
     HostBoundaryObservation,
 )
+from aptl.core.archival.legacy_manifest import LEGACY_REPRODUCIBILITY_SCHEMAS
 from aptl.utils.strict_json import model_validate_json_strict
 from aptl.workbench.access import CallerGrant, Identifier, SeatAccessRecord
 from aptl.workbench.preparation import EnrolledKey
@@ -208,7 +210,7 @@ class GuestRuntimeEvidence(_StrictModel):
     def correlated_success(self) -> "GuestRuntimeEvidence":
         backend = self.run_record.get("backend_evidence")
         if (
-            self.run_record.get("schema_version") != "aptl.run-record/v1"
+            self.run_record.get("schema_version") not in LEGACY_REPRODUCIBILITY_SCHEMAS
             or self.run_record.get("outcome") != "success"
             or not isinstance(backend, dict)
             or backend.get("range_snapshot") != self.snapshot
@@ -303,21 +305,44 @@ def publish_guest_access(device_path: Path, bundle: GuestAccessBundle) -> None:
     """Write the access bundle to the dedicated VM-owned virtio port."""
 
     payload = encode_guest_access_bundle(bundle)
-    flags = os.O_WRONLY | os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
     try:
-        descriptor = os.open(device_path, flags)
-        info = os.fstat(descriptor)
-        if not stat.S_ISCHR(info.st_mode):
-            os.close(descriptor)
-            raise OSError("access endpoint is not a character device")
-        with os.fdopen(descriptor, "wb", buffering=0) as device:
-            device.write(payload)
+        write_character_device(device_path, payload)
     except OSError as exc:
         raise WorkbenchConfigurationError(
             "guest access bundle could not be published"
         ) from exc
+
+
+def _recv_guest_access_payload(
+    connection: socket.socket,
+    *,
+    process_alive: Callable[[], bool],
+    deadline: float,
+) -> bytes:
+    """Receive one bounded frame while tolerating expected guest setup latency."""
+
+    payload = bytearray()
+    while b"\n" not in payload:
+        if len(payload) >= MAX_ACCESS_MESSAGE_BYTES:
+            raise ValueError("guest access bundle exceeds channel limit")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise WorkbenchConfigurationError("guest access deadline expired")
+        connection.settimeout(min(1.0, remaining))
+        try:
+            chunk = connection.recv(
+                min(64 * 1024, MAX_ACCESS_MESSAGE_BYTES - len(payload))
+            )
+        except socket.timeout:
+            if not process_alive():
+                raise WorkbenchConfigurationError(
+                    "VM exited before guest access"
+                ) from None
+            continue
+        if not chunk:
+            raise ValueError("guest access channel closed before a response")
+        payload.extend(chunk)
+    return bytes(payload)
 
 
 def wait_for_guest_access(
@@ -346,20 +371,12 @@ def wait_for_guest_access(
             except (FileNotFoundError, ConnectionRefusedError, socket.timeout):
                 candidate.close()
                 time.sleep(min(0.1, max(0.0, remaining)))
-        payload = bytearray()
-        while b"\n" not in payload:
-            if len(payload) >= MAX_ACCESS_MESSAGE_BYTES:
-                raise ValueError("guest access bundle exceeds channel limit")
-            connection.settimeout(min(1.0, max(0.1, deadline - time.monotonic())))
-            chunk = connection.recv(
-                min(64 * 1024, MAX_ACCESS_MESSAGE_BYTES - len(payload))
-            )
-            if not chunk:
-                raise ValueError("guest access channel closed before a response")
-            payload.extend(chunk)
+        payload = _recv_guest_access_payload(
+            connection, process_alive=process_alive, deadline=deadline
+        )
         if b"\n" in payload[:-1]:
             raise ValueError("guest access framing is invalid")
-        bundle = model_validate_json_strict(GuestAccessBundle, bytes(payload[:-1]))
+        bundle = model_validate_json_strict(GuestAccessBundle, payload[:-1])
         expected = (
             request.nonce,
             request.seat_id,

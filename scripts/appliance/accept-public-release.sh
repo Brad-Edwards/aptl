@@ -46,10 +46,6 @@ images=(
     network-boundary-helper
     appliance-egress-proxy
     operator-access-proxy
-    misp-suricata-sync
-    reverse
-    web
-    web-api
 )
 for image in "${images[@]}"; do
     docker pull "${namespace}/${image}:${RELEASE_TAG}"

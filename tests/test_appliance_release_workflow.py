@@ -90,11 +90,16 @@ def test_private_build_public_promotion_and_candidate_acquisition_sets_match() -
     builder = (ROOT / "scripts/appliance/build-candidate.sh").read_text()
     local_builder = (ROOT / "scripts/appliance/build-local-images.sh").read_text()
     promoter = (ROOT / "scripts/appliance/verify-public-images.sh").read_text()
+    acceptance = (ROOT / "scripts/appliance/accept-public-release.sh").read_text()
     published = set(re.findall(r"^build_image ([a-z0-9-]+) ", publisher, re.MULTILINE))
     acquired = set(re.findall(r"^  '([a-z0-9-]+) [^']+'$", builder, re.MULTILINE))
     image_block = promoter.split("images=(", 1)[1].split(")", 1)[0]
     promoted = set(re.findall(r"^  ([a-z0-9-]+)$", image_block, re.MULTILINE))
-    assert published == acquired == promoted
+    acceptance_block = acceptance.split("images=(", 1)[1].split(")", 1)[0]
+    anonymously_pulled = set(
+        re.findall(r"^    ([a-z0-9-]+)$", acceptance_block, re.MULTILINE)
+    )
+    assert published == acquired == promoted == anonymously_pulled
     assert len(published) == 13
     local_images = set(
         re.findall(r"^build_image ([^ ]+) ", local_builder, re.MULTILINE)
@@ -114,7 +119,7 @@ def test_local_candidate_path_uses_exact_commit_and_no_registry_dependency() -> 
     assert "source_revision" in builder
     assert '"$target_python" -m venv "$root/venv"' in builder
     assert "\npython -m venv " not in builder
-    assert 'pip download --require-hashes -r requirements/web.txt' in builder
+    assert "pip download --require-hashes -r requirements/web.txt" in builder
     assert "acquire-guest-system-packages.sh" in builder
     assert "--system-packages system-packages" in builder
     assert "--system-packages-lock" in builder
@@ -127,7 +132,7 @@ def test_local_candidate_path_uses_exact_commit_and_no_registry_dependency() -> 
 def test_local_image_builds_pin_unique_tags_and_exact_parent_images() -> None:
     builder = (ROOT / "scripts/appliance/build-local-images.sh").read_text()
     assert '"${canonical%:*}" "$APTL_LOCAL_IMAGE_TAG_SUFFIX"' in builder
-    assert 'docker image inspect --format \'{{.Id}}\' "$output_ref"' in builder
+    assert "docker image inspect --format '{{.Id}}' \"$output_ref\"" in builder
     assert 'build+=(--build-arg "APTL_PARENT_IMAGE=$parent_image")' in builder
     for name in (
         "generic-samba-ad-wazuh-agent-base",
@@ -143,7 +148,9 @@ def test_node22_image_preloads_exact_mcp_locks_for_offline_materialization() -> 
     dockerfile = (
         ROOT / "containers/generic-systemd-node22-base/Dockerfile"
     ).read_text()
-    assert "COPY requirements/runtime.txt /opt/aptl/runtime-requirements.txt" in dockerfile
+    assert (
+        "COPY requirements/runtime.txt /opt/aptl/runtime-requirements.txt" in dockerfile
+    )
     assert "python3 -m pip download --no-deps --require-hashes" in dockerfile
     assert "mcp-red-sources.tar" in dockerfile
     assert "mcp-blue-sources.tar" in dockerfile
@@ -172,3 +179,18 @@ def test_resource_sampler_handles_seats_before_their_pid_files_exist() -> None:
 
     assert "max((item[1] for item in samples), default=0)" in sampler
     assert "max((_disk(root) for root in args.seat_root), default=0)" in sampler
+
+
+def test_two_seat_qualification_uses_a_distinct_client_identity_per_seat() -> None:
+    qualifier = (ROOT / "scripts/appliance/qualify-candidate.sh").read_text()
+
+    seat_loop = (
+        qualifier.split("cold_started=$(date +%s)", 1)[1]
+        .split('for index in $(seq 1 "$APTL_QUALIFICATION_SEATS"); do', 1)[1]
+        .split("done", 1)[0]
+    )
+    assert 'identity="$work/client-key-$index"' in seat_loop
+    assert "ssh-keygen -q -t ed25519 -N '' -f \"$identity\"" in seat_loop
+    assert '--access-public-key "$identity.pub"' in seat_loop
+    assert '--access-identity-file "$identity"' in seat_loop
+    assert "ssh-keygen -q -t ed25519 -N '' -f \"$work/client-key\"" not in qualifier

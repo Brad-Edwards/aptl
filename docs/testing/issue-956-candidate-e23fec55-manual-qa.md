@@ -1,4 +1,4 @@
-# Issue 956 candidate manual QA — 2026-09-20
+# Issue 956 candidate manual QA: 2026-09-20
 
 This is an operator-assisted execution record for the procedure in
 [`smoke-test-plan.md`](smoke-test-plan.md). It tests candidate commit
@@ -34,11 +34,12 @@ unredacted local files are safe to publish. The local QA workspace is
 ephemeral, so these excerpts are the durable release-review evidence.
 The operator named above performed every row. Event-level UTC timestamps
 appear in the numbered excerpts. For UI and command-only observations, the
-path-A work was captured on 2026-09-20 00:14–00:33 CEST and path B on
-00:36–00:55 CEST; the browser capture times were A: Wazuh 00:27, TheHive
-00:28–00:29, MISP 00:29; B: Wazuh 00:49–00:50, TheHive 00:52, MISP 00:53.
+path-A work was captured on 2026-09-20 from 00:14 to 00:33 CEST and path B
+from 00:36 to 00:55 CEST; the browser capture times were A: Wazuh 00:27,
+TheHive from 00:28 to 00:29, MISP 00:29; B: Wazuh from 00:49 to 00:50,
+TheHive 00:52, MISP 00:53.
 
-## Path A — candidate wheel
+## Path A: candidate wheel
 
 Start run: `run_20260919T221423Z`. Its 28-container project was
 `aptl-wd6bf2dbd460e`. The exact installed version was `aptl 5.5.0`.
@@ -66,65 +67,65 @@ Start run: `run_20260919T221423Z`. Its 28-container project was
 
 ### Path-A bounded observations
 
-- **A01** — CLI: `Lab is ready.`; `aptl runs list`:
+- **A01**: CLI: `Lab is ready.`; `aptl runs list`:
   `run_20260919T221423Z techvault.sdl.yaml 2026-09-19T22:23:35`.
   `qa-start-status.json` held 28 entries, all with status `Up ...` and none
   named `aptl-mcp-endpoints`. Its Wazuh publication was
   `127.0.0.1:443->5601/tcp`; MISP's security-network address was
   `172.20.0.134`. The plain-text `aptl lab status` form was not separately
   captured; the complete JSON inventory was.
-- **A02** — `scenario verification — scenario=techvault backend=aptl
+- **A02**: Scenario verification reported `scenario=techvault backend=aptl
   plugin=techvault from aptl-labs==5.5.0: PASSED`; all nine listed checks,
   including defensive-stack readiness and runtime containment, were `passed`.
-- **A03** — Chromium (certificate validation enabled) after login:
+- **A03**: Chromium (certificate validation enabled) after login:
   `Active (8)`, `Disconnected (0)`, `1,049` low alerts; Threat Hunting
   displayed `1,095` total alerts in the last 24 hours.
-- **A04** — MCP action 2026-09-19T22:27:35–37Z: target
+- **A04**: MCP action 2026-09-19T22:27:35–37Z: target
   `172.20.1.30`, exit `0`, HTTP `200`; index hit
   `JpfIu6ABi5eqXjMPYcjG` at `22:27:37.516Z`, rule `302010`, agent
   `techvault-webapp-agent`.
-- **A05** — Sensor request at `22:27:58Z`, HTTP `200`; Suricata alert
+- **A05**: Sensor request at `22:27:58Z`, HTTP `200`; Suricata alert
   `22:27:58.983466+0000`, flow `1967697202781802`, source
   `172.20.1.128`, destination `172.20.1.20`, signature `1000010`;
   Wazuh hit `KZfIu6ABi5eqXjMPnMhU` at `22:27:59.896Z`, rule `303020`,
   agent `techvault-suricata-agent`.
-- **A06** — Workflow `ecc3b203-ecf6-43ce-bf09-2ae2deef6486`, execution
+- **A06**: Workflow `ecc3b203-ecf6-43ce-bf09-2ae2deef6486`, execution
   `fbe73a1b-37f1-4f2a-9b94-d6396e85dedd`: input alert A04 and rule
   `302010`; execution `FINISHED`, two `SUCCESS` action results. Case
   `~4042752` description contained the exact alert ID and rule.
-- **A07** — MCP returned observable `~4046848`, type `ip`, value
+- **A07**: MCP returned observable `~4046848`, type `ip`, value
   `172.20.1.30`; TheHive UI case #1 launched analyzer
   `TechVaultScenarioContext`. Cortex job `AjrJu6ABDMOPgKvxk-uv` was
   `Success` for that IP; UI showed `Analysis report` and
   `TechVault:ScenarioAttacker="1"`.
-- **A08** — Browser authenticated at canonical MISP origin and showed
+- **A08**: Browser authenticated at canonical MISP origin and showed
   `Event #1` with seeded name `APTL Lab - Known Threat Actors` and
   `172.20.4.30`. MCP `threatintel_search_iocs` returned `ip-src`, value
   `172.20.4.30`, event id `1`, attribute id `1`.
-- **A09** — `kali_info` responded with target metadata; `whoami` was a
+- **A09**: `kali_info` responded with target metadata; `whoami` was a
   successful MCP command, exit `0`, identity `kali`. MCP-side sessions were
   written under configured `runs/run_20260919T221423Z/mcp-side/sessions/`.
-- **A10** — `wazuh_query_alerts`: HTTP `200`, document
+- **A10**: `wazuh_query_alerts`: HTTP `200`, document
   `JpfIu6ABi5eqXjMPYcjG`, rule `302010`.
-- **A11** — `indexer_query` bounded to `22:27:30–22:28:00Z`: HTTP `200`,
+- **A11**: `indexer_query` bounded to `22:27:30–22:28:00Z`: HTTP `200`,
   same document and rule. The request used an ID filter and timestamp range.
-- **A12** — `network_query_ids_alerts` bounded to
+- **A12**: `network_query_ids_alerts` bounded to
   `22:27:55–22:28:05Z`: HTTP `200`, document
   `KZfIu6ABi5eqXjMPnMhU`, rule `303020`, signature `1000010`.
-- **A13** — Complete MCP initialize/list/call to shipped `mcp-reverse`
+- **A13**: Complete MCP initialize/list/call to shipped `mcp-reverse`
   returned `{"outcome":"expected-unavailable","operation":"reverse_run_command"}`;
   no reverse container was in A01 inventory.
-- **A14** — `aptl runs show` identified TechVault, backend `aptl`,
+- **A14**: `aptl runs show` identified TechVault, backend `aptl`,
   package `5.5.0`, pack `techvault` `0.1.0`, and A01/A02 run artifacts.
   Bundle root `sha256:4d3b86e7fc2ed4d999b239b4ff51d0080f0267d74ae6ebb4b919ed0ec74a6c8d`,
   15 members; `verify-bundle` returned `OK: bundle verified` and
   `seal: unsealed`. Limitations: no #444 seal and no
   `provenance/run-provenance.json`.
-- **A15** — `Lab stopped successfully.`; project-scoped assertion:
+- **A15**: `Lab stopped successfully.`; project-scoped assertion:
   `Project 'aptl': no containers, networks, or volumes remain.` Both
   path-A browser CA trust entries were then removed.
 
-## Path B — exact source commit
+## Path B: exact source commit
 
 Start run: `run_20260919T223603Z`. Its 28-container project was
 `aptl-wf802fdb528c7`. The clean checkout was detached at the exact candidate
@@ -153,13 +154,13 @@ commit, and the editable installation reported `aptl 5.5.0`.
 
 ### Path-B bounded observations
 
-- **B01** — `Lab is ready.`; plain status said `Lab is running` and listed
+- **B01**: `Lab is ready.`; plain status said `Lab is running` and listed
   all 28 project containers as `running`. JSON inventory contained 28
   entries; `aptl runs list` returned
   `run_20260919T223603Z techvault.sdl.yaml 2026-09-19T22:45:11`.
   Wazuh published on loopback port 443; the MISP security-network address
   was `172.20.0.134`. No `aptl-mcp-endpoints` was inventoried.
-- **B02** — `scenario verification — scenario=techvault backend=aptl
+- **B02**: Scenario verification reported `scenario=techvault backend=aptl
   plugin=techvault from aptl-labs==5.5.0: PASSED`; all nine listed checks
   passed, including readiness and runtime containment. Before this valid
   invocation, an attempt used `.venv/bin/aptl` by absolute path without
@@ -168,51 +169,51 @@ commit, and the editable installation reported `aptl 5.5.0`.
   rerunning with that directory on `PATH` produced the above pass against
   the same startup run. This was an operator invocation error, not a passing
   check or a product defect.
-- **B03** — Strict-TLS Chromium after login: `Active (8)`,
+- **B03**: Strict-TLS Chromium after login: `Active (8)`,
   `Disconnected (0)`; Threat Hunting displayed `1,097` recent alerts.
-- **B04** — MCP action 2026-09-19T22:50:25–27Z: target
+- **B04**: MCP action 2026-09-19T22:50:25–27Z: target
   `172.20.1.30`, exit `0`, HTTP `200`; Wazuh hit
   `_h_du6ABiDKYBLsqUDGT` at `22:50:27.386Z`, rule `302010`, agent
   `techvault-webapp-agent`.
-- **B05** — Sensor request at `22:50:55Z`, HTTP `200`; Suricata alert
+- **B05**: Sensor request at `22:50:55Z`, HTTP `200`; Suricata alert
   `22:50:55.345220+0000`, flow `2040975874541685`, source
   `172.20.1.128`, destination `172.20.1.20`, signature `1000010`;
   Wazuh hit `AR_du6ABiDKYBLsqsjI4` at `22:50:56.102Z`, rule
   `303020`, agent `techvault-suricata-agent`.
-- **B06** — Workflow `f7143505-c14b-4d82-b6b9-8142c4a94631`,
+- **B06**: Workflow `f7143505-c14b-4d82-b6b9-8142c4a94631`,
   execution `4e463d44-1de6-49d4-8bb5-8206d548c5af`: input contained
   exact B04 alert and rule `302010`; execution `FINISHED` with two
   `SUCCESS` actions. Case `~4218944` linked the exact alert and rule.
-- **B07** — MCP returned observable `~4120728`, type `ip`, value
+- **B07**: MCP returned observable `~4120728`, type `ip`, value
   `172.20.1.30`; strict-TLS TheHive case UI launched
   `TechVaultScenarioContext`. Cortex job `Mfbeu6ABPxFiCaN-yrzU` was
   `Success`; the UI showed `Analysis report` and
   `TechVault:ScenarioAttacker="1"`.
-- **B08** — Browser authenticated at
+- **B08**: Browser authenticated at
   `https://misp.techvault.local/` and showed seeded event #1 with
   `APTL Lab - Known Threat Actors` and `172.20.4.30`.
   `threatintel_search_iocs` returned `ip-src` `172.20.4.30`, event id
   `1`, attribute id `1`.
-- **B09** — `kali_info` returned target metadata; `whoami` succeeded,
+- **B09**: `kali_info` returned target metadata; `whoami` succeeded,
   exit `0`, identity `kali`. MCP-side session records were under
   `runs/run_20260919T223603Z/mcp-side/sessions/`, not the legacy store.
-- **B10** — `wazuh_query_alerts`: HTTP `200`, document
+- **B10**: `wazuh_query_alerts`: HTTP `200`, document
   `_h_du6ABiDKYBLsqUDGT`, rule `302010`.
-- **B11** — `indexer_query` bounded to `22:50:20–22:50:35Z`: HTTP
+- **B11**: `indexer_query` bounded to `22:50:20–22:50:35Z`: HTTP
   `200`, same document and rule, using an ID filter and timestamp range.
-- **B12** — `network_query_ids_alerts` bounded to
+- **B12**: `network_query_ids_alerts` bounded to
   `22:50:50–22:51:05Z`: HTTP `200`, document
   `AR_du6ABiDKYBLsqsjI4`, rule `303020`, signature `1000010`.
-- **B13** — Full MCP initialize/list/call to shipped `mcp-reverse`
+- **B13**: Full MCP initialize/list/call to shipped `mcp-reverse`
   returned `{"outcome":"expected-unavailable","operation":"reverse_run_command"}`;
   B01 inventory had no reverse target.
-- **B14** — `aptl runs show` identified TechVault, backend `aptl`,
+- **B14**: `aptl runs show` identified TechVault, backend `aptl`,
   package `5.5.0`, pack `techvault` `0.1.0`, and B01/B02 artifacts.
   Bundle root `sha256:c13d96bde75b307e3ec7a0f7bae3dd704de45c9fae678ea0950457b22c4e7dc5`,
   15 members; `verify-bundle` returned `OK: bundle verified`,
   `seal: unsealed`. Limitations: no #444 seal and no
   `provenance/run-provenance.json`.
-- **B15** — `Lab stopped successfully.`; project-scoped assertion:
+- **B15**: `Lab stopped successfully.`; project-scoped assertion:
   `Project 'aptl': no containers, networks, or volumes remain.` Both
   path-B browser CA trust entries were then removed.
 

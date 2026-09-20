@@ -180,8 +180,25 @@ def _realize_authored_tag(
     """
 
     observed, failure = _tag_image_id(backend, requirement, timeout=timeout)
-    if failure is not None or observed == image_id:
-        return failure
+    if failure is None and observed != image_id:
+        failure = _point_tag_at_image(
+            backend,
+            requirement,
+            image_id,
+            timeout=timeout,
+        )
+    return failure
+
+
+def _point_tag_at_image(
+    backend: object,
+    requirement: DeploymentSpawnImageRequirement,
+    image_id: str,
+    *,
+    timeout: int,
+) -> LabResult | None:
+    """Establish the authored tag on the verified image and read it back."""
+
     tagged = _run_bounded(
         backend,
         ["docker", "tag", requirement.image_ref, requirement.tag_reference],
@@ -190,11 +207,12 @@ def _realize_authored_tag(
     if tagged is None or tagged.returncode != 0:
         return _spawn_image_failure("tag could not be established", requirement)
     confirmed, failure = _tag_image_id(backend, requirement, timeout=timeout)
-    if failure is not None:
-        return failure
-    if confirmed != image_id:
-        return _spawn_image_failure("tag does not resolve to the image", requirement)
-    return None
+    if failure is None and confirmed != image_id:
+        failure = _spawn_image_failure(
+            "tag does not resolve to the image",
+            requirement,
+        )
+    return failure
 
 
 def _tag_image_id(
@@ -220,12 +238,17 @@ def _tag_image_id(
         return None, _spawn_image_failure("tag inspection timed out", requirement)
     if result.returncode == 0:
         observed = str(result.stdout or "").strip()
-        if not observed:
-            return None, _spawn_image_failure("tag identity unavailable", requirement)
-        return observed, None
-    if "no such image" in str(result.stderr or "").lower():
-        return None, None
-    return None, _spawn_image_failure("tag could not be read", requirement)
+        failure = (
+            None
+            if observed
+            else _spawn_image_failure("tag identity unavailable", requirement)
+        )
+        return (observed or None), failure
+    # Only a positively identified not-found means the name is free.
+    absent = "no such image" in str(result.stderr or "").lower()
+    return None, (
+        None if absent else _spawn_image_failure("tag could not be read", requirement)
+    )
 
 
 def _run_bounded(

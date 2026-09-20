@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
-from aptl.core.lab_types import LabResult
 from aptl.runtime_authority import (
     DOCKER_SOCKET_PATH,
     DeploymentDockerAuthorityAdmission,
-    DeploymentSpawnImageRequirement,
     has_undeclared_runtime_mounts,
     mount_exposes_or_mentions_docker_socket,
 )

@@ -1580,7 +1580,8 @@ def test_indeterminate_tag_read_fails_without_tagging(tmp_path) -> None:
 
     result = backend._prepare_spawn_images(_spec(_runtime(image_ref=_TAGGED_REF)))
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert all(command[:2] != ["docker", "tag"] for command in _commands(backend))
 
 
@@ -1615,7 +1616,8 @@ def test_conflicting_authored_tags_fail_before_any_tagging(tmp_path) -> None:
 
     result = backend._prepare_spawn_images(_spec(runtime))
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert "frikky/shuffle:http_1.4.0" in result.error
     # A contradiction in what was authored needs no daemon to detect.
     backend._run.assert_not_called()

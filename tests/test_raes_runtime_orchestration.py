@@ -135,7 +135,7 @@ def _spec(runtime: RuntimeConfiguration | None = None) -> DeploymentRealizationS
     )
 
 
-def test_same_node_authority_join_and_child_closure_are_preserved() -> None:
+def test_same_node_authority_join_and_template_images_are_preserved() -> None:
     runtime = _runtime()
 
     bindings = docker_control_authorities(
@@ -156,8 +156,7 @@ def test_same_node_authority_join_and_child_closure_are_preserved() -> None:
             template_id="worker",
             image_ref=_CHILD_REF,
             execution_timeout_seconds=600,
-            child_label="org.aptl.authority=worker-runtime",
-            expected_count=1,
+            tag_reference="",
         ),
     )
 
@@ -215,18 +214,6 @@ def test_control_authority_rejects_unsupported_engine_or_privilege(
         )
 
 
-def test_mutable_spawn_template_is_not_an_immutable_image_requirement() -> None:
-    runtime = _runtime(image_ref="ghcr.io/example/worker:latest")
-
-    with pytest.raises(
-        ValueError, match="aptl.provisioner.spawn-image-identity-invalid"
-    ):
-        spawn_image_requirements(
-            runtime,
-            node_address="provision.node.orborus",
-        )
-
-
 def test_unbounded_child_lifecycle_is_rejected() -> None:
     payload = _runtime().model_dump(mode="json")
     payload["orchestration_authorities"][0]["lifecycle_policy"] = {}
@@ -241,51 +228,7 @@ def test_unbounded_child_lifecycle_is_rejected() -> None:
         )
 
 
-def test_empty_spawn_closure_is_rejected() -> None:
-    payload = _runtime().model_dump(mode="json")
-    payload["orchestration_authorities"][0]["spawn_templates"] = []
-    runtime = RuntimeConfiguration.model_validate(payload)
-
-    with pytest.raises(
-        ValueError, match="aptl.provisioner.spawn-image-identity-invalid"
-    ):
-        spawn_image_requirements(
-            runtime,
-            node_address="provision.node.orborus",
-        )
-
-
-@pytest.mark.parametrize(
-    "mutation",
-    [
-        lambda payload: payload["orchestration_authorities"][0]["realized_children"][
-            0
-        ].update(evidence_ref="run-id:worker-runtime"),
-        lambda payload: payload["orchestration_authorities"][0]["realized_children"][
-            0
-        ].update(count=0),
-        lambda payload: payload["orchestration_authorities"][0]["realized_children"][
-            0
-        ].update(image_ref=f"ghcr.io/example/other@{_DIGEST}"),
-    ],
-)
-def test_spawn_child_correlation_must_be_complete_and_exact(
-    mutation: Callable[[dict[str, object]], None],
-) -> None:
-    payload = _runtime().model_dump(mode="json")
-    mutation(payload)
-    runtime = RuntimeConfiguration.model_validate(payload)
-
-    with pytest.raises(
-        ValueError, match="aptl.provisioner.spawn-child-correlation-invalid"
-    ):
-        spawn_image_requirements(
-            runtime,
-            node_address="provision.node.orborus",
-        )
-
-
-def test_a_template_without_children_still_pins_the_image_it_may_launch() -> None:
+def test_a_template_without_children_still_names_its_image() -> None:
     """An undeclared observation contract is not an ungated authority.
 
     RAES defines a realized child as "an observed, realized child workload
@@ -313,8 +256,7 @@ def test_a_template_without_children_still_pins_the_image_it_may_launch() -> Non
     requirement = requirements[0]
     assert "@sha256:" in requirement.image_ref
     assert requirement.execution_timeout_seconds > 0
-    assert requirement.child_label == ""
-    assert requirement.expected_count == 0
+    assert requirement.tag_reference == ""
 
 
 def test_an_authority_with_neither_templates_nor_children_is_not_gated() -> None:
@@ -352,47 +294,13 @@ def test_an_authority_without_children_is_still_admitted_with_its_controls() -> 
     # The pre-pull survives -- it is the gate on what the socket can launch --
     # while the post-start child count goes away, because nothing declared it.
     assert len(admission.spawn_requirements) == 1
-    assert admission.spawn_requirements[0].expected_count == 0
+    assert admission.spawn_requirements[0].image_ref == _CHILD_REF
     assert admission.endpoint_target == "/var/run/docker.sock"
     assert admission.endpoint_read_write is True
     assert admission.privilege_class == "host_root_equivalent"
 
 
-def test_a_declared_child_contract_still_requires_an_exact_image() -> None:
-    """Opting into a child contract keeps every guarantee it carried.
-
-    The relaxation above is only for authorities that declare no children. Where
-    one is declared, the image must still be digest-pinned, because that is what
-    lets the host pre-stage the exact child image the authority will run.
-    """
-
-    payload = _runtime(image_ref="ghcr.io/example/worker:latest").model_dump(
-        mode="json"
-    )
-    runtime = RuntimeConfiguration.model_validate(payload)
-
-    with pytest.raises(
-        ValueError, match="aptl.provisioner.spawn-image-identity-invalid"
-    ):
-        spawn_image_requirements(runtime, node_address="provision.node.orborus")
-
-
-def test_spawn_child_labels_are_unique_across_authorities() -> None:
-    first = _spec().nodes[0]
-    second = replace(
-        first,
-        address="provision.node.second",
-        name="second",
-        service_name="second",
-        container_name="aptl-second",
-    )
-    with pytest.raises(
-        ValueError, match="aptl.provisioner.spawn-child-correlation-invalid"
-    ):
-        admit_docker_authorities((first, second))
-
-
-def test_the_backend_accepts_an_admission_with_no_child_contract() -> None:
+def test_the_backend_accepts_an_admission_with_no_realized_children() -> None:
     """The backend-side integrity check makes the same allowance.
 
     `docker_authority_admissions` re-validates the carried decision before
@@ -419,7 +327,7 @@ def test_the_backend_accepts_an_admission_with_no_child_contract() -> None:
     assert len(admissions) == 1
     requirements = deployment_spawn_image_requirements(spec)
     assert len(requirements) == 1
-    assert requirements[0].child_label == ""
+    assert requirements[0].tag_reference == ""
     assert "@sha256:" in requirements[0].image_ref
 
 
@@ -1557,95 +1465,6 @@ def test_post_start_rejects_socket_propagation_to_another_service(tmp_path) -> N
     assert result.error == "Docker authority propagated to unauthorized service worker."
 
 
-@pytest.mark.parametrize(
-    "child_exposure",
-    [
-        {
-            "Created": "2025-01-01T00:01:00Z",
-            "Mounts": [
-                {
-                    "Type": "bind",
-                    "Source": _DOCKER_SOCKET,
-                    "Destination": "/var/run/docker.sock",
-                    "RW": True,
-                }
-            ],
-            "Config": {"Env": []},
-            "HostConfig": {"Privileged": False},
-        },
-        {
-            "Created": "2025-01-01T00:01:00Z",
-            "Mounts": [
-                {
-                    "Type": "bind",
-                    "Source": "/var/run",
-                    "Destination": "/host-run",
-                    "RW": True,
-                }
-            ],
-            "Config": {"Env": []},
-            "HostConfig": {"Privileged": False},
-        },
-        {
-            "Created": "2025-01-01T00:01:00Z",
-            "Mounts": [],
-            "Config": {"Env": ["DOCKER_HOST=tcp://docker.example:2375"]},
-            "HostConfig": {"Privileged": False},
-        },
-    ],
-)
-def test_post_start_rejects_every_spawned_child_docker_control_route(
-    tmp_path, child_exposure: dict
-) -> None:
-    backend = DockerComposeBackend(tmp_path)
-    backend._docker_daemon_id = "daemon-a"
-    backend.revalidate_local_docker_socket = MagicMock(
-        return_value=LabResult(success=True)
-    )
-    holder = {
-        "Mounts": [
-            {
-                "Type": "bind",
-                "Source": _DOCKER_SOCKET,
-                "Destination": "/var/run/docker.sock",
-                "RW": True,
-            }
-        ],
-        "Config": {"Env": []},
-        "HostConfig": {"Privileged": False},
-    }
-    child_exposure["Config"]["Labels"] = {"org.aptl.authority": "worker-runtime"}
-    child_exposure["Image"] = _IMAGE_ID
-    backend.container_inspect = MagicMock(side_effect=[holder, child_exposure])
-    backend.container_exec = MagicMock(
-        return_value=subprocess.CompletedProcess([], 0, stdout="daemon-a\n", stderr="")
-    )
-    backend._run = MagicMock(
-        side_effect=[
-            subprocess.CompletedProcess([], 0, stdout="spawned-child-id\n", stderr=""),
-            subprocess.CompletedProcess([], 0, stdout=_CHILD_INSPECT, stderr=""),
-        ]
-    )
-
-    result = backend._verify_runtime_orchestration(_spec(), require_children=True)
-
-    assert result is not None
-    assert result.success is False
-    assert result.error == (
-        "Docker authority propagated to spawned child provision.node.orborus/worker."
-    )
-    assert backend._run.call_args_list[0].kwargs["timeout"] == 600
-    assert backend._run.call_args_list[0].args[0] == [
-        "docker",
-        "ps",
-        "-aq",
-        "--filter",
-        f"ancestor={_CHILD_REF}",
-        "--filter",
-        "label=org.aptl.authority=worker-runtime",
-    ]
-
-
 def test_authored_privilege_alone_is_not_docker_control_authority(tmp_path) -> None:
     backend = DockerComposeBackend(tmp_path)
 
@@ -1654,210 +1473,203 @@ def test_authored_privilege_alone_is_not_docker_control_authority(tmp_path) -> N
     )
 
 
-def test_post_start_rejects_descendant_image_selected_by_ancestor_filter(
-    tmp_path,
-) -> None:
-    backend = DockerComposeBackend(tmp_path)
-    backend._docker_daemon_id = "daemon-a"
-    backend.revalidate_local_docker_socket = MagicMock(
-        return_value=LabResult(success=True)
-    )
-    holder = {
-        "Mounts": [
-            {
-                "Type": "bind",
-                "Source": _DOCKER_SOCKET,
-                "Destination": "/var/run/docker.sock",
-                "RW": True,
-            }
-        ],
-        "Config": {"Env": []},
-        "HostConfig": {"Privileged": False},
-    }
-    child = {
-        "Image": "sha256:" + "c" * 64,
-        "Mounts": [],
-        "Config": {
-            "Env": [],
-            "Labels": {"org.aptl.authority": "worker-runtime"},
-        },
-        "HostConfig": {"Privileged": False},
-        "State": {"Running": False},
-    }
-    backend.container_inspect = MagicMock(side_effect=[holder, child])
-    backend.container_exec = MagicMock(
-        return_value=subprocess.CompletedProcess([], 0, stdout="daemon-a\n", stderr="")
-    )
-    backend._run = MagicMock(
-        side_effect=[
-            subprocess.CompletedProcess(
-                [], 0, stdout="descendant-child-id\n", stderr=""
-            ),
-            subprocess.CompletedProcess([], 0, stdout=_CHILD_INSPECT, stderr=""),
-        ]
-    )
+def _authority_runtime(**authority: object) -> RuntimeConfiguration:
+    """Build a runtime whose single authority carries exactly what is given."""
 
-    result = backend._verify_runtime_orchestration(_spec(), require_children=True)
-
-    assert result is not None
-    assert result.success is False
-    assert result.error == (
-        "Spawned-child image identity mismatch for provision.node.orborus/worker."
-    )
-
-
-def test_post_work_attestation_terminates_overdue_spawned_child(tmp_path) -> None:
-    backend = DockerComposeBackend(tmp_path)
-    backend._docker_daemon_id = "daemon-a"
-    backend.revalidate_local_docker_socket = MagicMock(
-        return_value=LabResult(success=True)
-    )
-    holder = {
-        "Mounts": [
-            {
-                "Type": "bind",
-                "Source": _DOCKER_SOCKET,
-                "Destination": "/var/run/docker.sock",
-                "RW": True,
-            }
-        ],
-        "Config": {"Env": []},
-        "HostConfig": {"Privileged": False},
-    }
-    child_running = {
-        "Image": _IMAGE_ID,
-        "Mounts": [],
-        "Config": {
-            "Env": [],
-            "Labels": {"org.aptl.authority": "worker-runtime"},
-        },
-        "HostConfig": {"Privileged": False},
-        "State": {"Running": True, "StartedAt": "2020-01-01T00:00:00Z"},
-    }
-    child_stopped = {"State": {"Running": False}}
-    backend.container_inspect = MagicMock(
-        side_effect=[holder, child_running, child_stopped]
-    )
-    backend.container_exec = MagicMock(
-        return_value=subprocess.CompletedProcess([], 0, stdout="daemon-a\n", stderr="")
-    )
-    backend._run = MagicMock(
-        side_effect=[
-            subprocess.CompletedProcess([], 0, stdout="spawned-child-id\n", stderr=""),
-            subprocess.CompletedProcess([], 0, stdout=_CHILD_INSPECT, stderr=""),
-            subprocess.CompletedProcess([], 0, stdout="spawned-child-id\n", stderr=""),
-        ]
-    )
-
-    result = backend._verify_runtime_orchestration(_spec(), require_children=True)
-
-    assert result is not None
-    assert result.success is False
-    assert result.error == (
-        "Spawned child exceeded lifecycle deadline for provision.node.orborus/worker."
-    )
-    assert backend._run.call_args_list[2].args[0] == [
-        "docker",
-        "stop",
-        "--time",
-        "10",
-        "spawned-child-id",
-    ]
-
-
-def test_startup_child_attestation_uses_exact_label_and_allows_not_yet_spawned(
-    tmp_path,
-) -> None:
-    backend = DockerComposeBackend(tmp_path)
-    backend._docker_daemon_id = "daemon-a"
-    backend.revalidate_local_docker_socket = MagicMock(
-        return_value=LabResult(success=True)
-    )
-    socket_mount = {
-        "Type": "bind",
-        "Source": _DOCKER_SOCKET,
-        "Destination": "/var/run/docker.sock",
-        "RW": True,
-    }
-    holder = {
-        "Mounts": [socket_mount],
-        "Config": {"Env": []},
-        "HostConfig": {"Privileged": False},
-    }
-    backend.container_inspect = MagicMock(return_value=holder)
-    backend.container_exec = MagicMock(
-        return_value=subprocess.CompletedProcess([], 0, stdout="daemon-a\n", stderr="")
-    )
-    backend._run = MagicMock(
-        return_value=subprocess.CompletedProcess([], 0, stdout="", stderr="")
-    )
-
-    assert backend._verify_runtime_orchestration(_spec()) is None
-    assert backend._run.call_args.args[0] == [
-        "docker",
-        "ps",
-        "-aq",
-        "--filter",
-        f"ancestor={_CHILD_REF}",
-        "--filter",
-        "label=org.aptl.authority=worker-runtime",
-    ]
-
-
-def test_post_work_attestation_requires_exact_correlated_child_count(tmp_path) -> None:
-    backend = DockerComposeBackend(tmp_path)
-    backend._docker_daemon_id = "daemon-a"
-    backend.revalidate_local_docker_socket = MagicMock(
-        return_value=LabResult(success=True)
-    )
-    backend.container_inspect = MagicMock(
-        return_value={
-            "Mounts": [
+    return RuntimeConfiguration.model_validate(
+        {
+            "local_control_interfaces": [
                 {
-                    "Type": "bind",
-                    "Source": _DOCKER_SOCKET,
-                    "Destination": "/var/run/docker.sock",
-                    "RW": True,
+                    "control_interface_id": "docker-sock",
+                    "path": "/var/run/docker.sock",
+                    "kind": "unix_socket",
+                    "access": "read_write",
                 }
             ],
-            "Config": {"Env": []},
-            "HostConfig": {"Privileged": False},
+            "orchestration_authorities": [
+                {
+                    "orchestration_authority_id": "worker-runtime",
+                    "control_interface_ref": "docker-sock",
+                    "engine": "docker",
+                    "privilege_class": "host_root_equivalent",
+                    "lifecycle_policy": {"execution_timeout": "600"},
+                    **authority,
+                }
+            ],
         }
     )
-    backend.container_exec = MagicMock(
-        return_value=subprocess.CompletedProcess([], 0, stdout="daemon-a\n", stderr="")
-    )
-    backend._run = MagicMock(
-        return_value=subprocess.CompletedProcess([], 0, stdout="", stderr="")
+
+
+def test_tag_only_image_reference_is_realized_as_written() -> None:
+    # RuntimeOrchestrationSpawnTemplate.image_ref has no pattern in
+    # sdl-authoring-input-v1.json. A tag is what the author chose to write.
+    runtime = _authority_runtime(
+        spawn_templates=[
+            {"template_id": "app", "image_ref": "frikky/shuffle:http_1.4.0"}
+        ]
     )
 
-    result = backend._verify_runtime_orchestration(_spec(), require_children=True)
+    requirements = spawn_image_requirements(
+        runtime, node_address="provision.node.orborus"
+    )
+
+    assert [item.image_ref for item in requirements] == ["frikky/shuffle:http_1.4.0"]
+
+
+def test_template_without_an_image_yields_nothing_to_fetch() -> None:
+    # image_ref defaults to "" and only template_id is required, so a template
+    # naming a purpose alone is legal and has no image to realize.
+    runtime = _authority_runtime(
+        spawn_templates=[{"template_id": "worker", "purpose": "workflow execution"}]
+    )
+
+    assert spawn_image_requirements(runtime, node_address="provision.node.orborus") == ()
+
+
+def test_realized_child_carrying_only_its_workload_id_is_accepted() -> None:
+    # workload_id is the only required property; evidence_ref and count are
+    # optional and RAES constrains neither to APTL's label or range.
+    runtime = _authority_runtime(
+        spawn_templates=[{"template_id": "worker", "image_ref": _CHILD_REF}],
+        realized_children=[{"workload_id": "worker-instance"}],
+    )
+
+    requirements = spawn_image_requirements(
+        runtime, node_address="provision.node.orborus"
+    )
+
+    assert [item.image_ref for item in requirements] == [_CHILD_REF]
+
+
+def test_realized_children_without_spawn_templates_are_accepted() -> None:
+    runtime = _authority_runtime(
+        realized_children=[{"workload_id": "worker-instance", "count": 0}]
+    )
+
+    assert spawn_image_requirements(runtime, node_address="provision.node.orborus") == ()
+
+
+def test_tag_and_digest_reference_carries_the_authored_tag() -> None:
+    reference = f"frikky/shuffle:http_1.4.0@{_DIGEST}"
+    runtime = _authority_runtime(
+        spawn_templates=[{"template_id": "app", "image_ref": reference}]
+    )
+
+    requirement = spawn_image_requirements(
+        runtime, node_address="provision.node.orborus"
+    )[0]
+
+    assert requirement.image_ref == reference
+    assert requirement.tag_reference == "frikky/shuffle:http_1.4.0"
+
+
+_TAGGED_REF = f"frikky/shuffle:http_1.4.0@{_DIGEST}"
+_TAGGED_TAG = "frikky/shuffle:http_1.4.0"
+_TAGGED_INSPECT = f'["frikky/shuffle@{_DIGEST}"]\t{_IMAGE_ID}\tlinux/amd64\n'
+_OTHER_IMAGE_ID = "sha256:" + "c" * 64
+
+
+def _tagged_backend(tmp_path, *alias_results):
+    """Offline backend whose platform and exact inspect already succeed."""
+
+    backend = DockerComposeBackend(tmp_path, offline_staged=True)
+    backend.revalidate_local_docker_socket = MagicMock(
+        return_value=LabResult(success=True)
+    )
+    backend._run = MagicMock(
+        side_effect=[
+            subprocess.CompletedProcess([], 0, stdout="linux/amd64\n", stderr=""),
+            subprocess.CompletedProcess([], 0, stdout=_TAGGED_INSPECT, stderr=""),
+            *alias_results,
+        ]
+    )
+    return backend
+
+
+def _commands(backend):
+    return [call.args[0] for call in backend._run.call_args_list]
+
+
+def test_absent_authored_tag_is_created_from_the_verified_image(tmp_path) -> None:
+    backend = _tagged_backend(
+        tmp_path,
+        subprocess.CompletedProcess(
+            [], 1, stdout="", stderr="Error: No such image: frikky/shuffle:http_1.4.0\n"
+        ),
+        subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        subprocess.CompletedProcess([], 0, stdout=f"{_IMAGE_ID}\n", stderr=""),
+    )
+
+    assert backend._prepare_spawn_images(_spec(_runtime(image_ref=_TAGGED_REF))) is None
+    commands = _commands(backend)
+    assert ["docker", "tag", _TAGGED_REF, _TAGGED_TAG] in commands
+    assert all("pull" not in command for command in commands)
+    assert all("manifest" not in command for command in commands)
+    assert all("build" not in command for command in commands)
+
+
+def test_authored_tag_pointing_elsewhere_is_repointed_and_reverified(tmp_path) -> None:
+    backend = _tagged_backend(
+        tmp_path,
+        subprocess.CompletedProcess([], 0, stdout=f"{_OTHER_IMAGE_ID}\n", stderr=""),
+        subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        subprocess.CompletedProcess([], 0, stdout=f"{_IMAGE_ID}\n", stderr=""),
+    )
+
+    assert backend._prepare_spawn_images(_spec(_runtime(image_ref=_TAGGED_REF))) is None
+    assert ["docker", "tag", _TAGGED_REF, _TAGGED_TAG] in _commands(backend)
+
+
+def test_indeterminate_tag_read_fails_without_tagging(tmp_path) -> None:
+    # A daemon, permission, or timeout failure is not proof the name is absent,
+    # so it must never authorize mutating shared daemon state.
+    backend = _tagged_backend(
+        tmp_path,
+        subprocess.CompletedProcess(
+            [], 1, stdout="", stderr="Cannot connect to the Docker daemon\n"
+        ),
+    )
+
+    result = backend._prepare_spawn_images(_spec(_runtime(image_ref=_TAGGED_REF)))
 
     assert result is not None
     assert result.success is False
-    assert result.error == (
-        "Spawned-child correlation count mismatch for provision.node.orborus/worker."
+    assert all(command[:2] != ["docker", "tag"] for command in _commands(backend))
+
+
+def test_authored_tag_already_resolving_to_the_image_is_left_alone(tmp_path) -> None:
+    backend = _tagged_backend(
+        tmp_path,
+        subprocess.CompletedProcess([], 0, stdout=f"{_IMAGE_ID}\n", stderr=""),
     )
 
+    assert backend._prepare_spawn_images(_spec(_runtime(image_ref=_TAGGED_REF))) is None
+    assert all(command[:2] != ["docker", "tag"] for command in _commands(backend))
 
-def test_running_child_is_supervised_until_terminal_before_success(
-    tmp_path, monkeypatch
-) -> None:
-    from aptl.core.deployment import _compose_child_lifecycle as child_lifecycle
 
-    backend = DockerComposeBackend(tmp_path)
-    inspected = MagicMock(return_value={"State": {"Running": False}})
-    backend.container_inspect = inspected
-    monkeypatch.setattr(child_lifecycle.time, "sleep", lambda _seconds: None)
-    started = datetime.now(timezone.utc).isoformat()
-
-    result = backend._enforce_spawned_child_deadline(
-        "spawned-child-id",
-        {"State": {"Running": True, "StartedAt": started}},
-        timeout=600,
-        node_address="provision.node.orborus",
-        template_id="worker",
+def test_conflicting_authored_tags_fail_before_any_tagging(tmp_path) -> None:
+    # Two templates naming the same repository:tag with different digests
+    # cannot both be satisfied: one local name cannot resolve to two images.
+    other_digest = "sha256:" + "d" * 64
+    runtime = _authority_runtime(
+        spawn_templates=[
+            {"template_id": "app-a", "image_ref": _TAGGED_REF},
+            {
+                "template_id": "app-b",
+                "image_ref": f"frikky/shuffle:http_1.4.0@{other_digest}",
+            },
+        ]
     )
+    backend = DockerComposeBackend(tmp_path, offline_staged=True)
+    backend.revalidate_local_docker_socket = MagicMock(
+        return_value=LabResult(success=True)
+    )
+    backend._run = MagicMock()
 
-    assert result is None
-    inspected.assert_called_once_with("spawned-child-id")
+    result = backend._prepare_spawn_images(_spec(runtime))
+
+    assert result is not None
+    assert result.success is False
+    assert "frikky/shuffle:http_1.4.0" in result.error
+    # A contradiction in what was authored needs no daemon to detect.
+    backend._run.assert_not_called()

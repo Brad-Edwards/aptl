@@ -18,6 +18,32 @@ seat. It consumes the signed release, overlay, and launch contracts from
 [Disposable Appliance Release](appliance-release.md) without introducing a
 host-resident APTL runtime.
 
+## Security boundary
+
+The seat is the preferred path when AI agents will operate the range or when
+multiple users share a physical host. Direct `aptl lab start` places the
+intentionally vulnerable workloads, MCP tooling, and Docker-authorized control
+components on the selected host Docker engine. A seat instead places that
+rootful Docker daemon and the entire range inside a dedicated disposable VM;
+only signed loopback port mappings and the restricted authenticated MCP
+transport cross the VM boundary. Compromise of an ordinary lab container is
+therefore contained by an additional KVM/QEMU boundary before it reaches the
+physical host or another seat.
+
+That boundary is risk reduction, not a claim that VM escape is impossible. An
+advanced model with tool access can research, adapt, and attempt exploit chains
+against the guest kernel, emulated devices, QEMU, KVM, or the host kernel. A
+vulnerability in one of those layers may permit escape. Operators who care
+about that consequence should keep the virtualization stack patched, avoid
+unnecessary QEMU devices and host mappings, run seats on a dedicated and
+rebuildable host, keep unrelated secrets and workloads off it, restrict the
+surrounding network, and monitor active sessions.
+
+Inside one seat, all TechVault workloads share the guest boundary. A compromise
+may affect other containers, credentials, or evidence in that same VM. Reset
+destroys the overlay and revokes the previous generation; it does not turn a
+known-compromised physical host back into a trusted one.
+
 ## Prerequisites
 
 The physical host must satisfy the signed release `host_prerequisites` block:

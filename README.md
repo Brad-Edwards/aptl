@@ -13,7 +13,23 @@ One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, D
 
 ## Status
 
-**🚧 Active development. Not for production. Not hardened.** This lab gives AI agents access to real penetration-testing tools and runs intentionally vulnerable services. Container escapes and other security issues are possible—keep it on a host you can rebuild and a network you control. Always monitor red-team agents during scenarios.
+**🚧 Active development. Not for production. Not hardened.** APTL gives AI
+agents real penetration-testing tools and intentionally vulnerable targets.
+Choose the execution boundary accordingly:
+
+| Command | Isolation boundary | Appropriate use |
+|---|---|---|
+| `aptl lab start` | Containers on the selected host Docker engine | Development and supervised work on a dedicated, rebuildable host |
+| `aptl seat start` | Rootful Docker and the complete lab inside a disposable KVM VM | Agent-driven or multi-user work where stronger host and cross-seat isolation matters |
+
+The VM seat is materially safer than running the lab directly on the host
+Docker engine, but it is not an absolute sandbox. An advanced model with tool
+access can research and attempt container- or VM-escape chains; assume it may
+exploit a reachable kernel, hypervisor, or device-model flaw if one exists.
+Keep the host kernel and QEMU/KVM current, use a host that can be rebuilt, keep
+unrelated credentials and workloads elsewhere, control the surrounding
+network, and monitor active red-team sessions. See the
+[seat security boundary](docs/reference/appliance-seat-launcher.md#security-boundary).
 
 ## Quick Start
 

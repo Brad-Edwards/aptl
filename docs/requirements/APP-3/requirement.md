@@ -46,6 +46,7 @@ Issue #823 supplies the release artifact consumed by the host launcher in issue 
 - TESTS → TEST `tests/test_mcp_protocol.py` (Bounded MCP teardown proof during qualification)
 - TESTS → TEST `tests/test_appliance_release_workflow.py` (Release workflow permissions and ordering)
 - DOCUMENTS → DOCUMENTATION `docs/adrs/adr-060-vm-only-seat-containment.md` (Owner-approved containment scope)
+- DOCUMENTS → DOCUMENTATION `docs/reference/appliance-seat-launcher.md` (Operator security boundary and residual risk)
 
 - IMPLEMENTS → GITHUB_ISSUE `823` (Issue 823: signed disposable appliance release envelope)
 - IMPLEMENTS → CODE_FILE `src/aptl/appliance/manifest.py` (Signed appliance release manifest)

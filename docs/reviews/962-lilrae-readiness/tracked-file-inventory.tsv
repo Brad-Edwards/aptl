@@ -1714,6 +1714,7 @@ src/aptl/core/deployment/_compose_runtime_materialization.py	backend-substrate	R
 src/aptl/core/deployment/_runtime_materialization_effective.py	backend-substrate	Retain effective Compose authority comparison
 src/aptl/core/deployment/_runtime_materialization_qualification.py	backend-substrate	Retain authored runtime-field qualification
 src/aptl/core/deployment/_runtime_materialization_types.py	backend-substrate	Retain typed runtime materialization profiles and diagnostics
+src/aptl/backends/scenario_runtime_hooks.py	backend-scenario-extension	Retain bounded invocation of an admitted scenario startup provider
 docs/architecture/issue-969-platform-safety-gates-preflight.md	architecture-history	Preserve platform safety gate decisions and implementation guardrails
 docs/architecture/issue-970-generic-lab-lifecycle-preflight.md	architecture-history	Preserve issue 970 lifecycle and scenario-startup ownership guardrails
 docs/requirements/SEC-008/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration

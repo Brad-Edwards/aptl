@@ -65,6 +65,10 @@ def _endpoint_socket(mapping: BoundaryEndpoint) -> socket.socket:
 def _acquire_allocator_lock(deadline: float) -> socket.socket | _FileAllocatorLock:
     """Acquire the host-network-wide APTL allocation mutex."""
 
+    if os.name == "nt":
+        raise SeatLauncherError(
+            "unsupported-host-os", "seat mapping allocation requires Linux"
+        )
     if sys.platform != "linux":
         import fcntl
 

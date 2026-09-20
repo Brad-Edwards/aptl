@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import errno
-import fcntl
 import os
 import stat
 import threading
@@ -50,6 +49,12 @@ def seat_mutation_lock(seat_root: Path):
         return
 
     path = seat_root / _LOCK_NAME
+    try:
+        import fcntl
+    except ModuleNotFoundError as exc:
+        raise SeatLauncherError(
+            "unsupported-host-os", "seat lifecycle locking requires POSIX"
+        ) from exc
     flags = os.O_RDWR | os.O_CREAT | os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW

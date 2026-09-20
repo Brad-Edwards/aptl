@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import pwd
 import shutil
 import subprocess
 import tempfile
@@ -12,7 +11,7 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from aptl.appliance.launch import VerifiedApplianceLaunch, verify_launch_descriptor
 from aptl.appliance.seat.access import (
@@ -44,6 +43,31 @@ from aptl.validation.participant_qualification import QualificationCheckEvidence
 
 if TYPE_CHECKING:
     from aptl.appliance.candidate import VerifiedCandidateLaunch
+
+
+class _AccessAccount(Protocol):
+    """POSIX account fields required by the guest access supervisor."""
+
+    pw_uid: int
+    pw_gid: int
+    pw_dir: str
+
+
+def _access_account(username: str) -> _AccessAccount:
+    """Resolve the guest dispatcher account without breaking portable imports."""
+
+    try:
+        import pwd
+    except ModuleNotFoundError as exc:
+        raise WorkbenchConfigurationError(
+            "guest access supervision requires POSIX"
+        ) from exc
+    try:
+        return pwd.getpwnam(username)
+    except KeyError as exc:
+        raise WorkbenchConfigurationError(
+            "guest access account is unavailable"
+        ) from exc
 
 
 def _descriptor_digest(path: Path) -> str:
@@ -398,12 +422,7 @@ def serve_appliance_access(
         qualification_public_key,
         candidate_trust=candidate_trust,
     )
-    try:
-        account = pwd.getpwnam(username)
-    except KeyError as exc:
-        raise WorkbenchConfigurationError(
-            "guest access account is unavailable"
-        ) from exc
+    account = _access_account(username)
     host_key = state_dir / "ssh" / "ssh_host_ed25519_key"
     _ensure_host_key(host_key)
     _assign_management_state(project_dir, uid=account.pw_uid, gid=account.pw_gid)

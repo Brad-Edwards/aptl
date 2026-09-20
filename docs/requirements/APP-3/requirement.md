@@ -42,6 +42,7 @@ Issue #823 supplies the release artifact consumed by the host launcher in issue 
 - TESTS → TEST `tests/test_appliance_qualification.py` (Qualification identity and multi-machine gates)
 - TESTS → TEST `tests/test_appliance_seat_lifecycle.py` (VM start, readiness, recovery, and revocation)
 - TESTS → TEST `tests/test_appliance_seat_prereqs.py` (Capacity and free-space admission boundaries)
+- TESTS → TEST `tests/test_appliance_seat_portability.py` (Portable CLI imports and fail-closed POSIX locking)
 - TESTS → TEST `tests/test_mcp_protocol.py` (Bounded MCP teardown proof during qualification)
 - TESTS → TEST `tests/test_appliance_release_workflow.py` (Release workflow permissions and ordering)
 - DOCUMENTS → DOCUMENTATION `docs/adrs/adr-060-vm-only-seat-containment.md` (Owner-approved containment scope)

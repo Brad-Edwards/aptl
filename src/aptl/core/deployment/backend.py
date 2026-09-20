@@ -52,6 +52,11 @@ class DeploymentBackend(HostInventoryBackend, ContainerOpsBackend, Protocol):
     ``container_inspect``, ...) from :class:`ContainerOpsBackend`.
     """
 
+    def docker_transport_environment(self) -> dict[str, str]:
+        """Return only Docker transport settings used by this backend."""
+
+        ...
+
     def start(self, profiles: list[str], *, build: bool = True) -> LabResult:
         """Start lab services for the given profiles.
 

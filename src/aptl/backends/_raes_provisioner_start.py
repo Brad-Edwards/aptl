@@ -153,6 +153,7 @@ class ProvisionerStartMixin(object):
                 plan,
                 scenario_root=self.bundle.root,
                 observation_context=observation_context,
+                startup_selection=self.startup_selection,
             )
             realized_snapshot = self._with_artifact_satisfactions(
                 plan,

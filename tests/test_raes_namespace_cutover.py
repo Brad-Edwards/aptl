@@ -28,28 +28,7 @@ IDENTITY_LEDGER = (
     / "962-lilrae-readiness"
     / "identity-disposition.tsv"
 )
-KNOWN_PRIVATE_RAES_IMPORTS = {
-    (
-        "src/aptl/backends/raes_artifact_availability.py",
-        "raes._source",
-        "ArtifactIdentity",
-    ),
-    (
-        "src/aptl/backends/raes_artifact_availability.py",
-        "raes_processor.compiler.addresses",
-        "_node_address",
-    ),
-    (
-        "src/aptl/backends/raes_runtime_orchestration.py",
-        "raes_processor.compiler.addresses",
-        "_node_address",
-    ),
-    (
-        "src/aptl/backends/raes_repro.py",
-        "raes_runtime.control_plane_store",
-        "_snapshot_payload",
-    ),
-}
+KNOWN_PRIVATE_RAES_IMPORTS: set[tuple[str, str, str]] = set()
 
 
 def test_project_depends_on_exact_raes_4_1_release() -> None:
@@ -89,11 +68,11 @@ def test_runtime_and_tests_do_not_import_removed_aces_packages() -> None:
     assert offenders == []
 
 
-def test_private_raes_imports_and_manifest_fallback_are_inventoried() -> None:
-    """Known public-API blockers stay explicit until upstream replacements land."""
+def test_no_private_raes_imports_or_manifest_fallback_remain() -> None:
+    """Production source uses the public contracts in the pinned RAES release."""
 
     observed: set[tuple[str, str, str]] = set()
-    source_root = PROJECT_ROOT / "src" / "aptl"
+    source_root = PROJECT_ROOT / "src"
     for path in source_root.rglob("*.py"):
         tree = ast.parse(path.read_text(), filename=str(path))
         for node in ast.walk(tree):
@@ -121,14 +100,9 @@ def test_private_raes_imports_and_manifest_fallback_are_inventoried() -> None:
             row["surface_id"]: row for row in csv.DictReader(stream, delimiter="\t")
         }
 
-    expected_rows = {
-        "raes-private-artifact-identity": "raes._source.ArtifactIdentity",
-        "raes-private-node-address": "raes_processor.compiler.addresses._node_address",
-        "raes-private-snapshot-payload": "raes_runtime.control_plane_store._snapshot_payload",
-        "raes-manifest-authority-fallback": "BACKEND_SUPPORTED_CONTRACT_IDS ImportError fallback",
-    }
-    for surface_id, identity in expected_rows.items():
-        assert rows[surface_id]["current_identity"] == identity
+    assert all(
+        not surface_id.startswith("raes-private-") for surface_id in rows
+    )
 
     manifest = (
         PROJECT_ROOT / "src" / "aptl" / "backends" / "raes_manifest.py"
@@ -137,4 +111,4 @@ def test_private_raes_imports_and_manifest_fallback_are_inventoried() -> None:
         "from raes_contracts.manifest_authority import BACKEND_SUPPORTED_CONTRACT_IDS"
         in manifest
     )
-    assert "except ImportError:" in manifest
+    assert "except ImportError:" not in manifest

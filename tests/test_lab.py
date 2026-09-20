@@ -79,7 +79,8 @@ def _admitted_start_fixture(bundle_root: Path):
     from aptl.core.scenario_bundle import project_tree_bundle
 
     return SimpleNamespace(
-        bundle=project_tree_bundle(bundle_root, bundle_root / "fixture.sdl.yaml")
+        bundle=project_tree_bundle(bundle_root, bundle_root / "fixture.sdl.yaml"),
+        runtime_materialization_failure=None,
     )
 
 
@@ -1628,6 +1629,7 @@ class TestOrchestrateLabStart:
         pack_root.mkdir(parents=True)
         mocks["admitted_surface"] = _admitted_surface(
             pack_root,
+            env_pack=False,
             selected_profiles=(
                 "wazuh",
                 "victim",
@@ -2145,9 +2147,9 @@ class TestOrchestrateLabStart:
         )
 
         # Re-mock RAES handoff and wait_for_service since config changes
-        from aptl.core.lab import LabResult
-
-        mocks["start"].return_value = LabResult(success=True, message="Lab started")
+        mocks["start"].return_value = _raes_outcome(
+            success=True, selected_profiles=()
+        )
 
         result = orchestrate_lab_start(tmp_path)
 
@@ -3005,6 +3007,9 @@ class TestStartupClassificationWiring:
         if selected_profiles is None:
             selected_profiles = set(cfg.containers.enabled_profiles()) | {"otel"}
 
+        backend = MagicMock()
+        backend.docker_transport_environment.return_value = {}
+
         return _LabStartContext(
             project_dir=tmp_path,
             skip_seed=False,
@@ -3012,7 +3017,7 @@ class TestStartupClassificationWiring:
             config=cfg,
             ssh_key_path=Path("/tmp/aptl_lab_key"),
             selected_profiles=selected_profiles,
-            backend=MagicMock(),
+            backend=backend,
             scenario_startup=ScenarioStartupPlan(
                 seed_script="scripts/seed-prime.sh",
                 required_profiles=(
@@ -3024,6 +3029,7 @@ class TestStartupClassificationWiring:
                     "soc",
                 ),
                 activation_profiles=("soc",),
+                seed_environment_keys=("MISP_API_KEY", "SHUFFLE_API_KEY"),
             ),
         )
 

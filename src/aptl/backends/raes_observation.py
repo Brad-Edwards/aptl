@@ -80,6 +80,7 @@ log = get_logger("realization-observe")
 operational_realization_observations = _operational_realization_observations
 
 if TYPE_CHECKING:
+    from aptl.backends.scenario_startup import ScenarioStartupSelection
     from raes.runtime_configuration import RuntimeConfiguration
 
     from aptl.core.deployment.backend import DeploymentBackend
@@ -108,6 +109,7 @@ def observe_realization(
     plan: ProvisioningPlan,
     scenario_root: Path,
     observation_context: DeploymentObservationContext | None = None,
+    startup_selection: ScenarioStartupSelection | None = None,
 ) -> dict[str, ObservedResource]:
     """Return, per planned address, what the backend actually realized.
 
@@ -130,6 +132,7 @@ def observe_realization(
         realization,
         observations,
         observation_context,
+        startup_selection,
     )
     return align_techvault_identity_collection_observations(
         plan=plan,
@@ -198,6 +201,7 @@ def _add_techvault_runtime_attestations(
     realization: AptlRealization,
     observations: dict[str, ObservedResource],
     observation_context: DeploymentObservationContext | None,
+    startup_selection: ScenarioStartupSelection | None,
 ) -> None:
     """Attach only implementation-bound TechVault configuration disclosures."""
 
@@ -223,7 +227,10 @@ def _add_techvault_runtime_attestations(
         if concerns:
             observed_node.concerns.update(concerns)
         adapter_concerns = observe_scenario_runtime_concerns(
-            realization.pack_identity, backend, node
+            realization.pack_identity,
+            backend,
+            node,
+            selection=startup_selection,
         )
         if adapter_concerns:
             observed_node.concerns.update(adapter_concerns)

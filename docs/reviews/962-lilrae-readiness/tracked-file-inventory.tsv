@@ -1414,8 +1414,10 @@ tests/test_kali_capture_compose.py	tests-follow-owner	Retain meaningful boundary
 tests/test_kali_capture_writer.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_kill.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_lab.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_lab_core_only_artifact.py	tests-follow-owner	Installed wheel smoke proof for optional startup isolation
 tests/test_lab_fresh_start.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_lab_init_cli.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_lab_lifecycle_selection.py	tests-follow-owner	Generic lifecycle selection and bounded adapter regression tests
 tests/test_lifecycle_guard.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_lifecycle_policy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_lilrae_rename_boundary.py	tests-follow-owner	Structural gate for #934 identity, inventory, wording, and retirement invariants
@@ -1764,7 +1766,9 @@ src/aptl/core/deployment/_compose_runtime_materialization.py	backend-substrate	R
 src/aptl/core/deployment/_runtime_materialization_effective.py	backend-substrate	Retain effective Compose authority comparison
 src/aptl/core/deployment/_runtime_materialization_qualification.py	backend-substrate	Retain authored runtime-field qualification
 src/aptl/core/deployment/_runtime_materialization_types.py	backend-substrate	Retain typed runtime materialization profiles and diagnostics
+src/aptl/backends/scenario_runtime_hooks.py	backend-scenario-extension	Retain bounded invocation of an admitted scenario startup provider
 docs/architecture/issue-969-platform-safety-gates-preflight.md	architecture-history	Preserve platform safety gate decisions and implementation guardrails
+docs/architecture/issue-970-generic-lab-lifecycle-preflight.md	architecture-history	Preserve issue 970 lifecycle and scenario-startup ownership guardrails
 docs/requirements/SEC-008/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
 docs/testing/platform-pr-gates.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 tests/test_assert_project_teardown.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

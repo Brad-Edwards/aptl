@@ -1,23 +1,28 @@
 """Content-identified startup enrichment for the released TechVault pack."""
 
 from importlib import metadata
+from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import yaml
 
 from aptl.backends.scenario_startup import (
     ENTRY_POINT_GROUP,
     ScenarioStartupProviderError,
+    ScenarioStartupPlan,
     _safe_relative_script,
     observe_scenario_runtime_concerns,
     run_scenario_runtime,
     resolve_scenario_startup,
+    select_scenario_startup,
 )
 from aptl.backends.scenario_startup_policy import (
     ScenarioComposeStartupPolicy,
     StartupHealthDependency,
     StartupHealthProbe,
     _validated_policy,
+    _resolved_services as resolve_startup_policy,
     write_scenario_startup_override,
 )
 from aptl.backends.scenario_service_policy import (
@@ -325,6 +330,63 @@ def test_changed_pack_digest_gets_no_startup_behavior() -> None:
     assert resolve_scenario_startup(_bundle(digest="sha256:" + "0" * 64)) is None
 
 
+def test_admitted_provider_is_reused_by_all_runtime_hooks(
+    monkeypatch, tmp_path
+) -> None:
+    from aptl.backends import scenario_startup
+
+    calls: list[str] = []
+    identity = _bundle().pack_identity
+    assert identity is not None
+    provider = SimpleNamespace(
+        extension_api_version="1",
+        supported_pack_id=identity.pack_id,
+        supported_pack_versions=(identity.pack_version,),
+        supported_pack_set_digests=(identity.set_digest,),
+        resolve=lambda bundle: (
+            calls.append("resolve")
+            or ScenarioStartupPlan("scripts/seed.sh", ("soc",), ("soc",))
+        ),
+        compose_service_policy=lambda: (
+            calls.append("service") or ScenarioComposeServicePolicy()
+        ),
+        compose_startup_policy=lambda: (
+            calls.append("startup") or ScenarioComposeStartupPolicy()
+        ),
+        realize_runtime=lambda backend, nodes: calls.append("runtime") or [],
+        observe_runtime=lambda backend, node: calls.append("observe") or {},
+    )
+    loads: list[str] = []
+    entry = SimpleNamespace(
+        name=identity.pack_id,
+        load=lambda: loads.append("load") or provider,
+    )
+    monkeypatch.setattr(scenario_startup, "_entry_points", lambda: [entry])
+
+    selection = select_scenario_startup(_bundle())
+    assert selection.provider is provider
+    assert loads == ["load"]
+    monkeypatch.setattr(
+        scenario_startup,
+        "_entry_points",
+        lambda: pytest.fail("startup provider was rediscovered"),
+    )
+    spec = replace(_startup_spec(), startup_selection=selection)
+
+    assert resolve_service_policy(spec, tmp_path) == {}
+    assert certificate_mount_aliases(spec, tmp_path, {}) == {}
+    assert resolve_startup_policy(spec) == {}
+    assert run_scenario_runtime(identity, object(), (), selection=selection) == []
+    assert (
+        observe_scenario_runtime_concerns(
+            identity, object(), object(), selection=selection
+        )
+        == {}
+    )
+    assert calls == ["resolve", "service", "service", "startup", "runtime", "observe"]
+    assert loads == ["load"]
+
+
 def test_runtime_hook_only_runs_for_the_qualified_pack(monkeypatch) -> None:
     from aptl_techvault.startup import provider
 
@@ -432,6 +494,7 @@ def test_seed_environment_uses_receipt_resolved_container_names(tmp_path) -> Non
     plan = resolve_scenario_startup(_bundle())
     assert plan is not None
     backend = MagicMock()
+    backend.docker_transport_environment.return_value = {}
     backend.container_inspect.side_effect = lambda semantic: {
         "Name": f"/workspace-{semantic.removeprefix('aptl-')}"
     }

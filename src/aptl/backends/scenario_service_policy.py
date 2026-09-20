@@ -18,7 +18,7 @@ import yaml
 
 from aptl.backends.scenario_startup import (
     ScenarioStartupProviderError,
-    _runtime_provider,
+    selected_runtime_provider,
 )
 from aptl.core.deployment.realization import (
     DeploymentNodeRealization,
@@ -101,7 +101,7 @@ def certificate_mount_aliases(
     generated override. An edited Compose file cannot authorize itself.
     """
 
-    provider = _runtime_provider(spec.pack_identity)
+    provider = selected_runtime_provider(spec.pack_identity, spec.startup_selection)
     resolver = getattr(provider, "compose_service_policy", None) if provider else None
     if resolver is None:
         return {}
@@ -251,7 +251,7 @@ def _resolved_services(
 ) -> dict[str, dict[str, object]]:
     """Resolve the adapter policy into an additional, bounded Compose overlay."""
 
-    provider = _runtime_provider(spec.pack_identity)
+    provider = selected_runtime_provider(spec.pack_identity, spec.startup_selection)
     resolver = getattr(provider, "compose_service_policy", None) if provider else None
     if resolver is None:
         return {}

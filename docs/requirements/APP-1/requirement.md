@@ -47,6 +47,8 @@ Issue #822 establishes the general materializability and qualification surface c
 - IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/realization.py` (Backend-neutral deployment realization contract)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/_compose_boundary.py` (Selected-daemon boundary helper lifecycle)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/backend.py` (Deployment boundary capability contract)
+- IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/backend_host_inventory.py` (Selected daemon identity contract for appliance binding)
+- IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/_docker_endpoint_binding.py` (Daemon identity read through the selected Docker transport)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/docker_compose.py` (Compose boundary integration)
 - IMPLEMENTS → CONFIG `containers/network-boundary-helper/Dockerfile` (Pinned boundary helper image)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/_compose_base_substrate.py` (Network-before-start base substrate realization)

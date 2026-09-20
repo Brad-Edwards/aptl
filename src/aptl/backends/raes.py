@@ -80,6 +80,7 @@ from aptl.utils.logging import get_logger
 if TYPE_CHECKING:
     from raes_processor.models import ExecutionPlan
 
+    from aptl.backends.scenario_startup import ScenarioStartupSelection
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.runstore import RunStorageBackend
 
@@ -123,6 +124,7 @@ def create_aptl_runtime_target(
         observability_scope=selected.observability_scope
         or ObservabilityScopeDecision(),
         operator_access=selected.operator_access or OperatorAccessDecision(),
+        startup_selection=selected.startup_selection,
     )
     orchestrator = AptlOrchestrator()
     action_specs = dict(DEFAULT_PARTICIPANT_ACTIONS)
@@ -205,6 +207,8 @@ def admit_raes_scenario(
     *,
     scenario_path: Path | None = None,
     parameters: Mapping[str, object] | None = None,
+    bundle: ScenarioBundle | None = None,
+    startup_selection: ScenarioStartupSelection | None = None,
 ) -> AdmittedScenarioStart:
     """Admit one scenario execution: resolve, parse, plan, and interpret it once.
 
@@ -220,7 +224,12 @@ def admit_raes_scenario(
     # env-pack yields a staged, validated pack. Everything downstream anchors to
     # this rather than the engine's checkout, so rehoming changes only the
     # resolver (issue #874 / #875).
-    bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
+    if bundle is None:
+        bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
+    if startup_selection is None:
+        from aptl.backends.scenario_startup import select_scenario_startup
+
+        startup_selection = select_scenario_startup(bundle)
     scenario = parse_sdl_file(bundle.sdl_path)
     if parameters is None:
         from aptl.backends.scenario_runtime_parameters import (
@@ -261,6 +270,7 @@ def admit_raes_scenario(
             capture_plan=capture_plan,
             observability_scope=observability_scope_decision(scenario),
             operator_access=operator_access_decision(scenario),
+            startup_selection=startup_selection,
         ),
     )
     runtime_manager = RuntimeManager(target)
@@ -310,6 +320,7 @@ def admit_raes_scenario(
         realization=realization,
         capture_plan=capture_plan,
         runtime_materialization_failure=materialization_failure,
+        startup_selection=startup_selection,
     )
 
 

@@ -78,7 +78,9 @@ def _deployment_spec(
 
     selected_profiles = provisioner.selected_profiles(realization)
     try:
-        result = realization.deployment_spec(selected_profiles)
+        result = realization.deployment_spec(
+            selected_profiles, startup_selection=provisioner.startup_selection
+        )
     except (TypeError, ValueError) as exc:
         execution_plan.diagnostics.append(
             diagnostic(

@@ -198,3 +198,8 @@ class DockerEndpointBindingMixin:
         if daemon is None or daemon.returncode != 0 or not daemon.stdout.strip():
             return None
         return daemon.stdout.strip()
+
+    def daemon_identity(self) -> str | None:
+        """Read the daemon id through this backend's configured transport."""
+
+        return self._current_docker_daemon_id()

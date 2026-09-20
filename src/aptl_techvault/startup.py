@@ -6,7 +6,9 @@ from aptl.backends.scenario_startup import (
     EXTENSION_API_VERSION,
     ContainerEnvironmentBinding,
     EnvironmentAlias,
+    McpServerCredentials,
     ScenarioStartupPlan,
+    StartupCapability,
 )
 from aptl.backends.scenario_startup_policy import (
     ScenarioComposeStartupPolicy,
@@ -62,6 +64,37 @@ class TechVaultStartupProvider:
                     "WAZUH_MANAGER_CONTAINER", "aptl-wazuh-manager"
                 ),
             ),
+            lifecycle_capabilities=frozenset(
+                {
+                    StartupCapability.SSH,
+                    StartupCapability.HOST_TOOLS,
+                    StartupCapability.WAZUH,
+                    StartupCapability.SOC,
+                    StartupCapability.MCP,
+                    StartupCapability.NATIVE_EVIDENCE,
+                    StartupCapability.WAZUH_REPAIR,
+                }
+            ),
+            seed_environment_keys=(
+                "APTL_HP_WAZUH_INDEXER_9200",
+                "APTL_SHUFFLE_WEBHOOK_FILE",
+                "INDEXER_URL",
+                "INDEXER_USERNAME",
+                "INDEXER_PASSWORD",
+                "MISP_API_KEY",
+                "MISP_URL",
+                "SHUFFLE_API_KEY",
+                "SHUFFLE_URL",
+                "CORTEX_API_KEY",
+                "THEHIVE_API_KEY",
+            ),
+            mcp_build_script="mcp/build-all-mcps.sh",
+            mcp_server_keys=(
+                McpServerCredentials("aptl-casemgmt", ("THEHIVE_API_KEY",)),
+                McpServerCredentials("aptl-threatintel", ("MISP_API_KEY",)),
+                McpServerCredentials("aptl-soar", ("SHUFFLE_API_KEY",)),
+            ),
+            native_mcp_ingress=True,
         )
 
     @staticmethod

@@ -215,6 +215,7 @@ def test_verified_launch_payload_is_bound_before_scenario_realization(
     from aptl.appliance.policy import full_techvault_boundary_policy
 
     policy = full_techvault_boundary_policy()
+    backend.daemon_identity.return_value = "guest-daemon"
     descriptor = SimpleNamespace(
         boundary_policy_digest="sha256:" + "1" * 64,
         payload_digest="sha256:" + "2" * 64,
@@ -257,7 +258,9 @@ def test_verified_launch_payload_is_bound_before_scenario_realization(
     )
     backend.bind_local_docker_socket.return_value = LabResult(success=True)
     backend.bound_docker_daemon_id = "guest-daemon"
-    result = _configure_verified_appliance_launch(context)
+
+    with patch("aptl.core.lab.subprocess.run") as run:
+        result = _configure_verified_appliance_launch(context)
 
     assert result is None
     configured_policy, binding = backend.configure_appliance_boundary.call_args.args
@@ -265,6 +268,8 @@ def test_verified_launch_payload_is_bound_before_scenario_realization(
     assert binding.raes_boundary_required is False
     assert binding.payload_digest == descriptor.payload_digest
     assert binding.policy_digest == descriptor.boundary_policy_digest
+    backend.daemon_identity.assert_called_once_with()
+    run.assert_not_called()
     assert backend.configure_appliance_boundary.call_args.kwargs == {
         "isolated_daemon": True
     }

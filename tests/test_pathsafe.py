@@ -69,6 +69,10 @@ class TestHappyPath:
 
         assert data == b"hello"
 
+    @pytest.mark.skipif(
+        not (hasattr(os, "O_PATH") or hasattr(os, "O_SEARCH")),
+        reason="platform cannot open a search-only directory descriptor safely",
+    )
     def test_reads_through_execute_only_intermediate_directory(self, tmp_path):
         nested = tmp_path / "private-names"
         nested.mkdir()

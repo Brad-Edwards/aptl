@@ -29,6 +29,7 @@ REASON_NOT_FOUND = "not_found"
 REASON_NOT_REGULAR_FILE = "not_regular_file"
 REASON_BASE_DIR_UNAVAILABLE = "base_dir_unavailable"
 REASON_OPEN_FAILED = "open_failed"
+_DIRECTORY_ACCESS_FLAG = getattr(os, "O_PATH", getattr(os, "O_SEARCH", os.O_RDONLY))
 
 
 class PathContainmentError(Exception):
@@ -59,7 +60,9 @@ def _split_components(relative_path: str | Path) -> list[str]:
     if not text:
         raise PathContainmentError(REASON_EMPTY_COMPONENT, "path must not be empty")
     if text.startswith("/"):
-        raise PathContainmentError(REASON_NOT_RELATIVE, f"path must be relative: {text!r}")
+        raise PathContainmentError(
+            REASON_NOT_RELATIVE, f"path must be relative: {text!r}"
+        )
     components = text.split("/")
     for component in components:
         if component == "":
@@ -182,7 +185,7 @@ def _walk_to_parent(
 
 def _open_dir_nofollow(component: str, parent_fd: int) -> int:
     """Open component as a directory under parent_fd, no-follow; raise PathContainmentError on any failure."""
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    flags = _DIRECTORY_ACCESS_FLAG | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
     try:
         return os.open(component, flags, dir_fd=parent_fd)
     except OSError as exc:
@@ -199,6 +202,9 @@ def _open_dir_nofollow_or_create(component: str, parent_fd: int) -> int:
     :func:`_open_dir_nofollow` — creation never overwrites or follows an
     existing entry.
     """
+    # Writers fsync the returned parent directory after publishing the leaf.
+    # Linux O_PATH descriptors support traversal but cannot be fsync-ed, so the
+    # create path deliberately retains a readable directory descriptor.
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
     try:
         return os.open(component, flags, dir_fd=parent_fd)

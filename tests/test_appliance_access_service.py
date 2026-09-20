@@ -442,7 +442,7 @@ def test_access_supervisor_publishes_then_revokes_stopped_listener(
             return_value=request,
         ),
         patch("aptl.appliance.access_service._validate_request", return_value=launch),
-        patch("aptl.appliance.access_service.pwd.getpwnam", return_value=account),
+        patch("aptl.appliance.access_service._access_account", return_value=account),
         patch("aptl.appliance.access_service._ensure_host_key", side_effect=ensure_key),
         patch("aptl.appliance.access_service._assign_management_state"),
         patch("aptl.appliance.access_service._prepare_dispatch_home"),

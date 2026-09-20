@@ -2219,7 +2219,10 @@ def test_content_sync_probe_uses_installed_path_and_verifies_exact_config(tmp_pa
     class LocalProbe:
         def container_exec(self, _container, cmd, *, timeout):
             if cmd[0] == "sha256sum":
-                cmd = [cmd[0], str(config)]
+                digest = hashlib.sha256(config.read_bytes()).hexdigest()
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout=f"{digest}  {config}\n", stderr=""
+                )
             return subprocess.run(
                 cmd,
                 timeout=timeout,

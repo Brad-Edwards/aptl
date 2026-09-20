@@ -772,11 +772,13 @@ src/aptl/appliance/payload_content.py	optional-delivery	Keep sealed-seat boundar
 src/aptl/appliance/release_models.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/release_validation.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/__init__.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/_device.py	optional-delivery	Keep no-follow seat device access with delivery owner
 src/aptl/appliance/seat/context.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/errors.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/exposure.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/kiosk.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/lifecycle.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/locking.py	optional-delivery	Keep owner-scoped lifecycle serialization with delivery owner
 src/aptl/appliance/seat/models.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/observation.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/overlay_cleanup.py	optional-delivery	Keep sealed-seat boundary outside default install
@@ -1288,10 +1290,12 @@ tests/test_appliance_build.py	tests-follow-owner	Retain meaningful boundary and 
 tests/test_appliance_cli.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_egress_proxy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_guest_assets.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_guest_surfaces.py	tests-follow-owner	Retain authenticated guest-surface regression coverage
 tests/test_appliance_offline_payload.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_offline_start.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_release_manifest.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_seat_cli.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_seat_device.py	tests-follow-owner	Retain no-follow seat device regression coverage
 tests/test_appliance_seat_exposure.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_seat_kiosk.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_seat_lifecycle.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1299,6 +1303,7 @@ tests/test_appliance_seat_observation.py	tests-follow-owner	Retain meaningful bo
 tests/test_appliance_seat_paths.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_seat_persistence.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_seat_prereqs.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_appliance_seat_portability.py	tests-follow-owner	Retain portable seat import and fail-closed host-boundary coverage
 tests/test_appliance_seat_vm.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_application_provider_realization.py	tests-follow-owner	Retain semantic application-provider realization coverage with the backend owner
 tests/test_archival_discovery_index.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1734,6 +1739,7 @@ scripts/appliance/write-qualification-measurements.py	optional-delivery	Keep str
 src/aptl/appliance/access_service.py	optional-delivery	Keep guest-restricted MCP transport with delivery owner
 src/aptl/appliance/candidate.py	optional-delivery	Keep qualification-only candidate trust path with delivery owner
 src/aptl/appliance/guest_observation.py	optional-delivery	Keep authenticated guest observation with delivery owner
+src/aptl/appliance/guest_surfaces.py	optional-delivery	Keep authenticated guest-surface validation with delivery owner
 src/aptl/appliance/policy.py	optional-delivery	Keep full-TechVault appliance policy with delivery owner
 src/aptl/appliance/qualification.py	optional-delivery	Keep machine-derived qualification evidence with delivery owner
 src/aptl/appliance/seat/access.py	optional-delivery	Keep generation-scoped host access with delivery owner

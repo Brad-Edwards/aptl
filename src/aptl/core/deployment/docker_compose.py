@@ -272,8 +272,17 @@ class DockerComposeBackend(
             env = os.environ.copy()
             env["DOCKER_HOST"] = self._docker_host_override
             env.pop("DOCKER_CONTEXT", None)
+            env.pop("DOCKER_SSH_IDENTITY", None)
             kwargs["env"] = env
         return kwargs
+
+    def docker_transport_environment(self) -> dict[str, str]:
+        """Project this backend's effective subprocess Docker coordinates."""
+
+        kwargs = self._subprocess_kwargs(streaming=False, timeout=None)
+        source = kwargs.get("env", os.environ)
+        keys = ("DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "DOCKER_SSH_IDENTITY")
+        return {key: source[key] for key in keys if key in source}
 
     def _run(
         self,

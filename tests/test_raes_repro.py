@@ -12,6 +12,51 @@ from raes.module_registry import LOCKFILE_NAME
 
 from aptl.backends.raes_repro import RunRecordInputs, build_reproducibility_record
 
+
+def test_runtime_snapshot_record_projection_scrubs_account_credentials() -> None:
+    from raes_contracts.runtime_state import (
+        RuntimeDomain,
+        RuntimeSnapshot,
+        SnapshotEntry,
+    )
+
+    from aptl.backends.raes_repro import runtime_snapshot_record_payload
+
+    entry = SnapshotEntry(
+        address="provision.account.operator",
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="account-placement",
+        payload={
+            "spec": {
+                "credential_bindings": [
+                    {
+                        "credential_id": "operator-password",
+                        "purpose": "login",
+                        "auth_method": "password",
+                        "material": {
+                            "classification": "secret_fixture",
+                            "value": "credential-canary",
+                        },
+                    }
+                ]
+            }
+        },
+    )
+    payload = runtime_snapshot_record_payload(
+        RuntimeSnapshot(entries={entry.address: entry})
+    )
+
+    assert payload["schema_version"] == "runtime-snapshot/v1"
+    encoded = payload["entries"][entry.address]
+    assert encoded["domain"] == "provisioning"
+    assert encoded["ordering_dependencies"] == []
+    assert encoded["refresh_dependencies"] == []
+    assert encoded["payload"]["spec"]["credential_bindings"][0]["material"] == {
+        "classification": "secret_fixture",
+        "value_present": True,
+    }
+    assert "credential-canary" not in str(payload)
+
 _DEFAULTS: dict = dict(
     run_id="run_20260101T000000Z",
     backend_name="aptl",

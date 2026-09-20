@@ -44,6 +44,7 @@ from aptl.utils.logging import get_logger
 if TYPE_CHECKING:
     from raes_contracts.contracts import ArtifactAvailabilityContext
 
+    from aptl.backends.scenario_startup import ScenarioStartupSelection
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.scenario_bundle import ScenarioBundle
 
@@ -84,6 +85,9 @@ class AptlProvisioner(ProvisionerStartMixin):
     # plan, so it reaches the deployment through here (issue #1006).
     operator_access: OperatorAccessDecision = field(
         default_factory=OperatorAccessDecision
+    )
+    startup_selection: ScenarioStartupSelection | None = field(
+        default=None, repr=False
     )
     _cached_plan: object | None = field(default=None, init=False, repr=False)
     _cached_realization: AptlRealization | None = field(
@@ -205,6 +209,7 @@ class AptlProvisioner(ProvisionerStartMixin):
         try:
             return realization.deployment_spec(
                 selected_profiles,
+                startup_selection=self.startup_selection,
                 capture_apparatus=tuple(
                     DeploymentCaptureApparatus(
                         apparatus_id=item.apparatus_id,

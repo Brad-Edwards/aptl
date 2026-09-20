@@ -14,7 +14,7 @@ import yaml
 
 from aptl.backends.scenario_startup import (
     ScenarioStartupProviderError,
-    _runtime_provider,
+    selected_runtime_provider,
 )
 from aptl.core.deployment._compose_node_topology import service_dependencies
 from aptl.core.deployment._compose_service_health import runtime_expects_completion
@@ -177,7 +177,7 @@ def _validated_policy(
 def _resolved_services(spec: DeploymentRealizationSpec) -> dict[str, dict[str, object]]:
     """Resolve an exact-pack policy into bounded Compose service fields."""
 
-    provider = _runtime_provider(spec.pack_identity)
+    provider = selected_runtime_provider(spec.pack_identity, spec.startup_selection)
     resolver = getattr(provider, "compose_startup_policy", None) if provider else None
     if resolver is None:
         return {}

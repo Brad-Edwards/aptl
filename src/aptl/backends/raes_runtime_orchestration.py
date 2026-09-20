@@ -15,7 +15,7 @@ from raes.runtime_configuration import (
     RuntimeControlInterface,
     RuntimeOrchestrationAuthority,
 )
-from raes_processor.compiler.addresses import _node_address
+from raes_contracts.addressing import render_compiled_address
 
 from aptl.core.lab_types import LabResult
 from aptl.runtime_authority import (
@@ -405,7 +405,7 @@ def prepare_runtime_orchestration_for_scenario(
     nodes = getattr(scenario, "nodes", None) or {}
     required = False
     for name, node in nodes.items():
-        address = _node_address(name)
+        address = render_compiled_address("provision", "node", name)
         runtime = getattr(node, "runtime", None)
         if docker_control_authorities(runtime, node_address=address):
             required = True

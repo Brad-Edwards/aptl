@@ -62,11 +62,7 @@ from raes_contracts.vocabulary import (
     WorkflowStatePredicateFeature,
 )
 
-try:
-    from raes_contracts.manifest_authority import BACKEND_SUPPORTED_CONTRACT_IDS
-except ImportError:
-    # Older RAES packages still expose validation without manifest authority.
-    BACKEND_SUPPORTED_CONTRACT_IDS = ()
+from raes_contracts.manifest_authority import BACKEND_SUPPORTED_CONTRACT_IDS
 
 from aptl.backends.raes_participant_runtime import PARTICIPANT_ACTION_ADDRESS
 from aptl.core.experiment.capture_registry import (

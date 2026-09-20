@@ -11,6 +11,7 @@ from aptl.backends.raes_observability_scope import ObservabilityScopeDecision
 from aptl.backends.raes_operator_access import OperatorAccessDecision
 from aptl.backends.raes_participant_actions import ParticipantActionSpec
 from aptl.backends.raes_participant_driver import ParticipantPlanAuthority
+from aptl.backends.scenario_startup import ScenarioStartupSelection
 from aptl.core.experiment.capture_plan import CapturePlan
 
 
@@ -24,3 +25,4 @@ class RuntimeTargetOptions:
     capture_plan: CapturePlan | None = None
     observability_scope: ObservabilityScopeDecision | None = None
     operator_access: OperatorAccessDecision | None = None
+    startup_selection: ScenarioStartupSelection | None = None

@@ -158,7 +158,10 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
 
         return _failure_result(
             run_scenario_runtime(
-                realization.pack_identity, self, tuple(realization.nodes)
+                realization.pack_identity,
+                self,
+                tuple(realization.nodes),
+                selection=realization.startup_selection,
             )
         )
 

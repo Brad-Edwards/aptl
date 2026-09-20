@@ -102,7 +102,8 @@ class SSHComposeBackend(DockerComposeBackend):
         from the base class (which calls ``self._subprocess_kwargs``).
         """
         kwargs = super()._subprocess_kwargs(streaming=streaming, timeout=timeout)
-        env = os.environ.copy()
+        env = dict(kwargs.get("env", os.environ))
+        env.pop("DOCKER_CONTEXT", None)
         env["DOCKER_HOST"] = self._docker_host
         if self._ssh_key:
             # SSH_AUTH_SOCK won't help with a specific key file;
@@ -111,6 +112,8 @@ class SSHComposeBackend(DockerComposeBackend):
             # so users should add a Host entry.  We also set
             # DOCKER_SSH_IDENTITY for Docker's built-in SSH support.
             env["DOCKER_SSH_IDENTITY"] = self._ssh_key
+        else:
+            env.pop("DOCKER_SSH_IDENTITY", None)
         kwargs["env"] = env
         return kwargs
 

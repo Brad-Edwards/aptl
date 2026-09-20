@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
 from aptl.runtime_authority import DeploymentDockerAuthorityAdmission
@@ -17,6 +17,7 @@ from aptl.core.deployment._realization_primitives import (
 )
 
 if TYPE_CHECKING:
+    from aptl.backends.scenario_startup import ScenarioStartupSelection
     from raes.runtime_configuration import RuntimeConfiguration
 
 ImageRealizationMode = _ImageRealizationMode
@@ -494,5 +495,8 @@ class DeploymentRealizationSpec(object):
     persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()
     capture_apparatus: tuple[DeploymentCaptureApparatus, ...] = ()
     pack_identity: PackIdentity | None = None
+    startup_selection: ScenarioStartupSelection | None = field(
+        default=None, repr=False, compare=False
+    )
     # ADR-048 routing is derived per node so mixed artifacts, builds and generic
     # substrates never fall into one whole-graph materialization decision.

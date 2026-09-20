@@ -32,12 +32,12 @@ from typing import TYPE_CHECKING, Protocol
 
 from raes.explicitness import ExplicitnessClass
 from raes.nodes import NodeType
+from raes_contracts.addressing import render_compiled_address
 from raes_contracts.contracts import (
     ArtifactAvailabilityContext,
     ArtifactRequirementAvailability,
 )
 from raes_processor.compiler import compile_runtime_model
-from raes_processor.compiler.addresses import _node_address
 
 import hashlib
 from pathlib import Path
@@ -61,8 +61,7 @@ from aptl.backends.raes_substrate import resolve_substrate
 _CONTEXT_ROOT = "containers"
 
 if TYPE_CHECKING:
-    from raes._source import ArtifactIdentity
-    from raes.artifact_requirements import ArtifactRequirement
+    from raes.artifact_requirements import ArtifactIdentity, ArtifactRequirement
     from raes_processor.semantics.realization import CompiledRealizationRequirement
 
 
@@ -362,10 +361,7 @@ def _env_pack_digest_and_provenance(
     never have.
     """
 
-    if (
-        requirement.explicitness is not ExplicitnessClass.EXACT
-        or scenario_root is None
-    ):
+    if requirement.explicitness is not ExplicitnessClass.EXACT or scenario_root is None:
         return None
     exact = requirement.exact_artifact
     if (
@@ -460,7 +456,7 @@ def _substrate_digest_and_provenance(
 def _nodes_by_address(scenario: object) -> dict[str, object]:
     """Map each vm node's compiled address to its typed scenario node.
 
-    Built with RAES's canonical ``_node_address`` factory (never by parsing an
+    Built with RAES's public compiled-address renderer (never by parsing an
     address), so the open-substrate resolution reads a node's typed OS and
     runtime without a second compile pass. Switch nodes realize as networks, not
     containers, so they carry no substrate.
@@ -470,7 +466,7 @@ def _nodes_by_address(scenario: object) -> dict[str, object]:
     if not nodes:
         return {}
     return {
-        _node_address(name): node
+        render_compiled_address("provision", "node", name): node
         for name, node in nodes.items()
         if getattr(node, "type", None) is not NodeType.SWITCH
     }

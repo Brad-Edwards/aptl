@@ -1712,3 +1712,8 @@ src/aptl/core/deployment/_compose_runtime_materialization.py	backend-substrate	R
 src/aptl/core/deployment/_runtime_materialization_effective.py	backend-substrate	Retain effective Compose authority comparison
 src/aptl/core/deployment/_runtime_materialization_qualification.py	backend-substrate	Retain authored runtime-field qualification
 src/aptl/core/deployment/_runtime_materialization_types.py	backend-substrate	Retain typed runtime materialization profiles and diagnostics
+docs/architecture/issue-969-platform-safety-gates-preflight.md	architecture-history	Preserve platform safety gate decisions and implementation guardrails
+docs/requirements/SEC-008/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
+docs/testing/platform-pr-gates.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+tests/test_assert_project_teardown.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_platform_ci_gates.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

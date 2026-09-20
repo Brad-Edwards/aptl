@@ -102,6 +102,7 @@ nav:
     - "Issue #949 Orborus Control Authority Preflight": architecture/issue-949-orborus-control-authority-preflight.md
     - "Issue #951 Fresh Env-Pack Start Preflight": architecture/issue-951-fresh-env-pack-start-preflight.md
     - "Issue #964 Backend Resource Ownership Preflight": architecture/issue-964-backend-resource-ownership-preflight.md
+    - "Issue #969 Platform Safety Gates Preflight": architecture/issue-969-platform-safety-gates-preflight.md
     - "Issue #992 Backend Observability Ownership Preflight": architecture/issue-992-backend-observability-ownership-preflight.md
     - LilRAE Readiness Review:
       - Assessment: reviews/962-lilrae-readiness/README.md
@@ -138,6 +139,7 @@ nav:
     - TechVault Curated Live Validation Gate: raes/techvault-curated-live-validation-gate.md
     - Bounded Participant Agency Readiness: raes/bounded-participant-agency-readiness.md
   - Testing:
+    - Platform Pull-Request Gates: testing/platform-pr-gates.md
     - Release Candidate Manual QA: testing/smoke-test-plan.md
     - Property-Based Parser Tests: testing/property-based-parser-tests.md
   - Reference:

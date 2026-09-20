@@ -46,6 +46,14 @@ def _argument_options(argv: tuple[str, ...], flag: str) -> tuple[str, ...]:
 def audit_vm_argv(argv: tuple[str, ...]) -> HostExposureReport:
     """Reject VM launch arguments that widen the physical-host boundary."""
 
+    findings = _forbidden_argument_findings(argv)
+    findings.extend(_network_exposure_findings(argv))
+    return HostExposureReport(passed=not findings, findings=tuple(findings))
+
+
+def _forbidden_argument_findings(argv: tuple[str, ...]) -> list[str]:
+    """Return forbidden QEMU device and writable-share findings."""
+
     findings: list[str] = []
     joined = " ".join(argv)
     for flag in FORBIDDEN_VM_FLAGS:
@@ -55,18 +63,25 @@ def audit_vm_argv(argv: tuple[str, ...]) -> HostExposureReport:
     for flag in FORBIDDEN_VM_WRITABLE_SHARE_FLAGS:
         if flag in fsdev_joined:
             findings.append(f"host.exposure.forbidden-vm-share:{flag}")
+    return findings
+
+
+def _network_exposure_findings(argv: tuple[str, ...]) -> list[str]:
+    """Require exactly one restricted SLIRP network declaration."""
+
     # Ordinary SLIRP NAT permits a guest to reach the physical host and other
     # seats. Restriction blocks guest-originated traffic outside this VM while
     # retaining the explicit hostfwd publications used by participant clients.
     networks = _argument_options(argv, "-netdev")
     if len(networks) != 1 or "-nic" in argv or "-net" in argv:
-        findings.append("host.exposure.unrestricted-vm-network")
-    else:
-        options = networks[0].split(",")
-        restrictions = [item for item in options if item.startswith("restrict=")]
-        if options[0] != "user" or restrictions != ["restrict=on"]:
-            findings.append("host.exposure.unrestricted-vm-network")
-    return HostExposureReport(passed=not findings, findings=tuple(findings))
+        return ["host.exposure.unrestricted-vm-network"]
+    options = networks[0].split(",")
+    restrictions = [item for item in options if item.startswith("restrict=")]
+    return (
+        []
+        if options[0] == "user" and restrictions == ["restrict=on"]
+        else ["host.exposure.unrestricted-vm-network"]
+    )
 
 
 def audit_host_process_inventory(

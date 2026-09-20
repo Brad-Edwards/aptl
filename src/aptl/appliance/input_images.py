@@ -79,15 +79,15 @@ def compose_runtime_image_aliases(
     return aliases
 
 
-def canonical_image_references(project: Path, bundle: ScenarioBundle) -> dict[str, str]:
-    """Read scenario references and authored child images from canonical sources."""
-    realization = bundle_realization(project, AptlConfig(), bundle)
+def _scenario_image_references(realization) -> dict[str, str]:
+    """Collect the image selected for every realized scenario service."""
+
     references = {}
     for node in realization.nodes:
-        if node.image is not None:
-            reference = node.image.image_ref
-        else:
-            reference = base_container_spec(
+        reference = (
+            node.image.image_ref
+            if node.image is not None
+            else base_container_spec(
                 node.address,
                 os=node.os,
                 os_version=node.os_version,
@@ -96,6 +96,7 @@ def canonical_image_references(project: Path, bundle: ScenarioBundle) -> dict[st
                     backend_base_image_ref=node.backend_base_image_ref
                 ),
             ).image_ref
+        )
         if reference:
             references.update(
                 {
@@ -103,6 +104,12 @@ def canonical_image_references(project: Path, bundle: ScenarioBundle) -> dict[st
                     for service in node.backend_services
                 }
             )
+    return references
+
+
+def _shuffle_child_images(project: Path, realization) -> dict[str, str]:
+    """Validate and return the workflow engine's authored child images."""
+
     orchestrator = next(
         node for node in realization.nodes if node.name == "shuffle-orborus"
     )
@@ -135,17 +142,34 @@ def canonical_image_references(project: Path, bundle: ScenarioBundle) -> dict[st
         != environment["SHUFFLE_BASE_IMAGE_NAME"] + ":http_1.4.0"
     ):
         raise ValueError("canonical workflow HTTP image differs from spawn template")
+    return {
+        "child.shuffle-worker": templates["shuffle-worker"],
+        "child.shuffle-http": templates["shuffle-http-1-4-0"],
+    }
+
+
+def _certificate_generator_image(project: Path) -> str:
+    """Return the single authored certificate helper image."""
+
     certificates = yaml.safe_load((project / "generate-indexer-certs.yml").read_text())
     generators = {service["image"] for service in certificates["services"].values()}
     if len(generators) != 1:
         raise ValueError("certificate helper image inventory is ambiguous")
+    return generators.pop()
+
+
+def canonical_image_references(project: Path, bundle: ScenarioBundle) -> dict[str, str]:
+    """Read scenario references and authored child images from canonical sources."""
+
+    realization = bundle_realization(project, AptlConfig(), bundle)
+    references = _scenario_image_references(realization)
     references.update(
         {
             "helper.capture": "aptl-kali-capture:latest",
             "helper.boundary": DEFAULT_BOUNDARY_HELPER_IMAGE,
             "helper.traffic-mirror": DEFAULT_BOUNDARY_HELPER_IMAGE,
             "helper.egress": "aptl-appliance-egress-proxy:1",
-            "helper.certs": generators.pop(),
+            "helper.certs": _certificate_generator_image(project),
             "helper.suricata-seed": CONTENT_SEEDER_IMAGE,
             "helper.operator-access": OPERATOR_ACCESS_IMAGE,
             "helper.generic-samba-ad-base": "aptl/generic-samba-ad-base:latest",
@@ -153,8 +177,7 @@ def canonical_image_references(project: Path, bundle: ScenarioBundle) -> dict[st
             "helper.generic-systemd-base-debian": (
                 "aptl/generic-systemd-base-debian:latest"
             ),
-            "child.shuffle-worker": templates["shuffle-worker"],
-            "child.shuffle-http": templates["shuffle-http-1-4-0"],
+            **_shuffle_child_images(project, realization),
         }
     )
     return {role: _pin_third_party(reference) for role, reference in references.items()}

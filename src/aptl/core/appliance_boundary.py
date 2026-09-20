@@ -184,52 +184,71 @@ class ApplianceBoundaryPolicy(_StrictModel):
 
     @model_validator(mode="after")
     def validate_unique_entries(self) -> ApplianceBoundaryPolicy:
-        if self.internal_zone_isolation:
-            if not self.default_deny or any(
-                value is None
-                for value in (
-                    self.platform_networks,
-                    self.platform_anchors,
-                    self.egress_proxy_limits,
-                )
-            ):
-                raise ValueError(
-                    "internal-zone policy requires its complete deny boundary"
-                )
-        elif any(
-            (
-                self.default_deny,
-                self.platform_networks,
-                self.platform_anchors,
-                self.egress_proxy_limits,
-                self.fixed_crossings,
-                self.egress_authorities,
+        _validate_containment_contract(self)
+        _validate_host_mcp_contract(self)
+        _validate_unique_policy_entries(self)
+        return self
+
+
+def _validate_containment_contract(policy: ApplianceBoundaryPolicy) -> None:
+    """Require the fields promised by exactly one containment model."""
+
+    if policy.internal_zone_isolation:
+        if not policy.default_deny or any(
+            value is None
+            for value in (
+                policy.platform_networks,
+                policy.platform_anchors,
+                policy.egress_proxy_limits,
             )
         ):
-            raise ValueError("VM-only policy cannot claim internal-zone enforcement")
-        mcp = [item for item in self.guest_publications if item.audience == "host-mcp"]
-        if bool(mcp) != (self.host_mcp_contract is not None) or len(mcp) > 1:
             raise ValueError(
-                "host MCP requires one explicit supported transport publication"
+                "internal-zone policy requires its complete deny boundary"
             )
-        if mcp and mcp[0].protocol != "tcp":
-            raise ValueError("restricted SSH MCP requires TCP")
-        crossings = [
-            (item.source, item.destination, item.protocol, tuple(item.ports))
-            for item in self.fixed_crossings
-        ]
-        authorities = [(item.authority, item.port) for item in self.egress_authorities]
-        publications = [
-            (item.audience, item.address, item.port, item.protocol)
-            for item in self.guest_publications
-        ]
-        if len(crossings) != len(set(crossings)):
-            raise ValueError("fixed crossings must be unique")
-        if len(authorities) != len(set(authorities)):
-            raise ValueError("egress authorities must be unique")
-        if len(publications) != len(set(publications)):
-            raise ValueError("guest publications must be unique")
-        return self
+        return
+    vm_only_fields = (
+        policy.default_deny,
+        policy.platform_networks,
+        policy.platform_anchors,
+        policy.egress_proxy_limits,
+        policy.fixed_crossings,
+        policy.egress_authorities,
+    )
+    if any(vm_only_fields):
+        raise ValueError("VM-only policy cannot claim internal-zone enforcement")
+
+
+def _validate_host_mcp_contract(policy: ApplianceBoundaryPolicy) -> None:
+    """Bind the supported host MCP contract to one TCP publication."""
+
+    mcp = [item for item in policy.guest_publications if item.audience == "host-mcp"]
+    if bool(mcp) != (policy.host_mcp_contract is not None) or len(mcp) > 1:
+        raise ValueError(
+            "host MCP requires one explicit supported transport publication"
+        )
+    if mcp and mcp[0].protocol != "tcp":
+        raise ValueError("restricted SSH MCP requires TCP")
+
+
+def _validate_unique_policy_entries(policy: ApplianceBoundaryPolicy) -> None:
+    """Reject repeated signed grants and publications."""
+
+    crossings = [
+        (item.source, item.destination, item.protocol, tuple(item.ports))
+        for item in policy.fixed_crossings
+    ]
+    authorities = [(item.authority, item.port) for item in policy.egress_authorities]
+    publications = [
+        (item.audience, item.address, item.port, item.protocol)
+        for item in policy.guest_publications
+    ]
+    for values, message in (
+        (crossings, "fixed crossings must be unique"),
+        (authorities, "egress authorities must be unique"),
+        (publications, "guest publications must be unique"),
+    ):
+        if len(values) != len(set(values)):
+            raise ValueError(message)
 
 
 class ApplianceBoundaryBinding(_StrictModel):

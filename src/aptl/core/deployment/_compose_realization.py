@@ -312,27 +312,30 @@ class ComposeRealizationMixin(
         reports success.
         """
 
-        substrate_failure = self._realize_networks_and_boundaries(realization)
-        if substrate_failure is not None:
-            return substrate_failure
-        addresses = frozenset(node.address for node in realization.nodes)
-        failure, extra_ops = self._image_free_generated_artifact_ops(
-            realization, addresses, self.realization_root
-        )
-        if failure is not None:
-            return failure
-        node_result = _realize_node_subset(
-            self,
-            realization.nodes,
-            realization.content,
-            scenario_root,
-            extra_ops,
-            persistent_volumes=realization.persistent_volumes,
-        )
-        if node_result is not None and not node_result.success:
-            return node_result
-        platform = self._realize_platform_boundary()
-        return platform or node_result or LabResult(success=True)
+        failure = self._realize_networks_and_boundaries(realization)
+        node_result: LabResult | None = None
+        if failure is None:
+            addresses = frozenset(node.address for node in realization.nodes)
+            failure, extra_ops = self._image_free_generated_artifact_ops(
+                realization, addresses, self.realization_root
+            )
+        if failure is None:
+            node_result = _realize_node_subset(
+                self,
+                realization.nodes,
+                realization.content,
+                scenario_root,
+                extra_ops,
+                persistent_volumes=realization.persistent_volumes,
+            )
+            failure = (
+                node_result
+                if node_result is not None and not node_result.success
+                else None
+            )
+        if failure is None:
+            failure = self._realize_platform_boundary()
+        return failure or node_result or LabResult(success=True)
 
     def _realize_published_ports(
         self,

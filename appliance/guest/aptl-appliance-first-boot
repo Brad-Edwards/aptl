@@ -15,6 +15,11 @@ if test ! -f "$images_loaded"; then
     sha256sum /opt/aptl/offline/oci-images.tar >"$marker"
     chmod 0600 "$marker"
     mv "$marker" "$images_loaded"
+else
+    # A seat power-off is intentionally host-controlled and does not run an
+    # in-guest Compose shutdown. Reconcile those stale resources without
+    # deleting volumes before the admitted plan creates a fresh runtime.
+    /usr/local/bin/aptl kill --containers --project-dir /opt/aptl/project
 fi
 candidate_trust=false
 if python3 - /run/aptl-launch/appliance-launch.json <<'PYTHON'
@@ -42,8 +47,19 @@ if test "$candidate_trust" = true; then
 fi
 "$@" &
 proxy_pid=$!
+
+set -- /usr/local/bin/aptl appliance serve-seat-surfaces \
+    --launch-descriptor /run/aptl-launch/appliance-launch.json \
+    --release-public-key /run/aptl-launch/release-public.pem \
+    --qualification-public-key /run/aptl-launch/qualification-public.pem
+if test "$candidate_trust" = true; then
+    set -- "$@" --candidate-trust
+fi
+"$@" &
+surfaces_pid=$!
 cleanup() {
     kill "$proxy_pid" 2>/dev/null || true
+    kill "$surfaces_pid" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 

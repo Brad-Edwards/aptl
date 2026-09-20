@@ -32,7 +32,10 @@ from aptl.backends.raes_base_substrate import (
     VolumeMount,
     plan_node,
 )
-from aptl.backends.raes_docker_materializer import DockerMaterializationExecutor
+from aptl.backends.raes_docker_materializer import (
+    DockerMaterializationExecutor,
+    DockerMaterializationSettings,
+)
 from aptl.backends.raes_materializer import MaterializationOp
 from aptl.backends.raes_materializer_engine import materialize_node
 from aptl.core.lab_types import LabResult
@@ -137,12 +140,14 @@ def realize_node(
         container_for=lambda _addr: container,
         start_base=start_base,
         copy_in=backend.copy_into_container,
-        scenario_root=(
-            scenario_root
-            if scenario_root is not None
-            else getattr(backend, "project_dir", None)
+        settings=DockerMaterializationSettings(
+            scenario_root=(
+                scenario_root
+                if scenario_root is not None
+                else getattr(backend, "project_dir", None)
+            ),
+            offline_staged=bool(getattr(backend, "_offline_staged", False)),
         ),
-        offline_staged=bool(getattr(backend, "_offline_staged", False)),
     )
     return materialize_node(node.address, ops, executor)
 

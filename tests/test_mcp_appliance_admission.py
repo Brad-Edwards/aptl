@@ -199,6 +199,15 @@ def test_appliance_transport_checks_freshness_identity_mapping_and_live_probes(
         ),
     )
     admission._verify_appliance_observation()
+    # The supervisor's complete Docker and boundary observation cycle takes
+    # longer than five seconds on a loaded appliance. Admission must retain the
+    # most recent completed cycle while still rejecting genuinely stale state.
+    path.write_text(
+        observed.model_copy(
+            update={"observed_at": datetime.now(UTC) - timedelta(seconds=10)}
+        ).model_dump_json()
+    )
+    admission._verify_appliance_observation()
     for changes in (
         {"observed_at": datetime.now(UTC) - timedelta(seconds=30)},
         {"binding": binding.model_copy(update={"guest_daemon_id": "other"})},

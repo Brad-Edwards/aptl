@@ -206,11 +206,9 @@ class ComposeBoundaryRealizationMixin:
         """Enforce signed zones with no grants until anchors can be observed."""
 
         configured = getattr(self, "_appliance_boundary", None)
-        if configured is None:
+        if configured is None or not configured[0].internal_zone_isolation:
             return None
         policy, binding = configured
-        if not policy.internal_zone_isolation:
-            return None
         try:
             networks = self._project_boundary_network_observations()
             enforcement = compile_platform_bootstrap(
@@ -225,17 +223,16 @@ class ComposeBoundaryRealizationMixin:
                 error="Platform boundary networks were not observed exactly.",
             )
         result = self.realize_boundary(enforcement)
-        return None if result.success else result
+        failure = None if result.success else result
+        return failure
 
     def _realize_platform_boundary(self) -> LabResult | None:
         """Compile and enforce the configured signed platform policy."""
 
         configured = getattr(self, "_appliance_boundary", None)
-        if configured is None:
+        if configured is None or not configured[0].internal_zone_isolation:
             return None
         policy, binding = configured
-        if not policy.internal_zone_isolation:
-            return None
         try:
             networks = self._project_boundary_network_observations()
             workloads = self._platform_workload_observations(networks)
@@ -252,7 +249,8 @@ class ComposeBoundaryRealizationMixin:
                 error="Platform boundary anchors were not observed exactly.",
             )
         result = self.realize_boundary(enforcement)
-        return None if result.success else result
+        failure = None if result.success else result
+        return failure
 
     def _realize_raes_boundary(
         self,

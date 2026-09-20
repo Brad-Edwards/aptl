@@ -28,6 +28,8 @@ from aptl.workbench.access import CallerGrant, SeatAccessRecord
 from aptl.workbench.dispatch import DispatchSelector
 from aptl.workbench.profiles import ServerProfile, WorkbenchConfigurationError
 
+_MAX_APPLIANCE_OBSERVATION_AGE_SECONDS = 15
+
 
 class ApplianceAccessPaths(BaseModel):
     """Trusted supervisor paths, never supplied by the host participant."""
@@ -304,7 +306,9 @@ class GuestAdmission:
         )
         if (
             observed.observed_at.tzinfo is None
-            or not 0 <= (datetime.now(UTC) - observed.observed_at).total_seconds() <= 5
+            or not 0
+            <= (datetime.now(UTC) - observed.observed_at).total_seconds()
+            <= _MAX_APPLIANCE_OBSERVATION_AGE_SECONDS
         ):
             raise WorkbenchConfigurationError("appliance boundary observation is stale")
         descriptor = self.verified_launch.descriptor

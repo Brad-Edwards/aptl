@@ -207,10 +207,10 @@ def _stage_dispatch_metadata(
     return paths.model_copy(update=copies)
 
 
-def _qualification_checks(
+def _run_qualification_attempt(
     project_dir: Path,
 ) -> tuple[QualificationCheckEvidence, ...]:
-    """Run the packaged full-TechVault MCP qualification plan in the guest."""
+    """Run the packaged full-TechVault MCP qualification plan once."""
 
     from aptl.validation.participant_mcp_smoke import (
         McpRegistration,
@@ -258,6 +258,27 @@ def _qualification_checks(
             },
         )
     return run_participant_mcp_smoke(profile, registrations)
+
+
+def _qualification_checks(
+    project_dir: Path,
+    *,
+    timeout_seconds: float = 120,
+    retry_interval_seconds: float = 2,
+) -> tuple[QualificationCheckEvidence, ...]:
+    """Wait for every semantic MCP check before publishing candidate readiness."""
+
+    if timeout_seconds <= 0 or retry_interval_seconds < 0:
+        raise WorkbenchConfigurationError("guest qualification deadline is invalid")
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        checks = _run_qualification_attempt(project_dir)
+        if checks and all(check.status == "passed" for check in checks):
+            return checks
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise WorkbenchConfigurationError("guest qualification checks failed")
+        time.sleep(min(retry_interval_seconds, remaining))
 
 
 def _load_runtime_evidence(
@@ -438,6 +459,12 @@ def serve_appliance_access(
         delivery="appliance",
         appliance=metadata,
     )
+    # Candidate qualification can take several minutes. Complete it before
+    # observing and timestamping generation-scoped discovery so the bundle is
+    # still current when the host enforces its short freshness window.
+    runtime_evidence = _load_runtime_evidence(
+        project_dir, configuration.run_id, qualification=candidate_trust
+    )
     binding = prepare_guest_transport(configuration, output_dir)
     for path in output_dir.iterdir():
         os.chown(path, account.pw_uid, account.pw_gid)
@@ -470,9 +497,7 @@ def serve_appliance_access(
             access=binding.access,
             grant=binding.grants[0],
             host_public_key=configuration.host_public_key.read_text(encoding="utf-8"),
-            runtime_evidence=_load_runtime_evidence(
-                project_dir, binding.run_id, qualification=candidate_trust
-            ),
+            runtime_evidence=runtime_evidence,
         )
         publish_guest_access(device_path, bundle)
         while listener.poll() is None:

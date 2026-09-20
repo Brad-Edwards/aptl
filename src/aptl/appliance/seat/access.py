@@ -399,7 +399,10 @@ def wait_for_guest_access(
 def persist_host_access_bundle(seat_root: Path, bundle: GuestAccessBundle) -> Path:
     """Publish private generation-scoped host discovery without credentials."""
 
-    root = seat_root / "access" / f"generation-{bundle.generation}"
+    access_root = seat_root / "access"
+    _ensure_private_access_root(access_root)
+    root = access_root / f"generation-{bundle.generation}"
+    _remove_matching_invalidated_generation(root, bundle)
     root.mkdir(parents=True, mode=0o700, exist_ok=False)
     for name, payload in {
         "access.json": bundle.access.model_dump_json() + "\n",
@@ -409,6 +412,63 @@ def persist_host_access_bundle(seat_root: Path, bundle: GuestAccessBundle) -> Pa
     }.items():
         _atomic_write(root / name, payload.encode(), mode=0o600)
     return root
+
+
+def _remove_matching_invalidated_generation(
+    root: Path, bundle: GuestAccessBundle
+) -> None:
+    """Permit refresh only over this seat's revoked matching generation."""
+
+    if not root.exists() and not root.is_symlink():
+        return
+    try:
+        info = root.stat(follow_symlinks=False)
+        if (
+            root.is_symlink()
+            or not stat.S_ISDIR(info.st_mode)
+            or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) != 0o700
+        ):
+            raise OSError("existing access generation is unsafe")
+        allowed = {
+            "access.json",
+            "invalidated",
+            "runtime-evidence.json",
+            "ssh_host_ed25519_key.pub",
+        }
+        children = {child.name for child in root.iterdir()}
+        if "invalidated" not in children or not children <= allowed:
+            raise OSError("existing access generation is still active")
+        for child in root.iterdir():
+            child_info = child.stat(follow_symlinks=False)
+            if (
+                not stat.S_ISREG(child_info.st_mode)
+                or child_info.st_uid != os.getuid()
+                or stat.S_IMODE(child_info.st_mode) != 0o600
+            ):
+                raise OSError("existing access generation is unsafe")
+        previous = SeatAccessRecord.model_validate_json(
+            _read_private_regular(root / "access.json")
+        )
+        expected = (
+            bundle.access.owner_id,
+            bundle.seat_id,
+            bundle.instance_id,
+            bundle.generation,
+        )
+        observed = (
+            previous.owner_id,
+            previous.seat_id,
+            previous.instance_id,
+            previous.generation,
+        )
+        if previous.lifecycle_state != "needs-reset" or observed != expected:
+            raise OSError("invalidated access generation identity changed")
+        shutil.rmtree(root)
+    except (OSError, ValueError) as exc:
+        raise WorkbenchConfigurationError(
+            "existing access generation cannot be refreshed"
+        ) from exc
 
 
 def invalidate_host_access(seat_root: Path, *, reason: str) -> None:

@@ -32,6 +32,10 @@ from aptl.appliance.distribution import (
 )
 from aptl.appliance.download import ApplianceDownloadError, stage_https_artifact
 from aptl.appliance.launch import prepare_launch_descriptor, verify_launch_descriptor
+from aptl.appliance.guest_surfaces import (
+    build_guest_surface_bindings,
+    serve_guest_surfaces,
+)
 from aptl.appliance.loopback_proxy import build_proxy_bindings, serve_proxy_bindings
 from aptl.appliance.manifest import (
     ApplianceManifestError,
@@ -92,6 +96,33 @@ def proxy_loopback(
         serve_proxy_bindings(bindings)
     except (ApplianceManifestError, OSError, ValueError) as exc:
         _fail("guest publication proxy failed", exc)
+
+
+@app.command("serve-seat-surfaces", hidden=True)
+def serve_seat_surfaces(
+    launch_descriptor: Path = typer.Option(..., "--launch-descriptor"),
+    release_public_key: Path = typer.Option(..., "--release-public-key"),
+    qualification_public_key: Path = typer.Option(..., "--qualification-public-key"),
+    candidate_trust: bool = typer.Option(False, "--candidate-trust"),
+) -> None:
+    """Serve the signed participant landing page and coarse recovery health."""
+
+    try:
+        if candidate_trust:
+            from aptl.appliance.candidate import verify_candidate_launch_descriptor
+
+            launch = verify_candidate_launch_descriptor(
+                launch_descriptor, release_public_key
+            )
+        else:
+            launch = verify_launch_descriptor(
+                launch_descriptor,
+                release_public_key,
+                qualification_public_key,
+            )
+        serve_guest_surfaces(build_guest_surface_bindings(launch.boundary_policy))
+    except (ApplianceManifestError, OSError, ValueError) as exc:
+        _fail("guest seat surfaces failed", exc)
 
 
 @app.command("doctor")

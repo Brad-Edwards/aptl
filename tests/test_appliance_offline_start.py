@@ -296,7 +296,8 @@ def test_verified_launch_refuses_unattested_guest_daemon(
 
     result = _configure_verified_appliance_launch(context)
 
-    assert result is not None and not result.success
+    assert result is not None
+    assert not result.success
     assert result.error == "Verified appliance launch binding failed."
     backend.bind_local_docker_socket.assert_not_called()
     backend.configure_appliance_boundary.assert_not_called()

@@ -830,13 +830,15 @@ def test_appliance_guest_isolation_rejects_unbound_or_redirected_daemon(
     backend._docker_daemon_id = (
         "other-daemon" if mismatch == "wrong-daemon" else "guest-daemon"
     )
+    policy = MagicMock()
+    binding = SimpleNamespace(
+        guest_daemon_id="guest-daemon",
+        boundary_helper_image="example.test/helper:fixed",
+    )
     with pytest.raises(ValueError, match="isolated guest Docker daemon"):
         backend.configure_appliance_boundary(
-            MagicMock(),
-            SimpleNamespace(
-                guest_daemon_id="guest-daemon",
-                boundary_helper_image="example.test/helper:fixed",
-            ),
+            policy,
+            binding,
             isolated_daemon=True,
         )
     assert not getattr(backend, "_attempt_isolated_docker_daemon", False)

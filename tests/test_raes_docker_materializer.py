@@ -18,6 +18,7 @@ import pytest
 
 from aptl.backends.raes_docker_materializer import (
     DockerMaterializationExecutor,
+    DockerMaterializationSettings,
     MaterializationCommandError,
 )
 from aptl.core.deployment.errors import BackendSeedError
@@ -72,8 +73,10 @@ def _executor(
         start_base=start_base,
         # Real time.sleep would make retry tests (and the unrelated failure
         # tests that now also exhaust the refresh retry) take ~15s each.
-        sleep=sleep or (lambda seconds: None),
-        offline_staged=offline_staged,
+        settings=DockerMaterializationSettings(
+            sleep=sleep or (lambda seconds: None),
+            offline_staged=offline_staged,
+        ),
     )
 
 
@@ -98,12 +101,11 @@ class TestPackages:
 
     def test_offline_missing_package_fails_without_attempting_download(self):
         fake = _FakeExec(lambda _container, _argv: (1, ""))
+        executor = _executor(fake, offline_staged=True)
         with pytest.raises(
             MaterializationCommandError, match="offline image is missing"
         ):
-            _executor(fake, offline_staged=True).install_packages(
-                "n.db", "apt", ("postgresql",)
-            )
+            executor.install_packages("n.db", "apt", ("postgresql",))
         assert len(fake.calls) == 1
 
     def test_install_runs_generic_manager_command_in_the_node_container(self):
@@ -654,7 +656,7 @@ class TestPackArtifactPlacement:
             container_for=lambda addr: "aptl-" + addr.rsplit(".", 1)[-1],
             start_base=lambda addr, image: None,
             copy_in=_copy_in,
-            scenario_root=tmp_path,
+            settings=DockerMaterializationSettings(scenario_root=tmp_path),
         )
 
     @pytest.mark.parametrize("directory", [False, True])
@@ -690,7 +692,7 @@ class TestPackArtifactPlacement:
             container_for=lambda _: "dns",
             start_base=lambda *_: None,
             copy_in=copy,
-            scenario_root=tmp_path,
+            settings=DockerMaterializationSettings(scenario_root=tmp_path),
         )
         previous = os.umask(0o077)
         try:
@@ -779,8 +781,10 @@ class TestPackArtifactPlacement:
             container_for=lambda _addr: "aptl-fileshare",
             start_base=lambda *_: None,
             copy_in=copy,
-            scenario_root=tmp_path,
-            sleep=sleeps.append,
+            settings=DockerMaterializationSettings(
+                scenario_root=tmp_path,
+                sleep=sleeps.append,
+            ),
         )
 
         ex.place_pack_artifact(

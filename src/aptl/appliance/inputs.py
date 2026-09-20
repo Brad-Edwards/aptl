@@ -50,6 +50,9 @@ IMAGE_ARCHIVE = "oci-images.tar"
 REQUIREMENTS_FILE = "requirements.txt"
 SYSTEM_PACKAGES_DIRECTORY = "system-packages"
 SYSTEM_PACKAGES_LOCK = "system-packages.sha256"
+_DIGEST_PATTERN = r"sha256:[0-9a-f]{64}"
+_DIGEST_PREFIX = "sha256:"
+_DOCKER_ID_FORMAT = "{{.Id}}"
 _SYSTEM_PACKAGE_LINE = re.compile(
     r"^(?P<sha256>[0-9a-f]{64}) {2}(?P<filename>[A-Za-z0-9.+%:~_-]+\.deb)$"
 )
@@ -111,12 +114,8 @@ def _load_local_image_lock(path: Path) -> dict[str, tuple[str, str]]:
         if len(fields) != 3:
             raise ValueError("local image lock entry is invalid")
         canonical, unique, image_id = fields
-        if (
-            canonical in result
-            or unique == canonical
-            or not canonical.startswith(("aptl/", "aptl-"))
-            or not unique.startswith(canonical.rsplit(":", 1)[0] + ":local-")
-            or re.fullmatch(r"sha256:[0-9a-f]{64}", image_id) is None
+        if not _valid_local_image_lock_entry(
+            canonical, unique, image_id, existing=result
         ):
             raise ValueError("local image lock entry is invalid")
         result[canonical] = (unique, image_id)
@@ -125,12 +124,32 @@ def _load_local_image_lock(path: Path) -> dict[str, tuple[str, str]]:
     return result
 
 
+def _valid_local_image_lock_entry(
+    canonical: str,
+    unique: str,
+    image_id: str,
+    *,
+    existing: dict[str, tuple[str, str]],
+) -> bool:
+    """Validate one exact locally-built image identity tuple."""
+
+    return not any(
+        (
+            canonical in existing,
+            unique == canonical,
+            not canonical.startswith(("aptl/", "aptl-")),
+            not unique.startswith(canonical.rsplit(":", 1)[0] + ":local-"),
+            re.fullmatch(_DIGEST_PATTERN, image_id) is None,
+        )
+    )
+
+
 def _restore_local_image_tags(images: dict[str, tuple[str, str]]) -> None:
     """Retag only the locked image IDs, never an untrusted mutable :latest."""
 
     for canonical, (unique, expected_id) in sorted(images.items()):
         actual_id = subprocess.run(
-            ["docker", "image", "inspect", "--format", "{{.Id}}", unique],
+            ["docker", "image", "inspect", "--format", _DOCKER_ID_FORMAT, unique],
             check=True,
             capture_output=True,
             text=True,
@@ -163,10 +182,10 @@ def _saved_manifest_config_pairs(
         manifest_id = descriptor.get("digest")
         if (
             not isinstance(manifest_id, str)
-            or re.fullmatch(r"sha256:[0-9a-f]{64}", manifest_id) is None
+            or re.fullmatch(_DIGEST_PATTERN, manifest_id) is None
         ):
             continue
-        manifest_path = "blobs/sha256/" + manifest_id.removeprefix("sha256:")
+        manifest_path = "blobs/sha256/" + manifest_id.removeprefix(_DIGEST_PREFIX)
         if manifest_path not in image_files:
             continue
         manifest = json.loads(read_archive_member(image_archive, manifest_path))
@@ -174,12 +193,137 @@ def _saved_manifest_config_pairs(
         config_id = config.get("digest") if isinstance(config, dict) else None
         if (
             isinstance(config_id, str)
-            and re.fullmatch(r"sha256:[0-9a-f]{64}", config_id) is not None
+            and re.fullmatch(_DIGEST_PATTERN, config_id) is not None
         ):
             pairs.add((manifest_id, config_id))
     if not pairs:
         raise ValueError("saved Docker archive has no image identity mapping")
     return pairs
+
+
+def _require_available_images(references: dict[str, str]) -> None:
+    """Ensure every canonical image exists locally, pulling only absent inputs."""
+
+    for reference in sorted(set(references.values())):
+        inspected = subprocess.run(
+            ["docker", "image", "inspect", reference],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if inspected.returncode == 0:
+            continue
+        subprocess.run(
+            ["docker", "pull", reference],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=3600,
+        )
+        subprocess.run(
+            ["docker", "image", "inspect", reference],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+
+def _pin_runtime_image_tags(
+    project: Path, references: dict[str, str]
+) -> dict[str, str]:
+    """Make every authored mutable runtime tag point at its pinned identity."""
+
+    pinned_runtime_tags = {
+        runtime_image_tag(reference): reference
+        for reference in references.values()
+        if "@sha256:" in reference
+    }
+    pinned_runtime_tags.update(compose_runtime_image_aliases(project, references))
+    for runtime_tag, pinned_reference in sorted(pinned_runtime_tags.items()):
+        pinned_id = subprocess.run(
+            [
+                "docker",
+                "image",
+                "inspect",
+                "--format",
+                _DOCKER_ID_FORMAT,
+                pinned_reference,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        ).stdout.strip()
+        if not pinned_id:
+            raise ValueError("pinned Docker image identity is missing")
+        tagged = subprocess.run(
+            ["docker", "image", "inspect", "--format", _DOCKER_ID_FORMAT, runtime_tag],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if tagged.returncode == 0 and tagged.stdout.strip() == pinned_id:
+            continue
+        subprocess.run(
+            ["docker", "tag", pinned_reference, runtime_tag],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=60,
+        )
+    return pinned_runtime_tags
+
+
+def _save_canonical_image_archive(
+    image_archive: Path,
+    references: dict[str, str],
+    pinned_runtime_tags: dict[str, str],
+    local_images: dict[str, tuple[str, str]],
+) -> tuple[dict[str, tuple[str, ...]], dict[str, str], dict[str, str]]:
+    """Save and verify the image closure, retrying mutable local tag races."""
+
+    save_references = set(references.values()) | set(pinned_runtime_tags)
+    for attempt in range(3 if local_images else 1):
+        _restore_local_image_tags(local_images)
+        subprocess.run(
+            [
+                "docker",
+                "save",
+                "--output",
+                str(image_archive),
+                *sorted(save_references),
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=7200,
+        )
+        image_files = archive_files(image_archive)
+        images = docker_archive_images(image_archive, image_files)
+        roles = _resolve_archive_image_roles(
+            references, images, image_archive, image_files
+        )
+        saved_pairs = (
+            _saved_manifest_config_pairs(image_archive, image_files)
+            if local_images
+            else set()
+        )
+        mismatched = [
+            role
+            for role, reference in references.items()
+            if reference in local_images
+            and (local_images[reference][1], roles[role]) not in saved_pairs
+        ]
+        if not mismatched:
+            return images, roles, image_files
+        if attempt == 2:
+            raise ValueError("saved Docker archive differs from local image lock")
+        image_archive.unlink()
+    raise ValueError("Docker image archive could not be created")
 
 
 def acquire_canonical_images(
@@ -214,98 +358,11 @@ def acquire_canonical_images(
         }:
             raise ValueError("local image lock differs from canonical image closure")
         _restore_local_image_tags(local_images)
-        for reference in sorted(set(references.values())):
-            inspected = subprocess.run(
-                ["docker", "image", "inspect", reference],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            if inspected.returncode != 0:
-                subprocess.run(
-                    ["docker", "pull", reference],
-                    check=True,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=3600,
-                )
-                subprocess.run(
-                    ["docker", "image", "inspect", reference],
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=60,
-                )
-        pinned_runtime_tags = {
-            runtime_image_tag(reference): reference
-            for reference in references.values()
-            if "@sha256:" in reference
-        }
-        pinned_runtime_tags.update(compose_runtime_image_aliases(project, references))
-        for runtime_tag, pinned_reference in sorted(pinned_runtime_tags.items()):
-            pinned_id = subprocess.run(
-                ["docker", "image", "inspect", "--format", "{{.Id}}", pinned_reference],
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=60,
-            ).stdout.strip()
-            if not pinned_id:
-                raise ValueError("pinned Docker image identity is missing")
-            tagged = subprocess.run(
-                ["docker", "image", "inspect", "--format", "{{.Id}}", runtime_tag],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            if tagged.returncode != 0 or tagged.stdout.strip() != pinned_id:
-                subprocess.run(
-                    ["docker", "tag", pinned_reference, runtime_tag],
-                    check=True,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=60,
-                )
-        save_references = set(references.values()) | set(pinned_runtime_tags)
-        for attempt in range(3 if local_images else 1):
-            _restore_local_image_tags(local_images)
-            subprocess.run(
-                [
-                    "docker",
-                    "save",
-                    "--output",
-                    str(image_archive),
-                    *sorted(save_references),
-                ],
-                check=True,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=7200,
-            )
-            image_files = archive_files(image_archive)
-            images = docker_archive_images(image_archive, image_files)
-            roles = _resolve_archive_image_roles(
-                references, images, image_archive, image_files
-            )
-            saved_pairs = (
-                _saved_manifest_config_pairs(image_archive, image_files)
-                if local_images
-                else set()
-            )
-            mismatched = [
-                role
-                for role, reference in references.items()
-                if reference in local_images
-                and (local_images[reference][1], roles[role]) not in saved_pairs
-            ]
-            if not mismatched:
-                break
-            if attempt == 2:
-                raise ValueError("saved Docker archive differs from local image lock")
-            image_archive.unlink()
+        _require_available_images(references)
+        pinned_runtime_tags = _pin_runtime_image_tags(project, references)
+        images, roles, image_files = _save_canonical_image_archive(
+            image_archive, references, pinned_runtime_tags, local_images
+        )
         if set(roles.values()) != set(images):
             raise ValueError("saved Docker archive differs from resolved image closure")
         _validate_image_sources(
@@ -334,7 +391,7 @@ class CanonicalInputs(BaseModel):
 def hash_file_nofollow(path: Path) -> tuple[str, int]:
     """Use the incumbent streaming reader with the asset-lock hex encoding."""
     digest, size = _hash_file_nofollow(path)
-    return digest.removeprefix("sha256:"), size
+    return digest.removeprefix(_DIGEST_PREFIX), size
 
 
 def _expected_system_packages(lock: Path, architecture: str) -> dict[str, str]:
@@ -859,7 +916,7 @@ def _staged_assets(
             )
     for image in sorted(images):
         assets.append(
-            _entry(len(assets), "image-id", image, image.removeprefix("sha256:"))
+            _entry(len(assets), "image-id", image, image.removeprefix(_DIGEST_PREFIX))
         )
     return tuple(assets)
 

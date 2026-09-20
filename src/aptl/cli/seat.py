@@ -253,6 +253,13 @@ def start(
             raise SeatLauncherError(
                 "invalid-host-access", "all host access options must be supplied"
             )
+        if access_owner is not None:
+            assert access_public_key is not None
+            assert access_identity_file is not None
+            assert access_project_dir is not None
+            access_public_key = access_public_key.resolve(strict=True)
+            access_identity_file = access_identity_file.resolve(strict=True)
+            access_project_dir = access_project_dir.resolve(strict=True)
         enrollment = None
         clients: tuple[str, ...] = ()
         if access_owner is not None:
@@ -260,7 +267,6 @@ def start(
                 raise SeatLauncherError(
                     "invalid-host-access", "access profile must be red or blue"
                 )
-            assert access_public_key is not None
             enrollment = SeatAccessEnrollment(
                 owner_id=access_owner,
                 grant_id=f"{seat_id}-{access_profile}",

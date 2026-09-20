@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 import pytest
@@ -11,7 +12,9 @@ from aptl.appliance.manifest import ApplianceReleaseInspection
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.appliance.seat.lifecycle import (
     StartSeatOptions,
+    _establish_host_access,
     _ensure_overlay,
+    _fail_closed_start,
     _seat_paths,
     release_requires_host_access,
     reconcile_seat_after_reboot,
@@ -22,17 +25,132 @@ from aptl.appliance.seat.lifecycle import (
     status_seat,
     stop_seat,
 )
+from aptl.appliance.seat.access import GuestAccessBundle
 from aptl.appliance.seat.kiosk import open_participant_kiosk
+from aptl.appliance.seat.locking import seat_mutation_lock
 from aptl.appliance.seat.models import SeatRecord
+from aptl.appliance.seat.observation import HostObservationBundle
 from aptl.appliance.seat.persistence import load_seat_record, persist_seat_record
 from aptl.core import hostenv
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
+from aptl.workbench.profiles import WorkbenchConfigurationError
 from tests.test_appliance_boundary_inventory import _guest, _policy
 
 pytestmark = pytest.mark.skipif(
     hostenv.host_os() != hostenv.OS_LINUX,
     reason="appliance seat launcher lifecycle is Linux-only",
 )
+
+
+def test_concurrent_lifecycle_mutation_fails_before_touching_seat(
+    tmp_path: Path,
+) -> None:
+    seat_root = tmp_path / "seat"
+
+    def contend() -> str:
+        with pytest.raises(SeatLauncherError) as exc:
+            stage_seat(
+                seat_root,
+                seat_id="seat-01",
+                release_dir=tmp_path / "release",
+                release_public_key=tmp_path / "release-public.pem",
+                qualification_public_key=tmp_path / "qualification-public.pem",
+            )
+        return exc.value.code
+
+    with seat_mutation_lock(seat_root), ThreadPoolExecutor(max_workers=1) as pool:
+        assert pool.submit(contend).result(timeout=5) == "seat-lifecycle-busy"
+
+
+def test_seat_lifecycle_lock_is_reentrant_in_one_operation(tmp_path: Path) -> None:
+    seat_root = tmp_path / "seat"
+
+    with seat_mutation_lock(seat_root), seat_mutation_lock(seat_root):
+        assert (seat_root / ".lifecycle.lock").is_file()
+
+
+@pytest.mark.parametrize(
+    ("candidate_trust", "expected_timeout"),
+    ((False, 120), (True, 600)),
+)
+def test_host_access_allows_candidate_semantic_qualification_time(
+    tmp_path: Path,
+    candidate_trust: bool,
+    expected_timeout: int,
+) -> None:
+    from tests.test_appliance_seat_access import _bundle, _public_key, _request
+
+    request = _request()
+    seat_root = tmp_path / "seat"
+    paths = _seat_paths(
+        seat_root,
+        seat_id=request.seat_id,
+        release_dir=tmp_path / "release",
+        release_public_key=tmp_path / "release-public.pem",
+        qualification_public_key=tmp_path / "qualification-public.pem",
+    )
+    paths.launch_dir.mkdir(parents=True)
+    identity = tmp_path / "identity"
+    identity.write_text("private")
+    project = tmp_path / "client"
+    options = StartSeatOptions(
+        readiness_timeout_seconds=1800,
+        access_enrollment=request.enrollment,
+        access_identity_file=identity,
+        access_project_dir=project,
+        access_clients=("claude",),
+        candidate_trust=candidate_trust,
+    )
+    bundle = _bundle(_public_key())
+    record = SeatRecord(
+        schema_version="aptl.seat-record/v2",
+        seat_id=request.seat_id,
+        instance_id=request.instance_id,
+        generation=request.generation,
+        selected_release_id="aptl-v5.1.1-x86_64",
+        launch_descriptor_digest=request.launch_descriptor_digest,
+        overlay_path="instances/seat-1.qcow2",
+        host_observation_id=request.binding.host_observation_id,
+        lifecycle_state="starting",
+        taint_state="clean",
+        host_boot_id=request.binding.boot_id,
+        mappings=(request.outer_endpoint,),
+    )
+    policy = _policy().model_copy(
+        update={
+            "guest_publications": (
+                *_policy().guest_publications,
+                request.guest_endpoint,
+            ),
+            "host_mcp_contract": "aptl.restricted-ssh-mcp/v1",
+        }
+    )
+
+    with (
+        patch(
+            "aptl.appliance.seat.lifecycle.wait_for_guest_access",
+            return_value=bundle,
+        ) as wait,
+        patch("aptl.appliance.seat.lifecycle.persist_host_access_bundle"),
+        patch("aptl.appliance.seat.lifecycle.configure_host_clients"),
+    ):
+        _establish_host_access(
+            seat_root=seat_root,
+            paths=paths,
+            record=record,
+            policy=policy,
+            binding=request.binding,
+            host=HostObservationBundle(
+                observation=request.host_observation,
+                observation_id=request.host_observation.observation_id,
+            ),
+            guest=request.guest_observation,
+            access_socket=tmp_path / "access.sock",
+            options=options,
+        )
+
+    assert isinstance(bundle, GuestAccessBundle)
+    assert wait.call_args.kwargs["timeout_seconds"] == expected_timeout
 
 
 def _inspection() -> ApplianceReleaseInspection:
@@ -389,6 +507,7 @@ def test_start_fails_closed_without_real_boundary_probes(tmp_path: Path) -> None
         patch("aptl.appliance.seat.lifecycle.start_vm") as start_vm,
         patch("aptl.appliance.seat.lifecycle.write_vm_pid"),
         patch("aptl.appliance.seat.lifecycle.read_vm_pid", return_value=4242),
+        patch("aptl.appliance.seat.lifecycle.stop_vm") as stop,
         patch("aptl.appliance.seat.lifecycle._prepare_verified_launch_descriptor"),
         patch(
             "aptl.appliance.seat.lifecycle._launch_descriptor_digest",
@@ -412,6 +531,109 @@ def test_start_fails_closed_without_real_boundary_probes(tmp_path: Path) -> None
             )
 
     assert exc.value.code == "boundary.host-forbidden-reachability"
+    stop.assert_called_once_with(seat_root)
+
+
+def test_start_stops_vm_and_preserves_host_access_failure(tmp_path: Path) -> None:
+    seat_root = tmp_path / "seat"
+    seat_root.mkdir()
+    release = seat_root / "launch" / "release"
+    release.mkdir(parents=True)
+    public_key = tmp_path / "release-public.pem"
+    qualification_key = tmp_path / "qualification-public.pem"
+    public_key.write_text("public")
+    qualification_key.write_text("qualification")
+
+    with (
+        patch(
+            "aptl.appliance.seat.lifecycle.require_host_prerequisites",
+            return_value=object(),
+        ),
+        patch(
+            "aptl.appliance.seat.lifecycle._load_verified_release",
+            return_value=(_inspection(), _policy(), _manifest_stub()),
+        ),
+        patch(
+            "aptl.appliance.seat.lifecycle._load_release_documents",
+            return_value=(_manifest_stub(), object()),
+        ),
+        patch("aptl.appliance.seat.lifecycle._ensure_overlay"),
+        patch("aptl.appliance.seat.lifecycle.require_host_exposure"),
+        patch("aptl.appliance.seat.lifecycle.start_vm") as start_vm,
+        patch("aptl.appliance.seat.lifecycle.write_vm_pid"),
+        patch("aptl.appliance.seat.lifecycle.read_vm_pid", return_value=4242),
+        patch("aptl.appliance.seat.lifecycle.stop_vm") as stop,
+        patch("aptl.appliance.seat.lifecycle._prepare_verified_launch_descriptor"),
+        patch("aptl.appliance.seat.lifecycle.run_appliance_boundary_gate") as gate,
+        patch(
+            "aptl.appliance.seat.lifecycle._establish_host_access",
+            side_effect=WorkbenchConfigurationError("transport paths must be absolute"),
+        ),
+        patch(
+            "aptl.appliance.seat.lifecycle._launch_descriptor_digest",
+            return_value="sha256:" + "d" * 64,
+        ),
+    ):
+        start_vm.return_value.pid = 4242
+        gate.return_value = type("Result", (), {"passed": True, "findings": ()})()
+        with pytest.raises(SeatLauncherError) as exc:
+            start_seat(
+                seat_root,
+                seat_id="seat-01",
+                release_dir=release,
+                release_public_key=public_key,
+                qualification_public_key=qualification_key,
+                options=StartSeatOptions(
+                    listener_probe=_listener_probe,
+                    forbidden_reachability_probe=lambda: True,
+                    guest_readiness_probe=_guest,
+                    reserve_outer_mappings=False,
+                ),
+            )
+
+    assert exc.value.code == "invalid-host-access"
+    stop.assert_called_once_with(seat_root)
+
+
+def test_failed_start_still_stops_vm_when_access_revocation_fails(
+    tmp_path: Path,
+) -> None:
+    seat_root = tmp_path / "seat"
+    paths = _seat_paths(
+        seat_root,
+        seat_id="seat-01",
+        release_dir=tmp_path / "release",
+        release_public_key=tmp_path / "release-public.pem",
+        qualification_public_key=tmp_path / "qualification-public.pem",
+    )
+    paths.launch_dir.mkdir(parents=True)
+    starting = SeatRecord(
+        schema_version="aptl.seat-record/v1",
+        seat_id="seat-01",
+        selected_release_id="aptl-v1",
+        launch_descriptor_digest="sha256:" + "a" * 64,
+        overlay_path="instances/seat-01.qcow2",
+        host_observation_id="host-1",
+        lifecycle_state="starting",
+        taint_state="clean",
+        host_boot_id="boot-1",
+    )
+
+    with (
+        patch(
+            "aptl.appliance.seat.lifecycle.invalidate_host_access",
+            side_effect=OSError("revocation failed"),
+        ),
+        patch("aptl.appliance.seat.lifecycle.stop_vm") as stop,
+        pytest.raises(SeatLauncherError) as exc,
+    ):
+        _fail_closed_start(seat_root, paths, starting)
+
+    assert exc.value.code == "failed-start-cleanup"
+    stop.assert_called_once_with(seat_root)
+    failed = load_seat_record(seat_root)
+    assert failed is not None
+    assert failed.lifecycle_state == "tainted"
 
 
 def test_reset_destroys_overlay_and_restage(tmp_path: Path) -> None:
@@ -504,6 +726,37 @@ def test_stop_transitions_ready_to_staged(tmp_path: Path) -> None:
         updated = stop_seat(seat_root)
 
     assert updated.lifecycle_state == "staged"
+    assert updated.generation == record.generation + 1
+
+    with patch("aptl.appliance.seat.lifecycle.stop_vm"):
+        stopped_again = stop_seat(seat_root)
+    assert stopped_again.generation == updated.generation
+
+
+def test_stop_advances_a_staged_generation_that_already_issued_access(
+    tmp_path: Path,
+) -> None:
+    seat_root = tmp_path / "seat"
+    record = SeatRecord(
+        schema_version="aptl.seat-record/v1",
+        seat_id="seat-01",
+        instance_id="a" * 32,
+        generation=3,
+        selected_release_id="aptl-v1",
+        launch_descriptor_digest="sha256:" + "a" * 64,
+        overlay_path="instances/seat-01.qcow2",
+        host_observation_id="host-1",
+        lifecycle_state="staged",
+        taint_state="clean",
+        host_boot_id="boot-1",
+    )
+    persist_seat_record(seat_root, record)
+    (seat_root / "access" / "generation-3").mkdir(parents=True)
+
+    with patch("aptl.appliance.seat.lifecycle.stop_vm"):
+        updated = stop_seat(seat_root)
+
+    assert updated.generation == 4
 
 
 def test_status_never_includes_credentials(tmp_path: Path) -> None:
@@ -689,5 +942,5 @@ def test_open_participant_kiosk_spawns_browser_when_not_dry_run() -> None:
         )
 
     popen.assert_called_once()
-    assert plan.url == "https://127.0.0.1:8443/"
+    assert plan.url == "http://127.0.0.1:8443/"
     assert plan.argv[0] == "/usr/bin/browser"

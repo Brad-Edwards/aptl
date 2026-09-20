@@ -77,12 +77,14 @@ class _Relay:
         writer: MessageWriter,
         server: ServerProfile,
         authorize: Callable[[], None],
+        check_revocation: Callable[[], None] | None,
     ) -> None:
         self.child = child
         self.reader = reader
         self.writer = writer
         self.gate = ProtocolAdmission(server)
         self.authorize = authorize
+        self.check_revocation = check_revocation or authorize
         self.requests = asyncio.Queue(maxsize=8)
         self.ids = set()
         self.output_bytes = 0
@@ -91,7 +93,7 @@ class _Relay:
         """Read bounded client frames for the admitted relay."""
         while True:
             request = await asyncio.wait_for(_read_message(self.reader), timeout=300)
-            await asyncio.to_thread(self.authorize)
+            await asyncio.to_thread(self.check_revocation)
             identifier = request.get("id")
             if "id" in request:
                 if (
@@ -114,7 +116,12 @@ class _Relay:
         """Serialize admitted calls and redact backend data before forwarding."""
         while True:
             request = await self.requests.get()
-            await asyncio.to_thread(self.authorize)
+            check = (
+                self.authorize
+                if request["method"] == "tools/call"
+                else self.check_revocation
+            )
+            await asyncio.to_thread(check)
             if request["method"] == "notifications/initialized":
                 # The private admission handshake already sent this.
                 continue
@@ -130,7 +137,7 @@ class _Relay:
                 await self._admit_backend(response)
             elif request["method"] == TOOLS_LIST:
                 self.gate.admit_inventory(response.get("result", {}))
-            await asyncio.to_thread(self.authorize)
+            await asyncio.to_thread(check)
             await self._forward_response(response, request)
             self.ids.discard(request["id"])
 
@@ -189,8 +196,8 @@ class _Relay:
     async def watch(self, interval: float) -> None:
         """Poll authorization until the connection must close."""
         while True:
-            await asyncio.to_thread(self.authorize)
             await asyncio.sleep(interval)
+            await asyncio.to_thread(self.authorize)
 
 
 async def _stop(child: asyncio.subprocess.Process) -> bool:
@@ -223,6 +230,7 @@ async def relay_mcp(
     cleanup_observer: Callable[[bool], None],
     poll_seconds: float = 0.25,
     check_revocation: Callable[[], None] | None = None,
+    authorization_poll_seconds: float = 10,
 ) -> None:
     """Run only trusted guest argv; close and report every connection's cleanup.
 
@@ -240,13 +248,18 @@ async def relay_mcp(
         start_new_session=True,
         limit=_MAX_FRAME,
     )
-    relay = _Relay(child, reader, writer, launch.server, authorize)
+    relay = _Relay(
+        child, reader, writer, launch.server, authorize, check_revocation
+    )
+    authorization_interval = (
+        authorization_poll_seconds if check_revocation is not None else poll_seconds
+    )
     tasks = [
         asyncio.create_task(coro)
         for coro in (
             relay.receive(),
             relay.dispatch(),
-            relay.watch(poll_seconds),
+            relay.watch(authorization_interval),
             child.wait(),
         )
     ]

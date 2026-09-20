@@ -6,6 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
+from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
 from aptl.core.deployment._compose_image_free_realization import (
     _image_free_node_addresses,
     _image_free_service_names,
@@ -173,10 +174,7 @@ class ComposeMixedRealizationMixin:
     ) -> LabResult:
         """Run phased startup and post-start reconciliation."""
 
-        failure: LabResult | None = None
-        if realization_has_docker_authority(realization):
-            endpoint = self.revalidate_local_docker_socket()
-            failure = None if endpoint.success else endpoint
+        failure = self._docker_authority_failure(realization)
         if failure is None:
             failure = self._start_boundary_anchor_services(
                 realization,
@@ -212,6 +210,16 @@ class ComposeMixedRealizationMixin:
             )
         return failure
 
+    def _docker_authority_failure(
+        self, realization: DeploymentRealizationSpec
+    ) -> LabResult | None:
+        """Revalidate a required local daemon endpoint before mutation."""
+
+        if not realization_has_docker_authority(realization):
+            return None
+        endpoint = self.revalidate_local_docker_socket()
+        return None if endpoint.success else endpoint
+
     def _start_boundary_anchor_services(
         self,
         realization: DeploymentRealizationSpec,
@@ -225,38 +233,47 @@ class ComposeMixedRealizationMixin:
         """Start only missing signed anchors under the observed deny baseline."""
 
         configured = self._appliance_boundary
-        if configured is None:
+        if configured is None or not configured[0].internal_zone_isolation:
             return None
-        policy, _binding = configured
-        if not policy.internal_zone_isolation:
-            return None
-        nodes = {node.address: node for node in realization.nodes}
-        imaged = {image.address for image in realization.images}
-        services: set[str] = set()
-        for zone in ("participant", "management", "egress"):
-            selector = getattr(policy.platform_anchors, zone)
-            key, separator, address = selector.partition("=")
-            node = nodes.get(address)
-            if key != "aptl.node.address" or not separator or node is None:
+        services = _boundary_anchor_services(configured[0], realization)
+        if isinstance(services, LabResult):
+            return services
+        result: LabResult | None = None
+        if services:
+            started = self._start_realized_services(
+                profiles,
+                build=build and not self._offline_staged,
+                compose_files=compose_files,
+                exclude_services=excluded_services,
+                only_services=services,
+                scenario_root=scenario_root,
+            )
+            result = None if started.success else started
+        return result
+
+
+def _boundary_anchor_services(
+    policy: ApplianceBoundaryPolicy, realization: DeploymentRealizationSpec
+) -> tuple[str, ...] | LabResult:
+    """Resolve every signed platform anchor to an authored Compose service."""
+
+    nodes = {node.address: node for node in realization.nodes}
+    imaged = {image.address for image in realization.images}
+    services: set[str] = set()
+    for zone in ("participant", "management", "egress"):
+        selector = getattr(policy.platform_anchors, zone)
+        key, separator, address = selector.partition("=")
+        node = nodes.get(address)
+        if key != "aptl.node.address" or not separator or node is None:
+            return LabResult(
+                success=False,
+                error="Platform boundary anchor selection is unsupported.",
+            )
+        if address in imaged:
+            if not node.service_name:
                 return LabResult(
                     success=False,
-                    error="Platform boundary anchor selection is unsupported.",
+                    error="Platform boundary anchor has no Compose service.",
                 )
-            if address in imaged:
-                if not node.service_name:
-                    return LabResult(
-                        success=False,
-                        error="Platform boundary anchor has no Compose service.",
-                    )
-                services.add(node.service_name)
-        if not services:
-            return None
-        result = self._start_realized_services(
-            profiles,
-            build=build and not self._offline_staged,
-            compose_files=compose_files,
-            exclude_services=excluded_services,
-            only_services=tuple(sorted(services)),
-            scenario_root=scenario_root,
-        )
-        return None if result.success else result
+            services.add(node.service_name)
+    return tuple(sorted(services))

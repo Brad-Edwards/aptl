@@ -148,6 +148,33 @@ def test_resource_admission_preserves_host_memory_headroom(tmp_path: Path) -> No
     )
 
 
+def test_resource_admission_credits_only_retained_overlay_allocation(
+    tmp_path: Path,
+) -> None:
+    resources = (8, 32 * 1024**3, 250 * 1024**3)
+    capacity = (16, 128 * 1024**3, 900 * 1024**3)
+    available = (16, 64 * 1024**3, 220 * 1024**3)
+
+    with pytest.raises(SeatLauncherError) as exc:
+        _require_resource_capacity(
+            resources,
+            seat_root=tmp_path,
+            reservations=(0, 0, 0),
+            capacity=capacity,
+            available=available,
+        )
+    assert exc.value.code == "resource-capacity-exhausted"
+
+    _require_resource_capacity(
+        resources,
+        seat_root=tmp_path,
+        retained_disk_bytes=30 * 1024**3,
+        reservations=(0, 0, 0),
+        capacity=capacity,
+        available=available,
+    )
+
+
 def test_resource_reservations_are_discovered_from_qemu_argv(tmp_path: Path) -> None:
     process = tmp_path / "42"
     process.mkdir()

@@ -250,6 +250,7 @@ def test_seat_start_auto_enrolls_current_user_for_required_host_access(
     private = seat_root / "access" / "transport-key"
     public = seat_root / "access" / "transport-key.pub"
     public.parent.mkdir(parents=True)
+    private.write_text("private")
     public.write_text(
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGZhY2lsaXRhdG9yLXRlc3Qta2V5"
     )
@@ -273,6 +274,43 @@ def test_seat_start_auto_enrolls_current_user_for_required_host_access(
     assert options.access_identity_file == private
     assert options.access_project_dir == Path.cwd()
     assert options.access_clients == ("claude", "codex")
+
+
+def test_seat_start_resolves_explicit_host_client_paths(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    public = tmp_path / "caller.pub"
+    identity = tmp_path / "caller"
+    project = tmp_path / "client"
+    public.write_text("ssh-ed25519 " + "a" * 64)
+    identity.write_text("private")
+    project.mkdir()
+    with (
+        patch("aptl.cli.seat.release_requires_host_access", return_value=True),
+        patch("aptl.cli.seat.start_seat", return_value=_seat_record()) as start,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "seat",
+                "start",
+                *_common_seat_args(),
+                "--access-owner",
+                "operator",
+                "--access-public-key",
+                public.name,
+                "--access-identity-file",
+                identity.name,
+                "--access-project-dir",
+                project.name,
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    options = start.call_args.kwargs["options"]
+    assert options.access_identity_file == identity
+    assert options.access_project_dir == project
 
 
 def test_seat_start_error_is_bounded() -> None:
@@ -337,7 +375,7 @@ def test_open_kiosk_dry_run_does_not_spawn_browser() -> None:
 
     assert result.exit_code == 0
     popen.assert_not_called()
-    assert "https://127.0.0.1:443/" in result.stdout
+    assert "http://127.0.0.1:443/" in result.stdout
 
 
 def test_open_kiosk_honors_browser_command() -> None:
@@ -381,4 +419,4 @@ def test_open_kiosk_uses_persisted_participant_mapping(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0
-    assert "https://127.0.0.1:10443/" in result.stdout
+    assert "http://127.0.0.1:10443/" in result.stdout

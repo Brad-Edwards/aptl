@@ -203,34 +203,58 @@ def _place_pack_content(
                 f"{digest} != {item.artifact_digest}"
             )
     if item.source_kind == "pack-directory":
-        tree = root / "tree"
-        _remove_previous_output(tree)
-        tree.mkdir()
-        with tarfile.open(fileobj=io.BytesIO(resolved.data), mode="r:*") as archive:
-            archive.extractall(tree, filter="data")
-        for path in (tree, *sorted(tree.rglob("*"))):
-            if path.is_symlink():
-                raise ValueError("pack directory content contains a symlink")
-            if path.is_dir():
-                path.chmod(0o700 if item.sensitive else 0o755)
-            elif path.is_file():
-                executable = bool(path.stat().st_mode & 0o111)
-                path.chmod(
-                    (0o700 if executable else 0o600)
-                    if item.sensitive
-                    else (0o755 if executable else 0o644)
-                )
-        return tree
+        return _place_pack_directory(root, resolved.data, sensitive=item.sensitive)
+    return _place_pack_file(
+        root,
+        basename,
+        resolved.data,
+        executable=item.media_type in _EXECUTABLE_SCRIPT_MEDIA_TYPES,
+        sensitive=item.sensitive,
+    )
+
+
+def _place_pack_directory(root: Path, data: bytes, *, sensitive: bool) -> Path:
+    """Extract one verified pack tree and apply closed deterministic modes."""
+
+    tree = root / "tree"
+    _remove_previous_output(tree)
+    tree.mkdir()
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as archive:
+        archive.extractall(tree, filter="data")
+    for path in (tree, *sorted(tree.rglob("*"))):
+        if path.is_symlink():
+            raise ValueError("pack directory content contains a symlink")
+        if path.is_dir():
+            path.chmod(0o700 if sensitive else 0o755)
+        elif path.is_file():
+            executable = bool(path.stat().st_mode & 0o111)
+            path.chmod(_pack_content_mode(sensitive, executable=executable))
+    return tree
+
+
+def _place_pack_file(
+    root: Path,
+    basename: str,
+    data: bytes,
+    *,
+    executable: bool,
+    sensitive: bool,
+) -> Path:
+    """Write one verified pack file with its declared access mode."""
+
     destination = root / basename
     _remove_previous_output(destination)
-    destination.write_bytes(resolved.data)
-    executable = item.media_type in _EXECUTABLE_SCRIPT_MEDIA_TYPES
+    destination.write_bytes(data)
     # The exact bytes retain their digest identity when a declared script is
     # executable. Set the mode explicitly: guest first boot uses umask 077,
     # while non-root image users must still read non-sensitive bind content.
-    destination.chmod(
-        (0o700 if executable else 0o600)
-        if item.sensitive
-        else (0o755 if executable else 0o644)
-    )
+    destination.chmod(_pack_content_mode(sensitive, executable=executable))
     return destination
+
+
+def _pack_content_mode(sensitive: bool, *, executable: bool) -> int:
+    """Return the exact regular-file mode for one realized pack artifact."""
+
+    if sensitive:
+        return 0o700 if executable else 0o600
+    return 0o755 if executable else 0o644

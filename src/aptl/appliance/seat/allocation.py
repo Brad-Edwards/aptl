@@ -189,6 +189,7 @@ def _require_resource_capacity(
     resources: tuple[int, int, int],
     *,
     seat_root: Path,
+    retained_disk_bytes: int = 0,
     reservations: tuple[int, int, int] | None = None,
     capacity: tuple[int, int, int] | None = None,
     available: tuple[int, int, int] | None = None,
@@ -196,7 +197,7 @@ def _require_resource_capacity(
     """Admit one seat only when all declared concurrent reservations fit."""
 
     requested = resources
-    if min(requested) <= 0:
+    if min(requested) <= 0 or retained_disk_bytes < 0:
         raise SeatLauncherError(
             "resource-admission-unavailable", "seat resource contract is invalid"
         )
@@ -232,10 +233,11 @@ def _require_resource_capacity(
             "concurrent seat resource reservations exceed host capacity",
         )
     host_memory_headroom = max(_MIN_HOST_MEMORY_HEADROOM_BYTES, capacity[1] // 10)
+    remaining_disk = max(0, requested[2] - retained_disk_bytes)
     if (
         requested[0] > available[0]
         or requested[1] + host_memory_headroom > available[1]
-        or requested[2] > available[2]
+        or remaining_disk > available[2]
     ):
         raise SeatLauncherError(
             "resource-capacity-exhausted",
@@ -253,6 +255,7 @@ def launch_with_reserved_mappings(
     reservations: tuple[int, int, int] | None = None,
     capacity: tuple[int, int, int] | None = None,
     available: tuple[int, int, int] | None = None,
+    retained_disk_bytes: int = 0,
 ) -> T:
     """Hold the allocator lock until the launched VM owns every endpoint."""
 
@@ -267,6 +270,7 @@ def launch_with_reserved_mappings(
             _require_resource_capacity(
                 resources,
                 seat_root=seat_root,
+                retained_disk_bytes=retained_disk_bytes,
                 reservations=reservations,
                 capacity=capacity,
                 available=available,

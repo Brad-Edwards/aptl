@@ -250,19 +250,20 @@ def _append_enforcement_findings(
 ) -> None:
     """Require complete, digest-bound readback for every active authority."""
 
+    incomplete = "boundary.guest-enforcement-incomplete"
     by_authority = {item.authority: item for item in guest.enforcements}
     if len(by_authority) != len(guest.enforcements):
-        findings.append("boundary.guest-enforcement-incomplete")
+        findings.append(incomplete)
         return
     platform = by_authority.get("platform")
     if policy.internal_zone_isolation:
         if platform is None:
-            findings.append("boundary.guest-enforcement-incomplete")
+            findings.append(incomplete)
         else:
             if platform.source_digest != binding.policy_digest:
                 findings.append("boundary.guest-platform-source-mismatch")
             if set(platform.families) != {"bridge", "inet"}:
-                findings.append("boundary.guest-enforcement-incomplete")
+                findings.append(incomplete)
             if not platform.default_deny_observed:
                 findings.append("boundary.guest-default-deny-missing")
     elif platform is not None:
@@ -290,13 +291,23 @@ def _append_probe_findings(
     if binding.raes_boundary_required:
         required_authorities.add("raes")
     for authority in sorted(required_authorities):
-        scoped = [item for item in guest.probes if item.authority == authority]
-        positive = [item for item in scoped if item.expectation == "reachable"]
-        negative = [item for item in scoped if item.expectation == "blocked"]
-        if not positive or any(not item.passed for item in positive):
+        if _probe_failed(guest, authority, "reachable"):
             findings.append(f"boundary.guest-{authority}-positive-probe-failed")
-        if not negative or any(not item.passed for item in negative):
+        if _probe_failed(guest, authority, "blocked"):
             findings.append(f"boundary.guest-{authority}-negative-probe-failed")
+
+
+def _probe_failed(
+    guest: GuestBoundaryObservation, authority: str, expectation: str
+) -> bool:
+    """Return whether one required authority/expectation has no passing set."""
+
+    scoped = [
+        item
+        for item in guest.probes
+        if item.authority == authority and item.expectation == expectation
+    ]
+    return not scoped or any(not item.passed for item in scoped)
 
 
 def _inventory(

@@ -30,6 +30,7 @@ from aptl.appliance.seat.access import (
 )
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.workbench.dispatch import key_fingerprint
+from aptl.workbench.profiles import WorkbenchConfigurationError
 from tests.test_appliance_boundary_inventory import _binding, _guest, _host
 from tests.test_mcp_access import access_record, grant
 
@@ -143,6 +144,43 @@ def test_access_bundle_is_private_and_invalidated_on_stop(tmp_path: Path) -> Non
     assert not (output / "grant.json").exists()
     assert (output / "invalidated").read_text() == "seat-stopped\n"
     assert '"lifecycle_state":"needs-reset"' in (output / "access.json").read_text()
+
+
+def test_invalidated_matching_generation_is_refreshed_on_restart(
+    tmp_path: Path,
+) -> None:
+    host_key = _public_key()
+    first = _bundle(host_key)
+    output = persist_host_access_bundle(tmp_path, first)
+    invalidate_host_access(tmp_path, reason="seat-stopped")
+    refreshed = first.model_copy(
+        update={
+            "runtime_evidence": first.runtime_evidence.model_copy(
+                update={"run_id": "run-2"}
+            )
+        }
+    )
+
+    replaced = persist_host_access_bundle(tmp_path, refreshed)
+
+    assert replaced == output
+    assert not (replaced / "invalidated").exists()
+    assert (replaced / "grant.json").exists()
+    evidence = GuestRuntimeEvidence.model_validate_json(
+        (replaced / "runtime-evidence.json").read_bytes()
+    )
+    assert evidence.run_id == "run-2"
+
+
+def test_active_generation_cannot_be_replaced(tmp_path: Path) -> None:
+    bundle = _bundle(_public_key())
+    persist_host_access_bundle(tmp_path, bundle)
+
+    with pytest.raises(
+        WorkbenchConfigurationError,
+        match="existing access generation cannot be refreshed",
+    ):
+        persist_host_access_bundle(tmp_path, bundle)
 
 
 def test_transport_identity_is_created_once_and_owner_only(tmp_path: Path) -> None:

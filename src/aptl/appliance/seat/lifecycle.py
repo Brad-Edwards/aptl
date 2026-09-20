@@ -40,6 +40,7 @@ from aptl.appliance.seat.allocation import (
     launch_with_reserved_mappings,
 )
 from aptl.appliance.seat.errors import SeatLauncherError
+from aptl.appliance.seat.locking import serialized_seat_mutation
 from aptl.appliance.seat.exposure import require_host_exposure
 from aptl.appliance.seat.models import SeatRecord, SeatStatusProjection
 from aptl.appliance.seat.observation import (
@@ -78,6 +79,8 @@ from aptl.core.appliance_boundary_gate import BoundaryPhase, run_appliance_bound
 SEAT_RECORD_SCHEMA = "aptl.seat-record/v2"
 SEAT_NOT_STAGED = "seat is not staged"
 ACCESS_REQUEST_NAME = "access-request.json"
+_STANDARD_ACCESS_TIMEOUT_SECONDS = 120
+_CANDIDATE_ACCESS_TIMEOUT_SECONDS = 600
 
 
 @dataclass(frozen=True)
@@ -276,6 +279,7 @@ def _seat_paths(
     )
 
 
+@serialized_seat_mutation
 def stage_seat(
     seat_root: Path,
     *,
@@ -494,11 +498,16 @@ def _establish_host_access(
         guest_observation=guest,
     )
     publish_guest_access_request(paths.launch_dir / ACCESS_REQUEST_NAME, request)
+    access_timeout = (
+        _CANDIDATE_ACCESS_TIMEOUT_SECONDS
+        if options.candidate_trust
+        else _STANDARD_ACCESS_TIMEOUT_SECONDS
+    )
     response = wait_for_guest_access(
         access_socket,
         request,
         process_alive=lambda: read_vm_pid(seat_root) is not None,
-        timeout_seconds=min(120, options.readiness_timeout_seconds),
+        timeout_seconds=min(access_timeout, options.readiness_timeout_seconds),
     )
     persist_host_access_bundle(seat_root, response)
     assert options.access_project_dir is not None
@@ -510,6 +519,38 @@ def _establish_host_access(
         username=enrollment.username,
         clients=options.access_clients,
     )
+
+
+def _establish_validated_host_access(
+    *,
+    seat_root: Path,
+    paths: SeatPaths,
+    record: SeatRecord,
+    policy: ApplianceBoundaryPolicy,
+    binding: ApplianceBoundaryBinding,
+    host: HostObservationBundle,
+    guest: GuestBoundaryObservation,
+    access_socket: Path,
+    options: StartSeatOptions,
+) -> None:
+    """Preserve host-client configuration failures as launcher diagnostics."""
+
+    from aptl.workbench.profiles import WorkbenchConfigurationError
+
+    try:
+        _establish_host_access(
+            seat_root=seat_root,
+            paths=paths,
+            record=record,
+            policy=policy,
+            binding=binding,
+            host=host,
+            guest=guest,
+            access_socket=access_socket,
+            options=options,
+        )
+    except WorkbenchConfigurationError as exc:
+        raise SeatLauncherError("invalid-host-access", str(exc)) from exc
 
 
 def _requires_automatic_mappings(
@@ -545,6 +586,40 @@ def _start_with_selected_mappings(
     )
 
 
+def _fail_closed_start(
+    seat_root: Path, paths: SeatPaths, starting: SeatRecord
+) -> None:
+    """Revoke access and stop any VM left by an unsuccessful start."""
+
+    cleanup_failure: Exception | None = None
+    try:
+        invalidate_host_access(seat_root, reason="start-failed")
+    except (OSError, ValueError) as exc:
+        cleanup_failure = exc
+    try:
+        (paths.launch_dir / ACCESS_REQUEST_NAME).unlink(missing_ok=True)
+    except OSError as exc:
+        cleanup_failure = exc
+    try:
+        stop_vm(seat_root)
+    except SeatLauncherError as exc:
+        cleanup_failure = exc
+    if cleanup_failure is not None:
+        persist_seat_record(
+            seat_root,
+            starting.model_copy(
+                update={"lifecycle_state": "tainted", "taint_state": "tainted"}
+            ),
+        )
+        raise SeatLauncherError(
+            "failed-start-cleanup", "failed seat cleanup could not be fully proved"
+        ) from cleanup_failure
+    persist_seat_record(
+        seat_root, starting.model_copy(update={"lifecycle_state": "recoverable-failure"})
+    )
+
+
+@serialized_seat_mutation
 def start_seat(
     seat_root: Path,
     *,
@@ -671,6 +746,11 @@ def start_seat(
                         manifest.host_prerequisites.disk_bytes,
                     ),
                     seat_root=seat_root,
+                    retained_disk_bytes=(
+                        paths.overlay_path.stat().st_blocks * 512
+                        if paths.overlay_path.exists()
+                        else 0
+                    ),
                 )
             else:
                 vm = start_vm(spec)
@@ -770,7 +850,7 @@ def start_seat(
             raise SeatLauncherError(
                 verdict.findings[0], "appliance boundary readiness failed"
             )
-        _establish_host_access(
+        _establish_validated_host_access(
             seat_root=seat_root,
             paths=paths,
             record=record,
@@ -799,23 +879,18 @@ def start_seat(
         persist_seat_record(seat_root, ready)
         return ready
     except SeatLauncherError:
-        invalidate_host_access(seat_root, reason="start-failed")
-        (paths.launch_dir / ACCESS_REQUEST_NAME).unlink(missing_ok=True)
-        failed = starting.model_copy(update={"lifecycle_state": "recoverable-failure"})
-        persist_seat_record(seat_root, failed)
+        _fail_closed_start(seat_root, paths, starting)
         raise
     except (
         ApplianceManifestError,
         OSError,
         ValueError,
     ) as exc:
-        invalidate_host_access(seat_root, reason="start-failed")
-        (paths.launch_dir / ACCESS_REQUEST_NAME).unlink(missing_ok=True)
-        failed = starting.model_copy(update={"lifecycle_state": "recoverable-failure"})
-        persist_seat_record(seat_root, failed)
+        _fail_closed_start(seat_root, paths, starting)
         raise SeatLauncherError("failed-readiness", "seat start failed") from exc
 
 
+@serialized_seat_mutation
 def stop_seat(seat_root: Path) -> SeatRecord:
     """Stop the tracked VM and return the seat to staged state."""
 
@@ -825,11 +900,26 @@ def stop_seat(seat_root: Path) -> SeatRecord:
     invalidate_host_access(seat_root, reason="seat-stopped")
     stop_vm(seat_root)
     (seat_root / "launch" / ACCESS_REQUEST_NAME).unlink(missing_ok=True)
-    updated = record.model_copy(update={"lifecycle_state": "staged"})
+    current_access = seat_root / "access" / f"generation-{record.generation}"
+    generation_was_used = current_access.exists() or current_access.is_symlink()
+    updated = record.model_copy(
+        update={
+            "lifecycle_state": "staged",
+            # Every completed start owns a generation-bound caller grant.
+            # Stopping revokes it, so the next start must not reuse that
+            # generation even though it retains the same disposable overlay.
+            "generation": (
+                record.generation + 1
+                if record.lifecycle_state != "staged" or generation_was_used
+                else record.generation
+            ),
+        }
+    )
     persist_seat_record(seat_root, updated)
     return updated
 
 
+@serialized_seat_mutation
 def reset_seat(
     seat_root: Path,
     *,
@@ -878,6 +968,7 @@ def reset_seat(
     )
 
 
+@serialized_seat_mutation
 def recover_seat(
     seat_root: Path,
     *,
@@ -906,6 +997,7 @@ def recover_seat(
     )
 
 
+@serialized_seat_mutation
 def reconcile_seat_after_reboot(seat_root: Path) -> SeatRecord:
     """Reconcile persisted seat state after a physical-host reboot."""
 

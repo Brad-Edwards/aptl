@@ -22,6 +22,7 @@ import tarfile
 import tempfile
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from aptl.backends.raes_materializer import (
@@ -69,6 +70,15 @@ ExecFn = Callable[[str, list[str]], _ExecOutcome]
 ExecWithInputFn = Callable[[str, list[str], str], _ExecOutcome]
 
 
+@dataclass(frozen=True)
+class DockerMaterializationSettings:
+    """Optional execution context for Docker node materialization."""
+
+    scenario_root: Path | None = None
+    sleep: Callable[[float], None] = time.sleep
+    offline_staged: bool = False
+
+
 class DockerMaterializationExecutor(DockerMaterializationObservationMixin):
     """Run generic materialization operations inside per-node base containers."""
 
@@ -80,18 +90,17 @@ class DockerMaterializationExecutor(DockerMaterializationObservationMixin):
         container_for: Callable[[str], str],
         start_base: Callable[[str, str], None],
         copy_in: Callable[[str, str, str, bool], None] | None = None,
-        scenario_root: Path | None = None,
-        sleep: Callable[[float], None] = time.sleep,
-        offline_staged: bool = False,
+        settings: DockerMaterializationSettings | None = None,
     ) -> None:
+        configured = settings or DockerMaterializationSettings()
         self._run = run
         self._run_with_input = run_with_input
         self._container_for = container_for
         self._start_base = start_base
         self._copy_in = copy_in
-        self._scenario_root = scenario_root
-        self._sleep = sleep
-        self._offline_staged = offline_staged
+        self._scenario_root = configured.scenario_root
+        self._sleep = configured.sleep
+        self._offline_staged = configured.offline_staged
 
     # -- mutations -------------------------------------------------------
 

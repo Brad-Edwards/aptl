@@ -239,7 +239,13 @@ def test_guest_qualification_builds_every_profile_mcp_registration(
     def run(observed_profile, registrations):
         captured.update(registrations)
         assert observed_profile is profile
-        return ("passed",)
+        return (
+            QualificationCheckEvidence(
+                check_id="live-check",
+                status="passed",
+                summary="live qualification passed",
+            ),
+        )
 
     with (
         patch.object(
@@ -254,10 +260,78 @@ def test_guest_qualification_builds_every_profile_mcp_registration(
     ):
         result = access_service._qualification_checks(project)
 
-    assert result == ("passed",)
+    assert result[0].status == "passed"
     assert set(captured) == {"aptl", "scenario"}
     assert captured["aptl"].argv == ("/usr/bin/node", str(project / "mcp/aptl.js"))
     assert captured["aptl"].env["APTL_MODE"] == "offline"
+
+
+def test_guest_qualification_retries_failed_semantics_before_publishing(
+    tmp_path: Path,
+) -> None:
+    from aptl.validation.participant_qualification_evidence import (
+        QualificationCheckEvidence,
+    )
+
+    failed = (
+        QualificationCheckEvidence(
+            check_id="live-check",
+            status="failed",
+            summary="semantic backend operation failed",
+        ),
+    )
+    passed = (
+        QualificationCheckEvidence(
+            check_id="live-check",
+            status="passed",
+            summary="semantic backend operation passed",
+        ),
+    )
+
+    with patch(
+        "aptl.appliance.access_service._run_qualification_attempt",
+        side_effect=(failed, passed),
+    ) as attempt:
+        result = access_service._qualification_checks(
+            tmp_path,
+            timeout_seconds=10,
+            retry_interval_seconds=0,
+        )
+
+    assert result == passed
+    assert attempt.call_count == 2
+
+
+def test_guest_qualification_fails_closed_after_semantic_deadline(
+    tmp_path: Path,
+) -> None:
+    from aptl.validation.participant_qualification_evidence import (
+        QualificationCheckEvidence,
+    )
+
+    failed = (
+        QualificationCheckEvidence(
+            check_id="live-check",
+            status="failed",
+            summary="semantic backend operation failed",
+        ),
+    )
+    with (
+        patch(
+            "aptl.appliance.access_service._run_qualification_attempt",
+            return_value=failed,
+        ),
+        patch(
+            "aptl.appliance.access_service.time.monotonic",
+            side_effect=(0.0, 1.0),
+        ),
+        pytest.raises(WorkbenchConfigurationError, match="qualification checks failed"),
+    ):
+        access_service._qualification_checks(
+            tmp_path,
+            timeout_seconds=1,
+            retry_interval_seconds=0,
+        )
 
 
 def test_validate_request_accepts_the_signed_endpoint() -> None:
@@ -344,8 +418,10 @@ def test_access_supervisor_publishes_then_revokes_stopped_listener(
             return 1
 
     listener = Listener()
+    call_order: list[str] = []
 
     def prepare(_configuration: object, target: Path) -> SimpleNamespace:
+        call_order.append("prepare")
         assert _configuration.appliance.candidate_trust == candidate_trust
         target.mkdir(parents=True)
         (target / "sshd_config").write_text("fixture")
@@ -383,7 +459,9 @@ def test_access_supervisor_publishes_then_revokes_stopped_listener(
         patch("aptl.appliance.access_service.subprocess.Popen", return_value=listener),
         patch(
             "aptl.appliance.access_service._load_runtime_evidence",
-            return_value=bundle.runtime_evidence,
+            side_effect=lambda *_args, **_kwargs: (
+                call_order.append("qualify") or bundle.runtime_evidence
+            ),
         ),
         patch("aptl.appliance.access_service.publish_guest_access") as publish,
         patch("aptl.appliance.access_service.observe_guest", return_value=object()),
@@ -412,3 +490,4 @@ def test_access_supervisor_publishes_then_revokes_stopped_listener(
     published = publish.call_args.args[1]
     assert published.seat_id == request.seat_id
     assert published.runtime_evidence == bundle.runtime_evidence
+    assert call_order == ["qualify", "prepare"]

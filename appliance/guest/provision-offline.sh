@@ -75,11 +75,16 @@ cat > /usr/local/bin/aptl <<'EOF'
 #!/bin/sh
 PYTHONPATH=/opt/aptl/python exec /usr/bin/python3 /opt/aptl/python/bin/aptl "$@"
 EOF
+cat > /usr/local/bin/raes <<'EOF'
+#!/bin/sh
+PYTHONPATH=/opt/aptl/python exec /usr/bin/python3 /opt/aptl/python/bin/raes "$@"
+EOF
 cat > /usr/local/bin/aptl-misp-suricata-sync <<'EOF'
 #!/bin/sh
 PYTHONPATH=/opt/aptl/python exec /usr/bin/python3 /opt/aptl/python/bin/aptl-misp-suricata-sync "$@"
 EOF
-chmod 0755 /usr/local/bin/aptl /usr/local/bin/aptl-misp-suricata-sync
+chmod 0755 /usr/local/bin/aptl /usr/local/bin/raes \
+    /usr/local/bin/aptl-misp-suricata-sync
 /usr/local/bin/aptl appliance validate-inputs --staging-dir "$payload_dir"
 
 # Install the content-locked guest runtime without granting the build guest

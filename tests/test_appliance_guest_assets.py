@@ -41,6 +41,8 @@ def test_guest_scripts_are_valid_and_have_no_network_install_path() -> None:
     assert "--only-binary=:all:" in provisioner
     assert '-r "$payload_dir/requirements.txt"' in provisioner
     assert "PYTHONPATH=/opt/aptl/python exec /usr/bin/python3" in provisioner
+    assert "/usr/local/bin/raes" in provisioner
+    assert "/opt/aptl/python/bin/raes" in provisioner
     assert "/usr/local/bin/aptl-misp-suricata-sync" in provisioner
     assert "/usr/local/bin/aptl appliance validate-inputs" in provisioner
     assert "system-packages.sha256" in provisioner
@@ -76,12 +78,17 @@ def test_guest_scripts_are_valid_and_have_no_network_install_path() -> None:
     assert "/usr/local/bin/aptl appliance bootstrap-overlay" in first_boot
     assert "docker load" in first_boot
     assert "images-loaded" in first_boot
+    recovery = "/usr/local/bin/aptl kill --containers --project-dir /opt/aptl/project"
+    assert recovery in first_boot
+    assert first_boot.index(recovery) < first_boot.index("aptl lab start")
+    assert "aptl lab stop --volumes" not in first_boot
     assert "lab start" in first_boot
     assert "--offline-staged" in first_boot
     assert "--appliance-launch-descriptor" in first_boot
     assert "--appliance-release-public-key" in first_boot
     assert "--appliance-qualification-public-key" in first_boot
     assert "/usr/local/bin/aptl appliance proxy-loopback" in first_boot
+    assert "/usr/local/bin/aptl appliance serve-seat-surfaces" in first_boot
     assert 'set -- "$@" --candidate-trust' in first_boot
     assert "set -- /usr/local/bin/aptl lab start" in first_boot
     assert "exec aptl lab start" not in first_boot

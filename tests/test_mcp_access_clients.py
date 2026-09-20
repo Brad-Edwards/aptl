@@ -40,6 +40,11 @@ def test_native_configs_keep_manual_servers_and_provider_settings(tmp_path):
     assert args[args.index("-F") + 1] == "/dev/null"
     assert "StrictHostKeyChecking=yes" in args
     assert "IdentityAgent=none" in args
+    known_hosts_option = next(
+        item for item in args if item.startswith("UserKnownHostsFile=")
+    )
+    assert known_hosts_option == f"UserKnownHostsFile={tmp_path / 'known_hosts'}"
+    assert '"' not in known_hosts_option
     assert "30222" in args
     assert "2222" not in args
     assert args[-1] == "aptl-mcp-v1 instance-1 1 aptl-red"

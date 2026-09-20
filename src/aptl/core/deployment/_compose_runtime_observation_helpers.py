@@ -14,23 +14,6 @@ from aptl.runtime_authority import (
 )
 
 
-def spawn_failure(
-    condition: str,
-    requirement: DeploymentSpawnImageRequirement,
-    *,
-    separator: str = " for ",
-) -> LabResult:
-    """Build one stable child-observation diagnostic."""
-
-    return LabResult(
-        success=False,
-        error=(
-            f"{condition}{separator}"
-            f"{requirement.node_address}/{requirement.template_id}."
-        ),
-    )
-
-
 def inspect_mounts(info: object) -> Sequence[object]:
     """Return normalized Docker inspect mount entries."""
 
@@ -115,40 +98,10 @@ def authority_mount_is_valid(
     )
 
 
-def child_query(requirement: DeploymentSpawnImageRequirement) -> list[str]:
-    """Build the exact image and authored-label query."""
-
-    query = [
-        "docker",
-        "ps",
-        "-aq",
-        "--filter",
-        f"ancestor={requirement.image_ref}",
-    ]
-    if requirement.child_label:
-        query += ["--filter", f"label={requirement.child_label}"]
-    return query
-
-
-def container_ids(stdout: str) -> tuple[str, ...]:
-    """Return unique, non-empty container ids in daemon order."""
-
-    return tuple(
-        dict.fromkeys(
-            container_id.strip()
-            for container_id in stdout.splitlines()
-            if container_id.strip()
-        )
-    )
-
-
 __all__ = (
     "authority_mount_is_valid",
-    "child_query",
-    "container_ids",
     "inspect_environment",
     "inspect_has_endpoint_override",
     "inspect_has_socket_route",
     "inspect_mounts",
-    "spawn_failure",
 )

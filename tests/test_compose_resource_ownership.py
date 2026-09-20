@@ -723,47 +723,6 @@ def test_clean_volume_cleanup_retires_already_absent_receipt(tmp_path: Path) -> 
     assert ownership.receipts("volume")[0].attempt_id == "run-b"
 
 
-def test_isolated_daemon_children_are_receipted_before_observation(
-    tmp_path: Path,
-) -> None:
-    backend = DockerComposeBackend(tmp_path, project_name="aptl")
-    ownership = backend._ensure_resource_ownership(attempt_id="run-a")
-    backend._docker_daemon_id = "daemon-a"
-    backend._attempt_isolated_docker_daemon = True
-    requirement = DeploymentSpawnImageRequirement(
-        node_address="provision.node.orborus",
-        authority_id="orborus",
-        template_id="worker",
-        image_ref="example.invalid/worker@sha256:" + "c" * 64,
-        execution_timeout_seconds=30,
-        child_label="com.example.execution=run-a",
-        expected_count=1,
-    )
-    backend._run = MagicMock(
-        return_value=subprocess.CompletedProcess([], 0, stdout=f"{_ID_A}\n", stderr="")
-    )
-    backend._raw_container_inspect = MagicMock(
-        return_value={
-            "Id": _ID_A,
-            "Name": "/runtime-worker",
-            "Config": {"Labels": {"com.example.execution": "run-a"}},
-        }
-    )
-
-    failure, identifiers = backend._correlated_child_ids(
-        requirement, require_children=True
-    )
-
-    assert failure is None
-    assert identifiers == (_ID_A,)
-    assert backend._resolve_owned_container_id("worker") == _ID_A
-    receipt = ownership.candidates("worker", kind="container", daemon_id="daemon-a")
-    assert receipt[0].managed_by == "child"
-    backend._docker_daemon_id = "daemon-b"
-    with pytest.raises(OwnershipConflictError, match="daemon identity"):
-        backend._resolve_owned_container_id("worker")
-
-
 def test_receipted_container_resolution_retries_only_inconclusive_inspect(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -816,34 +775,6 @@ def test_receipted_container_resolution_retries_only_inconclusive_inspect(
         backend._resolve_owned_container_id("worker")
     assert sleeps == []
     assert backend._raw_container_inspect.call_count == 1
-
-
-def test_uncorrelated_child_template_never_queries_foreign_containers(
-    tmp_path: Path,
-) -> None:
-    """Image-only contracts must not absorb unrelated host containers."""
-
-    backend = DockerComposeBackend(tmp_path, project_name="aptl")
-    requirement = DeploymentSpawnImageRequirement(
-        node_address="provision.node.orborus",
-        authority_id="orborus",
-        template_id="worker",
-        image_ref="example.invalid/worker@sha256:" + "c" * 64,
-        execution_timeout_seconds=30,
-        child_label="",
-        expected_count=0,
-    )
-    backend._run = MagicMock(
-        return_value=subprocess.CompletedProcess([], 0, stdout="", stderr="")
-    )
-
-    failure, identifiers = backend._correlated_child_ids(
-        requirement, require_children=False
-    )
-
-    assert failure is None
-    assert identifiers == ()
-    backend._run.assert_not_called()
 
 
 def test_compose_override_labels_networks_and_volumes_and_plans_exact_names(

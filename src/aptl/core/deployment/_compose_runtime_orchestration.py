@@ -36,42 +36,19 @@ def _spawn_requirement_is_complete(
     *,
     node_address: str,
 ) -> bool:
-    """Whether a carried child contract contains every field core code consumes.
+    """Whether a carried image requirement names what core code consumes.
 
-    Image identity and the execution deadline are required of every carried
-    requirement. The correlation pair is required only when one was authored:
-    a template the pack pinned without declaring an expected child inventory
-    carries neither a label nor a count, and demanding them would reject the
-    very requirement that exists to gate what the authority may launch.
+    This is an integrity check on APTL's own carried decision, not a judgement
+    about the scenario. It confirms the requirement still belongs to its node
+    and names an image and a bounded deadline.
     """
 
-    correlated = bool(requirement.child_label) or bool(requirement.expected_count)
-    return bool(
-        _spawn_requirement_identity_is_complete(
-            requirement,
-            node_address=node_address,
-            correlated=correlated,
-        )
-        and _positive_int(requirement.execution_timeout_seconds)
-        and (not correlated or _positive_int(requirement.expected_count))
-    )
-
-
-def _spawn_requirement_identity_is_complete(
-    requirement: DeploymentSpawnImageRequirement,
-    *,
-    node_address: str,
-    correlated: bool,
-) -> bool:
-    """Whether a child contract carries its complete immutable identity."""
-
-    label_name, _separator, label_value = requirement.child_label.partition("=")
     return bool(
         requirement.node_address == node_address
         and requirement.authority_id
         and requirement.template_id
         and requirement.image_ref
-        and (not correlated or (label_name and label_value))
+        and _positive_int(requirement.execution_timeout_seconds)
     )
 
 
@@ -135,20 +112,13 @@ def docker_authority_admissions(
 def _authority_identifiers_are_unique(
     admissions: tuple[DeploymentDockerAuthorityAdmission, ...],
 ) -> bool:
-    """Return whether one authority owns unique node, service, and child ids."""
+    """Return whether one authority owns a unique node address and service."""
 
     addresses = [admission.node_address for admission in admissions]
     services = [admission.service_name for admission in admissions]
-    labels = [
-        requirement.child_label
-        for admission in admissions
-        for requirement in admission.spawn_requirements
-        if requirement.child_label
-    ]
     return bool(
         len(addresses) == len(set(addresses))
         and len(services) == len(set(services))
-        and len(labels) == len(set(labels))
     )
 
 

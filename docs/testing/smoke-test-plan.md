@@ -60,6 +60,7 @@ python3 -m venv qa-candidate-venv
 source qa-candidate-venv/bin/activate
 pip install /absolute/path/to/aptl_labs-X.Y.Z-py3-none-any.whl
 aptl --version
+raes --version
 aptl lab init qa-candidate-lab
 cd qa-candidate-lab
 ```
@@ -82,6 +83,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
 aptl --version
+raes --version
 ```
 
 The clean checkout itself is the project directory for every path-B action.
@@ -156,8 +158,9 @@ B. Do not copy an observation from one path to the other.
 Run:
 
 ```bash
-aptl lab start
-aptl lab status
+set -o pipefail
+aptl lab start 2>&1 | tee qa-start.txt
+aptl lab status | tee qa-start-status.txt
 aptl lab status --json --output qa-start-status.json
 aptl runs list | tee qa-start-runs.txt
 ```
@@ -170,6 +173,10 @@ contains the canonical run created by this exact start, backed by its root
 used by later UI rows. Record that full run id as the path's startup run id.
 Capture the final start result, complete status inventory, JSON snapshot, and
 runs listing. A start failure is a valid diagnostic, not a pass.
+Keep `pipefail` enabled when using `tee`: otherwise the pipeline may exit zero
+even if `aptl lab start` or `aptl lab status` failed. The plain-text status
+capture is required in addition to the JSON snapshot; the latter is not a
+substitute for executing the documented user-facing command.
 
 ### QA-LIVE: RAES live validation
 
@@ -411,6 +418,13 @@ hashes it does not contain. Also compare at least one claimed container and one
 live-gate evidence item with earlier observations. Capture the run id, bundle
 root identity, member count, verification verdict, cross-record comparison,
 and the two inspected claims.
+
+The `lab start` run is a provisional startup record, not a terminal experiment
+attempt. Its bundle may therefore verify as **unsealed** with the absent
+`run-provenance.json` and #444 seal explicitly disclosed. Record those
+limitations; do not call the bundle sealed or treat an unsealed startup bundle
+as a failed terminal-attempt seal. A terminal execution attempt that should
+seal but does not is a separate failure under EXP-009.
 
 ### QA-TEARDOWN: Scoped removal
 

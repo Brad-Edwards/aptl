@@ -557,6 +557,8 @@ docs/specs/soc-feature-spec.md	docs-follow-owner	Separate current user guidance 
 docs/specs/web-component-kit.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/specs/web-gui-design-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/specs/web-gui-design.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/testing/issue-956-candidate-254bc40f-manual-qa.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/testing/issue-956-candidate-e23fec55-manual-qa.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/testing/property-based-parser-tests.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/testing/smoke-test-plan.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/troubleshooting/index.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
@@ -903,6 +905,7 @@ src/aptl/backends/raes_start_model.py	core-candidate	Migrate only after public-i
 src/aptl/backends/raes_stateful_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_substrate.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/scenario_runtime_parameters.py	core-candidate	Generic content-identified runtime-parameter adapter discovery; retain behind scenario-independent contract
+src/aptl/backends/scenario_service_policy.py	core-candidate	Generic content-qualified service integration policy; retain behind scenario-independent contract
 src/aptl/backends/scenario_startup.py	core-candidate	Generic content-identified startup adapter discovery; retain behind scenario-independent contract
 src/aptl/backends/scenario_startup_policy.py	core-candidate	Generic content-identified startup readiness policy; retain behind scenario-independent contract
 src/aptl/cli/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification

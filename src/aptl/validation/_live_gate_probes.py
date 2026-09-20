@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from raes_contracts.diagnostics import Diagnostic
 
     from aptl.backends.raes_realization_model import AptlRealization
+    from aptl.backends.raes_start_model import AdmittedScenarioStart
     from aptl.core.config import AptlConfig
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.lab_types import LabResult
@@ -121,7 +122,7 @@ def _compute_realization(
     return realization, errors, apparatus
 
 
-def _planned_apparatus(admitted: Any) -> tuple[dict[str, str], ...]:
+def _planned_apparatus(admitted: "AdmittedScenarioStart") -> tuple[dict[str, str], ...]:
     """Project only scenario-admitted helper containers into live parity."""
     planned: list[dict[str, str]] = []
     for apparatus in admitted.capture_plan.apparatus:

@@ -206,8 +206,9 @@ def test_service_policy_rejects_missing_or_escaping_files(
             mounts=(ServiceFileMount("thehive", "../outside", "/etc/thehive/x"),)
         ),
     )
+    spec = _startup_spec()
     with pytest.raises(ScenarioStartupProviderError, match="result-invalid"):
-        resolve_service_policy(_startup_spec(), tmp_path)
+        resolve_service_policy(spec, tmp_path)
 
 
 def test_certificate_aliases_require_the_same_declared_source_and_consumer(

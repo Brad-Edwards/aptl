@@ -91,6 +91,29 @@ def test_reachability_passes_when_shared_targets_reachable(monkeypatch):
     assert state.evidence["reachability_targets"] == ["aptl-webapp"]
 
 
+def test_reachability_resolves_semantic_origin_in_scoped_snapshot(monkeypatch):
+    monkeypatch.setattr(ops, "get_backend", lambda c, p: _Backend(returncode=0))
+    state = _state(
+        [
+            _container(
+                "aptl-w123456789abc-kali",
+                networks={"aptl-w123456789abc-dmz-net": "172.20.1.30"},
+            ),
+            _container(
+                "aptl-w123456789abc-webapp",
+                networks={"aptl-w123456789abc-dmz-net": "172.20.1.10"},
+            ),
+        ]
+    )
+    state.semantic_container_names = {ATTACKER: "aptl-w123456789abc-kali"}
+
+    result = _operations(state).reachability_from(ATTACKER)
+
+    assert result.reached
+    assert result.tested == ("aptl-w123456789abc-webapp",)
+    assert _operations(state).shared_network_targets(ATTACKER)
+
+
 def test_reachability_fails_when_target_unreachable(monkeypatch):
     monkeypatch.setattr(ops, "get_backend", lambda c, p: _Backend(returncode=1))
     state = _state(

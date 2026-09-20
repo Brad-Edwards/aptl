@@ -68,6 +68,7 @@ class ComposeRealizationModelMixin:
             realization, scenario_root, realization_root
         )
         startup_override = None
+        service_override = None
         if not (scenario_root / STATIC_COMPOSE_FILENAME).exists():
             # The adapter registry imports deployment DTOs; resolve it only
             # after the deployment package has completed import initialization.
@@ -78,6 +79,15 @@ class ComposeRealizationModelMixin:
             startup_override = write_scenario_startup_override(
                 realization, realization_root
             )
+            from aptl.backends.scenario_service_policy import (
+                write_scenario_service_override,
+            )
+
+            service_override = write_scenario_service_override(
+                realization,
+                realization_root,
+                container_name_for_semantic=self._ensure_resource_ownership().container_name,
+            )
         overrides = tuple(
             path
             for path in (
@@ -85,6 +95,7 @@ class ComposeRealizationModelMixin:
                 stateful_override,
                 content_override,
                 startup_override,
+                service_override,
             )
             if path is not None
         )

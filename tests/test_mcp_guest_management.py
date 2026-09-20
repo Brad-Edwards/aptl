@@ -160,6 +160,9 @@ def test_guest_launch_binds_native_kali_and_keeps_provider_auth_out(
     config_path = tmp_path / ".mcp.json"
     config_path.write_text(json.dumps({"mcpServers": {"aptl-red": {"env": values}}}))
     config_path.chmod(0o600)
+    (tmp_path / "aptl.json").write_text(
+        '{"run_storage":{"local_path":"./custom-runs"}}'
+    )
     monkeypatch.setattr(
         "aptl.core.lab._server_config_port_refs", lambda *a: ("APTL_TEST_PORT",)
     )
@@ -183,6 +186,7 @@ def test_guest_launch_binds_native_kali_and_keeps_provider_auth_out(
     assert environment["APTL_MCP_KALI_HOST"] == "192.0.2.44"
     assert environment["DOCKER_HOST"] == "unix://" + str(tmp_path / "unused.sock")
     assert environment["APTL_MCP_ADMITTED_RUN_ID"] == binding.run_id
+    assert environment["APTL_MCP_RUN_STORE_BASE"] == str(tmp_path / "custom-runs")
     assert environment["APTL_TEST_PORT"] == "2222"
     assert "ANTHROPIC_API_KEY" not in environment
     assert calls == [({"fixture": True}, record.container_ids["aptl-kali"])]

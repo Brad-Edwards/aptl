@@ -3825,12 +3825,14 @@ def _sync_native_mcp_ingress(
     server.setdefault("env", {}).update(
         native_kali_ingress(observed, observed.get("Id", ""))
     )
+    run_store_base = str(_expected_transcript_store(project_dir).resolve())
     for role in ("red", "blue"):
         for item in profile_for(role).servers:
             managed = cfg["mcpServers"].get(item.server_id)
             if isinstance(managed, dict):
                 managed.setdefault("env", {}).update(
                     APTL_MCP_ADMITTED_RUN_ID=run_id,
+                    APTL_MCP_RUN_STORE_BASE=run_store_base,
                     APTL_STATE_DIR=str(project_dir / ".aptl"),
                 )
     path.write_text(json.dumps(cfg, indent=2) + "\n")

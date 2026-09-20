@@ -60,6 +60,7 @@ python3 -m venv qa-candidate-venv
 source qa-candidate-venv/bin/activate
 pip install /absolute/path/to/aptl_labs-X.Y.Z-py3-none-any.whl
 aptl --version
+raes --version
 aptl lab init qa-candidate-lab
 cd qa-candidate-lab
 ```
@@ -82,6 +83,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
 aptl --version
+raes --version
 ```
 
 The clean checkout itself is the project directory for every path-B action.
@@ -113,15 +115,37 @@ The Wazuh dashboard certificate names `wazuh.dashboard`, not `localhost`.
 Configure a temporary browser or operating-system resolver entry mapping
 `wazuh.dashboard` to `127.0.0.1`, and use the dashboard host port reported by
 `aptl lab info` (`443` is only the default). The other SOC UI certificates
-include `localhost`; use each service's actual loopback publication from the
-current path's `qa-start-status.json` rather than assuming a default port.
-Confirm that the browser reports a valid hostname and a chain to the
-corresponding path-specific root before recording a UI result.
+include `localhost`, but MISP's authored browser origin is
+`https://misp.techvault.local` on port 443. Its loopback publication (normally
+`https://localhost:8443`) is usable by API/MCP clients but is **not** a browser
+login URL: MISP redirects the form to its canonical origin, which the browser
+blocks under `form-action 'self'` when opened on the loopback publication.
+Do not weaken CSP or change the authored in-world base URL to make this pass.
+
+On a native-Linux Docker host, select the MISP container's security-network IP
+from this path's `qa-start-status.json` and map `misp.techvault.local` to that
+IP in the test browser only. Open `https://misp.techvault.local/`, not the
+loopback publication. For example, the IP can be read without guessing a
+container name:
+
+```bash
+jq -r '.containers[] | select(.name | endswith("-misp")) |
+  .networks | to_entries[] | select(.key | endswith("_aptl-security")) |
+  .value' qa-start-status.json
+```
+
+The browser must have a route to that in-range address. Docker Desktop hosts
+may not expose the bridge address directly; use a browser in an environment
+with a route to the scenario network and the same canonical origin, or record
+`QA-MISP` as `FAIL`. Do not count a successful API call or the broken loopback
+login page as a browser result. For Shuffle and TheHive, use each service's
+actual loopback publication from `qa-start-status.json`. Confirm a valid
+hostname and chain to the path-specific root before recording any UI result.
 
 Do not click through a certificate warning, disable certificate validation, or
 use an insecure client flag to make a QA row pass. Remove the temporary trust
-entries and hostname mapping after that path's `QA-TEARDOWN`; path B must import
-its own newly generated roots rather than reuse path A's trust.
+entries and hostname mappings after that path's `QA-TEARDOWN`; path B must
+import its own newly generated roots rather than reuse path A's trust.
 
 ## Required actions
 
@@ -134,8 +158,9 @@ B. Do not copy an observation from one path to the other.
 Run:
 
 ```bash
-aptl lab start
-aptl lab status
+set -o pipefail
+aptl lab start 2>&1 | tee qa-start.txt
+aptl lab status | tee qa-start-status.txt
 aptl lab status --json --output qa-start-status.json
 aptl runs list | tee qa-start-runs.txt
 ```
@@ -148,6 +173,10 @@ contains the canonical run created by this exact start, backed by its root
 used by later UI rows. Record that full run id as the path's startup run id.
 Capture the final start result, complete status inventory, JSON snapshot, and
 runs listing. A start failure is a valid diagnostic, not a pass.
+Keep `pipefail` enabled when using `tee`: otherwise the pipeline may exit zero
+even if `aptl lab start` or `aptl lab status` failed. The plain-text status
+capture is required in addition to the JSON snapshot; the latter is not a
+substitute for executing the documented user-facing command.
 
 ### QA-LIVE: RAES live validation
 
@@ -176,16 +205,20 @@ and a bounded recent-event view without credentials or session data.
 
 ### QA-DETECT: Attack and expected Wazuh rule
 
-Open a Kali shell with `aptl container shell aptl-kali`. Send a SQL-injection
-request to the realized TechVault portal:
+Use the generated `.mcp.json` configuration with an MCP client to call
+`mcp-red`'s `kali_run_command`. Direct `aptl container shell aptl-kali` is
+refused while required capture is active; a separate SSH command would not
+create the MCP-side session-census entry required by transcript finalization.
+Send this SQL-injection request from the realized Kali target:
 
 ```bash
-curl -sf 'http://172.20.1.20:8080/login?username=admin%27%20UNION%20SELECT%201,2,3--&password=x'
+curl -sf -o /dev/null -w '%{http_code}\n' 'http://172.20.1.20:8080/login?username=admin%27%20UNION%20SELECT%201,2,3--&password=x'
 ```
 
 In Wazuh, find the resulting alert within the test time window.
 
-Expected: the alert is attributable to this action and the expected custom
+Expected: `kali_run_command` reports target-backed success and HTTP `200`;
+the alert is attributable to this action and the expected custom
 Wazuh rule is `302010` (SQL injection). Capture the action time, source, alert
 id, rule id, description, and event time.
 
@@ -236,10 +269,11 @@ alert id, observable type/value, analyzer name, job id, and terminal result.
 
 ### QA-MISP: Seeded threat intelligence and round trip
 
-Open MISP at `https://localhost:<reported-host-port>` (default `8443`), confirm
-the expected seeded TechVault content is present, then add a harmless release-QA
-indicator in a dedicated QA event or select a seeded indicator. Retrieve the
-same indicator through a second supported surface, preferably
+Open MISP at the canonical browser origin specified above. Confirm the seeded
+`APTL Lab - Known Threat Actors` event and its TechVault-scenario Kali
+indicator `172.20.4.30`, then add a harmless release-QA indicator in a
+dedicated QA event or select that seeded indicator. Retrieve the same
+indicator through a second supported surface, preferably
 `mcp-threatintel` in `QA-MCP-TI`.
 
 Expected: MISP is usable and seeded, and the exact indicator can be pushed or
@@ -272,7 +306,10 @@ name, index pattern, query bounds, and matching document id.
 ### QA-MCP-SOAR: `mcp-soar`
 
 Use the SOAR tools to list/get the real-alert workflow and retrieve or execute
-the `QA-SOAR` run with the recorded real alert data.
+the `QA-SOAR` run with the recorded real alert data. For
+`soar_execute_workflow`, pass the alert object itself as `body`; wrapping it
+in `{"execution_argument": ...}` makes the workflow receive a nested object
+and leaves `$exec.rule.id` and the other alert fields empty.
 
 Expected: the live Shuffle target returns the same workflow and a terminal
 successful execution. Capture the tool names, workflow id, execution id, alert
@@ -381,6 +418,13 @@ hashes it does not contain. Also compare at least one claimed container and one
 live-gate evidence item with earlier observations. Capture the run id, bundle
 root identity, member count, verification verdict, cross-record comparison,
 and the two inspected claims.
+
+The `lab start` run is a provisional startup record, not a terminal experiment
+attempt. Its bundle may therefore verify as **unsealed** with the absent
+`run-provenance.json` and #444 seal explicitly disclosed. Record those
+limitations; do not call the bundle sealed or treat an unsealed startup bundle
+as a failed terminal-attempt seal. A terminal execution attempt that should
+seal but does not is a separate failure under EXP-009.
 
 ### QA-TEARDOWN: Scoped removal
 

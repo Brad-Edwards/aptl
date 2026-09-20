@@ -12,6 +12,9 @@ def test_native_client_sync_binds_run_without_changing_manual_entries(tmp_path):
     from aptl.core.lab import _sync_native_mcp_ingress
 
     path = tmp_path / ".mcp.json"
+    (tmp_path / "aptl.json").write_text(
+        '{"run_storage":{"local_path":"./custom-runs"}}'
+    )
     manual = {"command": "user-owned", "env": {"CUSTOM": "keep"}}
     path.write_text(
         json.dumps(
@@ -37,6 +40,9 @@ def test_native_client_sync_binds_run_without_changing_manual_entries(tmp_path):
     assert servers["aptl-red"]["env"]["APTL_MCP_KALI_HOST"] == "172.20.1.30"
     assert servers["aptl-indexer"]["env"]["APTL_MCP_ADMITTED_RUN_ID"] == "a" * 32
     assert servers["aptl-indexer"]["env"]["APTL_STATE_DIR"] == str(tmp_path / ".aptl")
+    assert servers["aptl-indexer"]["env"]["APTL_MCP_RUN_STORE_BASE"] == str(
+        tmp_path / "custom-runs"
+    )
 
 
 def test_native_ingress_requires_running_exact_identity():

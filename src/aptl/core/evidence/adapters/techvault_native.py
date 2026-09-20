@@ -48,6 +48,7 @@ from aptl.core.evidence.adapters.techvault_native_support import (
     content_identities,
     find_node,
     generated_output,
+    generated_output_path,
     inside_window,
     published_url,
     utc_iso_now,
@@ -114,7 +115,13 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
         self._now = selected_dependencies.now
         self._sleep = selected_dependencies.sleep
         self._cortex_url = published_url(realization, "cortex", 9001, "http")
-        self._thehive_url = published_url(realization, "thehive", 9000, "http")
+        self._thehive_url = published_url(realization, "thehive", 9000, "https")
+        self._thehive_ca_path = generated_output_path(
+            realization,
+            project_dir,
+            "techvault:soc-certificate-profile/v1",
+            "ca-certificate",
+        )
         self._indexer_url = published_url(realization, "wazuh-indexer", 9200, "https")
         self._connector_key = generated_output(
             realization,

@@ -84,14 +84,6 @@ class _Realization:
         return self.spec
 
 
-class _Manager:
-    def __init__(self, target):
-        self.target = target
-
-    def plan(self, scenario, artifact_availability=None):
-        return types.SimpleNamespace(provisioning=object())
-
-
 class _Snapshot:
     def __init__(self, data):
         self._data = data
@@ -131,6 +123,7 @@ def _container(
     health="healthy",
     networks=None,
     restart_policy="",
+    labels=None,
 ):
     return {
         "name": name,
@@ -138,6 +131,7 @@ def _container(
         "health": health,
         "networks": networks or {},
         "restart_policy": restart_policy,
+        "labels": labels or {},
     }
 
 
@@ -153,13 +147,23 @@ def _wire_boot(
             _container("aptl-webapp", networks={"aptl-dmz-net": "172.20.1.10"})
         ]
     }
-    # The realization + boot probes moved to `_live_gate_probes` (lgp); their
-    # leaf deps are looked up there. `select_backend_profiles` is still called
-    # directly in `check_raes_driven_boot` (lgc), so it stays patched on lgc.
+    # The realization + boot probes live in `_live_gate_probes` (lgp); their
+    # leaf deps are looked up there. Profile selection remains in lgc.
     monkeypatch.setattr(lgp, "get_backend", lambda config, project_dir: _Backend())
-    monkeypatch.setattr(lgp, "create_aptl_runtime_target", lambda **k: object())
-    monkeypatch.setattr(lgp, "RuntimeManager", _Manager)
-    monkeypatch.setattr(lgp, "interpret_provisioning_plan", lambda **k: realization)
+    monkeypatch.setattr(
+        lgp,
+        "admit_raes_scenario",
+        lambda *a, **k: types.SimpleNamespace(
+            realization=realization,
+            runtime_materialization_failure=None,
+            capture_plan=types.SimpleNamespace(apparatus=()),
+            target=types.SimpleNamespace(
+                provisioner=types.SimpleNamespace(
+                    operator_access=types.SimpleNamespace(accesses=())
+                )
+            ),
+        ),
+    )
     monkeypatch.setattr(
         lgc, "select_backend_profiles", lambda config, profiles: ["dmz", "soc"]
     )
@@ -426,6 +430,95 @@ def test_check_raes_driven_boot_happy_populates_state(monkeypatch):
     assert state.snapshot["containers"]
 
 
+def test_check_raes_driven_boot_uses_public_admission(monkeypatch):
+    """Live validation must reuse start admission, including pack bindings."""
+    _wire_boot(monkeypatch)
+    observed = []
+    realization = _Realization([_node("webapp", ["dmz"])], ["dmz", "soc"])
+
+    def record_admission(project_dir, config, backend, *, scenario_path=None):
+        observed.append((project_dir, config, backend, scenario_path))
+        return types.SimpleNamespace(
+            realization=realization,
+            runtime_materialization_failure=None,
+            capture_plan=types.SimpleNamespace(apparatus=()),
+            target=types.SimpleNamespace(
+                provisioner=types.SimpleNamespace(
+                    operator_access=types.SimpleNamespace(accesses=())
+                )
+            ),
+        )
+
+    monkeypatch.setattr(lgp, "admit_raes_scenario", record_admission)
+    selected = PROJECT_ROOT / "scenarios" / "custom.sdl.yaml"
+
+    check = lgc.check_raes_driven_boot(
+        object(),
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(skip_clean_boot=True),
+        state=LiveGateState(),
+        scenario_path=selected,
+    )
+
+    assert check.passed
+    assert len(observed) == 1
+    assert observed[0][0] == PROJECT_ROOT
+    assert isinstance(observed[0][2], _Backend)
+    assert observed[0][3] == selected
+
+
+def test_check_raes_driven_boot_carries_declared_apparatus(monkeypatch):
+    _wire_boot(monkeypatch)
+    realization = _Realization([_node("webapp", ["dmz"])], ["dmz", "soc"])
+    admitted = types.SimpleNamespace(
+        realization=realization,
+        runtime_materialization_failure=None,
+        capture_plan=types.SimpleNamespace(
+            apparatus=(
+                types.SimpleNamespace(
+                    container_name="aptl-kali-capture", service_name="kali-capture"
+                ),
+            )
+        ),
+        target=types.SimpleNamespace(
+            provisioner=types.SimpleNamespace(
+                operator_access=types.SimpleNamespace(
+                    accesses=(
+                        types.SimpleNamespace(
+                            access_id="kali-ssh", target_node="kali"
+                        ),
+                    )
+                )
+            )
+        ),
+    )
+    monkeypatch.setattr(lgp, "admit_raes_scenario", lambda *a, **k: admitted)
+    state = LiveGateState()
+
+    check = lgc.check_raes_driven_boot(
+        object(),
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(skip_clean_boot=True),
+        state=state,
+    )
+
+    assert check.passed
+    assert state.planned_apparatus == (
+        {
+            "name": "aptl-kali-capture",
+            "label_key": "com.docker.compose.service",
+            "label_value": "kali-capture",
+        },
+        {
+            "name": "aptl-operator-ssh-kali",
+            "label_key": "aptl.operator-access.id",
+            "label_value": "kali-ssh",
+        },
+    )
+
+
 def test_runtime_orchestration_containment_uses_post_work_backend_attestation(
     monkeypatch,
 ):
@@ -676,6 +769,99 @@ def test_readiness_passes_when_all_nodes_healthy():
     )
     check = lgc.check_defensive_stack_readiness(state=state)
     assert check.passed
+
+
+def test_readiness_uses_native_labels_for_workspace_scoped_names():
+    owner = {
+        "aptl.lifecycle.project": "aptl-w123456789abc",
+        "aptl.workspace.id": "123456789abcdef0",
+    }
+    webapp = _node("webapp", ["dmz"])
+    webapp["address"] = "provision.node.webapp"
+    webapp["container_name"] = "aptl-webapp"
+    cortex = _node("cortex", ["soc"])
+    cortex["container_name"] = "aptl-cortex"
+    state = _readiness_state(
+        [webapp, cortex],
+        [
+            _container(
+                "aptl-w123456789abc-webapp",
+                labels={**owner, "aptl.node.address": "provision.node.webapp"},
+            ),
+            _container(
+                "aptl-w123456789abc-cortex",
+                labels={**owner, "com.docker.compose.service": "cortex"},
+            ),
+        ],
+    )
+
+    assert lgc.check_defensive_stack_readiness(state=state).passed
+    assert state.semantic_container_names == {
+        "aptl-webapp": "aptl-w123456789abc-webapp",
+        "aptl-cortex": "aptl-w123456789abc-cortex",
+    }
+
+
+def test_readiness_does_not_override_conflicting_native_identity_by_name():
+    webapp = _node("webapp", ["dmz"])
+    webapp["address"] = "provision.node.webapp"
+    state = _readiness_state(
+        [webapp],
+        [
+            _container(
+                "aptl-webapp",
+                labels={"aptl.node.address": "provision.node.other"},
+            )
+        ],
+    )
+
+    check = lgc.check_defensive_stack_readiness(state=state)
+    assert not check.passed
+    assert any("no live container" in item for item in check.diagnostics)
+
+
+def test_readiness_accounts_only_for_admitted_backend_apparatus():
+    owner = {
+        "aptl.lifecycle.project": "aptl-w123456789abc",
+        "aptl.workspace.id": "123456789abcdef0",
+    }
+    webapp = _node("webapp", ["dmz"])
+    webapp["address"] = "provision.node.webapp"
+    containers = [
+        _container(
+            "aptl-w123456789abc-webapp",
+            labels={**owner, "aptl.node.address": "provision.node.webapp"},
+        ),
+        _container(
+            "aptl-w123456789abc-kali-capture",
+            labels={**owner, "com.docker.compose.service": "kali-capture"},
+        ),
+        _container(
+            "aptl-w123456789abc-operator-ssh-kali",
+            labels={**owner, "aptl.operator-access.id": "kali-ssh"},
+        ),
+    ]
+    state = _readiness_state([webapp], containers)
+    state.planned_apparatus = (
+        {
+            "name": "aptl-kali-capture",
+            "label_key": "com.docker.compose.service",
+            "label_value": "kali-capture",
+        },
+        {
+            "name": "aptl-operator-ssh-kali",
+            "label_key": "aptl.operator-access.id",
+            "label_value": "kali-ssh",
+        },
+    )
+    assert lgc.check_defensive_stack_readiness(state=state).passed
+
+    state.snapshot["containers"].append(
+        _container("aptl-w123456789abc-unexpected", labels=owner)
+    )
+    check = lgc.check_defensive_stack_readiness(state=state)
+    assert not check.passed
+    assert any("unexpected" in item for item in check.diagnostics)
 
 
 def test_readiness_fails_on_missing_node_container():
@@ -1544,6 +1730,37 @@ def test_the_returned_report_attributes_the_verdict_to_the_plugin(monkeypatch):
     assert report.distribution_version == "0.2.0"
     assert report.entry_point == "techvault.aptl"
     assert "aptl-techvault-verifier" in report.render()
+
+
+def test_verifier_observes_semantic_not_workspace_container_names(monkeypatch):
+    from aptl.validation import scenario_verification_discovery as svd
+
+    observed = []
+
+    def verify(context):
+        observed.append(context.observations["containers"])
+        return _provenance_report()
+
+    monkeypatch.setattr(svd, "verify_scenario", verify)
+    state = LiveGateState()
+    state.snapshot = {"containers": [_container("aptl-w123456789abc-kali")]}
+    state.semantic_container_names = {
+        "aptl-kali": "aptl-w123456789abc-kali"
+    }
+    ctx = tlg._RunContext(
+        scenario_path=SCENARIO,
+        bundle=BUNDLE,
+        boot_scenario_path=None,
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(run_id="rid"),
+        run_store=None,
+        run_id="rid",
+    )
+
+    tlg._semantic_checks(ctx, state)
+
+    assert observed == [["aptl-kali"]]
 
 
 def test_a_blocked_seam_leaves_no_plugin_attribution(monkeypatch):

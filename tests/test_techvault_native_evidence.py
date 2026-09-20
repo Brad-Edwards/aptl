@@ -58,6 +58,15 @@ def _realization(project_dir: Path):
         provenance="techvault:cortex-service-credentials/v1",
         outputs=(output,),
     )
+    ca_path = project_dir / "config/soc_certs/lab-ca.pem"
+    ca_path.parent.mkdir(parents=True, exist_ok=True)
+    ca_path.write_text("public-test-ca\n", encoding="utf-8")
+    ca_artifact = SimpleNamespace(
+        name="techvault-soc-certificates",
+        generator="certificate_bundle",
+        provenance="techvault:soc-certificate-profile/v1",
+        outputs=(SimpleNamespace(name="ca-certificate", path="lab-ca.pem"),),
+    )
     image = SimpleNamespace(image_ref="jasonish/suricata@" + _DIGEST)
     content = (
         SimpleNamespace(
@@ -89,7 +98,7 @@ def _realization(project_dir: Path):
             ),
         ),
         placements=content,
-        generated_artifacts=(artifact,),
+        generated_artifacts=(artifact, ca_artifact),
     )
 
 
@@ -148,8 +157,8 @@ def _request(url, **kwargs):
             "report": {"full": {"scenario_role": "attacker", "secret": "drop"}},
         }
     if url.endswith("/api/v1/status"):
-        assert url.startswith("http://127.0.0.1:9000/")
-        assert "ca_cert_path" not in kwargs
+        assert url.startswith("https://127.0.0.1:9000/")
+        assert kwargs["ca_cert_path"].endswith("/config/soc_certs/lab-ca.pem")
         return {"services": [{"name": "Cortex", "status": "OK"}]}
     if url.endswith("/_search"):
         return {
@@ -260,8 +269,33 @@ def test_cortex_owner_uses_runtime_thehive_api_key_without_admin_fallback(tmp_pa
     assert result.status is CollectorStatus.OK
     status_request = next(item for item in requests if item[0].endswith("/status"))
     assert status_request[1]["auth_header"] == "Bearer operator-api-key"
-    assert status_request[0].startswith("http://127.0.0.1:9000/")
-    assert "ca_cert_path" not in status_request[1]
+    assert status_request[0].startswith("https://127.0.0.1:9000/")
+    assert status_request[1]["ca_cert_path"] == str(
+        tmp_path / "config/soc_certs/lab-ca.pem"
+    )
+
+
+def test_cortex_owner_fails_closed_when_declared_thehive_ca_is_missing(tmp_path):
+    realization = _realization(tmp_path)
+    (tmp_path / "config/soc_certs/lab-ca.pem").unlink()
+    requests = []
+
+    def request(url, **kwargs):
+        requests.append((url, kwargs))
+        return _request(url, **kwargs)
+
+    owner = TechVaultNativeEvidenceOwner(
+        backend=_Backend(),
+        realization=realization,
+        project_dir=tmp_path,
+        indexer_auth=("admin", "password"),
+        thehive_api_key="operator-api-key",
+        dependencies=TechVaultNativeDependencies(request_json=request),
+    )
+    result = owner.sources()["aptl.collector.cortex-enrichment"].fetch(_START, _END)
+
+    assert result.status is CollectorStatus.SOURCE_UNAVAILABLE
+    assert requests == []
 
 
 def test_cortex_owner_polls_until_thehive_connector_refreshes(tmp_path):
@@ -272,11 +306,7 @@ def test_cortex_owner_polls_until_thehive_connector_refreshes(tmp_path):
         if url.endswith("/api/v1/status"):
             status_calls += 1
             if status_calls == 1:
-                return {
-                    "connectors": {
-                        "cortex": {"status": "ERROR", "servers": []}
-                    }
-                }
+                return {"connectors": {"cortex": {"status": "ERROR", "servers": []}}}
         return _request(url, **kwargs)
 
     result = (

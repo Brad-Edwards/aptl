@@ -409,6 +409,12 @@ def _certificate_exposure_errors(
         if artifact.generator == "certificate_bundle"
     }
     expected = _expected_certificate_mounts(scenario_root, realization)
+    # An exact-pack adapter may alias one SDL-produced certificate into an
+    # upstream image's native TLS path. The author still owns the source,
+    # consumer service and cert bytes; the adapter owns only that image path.
+    from aptl.backends.scenario_service_policy import certificate_mount_aliases
+
+    aliases = certificate_mount_aliases(realization, scenario_root, expected)
     return [
         f"Effective stateful service {service_name} exposes undeclared "
         "certificate material."
@@ -417,7 +423,7 @@ def _certificate_exposure_errors(
             services.get(service_name),
             cert_roots,
         )
-        != allowed
+        != allowed | aliases.get(service_name, set())
     ]
 
 

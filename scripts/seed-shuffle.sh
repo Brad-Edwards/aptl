@@ -203,7 +203,7 @@ read -r -d '' WORKFLOW_JSON << ENDJSON || true
                 {"name": "url", "value": "${THEHIVE_INTERNAL_URL}/api/v1/case"},
                 {"name": "method", "value": "POST"},
                 {"name": "headers", "value": "Authorization: Bearer ${THEHIVE_API_KEY}\nContent-Type: application/json"},
-                {"name": "body", "value": "{\"title\": \"[Wazuh \$exec.rule.id] \$exec.rule.description\", \"description\": \"Wazuh alert: rule \$exec.rule.id (\$exec.rule.description); level \$exec.rule.level; source IP \$exec.data.srcip; agent \$exec.agent.name; time \$exec.timestamp; MISP: source IP \$exec.data.srcip checked against threat intelligence.\", \"severity\": 3}"},
+                {"name": "body", "value": "{\"title\": \"[Wazuh \$exec.rule.id] \$exec.rule.description\", \"description\": \"Wazuh alert id \$exec.id; rule \$exec.rule.id (\$exec.rule.description); level \$exec.rule.level; source IP \$exec.data.srcip; agent \$exec.agent.name; time \$exec.timestamp; MISP: source IP \$exec.data.srcip checked against threat intelligence.\", \"severity\": 3}"},
                 {"name": "verify", "value": "false"}
             ]
         }

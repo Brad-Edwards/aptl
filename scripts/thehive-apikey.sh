@@ -19,8 +19,8 @@ set -euo pipefail
 # clients use the separately published endpoint contract. Override THEHIVE_URL
 # for local debugging.
 THEHIVE_CONTAINER="${THEHIVE_CONTAINER:-aptl-thehive}"
-THEHIVE_URL="${THEHIVE_URL:-http://localhost:9000}"
-THEHIVE_CA_CERT="${THEHIVE_CA_CERT:-/etc/lab-ca/lab-ca.pem}"
+THEHIVE_URL="${THEHIVE_URL:-https://localhost:9000}"
+THEHIVE_CA_CERT="${THEHIVE_CA_CERT:-/opt/techvault/soc-certs/lab-ca.pem}"
 ADMIN_USER="${THEHIVE_ADMIN_USER:-admin@thehive.local}"
 ADMIN_PASS="${THEHIVE_ADMIN_PASS:-secret}"
 ORG_NAME="APTL"

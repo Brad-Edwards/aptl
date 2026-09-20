@@ -638,7 +638,8 @@ def test_run_raes_uses_active_python_environment_without_path_activation(
     monkeypatch.setattr(gcli.subprocess, "run", fake_run)
 
     result = gcli.run_raes(["conformance", "backend"])
-    assert result is not None and result.returncode == 0
+    assert result is not None
+    assert result.returncode == 0
     assert calls[0][0] == [str(raes), "conformance", "backend"]
 
 
@@ -661,7 +662,8 @@ def test_run_raes_falls_back_to_path_when_sibling_is_not_executable(
     monkeypatch.setattr(gcli.subprocess, "run", fake_run)
 
     result = gcli.run_raes(["sdl", "verify-imports"])
-    assert result is not None and result.returncode == 0
+    assert result is not None
+    assert result.returncode == 0
     assert calls == [["/usr/bin/raes", "sdl", "verify-imports"]]
 
 

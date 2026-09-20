@@ -146,10 +146,9 @@ def _container_health_diagnostics(
     return [diag] if diag else []
 
 
-def _live_container_for_node(
-    node: Mapping[str, Any], containers: Sequence[Mapping[str, Any]]
-) -> Mapping[str, Any] | None:
-    """Prefer backend identity labels, retaining legacy alias-only snapshots."""
+def _node_identity_keys(node: Mapping[str, Any]) -> set[str]:
+    """Normalize the declared name and aliases for legacy snapshot matching."""
+
     node_keys: set[str] = set()
     raw_values = [node.get("name", ""), *node.get("aliases", ())]
     for raw in raw_values:
@@ -157,20 +156,37 @@ def _live_container_for_node(
         if norm:
             node_keys.add(norm)
             node_keys.add(norm.removeprefix("aptl-"))
-    for container in containers:
-        labels = container.get("labels")
-        if isinstance(labels, Mapping):
-            address = labels.get("aptl.node.address")
-            if address:
-                if address == node.get("address"):
-                    return container
-                continue
-            service = labels.get("com.docker.compose.service")
-            if service:
-                if normalize_identifier(str(service)) in node_keys:
-                    return container
-                continue
-        cname = normalize_identifier(str(container.get("name", "")))
-        if cname in node_keys or cname.removeprefix("aptl-") in node_keys:
-            return container
-    return None
+    return node_keys
+
+
+def _container_matches_node(
+    container: Mapping[str, Any], node: Mapping[str, Any], node_keys: set[str]
+) -> bool:
+    """Prefer authoritative labels and fall back to names only without them."""
+
+    labels = container.get("labels")
+    if isinstance(labels, Mapping):
+        address = labels.get("aptl.node.address")
+        if address:
+            return address == node.get("address")
+        service = labels.get("com.docker.compose.service")
+        if service:
+            return normalize_identifier(str(service)) in node_keys
+    cname = normalize_identifier(str(container.get("name", "")))
+    return cname in node_keys or cname.removeprefix("aptl-") in node_keys
+
+
+def _live_container_for_node(
+    node: Mapping[str, Any], containers: Sequence[Mapping[str, Any]]
+) -> Mapping[str, Any] | None:
+    """Prefer backend identity labels, retaining legacy alias-only snapshots."""
+
+    node_keys = _node_identity_keys(node)
+    return next(
+        (
+            container
+            for container in containers
+            if _container_matches_node(container, node, node_keys)
+        ),
+        None,
+    )

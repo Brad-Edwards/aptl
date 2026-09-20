@@ -22,10 +22,6 @@ _PINNED_THIRD_PARTY_IMAGES = {
         "debian:13-slim@sha256:"
         "d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132"
     ),
-    "frikky/shuffle:http_1.4.0": (
-        "frikky/shuffle:http_1.4.0@sha256:"
-        "011607c986960998c9c0ee4f7c3261319233148fe205177f0b7c2708a9d8e495"
-    ),
     "jasonish/suricata:7.0": (
         "jasonish/suricata:7.0@sha256:"
         "0364b6f31192bc27a84dd471f60de22781d88e4d9511fbd3413e56ba4e150ac8"
@@ -119,6 +115,26 @@ def canonical_image_references(project: Path, bundle: ScenarioBundle) -> dict[st
     )
     if apps != {("http", "1.4.0")}:
         raise ValueError("canonical workflow child image inventory needs updating")
+    authorities = [
+        authority
+        for authority in orchestrator.runtime.orchestration_authorities
+        if authority.orchestration_authority_id == "shuffle-orborus"
+    ]
+    if len(authorities) != 1:
+        raise ValueError("canonical workflow child authority is ambiguous")
+    templates = {
+        template.template_id: template.image_ref
+        for template in authorities[0].spawn_templates
+    }
+    if set(templates) != {"shuffle-worker", "shuffle-http-1-4-0"}:
+        raise ValueError("canonical workflow child image inventory needs updating")
+    if environment["SHUFFLE_WORKER_IMAGE"] != templates["shuffle-worker"]:
+        raise ValueError("canonical workflow worker image differs from spawn template")
+    if (
+        runtime_image_tag(templates["shuffle-http-1-4-0"])
+        != environment["SHUFFLE_BASE_IMAGE_NAME"] + ":http_1.4.0"
+    ):
+        raise ValueError("canonical workflow HTTP image differs from spawn template")
     certificates = yaml.safe_load((project / "generate-indexer-certs.yml").read_text())
     generators = {service["image"] for service in certificates["services"].values()}
     if len(generators) != 1:
@@ -137,9 +153,8 @@ def canonical_image_references(project: Path, bundle: ScenarioBundle) -> dict[st
             "helper.generic-systemd-base-debian": (
                 "aptl/generic-systemd-base-debian:latest"
             ),
-            "child.shuffle-worker": environment["SHUFFLE_WORKER_IMAGE"],
-            "child.shuffle-http": environment["SHUFFLE_BASE_IMAGE_NAME"]
-            + ":http_1.4.0",
+            "child.shuffle-worker": templates["shuffle-worker"],
+            "child.shuffle-http": templates["shuffle-http-1-4-0"],
         }
     )
     return {role: _pin_third_party(reference) for role, reference in references.items()}

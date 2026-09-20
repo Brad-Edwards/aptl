@@ -22,7 +22,7 @@ from aptl.appliance import input_images, inputs
 from aptl.core.assets import materialize
 from aptl.core.config import AptlConfig
 from aptl.core.scenario_bundle import env_pack_bundle
-from aptl.validation.curated_live_proof import expected_bundle_matrix
+from aptl.validation.curated_live_proof import bundle_realization, expected_bundle_matrix
 
 
 def _digest(data):
@@ -291,6 +291,24 @@ def test_image_acquisition_saves_pinned_runtime_tag(
         and compose_tag in command
         for command in calls
     )
+
+
+def test_canonical_child_images_match_authored_spawn_templates(tmp_path):
+    project = tmp_path / "project"
+    materialize(project)
+    bundle = env_pack_bundle(tmp_path / "pack")
+    references = input_images.canonical_image_references(project, bundle)
+    realization = bundle_realization(project, AptlConfig(), bundle)
+    orborus = next(node for node in realization.nodes if node.name == "shuffle-orborus")
+    authority = orborus.runtime.orchestration_authorities[0]
+    templates = {
+        template.template_id: template.image_ref
+        for template in authority.spawn_templates
+    }
+
+    assert set(templates) == {"shuffle-worker", "shuffle-http-1-4-0"}
+    assert references["child.shuffle-worker"] == templates["shuffle-worker"]
+    assert references["child.shuffle-http"] == templates["shuffle-http-1-4-0"]
 
 
 def test_canonical_staging_roundtrip_binds_acquired_bytes_and_rejects_tampering(

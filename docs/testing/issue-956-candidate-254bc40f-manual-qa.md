@@ -1,4 +1,4 @@
-# Issue 956 release-candidate manual QA — 2026-09-20
+# Issue 956 release-candidate manual QA: 2026-09-20
 
 This is an operator-assisted execution record for
 [`smoke-test-plan.md`](smoke-test-plan.md) against the exact head of
@@ -29,7 +29,7 @@ bundles are not published: they require separate redaction review. This record
 contains credential-free observations and stable identifiers that reviewers can
 compare with the local evidence. Neither `.env` nor browser storage is included.
 
-## Path A — exact wheel
+## Path A: exact wheel
 
 The installed wheel reported `aptl 5.5.0` and `raes 5.0.0`. Its startup run
 was `run_20260920T001432Z`; the project prefix was `aptl-w693e66892150`.
@@ -57,53 +57,53 @@ was `run_20260920T001432Z`; the project prefix was `aptl-w693e66892150`.
 
 ### Path-A bounded observations
 
-- **A01** — `qa-start.txt` ends in `Lab is ready.`; `qa-start-status.txt`
+- **A01**: `qa-start.txt` ends in `Lab is ready.`; `qa-start-status.txt`
   accounts for 28 running project containers, and `qa-start-status.json` has
   the matching inventory. `qa-start-runs.txt` names
   `run_20260920T001432Z`. No `aptl-mcp-endpoints` container appears.
-- **A02** — `qa-live.txt`: `scenario=techvault backend=aptl
+- **A02**: `qa-live.txt`: `scenario=techvault backend=aptl
   plugin=techvault from aptl-labs==5.5.0: PASSED`, including defensive-stack
   readiness and runtime-orchestration containment.
-- **A03** — Browser TLS verification stayed enabled. Wazuh showed
+- **A03**: Browser TLS verification stayed enabled. Wazuh showed
   `Active (8)`, `Disconnected (0)` and the Threat Hunting dashboard's
   1,097 total alerts in the last 24 hours.
-- **A04** — MCP action at `2026-09-20T00:28:47–49Z`: Kali target
+- **A04**: MCP action at `2026-09-20T00:28:47–49Z`: Kali target
   `172.20.1.30`, exit 0, HTTP 200. Wazuh hit `K7g3vKABCzMrdCXPPFpz`
   at `00:28:49.610Z`, rule `302010`, agent `techvault-webapp-agent`.
-- **A05** — Sensor request at `00:29:13Z` returned HTTP 200. Suricata
+- **A05**: Sensor request at `00:29:13Z` returned HTTP 200. Suricata
   reported source `172.20.1.128`, destination `172.20.1.20`, signature
   `1000010`; Wazuh hit `LLg3vKABCzMrdCXPnloQ` at `00:29:15.210Z`
   with rule `303020` on `techvault-suricata-agent`.
-- **A06** — Workflow `65199028-d34d-48d8-987c-5e0d23b4b47d`, execution
+- **A06**: Workflow `65199028-d34d-48d8-987c-5e0d23b4b47d`, execution
   `badd510c-dff3-4202-bce1-0dd2398ee446`: the input contained A04's exact
   alert and rule; terminal state `FINISHED` with two `SUCCESS` actions. Case
   `~3977352` linked the alert and rule.
-- **A07** — MCP added observable `~4305056`, type `ip`, value
+- **A07**: MCP added observable `~4305056`, type `ip`, value
   `172.20.1.30`. TheHive UI launched `TechVaultScenarioContext`; Cortex job
   `zH84vKABnb9aRBjrxSBB` completed `Success`, and the observable acquired
   its analyzer report.
-- **A08** — Canonical `https://misp.techvault.local/` authenticated with
+- **A08**: Canonical `https://misp.techvault.local/` authenticated with
   valid TLS and showed `APTL Lab - Known Threat Actors` event #1 with
   `172.20.4.30`. MCP returned `ip-src`, event id `1`, attribute id `1`.
-- **A09–A12** — Target-backed MCP red, Wazuh, indexer, SOAR, threat-intel,
+- **A09–A12**: Target-backed MCP red, Wazuh, indexer, SOAR, threat-intel,
   and network calls returned HTTP 200 or a successful target command. The
   Wazuh/indexer query used `00:28:45–55Z`; the network query used
   `00:29:10–20Z` and found signature `1000010`.
-- **A13** — Full MCP protocol call to shipped `mcp-reverse` returned
+- **A13**: Full MCP protocol call to shipped `mcp-reverse` returned
   `{"outcome":"expected-unavailable","operation":"reverse_run_command"}`;
   A01 inventory had no reverse target.
-- **A14** — Manifest identifies TechVault, backend `aptl`, package `5.5.0`,
+- **A14**: Manifest identifies TechVault, backend `aptl`, package `5.5.0`,
   pack `techvault` `0.1.0`, A01's Suricata container and A02's passed live
   gate. Export root
   `sha256:4007af1c901c40f37cc49d15aee68c261e287a693af3c9ab7d3cc1fb18b02f7e`,
   15 members; `verify-bundle` returned `OK: bundle verified`. This is an
   **unsealed startup bundle**: no #444 seal or
   `provenance/run-provenance.json` is claimed.
-- **A15** — `Lab stopped successfully.` and
+- **A15**: `Lab stopped successfully.` and
   `Project 'aptl': no containers, networks, or volumes remain.` The two
   path-A browser trust entries were then removed.
 
-## Path B — exact source commit
+## Path B: exact source commit
 
 The clean GitHub checkout was detached at the exact PR head before any
 generated files existed. A fresh editable venv reported `aptl 5.5.0` and
@@ -133,54 +133,54 @@ was `aptl-wdc2fe6d41dfb`.
 
 ### Path-B bounded observations
 
-- **B01** — `qa-start.txt` ends in `Lab is ready.`; `qa-start-status.txt`
+- **B01**: `qa-start.txt` ends in `Lab is ready.`; `qa-start-status.txt`
   and `qa-start-status.json` account for 28 running containers, with no
   `aptl-mcp-endpoints`. `qa-start-runs.txt` names
   `run_20260920T003540Z`. Before startup, the checkout was clean and detached
   at `254bc40f3c94d020045ae75216efcbc343afda53`.
-- **B02** — `qa-live.txt`: `scenario=techvault backend=aptl
+- **B02**: `qa-live.txt`: `scenario=techvault backend=aptl
   plugin=techvault from aptl-labs==5.5.0: PASSED` with all nine checks,
   including defensive-stack readiness and runtime-orchestration containment.
   A separate absolute-path source-venv probe, with only `/usr/bin:/bin` on
   `PATH`, returned `0 raes 5.0.0`; the CLI does not depend on venv `PATH`
   activation to find its companion RAES executable.
-- **B03** — Browser TLS verification stayed enabled. Wazuh showed
+- **B03**: Browser TLS verification stayed enabled. Wazuh showed
   `Active (8)`, `Disconnected (0)` and 1,097 Threat Hunting alerts in the last
   24 hours.
-- **B04** — MCP action at `2026-09-20T00:51:33–35Z`: Kali target
+- **B04**: MCP action at `2026-09-20T00:51:33–35Z`: Kali target
   `172.20.1.30`, exit 0, HTTP 200. Wazuh hit `lRZMvKABGjg9Zj4fLLi8`
   at `00:51:36.727Z`, rule `302010`, agent `techvault-webapp-agent`.
-- **B05** — Sensor request at `00:52:02Z` returned HTTP 200. Suricata
+- **B05**: Sensor request at `00:52:02Z` returned HTTP 200. Suricata
   reported source `172.20.1.128`, destination `172.20.1.20`, signature
   `1000010`; Wazuh hit `lxZMvKABGjg9Zj4fjrha` at `00:52:04.212Z`
   with rule `303020` on `techvault-suricata-agent`.
-- **B06** — Workflow `e049052c-6c7d-44ce-ab82-16965bc5ed92`, execution
+- **B06**: Workflow `e049052c-6c7d-44ce-ab82-16965bc5ed92`, execution
   `2b3b9440-34f4-4964-a8f9-ebfd53319e08`: its input contained B04's
   exact alert and rule; terminal state `FINISHED` with two `SUCCESS` actions.
   Case `~8224768` linked the alert and rule.
-- **B07** — MCP added observable `~8171760`, type `ip`, value
+- **B07**: MCP added observable `~8171760`, type `ip`, value
   `172.20.1.30`. TheHive UI launched `TechVaultScenarioContext`; Cortex job
   `uQdNvKABaJpUmtdtv4Pc` completed `Success`. Reopening the case in the
   strict-TLS browser showed its `Analysis report` and the scenario-context
   result `TechVault:ScenarioAttacker="1"`.
-- **B08** — Canonical `https://misp.techvault.local/` authenticated with
+- **B08**: Canonical `https://misp.techvault.local/` authenticated with
   valid TLS and showed `APTL Lab - Known Threat Actors` event #1 with
   `172.20.4.30`. MCP returned `ip-src`, event id `1`, attribute id `1`.
-- **B09–B12** — Target-backed MCP red, Wazuh, indexer, SOAR, threat-intel,
+- **B09–B12**: Target-backed MCP red, Wazuh, indexer, SOAR, threat-intel,
   and network calls returned HTTP 200 or a successful target command. The
   Wazuh/indexer query used `00:51:30–40Z`; the network query used
   `00:52:00–10Z` and found signature `1000010`.
-- **B13** — Full MCP protocol call to shipped `mcp-reverse` returned
+- **B13**: Full MCP protocol call to shipped `mcp-reverse` returned
   `{"outcome":"expected-unavailable","operation":"reverse_run_command"}`;
   B01 inventory had no reverse target.
-- **B14** — Manifest identifies TechVault, backend `aptl`, package `5.5.0`,
+- **B14**: Manifest identifies TechVault, backend `aptl`, package `5.5.0`,
   pack `techvault` `0.1.0`, B01's Suricata container and B02's passed live
   gate. Export root
   `sha256:141cf828bbdc7d1ec084b1fd565cacffe3f481799155b9ced6e2e81f40659a6e`,
   15 members; `verify-bundle` returned `OK: bundle verified`. This is an
   **unsealed startup bundle**: no #444 seal or
   `provenance/run-provenance.json` is claimed.
-- **B15** — `Lab stopped successfully.` and
+- **B15**: `Lab stopped successfully.` and
   `Project 'aptl': no containers, networks, or volumes remain.` The two
   path-B browser trust entries were then removed.
 

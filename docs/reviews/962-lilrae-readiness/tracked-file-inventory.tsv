@@ -975,7 +975,6 @@ src/aptl/core/deployment/_compose_boundary_realization.py	core-candidate	Migrate
 src/aptl/core/deployment/_compose_build_dedupe.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_capture_apparatus.py	backend-substrate	Post-baseline capture apparatus mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_capture_config.py	backend-substrate	Post-baseline capture apparatus mechanism; retain with deployment authority
-src/aptl/core/deployment/_compose_child_lifecycle.py	backend-substrate	Post-baseline Compose child-lifecycle mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_content_mounts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_content_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_direct_network.py	backend-substrate	Post-baseline direct network ownership mechanism; retain with deployment authority
@@ -1717,6 +1716,7 @@ src/aptl/core/deployment/_runtime_materialization_types.py	backend-substrate	Ret
 src/aptl/backends/scenario_runtime_hooks.py	backend-scenario-extension	Retain bounded invocation of an admitted scenario startup provider
 docs/architecture/issue-969-platform-safety-gates-preflight.md	architecture-history	Preserve platform safety gate decisions and implementation guardrails
 docs/architecture/issue-970-generic-lab-lifecycle-preflight.md	architecture-history	Preserve issue 970 lifecycle and scenario-startup ownership guardrails
+docs/architecture/issue-974-shuffle-worker-docker-images-preflight.md	architecture-history	Preserve issue 974 image realization and authored-reference guardrails
 docs/requirements/SEC-008/requirement.md	requirements-follow-owner	Preserve exact UID/history; reconcile authority during migration
 docs/testing/platform-pr-gates.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 tests/test_assert_project_teardown.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

@@ -102,29 +102,30 @@ check.
 
 ### Runtime-spawned children require independent backend ownership
 
-Issue #949's exact authored image and `child_label` checks remain required,
-but they prove template conformance and semantic correlation only. They do not
-prove which workspace or attempt created a child. `_correlated_child_ids()`
-must first restrict discovery to the current backend ownership scope and only
-then apply the authored image/label/count checks. Every selected child is
-pinned by native ID and revalidated before observation or termination.
+Issue #974 supersedes issue #949's authored `child_label` and count contract.
+Exact authored spawn-template images remain preparation/conformance inputs;
+actual children and counts are post-execution observations. Backend-generated
+run/execution correlation must first restrict discovery to the current daemon,
+workspace, attempt, run, and accepted product execution. Every selected child
+is then recorded in the existing ownership receipt, pinned by native ID, and
+revalidated before observation or termination.
 
 An APTL-controlled opaque owner marker may be used only where the admitted
 runtime contract permits that backend metadata and its observability does not
 change closed/exact SDL semantics. It must be independent of the authored
-label and impossible for a prior attempt's stale marker to satisfy the current
-receipt. Do not rewrite, overload, or require authors to add the marker. A
-runtime authority with the raw daemon socket can see and forge ordinary Docker
-labels, so label secrecy is not an ownership boundary.
+content and impossible for a prior attempt's stale marker to satisfy the
+current receipt. Do not rewrite, overload, or require authors to add the
+marker. A runtime authority with the raw daemon socket can see and forge
+ordinary Docker labels, so label secrecy is not an ownership boundary.
 
 When the child producer cannot carry trustworthy attempt ownership without an
 SDL-observable change, select a daemon/namespace dedicated to the admitted
 workspace/attempt and bind that isolation into the ownership receipt. On the
-ordinary shared host daemon, authored image plus authored label is
-insufficient: admission or post-start verification must report the backend
-resource/materialization conflict before APTL observes, waits on, stops, or
-kills a candidate. A timestamp window, child count, container name, ancestor
-filter, or parent-holder identity does not repair this gap.
+ordinary shared host daemon, exact image plus product correlation metadata is
+insufficient by itself: admission or post-start verification must report the
+backend resource/materialization conflict before APTL observes, waits on,
+stops, or kills a candidate. A timestamp window, child count, container name,
+ancestor filter, or parent-holder identity does not repair this gap.
 
 ### Teardown and recovery use receipts, not broad cleanup authority
 
@@ -164,7 +165,7 @@ authority source from project labels alone to the durable ownership record.
 | Config identity | Strict `AptlConfig` / `DeploymentConfig` (`extra="forbid"`) and `validate_compose_project_name()`. Keep `project_name` as validated logical input and derive the bounded effective backend namespace in one canonical helper. Do not add an env/CLI naming override. |
 | Backend authority | `DeploymentBackend`, `DockerComposeBackend`, `SSHComposeBackend`, `_run()`/`_run_with_input()`, and `_docker_endpoint_binding.py`. Every ownership receipt binds to the selected endpoint/daemon; RAES, CLI, API, and verifier code do not issue raw Docker commands. |
 | Runtime queries and interaction | `_compose_queries.py`, `_compose_project_inventory.py`, `_compose_runtime_inventory.py`, `_compose_base_substrate.py`, `_compose_network_realization.py`, `_compose_autoremove.py`, and the provider/readiness helpers. Centralize name-to-owned-ID resolution here rather than repeating label checks at every caller. |
-| Child conformance | `docker_authority_admissions()`, `deployment_spawn_image_requirements()`, `_correlated_child_ids()`, exact repo-digest/image-ID verification, mount/authority observation, and `_compose_child_lifecycle.py`. Add backend ownership before, not instead of, image/label/count/deadline checks. |
+| Child conformance | `docker_authority_admissions()` and `deployment_spawn_image_requirements()`. Issue #974 removed the authored label/count correlation, the daemon-wide image enumeration it fed, and the child lifecycle module, because none of them established ownership and the enumeration could act on containers APTL did not own. Build child ownership on backend identity; do not restore image, label, or count matching as a substitute. |
 | Cleanup | `_compose_stop.py`, `_compose_lifecycle.py`, `_compose_project_cleanup.py`, `_compose_volume_cleanup.py`, network cleanup, and failed-create rollback. They remain one lifecycle workflow but consume verified receipts/IDs and never daemon-wide prune or broad name matches. |
 | Results and errors | `BackendObservationError`, `BackendTimeoutError`, existing bounded backend errors, `Diagnostic`/`ApplyResult`, `LabResult`, `StartupOutcome`, and `StartupDiagnostic`. A stable resource-conflict diagnostic fits these envelopes; do not add a parallel exception hierarchy or public response DTO. |
 | Logging and redaction | `get_logger()` and `redact()` remain canonical. Log safe stage, resource kind, shortened native/owner correlation, counts, and stable reason codes. Never log raw inspect JSON, Docker stderr, command lines, environment values, credentials, or host paths. |

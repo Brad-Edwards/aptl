@@ -110,9 +110,9 @@ class ComposeRealizationMixin(
         failure = self._runtime_orchestration_preflight(realization)
         if failure is not None:
             return failure
-        return self._verify_runtime_orchestration(
-            realization, require_children=True
-        ) or LabResult(success=True)
+        return self._verify_runtime_orchestration(realization) or LabResult(
+            success=True
+        )
 
     def realize(
         self,

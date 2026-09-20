@@ -94,6 +94,24 @@ def exact_inspected_image_identity(
     return identity
 
 
+def authored_tag_reference(image_ref: str) -> str | None:
+    """Return the ``repository:tag`` a reference names, or ``None``.
+
+    A reference may name a tag, a digest, or both. Only the last path segment
+    can carry a tag, so a registry port -- the colon in ``localhost:5000/...``
+    -- is never mistaken for one.
+    """
+
+    reference, separator, _digest = image_ref.rpartition("@")
+    if not separator:
+        reference = image_ref
+    namespace, slash, image_name = reference.rpartition("/")
+    name, colon, tag = image_name.partition(":")
+    if not name or not colon or not tag:
+        return None
+    return f"{namespace}{slash}{name}:{tag}"
+
+
 def _canonical_repo_digest(image_ref: str) -> str | None:
     """Normalize an immutable Docker reference to its inspected repo digest."""
 

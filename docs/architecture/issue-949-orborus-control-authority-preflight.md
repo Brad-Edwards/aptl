@@ -1,5 +1,14 @@
 # Issue #949 Orborus Control Authority Preflight
 
+> **Superseded in part by issue #974.** The
+> [issue #974 preflight](issue-974-shuffle-worker-docker-images-preflight.md)
+> replaces this note's requirements for an authored host `bind_source`,
+> authored `realized_children`/labels/counts, a canonical host-side socket path,
+> one-template-per-image joins, blanket socket rejection on all spawned
+> children, and the prohibition on verified local alias creation while
+> offline. This file remains the historical design record for PR #959;
+> implementations must follow the newer boundaries where they conflict.
+
 This note fixes the repository-wide boundaries for realizing an authored
 runtime orchestration authority and preparing its spawned-image closure. It is
 architecture guidance, not an implementation plan. The issue contract and the

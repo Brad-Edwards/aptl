@@ -241,12 +241,12 @@ def test_orborus_docker_authority_is_admitted_only_as_the_pack_authored_it(
     # alongside the socket.
     assert admission.allowed_mount_targets == ()
 
-    # Everything this socket may launch is pinned. The pack names two spawn
-    # templates, and an authority with host-root-equivalent daemon access must
-    # not be able to resolve a mutable tag at spawn time -- a poisoned child
-    # image would otherwise execute with that access and reach the SOC
-    # networks. Each template is therefore digest-qualified and prepared, under
-    # the authority's own bounded execution deadline.
+    # The pack names two spawn templates, and this asserts they are realized as
+    # authored. It is not a bound on what the holder may launch: a
+    # host-root-equivalent daemon holder can pull or build anything regardless
+    # of what APTL staged, so the image list is realization demand rather than
+    # a gate. This pack happens to pin both templates by digest, under the
+    # authority's own bounded execution deadline.
     requirements = admission.spawn_requirements
     assert len(requirements) == 2
     assert {requirement.template_id for requirement in requirements} == {
@@ -256,10 +256,9 @@ def test_orborus_docker_authority_is_admitted_only_as_the_pack_authored_it(
     for requirement in requirements:
         assert "@sha256:" in requirement.image_ref, requirement.template_id
         assert requirement.execution_timeout_seconds == 600
-        # The pack declares no expected child inventory, so there is no count
-        # to enforce; the image identity gate above does not depend on one.
-        assert requirement.child_label == ""
-        assert requirement.expected_count == 0
+        # realized_children is an optional description the author may omit.
+        # APTL reads nothing from it, so nothing here depends on one.
+        assert requirement.tag_reference in {"", "frikky/shuffle:http_1.4.0"}
 
     orborus = next(node for node in realization.nodes if node.name == "shuffle-orborus")
     interfaces = orborus.runtime.local_control_interfaces

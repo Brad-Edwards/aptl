@@ -1592,3 +1592,30 @@ def test_authored_tag_already_resolving_to_the_image_is_left_alone(tmp_path) -> 
 
     assert backend._prepare_spawn_images(_spec(_runtime(image_ref=_TAGGED_REF))) is None
     assert all(command[:2] != ["docker", "tag"] for command in _commands(backend))
+
+
+def test_conflicting_authored_tags_fail_before_any_tagging(tmp_path) -> None:
+    # Two templates naming the same repository:tag with different digests
+    # cannot both be satisfied: one local name cannot resolve to two images.
+    other_digest = "sha256:" + "d" * 64
+    runtime = _authority_runtime(
+        spawn_templates=[
+            {"template_id": "app-a", "image_ref": _TAGGED_REF},
+            {
+                "template_id": "app-b",
+                "image_ref": f"frikky/shuffle:http_1.4.0@{other_digest}",
+            },
+        ]
+    )
+    backend = DockerComposeBackend(tmp_path, offline_staged=True)
+    backend.revalidate_local_docker_socket = MagicMock(
+        return_value=LabResult(success=True)
+    )
+    backend._run = MagicMock()
+
+    result = backend._prepare_spawn_images(_spec(runtime))
+
+    assert result is not None and result.success is False
+    assert "frikky/shuffle:http_1.4.0" in result.error
+    # A contradiction in what was authored needs no daemon to detect.
+    backend._run.assert_not_called()

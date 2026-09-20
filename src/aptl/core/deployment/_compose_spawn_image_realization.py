@@ -34,8 +34,39 @@ def prepare_spawn_images(
     except ValueError as exc:
         failure = LabResult(success=False, error=str(exc))
     if failure is None and requirements:
+        failure = _conflicting_tag_failure(requirements)
+    if failure is None and requirements:
         failure = _prepare_on_bound_daemon(backend, requirements)
     return failure
+
+
+def _conflicting_tag_failure(
+    requirements: tuple[DeploymentSpawnImageRequirement, ...],
+) -> LabResult | None:
+    """Reject two references demanding one local name resolve to two images.
+
+    One ``repository:tag`` cannot resolve to two different digests at once, so
+    whichever was realized last would silently win and leave the other naming
+    something its author did not write. This is a contradiction in what was
+    authored, so it needs no daemon to detect and is caught before any.
+    """
+
+    images_by_tag: dict[str, set[str]] = {}
+    for requirement in requirements:
+        if requirement.tag_reference:
+            images_by_tag.setdefault(requirement.tag_reference, set()).add(
+                requirement.image_ref
+            )
+    conflicted = sorted(tag for tag, images in images_by_tag.items() if len(images) > 1)
+    if not conflicted:
+        return None
+    return LabResult(
+        success=False,
+        error=(
+            "Spawn image tag conflict: "
+            f"{', '.join(conflicted)} is authored for more than one image."
+        ),
+    )
 
 
 def _prepare_on_bound_daemon(

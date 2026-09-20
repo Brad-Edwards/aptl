@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from raes_contracts.diagnostics import Diagnostic
 from raes.runtime_configuration import RuntimeConfiguration
@@ -26,6 +27,9 @@ from aptl.core.deployment.realization import (
 from aptl.backends.pack_interaction import ResolvedPackBackendInteraction
 from aptl.backends.raes_runtime_orchestration import admit_docker_authorities
 from aptl.core.scenario_bundle import PackIdentity
+
+if TYPE_CHECKING:
+    from aptl.backends.scenario_startup import ScenarioStartupSelection
 
 
 @dataclass(frozen=True)
@@ -240,6 +244,7 @@ class AptlRealization(object):
         profiles: list[str],
         *,
         capture_apparatus: tuple[DeploymentCaptureApparatus, ...] = (),
+        startup_selection: ScenarioStartupSelection | None = None,
     ) -> DeploymentRealizationSpec:
         """Return typed backend realization input for this RAES realization."""
 
@@ -281,6 +286,8 @@ class AptlRealization(object):
             generated_artifacts=self.generated_artifacts,
             persistent_volumes=self.persistent_volumes,
             capture_apparatus=capture_apparatus,
+            pack_identity=self.pack_identity,
+            startup_selection=startup_selection,
         )
 
     def details(self) -> dict[str, object]:

@@ -35,6 +35,7 @@ from aptl.core.deployment._compose_resource_ownership import (
     ResourceReceipt,
     WorkspaceOwnership,
 )
+from aptl.core.deployment.docker_compose import _safe_command_operation
 from aptl.core.deployment.errors import (
     BackendObservationError,
     BackendSeedError,
@@ -129,6 +130,36 @@ class TestRunRaisesBackendTimeoutError:
             mock_run.side_effect = subprocess.TimeoutExpired(cmd="docker", timeout=5)
             with pytest.raises(BackendTimeoutError):
                 backend._run_streaming(["docker", "logs", "x"], timeout=5)
+
+    def test_timeout_names_only_bounded_operation_not_arguments(self, tmp_path, caplog):
+        backend = DockerComposeBackend(project_dir=tmp_path)
+        secret = "private-token-do-not-log"
+        command = ["docker", "compose", "-f", secret, "up", "-d"]
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd=command, timeout=5)
+            with pytest.raises(BackendTimeoutError) as failure:
+                backend._run(command, timeout=5)
+
+        assert "docker compose up timed out after 5s" in str(failure.value)
+        assert "docker compose up timed out after 5s" in caplog.text
+        assert secret not in str(failure.value)
+        assert secret not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        (["not-docker", "private-token"], "backend command"),
+        (["docker", "private-token"], "docker command"),
+        (["docker", "exec", "private-token"], "docker exec"),
+        (["docker", "compose", "-f", "private-token", "down"], "docker compose down"),
+    ],
+)
+def test_docker_timeout_operation_never_discloses_arguments(command, expected):
+    operation = _safe_command_operation(command)
+
+    assert operation == expected
+    assert "private-token" not in operation
 
 
 def test_container_file_read_rejects_symlink_created_by_docker_cp(
@@ -1350,7 +1381,13 @@ services:
     def test_stop_with_volumes_fails_when_seeded_volume_cannot_be_removed(
         self, tmp_path
     ):
+        from aptl.core.evidence.adapters.techvault_enrollment_baseline import (
+            enrollment_baseline,
+            record_enrollment_baseline,
+        )
+
         backend = self._make_backend(tmp_path)
+        record_enrollment_baseline(tmp_path, {"db": "001"})
         (tmp_path / "docker-compose.yml").write_text("volumes:\n  seeded_data:\n")
         ownership = backend._resource_ownership
         assert ownership is not None
@@ -1392,6 +1429,9 @@ services:
 
         assert result.success is False
         assert "failed to remove receipt-owned volume" in result.error
+        # The identity still describes retained volume state. Clearing it on a
+        # failed reset would let a later capture bless a re-enrolment as fresh.
+        assert enrollment_baseline(tmp_path) == {"db": "001"}
 
     def test_stop_removes_leftover_project_networks(self, tmp_path):
         backend = self._make_backend(tmp_path)
@@ -1553,7 +1593,7 @@ services:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout=(
-                    "{\"Names\": \"aptl-victim\", \"Image\": \"victim:latest\", \"ID\": \"abc\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"com.docker.compose.project=test\", \"Ports\": \"\"}"
+                    '{"Names": "aptl-victim", "Image": "victim:latest", "ID": "abc", "Status": "Up 1 minute", "State": "running", "Labels": "com.docker.compose.project=test", "Ports": ""}'
                 ),
                 stderr="",
             )
@@ -1569,7 +1609,7 @@ services:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout=(
-                    "{\"Names\": \"aptl-victim\", \"Image\": \"victim:latest\", \"ID\": \"abc\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"com.docker.compose.project=test\", \"Ports\": \"\"}"
+                    '{"Names": "aptl-victim", "Image": "victim:latest", "ID": "abc", "Status": "Up 1 minute", "State": "running", "Labels": "com.docker.compose.project=test", "Ports": ""}'
                 ),
                 stderr="",
             )
@@ -1590,12 +1630,48 @@ services:
             for entry in mock_run.call_args_list
         )
 
+    def test_new_backend_status_loads_durable_workspace_project_name(self, tmp_path):
+        """A new CLI process observes the namespace a prior start created."""
+        project_dir = tmp_path / "installed-lab"
+        ownership = WorkspaceOwnership.ensure(project_dir, "test")
+        backend = DockerComposeBackend(project_dir, project_name="test")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            status = backend.status()
+
+        assert status.running is False
+        assert backend.project_name == ownership.project_name
+        commands = [entry.args[0] for entry in mock_run.call_args_list]
+        assert any(
+            f"label=com.docker.compose.project={ownership.project_name}" in command
+            for command in commands
+        )
+        assert any(
+            f"label=aptl.lifecycle.project={ownership.project_name}" in command
+            for command in commands
+        )
+
+    def test_status_fails_closed_for_corrupt_workspace_identity(self, tmp_path):
+        project_dir = tmp_path / "installed-lab"
+        state = project_dir / ".aptl/lifecycle/workspace-ownership-v1.json"
+        state.parent.mkdir(parents=True)
+        state.write_text("not-json", encoding="utf-8")
+        backend = DockerComposeBackend(project_dir, project_name="test")
+
+        with patch("subprocess.run") as mock_run:
+            status = backend.status()
+
+        assert status.running is False
+        assert "ownership" in status.error.lower()
+        mock_run.assert_not_called()
+
     def test_status_parses_multiple_project_rows(self, tmp_path):
         backend = self._make_backend(tmp_path)
         rows = "\n".join(
             (
-                "{\"Names\": \"aptl-victim\", \"Image\": \"victim:latest\", \"ID\": \"aaa\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"com.docker.compose.project=test\", \"Ports\": \"\"}",
-                "{\"Names\": \"aptl-kali\", \"Image\": \"kali:latest\", \"ID\": \"bbb\", \"Status\": \"Up 1 minute\", \"State\": \"running\", \"Labels\": \"aptl.lifecycle.project=test\", \"Ports\": \"\"}",
+                '{"Names": "aptl-victim", "Image": "victim:latest", "ID": "aaa", "Status": "Up 1 minute", "State": "running", "Labels": "com.docker.compose.project=test", "Ports": ""}',
+                '{"Names": "aptl-kali", "Image": "kali:latest", "ID": "bbb", "Status": "Up 1 minute", "State": "running", "Labels": "aptl.lifecycle.project=test", "Ports": ""}',
             )
         )
 
@@ -3827,9 +3903,7 @@ class _FakeAd:
             return self._ok(cmd) if self.provisioned else self._fail(cmd)
         if cmd[0] == "smbclient":
             fields = dict(
-                line.split("=", 1)
-                for line in payload.splitlines()
-                if "=" in line
+                line.split("=", 1) for line in payload.splitlines() if "=" in line
             )
             authenticated = self.authentication_works and self.passwords.get(
                 fields.get("username", "")
@@ -4355,7 +4429,7 @@ class TestAccountProvisionerOrderingContract:
         assert provision_call < marker_write
         # And the marker the backend probes matches the one the script writes.
         assert 'provisioned_marker="$private_root/.provisioned"' in script
-        assert 'private_root=/var/lib/samba/private' in script
+        assert "private_root=/var/lib/samba/private" in script
 
 
 class TestDeclaredCredentialClassIsRealized:

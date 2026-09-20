@@ -5,6 +5,7 @@ Query, realization, and cleanup helpers live in focused sibling modules.
 
 import os
 import subprocess
+import threading
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,50 @@ from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.docker_compose")
 _DOCKER_TIMEOUT = 30
+_DOCKER_COMMAND_GROUPS = frozenset({"compose", "image", "volume", "network"})
+_DOCKER_COMMAND_ACTIONS = frozenset(
+    {
+        "build",
+        "config",
+        "create",
+        "down",
+        "inspect",
+        "ls",
+        "ps",
+        "pull",
+        "rm",
+        "up",
+        "version",
+    }
+)
+
+
+def _safe_command_operation(cmd: list[str]) -> str:
+    """Classify a Docker timeout without logging command arguments or secrets."""
+
+    operation = "backend command"
+    if not cmd or cmd[0] != "docker":
+        return operation
+    operation = "docker command"
+    if len(cmd) >= 2:
+        verb = cmd[1]
+        if verb in _DOCKER_COMMAND_GROUPS:
+            action = next(
+                (part for part in cmd[2:] if part in _DOCKER_COMMAND_ACTIONS),
+                "command",
+            )
+            operation = f"docker {verb} {action}"
+        elif verb in {"exec", "inspect", "ps", "run", "start", "stop", "kill"}:
+            operation = f"docker {verb}"
+    return operation
+
+
+def _timed_out_operation(cmd: list[str], timeout: int | None) -> BackendTimeoutError:
+    """Build a redacted timeout diagnostic from a safe Docker verb only."""
+
+    operation = _safe_command_operation(cmd)
+    log.error("%s timed out after %ss", operation, timeout)
+    return BackendTimeoutError(f"{operation} timed out after {timeout}s")
 
 
 class DockerComposeBackend(
@@ -95,6 +140,9 @@ class DockerComposeBackend(
         self._project_name = self._logical_project_name
         self._resource_ownership: WorkspaceOwnership | None = None
         self._resource_attempt_id: str | None = None
+        # Concurrent node materialization can share a named volume. Serialize
+        # its creation and receipt publication within this backend instance.
+        self._project_volume_lock = threading.Lock()
         self._offline_staged = offline_staged
         self._appliance_boundary: (
             tuple[
@@ -224,8 +272,17 @@ class DockerComposeBackend(
             env = os.environ.copy()
             env["DOCKER_HOST"] = self._docker_host_override
             env.pop("DOCKER_CONTEXT", None)
+            env.pop("DOCKER_SSH_IDENTITY", None)
             kwargs["env"] = env
         return kwargs
+
+    def docker_transport_environment(self) -> dict[str, str]:
+        """Project this backend's effective subprocess Docker coordinates."""
+
+        kwargs = self._subprocess_kwargs(streaming=False, timeout=None)
+        source = kwargs.get("env", os.environ)
+        keys = ("DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "DOCKER_SSH_IDENTITY")
+        return {key: source[key] for key in keys if key in source}
 
     def _run(
         self,
@@ -245,9 +302,7 @@ class DockerComposeBackend(
         try:
             return subprocess.run(cmd, **kwargs)
         except subprocess.TimeoutExpired as exc:
-            raise BackendTimeoutError(
-                f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
-            ) from exc
+            raise _timed_out_operation(cmd, timeout) from exc
 
     def _run_streaming(
         self,
@@ -265,9 +320,7 @@ class DockerComposeBackend(
         try:
             return subprocess.run(cmd, **kwargs).returncode
         except subprocess.TimeoutExpired as exc:
-            raise BackendTimeoutError(
-                f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
-            ) from exc
+            raise _timed_out_operation(cmd, timeout) from exc
 
     def _run_with_input(
         self,
@@ -276,16 +329,14 @@ class DockerComposeBackend(
         *,
         timeout: int | None = None,
     ) -> subprocess.CompletedProcess:
-        """Run one fixed command with non-secret structured stdin."""
+        """Run one fixed command with a payload supplied only over stdin."""
 
         kwargs = self._subprocess_kwargs(streaming=False, timeout=timeout)
         kwargs["input"] = payload
         try:
             return subprocess.run(cmd, **kwargs)
         except subprocess.TimeoutExpired as exc:
-            raise BackendTimeoutError(
-                f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
-            ) from exc
+            raise _timed_out_operation(cmd, timeout) from exc
 
     def stop(self, profiles: list[str], *, remove_volumes: bool = False) -> LabResult:
         """Stop lab services via docker compose down.
@@ -317,6 +368,18 @@ class DockerComposeBackend(
         Returns:
             LabStatus with container information.
         """
+        try:
+            ownership = WorkspaceOwnership.load(
+                self._project_dir, self._logical_project_name
+            )
+        except OwnershipConflictError:
+            return LabStatus(
+                running=False,
+                error="Backend resource ownership state is unavailable.",
+            )
+        if ownership is not None:
+            self._resource_ownership = ownership
+            self._project_name = ownership.project_name
         return self._project_container_status()
 
     def kill(self, profiles: list[str]) -> tuple[bool, str]:

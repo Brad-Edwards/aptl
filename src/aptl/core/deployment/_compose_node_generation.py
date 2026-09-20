@@ -18,14 +18,20 @@ to start and be addressable.
 
 from __future__ import annotations
 
-import ipaddress
 from pathlib import Path
 
 import yaml
-from aptl.core.deployment._compose_realization_networks import _compose_network_key
+
+from aptl.core.deployment._compose_runtime_config import _operational_config
 from aptl.core.deployment._compose_runtime_orchestration import (
     docker_authority_admissions_by_address,
     docker_socket_volume,
+)
+from aptl.core.deployment._compose_node_topology import (
+    network_namespace_container as _network_namespace_container,
+    render_networks as _render_networks,
+    service_dependencies as _service_dependencies,
+    service_networks as _service_networks,
 )
 from aptl.core.deployment._compose_service_health import runtime_expects_completion
 from aptl.core.deployment._compose_stateful_constants import (
@@ -55,6 +61,9 @@ def render_realization_compose(spec: DeploymentRealizationSpec) -> dict[str, obj
     realizes them directly. ``depends_on`` edges are kept only when the target
     is itself an emitted service, so the document never references an undefined
     service.
+
+    Authority holders receive the exact host-root-equivalent endpoint they
+    declared.
     """
 
     image_by_address = {image.address: image for image in spec.images}
@@ -77,24 +86,44 @@ def render_realization_compose(spec: DeploymentRealizationSpec) -> dict[str, obj
         wazuh_identity.indexer_service: (WAZUH_INDEXER_SERVICE,),
     }
 
-    services: dict[str, dict[str, object]] = {}
-    for node in spec.nodes:
-        if not node.service_name or node.address not in image_by_address:
-            continue
-        services[node.service_name] = _render_service(
-            node,
-            image_by_address[node.address],
-            service_names,
-            completion_services,
-            docker_authority_admission=admissions.get(node.address),
-            network_aliases=canonical_aliases.get(node.service_name, ()),
-        )
+    services = _render_services(
+        spec,
+        image_by_address,
+        service_names,
+        completion_services,
+        admissions,
+        canonical_aliases,
+    )
 
     document: dict[str, object] = {"services": services}
     networks = _render_networks(spec)
     if networks:
         document["networks"] = networks
     return document
+
+
+def _render_services(
+    spec: DeploymentRealizationSpec,
+    image_by_address: dict[str, DeploymentImageRealization],
+    service_names: set[str],
+    completion_services: set[str],
+    admissions: dict[str, DeploymentDockerAuthorityAdmission],
+    canonical_aliases: dict[str, tuple[str, ...]],
+) -> dict[str, dict[str, object]]:
+    """Render image-backed services with carried authority and aliases."""
+
+    services: dict[str, dict[str, object]] = {}
+    for node in spec.nodes:
+        if node.service_name and node.address in image_by_address:
+            services[node.service_name] = _render_service(
+                node,
+                image_by_address[node.address],
+                service_names,
+                completion_services,
+                docker_authority_admission=admissions.get(node.address),
+                network_aliases=canonical_aliases.get(node.service_name, ()),
+            )
+    return services
 
 
 def _render_service(
@@ -161,280 +190,6 @@ _DEFAULT_IMAGE_NODE_ULIMITS = {
 }
 
 
-def _truthy(value: object) -> bool:
-    """Return whether a ``bool | str | None`` RAES flag is enabled."""
-
-    if isinstance(value, bool):
-        return value
-    return isinstance(value, str) and value.strip().lower() in {"true", "1", "yes"}
-
-
-_OPERATOR_SECRET_CLASSIFICATION = "operator_secret"
-
-
-def _environment_config(runtime: object) -> dict[str, str]:
-    """Return the Compose ``environment`` map from a node's declared env.
-
-    A variable classified ``operator_secret`` carries no value in the SDL (a real
-    deployment credential is authored empty and supplied by the operator, never
-    baked into the pack); it is emitted as a Compose interpolation reference
-    ``NAME=${NAME}`` so Docker resolves it from the operator ``.env`` at up time,
-    exactly as the graph-owned Wazuh services already did. Every other
-    classification — including the planted range credentials classified
-    ``secret_fixture`` — carries its authored value as content (issue #875).
-    """
-
-    environment: dict[str, str] = {}
-    for variable in getattr(runtime, "environment", ()):
-        name = getattr(variable, "name", "")
-        if not name:
-            continue
-        if getattr(variable, "value_from", None) is not None:
-            # Generated values are delivered by the admitted artifact binding;
-            # an empty entry here would override Compose's env_file value.
-            continue
-        raw = getattr(variable, "value_classification", "")
-        classification = str(getattr(raw, "value", raw) or "")
-        if classification == _OPERATOR_SECRET_CLASSIFICATION:
-            environment[name] = f"${{{name}}}"
-        else:
-            environment[name] = variable.value
-    return environment
-
-
-# RuntimeContainer sequence fields that translate one-to-one into the Compose
-# field of the same name, copied as a list.
-_CONTAINER_SEQUENCE_FIELDS = ("command", "entrypoint", "security_opt", "dns")
-
-
-def _operational_config(runtime: object) -> dict[str, object]:
-    """Translate a node's declared runtime desired-state into Compose fields.
-
-    APTL is a faithful translator here, not an authority: it emits only what the
-    SDL declared through RAES's own runtime vocabulary (``container`` command and
-    flags, ``environment`` variables, ``linux_capabilities``). It never supplies
-    implementation-specific defaults of its own, so a node runs exactly the
-    operational shape its pack declared (issue #875). Bare nodes declare no
-    runtime and get nothing here.
-    """
-
-    if runtime is None:
-        return {}
-    config: dict[str, object] = {}
-    environment = _environment_config(runtime)
-    if environment:
-        config["environment"] = environment
-    policy = getattr(runtime, "operational_policy", None)
-    if policy is not None:
-        restart = getattr(policy, "restart", None)
-        restart_value = str(getattr(restart, "value", restart) or "")
-        if restart_value:
-            config["restart"] = restart_value.replace("_", "-")
-        limits = getattr(policy, "resource_limits", None)
-        memory = getattr(limits, "memory", None) if limits is not None else None
-        if memory is not None:
-            config["mem_limit"] = memory
-    config.update(_container_config(getattr(runtime, "container", None)))
-    capabilities = _capability_config(runtime)
-    if capabilities:
-        config["cap_add"] = capabilities
-    return config
-
-
-def _container_config(container: object) -> dict[str, object]:
-    """Return the Compose fields a node's declared ``container`` runtime sets."""
-
-    if container is None:
-        return {}
-    config: dict[str, object] = {}
-    for field in _CONTAINER_SEQUENCE_FIELDS:
-        value = getattr(container, field, None)
-        if value:
-            config[field] = list(value)
-    if getattr(container, "shm_size", None):
-        config["shm_size"] = container.shm_size
-    if _truthy(getattr(container, "privileged", None)):
-        config["privileged"] = True
-    if _truthy(getattr(container, "autoremove", None)):
-        # A node declaring autoremove is a one-shot (an init job that runs to
-        # completion and exits, e.g. an index bootstrap). Compose has no
-        # service-level --rm, so restart: "no" lets post-start reconciliation
-        # first observe its successful exit and then remove it (issue #992).
-        config["restart"] = "no"
-    return config
-
-
-def _capability_config(runtime: object) -> list[str]:
-    """Return the Compose ``cap_add`` list a node's declared runtime asks for.
-
-    RAES uses the kernel CAP_* form; Docker's cap_add wants it without the
-    prefix (NET_ADMIN, not CAP_NET_ADMIN).
-    """
-
-    capabilities = getattr(runtime, "linux_capabilities", None)
-    added = list(getattr(capabilities, "add", ()) or ()) if capabilities else []
-    return [capability.removeprefix("CAP_") for capability in added]
-
-
-def _service_networks(
-    node: DeploymentNodeRealization, *, aliases: tuple[str, ...] = ()
-) -> dict[str, dict[str, object]]:
-    """Return the Compose ``networks`` attachment map for a node."""
-
-    attachments = node.network_attachments or tuple(
-        _Attachment(network) for network in node.networks
-    )
-    networks: dict[str, dict[str, object]] = {}
-    for attachment in attachments:
-        key = _compose_network_key(attachment.network)
-        if not key:
-            continue
-        options: dict[str, object] = {}
-        address = getattr(attachment, "ipv4_address", None)
-        if address:
-            options["ipv4_address"] = address
-        selected_aliases = [alias for alias in aliases if alias != node.service_name]
-        if selected_aliases:
-            options["aliases"] = selected_aliases
-        networks[key] = options
-    return networks
-
-
-def _network_namespace_container(node: DeploymentNodeRealization) -> str | None:
-    """Return the container whose netns this node joins, or ``None``.
-
-    A node declaring ``runtime.container.namespaces.network.target_node_ref``
-    (RAES ``RuntimeNetworkNamespace``) shares another node's network namespace.
-    The target is an image-free node the generic materializer starts before
-    Compose runs (ADR-048 ordering), so Compose references it by container name
-    via ``network_mode: container:<name>``. The name derivation matches the
-    image-free substrate's (``aptl-<ref>``, not doubling an existing prefix) so
-    both sides agree on the container identity (issue #875 / #906).
-    """
-
-    runtime = node.runtime
-    container = getattr(runtime, "container", None) if runtime is not None else None
-    namespaces = (
-        getattr(container, "namespaces", None) if container is not None else None
-    )
-    network = getattr(namespaces, "network", None) if namespaces is not None else None
-    ref = getattr(network, "target_node_ref", None) if network is not None else None
-    if not ref:
-        return None
-    tail = ref.rsplit(".", 1)[-1]
-    return tail if tail.startswith("aptl-") else f"aptl-{tail}"
-
-
-def _service_dependencies(
-    node: DeploymentNodeRealization,
-    service_names: set[str],
-    completion_services: set[str],
-) -> list[str] | dict[str, dict[str, str]]:
-    """Return ordering dependencies restricted to emitted services."""
-
-    depends: list[str] = []
-    for dependency in node.ordering_dependencies:
-        name = dependency.rsplit(".", 1)[-1]
-        if name in service_names and name != node.service_name and name not in depends:
-            depends.append(name)
-    if not any(name in completion_services for name in depends):
-        return depends
-    return {
-        name: {
-            "condition": (
-                "service_completed_successfully"
-                if name in completion_services
-                else "service_started"
-            )
-        }
-        for name in depends
-    }
-
-
-def _pinned_addresses_by_network(
-    spec: DeploymentRealizationSpec,
-) -> dict[str, set[str]]:
-    """Return, per network name, the set of statically-pinned node IPs.
-
-    A node pins an address by declaring ``ipv4_address`` on a network
-    attachment (SDL ``static_address_assignments``). These are the addresses
-    Docker's dynamic allocator must be kept away from.
-    """
-
-    pinned: dict[str, set[str]] = {}
-    for node in spec.nodes:
-        for attachment in node.network_attachments:
-            if attachment.ipv4_address:
-                pinned.setdefault(attachment.network, set()).add(
-                    attachment.ipv4_address
-                )
-    return pinned
-
-
-def _dynamic_ip_range(cidr: str, gateway: str | None, pinned: set[str]) -> str | None:
-    """Return an IPAM ``ip_range`` confining dynamic allocation off the pins.
-
-    Docker assigns dynamic addresses from the bottom of the subnet and does not
-    reserve the static IPs of not-yet-started containers, so a dynamically-placed
-    node (a DNS-reachable SOC service) can seize an address another node pinned in
-    the SDL, and the pinned container then fails networking with "Address already
-    in use" (issue #875). Restricting the dynamic pool to the subnet's upper half
-    keeps it clear of the low, pinned addresses.
-
-    Returns ``None`` when no confinement is needed (nothing pinned). Raises when a
-    pinned address or the gateway falls in the upper half, rather than emitting a
-    range that would still collide — a loud signal that the split no longer holds
-    for this topology.
-    """
-
-    if not pinned:
-        return None
-    subnet = ipaddress.ip_network(cidr, strict=False)
-    upper = list(subnet.subnets(prefixlen_diff=1))[1]
-    intruders = sorted(
-        str(address)
-        for address in (*pinned, *((gateway,) if gateway else ()))
-        if ipaddress.ip_address(address) in upper
-    )
-    if intruders:
-        raise ValueError(
-            f"network {cidr}: pinned/gateway address(es) {', '.join(intruders)} "
-            f"fall in the dynamic pool {upper}; the upper-half split no longer "
-            "isolates static addresses from dynamic allocation (issue #875)."
-        )
-    return str(upper)
-
-
-def _render_networks(spec: DeploymentRealizationSpec) -> dict[str, dict[str, object]]:
-    """Return the Compose ``networks`` section for the realized networks."""
-
-    pinned_by_network = _pinned_addresses_by_network(spec)
-    networks: dict[str, dict[str, object]] = {}
-    for network in spec.networks:
-        key = _compose_network_key(network.name)
-        if not key:
-            continue
-        definition: dict[str, object] = {"driver": "bridge"}
-        if network.internal:
-            definition["internal"] = True
-        ipam_config: dict[str, str] = {}
-        if network.cidr:
-            ipam_config["subnet"] = network.cidr
-            ip_range = _dynamic_ip_range(
-                network.cidr,
-                network.gateway,
-                pinned_by_network.get(network.name, set()),
-            )
-            if ip_range:
-                ipam_config["ip_range"] = ip_range
-        if network.gateway:
-            ipam_config["gateway"] = network.gateway
-        if ipam_config:
-            definition["ipam"] = {"config": [ipam_config]}
-        networks[key] = definition
-    return networks
-
-
 def write_realization_compose(
     spec: DeploymentRealizationSpec, scenario_root: Path
 ) -> Path:
@@ -470,13 +225,3 @@ def base_compose_file(
     if static.exists():
         return static
     return write_realization_compose(spec, realization_root or content_root)
-
-
-class _Attachment:
-    """Minimal network attachment for a node that declares only bare names."""
-
-    __slots__ = ("network", "ipv4_address")
-
-    def __init__(self, network: str) -> None:
-        self.network = network
-        self.ipv4_address = None

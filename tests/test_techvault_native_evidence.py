@@ -6,6 +6,9 @@ import json
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
+
+from aptl.core.evidence.adapters import techvault_native
 
 from aptl.core.deployment.realization import (
     DeploymentPublishedPort,
@@ -55,6 +58,15 @@ def _realization(project_dir: Path):
         provenance="techvault:cortex-service-credentials/v1",
         outputs=(output,),
     )
+    ca_path = project_dir / "config/soc_certs/lab-ca.pem"
+    ca_path.parent.mkdir(parents=True, exist_ok=True)
+    ca_path.write_text("public-test-ca\n", encoding="utf-8")
+    ca_artifact = SimpleNamespace(
+        name="techvault-soc-certificates",
+        generator="certificate_bundle",
+        provenance="techvault:soc-certificate-profile/v1",
+        outputs=(SimpleNamespace(name="ca-certificate", path="lab-ca.pem"),),
+    )
     image = SimpleNamespace(image_ref="jasonish/suricata@" + _DIGEST)
     content = (
         SimpleNamespace(
@@ -86,7 +98,7 @@ def _realization(project_dir: Path):
             ),
         ),
         placements=content,
-        generated_artifacts=(artifact,),
+        generated_artifacts=(artifact, ca_artifact),
     )
 
 
@@ -145,6 +157,8 @@ def _request(url, **kwargs):
             "report": {"full": {"scenario_role": "attacker", "secret": "drop"}},
         }
     if url.endswith("/api/v1/status"):
+        assert url.startswith("https://127.0.0.1:9000/")
+        assert kwargs["ca_cert_path"].endswith("/config/soc_certs/lab-ca.pem")
         return {"services": [{"name": "Cortex", "status": "OK"}]}
     if url.endswith("/_search"):
         return {
@@ -184,12 +198,47 @@ def _owner(tmp_path, backend=None, request_json=_request):
     )
 
 
-def test_native_owner_wires_only_the_three_native_registrations(tmp_path):
+def test_native_owner_wires_exactly_the_native_registrations(tmp_path):
+    """Every source the native owner offers can actually produce its evidence.
+
+    A source without the state it compares against would accept whatever it
+    observed, so the MISP readiness source is offered only when the plan admits
+    MISP. This realization does not, and its absence leaves the demand
+    uncovered rather than covered by something that cannot decide it.
+    """
+
     assert set(_owner(tmp_path).sources()) == {
         "aptl.collector.cortex-enrichment",
         "aptl.collector.suricata-rule-readiness",
         "aptl.collector.suricata-wazuh-sqli",
+        "aptl.collector.wazuh-agent-readiness",
     }
+
+
+def test_the_misp_source_appears_once_the_plan_admits_a_state_to_compare(tmp_path):
+    """And it carries the admitted values, not defaults of its own."""
+
+    from aptl.core.evidence.adapters.techvault_misp_readiness import AdmittedMispState
+    from aptl.core.evidence.adapters.techvault_native_readiness import (
+        admitted_misp_state,
+    )
+
+    owner = _owner(tmp_path)
+    admitted = AdmittedMispState(
+        canonical_url="https://misp.techvault.local",
+        database_identity="misp",
+        database_role="misp",
+        cache_persistence_policy="no",
+        cache_eviction_policy="noeviction",
+    )
+    with mock.patch.object(
+        techvault_native, "admitted_misp_state", return_value=admitted
+    ):
+        sources = owner.sources()
+
+    assert "aptl.collector.misp-authenticated-api-readiness" in sources
+    # The helper reads the admitted plan; it invents nothing when MISP is absent.
+    assert admitted_misp_state(owner._realization) is None
 
 
 def test_cortex_owner_executes_exact_analyzer_and_projects_no_full_report(tmp_path):
@@ -220,9 +269,33 @@ def test_cortex_owner_uses_runtime_thehive_api_key_without_admin_fallback(tmp_pa
     assert result.status is CollectorStatus.OK
     status_request = next(item for item in requests if item[0].endswith("/status"))
     assert status_request[1]["auth_header"] == "Bearer operator-api-key"
+    assert status_request[0].startswith("https://127.0.0.1:9000/")
     assert status_request[1]["ca_cert_path"] == str(
         tmp_path / "config/soc_certs/lab-ca.pem"
     )
+
+
+def test_cortex_owner_fails_closed_when_declared_thehive_ca_is_missing(tmp_path):
+    realization = _realization(tmp_path)
+    (tmp_path / "config/soc_certs/lab-ca.pem").unlink()
+    requests = []
+
+    def request(url, **kwargs):
+        requests.append((url, kwargs))
+        return _request(url, **kwargs)
+
+    owner = TechVaultNativeEvidenceOwner(
+        backend=_Backend(),
+        realization=realization,
+        project_dir=tmp_path,
+        indexer_auth=("admin", "password"),
+        thehive_api_key="operator-api-key",
+        dependencies=TechVaultNativeDependencies(request_json=request),
+    )
+    result = owner.sources()["aptl.collector.cortex-enrichment"].fetch(_START, _END)
+
+    assert result.status is CollectorStatus.SOURCE_UNAVAILABLE
+    assert requests == []
 
 
 def test_cortex_owner_polls_until_thehive_connector_refreshes(tmp_path):
@@ -233,11 +306,7 @@ def test_cortex_owner_polls_until_thehive_connector_refreshes(tmp_path):
         if url.endswith("/api/v1/status"):
             status_calls += 1
             if status_calls == 1:
-                return {
-                    "connectors": {
-                        "cortex": {"status": "ERROR", "servers": []}
-                    }
-                }
+                return {"connectors": {"cortex": {"status": "ERROR", "servers": []}}}
         return _request(url, **kwargs)
 
     result = (

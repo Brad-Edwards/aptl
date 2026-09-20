@@ -8,9 +8,9 @@ from aptl.core.deployment._compose_network_conflicts import (
     _network_subnet_conflicts,
     _planned_networks_to_create,
 )
-from aptl.core.deployment._compose_node_generation import (
-    _dynamic_ip_range,
-    _pinned_addresses_by_network,
+from aptl.core.deployment._compose_node_topology import (
+    dynamic_ip_range as _dynamic_ip_range,
+    pinned_addresses_by_network as _pinned_addresses_by_network,
 )
 from aptl.core.deployment._compose_realization_networks import (
     _compose_network_key,

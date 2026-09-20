@@ -52,6 +52,11 @@ class DeploymentBackend(HostInventoryBackend, ContainerOpsBackend, Protocol):
     ``container_inspect``, ...) from :class:`ContainerOpsBackend`.
     """
 
+    def docker_transport_environment(self) -> dict[str, str]:
+        """Return only Docker transport settings used by this backend."""
+
+        ...
+
     def start(self, profiles: list[str], *, build: bool = True) -> LabResult:
         """Start lab services for the given profiles.
 
@@ -98,6 +103,16 @@ class DeploymentBackend(HostInventoryBackend, ContainerOpsBackend, Protocol):
         Returns:
             LabResult indicating success or failure.
         """
+        ...
+
+    def qualify_runtime_materialization(
+        self,
+        realization: DeploymentRealizationSpec,
+        *,
+        scenario_root: Path,
+    ) -> LabResult:
+        """Read-only qualification that must precede artifact mutation."""
+
         ...
 
     def realize_boundary(self, policy: BoundaryEnforcementSpec) -> LabResult:

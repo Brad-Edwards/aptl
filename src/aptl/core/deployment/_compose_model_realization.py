@@ -12,6 +12,7 @@ this module owns only the file-set and model concerns.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 import json
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from aptl.core.deployment._compose_node_generation import (
 from aptl.core.deployment._compose_port_realization import write_port_override
 from aptl.core.deployment._compose_stateful_realization import (
     effective_stateful_model_errors,
+    stateful_override_payload,
 )
 from aptl.core.deployment._compose_runtime_orchestration import (
     effective_orchestration_model_errors,
@@ -65,9 +67,36 @@ class ComposeRealizationModelMixin:
         content_override = self._write_image_node_content_override(
             realization, scenario_root, realization_root
         )
+        startup_override = None
+        service_override = None
+        if not (scenario_root / STATIC_COMPOSE_FILENAME).exists():
+            # The adapter registry imports deployment DTOs; resolve it only
+            # after the deployment package has completed import initialization.
+            from aptl.backends.scenario_startup_policy import (
+                write_scenario_startup_override,
+            )
+
+            startup_override = write_scenario_startup_override(
+                realization, realization_root
+            )
+            from aptl.backends.scenario_service_policy import (
+                write_scenario_service_override,
+            )
+
+            service_override = write_scenario_service_override(
+                realization,
+                realization_root,
+                container_name_for_semantic=self._ensure_resource_ownership().container_name,
+            )
         overrides = tuple(
             path
-            for path in (port_override, stateful_override, content_override)
+            for path in (
+                port_override,
+                stateful_override,
+                content_override,
+                startup_override,
+                service_override,
+            )
             if path is not None
         )
         if (
@@ -181,12 +210,20 @@ class ComposeRealizationModelMixin:
             compose_files=compose_files,
             scenario_root=scenario_root,
         )
-        stateful = bool(
-            realization.generated_artifacts or realization.persistent_volumes
+        image_addresses = {image.address for image in realization.images}
+        has_image_services = any(
+            node.address in image_addresses and node.service_name
+            for node in realization.nodes
+        )
+        needs_effective_model = bool(
+            has_image_services
+            or realization.generated_artifacts
+            or realization.persistent_volumes
+            or realization_has_docker_authority(realization)
         )
         error = (
             self._effective_compose_model_error(command, realization, realization_root)
-            if stateful or realization_has_docker_authority(realization)
+            if needs_effective_model
             else self._compose_syntax_error(command)
         )
         return LabResult(success=False, error=error) if error is not None else None
@@ -226,4 +263,31 @@ class ComposeRealizationModelMixin:
             realization,
         )
         errors.extend(effective_orchestration_model_errors(payload, realization))
+        from aptl.core.deployment.runtime_materialization import (
+            effective_runtime_contract_issues,
+        )
+
+        profile = self._runtime_materialization_profile(realization)
+        stateful_payload = stateful_override_payload(
+            realization_root,
+            self.project_name,
+            realization,
+        )
+        stateful_services = stateful_payload.get("services", {})
+        validated_service_volumes = {
+            str(service_name): tuple(volumes)
+            for service_name, service in stateful_services.items()
+            if isinstance(service, Mapping)
+            and isinstance((volumes := service.get("volumes")), Sequence)
+            and not isinstance(volumes, (str, bytes))
+        }
+        errors.extend(
+            issue.render()
+            for issue in effective_runtime_contract_issues(
+                payload,
+                realization,
+                profile=profile,
+                validated_service_volumes=validated_service_volumes,
+            )
+        )
         return "; ".join(errors[:5]) if errors else None

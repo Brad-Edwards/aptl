@@ -34,6 +34,11 @@ class ProjectRuntimePresence:
 class HostInventoryBackend(Protocol):
     """Host-level inventory operations a deployment backend exposes."""
 
+    def daemon_identity(self) -> str | None:
+        """Return the selected deployment daemon id for appliance binding."""
+
+        ...
+
     def host_versions(self) -> dict[str, str]:
         """Return parsed daemon-side software versions.
 

@@ -7,6 +7,7 @@ calls are mocked.
 
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import ANY, MagicMock, call, patch
 from uuid import uuid4
 
@@ -70,6 +71,16 @@ def _admitted_surface(
         ),
         selected_profiles=selected_profiles,
         stateful_artifact_ownership=ownership,
+    )
+
+
+def _admitted_start_fixture(bundle_root: Path):
+    """Model a non-pack admission without invoking scenario-specific adapters."""
+    from aptl.core.scenario_bundle import project_tree_bundle
+
+    return SimpleNamespace(
+        bundle=project_tree_bundle(bundle_root, bundle_root / "fixture.sdl.yaml"),
+        runtime_materialization_failure=None,
     )
 
 
@@ -1617,11 +1628,24 @@ class TestOrchestrateLabStart:
         pack_root = tmp_path / ".aptl" / "staged-packs" / "fixture"
         pack_root.mkdir(parents=True)
         mocks["admitted_surface"] = _admitted_surface(
-            pack_root, selected_profiles=("wazuh", "victim", "kali", "otel")
+            pack_root,
+            env_pack=False,
+            selected_profiles=(
+                "wazuh",
+                "victim",
+                "kali",
+                "otel",
+                "soc",
+                "enterprise",
+                "fileshare",
+            ),
         )
         mocks["admit"] = mocker.patch(
             "aptl.core.lab.admit_start_surface",
-            return_value=(object(), mocks["admitted_surface"]),
+            return_value=(
+                _admitted_start_fixture(pack_root),
+                mocks["admitted_surface"],
+            ),
         )
 
         # Mock RAES runtime handoff start. The planned profile set is part of
@@ -1630,7 +1654,15 @@ class TestOrchestrateLabStart:
             "aptl.core.lab.start_raes_scenario",
             return_value=_raes_outcome(
                 success=True,
-                selected_profiles=("wazuh", "victim", "kali", "otel"),
+                selected_profiles=(
+                    "wazuh",
+                    "victim",
+                    "kali",
+                    "otel",
+                    "soc",
+                    "enterprise",
+                    "fileshare",
+                ),
             ),
         )
 
@@ -1655,6 +1687,10 @@ class TestOrchestrateLabStart:
             "aptl.core.lab.subprocess.run",
             return_value=MagicMock(returncode=0, stdout="", stderr=""),
         )
+        seed_script = tmp_path / "scripts" / "seed-prime.sh"
+        seed_script.parent.mkdir(exist_ok=True)
+        seed_script.write_text("#!/bin/sh\nexit 0\n")
+        seed_script.chmod(0o755)
 
         # Mock container IP resolution for the SSH readiness step —
         # lab targets are addressed by container IP (issue #293).
@@ -1759,6 +1795,28 @@ class TestOrchestrateLabStart:
             "several minutes while images build."
         )
         progress.assert_any_call("Waiting for Wazuh services to become ready.")
+
+    def test_product_neutral_progress_omits_adapter_specific_phases(self, tmp_path):
+        """An admitted scenario with no adapter profiles stays product-neutral."""
+
+        from aptl.core.lab import (
+            _LabStartContext,
+            _start_progress_message,
+            _step_build_mcps,
+            _step_generate_certs,
+            _step_start_containers,
+            _step_wait_for_services,
+        )
+
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.admitted_surface = object()
+
+        assert _start_progress_message(ctx, _step_generate_certs) is None
+        assert _start_progress_message(ctx, _step_wait_for_services) is None
+        assert _start_progress_message(ctx, _step_build_mcps) is None
+        assert "Starting containers" in str(
+            _start_progress_message(ctx, _step_start_containers)
+        )
 
     def test_orchestrates_selected_scenario_path(self, mocker, tmp_path):
         """Selected RAES SDL paths should reach the startup handoff."""
@@ -2089,9 +2147,9 @@ class TestOrchestrateLabStart:
         )
 
         # Re-mock RAES handoff and wait_for_service since config changes
-        from aptl.core.lab import LabResult
-
-        mocks["start"].return_value = LabResult(success=True, message="Lab started")
+        mocks["start"].return_value = _raes_outcome(
+            success=True, selected_profiles=()
+        )
 
         result = orchestrate_lab_start(tmp_path)
 
@@ -2168,7 +2226,10 @@ class TestAdmittedStartSurface:
         ctx = self._ctx(tmp_path)
         admit = mocker.patch(
             "aptl.core.lab.admit_start_surface",
-            return_value=(object(), _admitted_surface(tmp_path / "pack")),
+            return_value=(
+                _admitted_start_fixture(tmp_path / "pack"),
+                _admitted_surface(tmp_path / "pack"),
+            ),
         )
 
         assert _load_admitted_start_surface(ctx) is None
@@ -2183,7 +2244,10 @@ class TestAdmittedStartSurface:
         ctx = self._ctx(tmp_path, scenario_path=selected)
         admit = mocker.patch(
             "aptl.core.lab.admit_start_surface",
-            return_value=(object(), _admitted_surface(tmp_path, env_pack=False)),
+            return_value=(
+                _admitted_start_fixture(tmp_path),
+                _admitted_surface(tmp_path, env_pack=False),
+            ),
         )
 
         assert _load_admitted_start_surface(ctx) is None
@@ -2195,7 +2259,7 @@ class TestAdmittedStartSurface:
         from aptl.core.lab import _load_admitted_start_surface
 
         ctx = self._ctx(tmp_path)
-        admitted = object()
+        admitted = _admitted_start_fixture(tmp_path / "pack")
         surface = _admitted_surface(
             tmp_path / "pack",
             selected_profiles=("otel",),
@@ -2210,6 +2274,35 @@ class TestAdmittedStartSurface:
         assert ctx.admitted_start is admitted
         assert ctx.admitted_surface is surface
         assert ctx.stateful_artifact_ownership == surface.stateful_artifact_ownership
+
+    def test_runtime_materialization_failure_stops_before_legacy_mutation(
+        self, mocker, tmp_path
+    ):
+        """A valid SDL plan can still be unsupported by the selected backend."""
+        from aptl.core.lab import _load_admitted_start_surface
+        from aptl.core.lab_types import LabResult
+
+        ctx = self._ctx(tmp_path)
+        failure = LabResult(
+            success=False,
+            error=(
+                "aptl.provisioner.runtime-materialization-unsupported: "
+                "node=provision.node.probe field=runtime.container.privileged "
+                "backend=shared-docker"
+            ),
+        )
+        admitted = SimpleNamespace(runtime_materialization_failure=failure)
+        mocker.patch(
+            "aptl.core.lab.admit_start_surface",
+            return_value=(admitted, _admitted_surface(tmp_path)),
+        )
+
+        result = _load_admitted_start_surface(ctx)
+
+        assert result is failure
+        assert ctx.admitted_start is None
+        assert ctx.admitted_surface is None
+        assert ctx.stateful_artifact_ownership == frozenset()
 
     def test_admission_failure_fails_closed_before_legacy_mutation(
         self, mocker, tmp_path
@@ -2903,6 +2996,7 @@ class TestStartupClassificationWiring:
         )
 
     def _ctx(self, tmp_path, *, config=None, selected_profiles=None):
+        from aptl.backends.scenario_startup import ScenarioStartupPlan
         from aptl.core.lab import _LabStartContext
 
         cfg = config or self._make_config()
@@ -2913,6 +3007,9 @@ class TestStartupClassificationWiring:
         if selected_profiles is None:
             selected_profiles = set(cfg.containers.enabled_profiles()) | {"otel"}
 
+        backend = MagicMock()
+        backend.docker_transport_environment.return_value = {}
+
         return _LabStartContext(
             project_dir=tmp_path,
             skip_seed=False,
@@ -2920,7 +3017,20 @@ class TestStartupClassificationWiring:
             config=cfg,
             ssh_key_path=Path("/tmp/aptl_lab_key"),
             selected_profiles=selected_profiles,
-            backend=MagicMock(),
+            backend=backend,
+            scenario_startup=ScenarioStartupPlan(
+                seed_script="scripts/seed-prime.sh",
+                required_profiles=(
+                    "wazuh",
+                    "enterprise",
+                    "victim",
+                    "kali",
+                    "fileshare",
+                    "soc",
+                ),
+                activation_profiles=("soc",),
+                seed_environment_keys=("MISP_API_KEY", "SHUFFLE_API_KEY"),
+            ),
         )
 
     # -- redaction at the diagnostic boundary --------------------------
@@ -3664,6 +3774,18 @@ class TestStartupClassificationWiring:
 
     # -- build_mcps (capability) ---------------------------------------
 
+    def test_product_neutral_start_skips_mcp_build(self, tmp_path, mocker):
+        from aptl.core.lab import _step_build_mcps
+
+        ctx = self._ctx(tmp_path, selected_profiles=set())
+        ctx.admitted_surface = object()
+        run_script = mocker.patch("aptl.utils.shell.run_shell_script")
+
+        assert _step_build_mcps(ctx) is None
+
+        run_script.assert_not_called()
+        assert ctx.diagnostics == []
+
     def test_build_mcps_missing_script_emits_capability_warning(self, tmp_path):
         from aptl.core.lab import _step_build_mcps
         from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
@@ -4130,6 +4252,18 @@ class TestStartupClassificationWiring:
         assert ctx.diagnostics == []
 
     # -- mcp_config_sync (capability) ----------------------------------
+
+    def test_product_neutral_start_skips_mcp_config_sync(self, tmp_path, mocker):
+        from aptl.core.lab import _step_sync_mcp_config
+
+        ctx = self._ctx(tmp_path, selected_profiles=set())
+        ctx.admitted_surface = object()
+        sync = mocker.patch("aptl.core.lab._sync_mcp_config_keys")
+
+        assert _step_sync_mcp_config(ctx) is None
+
+        sync.assert_not_called()
+        assert ctx.diagnostics == []
 
     def test_mcp_config_sync_exception_emits_capability_warning(self, tmp_path, mocker):
         from aptl.core.lab import _step_sync_mcp_config
@@ -5000,17 +5134,10 @@ class TestStopLabCleanupIsContractFree:
 
 
 class TestSeedSocPrimeProfileDiagnostic:
-    """Soft check against `_PRIME_REQUIRED_PROFILES`, diffed against
-    `ctx.selected_profiles` (the scenario-realized surface, issue #550) at
-    the SOC seed boundary. ADR-005 supports selective SOC labs, so a
-    missing prime profile must NOT fatally refuse lab startup — it
-    surfaces as a CAPABILITY diagnostic and the step returns None. The
-    config-bound `required_profiles_enabled` predicate in
-    `aptl.core.contracts` remains available as a hard contract for a
-    future explicit prime-scenario entrypoint; this boundary uses plain
-    set containment against the selected surface instead."""
+    """Soft checks use the adapter's required scenario profile surface."""
 
     def _ctx(self, tmp_path: Path, *, soc: bool, selected_profiles=None, **extra):
+        from aptl.backends.scenario_startup import ScenarioStartupPlan
         from aptl.core.config import AptlConfig
         from aptl.core.env import EnvVars
         from aptl.core.lab import _LabStartContext
@@ -5034,6 +5161,18 @@ class TestSeedSocPrimeProfileDiagnostic:
             ),
             config=cfg,
             selected_profiles=selected_profiles,
+            scenario_startup=ScenarioStartupPlan(
+                seed_script="scripts/seed-prime.sh",
+                required_profiles=(
+                    "wazuh",
+                    "enterprise",
+                    "victim",
+                    "kali",
+                    "fileshare",
+                    "soc",
+                ),
+                activation_profiles=("soc",),
+            ),
         )
 
     def test_partial_prime_set_emits_capability_diagnostic(self, tmp_path):

@@ -24,6 +24,7 @@ from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.scenario_bundle import project_tree_bundle
+from tests.helpers import realized_container_name, realized_project_name
 
 pytestmark = pytest.mark.integration
 
@@ -34,25 +35,9 @@ def _bundle(root):
     return project_tree_bundle(root, root / "scenarios" / "demo.sdl.yaml")
 
 
-_SDL = """\
-name: imagefree-admission-smoke
-description: Minimal image-free scenario (ADR-048 full-stack validation).
-nodes:
-  smoke-net:
-    type: switch
-    description: smoke net
-  smoke-box:
-    type: compute
-    os: linux
-    runtime:
-      packages:
-        - {manager: apt, name: curl, version: "1.0"}
-      local_identity:
-        groups:
-          - {name: analysts}
-        users:
-          - {username: analyst, supplemental_groups: [analysts]}
-"""
+_MATERIALIZATION_ENVELOPE = (
+    _REPO_ROOT / "tests" / "fixtures" / "materialization-envelope.sdl.yaml"
+)
 
 
 def _docker_available() -> bool:
@@ -67,7 +52,7 @@ def _docker_available() -> bool:
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
 def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
     sdl = tmp_path / "imagefree.sdl.yaml"
-    sdl.write_text(_SDL, encoding="utf-8")
+    shutil.copyfile(_MATERIALIZATION_ENVELOPE, sdl)
     container = "aptl-smoke-box"
     subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
 
@@ -107,12 +92,26 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
         assert (
             backend.container_exec(container, ["id", "-u", "analyst"]).returncode == 0
         )
+        assert (
+            backend.container_exec(
+                container,
+                ["stat", "-c", "%U:%G %a", "/var/lib/aptl-smoke"],
+            ).stdout.strip()
+            == "analyst:analysts 750"
+        )
     finally:
         subprocess.run(
-            ["docker", "rm", "-f", container], capture_output=True, text=True
+            ["docker", "rm", "-f", realized_container_name(backend, container)],
+            capture_output=True,
+            text=True,
         )
         subprocess.run(
-            ["docker", "network", "rm", "aptl-imagefree-admit_aptl-smoke"],
+            [
+                "docker",
+                "network",
+                "rm",
+                f"{realized_project_name(backend)}_aptl-smoke",
+            ],
             capture_output=True,
             text=True,
         )

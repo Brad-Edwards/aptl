@@ -68,6 +68,7 @@ updates:
     directories:
       - "/containers/appliance-egress-proxy"
       - "/containers/base"
+      - "/containers/docker-authority-proxy"
       - "/containers/generic-systemd-base"
       - "/containers/generic-systemd-base-debian"
       - "/containers/generic-systemd-node22-base"

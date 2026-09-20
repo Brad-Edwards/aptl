@@ -156,6 +156,8 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [Issue #970 Generic Lab Lifecycle Boundary](issue-970-generic-lab-lifecycle-preflight.md)
+- [Issue #956 SDL Runtime Materialization](issue-956-sdl-runtime-authority-materialization-preflight.md)
 - [Issue #1002 Wazuh API TLS Warm-Up](issue-1002-wazuh-api-tls-warmup-preflight.md)
 - [Issue #1000 Partial Boot And Manual Release QA](issue-1000-manual-release-qa-preflight.md)
 - [Issue #992 Backend Observability Ownership](issue-992-backend-observability-ownership-preflight.md)
@@ -164,6 +166,7 @@ The victim and kali containers publish no host ports; use
 - [Issue #592 Scenario-Pack Terminology](issue-592-scenario-pack-terminology-preflight.md)
 - [Issue #951 Fresh Env-Pack Start](issue-951-fresh-env-pack-start-preflight.md)
 - [Issue #913 Shuffle Post-Realization Mutation](issue-913-shuffle-post-realization-mutation-preflight.md)
+- [Issue #912 MISP/Redis Post-Realization Mutation](issue-912-misp-redis-post-realization-mutation-preflight.md)
 - [Issue #905 Lab Lifecycle Robustness](issue-905-lab-lifecycle-robustness-preflight.md)
 - [Issue #874 Scenario-Bundle Realization Roots](issue-874-scenario-bundle-realization-roots-preflight.md)
 - [Issue #878 Scenario Verification Plugin Seam](issue-878-scenario-verification-plugin-seam-preflight.md)

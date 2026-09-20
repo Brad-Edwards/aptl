@@ -14,7 +14,18 @@ from typing import TYPE_CHECKING, Any
 
 from raes.module_registry import LOCKFILE_NAME
 from raes_backend_protocols.manifest import backend_manifest_payload
-from raes_runtime.control_plane_store import _snapshot_payload
+from raes_contracts.account_credentials import (
+    account_placement_has_credential_bindings,
+    value_free_account_placement_payload,
+)
+from raes_contracts.participant_autonomous_state import (
+    require_participant_autonomous_runtime_snapshot,
+)
+from raes_contracts.realization_preparation import (
+    jsonable_fallback,
+    to_jsonable_python,
+)
+from raes_contracts.runtime_state import RuntimeSnapshotEnvelope
 
 from aptl.backends.raes_manifest import create_aptl_manifest
 
@@ -70,6 +81,34 @@ class RunRecordInputs:
     evidence_references: list[dict[str, str]]
 
 
+def runtime_snapshot_record_payload(snapshot: RuntimeSnapshot) -> dict[str, Any]:
+    """Project the public RAES snapshot into the value-free REP-001 record.
+
+    The snapshot's dataclass contract supplies the field set. Credential
+    bindings in account placement are reduced through RAES's public value-free
+    projection before the record reaches the run store.
+    """
+
+    require_participant_autonomous_runtime_snapshot(snapshot)
+    payload = to_jsonable_python(snapshot, fallback=jsonable_fallback)
+    if not isinstance(payload, dict):
+        raise ValueError("RAES runtime snapshot did not encode as a mapping")
+    entries = payload.get("entries")
+    if not isinstance(entries, dict):
+        raise ValueError("RAES runtime snapshot entries are invalid")
+    for entry in entries.values():
+        if not isinstance(entry, dict):
+            raise ValueError("RAES runtime snapshot entry is invalid")
+        if not entry.get("profile_bindings"):
+            entry.pop("profile_bindings", None)
+        if entry.get("resource_type") != "account-placement":
+            continue
+        account_payload = entry.get("payload")
+        if account_placement_has_credential_bindings(account_payload):
+            entry["payload"] = value_free_account_placement_payload(account_payload)
+    return {"schema_version": RuntimeSnapshotEnvelope().schema_version, **payload}
+
+
 def build_reproducibility_record(inputs: RunRecordInputs) -> dict[str, Any]:
     """Build a REP-001 run reproducibility record dict.
 
@@ -80,7 +119,7 @@ def build_reproducibility_record(inputs: RunRecordInputs) -> dict[str, Any]:
     """
     manifest = create_aptl_manifest()
     manifest_payload = backend_manifest_payload(manifest)
-    runtime_snapshot_payload = _snapshot_payload(inputs.final_snapshot)
+    runtime_snapshot_payload = runtime_snapshot_record_payload(inputs.final_snapshot)
     raes_lock_digest = _raes_lock_digest(inputs.scenario_path)
 
     scenario_section: dict[str, Any] = {

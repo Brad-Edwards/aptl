@@ -133,6 +133,10 @@ class LiveGateOperations(object):
             return None
         return min(requested_seconds, floor(remaining))
 
+    def _observed_origin(self, origin: str) -> str:
+        """Resolve a plugin's semantic node to its observed native identity."""
+        return self._state.semantic_container_names.get(origin, origin)
+
     def reachability_from(self, origin: str) -> ReachabilityResult:
         """Return whether ``origin`` reaches every host on its shared networks.
 
@@ -141,7 +145,7 @@ class LiveGateOperations(object):
         """
 
         containers = (self._state.snapshot or {}).get("containers", [])
-        origin_container = _find_container(containers, origin)
+        origin_container = _find_container(containers, self._observed_origin(origin))
         if origin_container is None:
             return ReachabilityResult(
                 False, (), (f"origin {origin!r} not present in the booted range",)
@@ -178,7 +182,7 @@ class LiveGateOperations(object):
         """Return admitted ``(node, address)`` peers sharing a network with origin."""
 
         containers = (self._state.snapshot or {}).get("containers", [])
-        origin_container = _find_container(containers, origin)
+        origin_container = _find_container(containers, self._observed_origin(origin))
         if origin_container is None:
             return ()
         networks = set((origin_container.get("networks") or {}).keys())

@@ -12,7 +12,6 @@ boot.
 from __future__ import annotations
 
 import importlib.resources as ir
-from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -76,21 +75,6 @@ def techvault_realization(tmp_path_factory):
     return _realize_pack(tmp_path_factory.mktemp("techvault-realization"))
 
 
-def _without_downstream_orborus_authority(realization):
-    """Isolate non-authority tests until env-packs #285 completes the closure."""
-
-    nodes = tuple(
-        replace(
-            node,
-            runtime=node.runtime.model_copy(update={"orchestration_authorities": []}),
-        )
-        if node.name == "shuffle-orborus" and node.runtime is not None
-        else node
-        for node in realization.nodes
-    )
-    return replace(realization, nodes=nodes)
-
-
 @pytest.mark.integration
 def test_techvault_pack_realizes_without_provisioner_diagnostics(
     techvault_realization,
@@ -116,7 +100,7 @@ def test_techvault_pack_realizes_without_provisioner_diagnostics(
 
 @pytest.mark.integration
 def test_generated_compose_covers_image_nodes_networks_and_ordering(
-    techvault_realization,
+    techvault_realization, tmp_path
 ):
     """The generated base compose renders image nodes, networks, and safe deps."""
 
@@ -127,9 +111,7 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
     # which must replace Shuffle's mutable child image and author the realized
     # child correlation before APTL can admit its Docker authority. Strip only
     # that downstream declaration so the generic Compose surface remains covered.
-    spec = _without_downstream_orborus_authority(realization).deployment_spec(
-        sorted(realization.profiles)
-    )
+    spec = realization.deployment_spec(sorted(realization.profiles))
     document = render_realization_compose(spec)
 
     services = document["services"]
@@ -190,9 +172,14 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
 
     # depends_on never references a service the document does not define.
     defined = set(services)
+    # Every dependency comes from the admitted scenario graph; plain lab start
+    # does not insert a mediation service around declared Docker authority.
+    external_dependencies: set[str] = set()
     for service in services.values():
         for dependency in service.get("depends_on", []):
-            assert dependency in defined
+            if dependency not in defined:
+                external_dependencies.add(dependency)
+    assert external_dependencies == set()
 
     # The backend-neutral release no longer authors a Cortex initializer node.
     # The generated model must not resurrect the removed implementation detail.
@@ -220,23 +207,74 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
 
 
 @pytest.mark.integration
-def test_techvault_does_not_invent_a_docker_authority_for_orborus(
+def test_orborus_docker_authority_is_admitted_only_as_the_pack_authored_it(
     techvault_realization,
 ):
-    """Backend selection must not add host-root Docker access TechVault omitted."""
+    """Host-root Docker access is granted by the pack, never by the backend.
+
+    Until raes-env-packs 6.1.0 (OpenRAE/env-packs#285) TechVault declared no
+    Orborus authority, so the only correct behaviour was to admit none. The
+    released pack now authors the control interface and the authority Shuffle
+    workflow execution needs, so the contract under test flips: the admission
+    must mirror exactly what was authored, and the backend must still add
+    nothing of its own -- no extra mount targets, no second holder, and no
+    widening of the endpoint.
+    """
 
     realization = techvault_realization
 
     spec = realization.deployment_spec(sorted(realization.profiles))
 
-    assert [
+    admissions = [
         admission
         for admission in spec.docker_authority_admissions
         if admission.node_address == "provision.node.shuffle-orborus"
-    ] == []
+    ]
+    assert len(admissions) == 1
+    admission = admissions[0]
+    assert admission.engine == "docker"
+    assert admission.privilege_class == "host_root_equivalent"
+    assert admission.endpoint_kind == "unix_socket"
+    assert admission.endpoint_target == "/var/run/docker.sock"
+    assert admission.endpoint_read_write is True
+    # The authority holder mounts nothing else, so no mount target is admitted
+    # alongside the socket.
+    assert admission.allowed_mount_targets == ()
+
+    # Everything this socket may launch is pinned. The pack names two spawn
+    # templates, and an authority with host-root-equivalent daemon access must
+    # not be able to resolve a mutable tag at spawn time -- a poisoned child
+    # image would otherwise execute with that access and reach the SOC
+    # networks. Each template is therefore digest-qualified and prepared, under
+    # the authority's own bounded execution deadline.
+    requirements = admission.spawn_requirements
+    assert len(requirements) == 2
+    assert {requirement.template_id for requirement in requirements} == {
+        "shuffle-worker",
+        "shuffle-http-1-4-0",
+    }
+    for requirement in requirements:
+        assert "@sha256:" in requirement.image_ref, requirement.template_id
+        assert requirement.execution_timeout_seconds == 600
+        # The pack declares no expected child inventory, so there is no count
+        # to enforce; the image identity gate above does not depend on one.
+        assert requirement.child_label == ""
+        assert requirement.expected_count == 0
+
     orborus = next(node for node in realization.nodes if node.name == "shuffle-orborus")
-    assert orborus.runtime.local_control_interfaces == []
-    assert orborus.runtime.orchestration_authorities == []
+    interfaces = orborus.runtime.local_control_interfaces
+    assert [interface.control_interface_id for interface in interfaces] == [
+        "docker-sock"
+    ]
+    authorities = orborus.runtime.orchestration_authorities
+    assert [authority.orchestration_authority_id for authority in authorities] == [
+        "shuffle-orborus"
+    ]
+    # Orborus is the only holder: no other node acquires Docker authority
+    # because the pack grew one.
+    assert {
+        admission.node_address for admission in spec.docker_authority_admissions
+    } == {"provision.node.shuffle-orborus"}
 
 
 def test_generated_base_compose_is_written_under_realization_root_not_the_pack(
@@ -630,7 +668,9 @@ def test_network_without_pinned_addresses_emits_no_ip_range():
 def test_pinned_address_in_the_dynamic_half_fails_loudly():
     """A pin that would still collide with the dynamic pool raises, not silently ships."""
 
-    from aptl.core.deployment._compose_node_generation import _dynamic_ip_range
+    from aptl.core.deployment._compose_node_topology import (
+        dynamic_ip_range as _dynamic_ip_range,
+    )
 
     with pytest.raises(ValueError, match="no longer isolates"):
         _dynamic_ip_range("172.20.0.0/24", "172.20.0.1", {"172.20.0.200"})
@@ -927,9 +967,7 @@ def test_pack_script_content_for_an_image_node_is_staged_executable(
         )
     )
 
-    override = image_node_content_override(
-        spec, tmp_path / "pack", tmp_path / "engine"
-    )
+    override = image_node_content_override(spec, tmp_path / "pack", tmp_path / "engine")
 
     source = Path(override["services"]["tempo"]["volumes"][0]["source"])
     assert source.stat().st_mode & 0o111 == 0o111

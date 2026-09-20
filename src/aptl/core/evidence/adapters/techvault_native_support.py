@@ -67,28 +67,38 @@ def generated_output(
 ) -> str | None:
     """Read one bounded generated output rooted beneath its admitted artifact."""
 
-    result = None
+    path = generated_output_path(realization, project_dir, provenance, output_name)
+    if path is None:
+        return None
+    try:
+        value = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        value = ""
+    return value or None
+
+
+def generated_output_path(
+    realization: object, project_dir: Path, provenance: str, output_name: str
+) -> Path | None:
+    """Resolve one exact generated output without reading its contents."""
+
     artifacts = [
         item
         for item in getattr(realization, "generated_artifacts", ())
         if getattr(item, "provenance", None) == provenance
     ]
-    if len(artifacts) == 1:
-        outputs = [
-            item
-            for item in getattr(artifacts[0], "outputs", ())
-            if getattr(item, "name", None) == output_name
-        ]
-        if len(outputs) == 1:
-            root = artifact_source_path(project_dir, artifacts[0]).resolve()
-            target = (root / outputs[0].path).resolve()
-            if target.is_relative_to(root):
-                try:
-                    value = target.read_text(encoding="utf-8").strip()
-                except OSError:
-                    value = ""
-                result = value or None
-    return result
+    if len(artifacts) != 1:
+        return None
+    outputs = [
+        item
+        for item in getattr(artifacts[0], "outputs", ())
+        if getattr(item, "name", None) == output_name
+    ]
+    if len(outputs) != 1:
+        return None
+    root = artifact_source_path(project_dir, artifacts[0]).resolve()
+    target = (root / outputs[0].path).resolve()
+    return target if target.is_relative_to(root) and target.is_file() else None
 
 
 def content_identities(realization: object) -> dict[str, str] | None:

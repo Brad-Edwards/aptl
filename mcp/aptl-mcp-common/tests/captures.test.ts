@@ -96,6 +96,22 @@ function activateScenario(traceId: string): void {
 }
 
 describe('harvestSession', () => {
+  it('harvests into the configured Python run archive', async () => {
+    const tid = 'a'.repeat(32);
+    activateScenario(tid);
+    const archive = join(tmp, 'archive');
+    const dest = join(archive, tid, 'kali-side', 'sess-1');
+    mkdirSync(join(dest, 'pty'), { recursive: true });
+    writeFileSync(join(dest, 'pty', 'typescript'), 'hello');
+
+    const ok = await harvestSession(
+      { containerName: 'aptl-kali', env: { APTL_STATE_DIR: tmp, APTL_MCP_RUN_STORE_BASE: archive } },
+      'sess-1',
+    );
+
+    expect(ok).toBe(true);
+    expect(spawnControl.capturedArgs[0][2]).toBe(dest);
+  });
   it('invokes `docker cp <container>:<src>/. <dest>` for the active scenario', async () => {
     const tid = 'a'.repeat(32);
     activateScenario(tid);

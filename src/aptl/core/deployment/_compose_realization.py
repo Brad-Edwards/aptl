@@ -59,6 +59,9 @@ from aptl.core.deployment._compose_realization_networks import (
 from aptl.core.deployment._compose_runtime_orchestration import (
     ComposeRuntimeOrchestrationRouteMixin,
 )
+from aptl.core.deployment._compose_runtime_materialization import (
+    ComposeRuntimeMaterializationMixin,
+)
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.lab_types import LabResult
@@ -76,6 +79,7 @@ __all__ = [
 
 
 class ComposeRealizationMixin(
+    ComposeRuntimeMaterializationMixin,
     ComposeTrafficMirrorMixin,
     ComposeCaptureApparatusMixin,
     ComposeObservabilityMixin,
@@ -135,6 +139,12 @@ class ComposeRealizationMixin(
         route-3 node starts from exactly that config id, never a second
         resolution of the mutable tag.
         """
+
+        failure = self._runtime_materialization_preflight(
+            realization, scenario_root=scenario_root
+        )
+        if failure is not None:
+            return failure
 
         observation_context = observation_context or DeploymentObservationContext()
         attempt_id = observation_context.attempt_id or self._resource_attempt_id
@@ -267,7 +277,9 @@ class ComposeRealizationMixin(
             ]
             if not consumers and not environment_consumers:
                 continue
-            failure = self._realize_one_generated_artifact(artifact, realization_root)
+            failure = self._realize_one_generated_artifact(
+                artifact, realization_root, realization
+            )
             if failure is None:
                 failure = _append_image_free_artifact_ops(
                     ops_by_address, artifact, consumers, realization_root

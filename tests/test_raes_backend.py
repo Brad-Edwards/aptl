@@ -614,7 +614,7 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
     assert manifest.evaluator.supports_scoring is False
     assert manifest.evaluator.supports_objectives is True
     assert manifest.evaluator.supported_evidence_channels == frozenset(
-        {"api_response", "log"}
+        {"api_response", "file_artifact", "log"}
     )
     assert manifest.has_participant_runtime is True
     assert manifest.participant_runtime is not None
@@ -1779,6 +1779,58 @@ def test_start_raes_scenario_uses_selected_scenario_path(mocker, tmp_path):
 
     assert result.lab_result.success is True
     parser.assert_called_once_with(selected)
+
+
+def test_admission_preserves_valid_plan_when_backend_cannot_materialize(
+    mocker, tmp_path
+):
+    """Backend qualification limits realization, not SDL validity."""
+    from raes_contracts.contracts import ArtifactAvailabilityContext
+
+    from aptl.backends import raes
+
+    _write_compose(tmp_path, {"victim": ["victim"]})
+    scenario = object()
+    mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=scenario)
+    materialization_modes: list[bool] = []
+
+    def inspect_availability(*_args, materialize=False, **_kwargs):
+        materialization_modes.append(materialize)
+        return ArtifactAvailabilityContext(requirements=[])
+
+    mocker.patch(
+        "aptl.backends.raes.artifact_availability_for_scenario",
+        side_effect=inspect_availability,
+    )
+
+    class FakeRuntimeManager(_FakeRuntimeManager):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
+            assert parsed_scenario is scenario
+            return _FakeExecutionPlan(_plan_for_nodes("victim"))
+
+    mocker.patch("aptl.backends.raes.RuntimeManager", FakeRuntimeManager)
+    backend = MagicMock()
+    backend.bind_local_docker_socket.return_value = LabResult(success=True)
+    backend.qualify_runtime_materialization.return_value = LabResult(
+        success=False,
+        error="selected backend cannot safely realize this runtime",
+    )
+
+    admitted = raes.admit_raes_scenario(
+        tmp_path,
+        AptlConfig(lab={"name": "test"}, containers={"victim": True}),
+        backend,
+    )
+
+    assert admitted.execution_plan.is_valid is True
+    assert admitted.execution_plan.diagnostics == []
+    assert admitted.runtime_materialization_failure is not None
+    assert admitted.runtime_materialization_failure.error == (
+        "selected backend cannot safely realize this runtime"
+    )
+    assert materialization_modes == [False]
+    backend.qualify_runtime_materialization.assert_called_once()
+    backend.realize.assert_not_called()
 
 
 def test_start_raes_scenario_passes_runtime_parameters_to_raes_planner(

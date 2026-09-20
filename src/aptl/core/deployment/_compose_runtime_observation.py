@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from aptl.core.deployment._compose_child_lifecycle import (
     ComposeSpawnedChildLifecycleMixin,
 )
 from aptl.core.deployment._compose_resource_ownership import OwnershipConflictError
+from aptl.core.deployment._compose_runtime_observation_helpers import (
+    authority_mount_is_valid as _authority_mount_is_valid,
+    child_query as _child_query,
+    container_ids as _container_ids,
+    inspect_has_endpoint_override as _inspect_has_endpoint_override,
+    inspect_has_socket_route as _inspect_has_socket_route,
+    inspect_mounts as _inspect_mounts,
+    spawn_failure as _spawn_failure,
+)
 from aptl.core.deployment._compose_runtime_orchestration import (
     deployment_spawn_image_requirements,
     docker_authority_admissions,
@@ -24,118 +33,7 @@ from aptl.core.lab_types import LabResult
 from aptl.runtime_authority import (
     DeploymentDockerAuthorityAdmission,
     DeploymentSpawnImageRequirement,
-    has_undeclared_runtime_mounts,
-    mount_exposes_or_mentions_docker_socket,
 )
-
-
-def _spawn_failure(
-    condition: str,
-    requirement: DeploymentSpawnImageRequirement,
-    *,
-    separator: str = " for ",
-) -> LabResult:
-    """Build one stable child-observation diagnostic."""
-
-    return LabResult(
-        success=False,
-        error=(
-            f"{condition}{separator}"
-            f"{requirement.node_address}/{requirement.template_id}."
-        ),
-    )
-
-
-def _inspect_mounts(info: object) -> Sequence[object]:
-    """Return normalized Docker inspect mount entries."""
-
-    mounts = info.get("Mounts") if isinstance(info, Mapping) else None
-    if isinstance(mounts, Sequence) and not isinstance(mounts, (str, bytes)):
-        return mounts
-    return ()
-
-
-def _inspect_environment(info: object) -> Sequence[object]:
-    """Return normalized Docker inspect environment entries."""
-
-    config = info.get("Config") if isinstance(info, Mapping) else None
-    raw_env = config.get("Env") if isinstance(config, Mapping) else None
-    if isinstance(raw_env, Sequence) and not isinstance(raw_env, (str, bytes)):
-        return raw_env
-    return ()
-
-
-def _inspect_has_endpoint_override(info: object) -> bool:
-    """Whether inspect environment redirects Docker commands elsewhere."""
-
-    return any(
-        str(item).split("=", 1)[0] in {"DOCKER_HOST", "DOCKER_CONTEXT"}
-        for item in _inspect_environment(info)
-    )
-
-
-def _inspect_is_privileged(info: object) -> bool:
-    """Whether Docker inspect reports a privileged container."""
-
-    host_config = info.get("HostConfig") if isinstance(info, Mapping) else None
-    return bool(
-        isinstance(host_config, Mapping) and host_config.get("Privileged") is True
-    )
-
-
-def _inspect_has_socket_route(info: object) -> bool:
-    """Whether any observed bind contains or targets the Docker socket."""
-
-    return any(
-        mount_exposes_or_mentions_docker_socket(
-            mount,
-            source_key="Source",
-            target_key="Destination",
-            type_key="Type",
-            bind_type="bind",
-        )
-        for mount in _inspect_mounts(info)
-    )
-
-
-def _mount_is_canonical_authority_socket(mount: object) -> bool:
-    """Whether one observed mount is the admitted canonical socket bind."""
-
-    return bool(
-        isinstance(mount, Mapping)
-        and mount.get("Type") == "bind"
-        and mount.get("Source") == "/var/run/docker.sock"
-        and mount.get("Destination") == "/var/run/docker.sock"
-        and mount.get("RW") is True
-    )
-
-
-def _authority_mount_is_valid(
-    entries: Sequence[object],
-    admission: DeploymentDockerAuthorityAdmission,
-) -> bool:
-    """Whether a holder exposes only its admitted runtime mount footprint."""
-
-    socket_mounts = [
-        mount
-        for mount in entries
-        if mount_exposes_or_mentions_docker_socket(
-            mount,
-            source_key="Source",
-            target_key="Destination",
-            type_key="Type",
-            bind_type="bind",
-        )
-    ]
-    return bool(
-        len(socket_mounts) == 1
-        and _mount_is_canonical_authority_socket(socket_mounts[0])
-        and not has_undeclared_runtime_mounts(
-            entries,
-            allowed_targets=set(admission.allowed_mount_targets),
-            docker_authority_admitted=True,
-        )
-    )
 
 
 class ComposeRuntimeOrchestrationObservationMixin(
@@ -292,43 +190,15 @@ class ComposeRuntimeOrchestrationObservationMixin(
     ) -> tuple[LabResult | None, tuple[str, ...]]:
         """Query one exact image-label pair and enforce its declared count."""
 
-        try:
-            result = self._run(
-                [
-                    "docker",
-                    "ps",
-                    "-aq",
-                    "--filter",
-                    f"ancestor={requirement.image_ref}",
-                    "--filter",
-                    f"label={requirement.child_label}",
-                ],
-                timeout=requirement.execution_timeout_seconds,
-            )
-        except BackendTimeoutError:
-            result = None
-        failure = None
-        container_ids: tuple[str, ...] = ()
-        if result is None or result.returncode != 0:
-            failure = _spawn_failure("Spawned-child observation failed", requirement)
-        else:
-            container_ids = tuple(
-                dict.fromkeys(
-                    container_id.strip()
-                    for container_id in result.stdout.splitlines()
-                    if container_id.strip()
-                )
-            )
-            if container_ids and getattr(
-                self, "_attempt_isolated_docker_daemon", False
-            ):
-                try:
-                    self._record_isolated_child_receipts(container_ids, requirement)
-                except OwnershipConflictError:
-                    failure = _spawn_failure(
-                        "Spawned-child ownership could not be established",
-                        requirement,
-                    )
+        # An uncorrelated template identifies an allowed image, not a spawned
+        # child. A shared daemon cannot attribute other containers with that
+        # image to this lab, so never inspect foreign containers by image alone.
+        if not requirement.child_label:
+            return None, ()
+        failure, container_ids = self._query_correlated_child_ids(requirement)
+        # A count can only be enforced against an authored one. A template
+        # without a declared child inventory says which image may run, not how
+        # many may run, so its children are identity-checked and not counted.
         count_required = bool(container_ids or require_children)
         if (
             failure is None
@@ -340,6 +210,46 @@ class ComposeRuntimeOrchestrationObservationMixin(
                 requirement,
             )
         return failure, container_ids
+
+    def _query_correlated_child_ids(
+        self, requirement: DeploymentSpawnImageRequirement
+    ) -> tuple[LabResult | None, tuple[str, ...]]:
+        """Query exact child labels and capture isolated-daemon ownership."""
+
+        query = _child_query(requirement)
+        try:
+            result = self._run(
+                query,
+                timeout=requirement.execution_timeout_seconds,
+            )
+        except BackendTimeoutError:
+            result = None
+        if result is None or result.returncode != 0:
+            return _spawn_failure("Spawned-child observation failed", requirement), ()
+        container_ids = _container_ids(result.stdout)
+        if container_ids and getattr(self, "_attempt_isolated_docker_daemon", False):
+            return (
+                self._record_child_receipts(container_ids, requirement),
+                container_ids,
+            )
+        return None, container_ids
+
+    def _record_child_receipts(
+        self,
+        container_ids: tuple[str, ...],
+        requirement: DeploymentSpawnImageRequirement,
+    ) -> LabResult | None:
+        """Record isolated-daemon child ownership, or return one failure."""
+
+        failure = None
+        try:
+            self._record_isolated_child_receipts(container_ids, requirement)
+        except OwnershipConflictError:
+            failure = _spawn_failure(
+                "Spawned-child ownership could not be established",
+                requirement,
+            )
+        return failure
 
     def _verify_spawned_child(
         self,
@@ -386,6 +296,12 @@ class ComposeRuntimeOrchestrationObservationMixin(
     ) -> bool:
         """Whether inspect output carries the exact admitted child label."""
 
+        if not requirement.child_label:
+            # Nothing was authored to correlate against. The child's image
+            # identity is still verified by the caller; only the label match is
+            # vacuous here, and claiming a match that was never declared would
+            # be the false positive this check exists to avoid.
+            return True
         config = info.get("Config") if isinstance(info, Mapping) else None
         labels = config.get("Labels") if isinstance(config, Mapping) else None
         label_name, label_value = requirement.child_label.split("=", 1)
@@ -427,7 +343,6 @@ class ComposeRuntimeOrchestrationObservationMixin(
         configuration_ok = bool(
             _authority_mount_is_valid(_inspect_mounts(info), admission)
             and not _inspect_has_endpoint_override(info)
-            and not _inspect_is_privileged(info)
             and daemon_id
         )
         if not configuration_ok:
@@ -441,9 +356,9 @@ class ComposeRuntimeOrchestrationObservationMixin(
         drive the daemon over its API -- Shuffle's orborus is one -- and exec
         answers 126/127 when the binary is absent. There is then nothing to
         corroborate, and the caller has already established the boundary: the
-        mount is exactly the admitted socket, no endpoint override redirects
-        it, and the holder is unprivileged, so the daemon it reaches is this
-        one. A CLI that does answer, for a different daemon, is still a failure.
+        mount is exactly the admitted host socket and no endpoint override
+        redirects it. A CLI that does answer, for a different daemon, is still
+        a failure.
         """
 
         try:
@@ -466,10 +381,8 @@ class ComposeRuntimeOrchestrationObservationMixin(
 
     @staticmethod
     def _inspected_container_has_docker_authority(info: object) -> bool:
-        """Whether inspect output exposes the socket, an override, or privilege."""
+        """Whether inspect output exposes Docker control, not mere privilege."""
 
         return bool(
-            _inspect_has_socket_route(info)
-            or _inspect_has_endpoint_override(info)
-            or _inspect_is_privileged(info)
+            _inspect_has_socket_route(info) or _inspect_has_endpoint_override(info)
         )

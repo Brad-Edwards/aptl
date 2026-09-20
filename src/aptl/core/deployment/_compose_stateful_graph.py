@@ -6,11 +6,14 @@ from pathlib import PurePosixPath
 from typing import Any
 
 from aptl.core.deployment._compose_stateful_constants import (
+    ENVIRONMENT_DELIVERY_PROVENANCES,
     CERTIFICATE_PROVENANCE,
     SOC_CERT_PROFILE,
     WAZUH_CERT_PROFILES,
 )
 from aptl.core.deployment._flag_signing_keys import FLAG_SIGNING_PROFILE_V2
+from aptl.core.deployment._misp_cache_credential import MISP_CACHE_CREDENTIAL_PROFILE
+from aptl.core.deployment._misp_server_tls import MISP_SERVER_TLS_PROFILE
 from aptl.core.deployment._cortex_service_credentials import (
     CORTEX_SERVICE_CREDENTIALS_PROFILE,
 )
@@ -126,7 +129,12 @@ def _one_artifact_errors(artifact: object) -> list[str]:
     if (
         artifact.generator == "rendered_config"
         and artifact.provenance
-        not in {FLAG_SIGNING_PROFILE_V2, CORTEX_SERVICE_CREDENTIALS_PROFILE}
+        not in {
+            FLAG_SIGNING_PROFILE_V2,
+            CORTEX_SERVICE_CREDENTIALS_PROFILE,
+            MISP_CACHE_CREDENTIAL_PROFILE,
+            MISP_SERVER_TLS_PROFILE,
+        }
         and len(artifact.outputs) != 1
     ):
         errors.append(
@@ -138,7 +146,7 @@ def _one_artifact_errors(artifact: object) -> list[str]:
         )
     if (
         artifact.environment_consumers
-        and artifact.provenance != CORTEX_SERVICE_CREDENTIALS_PROFILE
+        and artifact.provenance not in ENVIRONMENT_DELIVERY_PROVENANCES
     ):
         errors.append(
             f"Generated artifact {artifact.address} has unsupported environment delivery."

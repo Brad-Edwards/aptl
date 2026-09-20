@@ -207,6 +207,7 @@ def test_verified_launch_payload_is_bound_before_scenario_realization(
     monkeypatch,
 ) -> None:
     backend = MagicMock()
+    backend.daemon_identity.return_value = "guest-daemon"
     policy = MagicMock()
     descriptor = SimpleNamespace(
         boundary_policy_digest="sha256:" + "1" * 64,
@@ -238,12 +239,6 @@ def test_verified_launch_payload_is_bound_before_scenario_realization(
     )
 
     with patch("aptl.core.lab.subprocess.run") as run:
-        run.return_value = subprocess.CompletedProcess(
-            ["docker", "info"],
-            0,
-            stdout="guest-daemon\n",
-            stderr="",
-        )
         result = _configure_verified_appliance_launch(context)
 
     assert result is None
@@ -251,6 +246,8 @@ def test_verified_launch_payload_is_bound_before_scenario_realization(
     assert configured_policy is policy
     assert binding.payload_digest == descriptor.payload_digest
     assert binding.policy_digest == descriptor.boundary_policy_digest
+    backend.daemon_identity.assert_called_once_with()
+    run.assert_not_called()
 
 
 @pytest.mark.parametrize(

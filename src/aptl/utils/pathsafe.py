@@ -166,7 +166,7 @@ def _atomic_publish(parent_fd: int, leaf_component: str, data: bytes) -> None:
     create-once caller's idempotency policy.
     """
     tmp_name = f".{leaf_component}.{os.getpid()}.{next(_TMP_COUNTER)}.tmp"
-    tmp_fd = _create_temp_leaf(tmp_name, parent_fd)
+    tmp_fd, tmp_name = _create_temp_leaf(tmp_name, parent_fd)
     try:
         try:
             write_all(tmp_fd, data)
@@ -190,7 +190,7 @@ def _atomic_publish(parent_fd: int, leaf_component: str, data: bytes) -> None:
             pass
 
 
-def _create_temp_leaf(tmp_name: str, parent_fd: int) -> int:
+def _create_temp_leaf(tmp_name: str, parent_fd: int) -> tuple[int, str]:
     """Create-exclusive-open the temporary publish inode under ``parent_fd``.
 
     Retries once under a fresh name if a stale temp with the same name exists
@@ -199,14 +199,14 @@ def _create_temp_leaf(tmp_name: str, parent_fd: int) -> int:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
     try:
         try:
-            return os.open(tmp_name, flags, 0o600, dir_fd=parent_fd)
+            return os.open(tmp_name, flags, 0o600, dir_fd=parent_fd), tmp_name
         except FileExistsError:
             try:
                 os.unlink(tmp_name, dir_fd=parent_fd)
             except OSError:
                 pass
             retry_name = f"{tmp_name}.{next(_TMP_COUNTER)}"
-            return os.open(retry_name, flags, 0o600, dir_fd=parent_fd)
+            return os.open(retry_name, flags, 0o600, dir_fd=parent_fd), retry_name
     except OSError as exc:
         # A non-EEXIST failure of the first open, or any failure of the retry
         # (including an EEXIST on the fresh unique name), is a containment error.

@@ -10,6 +10,7 @@ no Docker daemon is needed.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,6 +20,7 @@ from aptl.backends.raes_docker_materializer import (
     DockerMaterializationExecutor,
     MaterializationCommandError,
 )
+from aptl.core.deployment.errors import BackendSeedError
 from aptl.backends.raes_materializer import (
     EnsureDirectoryOp,
     EnsureUserOp,
@@ -44,13 +46,26 @@ class _FakeExec:
         return [argv for _, argv in self.calls]
 
 
-def _executor(exec_fn, *, started=None, sleep=None):
+class _FakeInputExec:
+    def __init__(self, responder=None) -> None:
+        self.calls: list[tuple[str, list[str], str]] = []
+        self._responder = responder or (lambda container, argv, payload: 0)
+
+    def __call__(self, container: str, argv: list[str], payload: str):
+        self.calls.append((container, argv, payload))
+        return SimpleNamespace(
+            returncode=self._responder(container, argv, payload), stdout=""
+        )
+
+
+def _executor(exec_fn, *, started=None, sleep=None, input_fn=None):
     def start_base(addr, image):
         if started is not None:
             started.append((addr, image))
 
     return DockerMaterializationExecutor(
         run=exec_fn,
+        run_with_input=input_fn,
         container_for=lambda addr: "aptl-" + addr.rsplit(".", 1)[-1],
         start_base=start_base,
         # Real time.sleep would make retry tests (and the unrelated failure
@@ -182,6 +197,27 @@ class TestIdentity:
         assert "/bin/bash" in useradd
         assert "wazuh" in useradd  # shell + group
 
+    def test_ensure_user_rechecks_and_retries_a_transient_creation_failure(self):
+        attempts = 0
+
+        def responder(_container, argv):
+            nonlocal attempts
+            if argv[0] == "id":
+                return (0, "1000") if attempts >= 2 else (1, "")
+            if argv[0] == "useradd":
+                attempts += 1
+                return (1, "") if attempts == 1 else (0, "")
+            return 0, ""
+
+        sleeps = []
+        fake = _FakeExec(responder)
+        _executor(fake, sleep=sleeps.append).ensure_user(
+            "n.node", EnsureUserOp(username="labadmin")
+        )
+
+        assert attempts == 2
+        assert sleeps == [0.25]
+
     def test_observe_local_user_and_group_from_returncode(self):
         present = _executor(_FakeExec(lambda c, a: (0, "")))
         absent = _executor(_FakeExec(lambda c, a: (1, "")))
@@ -192,6 +228,76 @@ class TestIdentity:
 
 
 class TestFilesystem:
+    def test_place_file_delivers_secret_only_on_stdin_and_reads_back_exact_bytes(self):
+        secret = "lab flag with a quote ' and newline\n"
+        fake_input = _FakeInputExec()
+        digest = hashlib.sha256(secret.encode()).hexdigest()
+        fake = _FakeExec(
+            lambda _container, argv: (
+                (0, f"{digest}  {argv[1]}") if argv[0] == "sha256sum" else (0, "")
+            )
+        )
+        _executor(fake, input_fn=fake_input).place_file(
+            "n.node", "/root/root.txt", secret, "0600"
+        )
+
+        assert len(fake_input.calls) == 1
+        assert [call[1][0] for call in fake_input.calls] == ["sh"]
+        assert all(call[2] == secret for call in fake_input.calls)
+        assert all(secret not in " ".join(call[1]) for call in fake_input.calls)
+        assert "base64" not in str(fake_input.calls)
+        assert "chmod 0600" in fake_input.calls[0][1][2]
+        assert fake.argvs() == [["sha256sum", "/root/root.txt"]]
+
+    def test_place_file_accepts_exact_readback_after_lost_mutation_result(self):
+        fake_input = _FakeInputExec(
+            lambda _container, argv, _payload: 1 if argv[0] == "sh" else 0
+        )
+        digest = hashlib.sha256(b"value").hexdigest()
+        fake = _FakeExec(lambda _container, argv: (0, f"{digest}  {argv[1]}"))
+        sleeps = []
+
+        _executor(fake, sleep=sleeps.append, input_fn=fake_input).place_file(
+            "n.node", "/tmp/a", "value"
+        )
+
+        assert len(fake_input.calls) == 1
+        assert sleeps == []
+
+    def test_place_file_retries_when_readback_does_not_match(self):
+        checks = 0
+        digest = hashlib.sha256(b"value").hexdigest()
+
+        def responder(_container, argv):
+            nonlocal checks
+            checks += 1
+            value = "0" * 64 if checks == 1 else digest
+            return 0, f"{value}  {argv[1]}"
+
+        fake_input = _FakeInputExec()
+        fake = _FakeExec(responder)
+        sleeps = []
+        _executor(fake, sleep=sleeps.append, input_fn=fake_input).place_file(
+            "n.node", "/tmp/a", "value"
+        )
+
+        assert [call[1][0] for call in fake_input.calls] == ["sh", "sh"]
+        assert fake.argvs() == [["sha256sum", "/tmp/a"]] * 2
+        assert sleeps == [0.25]
+
+    def test_place_file_fails_closed_when_exact_readback_never_matches(self):
+        fake_input = _FakeInputExec(lambda _container, argv, _payload: 1)
+        fake = _FakeExec(lambda _container, argv: (1, ""))
+        sleeps = []
+        executor = _executor(fake, sleep=sleeps.append, input_fn=fake_input)
+
+        with pytest.raises(MaterializationCommandError):
+            executor.place_file("n.node", "/tmp/a", "value")
+
+        assert len(fake_input.calls) == 5
+        assert fake.argvs() == [["sha256sum", "/tmp/a"]] * 5
+        assert sleeps == [0.25, 0.5, 1.0, 2.0]
+
     def test_ensure_directory_mkdirs_then_chowns_and_chmods(self):
         fake = _FakeExec()
         _executor(fake).ensure_directory(
@@ -520,6 +626,41 @@ class TestPackArtifactPlacement:
         container, members, dest, is_dir = copied[0]
         assert (container, dest, is_dir) == ("aptl-webapp", "/opt/app", True)
         assert members == ["README", "main.py"]
+
+    def test_transient_pack_copy_failure_retries_exact_staged_bytes(
+        self, tmp_path, stub_pack
+    ):
+        digest = "sha256:" + "b" * 64
+        stub_pack["shares"] = _StubResolved(_tar_bytes({"Public/a": b"x"}), digest)
+        attempts = []
+        sleeps = []
+
+        def copy(_container, src, _dest, _is_dir):
+            attempts.append(Path(src, "Public", "a").read_bytes())
+            if len(attempts) == 1:
+                raise BackendSeedError("transient Docker copy failure")
+
+        ex = DockerMaterializationExecutor(
+            run=_FakeExec(),
+            container_for=lambda _addr: "aptl-fileshare",
+            start_base=lambda *_: None,
+            copy_in=copy,
+            scenario_root=tmp_path,
+            sleep=sleeps.append,
+        )
+
+        ex.place_pack_artifact(
+            "provision.node.fileshare",
+            PlacePackArtifactOp(
+                dest_path="/srv/shares",
+                artifact_id="shares",
+                artifact_digest=digest,
+                is_directory=True,
+            ),
+        )
+
+        assert attempts == [b"x", b"x"]
+        assert sleeps == [0.25]
 
     def test_a_digest_mismatch_places_nothing(self, tmp_path, stub_pack):
         """Bytes that are not what the scenario pinned never reach the node."""

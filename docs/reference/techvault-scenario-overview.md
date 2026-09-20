@@ -57,8 +57,17 @@ response per [ADR-019](../adrs/adr-019-suricata-ids-only-prevention-via-wazuh-ar
 MISP threat intelligence (with its MariaDB and Redis backends plus a Suricata
 IOC sync); TheHive case management (backed by Cassandra and Elasticsearch)
 alongside Cortex; Shuffle SOAR (backend, frontend, orborus, and OpenSearch); and
-an OpenTelemetry collector feeding Tempo and Grafana. Two off-node Wazuh
-sidecars forward PostgreSQL and Suricata logs into the manager.
+an OpenTelemetry collector feeding Tempo and Grafana. Eight monitored hosts --
+the web app, domain controller, DNS, file share, victim, workstation, database,
+and Suricata -- each run their own enrolled Wazuh agent and keep their
+enrollment identity across a restart, so events stay attributable to the host
+that produced them.
+
+MISP is reached at its scenario identity, `https://misp.techvault.local`, and
+its certificate is issued by the lab CA for that name. Its database and cache
+connections, the cache's authentication, and its administrator identity are all
+part of the admitted plan before anything starts: the lab does not start MISP
+and then reconfigure it.
 
 ### Host-published ports
 
@@ -101,7 +110,7 @@ By design, secret-named values in this synthetic range are scenario content, not
 real operator secrets. They remain in the exact portable content or semantic
 fixtures that need them so the range stays reproducible. They are not expressed
 as Docker environment or mount instructions when the author did not choose
-those mechanics: TechVault 6.0.1 leaves those runtime scopes unspecified, which
+those mechanics: TechVault 6.1.0 leaves those runtime scopes unspecified, which
 RAES resolves CLOSED. The Active Directory, Flask, JWT, and workstation fixture
 secrets remain scenario content; genuine operator secrets are withheld.
 

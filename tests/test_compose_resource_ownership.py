@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import json
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pathlib import Path
+from threading import Event
 from unittest.mock import MagicMock
 
 import pytest
 import yaml
 
+from aptl.core.deployment._compose_owner_labels import complete_owner_labels
 from aptl.core.deployment._compose_resource_ownership import (
     OwnershipConflictError,
     ResourceReceipt,
@@ -37,6 +40,32 @@ def test_workspace_identity_is_stable_and_scopes_backend_names(tmp_path: Path) -
     assert len(first.project_name) <= 63
     assert first.container_name("aptl-victim") != other.container_name("aptl-victim")
     assert first.container_name("aptl-victim").endswith("-victim")
+
+
+def test_compose_receipt_requires_the_full_owner_label_tuple(tmp_path: Path) -> None:
+    ownership = WorkspaceOwnership.ensure(tmp_path, "aptl")
+    labels = {
+        **ownership.labels(attempt_id="run-a"),
+        "com.docker.compose.project": ownership.project_name,
+        "com.docker.compose.service": "victim",
+    }
+
+    assert complete_owner_labels(
+        ownership,
+        labels,
+        attempt_id="run-a",
+        compose_kind="service",
+        semantic_name="victim",
+    )
+    for key in labels:
+        incomplete = {**labels, key: "foreign"}
+        assert not complete_owner_labels(
+            ownership,
+            incomplete,
+            attempt_id="run-a",
+            compose_kind="service",
+            semantic_name="victim",
+        )
 
 
 def test_workspace_identity_rejects_corrupt_or_symlinked_state(tmp_path: Path) -> None:
@@ -79,6 +108,184 @@ def test_receipts_are_immutable_and_bound_to_daemon_and_attempt(tmp_path: Path) 
         ownership.record(conflicting)
     with pytest.raises(OwnershipConflictError, match="daemon identity"):
         ownership.candidates("aptl-victim", kind="container", daemon_id="daemon-b")
+
+
+def test_receipt_inventory_ignores_only_in_progress_atomic_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A concurrent reader never mistakes the publisher's temp inode for a receipt."""
+
+    from aptl.utils import pathsafe
+
+    ownership = WorkspaceOwnership.ensure(tmp_path, "aptl")
+    receipt = ResourceReceipt(
+        kind="container",
+        native_id=_ID_A,
+        external_name=ownership.container_name("worker"),
+        semantic_name="worker",
+        node_address="provision.node.worker",
+        workspace_id=ownership.workspace_id,
+        project_name=ownership.project_name,
+        daemon_id="daemon-a",
+        attempt_id="run-a",
+    )
+    staged, release = Event(), Event()
+    original_write_all = pathsafe.write_all
+
+    def pause_while_temp_inode_is_visible(fd, data):
+        staged.set()
+        assert release.wait(timeout=5)
+        original_write_all(fd, data)
+
+    monkeypatch.setattr(pathsafe, "write_all", pause_while_temp_inode_is_visible)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        publication = pool.submit(ownership.record, receipt)
+        try:
+            assert staged.wait(timeout=5)
+            receipt_dir = tmp_path / ".aptl/lifecycle/resource-receipts-v1/container"
+            staged_names = [path.name for path in receipt_dir.iterdir()]
+            assert len(staged_names) == 1
+            assert staged_names[0].endswith(".tmp")
+            assert ownership.receipts("container") == ()
+            assert (
+                ownership.candidates("worker", kind="container", daemon_id="daemon-a")
+                == ()
+            )
+        finally:
+            release.set()
+        publication.result(timeout=5)
+
+    assert ownership.receipts("container") == (receipt,)
+    unexpected = receipt_dir / ".unexpected.tmp"
+    unexpected.write_text("foreign", encoding="utf-8")
+    with pytest.raises(OwnershipConflictError, match="inventory is malformed"):
+        ownership.receipts("container")
+    unexpected.unlink()
+    (receipt_dir / "not-a-receipt.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(OwnershipConflictError, match="inventory is malformed"):
+        ownership.receipts("container")
+
+
+def test_receipt_publish_temp_name_remains_ascii_only() -> None:
+    """Unicode numerals must not be mistaken for publisher-owned temp files."""
+
+    from aptl.core.deployment._compose_resource_ownership import (
+        _RECEIPT_PUBLISH_TEMP,
+    )
+
+    prefix = "." + "a" * 64 + ".json."
+    assert _RECEIPT_PUBLISH_TEMP.fullmatch(prefix + "123.4.tmp")
+    assert not _RECEIPT_PUBLISH_TEMP.fullmatch(prefix + "١٢٣.4.tmp")
+
+
+def test_shared_volume_creation_waits_for_ownership_receipt(tmp_path: Path) -> None:
+    """Another node cannot observe a volume before its creator records it."""
+
+    backend = DockerComposeBackend(tmp_path)
+    ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+    backend._docker_daemon_id = "daemon-a"
+    volume = f"{ownership.project_name}_shared"
+    created, release, second_entered = Event(), Event(), Event()
+    state: dict[str, object] = {}
+    creates = []
+
+    def run(command, *, timeout):
+        if command[:3] == ["docker", "volume", "inspect"]:
+            labels = state.get("labels")
+            return subprocess.CompletedProcess(
+                command, int(labels is None), json.dumps(labels) if labels else "", ""
+            )
+        assert command[:3] == ["docker", "volume", "create"]
+        creates.append(command)
+        state["labels"] = {
+            command[index + 1].split("=", 1)[0]: command[index + 1].split("=", 1)[1]
+            for index, value in enumerate(command)
+            if value == "--label"
+        }
+        created.set()
+        assert release.wait(timeout=5)
+        return subprocess.CompletedProcess(command, 0, volume + "\n", "")
+
+    backend._run = run
+    backend._raw_volume_inspect = lambda _name: {
+        "Name": volume,
+        "Labels": state["labels"],
+    }
+
+    def second() -> None:
+        second_entered.set()
+        backend._ensure_labeled_project_volume("shared")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first_result = pool.submit(backend._ensure_labeled_project_volume, "shared")
+        try:
+            assert created.wait(timeout=5)
+            second_result = pool.submit(second)
+            assert second_entered.wait(timeout=5)
+            with pytest.raises(TimeoutError):
+                second_result.result(timeout=0.1)
+        finally:
+            release.set()
+        first_result.result(timeout=5)
+        second_result.result(timeout=5)
+
+    assert len(creates) == 1
+    assert len(ownership.receipts("volume")) == 1
+
+
+def test_compose_preflight_ignores_retired_network_identity(tmp_path: Path) -> None:
+    """A restarted network is accepted only through its one live native ID."""
+
+    backend = DockerComposeBackend(tmp_path)
+    ownership = backend._ensure_resource_ownership(attempt_id="run-b")
+    backend._docker_daemon_id = "daemon-a"
+    name = f"{ownership.project_name}_security-net"
+    for native_id, attempt_id in ((_ID_A, "run-a"), (_ID_B, "run-b")):
+        ownership.record(
+            ResourceReceipt(
+                kind="network",
+                native_id=native_id,
+                external_name=name,
+                semantic_name="security-net",
+                node_address="provision.network.security-net",
+                workspace_id=ownership.workspace_id,
+                project_name=ownership.project_name,
+                daemon_id="daemon-a",
+                attempt_id=attempt_id,
+            )
+        )
+
+    def inspect(network_id):
+        if network_id != _ID_B:
+            return {}
+        return {
+            "id": _ID_B,
+            "name": name,
+            "labels": {"com.docker.compose.project": ownership.project_name},
+        }
+
+    backend.host_inspect_network = MagicMock(side_effect=inspect)
+    backend._verify_scoped_receipts(
+        ownership,
+        daemon_id="daemon-a",
+        kind="network",
+        selectors=(name,),
+        resolver=backend._resolve_owned_network_id,
+    )
+
+    backend.host_inspect_network.side_effect = lambda network_id: {
+        "id": network_id,
+        "name": name,
+        "labels": {"com.docker.compose.project": ownership.project_name},
+    }
+    with pytest.raises(OwnershipConflictError, match="absent or ambiguous"):
+        backend._verify_scoped_receipts(
+            ownership,
+            daemon_id="daemon-a",
+            kind="network",
+            selectors=(name,),
+            resolver=backend._resolve_owned_network_id,
+        )
 
 
 def test_container_action_uses_recorded_id_and_rejects_replacement(
@@ -467,9 +674,17 @@ def test_volume_cleanup_uses_receipt_and_never_prefix_discovery(tmp_path: Path) 
         ]
     )
 
+    present = True
+
     def fake_run(argv, **_kwargs):
-        stdout = inspected if argv[:3] == ["docker", "volume", "inspect"] else ""
-        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+        nonlocal present
+        if argv[:3] == ["docker", "volume", "rm"]:
+            present = False
+        inspect_cmd = argv[:3] == ["docker", "volume", "inspect"]
+        stdout = inspected if inspect_cmd and present else ""
+        return subprocess.CompletedProcess(
+            argv, 0 if not inspect_cmd or present else 1, stdout=stdout, stderr=""
+        )
 
     backend._run = MagicMock(side_effect=fake_run)
 
@@ -477,6 +692,35 @@ def test_volume_cleanup_uses_receipt_and_never_prefix_discovery(tmp_path: Path) 
     commands = [call.args[0] for call in backend._run.call_args_list]
     assert ["docker", "volume", "rm", volume] in commands
     assert all("ls" not in command for command in commands)
+    assert ownership.receipts("volume") == ()
+
+
+def test_clean_volume_cleanup_retires_already_absent_receipt(tmp_path: Path) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl")
+    ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+    backend._docker_daemon_id = "daemon-a"
+    volume = f"{ownership.project_name}_data"
+    receipt = ResourceReceipt(
+        kind="volume",
+        native_id=volume,
+        external_name=volume,
+        semantic_name="data",
+        node_address="data",
+        workspace_id=ownership.workspace_id,
+        project_name=ownership.project_name,
+        daemon_id="daemon-a",
+        attempt_id="run-a",
+    )
+    ownership.record(receipt)
+    backend._run = MagicMock(
+        return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="")
+    )
+
+    assert backend._remove_owned_volumes() == []
+    assert ownership.receipts("volume") == ()
+
+    ownership.record(ResourceReceipt(**{**receipt.__dict__, "attempt_id": "run-b"}))
+    assert ownership.receipts("volume")[0].attempt_id == "run-b"
 
 
 def test_isolated_daemon_children_are_receipted_before_observation(
@@ -520,6 +764,88 @@ def test_isolated_daemon_children_are_receipted_before_observation(
         backend._resolve_owned_container_id("worker")
 
 
+def test_receipted_container_resolution_retries_only_inconclusive_inspect(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl")
+    ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+    backend._docker_daemon_id = "daemon-a"
+    external_name = ownership.container_name("worker")
+    ownership.record(
+        ResourceReceipt(
+            kind="container",
+            native_id=_ID_A,
+            external_name=external_name,
+            semantic_name="worker",
+            node_address="provision.node.worker",
+            workspace_id=ownership.workspace_id,
+            project_name=ownership.project_name,
+            daemon_id="daemon-a",
+            attempt_id="run-a",
+        )
+    )
+    current = {
+        "Id": _ID_A,
+        "Name": f"/{external_name}",
+        "Config": {
+            "Labels": {
+                "aptl.workspace.id": ownership.workspace_id,
+                "aptl.lifecycle.project": ownership.project_name,
+            }
+        },
+    }
+    sleeps: list[float] = []
+    monkeypatch.setattr(
+        "aptl.core.deployment._compose_resource_resolution.time.sleep",
+        sleeps.append,
+    )
+    backend._raw_container_inspect = MagicMock(side_effect=[{}, current])
+
+    assert backend._resolve_owned_container_id("worker") == _ID_A
+    assert sleeps == [0.2]
+    assert backend._raw_container_inspect.call_count == 2
+
+    backend._raw_container_inspect = MagicMock(
+        return_value={
+            **current,
+            "Config": {"Labels": {"aptl.workspace.id": "foreign"}},
+        }
+    )
+    sleeps.clear()
+    with pytest.raises(OwnershipConflictError, match="labels changed"):
+        backend._resolve_owned_container_id("worker")
+    assert sleeps == []
+    assert backend._raw_container_inspect.call_count == 1
+
+
+def test_uncorrelated_child_template_never_queries_foreign_containers(
+    tmp_path: Path,
+) -> None:
+    """Image-only contracts must not absorb unrelated host containers."""
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl")
+    requirement = DeploymentSpawnImageRequirement(
+        node_address="provision.node.orborus",
+        authority_id="orborus",
+        template_id="worker",
+        image_ref="example.invalid/worker@sha256:" + "c" * 64,
+        execution_timeout_seconds=30,
+        child_label="",
+        expected_count=0,
+    )
+    backend._run = MagicMock(
+        return_value=subprocess.CompletedProcess([], 0, stdout="", stderr="")
+    )
+
+    failure, identifiers = backend._correlated_child_ids(
+        requirement, require_children=False
+    )
+
+    assert failure is None
+    assert identifiers == ()
+    backend._run.assert_not_called()
+
+
 def test_compose_override_labels_networks_and_volumes_and_plans_exact_names(
     tmp_path: Path,
 ) -> None:
@@ -549,6 +875,44 @@ volumes:
     assert override["volumes"]["data"]["labels"]["aptl.workspace.id"] == (
         ownership.workspace_id
     )
+
+
+def test_compose_override_scopes_network_mode_to_receipted_direct_container(
+    tmp_path: Path,
+) -> None:
+    compose = tmp_path / "docker-compose.yml"
+    compose.write_text(
+        """services:
+  capture:
+    image: example.invalid/capture:1
+    network_mode: container:aptl-kali
+"""
+    )
+    ownership = WorkspaceOwnership.ensure(tmp_path, "aptl")
+    direct_name = ownership.container_name("aptl-kali")
+    ownership.record(
+        ResourceReceipt(
+            kind="container",
+            native_id=_ID_A,
+            external_name=direct_name,
+            semantic_name="aptl-kali",
+            node_address="provision.node.kali",
+            workspace_id=ownership.workspace_id,
+            project_name=ownership.project_name,
+            daemon_id="daemon-a",
+            attempt_id="run-a",
+        )
+    )
+
+    override_path, _semantic, expected = write_compose_ownership_override(
+        ownership, attempt_id="run-a", compose_files=(compose,)
+    )
+
+    override = yaml.safe_load(override_path.read_text(encoding="utf-8"))
+    assert override["services"]["capture"]["network_mode"] == (
+        f"container:{direct_name}"
+    )
+    assert direct_name in expected["container"]
 
 
 @pytest.mark.parametrize("kind", ["network", "volume"])

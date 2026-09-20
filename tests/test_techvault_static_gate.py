@@ -12,6 +12,7 @@ gate validates.
 
 import copy
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -615,6 +616,57 @@ def test_conformance_cli_diagnostics(monkeypatch):
     assert conformance_cli_diagnostics("provisioning-only", None, None) == []
 
 
+@pytest.mark.parametrize("path_executable", [None, "/usr/bin/raes"])
+def test_run_raes_uses_active_python_environment_without_path_activation(
+    monkeypatch, tmp_path, path_executable
+):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python = bin_dir / "python"
+    python.touch()
+    raes = bin_dir / "raes"
+    raes.touch()
+    raes.chmod(0o755)
+    monkeypatch.setattr(sys, "executable", str(python))
+    monkeypatch.setattr(gcli.shutil, "which", lambda name: path_executable)
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return _proc(0)
+
+    monkeypatch.setattr(gcli.subprocess, "run", fake_run)
+
+    result = gcli.run_raes(["conformance", "backend"])
+    assert result is not None
+    assert result.returncode == 0
+    assert calls[0][0] == [str(raes), "conformance", "backend"]
+
+
+def test_run_raes_falls_back_to_path_when_sibling_is_not_executable(
+    monkeypatch, tmp_path
+):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python = bin_dir / "python"
+    python.touch()
+    (bin_dir / "raes").touch()
+    monkeypatch.setattr(sys, "executable", str(python))
+    monkeypatch.setattr(gcli.shutil, "which", lambda name: "/usr/bin/raes")
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(argv)
+        return _proc(0)
+
+    monkeypatch.setattr(gcli.subprocess, "run", fake_run)
+
+    result = gcli.run_raes(["sdl", "verify-imports"])
+    assert result is not None
+    assert result.returncode == 0
+    assert calls == [["/usr/bin/raes", "sdl", "verify-imports"]]
+
+
 def test_cli_detail_json_and_plain():
     payload = '{"diagnostics": [{"code": "conformance.profile-load-failed"}]}'
     assert "profile-load-failed" in _cli_detail(_proc(1, stdout=payload))
@@ -645,7 +697,9 @@ def test_check_import_lock_missing_and_unavailable(tmp_path, monkeypatch):
     monkeypatch.setattr(gc, "run_raes", lambda *a, **k: None)
     check = check_import_lock(path, scenario)
     assert not check.passed
-    assert any("not found on PATH" in d for d in check.diagnostics)
+    assert any(
+        "not found beside active Python or on PATH" in d for d in check.diagnostics
+    )
 
 
 def test_check_import_lock_passes_when_scenario_declares_no_imports(tmp_path):

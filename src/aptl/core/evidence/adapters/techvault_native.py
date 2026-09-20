@@ -1,4 +1,4 @@
-"""Trusted native owners for the four TechVault capture registrations.
+"""Trusted native owners for the TechVault capture registrations.
 
 The public SDL chooses no URL, command, credential, path, or executable.  This
 module binds the exact code-owned TechVault registrations to bounded native
@@ -14,12 +14,12 @@ import secrets
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlunsplit
 
 from aptl.core.evidence.adapters.techvault import (
-    CORTEX_ANALYZER_ID,
     CORTEX_OBSERVABLE,
     SURICATA_SQLI_SID,
     WAZUH_SQLI_RULE_ID,
@@ -27,21 +27,41 @@ from aptl.core.evidence.adapters.techvault import (
     SuricataRuleReadinessSource,
     SuricataWazuhSqliSource,
 )
+from aptl.core.evidence.adapters._techvault_native_cortex import (
+    TechVaultNativeCortexMixin,
+)
+from aptl.core.evidence.adapters.techvault_misp_readiness import (
+    MispAuthenticatedApiReadinessSource,
+)
+from aptl.core.evidence.adapters.techvault_native_readiness import (
+    admitted_misp_state,
+    declared_endpoint_agents,
+    misp_readiness,
+    wazuh_agent_readiness,
+)
+from aptl.core.evidence.adapters.techvault_wazuh_agent_readiness import (
+    WazuhAgentReadinessSource,
+)
 from aptl.core.evidence.adapters.techvault_native_support import (
     MAX_SOURCE_BYTES,
     bounded,
-    connector_projection,
     content_identities,
     find_node,
     generated_output,
+    generated_output_path,
     inside_window,
     published_url,
     utc_iso_now,
     webapp_endpoint,
 )
 from aptl.utils.curl_safe import basic_auth_header, curl_json
+from aptl.core.evidence.adapters.techvault_telemetry_stimulus import (
+    emit_missing_agent_events,
+)
 
 _CORTEX_REGISTRATION = "aptl.collector.cortex-enrichment"
+_MISP_READINESS_REGISTRATION = "aptl.collector.misp-authenticated-api-readiness"
+_WAZUH_AGENT_REGISTRATION = "aptl.collector.wazuh-agent-readiness"
 _READINESS_REGISTRATION = "aptl.collector.suricata-rule-readiness"
 _SQLI_REGISTRATION = "aptl.collector.suricata-wazuh-sqli"
 _SURICATA_CONTAINER = "aptl-suricata"
@@ -70,8 +90,8 @@ class TechVaultNativeDependencies:
     sleep: Callable[[float], None] | None = None
 
 
-class TechVaultNativeEvidenceOwner:
-    """Own the bounded native operations behind three TechVault sources."""
+class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
+    """Own the bounded native operations behind the TechVault sources."""
 
     def __init__(
         self,
@@ -96,7 +116,12 @@ class TechVaultNativeEvidenceOwner:
         self._sleep = selected_dependencies.sleep
         self._cortex_url = published_url(realization, "cortex", 9001, "http")
         self._thehive_url = published_url(realization, "thehive", 9000, "https")
-        self._thehive_ca_cert = str(project_dir / "config/soc_certs/lab-ca.pem")
+        self._thehive_ca_path = generated_output_path(
+            realization,
+            project_dir,
+            "techvault:soc-certificate-profile/v1",
+            "ca-certificate",
+        )
         self._indexer_url = published_url(realization, "wazuh-indexer", 9200, "https")
         self._connector_key = generated_output(
             realization,
@@ -119,6 +144,11 @@ class TechVaultNativeEvidenceOwner:
             kwargs["sleep"] = self._sleep
         return {
             _CORTEX_REGISTRATION: CortexEnrichmentSource(self.cortex_query),
+            **self._misp_readiness_source(),
+            _WAZUH_AGENT_REGISTRATION: WazuhAgentReadinessSource(
+                self.wazuh_agent_readiness_query,
+                tuple(declared_endpoint_agents(self._realization)),
+            ),
             _READINESS_REGISTRATION: SuricataRuleReadinessSource(
                 self.suricata_readiness_query
             ),
@@ -130,162 +160,116 @@ class TechVaultNativeEvidenceOwner:
             ),
         }
 
-    def cortex_query(self, start_iso: str, end_iso: str) -> Mapping[str, object] | None:
-        """Execute the exact analyzer and read TheHive's native connector status."""
+    def _misp_readiness_source(self) -> dict[str, object]:
+        """Bind the MISP source only when the plan admits a state to compare.
 
-        prerequisites = self._cortex_prerequisites()
-        if prerequisites is None:
-            return None
-        cortex_url, thehive_url, auth = prerequisites
-        analyzers = self._request_json(
-            f"{cortex_url}/api/analyzer", auth_header=auth, timeout=30
+        Without admitted values there is nothing to compare an observation
+        with, so no source is offered at all and the demand reports itself
+        uncovered -- rather than a source that would accept whatever it saw.
+        """
+
+        admitted = admitted_misp_state(self._realization)
+        if admitted is None:
+            return {}
+        return {
+            _MISP_READINESS_REGISTRATION: MispAuthenticatedApiReadinessSource(
+                self.misp_readiness_query, admitted
+            )
+        }
+
+    def misp_readiness_query(
+        self, _start_iso: str, _end_iso: str
+    ) -> Mapping[str, object] | None:
+        """Observe MISP, its database and its cache through the admitted plan."""
+
+        return misp_readiness(self._backend, self._realization)
+
+    def wazuh_agent_readiness_query(
+        self, start_iso: str, end_iso: str
+    ) -> Mapping[str, object] | None:
+        """Correlate each declared endpoint agent with the manager's roster."""
+
+        observed = self._observe_agent_readiness(start_iso, end_iso)
+        return self._refresh_agent_telemetry(observed, start_iso, end_iso)
+
+    def _observe_agent_readiness(
+        self, start_iso: str, end_iso: str
+    ) -> Mapping[str, object] | None:
+        """Read the manager roster using the admitted scenario identities."""
+
+        return wazuh_agent_readiness(
+            getattr(self._backend, "container_exec_with_input", None),
+            self._realization,
+            self._project_dir,
+            start_iso,
+            end_iso,
         )
-        if not isinstance(analyzers, list) or not bounded(analyzers):
+
+    def _refresh_agent_telemetry(
+        self,
+        observed: Mapping[str, object] | None,
+        start_iso: str,
+        end_iso: str,
+    ) -> Mapping[str, object] | None:
+        """Stimulate only stale declared hosts, then await native freshness."""
+
+        if observed is None:
             return None
-        selected = [
-            item
-            for item in analyzers
-            if isinstance(item, Mapping)
-            and item.get("analyzerDefinitionId") == CORTEX_ANALYZER_ID
-            and item.get("id")
+        hosts = observed.get("hosts", ())
+        missing = [
+            str(host["node_ref"])
+            for host in hosts
+            if isinstance(host, Mapping) and host.get("telemetry_fresh") is False
         ]
-        return self._run_cortex_query(
-            cortex_url,
-            thehive_url,
-            auth,
-            analyzers,
-            selected,
-        )
-
-    def _cortex_prerequisites(self) -> tuple[str, str, str] | None:
-        """Return complete Cortex/TheHive endpoint credentials when available."""
-
-        result = None
-        if (
-            self._cortex_url
-            and self._thehive_url
-            and self._connector_key
-            and self._thehive_api_key
-        ):
-            result = (
-                self._cortex_url,
-                self._thehive_url,
-                f"Bearer {self._connector_key}",
-            )
-        return result
-
-    def _run_cortex_query(
-        self,
-        cortex_url: str,
-        thehive_url: str,
-        auth: str,
-        analyzers: list[object],
-        selected: list[Mapping[str, object]],
-    ) -> Mapping[str, object] | None:
-        """Run the uniquely selected analyzer and project its bounded response."""
-
-        if len(selected) != 1:
-            return None
-        started_at = self._now()
-        job = self._request_json(
-            f"{cortex_url}/api/analyzer/{selected[0]['id']}/run",
-            auth_header=auth,
-            body={"data": CORTEX_OBSERVABLE, "dataType": "ip", "tlp": 2, "pap": 2},
-            method="POST",
-            timeout=30,
-        )
-        if not isinstance(job, Mapping) or not job.get("id"):
-            return None
-        return self._read_cortex_result(
-            cortex_url,
-            thehive_url,
-            auth,
-            analyzers,
-            str(job["id"]),
-            started_at,
-        )
-
-    def _read_cortex_result(
-        self,
-        cortex_url: str,
-        thehive_url: str,
-        auth: str,
-        analyzers: list[object],
-        job_id: str,
-        started_at: str,
-    ) -> Mapping[str, object] | None:
-        """Read and reduce Cortex report plus TheHive connector health."""
-
-        report = self._request_json(
-            f"{cortex_url}/api/job/{job_id}/waitreport?atMost=2minute",
-            auth_header=auth,
-            timeout=150,
-        )
-        connector = self._read_thehive_connector(thehive_url)
-        finished_at = self._now()
-        if not isinstance(report, Mapping) or not bounded(report):
-            return None
-        return self._project_cortex_result(
-            analyzers, report, connector, started_at, finished_at
-        )
-
-    def _read_thehive_connector(self, thehive_url: str) -> object:
-        """Poll the read-only connector status through its startup refresh race."""
-
-        connector: object = None
+        deadline = self._agent_refresh_deadline(missing, end_iso)
+        if deadline is None:
+            return observed
         sleep = self._sleep or time.sleep
-        for attempt in range(30):
-            connector = self._request_json(
-                f"{thehive_url}/api/v1/status",
-                auth_header=f"Bearer {self._thehive_api_key}",
-                ca_cert_path=self._thehive_ca_cert,
-                timeout=30,
-            )
-            if connector_projection(connector) is not None:
+        for _attempt in range(30):
+            if datetime.fromisoformat(self._now().replace("Z", "+00:00")) >= deadline:
                 break
-            if attempt < 29:
-                sleep(2.0)
-        return connector
+            sleep(2.0)
+            observed = self._observe_agent_readiness(start_iso, end_iso)
+            if observed is None or self._all_agent_telemetry_fresh(observed):
+                break
+        return observed
+
+    def _agent_refresh_deadline(
+        self, missing: list[str], end_iso: str
+    ) -> datetime | None:
+        """Start bounded re-observation only after real stimulus was emitted."""
+
+        if not missing or not self._emit_missing_agent_events(missing):
+            return None
+        try:
+            return datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    def _emit_missing_agent_events(self, missing: list[str]) -> bool:
+        """Trigger real source activity for stale admitted endpoint agents."""
+
+        declared = {
+            node: sources
+            for node, (_enrollment, sources) in declared_endpoint_agents(
+                self._realization
+            ).items()
+        }
+        try:
+            return emit_missing_agent_events(
+                self._backend, self._realization, missing, declared, self.trigger_sqli
+            )
+        except Exception:
+            return False
 
     @staticmethod
-    def _project_cortex_result(
-        analyzers: list[object],
-        report: Mapping[str, object],
-        connector: object,
-        started_at: str,
-        finished_at: str,
-    ) -> Mapping[str, object] | None:
-        """Project only evidence-contract fields from native service responses."""
+    def _all_agent_telemetry_fresh(observed: Mapping[str, object]) -> bool:
+        """Require every corroborated host to carry a fresh telemetry marker."""
 
-        report_body = report.get("report")
-        full = report_body.get("full") if isinstance(report_body, Mapping) else None
-        if isinstance(full, str):
-            try:
-                full = json.loads(full)
-            except json.JSONDecodeError:
-                return None
-        projected_connector = connector_projection(connector)
-        if not isinstance(full, Mapping) or projected_connector is None:
-            return None
-        return {
-            "analyzers": [
-                {
-                    "id": str(item.get("analyzerDefinitionId", "")),
-                    "enabled": bool(item.get("id")),
-                }
-                for item in analyzers
-                if isinstance(item, Mapping) and item.get("analyzerDefinitionId")
-            ],
-            "report": {
-                "analyzer_id": CORTEX_ANALYZER_ID,
-                "observable": CORTEX_OBSERVABLE,
-                "status": str(report.get("status", "")),
-                "started_at": started_at,
-                "finished_at": finished_at,
-                "scenario_role": str(full.get("scenario_role", "")),
-            },
-            "connector": projected_connector,
-        }
+        return all(
+            isinstance(host, Mapping) and host.get("telemetry_fresh") is True
+            for host in observed.get("hosts", ())
+        )
 
     def suricata_readiness_query(
         self, _start_iso: str, _end_iso: str

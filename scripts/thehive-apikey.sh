@@ -15,11 +15,12 @@ set -euo pipefail
 # =============================================================================
 
 # Reach TheHive from inside its container, using the same generated SOC root as
-# external clients. The temporary env-pack compatibility fix activates Play TLS
-# on :9000 before this provisioner runs. Override THEHIVE_URL for local debugging.
+# external clients. The released pack declares the internal API as HTTP; host
+# clients use the separately published endpoint contract. Override THEHIVE_URL
+# for local debugging.
 THEHIVE_CONTAINER="${THEHIVE_CONTAINER:-aptl-thehive}"
 THEHIVE_URL="${THEHIVE_URL:-https://localhost:9000}"
-THEHIVE_CA_CERT="${THEHIVE_CA_CERT:-/etc/lab-ca/lab-ca.pem}"
+THEHIVE_CA_CERT="${THEHIVE_CA_CERT:-/opt/techvault/soc-certs/lab-ca.pem}"
 ADMIN_USER="${THEHIVE_ADMIN_USER:-admin@thehive.local}"
 ADMIN_PASS="${THEHIVE_ADMIN_PASS:-secret}"
 ORG_NAME="APTL"

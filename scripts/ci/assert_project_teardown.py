@@ -10,9 +10,10 @@ rules production teardown uses rather than restating them:
 - volumes through ``project_scoped_volume_names``, whose ``<project>_`` prefix
   catches ADR-043 seeded volumes that carry no Compose label at all.
 
-Both are scoped to the validated Compose project identity from the lab's own
-``aptl.json``. A name prefix such as ``aptl-*`` is never the authority, and
-nothing here prunes daemon-wide state.
+Both are scoped to the effective workspace-owned Compose project identity,
+resolved from the lab's validated ``aptl.json`` and durable ownership state.
+A name prefix such as ``aptl-*`` is never the authority, and nothing here
+prunes daemon-wide state.
 
 Absence that cannot be *proved* is a failure: a Docker query that errors exits
 non-zero rather than reporting a clean lab.
@@ -25,6 +26,7 @@ from pathlib import Path
 
 from aptl.core.config import find_config, load_config
 from aptl.core.deployment import get_backend
+from aptl.core.deployment._compose_resource_ownership import OwnershipConflictError
 from aptl.core.deployment._compose_volume_cleanup import project_scoped_volume_names
 
 _VOLUME_QUERY_TIMEOUT = 60
@@ -39,8 +41,19 @@ def main(argv: list[str]) -> int:
         print(f"No aptl.json found in {project_dir}", file=sys.stderr)
         return 2
     config = load_config(config_path)
+    if config.deployment.provider != "docker-compose":
+        print("Cleanup proof requires local Docker Compose", file=sys.stderr)
+        return 2
     backend = get_backend(config, project_dir)
-    project_name = config.deployment.project_name
+    try:
+        ownership = backend._load_resource_ownership()
+    except OwnershipConflictError:
+        print("Project ownership state could not be loaded", file=sys.stderr)
+        return 2
+    if ownership is None:
+        print("Project ownership state is missing", file=sys.stderr)
+        return 2
+    project_name = ownership.project_name
 
     failures: list[str] = []
     presence = backend.observe_project_runtime()

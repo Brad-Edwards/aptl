@@ -264,9 +264,22 @@ jobs:
             --scenario-path scenarios/materialization-envelope.sdl.yaml
           status_output=$("$RUNNER_TEMP/clean-venv/bin/aptl" lab status)
           grep -F "Lab is running." <<<"$status_output"
-          container_id=$(docker ps -q \
+          project_name=$("$RUNNER_TEMP/clean-venv/bin/python" -c '
+          from pathlib import Path
+          from aptl.core.config import load_config
+          from aptl.core.deployment._compose_resource_ownership import WorkspaceOwnership
+          config = load_config(Path("aptl.json"))
+          ownership = WorkspaceOwnership.load(Path.cwd(), config.deployment.project_name)
+          if ownership is None:
+              raise SystemExit("lab project ownership is unavailable")
+          print(ownership.project_name)
+          ')
+          container_ids=$(docker ps -q \
+            --filter "label=com.docker.compose.project=$project_name" \
             --filter label=aptl.node.address=provision.node.smoke-box)
-          test -n "$container_id"
+          test -n "$container_ids"
+          test "$(printf '%s\n' "$container_ids" | wc -l)" -eq 1
+          container_id=$container_ids
           docker exec "$container_id" dpkg-query -W curl
           test "$(docker exec "$container_id" id -u analyst)" -gt 0
           test "$(docker exec "$container_id" \
@@ -279,7 +292,8 @@ jobs:
       - name: Assert no project containers, networks, or volumes remain
         if: always()
         run: |
-          "$RUNNER_TEMP/clean-venv/bin/python" scripts/ci/assert_project_teardown.py \
+          "$RUNNER_TEMP/clean-venv/bin/python" \
+            "$GITHUB_WORKSPACE/scripts/ci/assert_project_teardown.py" \
             "$RUNNER_TEMP/clean-install/ci-lab"
 
   mcp-tests:
@@ -402,11 +416,8 @@ jobs:
   dependency-audit:
     name: Dependency vulnerability scan
     runs-on: ubuntu-latest
-    # The Python scan (pip-audit) is BLOCKING: it installs the project's
-    # runtime dependencies and fails the job on any known advisory, so a
-    # vulnerable dependency cannot merge. The npm audit step stays advisory
-    # (non-fatal at the step level) — the lab's large transitive Node tree
-    # carries known findings that are triaged out of band, not gated here.
+    # Audit the shipped platform closures and CI build tools. Intentionally
+    # vulnerable lab targets remain in the separate advisory scanner jobs.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -416,28 +427,28 @@ jobs:
         with:
           node-version: '22'
       - name: pip-audit (Python dependencies) — blocking
-        # Install the project so pip-audit sees aptl's real runtime
-        # dependency tree, not just pip-audit's own. --skip-editable drops the
-        # editable aptl checkout itself (not a published PyPI release, so
-        # --strict would otherwise error on it as unauditable). No `|| true`:
-        # a known advisory in a real dependency fails the job.
+        # Generated, hash-pinned exports are the canonical CLI, API, and build
+        # closures. No editable install or build hook runs during the scan.
         run: |
-          pip install --require-hashes -r requirements/runtime.txt
+          set -euo pipefail
           pip install --require-hashes -r requirements/ci.txt
-          pip install -e . --no-deps --no-build-isolation
-          # No --strict: it treats the skipped editable aptl as an error.
-          # pip-audit still fails on any real dependency vulnerability.
-          pip-audit --skip-editable --progress-spinner=off
+          pip-audit --require-hashes --disable-pip --strict \
+            -r requirements/runtime.txt \
+            -r requirements/web.txt \
+            -r requirements/ci.txt \
+            --progress-spinner=off
       - name: npm audit (JS/TS workspaces)
         run: |
-          set +e
-          for dir in web mcp/aptl-mcp-common mcp/mcp-casemgmt mcp/mcp-indexer mcp/mcp-network mcp/mcp-red mcp/mcp-reverse mcp/mcp-soar mcp/mcp-threatintel mcp/mcp-wazuh; do
-            [ -f "$dir/package.json" ] || continue
+          set -euo pipefail
+          packages=(web/package.json mcp/*/package.json)
+          for manifest in "${packages[@]}"; do
+            test -f "$manifest"
+            dir=${manifest%/package.json}
+            test -f "$dir/package-lock.json"
             echo ""
             echo "=== $dir ==="
-            (cd "$dir" && npm ci --no-audit --no-fund --silent >/dev/null 2>&1 && npm audit --audit-level=high)
+            (cd "$dir" && npm ci --ignore-scripts --no-audit --no-fund --silent && npm audit --omit=dev --audit-level=high)
           done
-          true
 
   trivy-fs:
     name: Trivy filesystem scan (advisory)

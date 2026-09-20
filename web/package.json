@@ -31,7 +31,7 @@
     "vitest": "^5.0.1"
   },
   "dependencies": {
-    "dompurify": "^3.3.3",
+    "dompurify": "^3.4.15",
     "marked": "^17.0.5"
   },
   "//overrides": "@sveltejs/kit 2.70.1 is the newest published release and still pins cookie@0.6.0, which carries GHSA-pxg6-pf52-xh8x (out-of-bounds characters accepted in cookie name/path/domain). There is no upstream release to upgrade to, so force the patched cookie release here. Drop this override once a kit release depends on cookie >=0.7.0.",

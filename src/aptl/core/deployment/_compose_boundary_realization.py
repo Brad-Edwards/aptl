@@ -209,6 +209,8 @@ class ComposeBoundaryRealizationMixin:
         if configured is None:
             return None
         policy, binding = configured
+        if not policy.internal_zone_isolation:
+            return None
         try:
             networks = self._project_boundary_network_observations()
             enforcement = compile_platform_bootstrap(
@@ -232,6 +234,8 @@ class ComposeBoundaryRealizationMixin:
         if configured is None:
             return None
         policy, binding = configured
+        if not policy.internal_zone_isolation:
+            return None
         try:
             networks = self._project_boundary_network_observations()
             workloads = self._platform_workload_observations(networks)

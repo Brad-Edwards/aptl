@@ -309,7 +309,7 @@ class GuestAdmission:
             "host_observation_id": descriptor.host_observation_id,
             "boot_id": self.binding.access.guest_boot_id,
             "guest_daemon_id": self.binding.access.guest_daemon_id,
-            "raes_boundary_required": True,
+            "raes_boundary_required": self.verified_launch.boundary_policy.internal_zone_isolation,
         }
         if any(
             getattr(observed.binding, key) != value for key, value in expected.items()

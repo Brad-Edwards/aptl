@@ -17,6 +17,10 @@ The APTL backend shall materialize admitted ACES infrastructure ACLs and narrow 
 
 ## Rationale
 
+Internal security review and implementation are deferred to #1127 by the owner
+on 2026-09-20 (ADR-060). This requirement is not a #1022 VM-only delivery gate
+and is not claimed verified by VM-only qualification.
+
 Issue #822 establishes the general materializability and qualification surface consumed by the disposable appliance artifact (#823) and host launcher (#824). Scenario topology and exercise effects remain authoritative in admitted ACES realization; the appliance platform policy must not duplicate current or future scenario nodes, networks, services, or zone membership.
 
 ## Traceability

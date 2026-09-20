@@ -1,5 +1,10 @@
 # Disposable appliance release
 
+Current delivery uses the signed V2 [VM-only containment contract](../adrs/adr-060-vm-only-seat-containment.md).
+It does not claim APP-1 internal-zone isolation, deferred to #1127. Existing V1
+policies still require their stronger enforcement; signature or qualification
+checks must not silently reinterpret them as VM-only releases.
+
 APTL appliance releases package a read-only golden qcow2 guest and every
 participant dependency needed for an offline first boot. Each lab instance is
 a disposable qcow2 overlay. Destroying that overlay destroys its credentials,

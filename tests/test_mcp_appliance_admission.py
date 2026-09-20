@@ -12,10 +12,16 @@ from tests.test_appliance_boundary_inventory import _binding, _guest, _policy
 from tests.test_mcp_access import access_record
 
 
+@pytest.mark.parametrize("vm_only", [False, True])
 def test_appliance_transport_checks_freshness_identity_mapping_and_live_probes(
     tmp_path,
+    vm_only,
 ):
-    policy_data = _policy().model_dump()
+    from aptl.appliance.policy import full_techvault_boundary_policy
+
+    policy_data = (
+        full_techvault_boundary_policy() if vm_only else _policy()
+    ).model_dump()
     policy_data.update(
         host_mcp_contract="aptl.restricted-ssh-mcp/v1",
         guest_publications=[
@@ -23,7 +29,7 @@ def test_appliance_transport_checks_freshness_identity_mapping_and_live_probes(
         ],
     )
     policy = type(_policy()).model_validate(policy_data)
-    binding = _binding().model_copy(update={"raes_boundary_required": True})
+    binding = _binding().model_copy(update={"raes_boundary_required": not vm_only})
     endpoint = BoundaryEndpoint(
         audience="host-mcp",
         address="127.0.0.1",
@@ -65,6 +71,8 @@ def test_appliance_transport_checks_freshness_identity_mapping_and_live_probes(
             ),
         }
     )
+    if vm_only:
+        guest = guest.model_copy(update={"enforcements": (), "probes": ()})
     observed = ApplianceAccessObservation(
         schema_version="aptl.mcp-boundary-observation/v1",
         observed_at=datetime.now(UTC),
@@ -97,7 +105,11 @@ def test_appliance_transport_checks_freshness_identity_mapping_and_live_probes(
     for changes in (
         {"observed_at": datetime.now(UTC) - timedelta(seconds=30)},
         {"binding": binding.model_copy(update={"guest_daemon_id": "other"})},
-        {"guest": guest.model_copy(update={"probes": ()})},
+        {
+            "guest": guest.model_copy(
+                update={"observation_complete": False} if vm_only else {"probes": ()}
+            )
+        },
         {
             "host": host.observation.model_copy(
                 update={"listeners": (endpoint.model_copy(update={"port": 30223}),)}

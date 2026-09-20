@@ -353,6 +353,14 @@ BACKEND_IMPLEMENTATION_PROFILES = (
             "cassandra@sha256:"
             "d25e8ee78d648fade002d0d176b7e8c953c69164b9f316ccbccf62f524c9dfbf"
         ),
+        runtime_selections={
+            # Retain the working local lab's budget inside a full-stack guest;
+            # image defaults otherwise size a multi-GiB heap from the VM RAM.
+            "runtime-environment": _environment(
+                _variable("MAX_HEAP_SIZE", "512M"),
+                _variable("HEAP_NEWSIZE", "128M"),
+            )
+        },
     ),
     BackendImplementationProfile(
         profile_id="elasticsearch-7.17.28",

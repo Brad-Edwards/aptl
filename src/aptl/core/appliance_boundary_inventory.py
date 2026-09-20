@@ -223,7 +223,7 @@ def _append_guest_findings(
     )
     findings.extend(code for failed, code in comparisons if failed)
     _append_enforcement_findings(policy, binding, guest, findings)
-    _append_probe_findings(binding, guest, findings)
+    _append_probe_findings(policy, binding, guest, findings)
     allowed = set(policy.docker_authority.allowed_holder_labels)
     if {holder.label_selector for holder in guest.docker_authority_holders} - allowed:
         findings.append("boundary.guest-docker-authority-unapproved")
@@ -251,16 +251,22 @@ def _append_enforcement_findings(
     """Require complete, digest-bound readback for every active authority."""
 
     by_authority = {item.authority: item for item in guest.enforcements}
-    if len(by_authority) != len(guest.enforcements) or "platform" not in by_authority:
+    if len(by_authority) != len(guest.enforcements):
         findings.append("boundary.guest-enforcement-incomplete")
         return
-    platform = by_authority["platform"]
-    if platform.source_digest != binding.policy_digest:
-        findings.append("boundary.guest-platform-source-mismatch")
-    if set(platform.families) != {"bridge", "inet"}:
-        findings.append("boundary.guest-enforcement-incomplete")
-    if policy.default_deny and not platform.default_deny_observed:
-        findings.append("boundary.guest-default-deny-missing")
+    platform = by_authority.get("platform")
+    if policy.internal_zone_isolation:
+        if platform is None:
+            findings.append("boundary.guest-enforcement-incomplete")
+        else:
+            if platform.source_digest != binding.policy_digest:
+                findings.append("boundary.guest-platform-source-mismatch")
+            if set(platform.families) != {"bridge", "inet"}:
+                findings.append("boundary.guest-enforcement-incomplete")
+            if not platform.default_deny_observed:
+                findings.append("boundary.guest-default-deny-missing")
+    elif platform is not None:
+        findings.append("boundary.guest-unexpected-platform-enforcement")
     raes = by_authority.get("raes")
     if binding.raes_boundary_required and raes is None:
         findings.append("boundary.guest-raes-enforcement-missing")
@@ -269,13 +275,18 @@ def _append_enforcement_findings(
 
 
 def _append_probe_findings(
+    policy: ApplianceBoundaryPolicy,
     binding: ApplianceBoundaryBinding,
     guest: GuestBoundaryObservation,
     findings: list[str],
 ) -> None:
     """Require passing positive and negative probes for each authority."""
 
-    required_authorities = {"platform"}
+    required_authorities = {"platform"} if policy.internal_zone_isolation else set()
+    if not policy.internal_zone_isolation and any(
+        item.authority == "platform" for item in guest.probes
+    ):
+        findings.append("boundary.guest-unexpected-platform-probes")
     if binding.raes_boundary_required:
         required_authorities.add("raes")
     for authority in sorted(required_authorities):
@@ -305,6 +316,9 @@ def _inventory(
             "id": policy.policy_id,
             "generation": policy.generation,
             "digest": binding.policy_digest,
+            "containment": "internal-zones"
+            if policy.internal_zone_isolation
+            else "vm-only",
         },
         "payload_digest": binding.payload_digest,
         "raes_plan_digest": binding.raes_plan_digest,

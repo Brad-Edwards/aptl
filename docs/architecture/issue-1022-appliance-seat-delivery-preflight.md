@@ -1,5 +1,12 @@
 # Issue #1022 Appliance Seat Delivery Preflight
 
+**Current scope (2026-09-20):** [ADR-060](../adrs/adr-060-vm-only-seat-containment.md)
+records the owner's VM-only decision. It supersedes this note's internal-zone
+enforcement obligations for #1022. APP-1 and internal security move to #1127;
+signed delivery, authenticated access, real lab QA and host/cross-seat isolation
+remain required. Historical analysis below does not add those deferred features
+back into the delivery scope.
+
 This note sets architecture guardrails for repairing appliance construction,
 real-VM startup, concurrent rootful seats, host CLI access, and public artifact
 delivery. It is guidance, not an implementation plan. The GitHub issue is the

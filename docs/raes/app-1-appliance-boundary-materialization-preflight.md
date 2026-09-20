@@ -1,5 +1,11 @@
 # APP-1 Appliance Boundary Materialization Preflight
 
+**Scope update (2026-09-20):** APP-1 internal security review/implementation is
+tracked in #1127, not a #1022 delivery gate. Current seats use the explicit
+[ADR-060 VM-only contract](../adrs/adr-060-vm-only-seat-containment.md).
+The inner-boundary guidance below applies to that follow-up, not as permission
+to alter ordinary TechVault traffic in VM-only seats.
+
 This note is the architecture preflight for APP-1 / issues #822 and #1022. It narrows
 [ADR-049](../adrs/adr-049-sealed-disposable-lab-appliance.md) for boundary
 materialization and verification; it is guidance, not an implementation plan.

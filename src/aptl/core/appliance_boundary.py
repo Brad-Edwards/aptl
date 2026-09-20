@@ -162,22 +162,51 @@ class EgressProxyLimits(_StrictModel):
 class ApplianceBoundaryPolicy(_StrictModel):
     """Platform policy that deliberately cannot contain scenario topology."""
 
-    schema_version: Literal["aptl.appliance-boundary/v1"]
+    schema_version: Literal["aptl.appliance-boundary/v1", "aptl.appliance-boundary/v2"]
     policy_id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,79}$")
     generation: int = Field(ge=1)
     workbench_policy_version: str = Field(pattern=r"^[a-z0-9][a-z0-9._/-]{0,127}$")
-    default_deny: Literal[True]
-    platform_networks: PlatformNetworks
-    platform_anchors: PlatformAnchors
+    default_deny: bool
+    platform_networks: PlatformNetworks | None = None
+    platform_anchors: PlatformAnchors | None = None
     fixed_crossings: list[FixedCrossing] = Field(default_factory=list)
     egress_authorities: list[EgressAuthority] = Field(default_factory=list)
-    egress_proxy_limits: EgressProxyLimits
+    egress_proxy_limits: EgressProxyLimits | None = None
     guest_publications: list[GuestPublication] = Field(default_factory=list)
     host_mcp_contract: Literal["aptl.restricted-ssh-mcp/v1"] | None = None
     docker_authority: DockerAuthorityPolicy
 
+    @property
+    def internal_zone_isolation(self) -> bool:
+        """V1 promises internal enforcement; V2 explicitly promises VM containment."""
+
+        return self.schema_version == "aptl.appliance-boundary/v1"
+
     @model_validator(mode="after")
     def validate_unique_entries(self) -> ApplianceBoundaryPolicy:
+        if self.internal_zone_isolation:
+            if not self.default_deny or any(
+                value is None
+                for value in (
+                    self.platform_networks,
+                    self.platform_anchors,
+                    self.egress_proxy_limits,
+                )
+            ):
+                raise ValueError(
+                    "internal-zone policy requires its complete deny boundary"
+                )
+        elif any(
+            (
+                self.default_deny,
+                self.platform_networks,
+                self.platform_anchors,
+                self.egress_proxy_limits,
+                self.fixed_crossings,
+                self.egress_authorities,
+            )
+        ):
+            raise ValueError("VM-only policy cannot claim internal-zone enforcement")
         mcp = [item for item in self.guest_publications if item.audience == "host-mcp"]
         if bool(mcp) != (self.host_mcp_contract is not None) or len(mcp) > 1:
             raise ValueError(

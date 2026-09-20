@@ -1,5 +1,12 @@
 # Appliance seat launcher
 
+Current seats use [VM-only containment](../adrs/adr-060-vm-only-seat-containment.md):
+one disposable VM per user running the ordinary full TechVault lab. Signing,
+authenticated access and physical-host/cross-seat isolation remain required.
+Additional isolation and controlled egress between workloads inside a guest are
+not promised; that work is tracked in #1127. The signed V2 boundary policy and
+runtime inventory identify this contract explicitly.
+
 Issue #824 adds the host-side lifecycle adapter for one disposable appliance
 seat. It consumes the signed release, overlay, and launch contracts from
 [Disposable Appliance Release](appliance-release.md) without introducing a

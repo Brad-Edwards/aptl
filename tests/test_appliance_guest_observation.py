@@ -159,7 +159,9 @@ def test_guest_observation_requires_real_positive_and_negative_probes() -> None:
             binding=binding,
             boundary_specs={"platform": spec},
             boundary_receipts=receipts,
-            realization=SimpleNamespace(nodes=(), docker_authority_admissions=()),
+            realization=SimpleNamespace(
+                nodes=(), acls=(), docker_authority_admissions=()
+            ),
         )
 
     assert result.observation_complete is True

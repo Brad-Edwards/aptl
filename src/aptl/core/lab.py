@@ -1291,7 +1291,7 @@ def _configure_verified_appliance_launch(
                 policy_digest=descriptor.boundary_policy_digest,
                 payload_digest=descriptor.payload_digest,
                 raes_plan_digest=descriptor.participant_routes_digest,
-                raes_boundary_required=True,
+                raes_boundary_required=launch.boundary_policy.internal_zone_isolation,
                 boundary_helper_image=descriptor.boundary_helper_image,
                 egress_proxy_image=descriptor.egress_proxy_image,
                 boot_id=boot_id,

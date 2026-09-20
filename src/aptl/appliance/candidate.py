@@ -232,7 +232,6 @@ def _validate_candidate(root: Path, manifest: ApplianceCandidateManifest) -> Non
         raise ApplianceManifestError("candidate evidence is invalid") from exc
     if (
         policy.host_mcp_contract != manifest.delivery.host_mcp_contract
-        or policy.model_dump().get("schema_version") != "aptl.appliance-boundary/v1"
         or inventory.populated_sensitive_paths
         or inventory.writable_runtime_paths
     ):

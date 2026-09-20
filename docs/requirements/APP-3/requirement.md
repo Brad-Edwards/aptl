@@ -17,9 +17,20 @@ APTL shall assemble and verify a signed, versioned appliance release envelope th
 
 ## Rationale
 
+For current VM-only seats, ADR-060 defines the signed containment policy.
+APP-1 internal-zone implementation is deferred to #1127; the release must name
+its actual containment contract and must not claim internal-isolation evidence.
+
 Issue #823 supplies the release artifact consumed by the host launcher in issue #824 and the hosted per-seat adapter in issue #825. APP-1 remains the boundary-enforcement authority and APP-2 remains the bounded participant-profile authority; this requirement binds those existing contracts into one immutable release unit without duplicating their schemas.
 
 ## Traceability
+
+- IMPLEMENTS → GITHUB_ISSUE `1022` (VM-only seat delivery and qualification)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/policy.py` (Explicit signed VM-only containment policy)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/candidate.py` (Signed candidate policy validation)
+- TESTS → TEST `tests/test_appliance_vm_containment.py` (Containment distinction and retained identity/host checks)
+- TESTS → TEST `tests/test_appliance_candidate.py` (Signed candidate and tamper rejection)
+- DOCUMENTS → DOCUMENTATION `docs/adrs/adr-060-vm-only-seat-containment.md` (Owner-approved containment scope)
 
 - IMPLEMENTS → GITHUB_ISSUE `823` (Issue 823: signed disposable appliance release envelope)
 - IMPLEMENTS → CODE_FILE `src/aptl/appliance/manifest.py` (Signed appliance release manifest)

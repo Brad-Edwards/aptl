@@ -12,14 +12,11 @@ from aptl.appliance.policy import (
 )
 
 
-def test_full_policy_uses_labels_present_on_generated_resources() -> None:
+def test_full_policy_keeps_vm_access_without_claiming_scenario_zones() -> None:
     policy = full_techvault_boundary_policy()
 
-    assert set(policy.platform_networks.model_dump().values()) == {
-        "com.docker.compose.network=aptl-redteam",
-        "com.docker.compose.network=aptl-security",
-        "com.docker.compose.network=aptl-dmz",
-    }
+    assert policy.platform_networks is None
+    assert policy.platform_anchors is None
     assert policy.host_mcp_contract == "aptl.restricted-ssh-mcp/v1"
     assert {item.audience for item in policy.guest_publications} == {
         "participant",

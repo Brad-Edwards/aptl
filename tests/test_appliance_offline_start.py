@@ -212,7 +212,9 @@ def test_verified_launch_payload_is_bound_before_scenario_realization(
     candidate_trust: bool,
 ) -> None:
     backend = MagicMock()
-    policy = MagicMock()
+    from aptl.appliance.policy import full_techvault_boundary_policy
+
+    policy = full_techvault_boundary_policy()
     descriptor = SimpleNamespace(
         boundary_policy_digest="sha256:" + "1" * 64,
         payload_digest="sha256:" + "2" * 64,
@@ -260,6 +262,7 @@ def test_verified_launch_payload_is_bound_before_scenario_realization(
     assert result is None
     configured_policy, binding = backend.configure_appliance_boundary.call_args.args
     assert configured_policy is policy
+    assert binding.raes_boundary_required is False
     assert binding.payload_digest == descriptor.payload_digest
     assert binding.policy_digest == descriptor.boundary_policy_digest
     assert backend.configure_appliance_boundary.call_args.kwargs == {

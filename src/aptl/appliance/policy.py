@@ -11,42 +11,15 @@ from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
 
 
 def full_techvault_boundary_policy() -> ApplianceBoundaryPolicy:
-    """Return the fixed platform boundary over observed RAES-owned resources."""
+    """Return the signed VM-only contract without repurposing scenario resources."""
 
     return ApplianceBoundaryPolicy.model_validate(
         {
-            "schema_version": "aptl.appliance-boundary/v1",
+            "schema_version": "aptl.appliance-boundary/v2",
             "policy_id": "techvault-full",
-            "generation": 1,
+            "generation": 2,
             "workbench_policy_version": "participant-workbench-profile/v1",
-            "default_deny": True,
-            "platform_networks": {
-                "participant": "com.docker.compose.network=aptl-redteam",
-                "management": "com.docker.compose.network=aptl-security",
-                "egress": "com.docker.compose.network=aptl-dmz",
-            },
-            "platform_anchors": {
-                "participant": "aptl.node.address=provision.node.kali",
-                "management": "aptl.node.address=provision.node.soc-workstation",
-                "egress": "aptl.node.address=provision.node.suricata",
-            },
-            "fixed_crossings": [
-                {
-                    "source": "management",
-                    "destination": "egress",
-                    "protocol": "tcp",
-                    "ports": [3128],
-                    "purpose": "bounded-egress-broker",
-                }
-            ],
-            "egress_authorities": [],
-            "egress_proxy_limits": {
-                "max_connections": 32,
-                "max_header_bytes": 4096,
-                "header_timeout_seconds": 5,
-                "connect_timeout_seconds": 10,
-                "idle_timeout_seconds": 60,
-            },
+            "default_deny": False,
             "guest_publications": [
                 {
                     "audience": "participant",
@@ -70,7 +43,7 @@ def full_techvault_boundary_policy() -> ApplianceBoundaryPolicy:
             "host_mcp_contract": "aptl.restricted-ssh-mcp/v1",
             "docker_authority": {
                 "allowed_holder_labels": [
-                    "aptl.node.address=provision.node.soc-workstation"
+                    "aptl.node.address=provision.node.shuffle-orborus"
                 ],
                 "require_guest_daemon": True,
             },

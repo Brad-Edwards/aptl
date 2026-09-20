@@ -228,6 +228,8 @@ class ComposeMixedRealizationMixin:
         if configured is None:
             return None
         policy, _binding = configured
+        if not policy.internal_zone_isolation:
+            return None
         nodes = {node.address: node for node in realization.nodes}
         imaged = {image.address for image in realization.images}
         services: set[str] = set()

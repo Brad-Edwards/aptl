@@ -545,26 +545,26 @@ def collect_guest_observation(
     if isinstance(platform, PlatformBoundarySpec):
         paths += _platform_probe_paths(platform, containers)
     raes = boundary_specs.get("raes")
-    if isinstance(raes, AcesBoundarySpec):
+    if policy.internal_zone_isolation and isinstance(raes, AcesBoundarySpec):
         paths += _raes_probe_paths(raes, containers)
     probes = tuple(
         _probe_path(backend, path, image=binding.boundary_helper_image)
         for path in paths
     )
     enforcements = _enforcement_observations(boundary_receipts)
-    expected_authorities = {
-        "platform",
-        *(("raes",) if binding.raes_boundary_required else ()),
-    }
-    complete = {
-        item.authority for item in enforcements
-    } == expected_authorities and all(
-        any(
-            item.authority == authority and item.expectation == expectation
-            for item in probes
+    expected_authorities = {"platform"} if policy.internal_zone_isolation else set()
+    if binding.raes_boundary_required or realization.acls:
+        expected_authorities.add("raes")
+    complete = {item.authority for item in enforcements} == expected_authorities and (
+        not policy.internal_zone_isolation
+        or all(
+            any(
+                item.authority == authority and item.expectation == expectation
+                for item in probes
+            )
+            for authority in expected_authorities
+            for expectation in ("reachable", "blocked")
         )
-        for authority in expected_authorities
-        for expectation in ("reachable", "blocked")
     )
     return GuestBoundaryObservation(
         policy_digest=binding.policy_digest,

@@ -12,6 +12,7 @@ boot.
 from __future__ import annotations
 
 import importlib.resources as ir
+import os
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -96,6 +97,37 @@ def test_techvault_pack_realizes_without_provisioner_diagnostics(
     assert evidence["provider"]["distribution"] == "aptl-labs"
     assert evidence["provider"]["entry_point"] == "techvault.aptl"
     assert evidence["provider"]["mapping_digest"].startswith("sha256:")
+
+
+@pytest.mark.integration
+def test_real_pack_cassandra_has_bounded_heap(techvault_realization):
+    """The guest must not size Cassandra's heap from all available VM RAM."""
+    from aptl.core.deployment._compose_node_generation import render_realization_compose
+
+    realization = techvault_realization
+    spec = realization.deployment_spec(sorted(realization.profiles))
+    service = render_realization_compose(spec)["services"]["thehive-cassandra"]
+
+    assert service.get("environment", {}).get("MAX_HEAP_SIZE") == "512M"
+    assert service["environment"]["HEAP_NEWSIZE"] == "128M"
+    node = next(node for node in realization.nodes if node.name == "thehive-cassandra")
+    assert "runtime-environment" in node.backend_selected_concerns
+
+
+@pytest.mark.integration
+def test_real_pack_orborus_disables_undeclared_pipeline_startup(techvault_realization):
+    """Offline worker startup must not auto-provision a Tenzir/Sigma stack."""
+    from aptl.core.deployment._compose_node_generation import render_realization_compose
+
+    spec = techvault_realization.deployment_spec(sorted(techvault_realization.profiles))
+    services = render_realization_compose(spec)["services"]
+    environment = services["shuffle-orborus"]["environment"]
+
+    assert environment.get("SHUFFLE_SKIP_PIPELINES") == "true"
+    assert environment.get("SHUFFLE_STATS_DISABLED") == "true"
+    assert environment.get("SHUFFLE_LOGS_DISABLED") == "true"
+    assert environment["SHUFFLE_AUTO_IMAGE_DOWNLOAD"] == "false"
+    assert "@sha256:" in environment["SHUFFLE_WORKER_IMAGE"]
 
 
 @pytest.mark.integration
@@ -907,6 +939,36 @@ def test_pack_file_content_for_an_image_node_is_bound_from_the_resolved_bytes(
     assert not (scenario_root / ".aptl").exists()
 
 
+@pytest.mark.parametrize("source_kind", ("inline-text", "pack-file"))
+@pytest.mark.parametrize("sensitive", (False, True))
+def test_image_content_mount_mode_ignores_boot_umask(
+    tmp_path, stub_pack, source_kind, sensitive
+):
+    """Non-root image users read public config; secrets stay owner-only."""
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+
+    fields = {"sensitive": sensitive}
+    if source_kind == "inline-text":
+        fields["inline_text"] = "setting: value\n"
+    else:
+        digest = "sha256:" + "a" * 64
+        stub_pack["config"] = _StubResolved(b"setting: value\n", digest)
+        fields.update(artifact_id="config", artifact_digest=digest)
+    spec = _content_spec(content=(_content_item(source_kind, **fields),))
+
+    previous_umask = os.umask(0o077)
+    try:
+        override = image_node_content_override(
+            spec, tmp_path / "pack", tmp_path / "engine"
+        )
+    finally:
+        os.umask(previous_umask)
+
+    source = Path(override["services"]["tempo"]["volumes"][0]["source"])
+    assert source.read_bytes() == b"setting: value\n"
+    assert source.stat().st_mode & 0o777 == (0o600 if sensitive else 0o644)
+
+
 def test_pack_directory_content_for_an_image_node_merges_files_into_target(
     tmp_path, stub_pack
 ):
@@ -948,6 +1010,41 @@ def test_pack_directory_content_for_an_image_node_merges_files_into_target(
     ]
     assert all(mount["read_only"] is True for mount in mounts)
     assert not any(mount["target"] == "/etc/suricata/rules" for mount in mounts)
+
+
+@pytest.mark.parametrize("sensitive", (False, True))
+def test_pack_directory_mount_modes_ignore_boot_umask(tmp_path, stub_pack, sensitive):
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+
+    digest = "sha256:" + "b" * 64
+    stub_pack["rules"] = _StubResolved(
+        _tar_bytes({"nested/reference.conf": b"reference\n"}), digest
+    )
+    spec = _content_spec(
+        content=(
+            _content_item(
+                "pack-directory",
+                dest_relpath="etc/suricata/rules",
+                artifact_id="rules",
+                artifact_digest=digest,
+                sensitive=sensitive,
+            ),
+        )
+    )
+
+    previous_umask = os.umask(0o077)
+    try:
+        override = image_node_content_override(
+            spec, tmp_path / "pack", tmp_path / "engine"
+        )
+    finally:
+        os.umask(previous_umask)
+
+    source = Path(override["services"]["tempo"]["volumes"][0]["source"])
+    assert source.stat().st_mode & 0o777 == (0o600 if sensitive else 0o644)
+    tree = source.parent.parent
+    assert tree.stat().st_mode & 0o777 == (0o700 if sensitive else 0o755)
+    assert source.parent.stat().st_mode & 0o777 == (0o700 if sensitive else 0o755)
 
 
 def test_pack_script_content_for_an_image_node_is_staged_executable(

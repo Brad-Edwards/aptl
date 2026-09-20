@@ -259,7 +259,7 @@ def acquire_canonical_images(
                 text=True,
                 timeout=60,
             )
-            if tagged.returncode != 0:
+            if tagged.returncode != 0 or tagged.stdout.strip() != pinned_id:
                 subprocess.run(
                     ["docker", "tag", pinned_reference, runtime_tag],
                     check=True,
@@ -268,8 +268,6 @@ def acquire_canonical_images(
                     stderr=subprocess.DEVNULL,
                     timeout=60,
                 )
-            elif tagged.stdout.strip() != pinned_id:
-                raise ValueError("Docker runtime tag differs from pinned image")
         save_references = set(references.values()) | set(pinned_runtime_tags)
         for attempt in range(3 if local_images else 1):
             _restore_local_image_tags(local_images)

@@ -230,8 +230,9 @@ def test_saved_manifest_config_pairs_reads_docker_oci_index(
 @pytest.mark.parametrize(
     "repository", ["example.test/participant:fixed", "example.test/participant"]
 )
+@pytest.mark.parametrize("existing_runtime_identity", [None, "sha256:" + "c" * 64])
 def test_image_acquisition_saves_pinned_runtime_tag(
-    tmp_path, monkeypatch, repository
+    tmp_path, monkeypatch, repository, existing_runtime_identity
 ) -> None:
     image_archive = tmp_path / "output" / "oci-images.tar"
     image_roles = tmp_path / "output" / "image-roles.json"
@@ -260,11 +261,13 @@ def test_image_acquisition_saves_pinned_runtime_tag(
     def run(argv, **kwargs):
         calls.append(argv)
         if argv[:5] == ["docker", "image", "inspect", "--format", "{{.Id}}"]:
-            return subprocess.CompletedProcess(
-                argv,
-                1 if argv[-1] in {runtime_tag, compose_tag} else 0,
-                stdout=identity + "\n",
-            )
+            if argv[-1] in {runtime_tag, compose_tag}:
+                return subprocess.CompletedProcess(
+                    argv,
+                    1 if existing_runtime_identity is None else 0,
+                    stdout=(existing_runtime_identity or "") + "\n",
+                )
+            return subprocess.CompletedProcess(argv, 0, stdout=identity + "\n")
         return subprocess.CompletedProcess(argv, 0, stdout="")
 
     monkeypatch.setattr(inputs.subprocess, "run", run)

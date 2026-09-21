@@ -21,7 +21,6 @@ from aptl.backends.raes_docker_materializer import (
     DockerMaterializationSettings,
     MaterializationCommandError,
 )
-from aptl.core.deployment.errors import BackendSeedError
 from aptl.backends.raes_materializer import (
     EnsureDirectoryOp,
     EnsureUserOp,
@@ -31,6 +30,7 @@ from aptl.backends.raes_materializer import (
     ProvisionDomainAuthorityOp,
     SetFilesystemMetadataOp,
 )
+from aptl.core.deployment.errors import BackendSeedError
 
 
 class _FakeExec:
@@ -92,7 +92,7 @@ class TestPackages:
     def test_preinstalled_packages_need_no_index_or_install(self):
         def responder(container, argv):
             if "dpkg-query" in argv:
-                return 0, "postgresql\n"
+                return 0, "ii  postgresql\n"
             raise AssertionError(f"unexpected package command: {argv}")
 
         fake = _FakeExec(responder)
@@ -138,7 +138,7 @@ class TestPackages:
     def test_observe_installed_parses_manager_query_output(self):
         def responder(container, argv):
             if "dpkg-query" in argv:
-                return 0, "curl\nwazuh-manager\n"
+                return 0, "ii  curl\nii  wazuh-manager\n"
             return 0, ""
 
         observed = _executor(_FakeExec(responder)).observe_installed_packages(
@@ -665,10 +665,11 @@ class TestPackArtifactPlacement:
         self, tmp_path, stub_pack, directory, sensitive
     ):
         import os
-        from aptl.core.deployment.realization import DeploymentContentRealization
+
         from aptl.core.deployment._compose_image_free_realization import (
             _content_placement_op,
         )
+        from aptl.core.deployment.realization import DeploymentContentRealization
 
         digest = "sha256:" + "a" * 64
         stub_pack["config"] = _StubResolved(

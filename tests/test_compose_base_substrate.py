@@ -606,14 +606,27 @@ class TestStartBaseContainerVolumesAndPorts:
             "suricata_command_socket"
         )
 
-    def test_published_port_defaults_host_port_to_container_port(self, tmp_path):
+    def test_published_port_without_a_host_port_publishes_ephemerally(self, tmp_path):
+        """An unfixed binding asks Docker to choose the host port.
+
+        ``host_port=None`` is the author declaring a container port with *no*
+        fixed host binding. Substituting the container port number turned that
+        into an exact binding the author never wrote, and
+        ``published_port_conflicts`` skips its probe for exactly these bindings
+        because one with no host port "cannot conflict" — so the invented
+        binding was also never checked, and a host port already in use failed
+        the boot with a raw Docker error instead of APTL's fail-closed message.
+        """
+
         backend = _backend(tmp_path)
         spec = BaseContainerSpec(
             node_address="provision.node.webapp",
             container_name="aptl-webapp",
             image_ref="debian:13-slim",
             runs_services=False,
-            published_ports=(PublishedPort(container_port=8080),),
+            published_ports=(
+                PublishedPort(container_port=8080, host_ip="127.0.0.1"),
+            ),
         )
 
         with patch("subprocess.run") as mock_run:
@@ -627,7 +640,48 @@ class TestStartBaseContainerVolumesAndPorts:
         )
         argv = run_call.args[0]
         assert "-p" in argv
-        assert "8080:8080/tcp" in argv
+        assert "127.0.0.1::8080/tcp" in argv
+        assert "127.0.0.1:8080:8080/tcp" not in argv
+
+    def test_unfixed_binding_agrees_with_the_compose_path(self, tmp_path):
+        """The same declaration must realize the same way on both paths.
+
+        An image-free node is realized by ``docker run -p`` here; an
+        image-backed one by the Compose port override. A declaration that
+        publishes ephemerally through one and exactly through the other is the
+        realization divergence this pins shut.
+        """
+
+        from aptl.core.deployment._compose_port_realization import compose_port_entry
+        from aptl.core.deployment.realization import DeploymentPublishedPort
+
+        compose_entry = compose_port_entry(
+            DeploymentPublishedPort(container_port=8080, host_ip="127.0.0.1")
+        )
+        assert "published" not in compose_entry
+
+        backend = _backend(tmp_path)
+        spec = BaseContainerSpec(
+            node_address="provision.node.webapp",
+            container_name="aptl-webapp",
+            image_ref="debian:13-slim",
+            runs_services=False,
+            published_ports=(
+                PublishedPort(container_port=8080, host_ip="127.0.0.1"),
+            ),
+        )
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+            )
+            backend.start_base_container(spec)
+
+        run_call = next(
+            c for c in mock_run.call_args_list if c.args[0][:2] == ["docker", "run"]
+        )
+        published = run_call.args[0][run_call.args[0].index("-p") + 1]
+        assert published.split(":")[1] == "", published
 
     def test_published_port_honours_explicit_host_ip_and_host_port(self, tmp_path):
         backend = _backend(tmp_path)

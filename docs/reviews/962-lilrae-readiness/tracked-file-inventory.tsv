@@ -1806,3 +1806,7 @@ tools/workshop/arsenal-2026/launch-ranges.sh.txt	architecture-history	Preserve n
 tools/workshop/arsenal-2026/provision-range.sh.txt	architecture-history	Preserve non-executable historical provisioning source
 tools/workshop/arsenal-2026/setup-purple-demo.sh.txt	architecture-history	Preserve non-executable historical provisioning source
 tools/workshop/arsenal-2026/setup-rdp.sh.txt	architecture-history	Preserve non-executable historical provisioning source
+docs/architecture/issue-993-boot-realization-regressions-preflight.md	architecture-history	Preserve boot realization regression decisions and coverage guardrails
+docs/testing/boot-realization-coverage.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+scripts/ci/assert_boot_realization.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+tests/test_boot_realization_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

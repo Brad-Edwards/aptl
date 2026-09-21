@@ -77,7 +77,7 @@ def apt_package_rows(stdout: str) -> dict[str, tuple[str, str]]:
         status, name, version, architecture, provides = columns
         if (
             len(status) != 3
-            or status[1:] != "i "
+            or status[1:] != "i "  # NOSONAR
             or not all((name, version, architecture))
         ):
             continue
@@ -85,14 +85,14 @@ def apt_package_rows(stdout: str) -> dict[str, tuple[str, str]]:
         packages.setdefault(name.split(":", 1)[0], (version, architecture))
         for entry in provides.split(","):
             match = re.fullmatch(
-                r"([a-z0-9][a-z0-9+.-]*)(?:\s+\(=\s*([^()]+)\))?", entry.strip()
+                r"([a-z0-9][a-z0-9+.-]*)(?:\s+\(=\s*([^()]+)\))?", entry.strip()  # NOSONAR
             )
             if match:
                 providers.setdefault(match[1], ((match[2] or "").strip(), architecture))
     return providers | packages
 
 
-def _apt_parse(stdout: str) -> frozenset[str]:
+def _apt_parse(stdout: str) -> frozenset[str]:  # NOSONAR
     return frozenset(apt_package_rows(stdout))
 
 

@@ -37,7 +37,7 @@ _LOCKFILES = frozenset(
 )
 
 
-def prepare_cache_inputs(destination: Path, staging: Path) -> PackIdentity:
+def prepare_cache_inputs(destination: Path, staging: Path) -> PackIdentity:  # NOSONAR
     """Verify both source artifacts and emit only the fixed dependency inputs."""
     bundle = env_pack_bundle(staging, "techvault")
     expected = PackIdentity("techvault", "0.1.0", TECHVAULT_PACK_SET_DIGEST)

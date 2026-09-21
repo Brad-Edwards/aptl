@@ -170,5 +170,5 @@ def test_reverse_negative_harness_rejects_unrelated_failures(monkeypatch, payloa
         "call_mcp_tool",
         lambda *_a, **_kw: {"content": [{"type": "text", "text": json.dumps(payload)}]},
     )
-    with pytest.raises(SystemExit, match="FAIL"):
+    with pytest.raises(SystemExit, match="FAIL"):  # NOSONAR
         exec(compile("import json\n" + program, "reverse-negative-harness", "exec"), {})

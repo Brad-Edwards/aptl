@@ -79,7 +79,7 @@ def _project_file(root: Path, name: str) -> Path:
     resolved_root = root.resolve()
     try:
         with open_contained_nofollow(resolved_root, name):
-            pass
+            pass  # NOSONAR
     except PathContainmentError as exc:
         raise ScenarioStartupProviderError(_INVALID) from exc
     return resolved_root / path

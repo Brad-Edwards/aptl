@@ -233,12 +233,63 @@ def test_drive_workflows_persists_run_archive_artifacts(tmp_path):
 
     address = next(iter(orchestrator.results()))
     safe_address = address.replace("/", "_")
-    assert (
-        tmp_path / "runs" / run_id / "orchestration" / safe_address / "result.json"
-    ).is_file()
-    assert (
-        tmp_path / "runs" / run_id / "orchestration" / safe_address / "history.jsonl"
-    ).is_file()
+    archive = tmp_path / "runs" / run_id / "orchestration" / safe_address
+    assert (archive / "result.json").is_file()
+    assert (archive / "history.jsonl").is_file()
+
+
+def test_persisted_history_is_the_portable_event_stream(tmp_path):
+    """The archive must hold the events, not the shape of one.
+
+    ``append_jsonl`` takes a *list* of records and redacts each one, so handing
+    it a single event mapping iterated that mapping and wrote one JSON string
+    per key — a ``history.jsonl`` of ``"event_type"``, ``"timestamp"``, ...
+    with every fact gone. The file existed, which is exactly why a presence
+    check never saw it (issue #993).
+    """
+
+    import json
+
+    from raes_contracts.workflow import WorkflowHistoryEvent
+
+    from aptl.core.runstore import LocalRunStore
+
+    orchestrator = AptlOrchestrator()
+    orchestrator.start(_orchestration_plan(), RuntimeSnapshot())
+    store = LocalRunStore(tmp_path / "runs")
+    run_id = "run-993"
+    store.create_run(run_id)
+
+    orchestrator.drive_workflows(
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED,
+        },
+        run_store=store,
+        run_id=run_id,
+    )
+
+    address = next(iter(orchestrator.results()))
+    history_path = (
+        tmp_path
+        / "runs"
+        / run_id
+        / "orchestration"
+        / address.replace("/", "_")
+        / "history.jsonl"
+    )
+    lines = [
+        line for line in history_path.read_text(encoding="utf-8").splitlines() if line
+    ]
+    persisted = [json.loads(line) for line in lines]
+
+    assert persisted == orchestrator.history()[address]
+    for event in persisted:
+        assert isinstance(event, dict)
+        WorkflowHistoryEvent.from_payload(event)
+    assert any(
+        event["event_type"] == WorkflowHistoryEventType.WORKFLOW_COMPLETED.value
+        for event in persisted
+    )
 
 
 def test_drive_workflows_reports_drive_failure():

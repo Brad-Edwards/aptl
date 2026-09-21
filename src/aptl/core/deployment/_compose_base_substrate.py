@@ -299,13 +299,23 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
 
     @staticmethod
     def _append_base_ports(argv: list[str], spec: "BaseContainerSpec") -> None:
-        """Append exact declared host publications to a base-container command."""
+        """Append declared host publications to a base-container command.
+
+        An absent ``host_port`` is the author declaring a container port with no
+        fixed host binding, so the host side is left empty and Docker chooses an
+        ephemeral port — the same realization the Compose override produces for
+        the identical declaration (``compose_port_entry`` emits no
+        ``published``). Substituting the container port number instead invented
+        an exact binding the author never wrote, and
+        ``published_port_conflicts`` skips its probe for a binding with no host
+        port, so the invented one was never checked either: a host port already
+        in use then failed the boot with a raw Docker error rather than APTL's
+        own fail-closed message.
+        """
 
         for port in spec.published_ports:
             host = f"{port.host_ip}:" if port.host_ip else ""
-            host_port = (
-                port.host_port if port.host_port is not None else port.container_port
-            )
+            host_port = "" if port.host_port is None else str(port.host_port)
             argv.extend(
                 ("-p", f"{host}{host_port}:{port.container_port}/{port.protocol}")
             )

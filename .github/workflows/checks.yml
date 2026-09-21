@@ -284,6 +284,29 @@ jobs:
           test "$(docker exec "$container_id" id -u analyst)" -gt 0
           test "$(docker exec "$container_id" \
             stat -c '%U:%G %a' /var/lib/aptl-smoke)" = "analyst:analysts 750"
+      - name: Verify the realization regressions the scenario declares
+        # Issue #993. The checks above observe packages, accounts and
+        # filesystem state; these are the realization surfaces that shipped
+        # defects the boot gate could not see: content that must execute, the
+        # service it configures, the listener and host publication that service
+        # produces, and the orchestrator workflow. They form one causal chain,
+        # so the content placement cannot silently no-op and leave the rest
+        # passing. The verifier runs from the clean venv, against the installed
+        # package's own identities.
+        run: |
+          cd "$RUNNER_TEMP/clean-install/ci-lab"
+          "$RUNNER_TEMP/clean-venv/bin/python" \
+            "$GITHUB_WORKSPACE/scripts/ci/assert_boot_realization.py" . \
+            --node-address provision.node.smoke-box \
+            --content-path /etc/ssh/sshd_config.d/10-aptl-smoke.conf \
+            --content-text $'Port 2022\n' \
+            --unit-name ssh.service \
+            --container-port 2022 \
+            --protocol tcp \
+            --host-ip 127.0.0.1 \
+            --host-port 32022 \
+            --endpoint-banner-prefix SSH- \
+            --workflow-address orchestration.workflow.smoke-control
       - name: Stop the lab and remove its volumes
         if: always()
         run: |

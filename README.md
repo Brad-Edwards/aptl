@@ -87,6 +87,14 @@ The APTL operator UI, vulnerable target applications, and third-party SOC
 interfaces are separate surfaces. The selected scenario determines which ones
 exist.
 
+## Scenarios
+
+The APTL startup catalog exposes the scenario selections supported by the
+installed release. Reusable environment-pack definitions and authoring support
+live in the companion [OpenRAE/env-packs](https://github.com/OpenRAE/env-packs)
+repository; APTL owns admission, realization, readiness, and operation of the
+selected scenario in the local lab.
+
 ## Documentation
 
 The published site is the canonical user manual:

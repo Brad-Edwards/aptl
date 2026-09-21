@@ -352,7 +352,12 @@ def test_broker_relays_characters_and_interrupt_bytes_and_restores_outer_termina
     monkeypatch.setattr(broker, "_relay", relay)
     try:
         assert broker.run_broker() == 0
-        assert termios.tcgetattr(slave) == saved
+        restored = termios.tcgetattr(slave)
+        # Darwin may report PENDIN after switching back to canonical mode.
+        # It is kernel-maintained input state, not a configured terminal mode.
+        for attributes in (saved, restored):
+            attributes[3] &= ~getattr(termios, "PENDIN", 0)
+        assert restored == saved
     finally:
         os.close(master)
         os.close(slave)

@@ -6,7 +6,6 @@ import pytest
 
 from aptl.backends.identity import BackendIdentity
 from aptl.backends.pack_interaction import PackBackendInteractionContext
-from aptl.backends.raes_profiles import OPERATOR_GROUP_VOCABULARY
 from aptl.core.scenario_bundle import PackIdentity
 from aptl_techvault.serving import TechVaultPackInteraction
 
@@ -24,7 +23,6 @@ def _context(*addresses: str) -> PackBackendInteractionContext:
         pack=PACK,
         backend=BACKEND,
         component_addresses=tuple(sorted(addresses)),
-        operator_groups=OPERATOR_GROUP_VOCABULARY,
     )
 
 

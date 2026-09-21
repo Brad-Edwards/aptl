@@ -52,7 +52,7 @@ def test_project_tree_keeps_qualified_legacy_startup(tmp_path: Path) -> None:
 
 
 def test_adapter_selects_only_its_declared_capabilities(tmp_path: Path) -> None:
-    from aptl.backends.scenario_startup import ScenarioStartupPlan, StartupCapability
+    from aptl.backends.scenario_startup import ScenarioStartupPlan, StartupHook
     from aptl.core.lab import _LabStartContext, _selected_start_steps
 
     ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
@@ -61,15 +61,15 @@ def test_adapter_selects_only_its_declared_capabilities(tmp_path: Path) -> None:
         seed_script="scripts/seed.sh",
         required_profiles=("soc",),
         activation_profiles=("soc",),
-        lifecycle_capabilities=frozenset({StartupCapability.SOC}),
+        startup_hooks=frozenset({StartupHook.STACK_ENVIRONMENT}),
     )
 
     names = {step.__name__ for step in _selected_start_steps(ctx)}
 
     assert "_step_seed_soc" in names
     assert "_step_generate_soc_certs" in names
-    assert "_step_sync_credentials" not in names
-    assert "_step_wait_for_services" not in names
+    assert "_step_sync_credentials" in names
+    assert "_step_wait_for_services" in names
     assert "_step_build_mcps" not in names
 
 

@@ -1,4 +1,4 @@
-"""Native readiness queries for the two TechVault readiness demands.
+"""Adapter-owned readiness queries for the TechVault readiness demands.
 
 Kept beside :mod:`techvault_native` rather than inside it so neither file grows
 past its size budget, and so the readiness contract released with
@@ -20,12 +20,12 @@ from urllib.parse import urlparse
 
 from pathlib import Path
 
-from aptl.core.evidence.adapters.techvault_enrollment_baseline import (
+from aptl_techvault.evidence.techvault_enrollment_baseline import (
     enrollment_baseline,
     record_enrollment_baseline,
 )
-from aptl.core.evidence.adapters.techvault_misp_readiness import AdmittedMispState
-from aptl.core.evidence.adapters.techvault_readiness_probes import (
+from aptl_techvault.evidence.techvault_misp_readiness import AdmittedMispState
+from aptl_techvault.evidence.techvault_readiness_probes import (
     agent_identity,
     misp_readiness_probe,
     telemetry_events,

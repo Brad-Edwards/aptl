@@ -1,4 +1,4 @@
-"""Native endpoint-agent readiness evidence for the TechVault scenario.
+"""Adapter-owned endpoint-agent readiness evidence for TechVault.
 
 The released pack's ``wazuh-agent-readiness`` requirement is per host, not per
 fleet. For each node that declares a forwarding agent it asks for exactly one

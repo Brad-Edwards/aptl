@@ -1,26 +1,17 @@
-"""Acquire the admitted TechVault native evidence into the run ledger."""
+"""Acquire adapter-supplied native evidence into the run ledger."""
 
 from __future__ import annotations
 
 import json
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from aptl.core.correlation.clock import ClockProvider, SystemClockProvider
-from aptl.core.evidence.adapters.sources import (
-    SourceResult,
-    WindowedSource,
-    _to_outcome,
-)
-from aptl.core.evidence.adapters import techvault_native as _techvault_native
-from aptl.core.evidence.content_store import create_run_json_once
 from aptl.core.evidence.coordinator import AcquisitionResult, acquire_evidence
-from aptl.core.evidence.outcomes import AcquisitionDisposition, CollectorStatus
-from aptl.core.evidence.protocol import CollectorContext, CollectorOutcome, RunScope
+from aptl.core.evidence.outcomes import AcquisitionDisposition
+from aptl.core.evidence.protocol import RunScope
 from aptl.core.experiment.capture_registry import CaptureBinding
 from aptl.core.runstore import LocalRunStore
 from aptl.utils.pathsafe import (
@@ -31,138 +22,21 @@ from aptl.utils.pathsafe import (
     open_contained_nofollow,
     read_contained_nofollow,
 )
-from aptl.backends._raes_transcript_parsing import (
-    FinalizedTranscriptCollector as _FinalizedTranscriptCollector,
-    TRANSCRIPT_REGISTRATION,
-    binding_from_projection as _binding_from_projection,
+from aptl.backends.identity import BackendIdentity
+from aptl.backends.scenario_capture import (
+    ResolvedScenarioCapture,
+    ScenarioCaptureContext,
 )
+from aptl.backends.scenario_capture_discovery import resolve_scenario_capture
 
 if TYPE_CHECKING:
     from aptl.core.experiment.capture_plan import CapturePlan
 
 
-NATIVE_TECHVAULT_REGISTRATIONS = frozenset(
-    {
-        "aptl.collector.cortex-enrichment",
-        "aptl.collector.misp-authenticated-api-readiness",
-        "aptl.collector.suricata-rule-readiness",
-        "aptl.collector.suricata-wazuh-sqli",
-        "aptl.collector.wazuh-agent-readiness",
-    }
-)
 _ACTIVE_AUTHORITY_DIR = ".aptl/capture-authorities"
 _FINALIZED_AUTHORITY_DIR = ".aptl/capture-finalized"
 _FAILED_ACTIVATION_DIR = ".aptl/capture-activation-failed"
 _FAILED_FINALIZATION_DIR = ".aptl/capture-finalization-failed"
-
-TechVaultNativeEvidenceOwner = _techvault_native.TechVaultNativeEvidenceOwner
-
-
-@dataclass(frozen=True)
-class _OnDemandHandle:
-    """Collector context and the exact native-check start instant."""
-
-    context: CollectorContext
-    started_at: str
-
-
-def _parse_timestamp(value: str) -> datetime:
-    """Parse the canonical UTC timestamp form emitted by capture clocks."""
-
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-
-def _deadline(started_at: str, seconds: float) -> str:
-    """Return the admitted deadline measured from a collector start."""
-
-    value = _parse_timestamp(started_at) + timedelta(seconds=seconds)
-    return value.isoformat().replace("+00:00", "Z")
-
-
-def _source_times_inside_actual_window(
-    result: SourceResult, started_at: str, finished_at: str
-) -> bool:
-    """Return whether all reported source instants fit the actual window."""
-
-    try:
-        start = _parse_timestamp(started_at)
-        finish = _parse_timestamp(finished_at)
-        source_min = (
-            _parse_timestamp(result.source_min_time)
-            if result.source_min_time is not None
-            else None
-        )
-        source_max = (
-            _parse_timestamp(result.source_max_time)
-            if result.source_max_time is not None
-            else None
-        )
-    except (TypeError, ValueError):
-        return False
-    return (
-        start <= finish
-        and (source_min is None or start <= source_min <= finish)
-        and (source_max is None or start <= source_max <= finish)
-        and (source_min is None or source_max is None or source_min <= source_max)
-    )
-
-
-class _OnDemandNativeCollector:
-    """Run one bounded native check and close its window after the check.
-
-    The native TechVault checks create fresh evidence while ``fetch`` runs.
-    The query receives the admitted future deadline, but the outcome records
-    the actual post-query finish. Source timestamps outside that actual window
-    are rejected as clock skew.
-    """
-
-    def __init__(self, registration_id: str, source: WindowedSource) -> None:
-        self._registration_id = registration_id
-        self._source = source
-
-    @property
-    def registration_id(self) -> str:
-        return self._registration_id
-
-    @staticmethod
-    def start(context: CollectorContext) -> _OnDemandHandle:
-        return _OnDemandHandle(context=context, started_at=context.clock.now())
-
-    def stop(self, handle: _OnDemandHandle) -> CollectorOutcome:
-        result = self._source.fetch(
-            handle.started_at,
-            _deadline(handle.started_at, handle.context.deadline_seconds),
-        )
-        finished_at = handle.context.clock.now()
-        if not _source_times_inside_actual_window(
-            result, handle.started_at, finished_at
-        ):
-            result = SourceResult(status=CollectorStatus.CLOCK_SKEW)
-        return _to_outcome(result, handle.started_at, finished_at)
-
-
-def _native_bindings(plan: CapturePlan) -> tuple[CaptureBinding, ...]:
-    """Select immediate TechVault bindings while excluding the transcript."""
-
-    return tuple(
-        binding
-        for binding in plan.runtime_bindings()
-        if binding.registration_id in NATIVE_TECHVAULT_REGISTRATIONS
-    )
-
-
-def _persist_capture_plan(
-    plan: CapturePlan, run_store: LocalRunStore, run_id: str
-) -> None:
-    """Create the run and seal the admitted capture plan exactly once."""
-
-    run_store.create_run(run_id)
-    create_run_json_once(
-        run_store,
-        run_id,
-        f"evidence/capture-plans/{plan.plan_id}.json",
-        json.loads(plan.canonical_bytes),
-    )
 
 
 def persist_active_transcript_authority(
@@ -172,12 +46,14 @@ def persist_active_transcript_authority(
     binding: CaptureBinding,
     run_store: LocalRunStore,
     run_id: str,
+    capture_selection: ResolvedScenarioCapture,
 ) -> None:
     """Persist the minimum restart-safe authority needed to finalize at stop."""
 
     if not isinstance(run_store, LocalRunStore):
         raise TypeError("transcript capture requires a local run store")
-    if binding.registration_id != TRANSCRIPT_REGISTRATION:
+    transcript_id = capture_selection.contribution.transcript_registration_id
+    if transcript_id is None or binding.registration_id != transcript_id:
         raise ValueError("unsupported transcript binding")
     _persist_capture_plan(plan, run_store, run_id)
     payload = {
@@ -186,6 +62,19 @@ def persist_active_transcript_authority(
         "run_store_base": str(run_store.base_dir),
         "capture_plan_id": plan.plan_id,
         "binding": binding.binding_projection(),
+        "capture_adapter": {
+            "pack_id": capture_selection.context.pack.pack_id,
+            "pack_version": capture_selection.context.pack.pack_version,
+            "pack_set_digest": capture_selection.context.pack.set_digest,
+            "backend_target_name": capture_selection.context.backend.target_name,
+            "backend_target_version": capture_selection.context.backend.target_version,
+            "backend_profile": capture_selection.context.backend.profile,
+            "backend_transport": capture_selection.context.backend.transport,
+            "provider_id": capture_selection.provider_id,
+            "distribution": capture_selection.distribution,
+            "distribution_version": capture_selection.distribution_version,
+            "entry_point": capture_selection.entry_point,
+        },
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     relative = f"{_ACTIVE_AUTHORITY_DIR}/{run_id}.json"
@@ -421,6 +310,7 @@ def _validated_activation_time(
     run_id: str,
     plan_id: str,
     clock: ClockProvider,
+    transcript_registration_id: str,
 ) -> tuple[object | None, str]:
     """Validate broker authority and return a safe payload/start boundary."""
 
@@ -428,7 +318,7 @@ def _validated_activation_time(
     expected_authority = {
         "run_id": run_id,
         "plan_id": plan_id,
-        "binding_id": TRANSCRIPT_REGISTRATION,
+        "binding_id": transcript_registration_id,
     }
     valid = isinstance(authority, Mapping) and all(
         authority.get(key) == value for key, value in expected_authority.items()
@@ -451,7 +341,18 @@ def finalize_active_transcript_authority(
     store_base = Path(str(state["run_store_base"])).resolve()
     if store_base != expected_run_store_base.resolve():
         raise ValueError("transcript run store does not match configured run storage")
-    binding = _binding_from_projection(state["binding"])
+    capture_selection = _capture_selection_from_state(state)
+    runtime_adapter = capture_selection.contribution.runtime_adapter
+    binding_loader = getattr(runtime_adapter, "binding_from_projection", None)
+    collector_factory = getattr(runtime_adapter, "finalized_transcript_collector", None)
+    if not callable(binding_loader) or not callable(collector_factory):
+        raise ValueError("capture adapter cannot finalize transcripts")
+    binding = binding_loader(state["binding"])
+    if not isinstance(binding, CaptureBinding):
+        raise ValueError("capture adapter returned an invalid binding")
+    transcript_id = capture_selection.contribution.transcript_registration_id
+    if transcript_id is None or binding.registration_id != transcript_id:
+        raise ValueError("capture adapter transcript identity mismatch")
     plan_id = str(state["capture_plan_id"])
     run_id = str(state["run_id"])
     if binding.capture_spec_id != plan_id:
@@ -462,8 +363,9 @@ def finalize_active_transcript_authority(
         run_id=run_id,
         plan_id=plan_id,
         clock=active_clock,
+        transcript_registration_id=transcript_id,
     )
-    collector = _FinalizedTranscriptCollector(binding, payload, activated_at)
+    collector = collector_factory(binding, payload, activated_at)
     result = acquire_evidence(
         bindings=(binding,),
         collectors={binding.registration_id: collector},
@@ -480,16 +382,64 @@ def finalize_active_transcript_authority(
     return result
 
 
+def _capture_selection_from_state(
+    state: Mapping[str, object],
+) -> ResolvedScenarioCapture:
+    """Re-resolve the exact persisted adapter and reject provenance drift."""
+
+    from aptl.core.scenario_bundle import PackIdentity
+
+    adapter = state.get("capture_adapter")
+    if not isinstance(adapter, Mapping):
+        raise ValueError("active authority has no capture adapter identity")
+    try:
+        context = ScenarioCaptureContext(
+            pack=PackIdentity(
+                str(adapter["pack_id"]),
+                str(adapter["pack_version"]),
+                str(adapter["pack_set_digest"]),
+            ),
+            backend=BackendIdentity(
+                str(adapter["backend_target_name"]),
+                str(adapter["backend_target_version"]),
+                str(adapter["backend_profile"]),
+                transport=str(adapter["backend_transport"]),
+            ),
+        )
+    except KeyError:
+        raise ValueError("active authority capture adapter is incomplete") from None
+    resolved = resolve_scenario_capture(context)
+    observed = (
+        resolved.provider_id,
+        resolved.distribution,
+        resolved.distribution_version,
+        resolved.entry_point,
+    )
+    expected = tuple(
+        str(adapter[name])
+        for name in (
+            "provider_id",
+            "distribution",
+            "distribution_version",
+            "entry_point",
+        )
+    )
+    if observed != expected:
+        raise ValueError("capture adapter provenance changed")
+    return resolved
+
+
 from aptl.backends._raes_native_evidence_acquisition import (
     NativeEvidenceRequest,
+    _OnDemandNativeCollector,
+    _persist_capture_plan,
     acquire_native_evidence,
 )
 
 
 __all__ = (
-    "NATIVE_TECHVAULT_REGISTRATIONS",
     "NativeEvidenceRequest",
-    "TRANSCRIPT_REGISTRATION",
+    "_OnDemandNativeCollector",
     "acquire_native_evidence",
     "finalize_active_transcript_authority",
     "load_active_transcript_authorities",

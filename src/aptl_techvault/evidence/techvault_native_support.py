@@ -1,4 +1,4 @@
-"""Pure support functions for TechVault's native evidence owner."""
+"""Pure adapter support functions for TechVault native evidence."""
 
 from __future__ import annotations
 

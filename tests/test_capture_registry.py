@@ -115,7 +115,7 @@ def _bind_reference(
 
 
 def test_best_effort_tempo_delivery_cannot_admit_required_loss_accounting():
-    from aptl.core.experiment.capture_registrations import BUILTIN_REGISTRATIONS
+    from aptl_techvault.capture_registrations import BUILTIN_REGISTRATIONS
 
     tempo = next(
         item
@@ -400,9 +400,9 @@ class TestObservationProjection:
         # now populated (EXP-010 PR 2 turned the fleet on).
         assert CollectorRegistry().observation_projection() is None
 
-    def test_default_registry_is_populated_and_projects_observation(self):
-        assert DEFAULT_COLLECTOR_REGISTRY.registrations
-        assert DEFAULT_COLLECTOR_REGISTRY.observation_projection() is not None
+    def test_core_default_registry_is_empty(self):
+        assert DEFAULT_COLLECTOR_REGISTRY.registrations == ()
+        assert DEFAULT_COLLECTOR_REGISTRY.observation_projection() is None
 
     def test_populated_registry_aggregates_declarations(self):
         registry = CollectorRegistry(

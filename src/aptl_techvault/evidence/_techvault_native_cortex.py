@@ -1,4 +1,4 @@
-"""Cortex analyzer execution and TheHive connector projection."""
+"""TechVault Cortex analyzer execution and TheHive connector projection."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ import json
 import time
 from collections.abc import Mapping
 
-from aptl.core.evidence.adapters.techvault import (
+from aptl_techvault.evidence.techvault import (
     CORTEX_ANALYZER_ID,
     CORTEX_OBSERVABLE,
 )
-from aptl.core.evidence.adapters.techvault_native_support import (
+from aptl_techvault.evidence.techvault_native_support import (
     bounded,
     connector_projection,
 )

@@ -1,16 +1,14 @@
-"""The trusted built-in collector registrations (EXP-010 / issue #752 PR 2).
+"""The TechVault collector registrations (EXP-010 / issue #980).
 
-Split out of :mod:`aptl.core.experiment.capture_registry` (which imports these
-at its foot into :data:`~aptl.core.experiment.capture_registry.
-DEFAULT_COLLECTOR_REGISTRY`) so the registration DATA lives apart from the
-registry/binding TYPES and matching logic — keeping both files within budget.
+These declarations are owned and exported by the installed TechVault adapter.
+Core's default registry stays empty; exact adapter discovery supplies this
+registry only for an admitted TechVault pack/backend pairing.
 
 Each registration is a static capability declaration only — no factory, import
 path, or executable reference. The trusted adapter wiring that maps a
 ``registration_id`` to a live :class:`~aptl.core.evidence.protocol.Collector`
-lives in :mod:`aptl.core.evidence.adapters.wiring`. Turning these on is what
-flips ``create_aptl_manifest().observation`` from ``None`` to a real aggregate
-projection — done together with the acquisition machinery (the honesty rule).
+lives behind the selected adapter's runtime contribution. Passing this registry
+to ``create_aptl_manifest`` turns on its real aggregate observation projection.
 
 ``channel_kind`` / ``capture_kind`` / sealing use governed RAES
 controlled-vocabulary terms (``observation-channel-kinds`` /

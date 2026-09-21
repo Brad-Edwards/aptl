@@ -350,6 +350,30 @@ def test_sqli_owner_keeps_probe_body_off_argv_and_requires_flow_join(tmp_path):
     assert result.observer_effect == "one fixed POST /login containing UNION SELECT"
 
 
+def test_suricata_query_reads_recent_events_from_a_large_native_log(tmp_path):
+    log = tmp_path / "eve.json"
+    event = {
+        "timestamp": _FINISH,
+        "src_ip": "172.20.1.40",
+        "dest_ip": "172.20.1.20",
+        "flow_id": 42,
+        "alert": {"signature_id": 1000010},
+    }
+    # Exercise the real tail command, including a cut through an older line.
+    log.write_text(
+        "x" * (techvault_native.MAX_SOURCE_BYTES + 100)
+        + "\n"
+        + json.dumps(event)
+        + "\n"
+    )
+    backend = _Backend()
+    backend.container_exec = lambda _name, argv, *, timeout: subprocess.run(
+        [*argv[:-1], str(log)], capture_output=True, text=True, timeout=timeout
+    )
+
+    assert _owner(tmp_path, backend).query_suricata(_START, _END) == [event]
+
+
 def test_missing_connector_credential_is_source_unavailable(tmp_path):
     realization = _realization(tmp_path)
     key = (

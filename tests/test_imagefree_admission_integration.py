@@ -71,6 +71,11 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
         _REPO_ROOT / "containers" / "generic-systemd-base-debian",
         tmp_path / "containers" / "generic-systemd-base-debian",
     )
+    (tmp_path / "requirements").mkdir()
+    shutil.copyfile(
+        _REPO_ROOT / "requirements" / "runtime.txt",
+        tmp_path / "requirements" / "runtime.txt",
+    )
     container = "aptl-smoke-box"
     subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
 

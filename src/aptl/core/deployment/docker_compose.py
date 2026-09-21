@@ -152,6 +152,7 @@ class DockerComposeBackend(
             | None
         ) = None
         self._boundary_receipts: dict[str, dict[str, object]] = {}
+        self._boundary_specs: dict[str, object] = {}
         self._boundary_helper_image = DEFAULT_BOUNDARY_HELPER_IMAGE
         # ADR-088 phased startup (issue #889): safe portable readback evidence
         # from each proven service-search-index-schema materialization, keyed by

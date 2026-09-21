@@ -76,11 +76,13 @@ class TestBaseContainerSpec:
         spec = base_container_spec(
             "n.node", os="linux", os_version="", runtime=_runtime_with_service()
         )
-        # A distinct, init-capable generic substrate (not the minimal base).
+        # Offline non-service nodes share the package-complete Debian image,
+        # but only a service node receives init/run capabilities.
         non_service = base_container_spec(
             "n.node", os="linux", os_version="", runtime=None
         )
-        assert spec.image_ref != non_service.image_ref
+        assert spec.image_ref == non_service.image_ref
+        assert non_service.init is None
         # The validated systemd run requirements are carried, not fabricated per call.
         assert spec.init is not None
         assert "SYS_ADMIN" in spec.init.capabilities

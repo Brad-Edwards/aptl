@@ -40,7 +40,8 @@ class _FakeBackend:
         # Emulate the real container: mutations accumulate, observers read back.
         if cmd[:1] == ["dpkg-query"]:
             return SimpleNamespace(
-                returncode=0, stdout="\n".join(sorted(self.installed)) + "\n"
+                returncode=0,
+                stdout="".join(f"ii  {name}\n" for name in sorted(self.installed)),
             )
         if "install" in cmd:
             self.installed.update(a for a in cmd if a in {"curl", "wazuh-manager"})

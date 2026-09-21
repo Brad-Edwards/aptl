@@ -15,7 +15,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 import icontract
 import yaml
@@ -134,6 +134,12 @@ class ApplianceStartOptions:
     launch_descriptor: Path | None = None
     release_public_key: Path | None = None
     qualification_public_key: Path | None = None
+    readiness_challenge: Path | None = None
+    readiness_device: Path | None = None
+    access_request: Path | None = None
+    access_device: Path | None = None
+    access_output_dir: Path | None = None
+    candidate_trust: bool = False
 
 
 @dataclass(frozen=True)
@@ -938,6 +944,12 @@ class _LabStartContext(object):
     appliance_launch_descriptor: Path | None = None
     appliance_release_public_key: Path | None = None
     appliance_qualification_public_key: Path | None = None
+    appliance_readiness_challenge: Path | None = None
+    appliance_readiness_device: Path | None = None
+    appliance_access_request: Path | None = None
+    appliance_access_device: Path | None = None
+    appliance_access_output_dir: Path | None = None
+    appliance_candidate_trust: bool = False
     scenario_path: Path | None = None
     progress: ProgressCallback | None = None
     raw_env: dict[str, str] = field(default_factory=dict)
@@ -1218,8 +1230,16 @@ def _step_resolve_host_ports(ctx: _LabStartContext) -> LabResult | None:
         active_profiles = set(ctx.config.containers.enabled_profiles())
     assert ctx.backend is not None
     existing_bindings = port_bindings.project_port_bindings(ctx.backend)
+    # An acquired scenario has its own Compose model (or a generated one).
+    # Probing the checkout's legacy model invents remaps that its exact RAES
+    # publications never consume, so subsequent readiness probes go astray.
+    port_root = (
+        ctx.admitted_surface.bundle_root
+        if ctx.admitted_surface is not None
+        else ctx.project_dir
+    )
     ctx.resolved_ports = host_ports.resolve_host_ports(
-        ctx.project_dir,
+        port_root,
         reserved_env=set(ctx.raw_env),
         active_profiles=active_profiles,
         existing_bindings=existing_bindings,
@@ -1312,6 +1332,25 @@ def _configure_verified_appliance_launch(
     descriptor_path = ctx.appliance_launch_descriptor
     if descriptor_path is None:
         return None
+    readiness = (
+        ctx.appliance_readiness_challenge,
+        ctx.appliance_readiness_device,
+    )
+    if any(readiness) != all(readiness):
+        return LabResult(
+            success=False,
+            error="Appliance readiness channel inputs are incomplete.",
+        )
+    access = (
+        ctx.appliance_access_request,
+        ctx.appliance_access_device,
+        ctx.appliance_access_output_dir,
+    )
+    if any(access) and (not all(access) or not all(readiness)):
+        return LabResult(
+            success=False,
+            error="Appliance access channel inputs are incomplete.",
+        )
     if (
         not ctx.offline_staged
         or ctx.appliance_release_public_key is None
@@ -1327,12 +1366,27 @@ def _configure_verified_appliance_launch(
         from aptl.core.appliance_boundary import ApplianceBoundaryBinding
 
         try:
-            launch = verify_launch_descriptor(
-                descriptor_path,
-                ctx.appliance_release_public_key,
-                ctx.appliance_qualification_public_key,
-            )
+            if ctx.appliance_candidate_trust:
+                from aptl.appliance.candidate import (
+                    verify_candidate_launch_descriptor,
+                )
+
+                launch = verify_candidate_launch_descriptor(
+                    descriptor_path,
+                    ctx.appliance_release_public_key,
+                )
+            else:
+                launch = verify_launch_descriptor(
+                    descriptor_path,
+                    ctx.appliance_release_public_key,
+                    ctx.appliance_qualification_public_key,
+                )
+            if not _attest_private_appliance_daemon(descriptor_path):
+                raise ValueError("appliance launch is not in an isolated guest")
             boot_id = _read_appliance_boot_id()
+            endpoint = ctx.backend.bind_local_docker_socket()
+            if not endpoint.success:
+                raise ValueError("appliance guest Docker endpoint is unavailable")
             daemon = ctx.backend.daemon_identity()
             if not boot_id or not isinstance(daemon, str) or not daemon:
                 raise ValueError("runtime identity is unavailable")
@@ -1341,7 +1395,7 @@ def _configure_verified_appliance_launch(
                 policy_digest=descriptor.boundary_policy_digest,
                 payload_digest=descriptor.payload_digest,
                 raes_plan_digest=descriptor.participant_routes_digest,
-                raes_boundary_required=True,
+                raes_boundary_required=launch.boundary_policy.internal_zone_isolation,
                 boundary_helper_image=descriptor.boundary_helper_image,
                 egress_proxy_image=descriptor.egress_proxy_image,
                 boot_id=boot_id,
@@ -1351,6 +1405,7 @@ def _configure_verified_appliance_launch(
             ctx.backend.configure_appliance_boundary(
                 launch.boundary_policy,
                 binding,
+                isolated_daemon=True,
             )
             result = None
         except (
@@ -1370,6 +1425,38 @@ def _read_appliance_boot_id() -> str:
     """Read the Linux guest boot identity used by boundary enforcement."""
 
     return Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+
+
+def _attest_private_appliance_daemon(
+    descriptor_path: Path,
+    *,
+    launch_root: Path = Path("/run/aptl-launch"),
+    mountinfo_path: Path = Path("/proc/self/mountinfo"),
+) -> bool:
+    """Only a read-only virtio guest launch share may claim daemon isolation."""
+
+    if descriptor_path != launch_root / "appliance-launch.json":
+        return False
+    try:
+        mountinfo = mountinfo_path.read_text()
+    except OSError:
+        return False
+    for line in mountinfo.splitlines():
+        before, separator, after = line.partition(" - ")
+        if not separator:
+            continue
+        mount = before.split()
+        filesystem = after.split()
+        if (
+            len(mount) >= 6
+            and len(filesystem) >= 3
+            and mount[4] == str(launch_root)
+            and "ro" in mount[5].split(",")
+            and filesystem[:2] == ["9p", "aptl-launch"]
+            and "trans=virtio" in filesystem[2].split(",")
+        ):
+            return True
+    return False
 
 
 def _load_admitted_start_surface(
@@ -2626,13 +2713,23 @@ def _activate_required_transcript(
     """Persist and activate one complete admitted transcript authority."""
 
     from aptl.backends.raes_evidence_acquisition import (
+        load_active_transcript_authorities,
         mark_transcript_activation_failed,
+        mark_transcript_finalization_failed,
         persist_active_transcript_authority,
     )
 
     if ctx.run_store is None or ctx.run_id is None:
         return None
     try:
+        # A failed or interrupted start can leave its transcript authority
+        # pending. A retry creates a new canonical run, so retire every older
+        # authority with an auditable terminal marker before activating it.
+        for state in load_active_transcript_authorities(ctx.project_dir):
+            if state.get("run_id") != ctx.run_id:
+                mark_transcript_finalization_failed(
+                    project_dir=ctx.project_dir, state=state
+                )
         persist_active_transcript_authority(
             project_dir=ctx.project_dir,
             plan=plan,
@@ -3415,9 +3512,26 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
         log.debug("No adapter profiles selected, skipping MCP client configuration")
         return None
     try:
+        active_profiles = (
+            set(ctx.admitted_surface.selected_profiles)
+            if ctx.admitted_surface is not None
+            else None
+        )
+        runtime_ports = (
+            _runtime_mcp_host_ports(
+                ctx.project_dir, ctx.backend, active_profiles=active_profiles
+            )
+            if ctx.backend is not None
+            else []
+        )
+        ports_by_variable = {
+            getattr(port, "env_var", None): port
+            for port in [*ctx.resolved_ports, *runtime_ports]
+            if getattr(port, "env_var", None)
+        }
         _sync_mcp_config_keys(
             ctx.project_dir,
-            ctx.resolved_ports,
+            list(ports_by_variable.values()),
             server_keys=_mcp_startup_policy(ctx),
         )
         from aptl.backends.scenario_startup import ScenarioStartupPlan
@@ -3787,19 +3901,27 @@ def orchestrate_lab_start(
 ) -> LabResult:
     """Own and orchestrate the complete lab startup process."""
 
+    after_start: list[Callable[[], LabResult | None]] = []
     try:
         with lifecycle_mutation_lock(project_dir) as project_root:
-            return _orchestrate_lab_start_owned(
+            result = _orchestrate_lab_start_owned(
                 project_root,
                 skip_seed=skip_seed,
                 scenario_path=scenario_path,
                 progress=progress,
                 appliance=appliance,
+                after_start=after_start,
             )
     except LifecycleBusyError:
         return _lifecycle_busy_result("start")
     except LifecycleLockUnavailableError:
         return _lifecycle_lock_unavailable_result()
+    if result.success:
+        for supervise in after_start:
+            failure = supervise()
+            if failure is not None:
+                return failure
+    return result
 
 
 def _orchestrate_lab_start_owned(
@@ -3808,6 +3930,7 @@ def _orchestrate_lab_start_owned(
     scenario_path: Path | None = None,
     progress: ProgressCallback | None = None,
     appliance: ApplianceStartOptions | None = None,
+    after_start: list[Callable[[], LabResult | None]] | None = None,
 ) -> LabResult:
     """Orchestrate the complete lab startup process.
 
@@ -3835,6 +3958,12 @@ def _orchestrate_lab_start_owned(
         appliance_launch_descriptor=appliance.launch_descriptor,
         appliance_release_public_key=appliance.release_public_key,
         appliance_qualification_public_key=appliance.qualification_public_key,
+        appliance_readiness_challenge=appliance.readiness_challenge,
+        appliance_readiness_device=appliance.readiness_device,
+        appliance_access_request=appliance.access_request,
+        appliance_access_device=appliance.access_device,
+        appliance_access_output_dir=appliance.access_output_dir,
+        appliance_candidate_trust=appliance.candidate_trust,
         scenario_path=scenario_path,
         progress=progress,
     )
@@ -3880,6 +4009,15 @@ def _orchestrate_lab_start_owned(
                 diagnostics=list(ctx.diagnostics),
             )
 
+    if after_start is not None:
+        # The long-lived access supervisor must not own startup's mutation
+        # lock: its dispatcher observes the lab under the shared lock.
+        after_start.append(lambda: _publish_appliance_guest_readiness(ctx))
+        readiness_failure = None
+    else:
+        readiness_failure = _publish_appliance_guest_readiness(ctx)
+    if readiness_failure is not None:
+        return readiness_failure
     outcome = derive_startup_outcome(ctx.diagnostics, fatal=False)
     if outcome is StartupOutcome.READY:
         log.info("APTL lab started successfully!")
@@ -3894,6 +4032,69 @@ def _orchestrate_lab_start_owned(
         diagnostics=list(ctx.diagnostics),
         resolved_ports=list(ctx.resolved_ports),
     )
+
+
+def _publish_appliance_guest_readiness(
+    ctx: _LabStartContext,
+) -> LabResult | None:
+    """Send fresh active guest evidence for one verified appliance launch."""
+
+    challenge = ctx.appliance_readiness_challenge
+    device = ctx.appliance_readiness_device
+    if challenge is None and device is None:
+        return None
+    if (
+        challenge is None
+        or device is None
+        or ctx.backend is None
+        or ctx.admitted_start is None
+    ):
+        return LabResult(success=False, error="Appliance readiness is unavailable.")
+    realization = getattr(ctx.admitted_start, "realization", None)
+    observe = getattr(ctx.backend, "observe_appliance_boundary", None)
+    if realization is None or not callable(observe):
+        return LabResult(success=False, error="Appliance readiness is unavailable.")
+    try:
+        deployment = realization.deployment_spec(sorted(ctx.selected_profiles))
+        observation = observe(deployment)
+        from aptl.appliance.seat.readiness import publish_guest_readiness
+
+        publish_guest_readiness(challenge, device, observation)
+        access_values = (
+            ctx.appliance_access_request,
+            ctx.appliance_access_device,
+            ctx.appliance_access_output_dir,
+        )
+        if any(access_values):
+            if (
+                not all(access_values)
+                or ctx.appliance_launch_descriptor is None
+                or ctx.appliance_release_public_key is None
+                or ctx.appliance_qualification_public_key is None
+                or ctx.run_id is None
+            ):
+                raise ValueError("appliance access channel is incomplete")
+            from aptl.appliance.access_service import serve_appliance_access
+
+            serve_appliance_access(
+                request_path=cast(Path, ctx.appliance_access_request),
+                descriptor_path=ctx.appliance_launch_descriptor,
+                release_public_key=ctx.appliance_release_public_key,
+                qualification_public_key=ctx.appliance_qualification_public_key,
+                device_path=cast(Path, ctx.appliance_access_device),
+                output_dir=cast(Path, ctx.appliance_access_output_dir),
+                run_id=ctx.run_id,
+                project_dir=ctx.project_dir,
+                observe_boundary=lambda: observe(deployment),
+                candidate_trust=ctx.appliance_candidate_trust,
+            )
+    except Exception:
+        log.exception("Appliance guest readiness publication failed")
+        return LabResult(
+            success=False,
+            error="Appliance guest readiness publication failed.",
+        )
+    return None
 
 
 _MCP_SERVER_KEYS = {
@@ -3949,6 +4150,59 @@ def _resolved_host_port_env(resolved_ports: list[object]) -> dict[str, str]:
         if isinstance(var, str) and var and isinstance(port, int):
             env[var] = str(port)
     return env
+
+
+def _runtime_mcp_host_ports(
+    project_dir: Path, backend: object, *, active_profiles: set[str] | None = None
+) -> list[object]:
+    """Map MCP port variables to receipt-owned live publications.
+
+    Env-pack startup can generate a Compose model without ``${APTL_HP_*}``
+    expressions, so its pre-start port-resolution result contains no variables
+    to inject into ``.mcp.json``. At MCP-sync time the containers are live.
+    Match the checkout's variable-bearing port declarations only to bindings
+    the backend proves this project owns; never probe or synthesize a port.
+
+    The legacy Compose model uses dotted Wazuh service names while generated
+    RAES Compose uses hyphens, hence the narrow dot/hyphen identity aliases.
+    """
+    from aptl.core import _port_bindings as port_bindings, host_ports
+
+    bindings = port_bindings.project_port_bindings(backend)
+    resolved: dict[str, object | None] = {}
+    for spec in host_ports.published_port_specs(project_dir, active_profiles):
+        if spec.env_var is None:
+            continue
+        services = {
+            spec.service,
+            spec.service.replace(".", "-"),
+            spec.service.replace("-", "."),
+        }
+        candidates = {
+            bindings[(service, spec.container_port, spec.proto)]
+            for service in services
+            if (service, spec.container_port, spec.proto) in bindings
+        }
+        if len(candidates) != 1:
+            continue
+        port = next(iter(candidates))
+        current = resolved.get(spec.env_var)
+        if current is not None and getattr(current, "resolved_port", None) != port:
+            # Conflicting observations are not an authority for client config.
+            resolved[spec.env_var] = None
+            continue
+        if current is None and spec.env_var in resolved:
+            continue
+        resolved[spec.env_var] = host_ports.ResolvedPort(
+            service=spec.service,
+            env_var=spec.env_var,
+            default_port=spec.default_port,
+            resolved_port=port,
+            protos=(spec.proto,),
+            host_ip=spec.host_ip,
+            remapped=port != spec.default_port,
+        )
+    return [item for item in resolved.values() if item is not None]
 
 
 def _server_config_port_refs(spec: dict[str, Any], project_dir: Path) -> set[str]:

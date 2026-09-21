@@ -6,7 +6,7 @@ import os
 import sys
 
 from aptl.workbench.profiles import profile_for
-from aptl.workbench.relay import RelayLaunch, relay_mcp
+from aptl.workbench.relay import RelayLaunch, RelayPolling, relay_mcp
 
 SERVER = r"""
 import json,signal,sys
@@ -27,11 +27,18 @@ def test_real_pipe_relay_admits_inventory_denies_blue_and_revokes_live_session(
 ):
     async def exercise():
         revoked = False
+        authorizations = 0
         cleanups = []
         tasks = set()
         selected = profile_for("red").servers[0]
 
         def authorize():
+            nonlocal authorizations
+            authorizations += 1
+            if revoked:
+                raise ValueError("revoked")
+
+        def check_revocation():
             if revoked:
                 raise ValueError("revoked")
 
@@ -54,7 +61,11 @@ def test_real_pipe_relay_admits_inventory_denies_blue_and_revokes_live_session(
                     ),
                     authorize=authorize,
                     cleanup_observer=cleanups.append,
-                    poll_seconds=0.01,
+                    check_revocation=check_revocation,
+                    polling=RelayPolling(
+                        revocation_seconds=0.01,
+                        authorization_seconds=1,
+                    ),
                 )
             finally:
                 tasks.remove(task)
@@ -96,6 +107,7 @@ def test_real_pipe_relay_admits_inventory_denies_blue_and_revokes_live_session(
             "tools/call", 2, {"name": "kali_info", "arguments": {}}
         )
         assert response["result"]["content"][0]["text"] == "executed"
+        assert authorizations == 3
         revoked = True
         assert await asyncio.wait_for(reader.read(), 5) == b""
         writer.close()

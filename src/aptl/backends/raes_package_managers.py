@@ -54,7 +54,22 @@ def _apt_install(packages: tuple[str, ...]) -> list[str]:
 def _apt_query(packages: tuple[str, ...]) -> list[str]:
     """Build the `dpkg-query` argv that reports which declared packages are installed."""
 
-    return ["dpkg-query", "-W", "-f=${Package}\n", *sorted(packages)]
+    return [
+        "dpkg-query",
+        "-W",
+        "-f=${db:Status-Abbrev} ${binary:Package}\n",
+        *sorted(packages),
+    ]
+
+
+def _apt_parse(stdout: str) -> frozenset[str]:
+    """Return only packages whose dpkg status is installed and configured."""
+
+    return frozenset(
+        line[3:].strip()
+        for line in stdout.splitlines()
+        if line.startswith("ii ") and line[3:].strip()
+    )
 
 
 def _lines_to_set(stdout: str) -> frozenset[str]:
@@ -116,7 +131,7 @@ _MANAGERS: dict[str, _Manager] = {
     "apt": _Manager(
         install=_apt_install,
         query=_apt_query,
-        parse=_lines_to_set,
+        parse=_apt_parse,
         refresh=("env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "update"),
     ),
     "dnf": _Manager(install=_dnf_install, query=_dnf_query, parse=_lines_to_set),
@@ -181,7 +196,9 @@ _MANIFEST_QUERIES: dict[str, Callable[[str], list[str]]] = {
 }
 
 
-def manifest_install_argv(ecosystem: str, directory: str) -> list[str]:
+def manifest_install_argv(
+    ecosystem: str, directory: str, *, offline: bool = False
+) -> list[str]:
     """Return the argv that installs a project from its manifest's directory."""
 
     builder = _MANIFEST_INSTALLERS.get(ecosystem)
@@ -189,7 +206,10 @@ def manifest_install_argv(ecosystem: str, directory: str) -> list[str]:
         raise UnsupportedDependencyEcosystemError(
             f"no generic mechanism for dependency ecosystem {ecosystem!r}"
         )
-    return builder(directory)
+    argv = builder(directory)
+    if offline and ecosystem == "pip":
+        argv[3:3] = ["--no-index", "--no-deps", "--no-build-isolation"]
+    return argv
 
 
 def manifest_query_argv(ecosystem: str, name: str) -> list[str]:

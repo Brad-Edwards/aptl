@@ -22,7 +22,7 @@ def build_kiosk_launch_plan(
 ) -> KioskLaunchPlan:
     """Return a fullscreen browser argv without embedding secrets."""
 
-    url = f"https://127.0.0.1:{participant_port}/"
+    url = f"http://127.0.0.1:{participant_port}/"
     browser = browser_command or _default_browser()
     argv = (
         browser,

@@ -15,15 +15,21 @@ the admission boundary and translates into the RAES `LabResult` envelope.
 
 from __future__ import annotations
 
-import io
 import hashlib
+import io
 import shlex
 import tarfile
 import tempfile
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+from aptl.backends._raes_docker_materializer_observations import (
+    DockerMaterializationObservationMixin,
+    _ExecOutcome,
+    _normalized_mode,
+)
 from aptl.backends.raes_materializer import (
     EnsureDirectoryOp,
     EnsureUserOp,
@@ -33,11 +39,6 @@ from aptl.backends.raes_materializer import (
     PlaceProjectContentOp,
     ProvisionDomainAuthorityOp,
     SetFilesystemMetadataOp,
-)
-from aptl.backends._raes_docker_materializer_observations import (
-    DockerMaterializationObservationMixin,
-    _ExecOutcome,
-    _normalized_mode,
 )
 from aptl.backends.raes_package_managers import (
     install_argv,
@@ -69,6 +70,15 @@ ExecFn = Callable[[str, list[str]], _ExecOutcome]
 ExecWithInputFn = Callable[[str, list[str], str], _ExecOutcome]
 
 
+@dataclass(frozen=True)
+class DockerMaterializationSettings:
+    """Optional execution context for Docker node materialization."""
+
+    scenario_root: Path | None = None
+    sleep: Callable[[float], None] = time.sleep
+    offline_staged: bool = False
+
+
 class DockerMaterializationExecutor(DockerMaterializationObservationMixin):
     """Run generic materialization operations inside per-node base containers."""
 
@@ -80,16 +90,17 @@ class DockerMaterializationExecutor(DockerMaterializationObservationMixin):
         container_for: Callable[[str], str],
         start_base: Callable[[str, str], None],
         copy_in: Callable[[str, str, str, bool], None] | None = None,
-        scenario_root: Path | None = None,
-        sleep: Callable[[float], None] = time.sleep,
+        settings: DockerMaterializationSettings | None = None,
     ) -> None:
+        configured = settings or DockerMaterializationSettings()
         self._run = run
         self._run_with_input = run_with_input
         self._container_for = container_for
         self._start_base = start_base
         self._copy_in = copy_in
-        self._scenario_root = scenario_root
-        self._sleep = sleep
+        self._scenario_root = configured.scenario_root
+        self._sleep = configured.sleep
+        self._offline_staged = configured.offline_staged
 
     # -- mutations -------------------------------------------------------
 
@@ -99,6 +110,15 @@ class DockerMaterializationExecutor(DockerMaterializationObservationMixin):
     def install_packages(
         self, node_address: str, manager: str, packages: tuple[str, ...]
     ) -> None:
+        installed = self.observe_installed_packages(node_address, manager, packages)
+        missing = tuple(package for package in packages if package not in installed)
+        if not missing:
+            return
+        if self._offline_staged:
+            raise MaterializationCommandError(
+                f"offline image is missing declared {manager} packages on "
+                f"{node_address}: {', '.join(missing)}"
+            )
         refresh = refresh_argv(manager)
         if refresh is not None:
             self._require_ok_with_retry(
@@ -108,7 +128,7 @@ class DockerMaterializationExecutor(DockerMaterializationObservationMixin):
                 _PACKAGE_INDEX_REFRESH_RETRY_DELAYS_SECONDS,
             )
         self._require_ok(
-            node_address, install_argv(manager, packages), "install packages"
+            node_address, install_argv(manager, missing), "install packages"
         )
 
     def ensure_group(self, node_address: str, name: str, gid: int | str | None) -> None:
@@ -271,26 +291,72 @@ class DockerMaterializationExecutor(DockerMaterializationObservationMixin):
             _IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS,
         )
         with tempfile.TemporaryDirectory() as staging:
-            if op.is_directory:
-                staged = Path(staging) / "tree"
-                staged.mkdir()
-                with tarfile.open(
-                    fileobj=io.BytesIO(resolved.data), mode="r:*"
-                ) as archive:
-                    archive.extractall(staged, filter="data")
-            else:
-                staged = Path(staging) / PurePosixPath(op.dest_path).name
-                staged.write_bytes(resolved.data)
-            for attempt in range(len(_IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS) + 1):
-                try:
-                    self._copy_in(container, str(staged), op.dest_path, op.is_directory)
-                    break
-                except (BackendSeedError, BackendTimeoutError, OSError):
-                    if attempt == len(_IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS):
-                        raise MaterializationCommandError(
-                            f"pack content copy failed on {node_address}"
-                        ) from None
-                    self._sleep(_IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS[attempt])
+            staged = self._stage_pack_artifact(Path(staging), resolved.data, op)
+            self._secure_pack_artifact(staged, op)
+            self._copy_pack_artifact(container, staged, node_address, op)
+
+    @staticmethod
+    def _stage_pack_artifact(
+        staging: Path, payload: bytes, op: PlacePackArtifactOp
+    ) -> Path:
+        """Expand or write a resolved pack artifact into private staging."""
+
+        if not op.is_directory:
+            staged = staging / PurePosixPath(op.dest_path).name
+            staged.write_bytes(payload)
+            return staged
+        staged = staging / "tree"
+        staged.mkdir()
+        with tarfile.open(fileobj=io.BytesIO(payload), mode="r:*") as archive:
+            archive.extractall(staged, filter="data")
+        return staged
+
+    @staticmethod
+    def _pack_artifact_mode(path: Path, op: PlacePackArtifactOp) -> int:
+        """Return the least-permissive executable or data mode for one path."""
+
+        executable = (
+            path.is_dir()
+            or bool(path.stat().st_mode & 0o111)
+            or (not op.is_directory and op.executable)
+        )
+        if op.sensitive:
+            return 0o700 if executable else 0o600
+        return 0o755 if executable else 0o644
+
+    def _secure_pack_artifact(self, staged: Path, op: PlacePackArtifactOp) -> None:
+        """Reject links and normalize every staged artifact mode."""
+
+        descendants = sorted(staged.rglob("*")) if op.is_directory else []
+        for path in (staged, *descendants):
+            if path.is_symlink():
+                raise MaterializationCommandError(
+                    "pack content contains a symbolic link"
+                )
+            path.chmod(self._pack_artifact_mode(path, op))
+
+    def _copy_pack_artifact(
+        self,
+        container: str,
+        staged: Path,
+        node_address: str,
+        op: PlacePackArtifactOp,
+    ) -> None:
+        """Retry the idempotent copy after ambiguous backend failures."""
+
+        if self._copy_in is None:
+            raise MaterializationCommandError("pack content copy is unavailable")
+        retries = _IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS
+        for attempt in range(len(retries) + 1):
+            try:
+                self._copy_in(container, str(staged), op.dest_path, op.is_directory)
+                return
+            except (BackendSeedError, BackendTimeoutError, OSError):
+                if attempt == len(retries):
+                    raise MaterializationCommandError(
+                        f"pack content copy failed on {node_address}"
+                    ) from None
+                self._sleep(retries[attempt])
 
     def install_dependency_manifest(
         self, node_address: str, op: InstallDependencyManifestOp
@@ -298,7 +364,9 @@ class DockerMaterializationExecutor(DockerMaterializationObservationMixin):
         directory = str(PurePosixPath(op.path).parent)
         self._require_ok(
             node_address,
-            manifest_install_argv(op.ecosystem, directory),
+            manifest_install_argv(
+                op.ecosystem, directory, offline=self._offline_staged
+            ),
             "install dependency manifest",
         )
 
@@ -312,11 +380,10 @@ class DockerMaterializationExecutor(DockerMaterializationObservationMixin):
                 f"unsupported software component ecosystem on {node_address}"
             )
         directory = str(PurePosixPath(op.manifest_path).parent)
-        self._require_ok(
-            node_address,
-            ["npm", "--prefix", directory, "ci", "--include=dev"],
-            "install software component",
-        )
+        install_argv = ["npm", "--prefix", directory, "ci", "--include=dev"]
+        if self._offline_staged:
+            install_argv.append("--offline")
+        self._require_ok(node_address, install_argv, "install software component")
         self._require_ok(
             node_address,
             ["npm", "--prefix", directory, "run", "build", "--if-present"],
@@ -350,7 +417,14 @@ class DockerMaterializationExecutor(DockerMaterializationObservationMixin):
         )
 
     def start_service_unit(self, node_address: str, unit_name: str) -> None:
-        self._require_ok(node_address, ["systemctl", "start", unit_name], "start unit")
+        # A preinstalled package can auto-start with its default configuration
+        # before authored content is placed. Plain start preserves that stale
+        # process, and reload is insufficient for startup-only settings (BIND
+        # query logging is one example). Restart applies the complete authored
+        # state and also starts an inactive unit.
+        self._require_ok(
+            node_address, ["systemctl", "restart", unit_name], "start unit"
+        )
 
     # -- internals -------------------------------------------------------
 

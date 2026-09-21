@@ -19,10 +19,13 @@ from aptl.core.deployment.realization import (
 )
 from aptl.core.lab import (
     _LabStartContext,
+    _attest_private_appliance_daemon,
     _configure_verified_appliance_launch,
+    _publish_appliance_guest_readiness,
     _step_pull_images,
     _step_seed_suricata_volumes,
 )
+from aptl.core.lab_types import LabResult
 from aptl.core.seed_spec import NamedVolumeSeed, SeedFile
 
 
@@ -73,6 +76,7 @@ def test_offline_staged_realization_inspects_images_and_forbids_pull_or_build(
     assert "--pull" in up
     assert up[up.index("--pull") + 1] == "never"
     assert "--build" not in up
+    assert "--no-build" in up
 
 
 def test_offline_staged_realization_fails_before_start_when_image_is_missing(
@@ -202,13 +206,17 @@ def test_offline_staged_generic_base_requires_a_staged_image(
     )
 
 
+@pytest.mark.parametrize("candidate_trust", [False, True])
 def test_verified_launch_payload_is_bound_before_scenario_realization(
     tmp_path: Path,
     monkeypatch,
+    candidate_trust: bool,
 ) -> None:
     backend = MagicMock()
+    from aptl.appliance.policy import full_techvault_boundary_policy
+
+    policy = full_techvault_boundary_policy()
     backend.daemon_identity.return_value = "guest-daemon"
-    policy = MagicMock()
     descriptor = SimpleNamespace(
         boundary_policy_digest="sha256:" + "1" * 64,
         payload_digest="sha256:" + "2" * 64,
@@ -224,6 +232,13 @@ def test_verified_launch_payload_is_bound_before_scenario_realization(
             boundary_policy=policy,
         ),
     )
+    monkeypatch.setattr(
+        "aptl.appliance.candidate.verify_candidate_launch_descriptor",
+        lambda *args: SimpleNamespace(
+            descriptor=descriptor,
+            boundary_policy=policy,
+        ),
+    )
     context = _LabStartContext(
         project_dir=tmp_path,
         skip_seed=False,
@@ -231,12 +246,19 @@ def test_verified_launch_payload_is_bound_before_scenario_realization(
         appliance_launch_descriptor=tmp_path / "launch.json",
         appliance_release_public_key=tmp_path / "release-public.pem",
         appliance_qualification_public_key=tmp_path / "qualification-public.pem",
+        appliance_candidate_trust=candidate_trust,
         backend=backend,
     )
     monkeypatch.setattr(
         "aptl.core.lab._read_appliance_boot_id",
         lambda: "guest-boot",
     )
+    monkeypatch.setattr(
+        "aptl.core.lab._attest_private_appliance_daemon",
+        lambda _: True,
+    )
+    backend.bind_local_docker_socket.return_value = LabResult(success=True)
+    backend.bound_docker_daemon_id = "guest-daemon"
 
     with patch("aptl.core.lab.subprocess.run") as run:
         result = _configure_verified_appliance_launch(context)
@@ -244,10 +266,73 @@ def test_verified_launch_payload_is_bound_before_scenario_realization(
     assert result is None
     configured_policy, binding = backend.configure_appliance_boundary.call_args.args
     assert configured_policy is policy
+    assert binding.raes_boundary_required is False
     assert binding.payload_digest == descriptor.payload_digest
     assert binding.policy_digest == descriptor.boundary_policy_digest
     backend.daemon_identity.assert_called_once_with()
     run.assert_not_called()
+    assert backend.configure_appliance_boundary.call_args.kwargs == {
+        "isolated_daemon": True
+    }
+
+
+def test_verified_launch_refuses_unattested_guest_daemon(
+    tmp_path: Path, monkeypatch
+) -> None:
+    backend = MagicMock()
+    monkeypatch.setattr(
+        "aptl.appliance.launch.verify_launch_descriptor",
+        lambda *args: SimpleNamespace(descriptor=object(), boundary_policy=object()),
+    )
+    context = _LabStartContext(
+        project_dir=tmp_path,
+        skip_seed=False,
+        offline_staged=True,
+        appliance_launch_descriptor=tmp_path / "copied-launch.json",
+        appliance_release_public_key=tmp_path / "release-public.pem",
+        appliance_qualification_public_key=tmp_path / "qualification-public.pem",
+        backend=backend,
+    )
+
+    result = _configure_verified_appliance_launch(context)
+
+    assert result is not None
+    assert not result.success
+    assert result.error == "Verified appliance launch binding failed."
+    backend.bind_local_docker_socket.assert_not_called()
+    backend.configure_appliance_boundary.assert_not_called()
+
+
+def test_appliance_daemon_isolation_requires_read_only_virtio_launch_mount(
+    tmp_path: Path,
+) -> None:
+    launch_root = tmp_path / "aptl-launch"
+    mountinfo = tmp_path / "mountinfo"
+    mountinfo.write_text(
+        f"47 32 0:49 / {launch_root} ro,relatime - 9p aptl-launch ro,trans=virtio\n"
+    )
+    descriptor = launch_root / "appliance-launch.json"
+
+    assert _attest_private_appliance_daemon(
+        descriptor, launch_root=launch_root, mountinfo_path=mountinfo
+    )
+    for unsafe in (
+        f"47 32 0:49 / {launch_root} rw,relatime - 9p aptl-launch rw,trans=virtio\n",
+        f"47 32 0:49 / {launch_root} ro,relatime - ext4 /dev/sda ro\n",
+        f"47 32 0:49 / {launch_root} ro,relatime - 9p aptl-launch ro,trans=tcp\n",
+    ):
+        mountinfo.write_text(unsafe)
+        assert not _attest_private_appliance_daemon(
+            descriptor, launch_root=launch_root, mountinfo_path=mountinfo
+        )
+    mountinfo.write_text(
+        f"47 32 0:49 / {launch_root} ro,relatime - 9p aptl-launch ro,trans=virtio\n"
+    )
+    assert not _attest_private_appliance_daemon(
+        tmp_path / "copied-launch.json",
+        launch_root=launch_root,
+        mountinfo_path=mountinfo,
+    )
 
 
 @pytest.mark.parametrize(
@@ -318,3 +403,72 @@ def test_verified_launch_reverification_failure_is_a_hard_stop(
     assert "unsafe verification detail" not in result.error
     run.assert_not_called()
     backend.configure_appliance_boundary.assert_not_called()
+
+
+def test_guest_readiness_and_access_are_published_from_one_observation(
+    tmp_path: Path,
+) -> None:
+    deployment = object()
+    observation = object()
+    realization = SimpleNamespace(
+        deployment_spec=lambda profiles: deployment,
+    )
+    backend = SimpleNamespace(
+        observe_appliance_boundary=lambda value: observation,
+    )
+    context = _LabStartContext(
+        project_dir=tmp_path,
+        skip_seed=False,
+        backend=backend,
+        selected_profiles={"red", "blue"},
+        admitted_start=SimpleNamespace(realization=realization),
+        run_id="run-current",
+        appliance_readiness_challenge=tmp_path / "readiness.json",
+        appliance_readiness_device=tmp_path / "readiness.sock",
+        appliance_access_request=tmp_path / "access-request.json",
+        appliance_access_device=tmp_path / "access.sock",
+        appliance_access_output_dir=tmp_path / "access",
+        appliance_launch_descriptor=tmp_path / "launch.json",
+        appliance_release_public_key=tmp_path / "release.pem",
+        appliance_qualification_public_key=tmp_path / "qualification.pem",
+        appliance_candidate_trust=True,
+    )
+
+    with (
+        patch(
+            "aptl.appliance.seat.readiness.publish_guest_readiness"
+        ) as publish_readiness,
+        patch("aptl.appliance.access_service.serve_appliance_access") as serve_access,
+    ):
+        result = _publish_appliance_guest_readiness(context)
+
+    assert result is None
+    publish_readiness.assert_called_once_with(
+        context.appliance_readiness_challenge,
+        context.appliance_readiness_device,
+        observation,
+    )
+    assert serve_access.call_args.kwargs["candidate_trust"] is True
+    assert serve_access.call_args.kwargs["run_id"] == "run-current"
+    assert serve_access.call_args.kwargs["observe_boundary"]() is observation
+
+
+def test_appliance_supervision_does_not_keep_the_startup_mutation_lock(
+    tmp_path, monkeypatch
+):
+    from aptl.core import lab
+    from aptl.core.lifecycle_guard import lifecycle_observation_lock
+
+    reached = []
+
+    def publish(context):
+        # The real guest transport acquires this shared lock before admission.
+        # Retaining startup's exclusive lock makes every connection fail.
+        with lifecycle_observation_lock(context.project_dir):
+            reached.append("admitted")
+
+    monkeypatch.setattr(lab, "_LAB_START_STEPS", ())
+    monkeypatch.setattr(lab, "_publish_appliance_guest_readiness", publish)
+    result = lab.orchestrate_lab_start(tmp_path)
+    assert result.success
+    assert reached == ["admitted"]

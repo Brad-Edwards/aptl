@@ -129,6 +129,19 @@ class ComposeOwnedStartMixin:
         result = self._run(command)
         if result.returncode != 0:
             log.error("Lab start failed: %s", result.stderr)
+            # Compose can create or replace a subset of the project before a
+            # service failure makes ``up`` return non-zero. Capture that exact
+            # attempt while its owner tuple is still known, then remove the
+            # partial runtime without deleting retained lab volumes. Without
+            # this, the next start correctly rejects the unreceipted objects
+            # as foreign and the workspace cannot recover automatically.
+            captured = self._capture_started_resources(prepared, profiles)
+            if captured.success:
+                self._roll_back_started_project(
+                    prepared,
+                    profiles,
+                    remove_volumes=False,
+                )
             return LabResult(success=False, error=result.stderr)
         return self._capture_started_resources(prepared, profiles)
 
@@ -189,7 +202,7 @@ class ComposeOwnedStartMixin:
         if build:
             command.append("--build")
         if self._offline_staged:
-            command.extend(["--pull", "never"])
+            command.extend(["--pull", "never", "--no-build"])
         command.append("-d")
         for service in exclude_services:
             command.extend(["--scale", f"{service}=0"])
@@ -247,19 +260,25 @@ class ComposeOwnedStartMixin:
         return LabResult(success=True, message="Lab started")
 
     def _roll_back_started_project(
-        self, scope: _OwnedStartScope, profiles: list[str]
+        self,
+        scope: _OwnedStartScope,
+        profiles: list[str],
+        *,
+        remove_volumes: bool = True,
     ) -> None:
         """Undo everything this attempt started, receipted or not."""
 
         try:
+            command = [
+                *self._build_command(
+                    "down", profiles, compose_files=scope.compose_files
+                ),
+                "--remove-orphans",
+            ]
+            if remove_volumes:
+                command.append("--volumes")
             self._run(
-                [
-                    *self._build_command(
-                        "down", profiles, compose_files=scope.compose_files
-                    ),
-                    "--volumes",
-                    "--remove-orphans",
-                ],
+                command,
                 timeout=300,
             )
         except (OSError, ValueError):

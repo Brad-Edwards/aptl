@@ -2177,22 +2177,67 @@ def _configured_forwarding_backend(runtime, *, digest_override=None, executable=
     if implementation == "wazuh_agent":
         payload = _wazuh_config(agent)
         path = _WAZUH_CONFIG
-        binary = "/var/ossec/bin/wazuh-control"
+        executable_probe = ("test", "-x", "/var/ossec/bin/wazuh-control")
     else:
         payload = _misp_sync_config(agent)
         path = _MISP_SYNC_CONFIG
-        binary = "/usr/local/bin/aptl-misp-suricata-sync"
+        executable_probe = (
+            "sh",
+            "-c",
+            'test -x "$(command -v aptl-misp-suricata-sync)"',
+        )
     assert payload is not None
     digest = digest_override or hashlib.sha256(payload.encode()).hexdigest()
     return _Backend(
         {_CONTAINER: _inspect()},
         exec_results={
             _CONTAINER: {
-                ("test", "-x", binary): (0 if executable else 1, ""),
+                executable_probe: (0 if executable else 1, ""),
                 ("sha256sum", path): (0, f"{digest}  {path}\n"),
             }
         },
     )
+
+
+def test_content_sync_probe_uses_installed_path_and_verifies_exact_config(tmp_path):
+    import os
+    import subprocess
+    from aptl.core.deployment._forwarding_agent_realization import (
+        _agent_configured,
+        _misp_sync_config,
+    )
+
+    agent = _content_sync_runtime().forwarding_agents[0]
+    venv_bin = tmp_path / "venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    executable = venv_bin / "aptl-misp-suricata-sync"
+    executable.write_text("#!/bin/sh\nexit 0\n")
+    executable.chmod(0o755)
+    config = tmp_path / "sync.env"
+    config.write_text(_misp_sync_config(agent))
+
+    class LocalProbe:
+        def container_exec(self, _container, cmd, *, timeout):
+            if cmd[0] == "sha256sum":
+                digest = hashlib.sha256(config.read_bytes()).hexdigest()
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout=f"{digest}  {config}\n", stderr=""
+                )
+            return subprocess.run(
+                cmd,
+                timeout=timeout,
+                capture_output=True,
+                text=True,
+                env={**os.environ, "PATH": str(venv_bin) + ":/usr/bin:/bin"},
+            )
+
+    backend = LocalProbe()
+    assert _agent_configured(backend, "sync", agent)
+    executable.chmod(0o600)
+    assert not _agent_configured(backend, "sync", agent)
+    executable.chmod(0o755)
+    config.write_text("wrong configuration\n")
+    assert not _agent_configured(backend, "sync", agent)
 
 
 def _forwarding_gate(runtime: RuntimeConfiguration, backend: _Backend):

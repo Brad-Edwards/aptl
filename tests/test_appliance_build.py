@@ -19,6 +19,7 @@ from aptl.appliance.build import (
     OverlayCreateRequest,
     build_golden_image,
     create_disposable_overlay,
+    prepare_golden_image_request,
 )
 from aptl.appliance.launch import canonical_launch_bytes
 from aptl.appliance.models import GoldenImageInventory
@@ -36,11 +37,15 @@ class RecordingRunner:
         self.calls.append(tuple(argv))
         if argv[0] == self.fail_program:
             raise subprocess.CalledProcessError(1, argv, stderr="unsafe raw detail")
-        if argv[:3] == ["qemu-img", "convert", "-f"]:
-            Path(argv[-1]).write_bytes(b"immutable golden image")
         if argv[:3] == ["qemu-img", "create", "-f"]:
-            Path(argv[-1]).write_bytes(b"disposable overlay")
-        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+            candidate = Path(argv[-2] if argv[-1].isdecimal() else argv[-1])
+            candidate.write_bytes(b"immutable golden image")
+        stdout = (
+            '{"format":"qcow2"}'
+            if argv[:3] == ["qemu-img", "info", "--output=json"]
+            else ""
+        )
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
 
 def _request(root: Path) -> GoldenImageBuildRequest:
@@ -107,6 +112,44 @@ def _overlay_request(
     )
 
 
+def test_build_request_planning_pins_every_staged_input_create_once(
+    tmp_path: Path,
+) -> None:
+    expected = _request(tmp_path)
+
+    planned = prepare_golden_image_request(
+        tmp_path,
+        base_image_path=expected.base_image_path,
+        offline_payload_path=expected.offline_payload_path,
+        provisioner_path=expected.provisioner_path,
+        scanner_path=expected.scanner_path,
+        output_image_path=expected.output_image_path,
+        inventory_output_path=expected.inventory_output_path,
+        virtual_size_bytes=expected.virtual_size_bytes,
+        request_path="output/build-request.json",
+    )
+
+    assert planned == expected
+    assert (
+        GoldenImageBuildRequest.model_validate_json(
+            (tmp_path / "output/build-request.json").read_bytes()
+        )
+        == expected
+    )
+    with pytest.raises(ApplianceBuildError, match="already exists"):
+        prepare_golden_image_request(
+            tmp_path,
+            base_image_path=expected.base_image_path,
+            offline_payload_path=expected.offline_payload_path,
+            provisioner_path=expected.provisioner_path,
+            scanner_path=expected.scanner_path,
+            output_image_path=expected.output_image_path,
+            inventory_output_path=expected.inventory_output_path,
+            virtual_size_bytes=expected.virtual_size_bytes,
+            request_path="output/build-request.json",
+        )
+
+
 def test_golden_image_build_uses_fixed_offline_commands_and_read_only_output(
     tmp_path: Path,
 ) -> None:
@@ -129,20 +172,24 @@ def test_golden_image_build_uses_fixed_offline_commands_and_read_only_output(
     assert [call[0] for call in runner.calls] == [
         "qemu-img",
         "qemu-img",
+        "virt-resize",
         "virt-customize",
         "virt-sysprep",
         "virt-customize",
         "qemu-img",
+        "qemu-img",
     ]
-    customize = runner.calls[2]
+    customize = runner.calls[3]
     assert "--no-network" in customize
     assert "--run" in customize
     assert all(
         "http://" not in value and "https://" not in value for value in customize
     )
     assert all("/bin/sh" not in value and "bash" not in value for value in customize)
-    scanner = runner.calls[4]
+    scanner = runner.calls[5]
     assert "--no-network" in scanner
+    assert scanner[scanner.index("--run-command") + 1] == ": > /etc/machine-id"
+    assert scanner.index("--run-command") < scanner.index("--run")
     assert "--run" in scanner
 
 
@@ -209,7 +256,7 @@ def test_disposable_overlay_uses_verified_read_only_backing_file(
 
     assert result.overlay_path == tmp_path / "instances/seat-01.qcow2"
     assert result.overlay_path.stat().st_mode & 0o777 == 0o600
-    create = runner.calls[0]
+    create = runner.calls[1]
     assert create[:8] == (
         "qemu-img",
         "create",
@@ -222,9 +269,34 @@ def test_disposable_overlay_uses_verified_read_only_backing_file(
     )
     candidate = Path(create[-1])
     assert candidate.name.startswith("seat-01.qcow2.candidate-")
-    assert runner.calls[1] == ("qemu-img", "check", "-q", str(candidate))
+    assert runner.calls[2] == ("qemu-img", "check", "-q", str(candidate))
     assert golden.read_bytes() == b"immutable golden image"
     assert golden.stat().st_mode & 0o222 == 0
+
+
+def test_disposable_overlay_rejects_external_golden_references(
+    tmp_path: Path,
+) -> None:
+    golden = tmp_path / "golden.qcow2"
+    golden.write_bytes(b"golden")
+    golden.chmod(0o444)
+    request = _overlay_request(
+        tmp_path,
+        golden_path="golden.qcow2",
+        golden_digest=f"sha256:{hashlib.sha256(b'golden').hexdigest()}",
+        overlay_path="overlay.qcow2",
+    )
+
+    def runner(argv: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout='{"format":"qcow2","backing-filename":"../outside.qcow2"}',
+            stderr="",
+        )
+
+    with pytest.raises(ApplianceBuildError, match="not standalone"):
+        create_disposable_overlay(tmp_path, request, runner=runner)
 
 
 def test_disposable_overlay_rejects_writable_or_tampered_golden(

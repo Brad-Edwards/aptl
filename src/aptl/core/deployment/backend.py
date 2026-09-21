@@ -124,8 +124,16 @@ class DeploymentBackend(HostInventoryBackend, ContainerOpsBackend, Protocol):
         self,
         policy: ApplianceBoundaryPolicy,
         binding: ApplianceBoundaryBinding,
+        *,
+        isolated_daemon: bool = False,
     ) -> None:
         """Bind trusted appliance policy inputs to the next realization."""
+
+        ...
+
+    @property
+    def bound_docker_daemon_id(self) -> str | None:
+        """Return the identity of the locally bound Docker daemon, if any."""
 
         ...
 

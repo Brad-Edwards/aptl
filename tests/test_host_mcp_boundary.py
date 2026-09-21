@@ -68,6 +68,13 @@ def test_release_extension_requires_signed_inputs_and_retains_all_existing_artif
             "canonical-inputs", "canonical-inputs", "artifacts/inputs.json"
         ).model_dump(mode="json")
     )
+    document["artifacts"].append(
+        _artifact(
+            "redistribution-review",
+            "redistribution-review",
+            "evidence/redistribution-review.json",
+        ).model_dump(mode="json")
+    )
     admitted = ApplianceReleaseManifest.model_validate_json(json.dumps(document))
     assert admitted.delivery.host_mcp_contract == "aptl.restricted-ssh-mcp/v1"
     document["artifacts"] = [

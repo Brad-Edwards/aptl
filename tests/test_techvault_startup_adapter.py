@@ -324,6 +324,24 @@ def test_exact_release_resolves_seed_and_runtime_bindings() -> None:
         ("CORTEX_CONTAINER", "aptl-cortex"),
         ("WAZUH_MANAGER_CONTAINER", "aptl-wazuh-manager"),
     }
+    assert {item.server_id: item.environment_keys for item in plan.mcp_server_keys} == {
+        "aptl-casemgmt": ("THEHIVE_API_KEY",),
+        "aptl-indexer": (
+            "INDEXER_USERNAME",
+            "INDEXER_PASSWORD",
+            "API_USERNAME",
+            "API_PASSWORD",
+        ),
+        "aptl-network": ("INDEXER_USERNAME", "INDEXER_PASSWORD"),
+        "aptl-soar": ("SHUFFLE_API_KEY",),
+        "aptl-threatintel": ("MISP_API_KEY",),
+        "aptl-wazuh": (
+            "INDEXER_USERNAME",
+            "INDEXER_PASSWORD",
+            "API_USERNAME",
+            "API_PASSWORD",
+        ),
+    }
 
 
 def test_changed_pack_digest_gets_no_startup_behavior() -> None:

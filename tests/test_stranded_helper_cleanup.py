@@ -224,3 +224,62 @@ def test_an_unreachable_daemon_is_a_reported_failure_not_an_exception(tmp_path):
     assert backend.remove_stranded_helpers() == [
         "failed to list stranded helper containers"
     ]
+
+
+def test_an_unreadable_ownership_state_is_a_reported_failure_not_an_exception(
+    tmp_path,
+):
+    """A conflicted workspace must not abort the teardown steps after the sweep."""
+
+    from aptl.core.deployment._compose_resource_ownership import OwnershipConflictError
+
+    backend = DockerComposeBackend(project_dir=tmp_path, project_name="lab")
+
+    def conflicted():
+        raise OwnershipConflictError("workspace ownership state is unavailable")
+
+    backend._load_resource_ownership = conflicted
+    backend._run = _Daemon(stranded=["aaa111"])
+
+    assert backend.remove_stranded_helpers() == [
+        "failed to list stranded helper containers"
+    ]
+
+
+def test_one_removal_timing_out_does_not_skip_the_rest(tmp_path):
+    """Every stranded helper gets its removal attempt; each failure is reported."""
+
+    from aptl.core.deployment.errors import BackendTimeoutError
+
+    WorkspaceOwnership.ensure(tmp_path, "lab")
+    backend = DockerComposeBackend(project_dir=tmp_path, project_name="lab")
+    daemon = _Daemon(stranded=["slow111", "fast222"])
+
+    def run(cmd, *, timeout=None):
+        if cmd[:2] == ["docker", "rm"] and cmd[-1] == "slow111":
+            daemon.commands.append(list(cmd))
+            raise BackendTimeoutError("docker rm timed out after 60s")
+        return daemon(cmd, timeout=timeout)
+
+    backend._run = run
+
+    assert backend.remove_stranded_helpers() == [
+        "failed to remove a stranded helper container"
+    ]
+    assert remove_container_command("fast222") in daemon.commands
+
+
+def test_a_helper_minted_under_a_conflicted_workspace_still_runs_unscoped(tmp_path):
+    """Scoping is best effort at mint time; the operations that need authority
+    are the ones that report a conflicted workspace."""
+
+    from aptl.core.deployment._compose_resource_ownership import OwnershipConflictError
+
+    backend = DockerComposeBackend(project_dir=tmp_path, project_name="lab")
+
+    def conflicted():
+        raise OwnershipConflictError("workspace ownership state is unavailable")
+
+    backend._load_resource_ownership = conflicted
+
+    assert backend._ephemeral_container("content-probe").project is None

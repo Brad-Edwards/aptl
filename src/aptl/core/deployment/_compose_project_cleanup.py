@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 from typing import Protocol
 
+from aptl.core.deployment._compose_ownership_override import OwnershipConflictError
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.ephemeral_containers import (
     EphemeralContainer,
@@ -50,9 +51,14 @@ class ComposeProjectCleanupMixin(object):
 
         Loading rather than ensuring ownership keeps a helper from publishing
         workspace state or fixing the start attempt's identity as a side effect.
+        An unreadable ownership state scopes nothing here: minting a helper needs
+        no authority, and the operations that do are the ones that report it.
         """
 
-        ownership = self._load_resource_ownership()
+        try:
+            ownership = self._load_resource_ownership()
+        except OwnershipConflictError:
+            return None
         return None if ownership is None else ownership.project_name
 
     def _ephemeral_container(self, role: str) -> EphemeralContainer:
@@ -67,30 +73,55 @@ class ComposeProjectCleanupMixin(object):
         between create and start stays ``Created`` with nothing to reap it.
         Only helpers of this workspace's project that are not running are
         selected, so an in-flight helper and every node container are safe.
+        Every failure is reported, like any other teardown step, and none stops
+        the remaining helpers or the steps after this one.
         """
 
-        # A daemon that times out or is unreachable is a cleanup failure to
-        # report, like every other teardown step, never an exception that
-        # aborts the rest of teardown.
+        native_ids = self._stranded_helper_ids()
+        if native_ids is None:
+            return ["failed to list stranded helper containers"]
+        return [
+            failure
+            for failure in map(self._remove_stranded_helper, native_ids)
+            if failure is not None
+        ]
+
+    def _stranded_helper_ids(self) -> list[str] | None:
+        """Return this project's non-running helpers, or None if unlistable.
+
+        Unlike minting, the sweep needs the scope to be certain: a workspace it
+        cannot read is a failure to report, not a workspace with nothing in it.
+        """
+
         try:
-            project = self._ephemeral_project()
-            if project is None:
-                return []
-            listed = self._run(
-                stranded_helpers_command(project), timeout=_HELPER_CLEANUP_TIMEOUT
-            )
-            if listed.returncode != 0:
-                return ["failed to list stranded helper containers"]
-            failures = []
-            for native_id in (line.strip() for line in listed.stdout.splitlines()):
-                if not native_id:
-                    continue
-                removed = self._run(
-                    remove_container_command(native_id),
+            ownership = self._load_resource_ownership()
+            listed = (
+                None
+                if ownership is None
+                else self._run(
+                    stranded_helpers_command(ownership.project_name),
                     timeout=_HELPER_CLEANUP_TIMEOUT,
                 )
-                if removed.returncode != 0:
-                    failures.append("failed to remove a stranded helper container")
-            return failures
+            )
+        except (OwnershipConflictError, BackendTimeoutError, OSError):
+            return None
+        if listed is None:
+            return []
+        return (
+            None
+            if listed.returncode != 0
+            else [line.strip() for line in listed.stdout.splitlines() if line.strip()]
+        )
+
+    def _remove_stranded_helper(self, native_id: str) -> str | None:
+        """Remove one stranded helper with its volumes; return a failure if not."""
+
+        try:
+            removed = self._run(
+                remove_container_command(native_id), timeout=_HELPER_CLEANUP_TIMEOUT
+            )
         except (BackendTimeoutError, OSError):
-            return ["failed to list stranded helper containers"]
+            removed = None
+        if removed is not None and removed.returncode == 0:
+            return None
+        return "failed to remove a stranded helper container"

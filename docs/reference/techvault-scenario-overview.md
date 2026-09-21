@@ -14,11 +14,10 @@ boundary and curated startup slices, see
 
 ## Where the scenario is defined
 
-- `scenarios/techvault-operational.sdl.yaml` is the canonical RAES SDL that
-  public startup boots by default (nodes, vulnerabilities, accounts, content,
-  and relationships).
-- `scenarios/catalog.json` registers the operational default plus the four
-  curated variants as startup aliases.
+- The verified acquired `techvault` bundle supplies the canonical SDL, content,
+  and artifact identity used by ordinary startup.
+- The operator catalog projects that acquired identity. `scenarios/catalog.json`
+  belongs to checkout-only research fixtures and does not add startup aliases.
 
 Compose profiles are realized from the nodes the SDL declares (including
 dependency closure), not from a preset keyed off the scenario name.
@@ -131,7 +130,8 @@ only admitted apparatus that is necessary for required evidence and permitted
 by the scenario's realization scopes. TechVault's native evidence paths do not
 require OTel, so its normal startup omits that optional stack.
 
-Select a variant with `aptl lab start --scenario <catalog id>`. See
+From a matching source checkout, select a research fixture with
+`aptl lab start --scenario-path scenarios/<fixture-id>.sdl.yaml`. See
 [Curated RAES Variants](../sdl/techvault-curated-variants.md) for the full
 authoring and proof detail.
 
@@ -139,5 +139,5 @@ The versioned [Guided Purple Participant Profile](participant-profile.md)
 binds `techvault-attacker-target` to one supported workshop narrative, strict
 config, participant surface, readiness suite, and qualification budget. The
 curated scenario remains general RAES content; it is not renamed or forked for
-an event. The full `techvault-operational` stack remains the broader developer
-and research path.
+an event. The full acquired `techvault` pack supplies ordinary startup and participant
+appliance delivery; the guided fixture is a separate research input.

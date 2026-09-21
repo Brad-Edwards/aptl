@@ -106,7 +106,7 @@ schema `aptl.live-gate.manifest/v1`. It records:
 ## Observable surface
 
 The live gate validates the operational startup contract. The public boot
-SDL, `scenarios/techvault-operational.sdl.yaml`, is the contract: it names
+SDL from the validated acquired `techvault` bundle is the contract: it names
 the steady-state Compose services and networks the range actually realizes at
 range granularity, and there is no separate capture/parity evidence surface
 behind it (ADR-046). Evaluator contracts are part of the declared

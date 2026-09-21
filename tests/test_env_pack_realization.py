@@ -7,6 +7,11 @@ node-to-node dependencies resolve against realized services, and component
 builds resolve from the engine checkout (``component_root``), not the bundle. A
 regression in any of those re-introduces provisioner diagnostics that block the
 boot.
+
+The TechVault cases pin the released pack. The pack path itself -- a pack with
+no installed adapter, admitted by the production resolver -- is proven against
+APTL's owned fixture pack (issue #985), so it runs in the fast suite and no pack
+release can break it.
 """
 
 from __future__ import annotations
@@ -97,6 +102,57 @@ def test_techvault_pack_realizes_without_provisioner_diagnostics(
     assert evidence["provider"]["distribution"] == "aptl-labs"
     assert evidence["provider"]["entry_point"] == "techvault.aptl"
     assert evidence["provider"]["mapping_digest"].startswith("sha256:")
+
+
+def test_owned_fixture_pack_realizes_through_the_pack_path(tmp_path):
+    """A pack with no installed adapter realizes through the core default (#985).
+
+    The owned fixture is admitted by the same resolver as a released pack, so it
+    takes the pack-only realization path: its content identity is carried into
+    the realization, and serving groups resolve through the installed-provider
+    seam. No provider is registered for this identity, so the core unprofiled
+    default answers -- a generic pack must neither need an adapter nor borrow
+    TechVault's profiles to realize.
+    """
+
+    from aptl.backends.raes import (
+        RuntimeManager,
+        create_aptl_runtime_target,
+        parse_sdl_file,
+    )
+    from aptl.backends.raes_realization import interpret_provisioning_plan
+    from aptl.core.config import AptlConfig
+    from aptl.core.scenario_bundle import ScenarioSourceKind
+    from tests.fixture_pack import admit_fixture_pack
+
+    bundle = admit_fixture_pack(tmp_path / "staged")
+    config = AptlConfig(lab={"name": "fixture"}, containers={})
+    target = create_aptl_runtime_target(
+        project_dir=PROJECT_ROOT, config=config, backend=MagicMock(), bundle=bundle
+    )
+    plan = RuntimeManager(target).plan(parse_sdl_file(bundle.sdl_path))
+    assert [d.code for d in plan.diagnostics] == []
+
+    realization = interpret_provisioning_plan(
+        plan=plan.provisioning,
+        config=config,
+        bundle=bundle,
+        component_root=PROJECT_ROOT,
+    )
+
+    assert bundle.source_kind is ScenarioSourceKind.ENV_PACK
+    assert [d.code for d in realization.diagnostics] == []
+    assert [node.address for node in realization.nodes] == ["provision.node.smoke-box"]
+    assert [item.address for item in realization.placements] == [
+        "provision.content.smoke-sshd-config"
+    ]
+    assert realization.profiles == frozenset()
+    assert realization.pack_identity == bundle.pack_identity
+    evidence = realization.pack_interaction_evidence([])
+    assert evidence["pack"]["pack_id"] == "materialization-envelope"
+    assert evidence["pack"]["set_digest"] == bundle.pack_identity.set_digest
+    assert evidence["provider"]["provider_id"] == "aptl.core.unprofiled-default"
+    assert evidence["provider"]["entry_point"] == ""
 
 
 @pytest.mark.integration
@@ -321,14 +377,17 @@ def test_generated_base_compose_is_written_under_realization_root_not_the_pack(
     base is written under the writable realization root instead.
     """
 
+    from raes_env_packs import validate_pack_content_manifest
+
     from aptl.core.deployment._compose_node_generation import (
         GENERATED_COMPOSE_RELPATH,
         base_compose_file,
     )
     from aptl.core.deployment.realization import DeploymentRealizationSpec
+    from tests.fixture_pack import admit_fixture_pack
 
-    content_root = tmp_path / "staged-pack"  # pristine, no docker-compose.yml
-    content_root.mkdir()
+    # A real staged, validated pack: pristine, with no docker-compose.yml.
+    content_root = admit_fixture_pack(tmp_path / "staged").root
     realization_root = tmp_path / "engine"
     realization_root.mkdir()
     spec = DeploymentRealizationSpec(profiles=(), nodes=(), networks=())
@@ -337,8 +396,10 @@ def test_generated_base_compose_is_written_under_realization_root_not_the_pack(
 
     assert path == realization_root / GENERATED_COMPOSE_RELPATH
     assert path.is_file()
-    # Nothing generated under the pristine pack root.
+    # Nothing generated under the pristine pack root, so its exact inventory
+    # still passes env-packs' own gate.
     assert not (content_root / ".aptl").exists()
+    validate_pack_content_manifest(str(content_root))
 
 
 def test_in_tree_base_compose_uses_the_static_file(tmp_path):

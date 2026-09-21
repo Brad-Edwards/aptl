@@ -44,7 +44,6 @@ from aptl.backends.identity import (
     APTL_RAES_TARGET_VERSION,
     BackendIdentity,
 )
-from aptl.backends.raes import DEFAULT_RAES_SCENARIO
 from aptl.validation._live_gate_models import (
     CATEGORY_BACKEND_INSTANTIATION,
     CATEGORY_BACKEND_INTERPRETATION,

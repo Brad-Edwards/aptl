@@ -1,5 +1,11 @@
 # Issue #878 Scenario Verification Plugin Seam Preflight
 
+> Historical seam and qualification record. Its independent core/plugin wheel
+> claims describe the recorded candidate. The current `aptl-labs` wheel bundles
+> `aptl_techvault`; this is not proof of ADR-053’s core-only distribution
+> constraint. Issue #880 preserves that distinction and does not redefine the
+> packaging decision.
+
 This note fixes the APTL architecture boundary for semantic scenario
 verification. It is guidance, not an implementation plan. The issue contract
 decides the ownership change: APTL core provides a scenario-agnostic framework

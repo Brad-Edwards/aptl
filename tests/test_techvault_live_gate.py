@@ -5,12 +5,16 @@ The fast unit suite drives the scenario-generic orchestrator composed in
 ``aptl.validation._live_gate_checks`` without a live lab, by monkeypatching the
 lifecycle / snapshot / collector entry points. The destructive end-to-end live
 boot is the integration-marked, ``APTL_LIVE_GATE``-gated test at the bottom.
+
+The generic gate machinery is driven from APTL's owned fixture pack (issue
+#985), so no released scenario pack is acquired at collection time and a pack
+release cannot break these cases. Only the destructive TechVault qualification
+run uses the released pack.
 """
 
 import functools
 import json
 import os
-import tempfile
 import types
 from pathlib import Path
 
@@ -42,13 +46,20 @@ from aptl.validation.techvault_live_gate import (
     LiveGateState,
     validate_live_deployment,
 )
-from tests.helpers import techvault_scenario_bundle
+from tests.fixture_pack import FIXTURE_SDL, admit_fixture_pack
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-# The default TechVault scenario now ships as the bundled env-pack (#875); stage
-# it once for the module and drive the live gate from its validated SDL.
-BUNDLE = techvault_scenario_bundle(Path(tempfile.mkdtemp(prefix="aptl-live-gate-")))
-SCENARIO = BUNDLE.sdl_path
+# Path-only cases use the fixture pack's checked-in SDL; cases that need an
+# admitted pack identity stage the pack through the production resolver in the
+# scoped ``fixture_bundle`` fixture below.
+SCENARIO = FIXTURE_SDL
+
+
+@pytest.fixture(scope="module")
+def fixture_bundle(tmp_path_factory):
+    """The owned fixture pack, admitted once for the module (#985)."""
+
+    return admit_fixture_pack(tmp_path_factory.mktemp("live-gate-pack"))
 
 
 # --------------------------------------------------------------------------- #
@@ -1143,7 +1154,7 @@ def test_run_archive_writes_manifest_through_redacting_boundary():
         "participant-episode-history-event-stream-v1",
         "participant-behavior-history-event-stream-v1",
     ]
-    assert manifest["scenario"]["name"] == "techvault"
+    assert manifest["scenario"]["name"] == "materialization-envelope"
 
 
 def test_run_archive_roundtrips_to_local_store(tmp_path):
@@ -1354,13 +1365,22 @@ def test_live_gate_passes_on_techvault(tmp_path):
     installed-plugin identity is read back from both the validated report and
     the redacted persisted summary (#879). The verifier must be installed for
     this to pass; that is the point, not a precondition to work around.
+
+    The released pack is selected by configuration, exactly as ``aptl lab
+    start`` selects it, and no scenario path is passed: an explicit path is a
+    project-tree selection, so handing the gate a staged pack SDL would admit
+    TechVault without its pack identity or runtime parameters and fail before
+    any boot.
     """
     from aptl.core.config import load_config
 
     config = load_config(PROJECT_ROOT / "aptl.json")
+    assert (config.scenario.identity, config.scenario.source) == (
+        "techvault",
+        "env-pack",
+    )
     store = LocalRunStore(tmp_path)
     report = validate_live_deployment(
-        SCENARIO,
         project_dir=PROJECT_ROOT,
         config=config,
         options=LiveGateOptions(run_id="livegatequalification"),
@@ -1413,6 +1433,7 @@ def _patch_cli(mocker, *, passed=True):
 
 def test_validate_live_deployment_rejects_unsafe_run_id():
     report = validate_live_deployment(
+        SCENARIO,
         project_dir=PROJECT_ROOT,
         config=_config(),
         options=LiveGateOptions(run_id="../escape"),
@@ -1639,13 +1660,13 @@ def test_semantic_verification_runs_only_through_the_plugin_seam():
     assert not re.search(r"aptl-kali|_KALI_CONTAINER", source)
 
 
-def _provenance_report(status=VerificationStatus.PASSED):
+def _provenance_report(bundle, status=VerificationStatus.PASSED):
     """Return a validated plugin report carrying host-observed provenance."""
 
     from aptl.validation.scenario_verification import VerificationCheck
 
     scenario, backend = tlg._verification_identities(
-        SCENARIO, BUNDLE, "full-remote-control-plane", "docker-compose"
+        bundle.sdl_path, bundle, "full-remote-control-plane", "docker-compose"
     )
     return VerificationReport(
         status=status,
@@ -1653,10 +1674,10 @@ def _provenance_report(status=VerificationStatus.PASSED):
         backend=backend,
         run_id="rid",
         attempt_id="rid",
-        plugin_id="techvault",
-        distribution="aptl-techvault-verifier",
+        plugin_id="fixture",
+        distribution="aptl-fixture-verifier",
         distribution_version="0.2.0",
-        entry_point="techvault.aptl",
+        entry_point="fixture.aptl",
         checks=(
             VerificationCheck(
                 "detection-traversal", status, category="evidence_capture"
@@ -1665,13 +1686,16 @@ def _provenance_report(status=VerificationStatus.PASSED):
     )
 
 
-def test_failed_semantic_verification_surfaces_its_exact_diagnostic():
+def test_failed_semantic_verification_surfaces_its_exact_diagnostic(fixture_bundle):
     from aptl.validation.scenario_verification import VerificationCheck
 
     scenario, backend = tlg._verification_identities(
-        SCENARIO, BUNDLE, "full-remote-control-plane", "docker-compose"
+        fixture_bundle.sdl_path,
+        fixture_bundle,
+        "full-remote-control-plane",
+        "docker-compose",
     )
-    diagnostic = "techvault.detection-missed: expected correlated alert was absent"
+    diagnostic = "fixture.detection-missed: expected correlated alert was absent"
     report = VerificationReport(
         status=VerificationStatus.FAILED,
         scenario=scenario,
@@ -1693,7 +1717,10 @@ def test_failed_semantic_verification_surfaces_its_exact_diagnostic():
     assert checks[0].diagnostics == (diagnostic,)
 
 
-def test_the_returned_report_attributes_the_verdict_to_the_plugin(monkeypatch):
+def test_the_returned_report_attributes_the_verdict_to_the_plugin(
+    monkeypatch,
+    fixture_bundle,
+):
     """Which executable answer key produced this verdict must survive (#879).
 
     ``_semantic_checks`` reduces the plugin's validated report to checks, so the
@@ -1705,12 +1732,13 @@ def test_the_returned_report_attributes_the_verdict_to_the_plugin(monkeypatch):
 
     from aptl.validation import scenario_verification_discovery as svd
 
-    monkeypatch.setattr(svd, "verify_scenario", lambda context: _provenance_report())
+    provenance = _provenance_report(fixture_bundle)
+    monkeypatch.setattr(svd, "verify_scenario", lambda context: provenance)
     state = LiveGateState()
     state.snapshot = {"containers": [_container("aptl-kali")]}
     ctx = tlg._RunContext(
-        scenario_path=SCENARIO,
-        bundle=BUNDLE,
+        scenario_path=fixture_bundle.sdl_path,
+        bundle=fixture_bundle,
         boot_scenario_path=None,
         project_dir=PROJECT_ROOT,
         config=_config(),
@@ -1723,23 +1751,32 @@ def test_the_returned_report_attributes_the_verdict_to_the_plugin(monkeypatch):
 
     assert [check.name for check in checks] == ["detection-traversal"]
     report = tlg._report(
-        SCENARIO, "rid", ctx.options, list(checks), BUNDLE, ctx.config, state
+        fixture_bundle.sdl_path,
+        "rid",
+        ctx.options,
+        list(checks),
+        fixture_bundle,
+        ctx.config,
+        state,
     )
-    assert report.plugin_id == "techvault"
-    assert report.distribution == "aptl-techvault-verifier"
+    assert report.plugin_id == "fixture"
+    assert report.distribution == "aptl-fixture-verifier"
     assert report.distribution_version == "0.2.0"
-    assert report.entry_point == "techvault.aptl"
-    assert "aptl-techvault-verifier" in report.render()
+    assert report.entry_point == "fixture.aptl"
+    assert "aptl-fixture-verifier" in report.render()
 
 
-def test_verifier_observes_semantic_not_workspace_container_names(monkeypatch):
+def test_verifier_observes_semantic_not_workspace_container_names(
+    monkeypatch,
+    fixture_bundle,
+):
     from aptl.validation import scenario_verification_discovery as svd
 
     observed = []
 
     def verify(context):
         observed.append(context.observations["containers"])
-        return _provenance_report()
+        return _provenance_report(fixture_bundle)
 
     monkeypatch.setattr(svd, "verify_scenario", verify)
     state = LiveGateState()
@@ -1748,8 +1785,8 @@ def test_verifier_observes_semantic_not_workspace_container_names(monkeypatch):
         "aptl-kali": "aptl-w123456789abc-kali"
     }
     ctx = tlg._RunContext(
-        scenario_path=SCENARIO,
-        bundle=BUNDLE,
+        scenario_path=fixture_bundle.sdl_path,
+        bundle=fixture_bundle,
         boot_scenario_path=None,
         project_dir=PROJECT_ROOT,
         config=_config(),
@@ -1763,13 +1800,16 @@ def test_verifier_observes_semantic_not_workspace_container_names(monkeypatch):
     assert observed == [["aptl-kali"]]
 
 
-def test_a_blocked_seam_leaves_no_plugin_attribution(monkeypatch):
+def test_a_blocked_seam_leaves_no_plugin_attribution(monkeypatch, fixture_bundle):
     """With nothing qualified to run, there is no plugin to attribute to."""
 
     from aptl.validation import scenario_verification_discovery as svd
 
     scenario, backend = tlg._verification_identities(
-        SCENARIO, BUNDLE, "full-remote-control-plane", "docker-compose"
+        fixture_bundle.sdl_path,
+        fixture_bundle,
+        "full-remote-control-plane",
+        "docker-compose",
     )
     blocked = VerificationReport(
         status=VerificationStatus.BLOCKED,
@@ -1783,8 +1823,8 @@ def test_a_blocked_seam_leaves_no_plugin_attribution(monkeypatch):
     state = LiveGateState()
     state.snapshot = {"containers": []}
     ctx = tlg._RunContext(
-        scenario_path=SCENARIO,
-        bundle=BUNDLE,
+        scenario_path=fixture_bundle.sdl_path,
+        bundle=fixture_bundle,
         boot_scenario_path=None,
         project_dir=PROJECT_ROOT,
         config=_config(),
@@ -1795,7 +1835,13 @@ def test_a_blocked_seam_leaves_no_plugin_attribution(monkeypatch):
 
     checks = tlg._semantic_checks(ctx, state)
     report = tlg._report(
-        SCENARIO, "rid", ctx.options, list(checks), BUNDLE, ctx.config, state
+        fixture_bundle.sdl_path,
+        "rid",
+        ctx.options,
+        list(checks),
+        fixture_bundle,
+        ctx.config,
+        state,
     )
 
     assert report.status is VerificationStatus.BLOCKED
@@ -1803,12 +1849,14 @@ def test_a_blocked_seam_leaves_no_plugin_attribution(monkeypatch):
     assert report.distribution == ""
 
 
-def test_the_persisted_manifest_records_the_plugin_that_produced_the_verdict():
+def test_the_persisted_manifest_records_the_plugin_that_produced_the_verdict(
+    fixture_bundle,
+):
     """The durable audit artifact carries the same host-observed identity."""
 
     store = _RecordingStore()
     state = _archive_state()
-    state.verification = _provenance_report()
+    state.verification = _provenance_report(fixture_bundle)
 
     check = lgc.check_run_archive_manifest(
         SCENARIO,
@@ -1824,15 +1872,18 @@ def test_the_persisted_manifest_records_the_plugin_that_produced_the_verdict():
     _, _, manifest = store.json_writes[0]
     verification = manifest["validation"]["verification"]
     assert verification == {
-        "plugin_id": "techvault",
-        "distribution": "aptl-techvault-verifier",
+        "plugin_id": "fixture",
+        "distribution": "aptl-fixture-verifier",
         "distribution_version": "0.2.0",
-        "entry_point": "techvault.aptl",
+        "entry_point": "fixture.aptl",
         "extension_api_version": "2",
     }
 
 
-def test_the_manifest_states_plainly_when_no_plugin_answered(monkeypatch):
+def test_the_manifest_states_plainly_when_no_plugin_answered(
+    monkeypatch,
+    fixture_bundle,
+):
     """An absent verdict is recorded as absent, not as empty attribution.
 
     Driven through the real blocked seam rather than a state where semantic
@@ -1845,7 +1896,10 @@ def test_the_manifest_states_plainly_when_no_plugin_answered(monkeypatch):
     from aptl.validation import scenario_verification_discovery as svd
 
     scenario, backend = tlg._verification_identities(
-        SCENARIO, BUNDLE, "full-remote-control-plane", "docker-compose"
+        fixture_bundle.sdl_path,
+        fixture_bundle,
+        "full-remote-control-plane",
+        "docker-compose",
     )
     monkeypatch.setattr(
         svd,
@@ -1861,8 +1915,8 @@ def test_the_manifest_states_plainly_when_no_plugin_answered(monkeypatch):
     )
     state = _archive_state()
     ctx = tlg._RunContext(
-        scenario_path=SCENARIO,
-        bundle=BUNDLE,
+        scenario_path=fixture_bundle.sdl_path,
+        bundle=fixture_bundle,
         boot_scenario_path=None,
         project_dir=PROJECT_ROOT,
         config=_config(),
@@ -1890,18 +1944,18 @@ def test_the_manifest_states_plainly_when_no_plugin_answered(monkeypatch):
     assert manifest["validation"]["status"] == "blocked"
 
 
-def test_report_and_plugin_admission_share_canonical_bundle_identities():
+def test_report_and_plugin_admission_share_canonical_bundle_identities(fixture_bundle):
     scenario, backend = tlg._verification_identities(
-        SCENARIO,
-        BUNDLE,
+        fixture_bundle.sdl_path,
+        fixture_bundle,
         "full-remote-control-plane",
         "docker-compose",
     )
 
-    assert scenario.identity == BUNDLE.identity
-    assert scenario.source_kind == BUNDLE.source_kind.value
-    assert scenario.version == BUNDLE.pack_identity.pack_version
-    assert scenario.content_digest == BUNDLE.pack_identity.set_digest
+    assert scenario.identity == fixture_bundle.identity
+    assert scenario.source_kind == fixture_bundle.source_kind.value
+    assert scenario.version == fixture_bundle.pack_identity.pack_version
+    assert scenario.content_digest == fixture_bundle.pack_identity.set_digest
     assert backend.target_name == "aptl"
     assert backend.target_version == "0.1.0"
     assert backend.profile == "full-remote-control-plane"

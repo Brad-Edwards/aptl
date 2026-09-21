@@ -4,7 +4,7 @@
 #
 # For the named curated variant this script: (1) sets aptl.json containers to the
 # variant's matched profile set, (2) boots it through the PUBLIC start path
-# (`uv run aptl lab start --scenario <id>`), (3) captures the canonical
+# (`uv run aptl lab start --scenario-path scenarios/<id>.sdl.yaml`), (3) captures the canonical
 # RangeSnapshot (`aptl lab status --json`), (4) compares the running range to the
 # variant's model-derived reduced surface via `aptl.validation.curated_live_proof`,
 # (5) drives the TechVault attacker-target participant action through the RAES
@@ -79,7 +79,7 @@ fi
 
 # 2. Boot through the public start path (timed). A non-zero exit fails the proof.
 START=$(date +%s)
-uv run aptl lab start --scenario "$CATALOG_ID" > "$OUT_DIR/boot.log" 2>&1
+uv run aptl lab start --scenario-path "scenarios/${CATALOG_ID}.sdl.yaml" > "$OUT_DIR/boot.log" 2>&1
 BOOT_RC=$?
 ELAPSED=$(( $(date +%s) - START ))
 READINESS=$(head -1 "$OUT_DIR/boot.log")
@@ -145,7 +145,7 @@ result = {
     "catalog_id": os.environ["APTL_CLP_ID"],
     "scenario": pathlib.Path(os.environ["APTL_CLP_SCENARIO"]).name,
     "matched_config_containers": sorted(k for k, v in matched.items() if v),
-    "command": f"uv run aptl lab start --scenario {os.environ['APTL_CLP_ID']}",
+    "command": f"uv run aptl lab start --scenario-path scenarios/{os.environ['APTL_CLP_ID']}.sdl.yaml",
     "readiness_outcome": os.environ["APTL_CLP_READINESS"].strip(),
     "boot_elapsed_seconds": int(os.environ["APTL_CLP_ELAPSED"]),
     **matrix.to_dict(),

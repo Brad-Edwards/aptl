@@ -151,9 +151,10 @@ def test_node22_image_preloads_exact_mcp_locks_for_offline_materialization() -> 
     assert (
         "COPY requirements/runtime.txt /opt/aptl/runtime-requirements.txt" in dockerfile
     )
-    assert "python3 -m pip download --no-deps --require-hashes" in dockerfile
-    assert "mcp-red-sources.tar" in dockerfile
-    assert "mcp-blue-sources.tar" in dockerfile
+    assert "python3 -m pip install --no-deps --require-hashes" in dockerfile
+    assert "python3 -m aptl_techvault.build_cache" in dockerfile
+    assert "npm-cache-input-identity.json" in dockerfile
+    assert "zipfile -e" not in dockerfile
     assert "npm_config_cache=/opt/aptl/npm-cache" in dockerfile
     assert "aptl-mcp-common mcp-casemgmt mcp-indexer mcp-network" in dockerfile
     assert "mcp-red mcp-reverse mcp-soar mcp-threatintel mcp-wazuh" in dockerfile
@@ -194,3 +195,21 @@ def test_two_seat_qualification_uses_a_distinct_client_identity_per_seat() -> No
     assert '--access-public-key "$identity.pub"' in seat_loop
     assert '--access-identity-file "$identity"' in seat_loop
     assert "ssh-keygen -q -t ed25519 -N '' -f \"$work/client-key\"" not in qualifier
+
+
+def test_image_publisher_has_github_api_authentication():
+    step = next(
+        step
+        for step in _jobs()["publish-appliance-images"]["steps"]
+        if step.get("run") == "scripts/appliance/publish-images.sh"
+    )
+    assert step["env"]["GH_TOKEN"] == "${{ github.token }}"
+
+
+def test_checkout_free_release_upload_has_explicit_repository():
+    step = next(
+        step
+        for step in _jobs()["publish-appliance"]["steps"]
+        if "gh release upload" in step.get("run", "")
+    )
+    assert step["env"]["GH_REPO"] == "${{ github.repository }}"

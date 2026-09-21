@@ -92,7 +92,7 @@ class TestPackages:
     def test_preinstalled_packages_need_no_index_or_install(self):
         def responder(container, argv):
             if "dpkg-query" in argv:
-                return 0, "ii  postgresql\n"
+                return 0, "ii \tpostgresql\t1.0\tamd64\t\n"
             raise AssertionError(f"unexpected package command: {argv}")
 
         fake = _FakeExec(responder)
@@ -138,7 +138,7 @@ class TestPackages:
     def test_observe_installed_parses_manager_query_output(self):
         def responder(container, argv):
             if "dpkg-query" in argv:
-                return 0, "ii  curl\nii  wazuh-manager\n"
+                return 0, "ii \tcurl\t1.0\tamd64\t\nii \twazuh-manager\t1.0\tamd64\t\n"
             return 0, ""
 
         observed = _executor(_FakeExec(responder)).observe_installed_packages(

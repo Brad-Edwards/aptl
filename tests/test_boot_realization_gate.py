@@ -29,6 +29,8 @@ from raes_contracts.workflow import (
     WorkflowStatus,
 )
 
+from tests.fixture_pack import FIXTURE_SDL
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "ci" / "assert_boot_realization.py"
 
@@ -630,7 +632,7 @@ class TestFixtureDeclaresOnlyCorroborableState:
     the backend's own support predicates so that regression costs seconds.
     """
 
-    FIXTURE = ROOT / "tests" / "fixtures" / "materialization-envelope.sdl.yaml"
+    FIXTURE = FIXTURE_SDL
 
     def _runtime(self):
         from raes import parse_sdl_file

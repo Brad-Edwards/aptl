@@ -978,12 +978,11 @@ def test_declared_package_is_disclosed_only_after_guest_query_matches():
     query = (
         "dpkg-query",
         "-W",
-        "-f=${Package}\\t${Version}\\t${Architecture}\\n",
-        "curl",
+        "-f=${db:Status-Abbrev}\\t${binary:Package}\\t${Version}\\t${Architecture}\\t${Provides}\\n",
     )
     backend = _Backend(
         {_CONTAINER: _inspect()},
-        exec_results={_CONTAINER: {query: (0, "curl\t8.10.1-1\tamd64\n")}},
+        exec_results={_CONTAINER: {query: (0, "ii \tcurl\t8.10.1-1\tamd64\t\n")}},
     )
 
     codes, _provenance, observations = _gate(runtime, backend, "runtime-packages")
@@ -1013,7 +1012,7 @@ def test_declared_package_corroborates_through_its_installed_provider():
     provides = (
         "dpkg-query",
         "-W",
-        "-f=${Package}\\t${Version}\\t${Architecture}\\t${Provides}\\n",
+        "-f=${db:Status-Abbrev}\\t${binary:Package}\\t${Version}\\t${Architecture}\\t${Provides}\\n",
     )
     backend = _Backend(
         {_CONTAINER: _inspect()},
@@ -1022,8 +1021,8 @@ def test_declared_package_corroborates_through_its_installed_provider():
                 direct: (1, ""),
                 provides: (
                     0,
-                    "bind9-dnsutils\t1:9.20.26-1~deb13u1\tamd64\tdnsutils\n"
-                    "curl\t8.14.1-2\tamd64\t\n",
+                    "ii \tbind9-dnsutils\t1:9.20.26-1~deb13u1\tamd64\tdnsutils\n"
+                    "ii \tcurl\t8.14.1-2\tamd64\t\n",
                 ),
             }
         },
@@ -1049,14 +1048,14 @@ def test_declared_package_with_no_provider_is_still_rejected():
     provides = (
         "dpkg-query",
         "-W",
-        "-f=${Package}\\t${Version}\\t${Architecture}\\t${Provides}\\n",
+        "-f=${db:Status-Abbrev}\\t${binary:Package}\\t${Version}\\t${Architecture}\\t${Provides}\\n",
     )
     backend = _Backend(
         {_CONTAINER: _inspect()},
         exec_results={
             _CONTAINER: {
                 direct: (1, ""),
-                provides: (0, "curl\t8.14.1-2\tamd64\t\n"),
+                provides: (0, "ii \tcurl\t8.14.1-2\tamd64\t\n"),
             }
         },
     )

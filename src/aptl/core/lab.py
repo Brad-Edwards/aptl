@@ -3550,13 +3550,19 @@ def _native_evidence_request(
     declared_keys = (
         ctx.admitted_start.capture_selection.contribution.runtime_environment_keys
     )
+    # Seeding may create service credentials after the startup environment was
+    # loaded. Refresh at acquisition while keeping the admitted key allowlist.
+    environment = dict(ctx.raw_env)
+    env_path = ctx.project_dir / ".env"
+    if env_path.exists():
+        environment.update(load_dotenv(env_path))
     return NativeEvidenceRequest(
         plan=plan,
         backend=ctx.backend,
         realization=realization,
         project_dir=ctx.project_dir,
         environment=MappingProxyType(
-            {key: ctx.raw_env[key] for key in declared_keys if key in ctx.raw_env}
+            {key: environment[key] for key in declared_keys if key in environment}
         ),
         run_store=ctx.run_store,
         run_id=ctx.run_id,

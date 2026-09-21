@@ -138,7 +138,7 @@ if [ -x "$SCRIPT_DIR/thehive-apikey.sh" ]; then
     if THEHIVE_API_KEY=$("$SCRIPT_DIR/thehive-apikey.sh" 2>/dev/null) && \
         [ -n "$THEHIVE_API_KEY" ]; then
         export THEHIVE_API_KEY
-        echo "  TheHive API key provisioned: ${THEHIVE_API_KEY:0:8}..."
+        echo "  TheHive API key provisioned"
 
         # Persist provisioned + default seed keys back to .env so MCP servers
         # (which spawn fresh per tool call and load .env at startup) can
@@ -192,8 +192,8 @@ INDEXER_PASS="${INDEXER_PASSWORD:-SecretPassword}"
 max_wait=600
 elapsed=0
 while [ $elapsed -lt $max_wait ]; do
-    status=$(curl -ks -u "$INDEXER_USER:$INDEXER_PASS" \
-        "$INDEXER_URL/_cluster/health" 2>/dev/null \
+    status=$(aptl_curl_config -ks -u "$INDEXER_USER:$INDEXER_PASS" \
+        "$INDEXER_URL/_cluster/health" | curl --config - 2>/dev/null \
         | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4) || true
 
     if [ "$status" = "green" ] || [ "$status" = "yellow" ]; then
@@ -251,9 +251,9 @@ echo "[6/6] Configuring Wazuh -> Shuffle integration..."
 WEBHOOK_FILE="${APTL_SHUFFLE_WEBHOOK_FILE:-/tmp/aptl_shuffle_webhook_url}"
 if [ -f "$WEBHOOK_FILE" ]; then
     WEBHOOK_URL=$(cat "$WEBHOOK_FILE")
-    if docker exec "$WAZUH_MANAGER_CONTAINER" bash -c \
-        "echo '${WEBHOOK_URL}' > /var/ossec/etc/shuffle_webhook_url"; then
-        echo "  Webhook URL written to Wazuh manager: ${WEBHOOK_URL}"
+    if docker exec -i "$WAZUH_MANAGER_CONTAINER" bash -c \
+        'cat > /var/ossec/etc/shuffle_webhook_url' <<<"$WEBHOOK_URL"; then
+        echo "  Webhook URL written to Wazuh manager"
     else
         record_seed_failure \
             "Wazuh to Shuffle" \

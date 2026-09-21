@@ -114,9 +114,9 @@ Alert          → 100606     → Level 13
 Emergency      → 100607     → Level 15
 ```
 
-**Configuration Files:**
-- [falco_rules.xml](https://github.com/Brad-Edwards/aptl/blob/main/config/wazuh_cluster/falco_rules.xml) - Custom Falco rules
-- [wazuh_manager.conf](https://github.com/Brad-Edwards/aptl/blob/main/config/wazuh_cluster/wazuh_manager.conf) - Manager config
+**Configuration sources:**
+- Acquired [`techvault` environment pack](https://github.com/OpenRAE/env-packs/tree/main/packs/techvault) - scenario-owned Falco rules
+- [wazuh_manager.conf](https://github.com/Brad-Edwards/aptl/blob/main/config/wazuh_cluster/wazuh_manager.conf) - generic manager config
 
 ## MCP Integration
 

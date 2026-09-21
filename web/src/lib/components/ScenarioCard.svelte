@@ -39,6 +39,9 @@
 	{#if scenario.description}
 		<p class="mt-1 line-clamp-3 text-xs text-aptl-text-muted">{scenario.description}</p>
 	{/if}
+	<p class="mt-2 font-mono text-xs text-aptl-text-muted">
+		{scenario.pack.id} {scenario.pack.version} · {scenario.pack.maturity}
+	</p>
 
 	<div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
 		{#if scenario.mode}

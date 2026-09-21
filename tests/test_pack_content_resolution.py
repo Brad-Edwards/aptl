@@ -5,8 +5,9 @@ source declares an exact env-pack artifact (opaque id + ``sha256`` digest) is
 lowered to a ``pack-file`` / ``pack-directory`` realization, and the backend seed
 opens the bytes through ``resolve_pack_artifact`` — which byte-binds them to the
 pack manifest digest — rather than resolving a path in the engine's tree. These
-tests exercise the real bundled TechVault pack, so a passing seed proves the
-declared bytes were resolved and digest-verified, not hand-copied.
+tests exercise APTL's owned fixture pack (issue #985), admitted through the
+production resolver, so a passing seed proves the declared bytes were resolved
+and digest-verified, not hand-copied, without depending on a released pack.
 """
 
 from __future__ import annotations
@@ -18,21 +19,13 @@ from raes_contracts.planning import PlannedResource, RuntimeDomain
 
 from aptl.backends.raes_content_realization import resolve_content_placement
 from aptl.core.content_seed import build_content_volume_seeds
-from aptl.core.scenario_bundle import env_pack_bundle
+from tests.fixture_pack import NOTICE, TREE, admit_fixture_pack
 
-_README = (
-    "techvault-misp-sync-readme",
-    "sha256:07c3dee4987c47e57bc8f0333073abdc07b832a7e82136c3123577531978231b",
-    "text/markdown",
-)
-_SRC_TAR = (
-    "techvault-misp-sync-src",
-    "sha256:c872e56e963934883190f7fed307116504c39d6771a528852a8b4e27682e8b91",
-    "application/x-tar",
-)
+_FILE = (NOTICE.artifact_id, NOTICE.digest, NOTICE.media_type)
+_ARCHIVE = (TREE.artifact_id, TREE.digest, TREE.media_type)
 
 
-def _file_spec(artifact_id, digest, media_type, *, path="readme.md"):
+def _file_spec(artifact_id, digest, media_type, *, path="notice.txt"):
     return {
         "type": "file",
         "target": "fileshare",
@@ -85,25 +78,25 @@ def _resolve(spec):
 
 
 def test_file_source_lowers_to_a_pack_file_realization():
-    content, diagnostics = _resolve(_file_spec(*_README))
+    content, diagnostics = _resolve(_file_spec(*_FILE))
     assert not diagnostics
     assert content is not None
     assert content.source_kind == "pack-file"
-    assert content.artifact_id == _README[0]
-    assert content.artifact_digest == _README[1]
+    assert content.artifact_id == _FILE[0]
+    assert content.artifact_digest == _FILE[1]
     assert content.source_relpath is None  # no host path anywhere
 
 
 def test_directory_source_lowers_to_a_pack_directory_realization():
-    content, diagnostics = _resolve(_dir_spec(*_SRC_TAR))
+    content, diagnostics = _resolve(_dir_spec(*_ARCHIVE))
     assert not diagnostics
     assert content is not None
     assert content.source_kind == "pack-directory"
-    assert content.artifact_id == _SRC_TAR[0]
+    assert content.artifact_id == _ARCHIVE[0]
 
 
 def test_directory_source_that_is_not_an_archive_is_rejected():
-    content, diagnostics = _resolve(_dir_spec(_README[0], _README[1], "text/markdown"))
+    content, diagnostics = _resolve(_dir_spec(*_FILE))
     assert content is None
     assert any("pack-directory-not-archive" in d.message for d in diagnostics)
 
@@ -111,7 +104,7 @@ def test_directory_source_that_is_not_an_archive_is_rejected():
 def test_a_source_naming_no_artifact_id_is_rejected():
     """An exact artifact requirement with no resolvable identity fails closed."""
 
-    spec = _file_spec(*_README)
+    spec = _file_spec(*_FILE)
     spec["source"]["artifact_requirement"]["exact_artifact"]["artifact_id"] = ""
     content, diagnostics = _resolve(spec)
     assert content is None
@@ -119,15 +112,14 @@ def test_a_source_naming_no_artifact_id_is_rejected():
 
 
 def test_malformed_digest_is_rejected():
-    content, diagnostics = _resolve(_file_spec(_README[0], "sha256:nope", "text/markdown"))
+    content, diagnostics = _resolve(_file_spec(_FILE[0], "sha256:nope", _FILE[2]))
     assert content is None
     assert any("pack-artifact-invalid-digest" in d.message for d in diagnostics)
 
 
-@pytest.mark.integration
 def test_seed_resolves_and_digest_verifies_file_bytes_from_the_pack(tmp_path):
-    bundle = env_pack_bundle(tmp_path / "staged", "techvault")
-    content, _ = _resolve(_file_spec(*_README))
+    bundle = admit_fixture_pack(tmp_path / "staged")
+    content, _ = _resolve(_file_spec(*_FILE))
     (seed,) = build_content_volume_seeds(bundle.root, (content,))
     rendered = seed.source_dir / seed.files[0].src
     assert rendered.is_file()
@@ -135,23 +127,24 @@ def test_seed_resolves_and_digest_verifies_file_bytes_from_the_pack(tmp_path):
     import hashlib
 
     digest = "sha256:" + hashlib.sha256(rendered.read_bytes()).hexdigest()
-    assert digest == _README[1]
+    assert digest == _FILE[1]
 
 
-@pytest.mark.integration
 def test_seed_extracts_a_pack_directory_tar_from_the_pack(tmp_path):
-    bundle = env_pack_bundle(tmp_path / "staged", "techvault")
-    content, _ = _resolve(_dir_spec(*_SRC_TAR))
+    bundle = admit_fixture_pack(tmp_path / "staged")
+    content, _ = _resolve(_dir_spec(*_ARCHIVE))
     (seed,) = build_content_volume_seeds(bundle.root, (content,))
     extracted = seed.source_dir / seed.files[0].src
     assert extracted.is_dir()
-    assert any(extracted.rglob("*"))  # the archive materialized real files
+    # The archive materialized its real member, byte for byte.
+    assert (extracted / "notes" / "readme.txt").read_bytes() == (
+        b"Synthetic directory content owned by the APTL test suite.\n"
+    )
 
 
-@pytest.mark.integration
 def test_seed_fails_closed_on_declared_digest_mismatch(tmp_path):
-    bundle = env_pack_bundle(tmp_path / "staged", "techvault")
-    content, _ = _resolve(_file_spec(*_README))
+    bundle = admit_fixture_pack(tmp_path / "staged")
+    content, _ = _resolve(_file_spec(*_FILE))
     tampered = content.__class__(
         **{**content.__dict__, "artifact_digest": "sha256:" + "0" * 64}
     )

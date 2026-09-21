@@ -5,6 +5,10 @@ selects the same small SDL used by the real-Docker materializer integration
 test. The scenario intentionally belongs to APTL's test suite rather than to a
 scenario adapter: it proves the generic parse, plan, qualification, generated
 model, and pre-mutation lifecycle path without borrowing TechVault semantics.
+It is the SDL of APTL's owned fixture pack (issue #985), selected by explicit
+path exactly as the clean-wheel job selects it, so this is project-tree
+admission; admission of the pack itself is proven in
+``tests/test_scenario_bundle.py``.
 
 The live clean-wheel job continues from this boundary through public CLI start,
 status, native readback, and teardown. Keeping the preflight here separately
@@ -18,10 +22,7 @@ from pathlib import Path
 
 import pytest
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-_MATERIALIZATION_ENVELOPE = (
-    _REPO_ROOT / "tests" / "fixtures" / "materialization-envelope.sdl.yaml"
-)
+from tests.fixture_pack import FIXTURE_SDL as _MATERIALIZATION_ENVELOPE
 
 
 @pytest.fixture(scope="module")
@@ -34,6 +35,7 @@ def admitted_fresh_lab(tmp_path_factory):
     project_dir = tmp_path_factory.mktemp("fresh") / "fresh-lab"
     materialize(project_dir)
     selected = project_dir / "scenarios" / "materialization-envelope.sdl.yaml"
+    selected.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(_MATERIALIZATION_ENVELOPE, selected)
 
     assert not (project_dir / "config" / "soc_certs").exists()

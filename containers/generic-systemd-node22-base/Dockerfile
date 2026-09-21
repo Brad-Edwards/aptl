@@ -1,7 +1,7 @@
 # APTL backend substrate for nodes that require Node.js 22 and systemd-managed
 # services.  The product/runtime state remains materialized from the admitted
 # scenario; this image supplies only the selected language + init/SSH substrate.
-FROM node:25-trixie@sha256:b6cf8d20ee78aa10f0a6b98242e26d547869801abd6bc3f7094b0a54301dee02
+FROM node:22-trixie@sha256:ae3b84a81a94a99f50110663c936ccda31a3bbf1e91bb6b23c638669f777a6f2
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         systemd systemd-sysv dbus gnupg openssh-server \
@@ -9,29 +9,24 @@ RUN apt-get update \
         smbclient ldap-utils sqlmap hydra python3-impacket \
     && apt-get clean \
     && find /var/lib/apt/lists -mindepth 1 -delete
-# First boot is sealed from the network. The admitted TechVault MCP sources are
-# artifacts in the hash-pinned RAES pack, not the repository's mcp/ tree. Prime
-# npm from those exact pack lockfiles so offline materialization uses the same
-# dependency closure that the guest receives.
+# This image's offline cache is an APTL-owned build integration. Resolve the
+# exact compatible pack through the normal acquisition/artifact validators;
+# retain dependency cache + identity evidence, never a second runtime source.
 COPY requirements/runtime.txt /opt/aptl/runtime-requirements.txt
+COPY src/aptl /tmp/aptl-cache-src/aptl
+COPY src/aptl_techvault /tmp/aptl-cache-src/aptl_techvault
 ENV npm_config_cache=/opt/aptl/npm-cache
 RUN set -eu; \
-    sed -n '/^raes-env-packs==/,/^[[:space:]]*# via /p' \
-        /opt/aptl/runtime-requirements.txt > /tmp/raes-pack-requirement.txt; \
-    python3 -m pip download --no-deps --require-hashes \
-        --dest /tmp/raes-wheel -r /tmp/raes-pack-requirement.txt; \
-    mkdir -p /tmp/raes-wheel/unpacked /opt/aptl/npm-source; \
-    python3 -m zipfile -e /tmp/raes-wheel/raes_env_packs-*.whl \
-        /tmp/raes-wheel/unpacked; \
-    pack_content=/tmp/raes-wheel/unpacked/raes_env_packs/resources/packs/techvault/assets/content; \
-    tar -xf "$pack_content/mcp-red-sources.tar" -C /opt/aptl/npm-source; \
-    tar -xf "$pack_content/mcp-blue-sources.tar" -C /opt/aptl/npm-source; \
+    python3 -m pip install --no-deps --require-hashes \
+        --target /tmp/aptl-cache-deps -r /opt/aptl/runtime-requirements.txt; \
+    PYTHONPATH=/tmp/aptl-cache-src:/tmp/aptl-cache-deps \
+        python3 -m aptl_techvault.build_cache /opt/aptl/npm-source /tmp/aptl-cache-pack \
+        > /opt/aptl/npm-cache-input-identity.json; \
     for project in aptl-mcp-common mcp-casemgmt mcp-indexer mcp-network \
         mcp-red mcp-reverse mcp-soar mcp-threatintel mcp-wazuh; do \
         npm --prefix "/opt/aptl/npm-source/$project" ci \
             --include=dev --ignore-scripts --no-audit --no-fund; \
     done; \
-    find /opt/aptl/npm-source -type d -name node_modules -prune -exec rm -rf {} +; \
-    rm -rf /tmp/raes-wheel /tmp/raes-pack-requirement.txt
+    rm -rf /opt/aptl/npm-source /tmp/aptl-cache-src /tmp/aptl-cache-deps /tmp/aptl-cache-pack
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]

@@ -16,6 +16,8 @@ import re
 
 import yaml
 
+from aptl.utils.pathsafe import PathContainmentError, open_contained_nofollow
+
 from aptl.backends.scenario_startup import (
     ScenarioStartupProviderError,
     selected_runtime_provider,
@@ -75,10 +77,12 @@ def _project_file(root: Path, name: str) -> Path:
     ):
         raise ScenarioStartupProviderError(_INVALID)
     resolved_root = root.resolve()
-    resolved = (resolved_root / path).resolve()
-    if not resolved.is_relative_to(resolved_root) or not resolved.is_file():
-        raise ScenarioStartupProviderError(_INVALID)
-    return resolved
+    try:
+        with open_contained_nofollow(resolved_root, name):
+            pass  # NOSONAR
+    except PathContainmentError as exc:
+        raise ScenarioStartupProviderError(_INVALID) from exc
+    return resolved_root / path
 
 
 def _target(value: str) -> str:

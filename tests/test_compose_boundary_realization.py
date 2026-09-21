@@ -3,6 +3,8 @@
 import json
 from unittest.mock import MagicMock
 
+import pytest
+
 from aptl.core.deployment.boundary import (
     BoundaryNetwork,
     BoundaryWorkload,
@@ -91,13 +93,11 @@ def test_boundary_is_applied_on_daemon_host_not_workload_namespace(tmp_path) -> 
 
     assert receipt.success is True
     apply_cmd = backend._run_with_input.call_args_list[0].args[0]
-    assert apply_cmd[:5] == [
-        "docker",
-        "run",
-        "--rm",
-        "--network",
-        "host",
-    ]
+    assert apply_cmd[:2] == ["docker", "run"]
+    assert apply_cmd[apply_cmd.index("--network") + 1] == "host"
+    # Named, so a run that does not complete can remove exactly this helper.
+    assert "--rm" in apply_cmd
+    assert apply_cmd[apply_cmd.index("--name") + 1].startswith("aptl-boundary-apply-")
     assert "--cap-add=NET_ADMIN" in apply_cmd
     assert "--privileged" not in apply_cmd
     assert "--read-only" in apply_cmd
@@ -141,3 +141,54 @@ def test_missing_signed_helper_never_falls_back_to_a_local_build(tmp_path) -> No
     assert receipt.error == "Signed boundary enforcement helper was unavailable."
     backend._run_with_input.assert_not_called()
     assert backend._run.call_count == 1
+
+
+def test_a_timed_out_boundary_helper_is_removed_by_name(tmp_path) -> None:
+    """A killed helper CLI must not leave the helper container behind.
+
+    ``--rm`` removes only a container that started and exited. When the
+    30-second timeout kills ``docker run`` between create and start, the helper
+    stays ``Created`` forever — unnamed and unlabelled before this, so no
+    teardown could find it. A rootless lab kept one for days. The run now
+    removes the exact container it named.
+    """
+
+    from aptl.core.deployment.errors import BackendTimeoutError
+
+    backend = DockerComposeBackend(tmp_path, project_name="seat-17")
+    backend._run = MagicMock(return_value=MagicMock(returncode=0))
+    backend._run_with_input = MagicMock(
+        side_effect=BackendTimeoutError("docker run timed out after 30s")
+    )
+
+    with pytest.raises(BackendTimeoutError):
+        backend.realize_boundary(_spec())
+
+    apply_cmd = backend._run_with_input.call_args.args[0]
+    helper_name = apply_cmd[apply_cmd.index("--name") + 1]
+    removals = [
+        call.args[0]
+        for call in backend._run.call_args_list
+        if call.args[0][:2] == ["docker", "rm"]
+    ]
+    assert removals == [["docker", "rm", "-f", "-v", helper_name]]
+
+
+def test_the_boundary_payload_never_reaches_the_helper_removal(tmp_path) -> None:
+    """Removal runs through the plain runner, not the stdin one carrying policy."""
+
+    from aptl.core.deployment.errors import BackendTimeoutError
+
+    backend = DockerComposeBackend(tmp_path, project_name="seat-17")
+    backend._run = MagicMock(return_value=MagicMock(returncode=0))
+    backend._run_with_input = MagicMock(
+        side_effect=BackendTimeoutError("docker run timed out after 30s")
+    )
+
+    with pytest.raises(BackendTimeoutError):
+        backend.realize_boundary(_spec())
+
+    assert all(
+        call.args[0][:2] != ["docker", "rm"]
+        for call in backend._run_with_input.call_args_list
+    )

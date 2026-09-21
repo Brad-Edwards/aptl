@@ -21,6 +21,10 @@ environment, materializes a fresh project, and starts only the product-neutral
 `materialization-envelope.sdl.yaml` scenario. It checks native effects in the
 project's running container, stops the lab with volumes, and proves that the
 effective workspace project has no remaining containers, networks, or volumes.
+Anonymous volumes and ephemeral helper containers carry no project identity, so
+the job also records what the daemon holds before the lab starts and fails on
+any of either that teardown leaves behind. That comparison only observes; it
+deletes nothing.
 
 The scenario carries one causal realization chain, so none of those checks can
 pass on a declaration alone: inline content moves the SSH daemon off its

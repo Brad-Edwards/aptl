@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from aptl.core import hostenv
+from aptl.core.ephemeral_containers import EphemeralContainer
 from aptl.utils.logging import get_logger
 
 log = get_logger("certs")
@@ -280,6 +281,10 @@ def _cert_generator_command(
     host_user = _native_linux_user()
     if host_user is not None:
         certs_dir.mkdir(parents=True, exist_ok=True)
+    # Named and labelled like every other helper. Removal is not left to
+    # ``--rm`` alone: the generator runs under its own Compose project, and
+    # :func:`_cleanup_cert_generator` takes that project down after every
+    # outcome, a timeout included.
     command = [
         "docker",
         "compose",
@@ -288,7 +293,7 @@ def _cert_generator_command(
         "-f",
         _CERT_COMPOSE_FILE,
         "run",
-        "--rm",
+        *EphemeralContainer.for_role("cert-generator").run_options(),
     ]
     user = _container_cert_user(host_user, rootless)
     if user is not None:

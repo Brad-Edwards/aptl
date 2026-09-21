@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from aptl.core.evidence.adapters import techvault_readiness_probes as probes
+from aptl_techvault.evidence import techvault_readiness_probes as probes
 
 _START = "2026-01-01T00:00:00Z"
 _END = "2026-01-01T00:05:00Z"

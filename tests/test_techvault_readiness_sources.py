@@ -13,11 +13,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from aptl.core.evidence.adapters.techvault_misp_readiness import (
+from aptl_techvault.evidence.techvault_misp_readiness import (
     AdmittedMispState,
     MispAuthenticatedApiReadinessSource,
 )
-from aptl.core.evidence.adapters.techvault_wazuh_agent_readiness import (
+from aptl_techvault.evidence.techvault_wazuh_agent_readiness import (
     WazuhAgentReadinessSource,
 )
 from aptl.core.evidence.outcomes import CollectorStatus
@@ -110,7 +110,7 @@ def test_an_unavailable_misp_probe_reports_no_evidence():
 def test_admitted_cache_policy_comes_from_misps_bound_cache_node():
     """An unrelated Redis node must not become MISP's admitted expectation."""
 
-    from aptl.core.evidence.adapters.techvault_native_readiness import (
+    from aptl_techvault.evidence.techvault_native_readiness import (
         admitted_misp_state,
     )
 
@@ -180,7 +180,7 @@ def test_admitted_cache_policy_comes_from_misps_bound_cache_node():
 def test_misp_tls_target_is_owned_and_within_the_admitted_subnet(
     address, aliases, accepted
 ):
-    from aptl.core.evidence.adapters.techvault_native_readiness import (
+    from aptl_techvault.evidence.techvault_native_readiness import (
         _deployed_node_address,
     )
 
@@ -384,7 +384,7 @@ def test_the_roster_parser_preserves_a_duplicate_name():
     never reach the code that rejects it.
     """
 
-    from aptl.core.evidence.adapters.techvault_readiness_probes import _parse_roster
+    from aptl_techvault.evidence.techvault_readiness_probes import _parse_roster
 
     rows = _parse_roster(
         "   ID: 001, Name: techvault-db-agent, IP: any, Active\n"
@@ -398,13 +398,13 @@ def test_the_roster_parser_preserves_a_duplicate_name():
 
 
 def test_an_unreadable_roster_yields_no_identities():
-    from aptl.core.evidence.adapters.techvault_readiness_probes import _parse_roster
+    from aptl_techvault.evidence.techvault_readiness_probes import _parse_roster
 
     assert _parse_roster("agent_control: permission denied\n") == ()
 
 
 def test_telemetry_events_reports_what_the_manager_counted():
-    from aptl.core.evidence.adapters.techvault_readiness_probes import telemetry_events
+    from aptl_techvault.evidence.techvault_readiness_probes import telemetry_events
 
     def execute(_name, _cmd, _payload, timeout=None):
         return _Result("telemetry_event_count=4\n")
@@ -417,7 +417,7 @@ def test_wazuh_telemetry_probe_counts_native_offsets_and_structured_agent_ids(
 ):
     """Exercise the shipped shell/Python probe against Wazuh-shaped records."""
 
-    from aptl.core.evidence.adapters.techvault_readiness_probes import (
+    from aptl_techvault.evidence.techvault_readiness_probes import (
         _WAZUH_TELEMETRY_SCRIPT,
     )
 
@@ -463,7 +463,7 @@ def test_wazuh_telemetry_probe_counts_native_offsets_and_structured_agent_ids(
 
 
 def test_an_unparseable_telemetry_count_is_not_read_as_zero_or_as_ready():
-    from aptl.core.evidence.adapters.techvault_readiness_probes import telemetry_events
+    from aptl_techvault.evidence.techvault_readiness_probes import telemetry_events
 
     def execute(_name, _cmd, _payload, timeout=None):
         return _Result("telemetry_event_count=lots\n")
@@ -472,7 +472,7 @@ def test_an_unparseable_telemetry_count_is_not_read_as_zero_or_as_ready():
 
 
 def test_a_duplicate_probe_field_is_ambiguous_not_last_value_wins():
-    from aptl.core.evidence.adapters.techvault_readiness_probes import telemetry_events
+    from aptl_techvault.evidence.techvault_readiness_probes import telemetry_events
 
     def execute(_name, _cmd, _payload, timeout=None):
         return _Result("telemetry_event_count=0\ntelemetry_event_count=4\n")
@@ -481,7 +481,7 @@ def test_a_duplicate_probe_field_is_ambiguous_not_last_value_wins():
 
 
 def test_a_failed_telemetry_probe_is_not_read_as_no_events():
-    from aptl.core.evidence.adapters.techvault_readiness_probes import telemetry_events
+    from aptl_techvault.evidence.techvault_readiness_probes import telemetry_events
 
     def execute(_name, _cmd, _payload, timeout=None):
         return _Result("", returncode=1)
@@ -492,7 +492,7 @@ def test_a_failed_telemetry_probe_is_not_read_as_no_events():
 def test_the_enrollment_baseline_is_recorded_once_and_not_overwritten(tmp_path):
     """Overwriting it would erase the evidence a later comparison depends on."""
 
-    from aptl.core.evidence.adapters.techvault_enrollment_baseline import (
+    from aptl_techvault.evidence.techvault_enrollment_baseline import (
         enrollment_baseline,
         record_enrollment_baseline,
     )
@@ -507,7 +507,7 @@ def test_the_enrollment_baseline_is_recorded_once_and_not_overwritten(tmp_path):
 
 
 def test_a_missing_baseline_reads_as_no_recorded_identity(tmp_path):
-    from aptl.core.evidence.adapters.techvault_enrollment_baseline import (
+    from aptl_techvault.evidence.techvault_enrollment_baseline import (
         enrollment_baseline,
     )
 
@@ -517,7 +517,7 @@ def test_a_missing_baseline_reads_as_no_recorded_identity(tmp_path):
 def test_a_corrupt_baseline_is_not_replaced_with_a_fresh_identity(tmp_path):
     """Corruption is unknown state, not permission to bless the current id."""
 
-    from aptl.core.evidence.adapters.techvault_enrollment_baseline import (
+    from aptl_techvault.evidence.techvault_enrollment_baseline import (
         ENROLLMENT_BASELINE_RELPATH,
         enrollment_baseline,
         record_enrollment_baseline,
@@ -540,10 +540,10 @@ def test_a_re_enrolled_agent_does_not_pass_enrollment_preservation(tmp_path):
     regenerated one.
     """
 
-    from aptl.core.evidence.adapters.techvault_enrollment_baseline import (
+    from aptl_techvault.evidence.techvault_enrollment_baseline import (
         record_enrollment_baseline,
     )
-    from aptl.core.evidence.adapters.techvault_native_readiness import (
+    from aptl_techvault.evidence.techvault_native_readiness import (
         wazuh_agent_readiness,
     )
 
@@ -572,10 +572,10 @@ def test_a_re_enrolled_agent_does_not_pass_enrollment_preservation(tmp_path):
 
 
 def test_a_preserved_identity_passes_against_its_recorded_baseline(tmp_path):
-    from aptl.core.evidence.adapters.techvault_enrollment_baseline import (
+    from aptl_techvault.evidence.techvault_enrollment_baseline import (
         record_enrollment_baseline,
     )
-    from aptl.core.evidence.adapters.techvault_native_readiness import (
+    from aptl_techvault.evidence.techvault_native_readiness import (
         wazuh_agent_readiness,
     )
 
@@ -605,10 +605,10 @@ def test_a_preserved_identity_passes_against_its_recorded_baseline(tmp_path):
 def test_a_silent_agent_is_not_ready_even_while_connected(tmp_path):
     """`active` says it is talking to the manager, not that it shipped events."""
 
-    from aptl.core.evidence.adapters.techvault_enrollment_baseline import (
+    from aptl_techvault.evidence.techvault_enrollment_baseline import (
         record_enrollment_baseline,
     )
-    from aptl.core.evidence.adapters.techvault_native_readiness import (
+    from aptl_techvault.evidence.techvault_native_readiness import (
         wazuh_agent_readiness,
     )
 
@@ -632,7 +632,7 @@ def test_a_silent_agent_is_not_ready_even_while_connected(tmp_path):
 
 
 def test_a_duplicate_manager_member_stops_the_observation(tmp_path):
-    from aptl.core.evidence.adapters.techvault_native_readiness import (
+    from aptl_techvault.evidence.techvault_native_readiness import (
         wazuh_agent_readiness,
     )
 
@@ -688,7 +688,7 @@ def _one_agent_realization() -> _Realization:
 
 
 def test_duplicate_endpoint_agents_on_one_node_fail_declaration_closed():
-    from aptl.core.evidence.adapters.techvault_native_readiness import (
+    from aptl_techvault.evidence.techvault_native_readiness import (
         declared_endpoint_agents,
     )
 
@@ -699,7 +699,7 @@ def test_duplicate_endpoint_agents_on_one_node_fail_declaration_closed():
 
 
 def test_an_endpoint_agent_without_a_declared_tailed_source_is_not_ready():
-    from aptl.core.evidence.adapters.techvault_native_readiness import (
+    from aptl_techvault.evidence.techvault_native_readiness import (
         declared_endpoint_agents,
     )
 
@@ -719,10 +719,10 @@ def test_the_first_capture_establishes_its_own_baseline(tmp_path):
     the baseline. Every later capture is then compared against it.
     """
 
-    from aptl.core.evidence.adapters.techvault_enrollment_baseline import (
+    from aptl_techvault.evidence.techvault_enrollment_baseline import (
         enrollment_baseline,
     )
-    from aptl.core.evidence.adapters.techvault_native_readiness import (
+    from aptl_techvault.evidence.techvault_native_readiness import (
         wazuh_agent_readiness,
     )
 
@@ -750,7 +750,7 @@ def test_the_first_capture_establishes_its_own_baseline(tmp_path):
 def test_the_explicit_reset_clears_the_baseline_it_owns(tmp_path):
     """Otherwise a legitimate `stop -v` leaves every host permanently failing."""
 
-    from aptl.core.evidence.adapters.techvault_enrollment_baseline import (
+    from aptl_techvault.evidence.techvault_enrollment_baseline import (
         clear_enrollment_baseline,
         enrollment_baseline,
         record_enrollment_baseline,

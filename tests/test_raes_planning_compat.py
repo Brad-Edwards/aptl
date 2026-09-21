@@ -23,8 +23,7 @@ from raes_processor.semantics.realization import (
 
 from aptl.backends.raes_planning_compat import (
     AptlRuntimeManager,
-    _TECHVAULT_RUNTIME_MAX_NODES,
-    apply_techvault_observation_strength_compatibility,
+    apply_planning_compatibility,
     plan_aptl_scenario,
 )
 from aptl.backends.raes_runtime_attestation import (
@@ -35,6 +34,25 @@ from aptl.core.scenario_bundle import (
     ScenarioBundle,
     ScenarioSourceKind,
 )
+from aptl_techvault.planning_compatibility import provider as compatibility_provider
+
+_TECHVAULT_RUNTIME_MAX_NODES = 131_072
+
+
+def apply_techvault_observation_strength_compatibility(model, bundle, *, scenario=None):
+    """Exercise core application with TechVault's adapter-supplied decision."""
+
+    return apply_planning_compatibility(
+        model,
+        (
+            compatibility_provider.resolve(None)  # type: ignore[arg-type]
+            if bundle.pack_identity is not None
+            and bundle.pack_identity.pack_id == "techvault"
+            else None
+        ),
+        scenario=scenario,
+    )
+
 
 _ADDRESS = "provision.node.vm"
 _FIELD_PREFIX = "nodes.vm.runtime"
@@ -391,6 +409,7 @@ def test_aptl_planning_applies_compatibility_before_raes_planner(
     manager._target = target
     manager._snapshot = RuntimeSnapshot()
     manager._aptl_bundle = bundle
+    manager._aptl_planning_compatibility = compatibility_provider.resolve(None)  # type: ignore[arg-type]
 
     result = plan_aptl_scenario(
         target=target,
@@ -444,6 +463,55 @@ def test_aptl_runtime_manager_preserves_raes_constructor_contract(
     }
 
 
+def test_admitted_target_reuses_one_planning_compatibility_resolution(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from aptl.backends import raes, raes_planning_compat
+    from aptl.backends.scenario_planning_compatibility import (
+        PlanningCompatibilityDecision,
+        ResolvedPlanningCompatibility,
+    )
+    from aptl.core.config import AptlConfig
+
+    selection = ResolvedPlanningCompatibility(
+        decision=PlanningCompatibilityDecision(runtime_max_nodes=100),
+        provider_id="test-planning",
+        extension_api_version="1",
+        distribution="test-adapter",
+        distribution_version="1.0.0",
+        entry_point="techvault.aptl",
+    )
+    resolutions = []
+    monkeypatch.setattr(
+        raes,
+        "resolve_target_planning_compatibility",
+        lambda bundle, config: resolutions.append((bundle, config)) or selection,
+    )
+    monkeypatch.setattr(
+        raes_planning_compat._RaesRuntimeManager,
+        "__init__",
+        lambda *_args, **_kwargs: None,
+    )
+    config = AptlConfig()
+    bundle = _bundle(tmp_path)
+    target = raes.create_aptl_runtime_target(
+        project_dir=tmp_path,
+        config=config,
+        backend=object(),
+        bundle=bundle,
+    )
+
+    planning_manager = AptlRuntimeManager(target)
+    apply_manager = AptlRuntimeManager(target, initial_snapshot=RuntimeSnapshot())
+
+    assert resolutions == [(bundle, config)]
+    assert target.provisioner.planning_compatibility is selection
+    assert planning_manager._aptl_planning_compatibility_selection is selection
+    assert apply_manager._aptl_planning_compatibility_selection is selection
+    assert planning_manager._aptl_planning_compatibility is selection.decision
+    assert apply_manager._aptl_planning_compatibility is selection.decision
+
+
 def test_aptl_runtime_manager_scopes_large_plan_limits_to_exact_pack(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -463,6 +531,7 @@ def test_aptl_runtime_manager_scopes_large_plan_limits_to_exact_pack(
     monkeypatch.setattr(raes_planning_compat._RaesRuntimeManager, "apply", _apply)
     manager = object.__new__(AptlRuntimeManager)
     manager._aptl_bundle = _bundle(tmp_path)
+    manager._aptl_planning_compatibility = compatibility_provider.resolve(None)  # type: ignore[arg-type]
 
     assert manager.apply("plan") == "applied"
     assert captured["execution_plan"] == "plan"

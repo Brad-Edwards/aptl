@@ -163,9 +163,9 @@ def test_provider_can_change_only_group_fields(monkeypatch, tmp_path) -> None:
     assert first.profiles != second.profiles
 
 
-def test_disabled_assigned_group_rejects_before_backend_mutation(monkeypatch, tmp_path) -> None:
-    from raes_contracts.runtime_state import RuntimeSnapshot
-
+def test_pack_assigned_group_is_not_filtered_by_legacy_config(
+    monkeypatch, tmp_path
+) -> None:
     from aptl.backends.raes_provisioner import AptlProvisioner
 
     monkeypatch.setattr(
@@ -186,13 +186,12 @@ def test_disabled_assigned_group_rejects_before_backend_mutation(monkeypatch, tm
         bundle=_bundle(tmp_path),
     )
 
-    result = provisioner.apply(_plan(_node("a")), RuntimeSnapshot())
+    realization = provisioner.realize_plan(_plan(_node("a")))
 
-    assert result.success is False
-    assert "aptl.provisioner.pack-interaction-group-disabled" in {
-        diagnostic.code for diagnostic in result.diagnostics
+    assert provisioner.selected_profiles(realization) == ["soc"]
+    assert "aptl.provisioner.pack-interaction-group-disabled" not in {
+        diagnostic.code for diagnostic in realization.diagnostics
     }
-    backend.realize.assert_not_called()
 
 
 def test_interaction_context_carries_the_selected_deployment_transport(

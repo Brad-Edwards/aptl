@@ -2,7 +2,7 @@
 
 import json
 
-from aptl.core.evidence.adapters.techvault import (
+from aptl_techvault.evidence.techvault import (
     CortexEnrichmentSource,
     RedteamSessionTranscriptSource,
     SuricataRuleReadinessSource,

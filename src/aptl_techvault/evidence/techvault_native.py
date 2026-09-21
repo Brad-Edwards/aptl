@@ -1,4 +1,4 @@
-"""Trusted native owners for the TechVault capture registrations.
+"""Adapter-owned native owners for the TechVault capture registrations.
 
 The public SDL chooses no URL, command, credential, path, or executable.  This
 module binds the exact code-owned TechVault registrations to bounded native
@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlunsplit
 
-from aptl.core.evidence.adapters.techvault import (
+from aptl_techvault.evidence.techvault import (
     CORTEX_OBSERVABLE,
     SURICATA_SQLI_SID,
     WAZUH_SQLI_RULE_ID,
@@ -27,22 +27,22 @@ from aptl.core.evidence.adapters.techvault import (
     SuricataRuleReadinessSource,
     SuricataWazuhSqliSource,
 )
-from aptl.core.evidence.adapters._techvault_native_cortex import (
+from aptl_techvault.evidence._techvault_native_cortex import (
     TechVaultNativeCortexMixin,
 )
-from aptl.core.evidence.adapters.techvault_misp_readiness import (
+from aptl_techvault.evidence.techvault_misp_readiness import (
     MispAuthenticatedApiReadinessSource,
 )
-from aptl.core.evidence.adapters.techvault_native_readiness import (
+from aptl_techvault.evidence.techvault_native_readiness import (
     admitted_misp_state,
     declared_endpoint_agents,
     misp_readiness,
     wazuh_agent_readiness,
 )
-from aptl.core.evidence.adapters.techvault_wazuh_agent_readiness import (
+from aptl_techvault.evidence.techvault_wazuh_agent_readiness import (
     WazuhAgentReadinessSource,
 )
-from aptl.core.evidence.adapters.techvault_native_support import (
+from aptl_techvault.evidence.techvault_native_support import (
     MAX_SOURCE_BYTES,
     bounded,
     content_identities,
@@ -55,7 +55,7 @@ from aptl.core.evidence.adapters.techvault_native_support import (
     webapp_endpoint,
 )
 from aptl.utils.curl_safe import basic_auth_header, curl_json
-from aptl.core.evidence.adapters.techvault_telemetry_stimulus import (
+from aptl_techvault.evidence.techvault_telemetry_stimulus import (
     emit_missing_agent_events,
 )
 

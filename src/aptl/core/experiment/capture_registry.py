@@ -457,13 +457,6 @@ def _bind(
     )
 
 
-#: The production registry — the trusted built-in fleet (EXP-010 PR 2). Its
-#: registration DATA lives in the sibling ``capture_registrations`` module
-#: (imported here at the foot, after the types above are defined, so the
-#: type/data split does not create an import cycle). Populating it is what
-#: turns ``create_aptl_manifest().observation`` from ``None`` into a real
-#: aggregate projection — done together with the acquisition machinery + the
-#: adapter wiring + conformance fixtures (the honesty rule).
-from aptl.core.experiment.capture_registrations import BUILTIN_REGISTRATIONS
-
-DEFAULT_COLLECTOR_REGISTRY = CollectorRegistry(BUILTIN_REGISTRATIONS)
+#: Honest core-only baseline. An admitted pack contributes the request-scoped
+#: registry used by manifest projection, capture admission, and execution.
+DEFAULT_COLLECTOR_REGISTRY = CollectorRegistry()

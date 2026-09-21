@@ -1,4 +1,4 @@
-FROM jasonish/suricata:7.0@sha256:0364b6f31192bc27a84dd471f60de22781d88e4d9511fbd3413e56ba4e150ac8
+FROM jasonish/suricata:8.0@sha256:7ca2546f7f2735f621b981b6a5ec84fb962984636f7629a1a2fa6a324d4b6840
 
 COPY containers/_wazuh-agent/install-rhel.sh /tmp/install-wazuh.sh
 COPY containers/_wazuh-agent/wazuh.repo /tmp/wazuh.repo

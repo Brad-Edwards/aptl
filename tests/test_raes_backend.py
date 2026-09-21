@@ -2139,8 +2139,8 @@ def test_lab_start_handoff_forwards_the_admission_to_the_backend(mocker, tmp_pat
     assert handoff.call_args.kwargs["admitted"] is admitted
 
 
-def test_start_raes_scenario_does_not_retry_non_soc_apply(mocker, tmp_path):
-    """A retryable apply is not enough; the admitted plan must select SOC."""
+def test_start_raes_scenario_retries_without_named_profile_branch(mocker, tmp_path):
+    """A retryable apply uses the admitted hook without inspecting profile names."""
     from aptl.backends import raes
 
     _write_compose(tmp_path, {"aptl-victim": ["victim"]})
@@ -2174,9 +2174,9 @@ def test_start_raes_scenario_does_not_retry_non_soc_apply(mocker, tmp_path):
 
     assert result.lab_result.success is False
     assert result.retryable is True
-    assert calls == {"plan": 1, "apply": 1}
-    backend.realize.assert_called_once()
-    before_retry.assert_not_called()
+    assert calls == {"plan": 1, "apply": 2}
+    assert backend.realize.call_count == 2
+    before_retry.assert_called_once_with()
 
 
 def _workflow_and_evaluation_execution_plan():

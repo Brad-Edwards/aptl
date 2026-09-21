@@ -1,4 +1,4 @@
-name: materialization-envelope-smoke
+name: materialization-envelope
 description: >
   Product-neutral smoke scenario for the public APTL materialization path.
   It exercises scenario admission, backend substrate selection, package and
@@ -6,6 +6,9 @@ description: >
   service-manager unit setup, declared listener and host-published port
   realization, networking, native readback, orchestration, lifecycle status,
   and teardown without depending on a scenario adapter.
+
+  It is the scenario of APTL's owned fixture pack (issue #985), so its name is
+  the pack identity: env-packs binds the pack's content manifest to it.
 
   The content, service, listener and port declarations form one causal chain
   (issue #993): the placed config moves the SSH daemon off its package default

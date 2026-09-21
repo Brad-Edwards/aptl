@@ -42,7 +42,7 @@ from aptl.core.deployment.errors import (
     BackendTimeoutError,
 )
 from aptl.core.lab import LabResult, LabStatus
-from tests.helpers import docker_ps_inventory_row
+from tests.helpers import docker_ps_inventory_row, without_helper_identity
 
 # SSHComposeBackend validates the *local* ssh identity path with
 # Path.is_absolute(), which is platform-specific: a POSIX "/home/..." path is
@@ -3012,7 +3012,7 @@ class TestSeedNamedVolumes:
             "subprocess.run", side_effect=self._seed_run_mock("suricata_config_seed")
         ) as mock_run:
             backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
-        cmd = mock_run.call_args[0][0]
+        cmd = without_helper_identity(mock_run.call_args[0][0])
         assert cmd[:7] == [
             "docker",
             "run",
@@ -3243,7 +3243,7 @@ class TestSeedNamedVolumes:
             if c[0][0][:3] != ["docker", "volume", "inspect"]
         ]
         assert len(calls) == 2
-        retire, seed = calls
+        retire, seed = (without_helper_identity(call) for call in calls)
         assert retire[:5] == ["docker", "run", "--rm", "--user", "0:0"]
         assert retire[5:7] == ["--entrypoint", "rm"]
         assert f"{Path('/proj/.aptl/suricata/rules')}:/legacy" in retire
@@ -3278,7 +3278,7 @@ class TestSeedNamedVolumes:
                 side_effect=self._seed_run_mock("suricata_config_seed"),
             ) as mock_run:
                 backend.seed_named_volumes([seed], seeder_image="img:1")
-                commands.append(mock_run.call_args[0][0])
+                commands.append(without_helper_identity(mock_run.call_args[0][0]))
         assert commands[0] == commands[1]
 
     def test_nonzero_exit_raises_without_leaking_stderr(self, tmp_path):
@@ -3515,7 +3515,7 @@ class TestRealizeContent:
                 scenario_root=tmp_path,
             )
 
-        cmd = mock_run.call_args[0][0]
+        cmd = without_helper_identity(mock_run.call_args[0][0])
         assert cmd[:7] == [
             "docker",
             "run",
@@ -3599,7 +3599,7 @@ class TestRealizeContent:
                 backend.realize_content(
                     [item], seeder_image="img:1", scenario_root=tmp_path
                 )
-                commands.append(mock_run.call_args[0][0])
+                commands.append(without_helper_identity(mock_run.call_args[0][0]))
         assert commands[0] == commands[1]
 
     def test_empty_content_list_runs_no_container(self, tmp_path):
@@ -3681,7 +3681,7 @@ class TestObserveContentType:
             "--format",
             "{{json .Labels}}",
         ]
-        cmd = run.call_args_list[1].args[0]
+        cmd = without_helper_identity(run.call_args_list[1].args[0])
         assert "test_fileshare_data:/dest:ro" in cmd
         assert cmd[:3] == ["docker", "run", "--rm"]
         assert cmd[3:5] == ["--user", "0:0"]
@@ -3818,7 +3818,8 @@ class TestObserveBindSourceType:
             )
             assert backend.observe_bind_source_type(source) == expected
 
-        cmd = run.call_args.args[0]
+        probe = run.call_args_list[0].args[0]
+        cmd = without_helper_identity(probe)
         assert cmd[:3] == ["docker", "run", "--rm"]
         assert cmd[-2:] == ["aptl-bind-source-probe", "/probe"]
         # ``--mount`` (not ``-v``): -v would create a missing source as an empty
@@ -3828,6 +3829,17 @@ class TestObserveBindSourceType:
             f"type=bind,src={source},dst=/probe,readonly"
         )
         assert "-v" not in cmd
+        # A Docker daemon error can follow a successful create, which ``--rm``
+        # never reaches; only then is the helper removed by its name.
+        removals = [
+            call.args[0]
+            for call in run.call_args_list
+            if call.args[0][:2] == ["docker", "rm"]
+        ]
+        name = probe[probe.index("--name") + 1]
+        assert removals == (
+            [["docker", "rm", "-f", "-v", name]] if returncode == 125 else []
+        )
         assert run.call_args.kwargs["timeout"] > 0
 
 

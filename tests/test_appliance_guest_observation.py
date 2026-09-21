@@ -5,6 +5,8 @@ from types import SimpleNamespace
 from subprocess import CompletedProcess
 from unittest.mock import patch
 
+import pytest
+
 from aptl.appliance.guest_observation import (
     _LiveContainer,
     _ProbePath,
@@ -190,18 +192,29 @@ def test_probe_command_joins_only_the_observed_container_namespace() -> None:
         image="example.test/helper@sha256:" + "a" * 64,
         network_container="aptl-management",
         arguments=["connect", "--address", "10.50.2.30", "--port", "3128"],
+        lifecycle=["--rm", "--name", "aptl-boundary-probe-test"],
     )
 
-    assert command[:6] == [
-        "docker",
-        "run",
-        "--rm",
-        "--network",
-        "container:aptl-management",
-        "--cap-drop=ALL",
-    ]
+    assert command[:2] == ["docker", "run"]
+    assert command[command.index("--network") + 1] == "container:aptl-management"
+    assert "--cap-drop=ALL" in command
     assert "--privileged" not in command
     assert "/var/run/docker.sock" not in command
+
+
+def test_probe_lifecycle_options_cannot_widen_the_probe() -> None:
+    """The caller chooses naming and removal; the probe's shape stays fixed."""
+
+    command = _probe_command(
+        image="example.test/helper@sha256:" + "a" * 64,
+        network_container="aptl-management",
+        arguments=["connect"],
+        lifecycle=["-d", "--rm", "--name", "aptl-boundary-listener-test"],
+    )
+
+    assert command.count("--network") == 1
+    assert command[command.index("--network") + 1] == "container:aptl-management"
+    assert command[command.index("--entrypoint") + 1] == "python3"
 
 
 def test_probe_listener_and_path_use_disposable_fixed_namespace_container() -> None:
@@ -227,7 +240,11 @@ def test_probe_listener_and_path_use_disposable_fixed_namespace_container() -> N
 
     assert listener is not None
     start = backend.commands[0][0]
-    assert start[:5] == ["docker", "run", "-d", "--name", listener]
+    assert start[:3] == ["docker", "run", "-d"]
+    assert start[start.index("--name") + 1] == listener
+    # Auto-removed as well as explicitly removed: the listener exits on its own
+    # timeout, so a path that never reaches the explicit removal cannot leak it.
+    assert "--rm" in start
 
     source = _LiveContainer("src-id", "source", ("10.0.2.10",), {})
     path = _ProbePath(
@@ -348,3 +365,57 @@ def test_docker_authority_holders_are_bound_to_admitted_live_container() -> None
     assert holders[0].identity == "management-id"
     assert holders[0].label_selector == "org.aptl.zone=management"
     assert holders[0].device_count == 1
+
+
+class _ListenerBackend:
+    """Records commands; the start either times out or reports a failure."""
+
+    def __init__(self, *, start_raises=None, start_returncode=0) -> None:
+        self.commands = []
+        self._start_raises = start_raises
+        self._start_returncode = start_returncode
+
+    def _run(self, command, *, timeout=None):
+        self.commands.append(command)
+        if command[:3] == ["docker", "run", "-d"]:
+            if self._start_raises is not None:
+                raise self._start_raises
+            return SimpleNamespace(returncode=self._start_returncode, stdout="")
+        return SimpleNamespace(returncode=0, stdout="")
+
+    def removals(self):
+        return [command for command in self.commands if command[:2] == ["docker", "rm"]]
+
+
+def _start(backend):
+    return _start_listener(
+        backend,
+        image="example.test/helper@sha256:" + "a" * 64,
+        destination=_LiveContainer("dst-id", "destination", ("10.0.2.20",), {}),
+        address="10.0.2.20",
+        port=8443,
+    )
+
+
+def test_a_listener_whose_start_times_out_is_removed() -> None:
+    """A detached start killed by its timeout can leave the listener created."""
+
+    backend = _ListenerBackend(start_raises=TimeoutError("docker run timed out"))
+
+    with pytest.raises(TimeoutError):
+        _start(backend)
+
+    start = next(c for c in backend.commands if c[:3] == ["docker", "run", "-d"])
+    name = start[start.index("--name") + 1]
+    assert backend.removals() == [["docker", "rm", "-f", "-v", name]]
+
+
+def test_a_listener_whose_start_reports_failure_is_removed() -> None:
+    """Before this, a failed start returned without removing anything."""
+
+    backend = _ListenerBackend(start_returncode=125)
+
+    assert _start(backend) is None
+    start = next(c for c in backend.commands if c[:3] == ["docker", "run", "-d"])
+    name = start[start.index("--name") + 1]
+    assert backend.removals() == [["docker", "rm", "-f", "-v", name]]

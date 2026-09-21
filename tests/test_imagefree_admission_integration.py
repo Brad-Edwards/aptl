@@ -1,12 +1,15 @@
-"""Full-stack real-Docker test: admit an image-free SDL and realize it (ADR-048).
+"""Full-stack real-Docker test: admit an image-free pack and realize it (ADR-048).
 
 Exercises the entire path through the real RAES compiler:
-parse -> plan -> interpret -> deployment_spec (image_free derived) ->
-backend.realize -> generic materializer -> real container, verified by
-read-after-write. Zero product code; proves an arbitrary image-free scenario
+pack admission -> parse -> plan -> interpret -> deployment_spec (image_free
+derived) -> backend.realize -> generic materializer -> real container, verified
+by read-after-write. Zero product code; proves an arbitrary image-free scenario
 composes and boots on local Docker.
 
-One scenario, the shared `materialization-envelope.sdl.yaml`. A second live
+One scenario, the shared `materialization-envelope.sdl.yaml`, admitted as
+APTL's owned fixture pack (issue #985) through the same resolver a released pack
+passes, so the live realization runs the pack path rather than a project-tree
+one and no released pack can break it. A second live
 scenario used to boot the same service path on the dnf/RHEL substrate; issue
 #993 retired it, because the shared fixture now proves that path live here and
 again in the installed-wheel boot gate, while the family-aware substrate
@@ -33,21 +36,13 @@ from aptl.backends.raes import create_aptl_runtime_target
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
 from aptl.core.deployment.docker_compose import DockerComposeBackend
-from aptl.core.scenario_bundle import project_tree_bundle
+from aptl.core.scenario_bundle import ScenarioSourceKind
+from tests.fixture_pack import admit_fixture_pack
 from tests.helpers import realized_container_name, realized_project_name
 
 pytestmark = pytest.mark.integration
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-
-
-def _bundle(root):
-    return project_tree_bundle(root, root / "scenarios" / "demo.sdl.yaml")
-
-
-_MATERIALIZATION_ENVELOPE = (
-    _REPO_ROOT / "tests" / "fixtures" / "materialization-envelope.sdl.yaml"
-)
 
 
 def _docker_available() -> bool:
@@ -61,8 +56,8 @@ def _docker_available() -> bool:
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
 def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
-    sdl = tmp_path / "imagefree.sdl.yaml"
-    shutil.copyfile(_MATERIALIZATION_ENVELOPE, sdl)
+    bundle = admit_fixture_pack(tmp_path / "staged-packs")
+    assert bundle.source_kind is ScenarioSourceKind.ENV_PACK
     # The shared fixture declares service units, so the node materializes onto
     # the init-capable generic substrate, which the backend builds from the
     # Dockerfile its own project dir ships (issue #1006). Stage that context
@@ -85,8 +80,7 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
     )
 
     # Admit through the real RAES compiler/planner/interpreter.
-    scenario = parse_sdl_file(sdl)
-    bundle = _bundle(tmp_path)
+    scenario = parse_sdl_file(bundle.sdl_path)
     target = create_aptl_runtime_target(
         project_dir=tmp_path, config=cfg, backend=backend, bundle=bundle
     )
@@ -95,6 +89,7 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
         plan=plan.provisioning, config=cfg, bundle=bundle
     )
     assert [d.message for d in realization.diagnostics if d.is_error] == []
+    assert realization.pack_identity == bundle.pack_identity
 
     spec = realization.deployment_spec([])
     # Fully image-free: every node is materialized, so nothing is left for the
@@ -104,7 +99,7 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
     assert _needs_compose(spec) is False
 
     try:
-        result = backend.realize(spec, scenario_root=tmp_path)
+        result = backend.realize(spec, scenario_root=bundle.root)
         assert result.success, result.error
         assert (
             "curl"

@@ -64,9 +64,15 @@ def test_clean_install_workflow_starts_the_product_neutral_envelope():
     )
     assert job_match is not None
     job = job_match.group()
-    fixture = "materialization-envelope.sdl.yaml"
-    assert (PROJECT_ROOT / "tests" / "fixtures" / fixture).is_file()
-    assert f"tests/fixtures/{fixture}" in job
-    assert f"--scenario-path scenarios/{fixture}" in job
+    from tests.fixture_pack import FIXTURE_SDL
+
+    fixture = FIXTURE_SDL.relative_to(PROJECT_ROOT).as_posix()
+    assert FIXTURE_SDL.is_file()
+    assert fixture == (
+        "tests/fixtures/packs/materialization-envelope/sdl/"
+        "materialization-envelope.sdl.yaml"
+    )
+    assert fixture in job
+    assert f"--scenario-path scenarios/{FIXTURE_SDL.name}" in job
     assert 'aptl" lab status' in job
     assert 'aptl" lab stop --volumes --yes' in job

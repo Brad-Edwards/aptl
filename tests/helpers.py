@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -663,3 +664,35 @@ def run_owned_container(backend, semantic_name: str, image_args: list[str]) -> s
         )
     )
     return native_id
+
+
+_EPHEMERAL_NAME = re.compile(r"^aptl-[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{12}$")
+
+
+def without_helper_identity(argv: list[str]) -> list[str]:
+    """Return a helper's argv without its per-invocation name and role label.
+
+    ``EphemeralContainer`` names every helper randomly so concurrent helpers
+    never collide on the daemon. A test that pins the rest of the argv — the
+    order of its security options, its mounts — strips exactly that identity
+    here rather than loosening every other assertion. Only the generated name
+    shape and the ephemeral role label are removed; a node's own ``--name`` is
+    left alone.
+    """
+
+    from aptl.core.ephemeral_containers import EPHEMERAL_ROLE_LABEL
+
+    stripped: list[str] = []
+    skip_next = False
+    for index, item in enumerate(argv):
+        if skip_next:
+            skip_next = False
+            continue
+        following = str(argv[index + 1]) if index + 1 < len(argv) else ""
+        if (item == "--name" and _EPHEMERAL_NAME.fullmatch(following)) or (
+            item == "--label" and following.startswith(f"{EPHEMERAL_ROLE_LABEL}=")
+        ):
+            skip_next = True
+            continue
+        stripped.append(item)
+    return stripped

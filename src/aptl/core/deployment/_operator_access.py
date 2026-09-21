@@ -42,6 +42,7 @@ from aptl.core.deployment._operator_access_proof import (
     _prove_endpoints,
 )
 from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.ephemeral_containers import remove_container_command
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -325,7 +326,7 @@ class ComposeOperatorAccessMixin(object):
                 )
             )
         except OwnershipConflictError:
-            self._run(["docker", "rm", "-f", native_id], timeout=60)
+            self._run(remove_container_command(native_id), timeout=60)
             return [f"operator access {access.access_id}: relay ownership not recorded"]
         joined = self._run(
             ["docker", "network", "connect", target_network, native_id],
@@ -345,7 +346,7 @@ class ComposeOperatorAccessMixin(object):
             native_id = self._resolve_owned_container_id(semantic_name)
         except OwnershipConflictError:
             return
-        self._run(["docker", "rm", "-f", native_id], timeout=60)
+        self._run(remove_container_command(native_id), timeout=60)
 
     def _target_identity(self, semantic_name: str) -> tuple[str, str] | None:
         """Return the running target's external name and first network."""

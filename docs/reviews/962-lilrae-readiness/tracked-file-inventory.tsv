@@ -1835,3 +1835,5 @@ tests/fixtures/packs/materialization-envelope/sdl/materialization-envelope.sdl.y
 src/aptl/core/ephemeral_containers.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 tests/test_ephemeral_containers.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_container_lifecycle_policy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+.github/workflows/ground-control-phase-e.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+tests/test_ground_control_phase_e_workflow.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

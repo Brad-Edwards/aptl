@@ -1,0 +1,93 @@
+name: Ground Control Phase E
+# Carries the pull request into the run record, so a dispatch run — which has no
+# `pull_requests` association — is still bound to what it finalized. Ground
+# Control's close gate matches this exact text; do not change it.
+run-name: Ground Control Phase E for PR ${{ github.event.pull_request.number || inputs.pr }}
+
+# A merged Ground Control delivery pull request finishes Phase E here, with no
+# model or agent session (Ground Control ADR-102). The agent records a trusted
+# delivery-readiness handoff at Phase D and may then stop; this job is only the
+# trigger and the transport. It passes the pull-request number to
+# `grndctl finalize-merged-pr`, which resolves the issue from the trusted
+# pointer and replays the recorded payload through the unchanged finalizer, so
+# the merge gate, the merged-state verification, the final-report marker and
+# the idempotent close all still apply. A merged pull request that is not a
+# Ground Control delivery carries no pointer and is a successful no-op.
+#
+# It runs no tests, no policy suite and no review, and waits for no other job.
+#
+# Why Ground Control runs from a pinned commit rather than `npx grndctl@<ver>`:
+# the template `grndctl init` installs calls the published package, but grndctl
+# is not published to any registry, so that command cannot resolve. This runs
+# the same finalizer the way Ground Control's own Phase E job does — from a
+# checkout — pinned to an immutable commit and installed from its lockfile with
+# install scripts disabled. Bump GROUND_CONTROL_COMMIT deliberately; do not
+# track a branch. Once grndctl is published, switch to the pinned release.
+#
+# The workflow path is itself part of the contract: the close gate trusts a
+# final report only when its run resolves to this repository's
+# `.github/workflows/ground-control-phase-e.yml`.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main, dev]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number to finalize (maintainer repair path)
+        required: true
+        type: string
+
+concurrency:
+  # Serialize per pull request so a replay cannot race itself. Never cancel: a
+  # cancelled finalization leaves neither a final report nor a failure record.
+  group: gc-phase-e-${{ github.event.pull_request.number || inputs.pr }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: read
+  # The close gate verifies this job's own run through the Actions API before it
+  # accepts an automation-authored final-report marker.
+  actions: read
+  # The final report and the issue close. This is the job's only write.
+  issues: write
+
+jobs:
+  finalize:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GROUND_CONTROL_COMMIT: 2ea7081bd5ef6d2a2e1a5607397bba171e5d32af
+    steps:
+      # The immutable merge revision, never the pull-request head. Phase E reads
+      # requirement state from the merged tree and executes none of the
+      # delivered code; `fetch-depth: 0` brings every branch, so the merge
+      # commit is present on the dispatch path too.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          fetch-depth: 0
+          path: aptl
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: autarchy-ai/Ground-Control
+          ref: ${{ env.GROUND_CONTROL_COMMIT }}
+          path: ground-control
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: 22
+      - name: Install the pinned Ground Control finalizer
+        run: npm --prefix ground-control/mcp/ground-control ci --ignore-scripts --no-audit --no-fund
+      - name: Finalize the merged delivery
+        # The finalizer treats its working directory as the repository it
+        # finalizes, so it runs from the APTL checkout.
+        working-directory: aptl
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number || inputs.pr }}
+        run: node ../ground-control/mcp/ground-control/bin/grndctl.js finalize-merged-pr --pr "$PR"

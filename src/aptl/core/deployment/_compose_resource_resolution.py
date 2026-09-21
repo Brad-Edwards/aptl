@@ -12,6 +12,7 @@ from aptl.core.deployment._compose_resource_ownership import (
     WorkspaceOwnership,
 )
 from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
+from aptl.core.ephemeral_containers import remove_container_command
 
 if TYPE_CHECKING:
     import subprocess
@@ -237,7 +238,7 @@ class ComposeResourceResolutionMixin:
                 if not self._raw_container_inspect(receipt.native_id):
                     continue
                 native_id = self._resolve_owned_container_id(receipt.native_id)
-                if self._run(["docker", "rm", "-f", native_id], timeout=60).returncode:
+                if self._run(remove_container_command(native_id), timeout=60).returncode:
                     failures.append("failed to remove receipt-owned container")
             return failures
         except (OwnershipConflictError, OSError):
@@ -332,7 +333,7 @@ class ComposeResourceResolutionMixin:
             return
         if (
             existing_id is not None
-            and self._run(["docker", "rm", "-f", existing_id], timeout=30).returncode
+            and self._run(remove_container_command(existing_id), timeout=30).returncode
         ):
             raise BackendSeedError(
                 f"failed to recover owned base container for node {spec.node_address}"
@@ -401,7 +402,7 @@ class ComposeResourceResolutionMixin:
                 )
             )
         except OwnershipConflictError as exc:
-            self._run(["docker", "rm", "-f", native_id], timeout=30)
+            self._run(remove_container_command(native_id), timeout=30)
             raise BackendSeedError(
                 f"failed to record ownership for node {spec.node_address}"
             ) from exc
@@ -474,6 +475,6 @@ class ComposeResourceResolutionMixin:
                 continue
             try:
                 native_id = self._resolve_owned_container_id(receipt.native_id)
-                self._run(["docker", "rm", "-f", native_id], timeout=60)
+                self._run(remove_container_command(native_id), timeout=60)
             except (OwnershipConflictError, OSError):
                 continue

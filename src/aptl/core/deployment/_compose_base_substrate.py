@@ -32,6 +32,7 @@ from aptl.core.deployment.realization import (
     DeploymentNetworkAttachment,
     valid_environment_variable_name,
 )
+from aptl.core.ephemeral_containers import remove_container_command
 
 if TYPE_CHECKING:
     from aptl.backends.raes_base_substrate import BaseContainerSpec, InitRequirements
@@ -346,7 +347,7 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
             )
         if result.returncode != 0:
             if network_bindings is not None and native_id:
-                self._run(["docker", "rm", "-f", native_id], timeout=30)
+                self._run(remove_container_command(native_id), timeout=30)
             raise BackendSeedError(
                 f"failed to start base container for node {spec.node_address}"
             )

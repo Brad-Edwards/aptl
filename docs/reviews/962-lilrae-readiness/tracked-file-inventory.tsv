@@ -1832,3 +1832,6 @@ tests/fixtures/packs/materialization-envelope/assets/content/tree.tar	tests-foll
 tests/fixtures/packs/materialization-envelope/docs/provenance-ledger.yaml	tests-follow-owner	Owned fixture pack exercising generic lab machinery without a released scenario pack
 tests/fixtures/packs/materialization-envelope/pack.yaml	tests-follow-owner	Owned fixture pack exercising generic lab machinery without a released scenario pack
 tests/fixtures/packs/materialization-envelope/sdl/materialization-envelope.sdl.yaml	tests-follow-owner	Exercise generic materialization without scenario adapter coupling
+src/aptl/core/ephemeral_containers.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+tests/test_ephemeral_containers.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_container_lifecycle_policy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

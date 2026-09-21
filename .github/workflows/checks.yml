@@ -257,6 +257,16 @@ jobs:
             ci-lab/scenarios/materialization-envelope.sdl.yaml
           test ! -e ci-lab/config/soc_certs
           test ! -e ci-lab/.aptl
+      - name: Record the daemon baseline before the lab starts
+        # Anonymous volumes and ephemeral helper containers carry no project
+        # identity, so the project-scoped cleanup proof cannot attribute them.
+        # Recording what the daemon already holds lets that proof fail on any
+        # the lab leaves behind. It observes only; it deletes nothing.
+        run: |
+          "$RUNNER_TEMP/clean-venv/bin/python" \
+            "$GITHUB_WORKSPACE/scripts/ci/assert_project_teardown.py" \
+            "$RUNNER_TEMP/clean-install/ci-lab" \
+            --record-baseline "$RUNNER_TEMP/daemon-baseline.json"
       - name: Start and verify the materialization envelope
         run: |
           cd "$RUNNER_TEMP/clean-install/ci-lab"
@@ -317,7 +327,8 @@ jobs:
         run: |
           "$RUNNER_TEMP/clean-venv/bin/python" \
             "$GITHUB_WORKSPACE/scripts/ci/assert_project_teardown.py" \
-            "$RUNNER_TEMP/clean-install/ci-lab"
+            "$RUNNER_TEMP/clean-install/ci-lab" \
+            --baseline "$RUNNER_TEMP/daemon-baseline.json"
 
   mcp-tests:
     name: MCP TypeScript tests + coverage

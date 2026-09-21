@@ -70,11 +70,18 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting Started:
+  - Lab Guide:
     - Overview: getting-started/index.md
     - Prerequisites: getting-started/prerequisites.md
-    - Installation: getting-started/installation.md
-    - Quick Start: getting-started/quick-start.md
+    - Install APTL: getting-started/installation.md
+    - Run Your First Lab: getting-started/quick-start.md
+  - Interfaces:
+    - CLI: reference/cli.md
+    - MCP: reference/mcp.md
+    - Web: reference/web.md
+  - Operations:
+    - Deployment: deployment.md
+    - Troubleshooting: troubleshooting/index.md
   - Workshop:
     - Playbook: workshop/playbook.md
     - Lab Walkthrough: workshop/walkthrough.md
@@ -86,6 +93,7 @@ nav:
     - RNG-001 Ephemeral Environments Preflight: architecture/rng-001-ephemeral-environments-preflight.md
     - DEP-003 Ephemeral Lifecycle Policy Preflight: architecture/dep-003-ephemeral-lifecycle-preflight.md
     - GRC Boundary Surface Vocabulary Preflight: architecture/grc-boundary-surface-vocabulary-preflight.md
+    - "Issue #851 First-Time User Documentation Preflight": architecture/issue-851-first-time-user-docs-preflight.md
     - "Issue #557 Participant Implementation Binding Preflight": architecture/issue-557-participant-implementation-binding-preflight.md
     - "Issue #821 In-Appliance Participant Workbench Preflight": architecture/issue-821-participant-workbench-preflight.md
     - "Issue #823 Versioned Disposable Lab Appliance Preflight": architecture/issue-823-versioned-disposable-appliance-preflight.md
@@ -117,7 +125,6 @@ nav:
       - Delivery Plan: reviews/962-lilrae-readiness/delivery-plan.md
       - Upstream update: reviews/962-lilrae-readiness/upstream-update.md
       - Evidence: reviews/962-lilrae-readiness/evidence/README.md
-  - Deployment: deployment.md
   - Components:
     - Wazuh SIEM: components/wazuh-siem.md
     - Wazuh Active Response: components/wazuh-active-response.md
@@ -163,7 +170,6 @@ nav:
     - Web GUI Design Specification: specs/web-gui-design.md
     - Web GUI Design Preflight Guardrails: specs/web-gui-design-preflight.md
     - Web Component Kit: specs/web-component-kit.md
-  - Troubleshooting: troubleshooting/index.md
   - Decisions:
     - Index: adrs/README.md
     - ADR-000 Use ADRs: adrs/adr-000-use-adrs.md

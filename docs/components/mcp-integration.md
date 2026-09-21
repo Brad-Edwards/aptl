@@ -1,87 +1,65 @@
-# MCP Integration
+# MCP Integration Architecture
 
-AI agents control lab containers via Model Context Protocol servers.
+APTL uses Model Context Protocol servers as scenario-aware adapters between an
+authorized AI client and the red- or blue-team systems in a realized lab.
 
-## Architecture
+For operator setup, availability, and supported tool naming, use the
+[MCP reference](../reference/mcp.md). This page explains the component boundary
+without duplicating the generated runtime configuration.
+
+## Runtime Flow
 
 ```mermaid
-flowchart TD
-    A[AI Agent] --> B[MCP Client]
-    B --> C[mcp-red]
-    B --> D[mcp-wazuh]
-    B --> E[mcp-network]
-    B --> F[mcp-threatintel]
-    B --> G[mcp-casemgmt]
-    B --> I[mcp-soar]
-    B --> K[mcp-indexer]
+flowchart LR
+    Client[Project-aware MCP client]
+    Config[Generated private client config]
+    Servers[Scenario-enabled MCP servers]
+    Targets[Realized lab targets and APIs]
 
-    C --> L[Kali Container<br/>172.20.4.30]
-    D --> M[Wazuh Manager API<br/>172.20.0.10:55000]
-    K --> N[Wazuh Indexer API<br/>172.20.0.12:9200]
-    E --> O[Suricata via Wazuh<br/>172.20.0.50]
-    F --> P[MISP<br/>172.20.0.16]
-    G --> Q[TheHive<br/>172.20.0.18]
-    I --> R[Shuffle SOAR<br/>172.20.0.20]
+    Client --> Config
+    Config --> Servers
+    Servers --> Targets
 ```
 
-The optional `mcp-reverse` server is built with the other artifacts but is not
-written to the default client configuration because the acquired `techvault` pack
-does not realize a reverse-engineering node.
+`aptl lab start` realizes the scenario before it updates `.mcp.json`. This
+ordering lets APTL include only supported servers, inject generated credentials,
+and use runtime-resolved ports. A server artifact in the project tree does not
+prove that its target exists in the current scenario.
 
-## Common Library
+## Server Families
 
-All SSH-based MCPs use `aptl-mcp-common` for session management, connection pooling, and configuration loading.
+SSH-backed servers use `aptl-mcp-common` for connection pooling, bounded
+sessions, tool definition generation, error handling, telemetry, and
+redaction. API-backed servers use the common authenticated HTTP/TLS boundary
+and their declared query or action configurations.
 
-## MCP Servers
+Every server owns a `toolPrefix`. The common generators apply that prefix to
+the advertised tool name, preventing collisions when several servers expose a
+similar capability. The connected server remains the authority for its exact
+tool list and input schemas.
 
-| Server | Target | Transport | Tools |
-|--------|--------|-----------|-------|
-| mcp-red | Kali (172.20.4.30) | SSH | `kali_info`, `run_command` |
-| mcp-wazuh | Wazuh Manager API (55000) | HTTPS | Alert queries, rule creation |
-| mcp-indexer | Wazuh Indexer API (9200) | HTTPS | Log search, index queries |
-| mcp-network | Suricata via Wazuh | HTTPS | IDS alerts, DNS events, web attacks |
-| mcp-threatintel | MISP (172.20.0.16) | HTTPS | IOC search, indicator submission |
-| mcp-casemgmt | TheHive (172.20.0.18) | HTTPS | Case management, observables, analyzers |
-| mcp-soar | Shuffle (172.20.0.20) | HTTPS | Workflow triggers, response actions |
+## Configuration Boundary
 
-## Setup
+The tracked `docker-lab-config.json` files describe server identity, prefix,
+target type, and non-secret transport shape. The generated `.mcp.json` binds
+those definitions to one realized project and can contain credentials. Keep it
+private and let APTL update managed entries; do not turn it into checked-in
+documentation or a shared template.
 
-The normal participant path is automatic:
+The optional reverse-engineering server demonstrates the artifact-versus-
+availability distinction: APTL builds it with the other server artifacts, but
+does not add it to the default client configuration when the scenario has no
+reverse-engineering target.
 
-```bash
-aptl lab start
-```
+## Development
 
-Startup builds the MCP artifacts, creates `.mcp.json` from the shipped current
-template when it is missing, and injects the generated MISP, TheHive, and
-Shuffle keys. Existing MCP client entries are preserved. Start Claude Code,
-Cursor, Cline, or another project-config-aware client from the project root.
+Contributors can rebuild every server with:
 
-To rebuild all artifacts without restarting the lab:
-
-```bash
+```shell
 ./mcp/build-all-mcps.sh
 ```
 
-Or rebuild one server:
-
-```bash
-cd mcp/mcp-red && npm install && npm run build && cd ../..
-```
-
-The generated config points every enabled server at
-`./mcp/<server>/build/index.js`.
-
-## Usage
-
-**Red Team:**
-- Display lab network information
-- Execute commands on Kali container
-
-**Blue Team:**
-- Query security alerts and historical logs
-- Create detection rules
-- Query network IDS alerts
-- Search threat intelligence
-- Manage incident cases
-- Trigger SOAR playbooks
+Changes under `mcp/aptl-mcp-common` affect every dependent server and require a
+complete dependent rebuild and test sweep. Operator workflows should use
+`aptl lab start`, which owns build, realization, credentials, and generated
+client configuration together.

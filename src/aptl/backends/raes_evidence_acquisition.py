@@ -439,6 +439,7 @@ from aptl.backends._raes_native_evidence_acquisition import (
 
 __all__ = (
     "NativeEvidenceRequest",
+    "_OnDemandNativeCollector",
     "acquire_native_evidence",
     "finalize_active_transcript_authority",
     "load_active_transcript_authorities",

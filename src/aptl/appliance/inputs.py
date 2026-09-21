@@ -21,6 +21,8 @@ from aptl.appliance.input_images import (
     canonical_image_references,
     compose_runtime_image_aliases,
     runtime_image_tag,
+)
+from aptl.appliance.input_images import (
     validate_image_sources as _validate_image_sources,
 )
 from aptl.appliance.input_profile import _entry, _write_full_profile
@@ -194,20 +196,17 @@ def _saved_manifest_config_pair(
 
     if not isinstance(descriptor, dict):
         raise ValueError("saved Docker archive has an invalid OCI descriptor")
+    pair = None
     manifest_id = descriptor.get("digest")
-    if not isinstance(manifest_id, str) or not re.fullmatch(
-        _DIGEST_PATTERN, manifest_id
-    ):
-        return None
-    manifest_path = "blobs/sha256/" + manifest_id.removeprefix(_DIGEST_PREFIX)
-    if manifest_path not in image_files:
-        return None
-    manifest = json.loads(read_archive_member(image_archive, manifest_path))
-    config = manifest.get("config") if isinstance(manifest, dict) else None
-    config_id = config.get("digest") if isinstance(config, dict) else None
-    if not isinstance(config_id, str) or not re.fullmatch(_DIGEST_PATTERN, config_id):
-        return None
-    return manifest_id, config_id
+    if isinstance(manifest_id, str) and re.fullmatch(_DIGEST_PATTERN, manifest_id):
+        manifest_path = "blobs/sha256/" + manifest_id.removeprefix(_DIGEST_PREFIX)
+        if manifest_path in image_files:
+            manifest = json.loads(read_archive_member(image_archive, manifest_path))
+            config = manifest.get("config") if isinstance(manifest, dict) else None
+            config_id = config.get("digest") if isinstance(config, dict) else None
+            if isinstance(config_id, str) and re.fullmatch(_DIGEST_PATTERN, config_id):
+                pair = (manifest_id, config_id)
+    return pair
 
 
 def _require_available_images(references: dict[str, str]) -> None:

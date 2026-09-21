@@ -18,7 +18,6 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from aptl.appliance.seat._device import write_character_device
-from aptl.appliance.seat.access_clients import configure_host_clients, enrolled_key
 from aptl.appliance.seat.access_state import remove_matching_invalidated_generation
 from aptl.core._soc_ca_io import _atomic_write
 from aptl.core.appliance_boundary import ApplianceBoundaryBinding

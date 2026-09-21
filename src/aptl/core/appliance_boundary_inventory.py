@@ -15,6 +15,8 @@ from aptl.core.appliance_boundary import (
 )
 from aptl.utils.redaction import redact
 
+_INCOMPLETE_ENFORCEMENT = "boundary.guest-enforcement-incomplete"
+
 
 class _StrictObservation(BaseModel):
     """Base for immutable, closed boundary-observation records."""
@@ -250,10 +252,9 @@ def _append_enforcement_findings(
 ) -> None:
     """Require complete, digest-bound readback for every active authority."""
 
-    incomplete = "boundary.guest-enforcement-incomplete"
     by_authority = {item.authority: item for item in guest.enforcements}
     if len(by_authority) != len(guest.enforcements):
-        findings.append(incomplete)
+        findings.append(_INCOMPLETE_ENFORCEMENT)
         return
     platform = by_authority.get("platform")
     if policy.internal_zone_isolation:
@@ -275,12 +276,12 @@ def _append_platform_enforcement_findings(
     """Require complete, digest-bound platform firewall enforcement."""
 
     if platform is None:
-        findings.append("boundary.guest-enforcement-incomplete")
+        findings.append(_INCOMPLETE_ENFORCEMENT)
         return
     if platform.source_digest != policy_digest:
         findings.append("boundary.guest-platform-source-mismatch")
     if set(platform.families) != {"bridge", "inet"}:
-        findings.append("boundary.guest-enforcement-incomplete")
+        findings.append(_INCOMPLETE_ENFORCEMENT)
     if not platform.default_deny_observed:
         findings.append("boundary.guest-default-deny-missing")
 

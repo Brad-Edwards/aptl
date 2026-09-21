@@ -11,38 +11,38 @@ from pathlib import Path
 
 from aptl.appliance.bootstrap import initialize_overlay_state
 from aptl.appliance.build import OverlayCreateRequest, create_disposable_overlay
-from aptl.appliance.launch import _prepare_verified_launch_descriptor
 from aptl.appliance.candidate import (
     ApplianceCandidateManifest,
     _prepare_verified_candidate_launch_descriptor,
     _verify_candidate_metadata,
     verify_candidate_directory,
 )
+from aptl.appliance.launch import _prepare_verified_launch_descriptor
 from aptl.appliance.manifest import (
     ApplianceManifestError,
     ApplianceReleaseInspection,
+    _load_release_documents,
     verify_release_directory,
     verify_release_metadata,
-    _load_release_documents,
 )
 from aptl.appliance.models import ApplianceReleaseManifest
 from aptl.appliance.release_validation import read_release_artifact
-from aptl.appliance.seat.context import SeatPaths, StartSeatOptions
 from aptl.appliance.seat.access import (
     GuestAccessRequest,
-    configure_host_clients,
     invalidate_host_access,
     persist_host_access_bundle,
     publish_guest_access_request,
     wait_for_guest_access,
 )
+from aptl.appliance.seat.access_clients import configure_host_clients
 from aptl.appliance.seat.allocation import (
     launch_with_automatic_mappings,
     launch_with_reserved_mappings,
 )
+from aptl.appliance.seat.context import SeatPaths, StartSeatOptions
 from aptl.appliance.seat.errors import SeatLauncherError
-from aptl.appliance.seat.locking import serialized_seat_mutation
 from aptl.appliance.seat.exposure import require_host_exposure
+from aptl.appliance.seat.locking import serialized_seat_mutation
 from aptl.appliance.seat.models import SeatRecord, SeatStatusProjection
 from aptl.appliance.seat.observation import (
     HostObservationBundle,
@@ -73,9 +73,11 @@ from aptl.core.appliance_boundary import (
     ApplianceBoundaryPolicy,
     load_boundary_policy,
 )
-from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
-from aptl.core.appliance_boundary_inventory import GuestBoundaryObservation
 from aptl.core.appliance_boundary_gate import BoundaryPhase, run_appliance_boundary_gate
+from aptl.core.appliance_boundary_inventory import (
+    BoundaryEndpoint,
+    GuestBoundaryObservation,
+)
 from aptl.utils.strict_json import model_validate_json_strict
 from aptl.validation.participant_profile_models import ParticipantProfileManifest
 

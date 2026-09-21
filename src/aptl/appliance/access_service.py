@@ -27,10 +27,10 @@ from aptl.appliance.seat.access import (
     GuestAccessBundle,
     GuestAccessRequest,
     GuestRuntimeEvidence,
-    enrolled_key,
     publish_guest_access,
     read_guest_access_request,
 )
+from aptl.appliance.seat.access_clients import enrolled_key
 from aptl.core.appliance_boundary_inventory import (
     GuestBoundaryObservation,
     qualify_appliance_boundary,

@@ -122,19 +122,24 @@ def _assign_management_state(project: Path, *, uid: int, gid: int) -> None:
         if target.is_symlink() or not target.exists():
             raise WorkbenchConfigurationError("guest management state is unsafe")
         if target.is_dir():
-            for root, directories, files in os.walk(target, followlinks=False):
-                root_path = Path(root)
-                if any(
-                    (root_path / name).is_symlink() for name in (*directories, *files)
-                ):
-                    raise WorkbenchConfigurationError(
-                        "guest management state contains a symbolic link"
-                    )
-                os.chown(root_path, uid, gid, follow_symlinks=False)
-                for name in files:
-                    os.chown(root_path / name, uid, gid, follow_symlinks=False)
+            _assign_management_directory(target, uid=uid, gid=gid)
         else:
             os.chown(target, uid, gid, follow_symlinks=False)
+
+
+def _assign_management_directory(directory: Path, *, uid: int, gid: int) -> None:
+    """Reject links and assign one generated management directory tree."""
+
+    for root, directories, files in os.walk(directory, followlinks=False):
+        root_path = Path(root)
+        entries = (*directories, *files)
+        if any((root_path / name).is_symlink() for name in entries):
+            raise WorkbenchConfigurationError(
+                "guest management state contains a symbolic link"
+            )
+        os.chown(root_path, uid, gid, follow_symlinks=False)
+        for name in files:
+            os.chown(root_path / name, uid, gid, follow_symlinks=False)
 
 
 def _prepare_dispatch_home(home: Path, *, uid: int, gid: int) -> None:

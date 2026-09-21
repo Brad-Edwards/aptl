@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
-from pathlib import Path
 import socket
 import tempfile
 import threading
 import time
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -18,16 +18,16 @@ from aptl.appliance.seat.access import (
     GuestAccessRequest,
     GuestRuntimeEvidence,
     SeatAccessEnrollment,
-    configure_host_clients,
     encode_guest_access_bundle,
+    ensure_transport_identity,
     invalidate_host_access,
     persist_host_access_bundle,
     publish_guest_access,
     publish_guest_access_request,
     read_guest_access_request,
     wait_for_guest_access,
-    ensure_transport_identity,
 )
+from aptl.appliance.seat.access_clients import configure_host_clients
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.workbench.dispatch import key_fingerprint
 from aptl.workbench.profiles import WorkbenchConfigurationError

@@ -44,7 +44,7 @@ checks observe an effect in the running lab rather than a declaration.
 | Host-published ports | Boot gate, live: the exact declared loopback tuple, no wider binding, and a real connection. Focused: `tests/test_compose_port_realization.py`, `tests/test_docker_compose_port_bindings.py` |
 | Orchestrator `workflows` | Boot gate, live: one end-only workflow driven to a terminal RAES state with history, parsed with the contract model. Focused: `tests/test_raes_orchestrator.py`, `tests/test_workflow_engine.py` |
 | Lifecycle and teardown | Boot gate: `aptl lab stop --volumes` plus the independent project-scoped absence proof in `scripts/ci/assert_project_teardown.py` |
-| The gate's own failure modes | `tests/test_boot_realization_gate.py` — every check fails closed without Docker |
+| The gate's own failure modes | `tests/test_boot_realization_gate.py`, where every check fails closed without Docker |
 
 ## Declared dimensions APTL does not read back
 
@@ -54,7 +54,7 @@ lab start rather than reporting a realized range. Two consequences worth
 knowing before extending the fixture:
 
 - A service unit may declare only the dimensions the service manager is asked
-  for — load, enabled and active state. `unit_type`, `unit_file_path`,
+  for: load, enabled and active state. `unit_type`, `unit_file_path`,
   `exec_start` and a `Node.services` back-reference are not read back
   (`_service_unit_shape_supported` in
   `src/aptl/backends/raes_runtime_guest_observation.py`), so declaring one
@@ -80,5 +80,5 @@ those, and full-range qualification is tracked in APTL #870 and #685 and in
 OpenRAE/lilrae #4, #9, and #10.
 
 Adding the next regression should add one field to the shared scenario and one
-effect assertion to the verifier — not a second boot job and not a second
+effect assertion to the verifier, not a second boot job and not a second
 scenario.

@@ -33,6 +33,7 @@ observed run state behind it, not synthetic in-memory progress.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -240,6 +241,9 @@ def _apply_plan_operations(
 class AptlEvaluator(object):
     """Evaluation component of APTL's ``full-remote-control-plane`` target."""
 
+    proposition_interpreter: Callable[..., object] | None = field(
+        default=None, repr=False
+    )
     _results: dict[str, dict[str, object]] = field(default_factory=dict, init=False)
     _history: dict[str, list[dict[str, object]]] = field(
         default_factory=dict, init=False
@@ -312,6 +316,7 @@ class AptlEvaluator(object):
             plan,
             working_snapshot,
             evidence_records=self._evidence_records,
+            proposition_interpreter=self.proposition_interpreter,
         )
         return ApplyResult(
             success=True,
@@ -404,7 +409,12 @@ def refresh_evidence_truth(
     refresh_snapshot = _without_evaluation_state(snapshot)
     control_plane = RuntimeControlPlane(target, initial_snapshot=refresh_snapshot)
     try:
-        return _run_evidence_refresh(control_plane, execution_plan, evidence_records)
+        return _run_evidence_refresh(
+            control_plane,
+            execution_plan,
+            evidence_records,
+            evaluator.proposition_interpreter,
+        )
     finally:
         control_plane.close()
 
@@ -429,6 +439,7 @@ def _run_evidence_refresh(
     control_plane: RuntimeControlPlane,
     execution_plan: ExecutionPlan,
     evidence_records: tuple[ExperimentEvidenceRecordModel, ...],
+    proposition_interpreter: object | None,
 ) -> EvidenceTruthRefresh:
     """Run one registered evaluation and return its exact terminal disposition."""
 
@@ -462,6 +473,7 @@ def _run_evidence_refresh(
             execution_plan.evaluation,
             snapshot,
             evidence_records,
+            proposition_interpreter,
         )
     ):
         result = EvidenceTruthRefresh(

@@ -1,10 +1,4 @@
-"""Emergency kill switch for all agent and MCP operations.
-
-Discovers and terminates MCP server processes, optionally stops lab
-containers, clears scenario session state, and cleans up trace context
-files. Designed for resilience: each step runs independently so that a
-failure in one does not prevent the others.
-"""
+"""Emergency kill switch for agent, MCP, and lab operations."""
 
 import os
 import signal
@@ -17,7 +11,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional, TypedDict
 
 from aptl.core.config import find_config, load_config
-from aptl.core.lab import ALL_KNOWN_PROFILES
 from aptl.core.lifecycle_guard import (
     LifecycleLockUnavailableError,
     lifecycle_mutation_lock,
@@ -315,7 +308,13 @@ def _kill_lab_containers_owned(
     if error:
         return False, error
     assert resolved_backend is not None
-    return resolved_backend.kill(list(ALL_KNOWN_PROFILES))
+    try:
+        from aptl.core.operator_group_state import load_admitted_operator_groups
+
+        profiles = list(load_admitted_operator_groups(project_dir))
+    except (OSError, ValueError):
+        return False, "invalid operator-group recovery state"
+    return resolved_backend.kill(profiles)
 
 
 def _kill_backend(

@@ -1,4 +1,4 @@
-"""Exact native sources for the released TechVault evidence demands."""
+"""Adapter-owned native sources for the released TechVault evidence demands."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from datetime import datetime
 from typing import cast
 
 from aptl.core.evidence.adapters.sources import SourceResult
-from aptl.core.evidence.adapters.techvault_transcript import (
+from aptl_techvault.evidence.techvault_transcript import (
     RedteamSessionTranscriptSource,
     TranscriptFrame,
     TranscriptSession,
     transcript_chain_digest,
 )
-from aptl.core.evidence.adapters.techvault_readiness import (
+from aptl_techvault.evidence.techvault_readiness import (
     TECHVAULT_LOCAL_SIDS,
     SuricataRuleReadinessSource,
 )

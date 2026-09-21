@@ -1,4 +1,4 @@
-"""Complete-session transcript evidence for TechVault's Kali participant."""
+"""Adapter-owned complete-session transcript evidence for TechVault."""
 
 from __future__ import annotations
 

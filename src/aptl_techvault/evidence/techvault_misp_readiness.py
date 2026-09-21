@@ -1,4 +1,4 @@
-"""Native MISP authenticated-readiness evidence for the TechVault scenario.
+"""Adapter-owned MISP authenticated-readiness evidence for TechVault.
 
 The released pack's ``misp-authenticated-api-readiness`` requirement asks for
 four separate facts on a clean realization: the canonical URL MISP is reached

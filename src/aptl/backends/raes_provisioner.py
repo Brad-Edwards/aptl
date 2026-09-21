@@ -32,6 +32,10 @@ from aptl.backends.raes_realization import (
     interpret_provisioning_plan,
 )
 from aptl.backends.raes_profiles import select_backend_profiles
+from aptl.backends.scenario_planning_compatibility import (
+    ResolvedPlanningCompatibility,
+)
+from aptl.backends.scenario_startup import ScenarioStartupSelection
 from aptl.core.config import AptlConfig
 from aptl.core.experiment.capture_plan import CapturePlan, empty_capture_plan
 from aptl.core.deployment.realization import (
@@ -44,7 +48,6 @@ from aptl.utils.logging import get_logger
 if TYPE_CHECKING:
     from raes_contracts.contracts import ArtifactAvailabilityContext
 
-    from aptl.backends.scenario_startup import ScenarioStartupSelection
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.scenario_bundle import ScenarioBundle
 
@@ -86,7 +89,8 @@ class AptlProvisioner(ProvisionerStartMixin):
     operator_access: OperatorAccessDecision = field(
         default_factory=OperatorAccessDecision
     )
-    startup_selection: ScenarioStartupSelection | None = field(
+    startup_selection: ScenarioStartupSelection | None = field(default=None, repr=False)
+    planning_compatibility: ResolvedPlanningCompatibility | None = field(
         default=None, repr=False
     )
     _cached_plan: object | None = field(default=None, init=False, repr=False)
@@ -277,9 +281,18 @@ class AptlProvisioner(ProvisionerStartMixin):
         )
 
     def selected_profiles(self, realization: AptlRealization) -> list[str]:
-        """Apply the admitted scope decision to the ordinary backend profiles."""
+        """Apply the admitted group vocabulary and observability decision."""
+        admitted_groups = (
+            realization.pack_interaction.operator_groups
+            if realization.pack_interaction is not None
+            else None
+        )
         return self.observability_scope.select_profiles(
-            select_backend_profiles(self.config, realization.profiles)
+            select_backend_profiles(
+                self.config,
+                realization.profiles,
+                admitted_operator_groups=admitted_groups,
+            )
         )
 
     def _availability_substrate_digests(self) -> dict[str, str]:

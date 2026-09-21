@@ -1,4 +1,4 @@
-"""The retained per-host enrollment identity readiness is compared against.
+"""TechVault retained per-host enrollment identity readiness is compared against.
 
 Comparing the manager's current view of an agent with that agent's current
 `client.keys` proves only that the two agree right now. Delete the retained

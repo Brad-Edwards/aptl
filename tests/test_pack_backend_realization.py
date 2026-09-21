@@ -289,3 +289,4 @@ def test_generated_compose_uses_the_realized_membership_not_a_name_table() -> No
     service = render_realization_compose(spec)["services"]["thehive"]
 
     assert service["profiles"] == ["enterprise"]
+    assert service["labels"]["aptl.node.address"] == "provision.node.thehive"

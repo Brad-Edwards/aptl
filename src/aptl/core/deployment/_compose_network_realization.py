@@ -208,14 +208,15 @@ class ComposeRealizationNetworkMixin:
                 )
                 continue
             current = _container_networks(info) & managed_networks
+            aliases = _node_network_aliases(node)
             reattach, reattach_failures = self._reconnect_static_ip_drifts(
                 node.container_name,
                 info,
                 desired,
+                aliases=aliases,
             )
             failures.extend(reattach_failures)
             current = current - set(reattach)
-            aliases = _node_network_aliases(node)
             failures.extend(
                 self._disconnect_extra_networks(
                     node.container_name,
@@ -271,16 +272,27 @@ class ComposeRealizationNetworkMixin:
         container_name: str,
         info: dict[str, Any],
         desired: dict[str, DeploymentNetworkAttachment],
+        *,
+        aliases: tuple[str, ...] = (),
     ) -> tuple[list[str], list[str]]:
-        """Disconnect already-attached networks whose static IP is wrong."""
+        """Reconnect endpoints missing their declared IP or service DNS aliases."""
 
         reattach: list[str] = []
         failures: list[str] = []
         for network_name, attachment in desired.items():
-            if not attachment.ipv4_address:
+            endpoint = (
+                info.get("NetworkSettings", {}).get("Networks", {}).get(network_name)
+            )
+            if not isinstance(endpoint, dict):
                 continue
             current_ip = _container_network_ip(info, network_name)
-            if current_ip and current_ip != attachment.ipv4_address:
+            ip_drift = bool(
+                attachment.ipv4_address
+                and current_ip
+                and current_ip != attachment.ipv4_address
+            )
+            alias_drift = not set(aliases).issubset(endpoint.get("Aliases") or ())
+            if ip_drift or alias_drift:
                 result = self.disconnect_container_network(container_name, network_name)
                 if result.success:
                     reattach.append(network_name)

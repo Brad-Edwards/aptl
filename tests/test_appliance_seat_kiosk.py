@@ -13,7 +13,7 @@ def test_build_kiosk_launch_plan_uses_custom_browser() -> None:
         browser_command="/usr/bin/custom-browser",
     )
 
-    assert plan.url == "https://127.0.0.1:8443/"
+    assert plan.url == "http://127.0.0.1:8443/"
     assert plan.argv[0] == "/usr/bin/custom-browser"
     assert "--kiosk" in plan.argv
 

@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from aptl.core.archival.legacy_manifest import LEGACY_REPRODUCIBILITY_SCHEMAS
 from aptl.utils.pathsafe import PathContainmentError, read_contained_nofollow
 
 _DIGEST_RE = re.compile(r"^sha256:[a-f0-9]{64}$")
@@ -271,7 +272,7 @@ def _validate_canonical_evidence(
     ):
         raise ParticipantQualificationError("invalid participant run record")
     matches = (
-        run_record.get("schema_version") == "aptl.run-record/v1"
+        run_record.get("schema_version") in LEGACY_REPRODUCIBILITY_SCHEMAS
         and run_record.get("outcome") == "success"
         and set(selected_profiles) == set(report.surface.selected_profiles)
         and backend_evidence.get("range_snapshot") == snapshot

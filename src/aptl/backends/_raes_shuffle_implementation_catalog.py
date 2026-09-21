@@ -84,6 +84,12 @@ SHUFFLE_APPLICATION_PROFILES = (
                 _variable("ENVIRONMENT_NAME", "Shuffle"),
                 _variable("SHUFFLE_APP_SDK_TIMEOUT", "300"),
                 _variable("SHUFFLE_AUTO_IMAGE_DOWNLOAD", "false"),
+                # Pipeline provisioning is a separate upstream auto-download
+                # path: it otherwise pulls Tenzir and publishes Wazuh's 1514.
+                # TechVault declares workflow workers, not a pipeline stack.
+                _variable("SHUFFLE_SKIP_PIPELINES", "true"),
+                _variable("SHUFFLE_STATS_DISABLED", "true"),
+                _variable("SHUFFLE_LOGS_DISABLED", "true"),
                 _variable("SHUFFLE_BASE_IMAGE_NAME", "frikky/shuffle"),
                 _variable("SHUFFLE_ORBORUS_EXECUTION_TIMEOUT", "600"),
                 _variable(

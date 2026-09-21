@@ -98,7 +98,9 @@ def _attack_completed(result: Mapping[str, object]) -> bool:
             continue
         output = payload.get("output")
         stdout = output.get("stdout") if isinstance(output, Mapping) else None
-        if isinstance(stdout, str) and stdout.rstrip().endswith("done"):
+        if isinstance(stdout, str) and "done" in {
+            line.strip() for line in stdout.splitlines()
+        }:
             return True
     return False
 

@@ -47,14 +47,14 @@ class TestQueryAndParse:
     def test_apt_query_then_parse_returns_installed_set(self):
         argv = query_installed_argv("apt", ("curl", "wazuh-manager"))
         assert "dpkg-query" in argv
-        # dpkg-query -W -f '${Package}\n' prints one installed package per line.
-        stdout = "curl\nwazuh-manager\n"
+        stdout = "ii  curl\nii  wazuh-manager\n"
         assert parse_installed("apt", stdout) == frozenset({"curl", "wazuh-manager"})
 
     def test_apt_parse_ignores_not_installed_noise(self):
-        # dpkg-query emits errors on stderr for missing packages; stdout carries
-        # only the installed ones, so a partial install parses to what is present.
-        assert parse_installed("apt", "curl\n") == frozenset({"curl"})
+        # dpkg-query can print a known package with the `un` status while
+        # returning nonzero. It is available to apt but not installed.
+        stdout = "ii  curl\nun  openssh-server\n"
+        assert parse_installed("apt", stdout) == frozenset({"curl"})
 
     def test_pip_parse_reads_freeze_names(self):
         stdout = "requests==2.31.0\nurllib3==2.0.0\n"

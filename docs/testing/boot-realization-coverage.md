@@ -11,7 +11,13 @@ envelope is tracked in issue #1126; this table must not grow into a second
 capability registry.
 
 The **Clean-install lab boot and teardown (DEP-008)** job starts the one
-product-neutral scenario, `tests/fixtures/materialization-envelope.sdl.yaml`.
+product-neutral scenario,
+`tests/fixtures/packs/materialization-envelope/sdl/materialization-envelope.sdl.yaml`.
+It is the scenario of APTL's owned [lab fixture pack](lab-fixture-pack.md),
+which the unit suite admits through the same resolver as a released pack. The
+job itself selects the SDL by explicit path, so it covers the installed
+lifecycle, not pack admission.
+
 Since issue #993 that scenario carries a single causal chain: inline content
 moves the SSH daemon off its package default port, the declared service unit
 starts the daemon, the declared listener binds the moved port, and that port is

@@ -1253,7 +1253,6 @@ tests/__init__.py	tests-follow-owner	Retain meaningful boundary and parity tests
 tests/_bundle_fixtures.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/archival_fixtures.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/conftest.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
-tests/fixtures/materialization-envelope.sdl.yaml	tests-follow-owner	Exercise generic materialization without scenario adapter coupling
 tests/fixtures/mcp_transport_dispatch.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/fixtures/redaction_parity_corpus.json	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/fixtures/workbench_mcp_server.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1824,3 +1823,12 @@ src/aptl_techvault/evidence/transcript_parsing.py	core-runtime	Retain TechVault 
 src/aptl_techvault/planning_compatibility.py	core-runtime	TechVault planning constraints stay behind the installed adapter seam
 tests/test_pack_adapter_install_artifact.py	tests-follow-owner	Retain real installed second-adapter acceptance coverage
 tests/test_pack_adapter_install_seam.py	tests-follow-owner	Retain generic adapter seam regression coverage
+docs/architecture/issue-985-owned-lab-fixture-preflight.md	architecture-history	Preserve owned lab fixture decisions and test-migration guardrails
+docs/testing/lab-fixture-pack.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+tests/fixture_pack.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/fixtures/packs/materialization-envelope/associated-artifacts.json	tests-follow-owner	Owned fixture pack exercising generic lab machinery without a released scenario pack
+tests/fixtures/packs/materialization-envelope/assets/content/notice.txt	tests-follow-owner	Owned fixture pack exercising generic lab machinery without a released scenario pack
+tests/fixtures/packs/materialization-envelope/assets/content/tree.tar	tests-follow-owner	Owned fixture pack exercising generic lab machinery without a released scenario pack
+tests/fixtures/packs/materialization-envelope/docs/provenance-ledger.yaml	tests-follow-owner	Owned fixture pack exercising generic lab machinery without a released scenario pack
+tests/fixtures/packs/materialization-envelope/pack.yaml	tests-follow-owner	Owned fixture pack exercising generic lab machinery without a released scenario pack
+tests/fixtures/packs/materialization-envelope/sdl/materialization-envelope.sdl.yaml	tests-follow-owner	Exercise generic materialization without scenario adapter coupling

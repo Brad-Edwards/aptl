@@ -3,10 +3,11 @@
 The 19 TechVault content placements that author an EXACT ``source.artifact_requirement``
 were rejected by RAES's SEM-218 runtime gate with ``runtime.backend-contract-invalid``
 because APTL disclosed nothing for them: the disclosure path only covered nodes.
-These tests run that same real gate (``evaluate_artifact_realization``) against a
-real staged TechVault pack, so a pass proves the disclosed digest is the digest
-of the pack bytes the placement actually resolved — not a payload that merely
-looks well-shaped.
+These tests run that same real gate (``evaluate_artifact_realization``) against
+APTL's owned fixture pack (issue #985), admitted through the production resolver,
+so a pass proves the disclosed digest is the digest of the pack bytes the
+placement actually resolved — not a payload that merely looks well-shaped — and
+no released pack's contents can change the outcome.
 
 The decisive cases are the negatives: a placement the backend did not realize,
 and a pin the pack's bytes do not match, must both produce *no* disclosure and
@@ -48,29 +49,31 @@ from aptl.backends.raes_artifact_mechanisms import (
 from aptl.backends.raes_content_satisfaction import content_satisfactions_for_plan
 from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.core.deployment.realization import DeploymentContentRealization
-from aptl.core.scenario_bundle import env_pack_bundle
+from tests.fixture_pack import NOTICE, admit_fixture_pack
 
-_ADDRESS = "provision.content.misp-suricata-sync-readme"
-_FIELD_PATH = "content.misp-suricata-sync-readme.source.artifact_requirement"
-# The readme artifact the bundled TechVault pack really carries, and the digest
-# its manifest really binds those bytes to.
-_ARTIFACT_ID = "techvault-misp-sync-readme"
-_DIGEST = "sha256:07c3dee4987c47e57bc8f0333073abdc07b832a7e82136c3123577531978231b"
+_CONTENT_NAME = "fixture-notice"
+_ADDRESS = f"provision.content.{_CONTENT_NAME}"
+_FIELD_PATH = f"content.{_CONTENT_NAME}.source.artifact_requirement"
+_TARGET = "provision.node.smoke-box"
+# The file artifact the owned fixture pack really carries, and the digest of
+# its checked-in bytes.
+_ARTIFACT_ID = NOTICE.artifact_id
+_DIGEST = NOTICE.digest
 _OTHER_DIGEST = "sha256:" + "4" * 64
 
 
 def _identity(digest: str = _DIGEST) -> ArtifactIdentity:
     return ArtifactIdentity(
         artifact_id=_ARTIFACT_ID,
-        version="0.1.0",
+        version="1.0.0",
         digest=digest,
-        media_type="text/markdown",
+        media_type=NOTICE.media_type,
     )
 
 
 def _contract(digest: str = _DIGEST) -> ArtifactRequirement:
     return ArtifactRequirement(
-        requirement_id="techvault-misp-sync-readme-requirement",
+        requirement_id=f"{_CONTENT_NAME}-requirement",
         explicitness=ExplicitnessClass.EXACT,
         exact_artifact=_identity(digest),
         permitted_routes=[
@@ -91,10 +94,10 @@ def _plan(contract: ArtifactRequirement) -> ProvisioningPlan:
                 domain=RuntimeDomain.PROVISIONING,
                 resource_type="content-placement",
                 payload={
-                    "content_name": "misp-suricata-sync-readme",
+                    "content_name": _CONTENT_NAME,
                     "spec": {
                         "type": "file",
-                        "path": "/app/README.md",
+                        "path": "/srv/fixture/notice.txt",
                         "source": {
                             "name": _ARTIFACT_ID,
                             "artifact_requirement": contract.model_dump(mode="json"),
@@ -111,14 +114,14 @@ def _content(artifact_id: str = _ARTIFACT_ID) -> DeploymentContentRealization:
 
     return DeploymentContentRealization(
         address=_ADDRESS,
-        target_address="provision.node.misp-suricata-sync",
-        content_name="misp-suricata-sync-readme",
+        target_address=_TARGET,
+        content_name=_CONTENT_NAME,
         volume_suffix="",
-        dest_relpath="app/README.md",
+        dest_relpath="srv/fixture/notice.txt",
         source_kind="pack-file",
         artifact_id=artifact_id,
         artifact_digest=_DIGEST,
-        media_type="text/markdown",
+        media_type=NOTICE.media_type,
     )
 
 
@@ -130,7 +133,7 @@ def _compiled(contract: ArtifactRequirement) -> CompiledRealizationRequirement:
         requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
         explicitness=ExplicitnessClass.EXACT,
         provenance=ExplicitnessProvenance.AUTHOR_DECLARED,
-        governing_scope="#/content/misp-suricata-sync-readme",
+        governing_scope=f"#/content/{_CONTENT_NAME}",
         artifact_requirement=contract,
     )
 
@@ -192,12 +195,11 @@ def _evaluate(payload: dict[str, object] | None, contract: ArtifactRequirement):
 
 @pytest.fixture(scope="module")
 def bundle_root(tmp_path_factory):
-    """A real staged, validated TechVault pack — the bytes under test."""
+    """The owned fixture pack, staged and validated — the bytes under test."""
 
-    return env_pack_bundle(tmp_path_factory.mktemp("staged"), "techvault").root
+    return admit_fixture_pack(tmp_path_factory.mktemp("staged")).root
 
 
-@pytest.mark.integration
 def test_realized_pack_content_satisfies_the_runtime_gate(bundle_root):
     """The disclosed digest is the pack's own bytes, and the gate accepts it."""
 
@@ -227,14 +229,12 @@ def test_absent_disclosure_is_rejected_by_the_runtime_gate():
     assert provenance is None
 
 
-@pytest.mark.integration
 def test_content_the_backend_did_not_realize_gets_no_disclosure(bundle_root):
     """A placement the realization never lowered discloses nothing."""
 
     assert _disclosures(bundle_root, None) == {}
 
 
-@pytest.mark.integration
 def test_content_whose_pack_bytes_differ_from_the_pin_gets_no_disclosure(bundle_root):
     """A pin the pack's actual bytes do not match is a refusal, not an echo."""
 
@@ -243,23 +243,23 @@ def test_content_whose_pack_bytes_differ_from_the_pin_gets_no_disclosure(bundle_
     assert _disclosures(bundle_root, _content(), contract) == {}
 
 
-@pytest.mark.integration
 def test_unresolvable_artifact_id_gets_no_disclosure(bundle_root):
     """Content whose bytes the pack cannot resolve fails closed."""
 
-    assert _disclosures(bundle_root, _content("techvault-not-in-this-pack")) == {}
+    missing = _content("materialization-envelope-not-in-this-pack")
+
+    assert _disclosures(bundle_root, missing) == {}
 
 
-@pytest.mark.integration
 def test_non_pack_content_discloses_nothing(bundle_root):
     """Inline text carries no pack-resolved bytes, so there is nothing to claim."""
 
     inline = DeploymentContentRealization(
         address=_ADDRESS,
-        target_address="provision.node.misp-suricata-sync",
-        content_name="misp-suricata-sync-readme",
+        target_address=_TARGET,
+        content_name=_CONTENT_NAME,
         volume_suffix="",
-        dest_relpath="app/README.md",
+        dest_relpath="srv/fixture/notice.txt",
         source_kind="inline-text",
         inline_text="not the pack's bytes",
     )
@@ -365,7 +365,7 @@ def test_one_artifact_shared_by_several_placements_is_resolved_once(stub_pack):
     payload_bytes = b"shared artifact bytes"
     store[_ARTIFACT_ID] = payload_bytes
     contract = _pack_contract(_digest_of(payload_bytes))
-    second = "provision.content.misp-suricata-sync-readme-copy"
+    second = f"{_ADDRESS}-copy"
     plan = _plan(contract)
     plan.resources[second] = PlannedResource(
         address=second,
@@ -489,10 +489,10 @@ def test_inline_text_content_discloses_nothing_without_touching_the_pack(stub_pa
     _store, calls = stub_pack
     inline = DeploymentContentRealization(
         address=_ADDRESS,
-        target_address="provision.node.misp-suricata-sync",
-        content_name="misp-suricata-sync-readme",
+        target_address=_TARGET,
+        content_name=_CONTENT_NAME,
         volume_suffix="",
-        dest_relpath="app/README.md",
+        dest_relpath="srv/fixture/notice.txt",
         source_kind="inline-text",
         inline_text="not the pack's bytes",
     )

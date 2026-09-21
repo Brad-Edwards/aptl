@@ -18,7 +18,8 @@ temporary platform exception. There are currently no such exceptions.
 
 The clean-install job builds a wheel, installs it in an empty virtual
 environment, materializes a fresh project, and starts only the product-neutral
-`materialization-envelope.sdl.yaml` scenario. It checks native effects in the
+`materialization-envelope.sdl.yaml` scenario from APTL's owned
+[lab fixture pack](lab-fixture-pack.md). It checks native effects in the
 project's running container, stops the lab with volumes, and proves that the
 effective workspace project has no remaining containers, networks, or volumes.
 

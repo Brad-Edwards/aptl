@@ -9,6 +9,8 @@ from pathlib import Path
 
 import yaml
 
+from tests.fixture_pack import FIXTURE_SDL
+
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "checks.yml"
 BASELINE = ROOT / ".github" / "branch-protection-baseline.json"
@@ -137,7 +139,7 @@ class TestBootRealizationCoverage:
     silently-vacuous gate issue #993 exists to prevent.
     """
 
-    FIXTURE = ROOT / "tests" / "fixtures" / "materialization-envelope.sdl.yaml"
+    FIXTURE = FIXTURE_SDL
     NODE = "smoke-box"
 
     def _scenario(self) -> dict:

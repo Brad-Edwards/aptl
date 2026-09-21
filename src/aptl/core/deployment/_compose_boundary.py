@@ -45,6 +45,8 @@ class _BoundaryRunner(Protocol):
         timeout: int | None = None,
     ) -> subprocess.CompletedProcess: ...
 
+    def _ephemeral_container(self, role: str) -> EphemeralContainer: ...
+
 
 def _helper_command(
     action: str,
@@ -59,7 +61,8 @@ def _helper_command(
     complete; a caller that only needs the argv shape may omit it.
     """
 
-    helper = helper or EphemeralContainer.for_role(f"boundary-{action}")
+    # An argv-only caller runs nothing, so there is nothing for teardown to find.
+    helper = helper or EphemeralContainer.for_role(f"boundary-{action}", project=None)
     return [
         "docker",
         "run",
@@ -121,7 +124,7 @@ def _run_helper(
     never receives it.
     """
 
-    helper = EphemeralContainer.for_role(f"boundary-{action}")
+    helper = backend._ephemeral_container(f"boundary-{action}")
     return helper.run(
         lambda command, *, timeout: backend._run_with_input(
             command, payload, timeout=timeout

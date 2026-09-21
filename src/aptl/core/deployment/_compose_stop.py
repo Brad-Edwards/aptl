@@ -49,6 +49,11 @@ class _ComposeStopBackend(Protocol):
 
         ...
 
+    def remove_stranded_helpers(self) -> list[str]:
+        """Remove this project's helpers a killed process left not running."""
+
+        ...
+
     def remove_project_containers(self) -> list[str]:
         """Force-remove residual containers scoped to the Compose project."""
 
@@ -98,6 +103,9 @@ def _run_stop(
     """Run bounded project cleanup and verify the runtime is absent."""
 
     failures = backend.remove_generic_materializer_containers()
+    # After the direct containers, so the workspace project is resolved; before
+    # networks and volumes, so no stranded helper still holds one of them.
+    failures.extend(backend.remove_stranded_helpers())
     cmd = backend._build_command("down", profiles, compose_files=compose_files)
     if remove_volumes:
         cmd.append("-v")

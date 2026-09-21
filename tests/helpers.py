@@ -674,15 +674,19 @@ def without_helper_identity(argv: list[str]) -> list[str]:
     """Return a helper's argv without its per-invocation name and role label.
 
     ``EphemeralContainer`` names every helper randomly so concurrent helpers
-    never collide on the daemon. A test that pins the rest of the argv — the
-    order of its security options, its mounts — strips exactly that identity
-    here rather than loosening every other assertion. Only the generated name
-    shape and the ephemeral role label are removed; a node's own ``--name`` is
-    left alone.
+    never collide on the daemon, and labels its role and lab project. A test
+    that pins the rest of the argv — the order of its security options, its
+    mounts — strips exactly that identity here rather than loosening every
+    other assertion. Only the generated name shape and the two ephemeral labels
+    are removed; a node's own ``--name`` is left alone.
     """
 
-    from aptl.core.ephemeral_containers import EPHEMERAL_ROLE_LABEL
+    from aptl.core.ephemeral_containers import (
+        EPHEMERAL_PROJECT_LABEL,
+        EPHEMERAL_ROLE_LABEL,
+    )
 
+    helper_labels = (f"{EPHEMERAL_ROLE_LABEL}=", f"{EPHEMERAL_PROJECT_LABEL}=")
     stripped: list[str] = []
     skip_next = False
     for index, item in enumerate(argv):
@@ -691,7 +695,7 @@ def without_helper_identity(argv: list[str]) -> list[str]:
             continue
         following = str(argv[index + 1]) if index + 1 < len(argv) else ""
         if (item == "--name" and _EPHEMERAL_NAME.fullmatch(following)) or (
-            item == "--label" and following.startswith(f"{EPHEMERAL_ROLE_LABEL}=")
+            item == "--label" and following.startswith(helper_labels)
         ):
             skip_next = True
             continue

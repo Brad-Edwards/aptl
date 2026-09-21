@@ -124,6 +124,7 @@ def _restore_via_container(
     seeder_image: str,
     *,
     pull_never: bool,
+    project: str | None = None,
 ) -> SuricataSourceOwnershipResult:
     """Chown the still-foreign sources from inside a root container.
 
@@ -142,7 +143,7 @@ def _restore_via_container(
     rel_targets = [
         f"/project/{p.relative_to(project_dir).as_posix()}" for p in still_foreign
     ]
-    helper = EphemeralContainer.for_role("suricata-source-chown")
+    helper = EphemeralContainer.for_role("suricata-source-chown", project=project)
     try:
         perm_result = helper.run(
             subprocess.run,
@@ -209,6 +210,7 @@ def ensure_suricata_config_source_ownership(
     seeder_image: str = _SURICATA_SEEDER_IMAGE,
     *,
     pull_never: bool = False,
+    project: str | None = None,
 ) -> SuricataSourceOwnershipResult:
     """Return checked-in Suricata seed sources to the invoking operator's uid/gid.
 
@@ -232,6 +234,7 @@ def ensure_suricata_config_source_ownership(
         project_dir,
         seeder_image,
         pull_never=pull_never,
+        project=project,
     )
 
 
@@ -240,6 +243,7 @@ def _ensure_suricata_config_source_ownership_linux(
     seeder_image: str,
     *,
     pull_never: bool,
+    project: str | None = None,
 ) -> SuricataSourceOwnershipResult:
     """Repair legacy Suricata source ownership on native Linux Docker hosts."""
     uid = os.getuid()
@@ -257,6 +261,7 @@ def _ensure_suricata_config_source_ownership_linux(
             project_dir,
             seeder_image,
             pull_never=pull_never,
+            project=project,
         )
     return result
 
@@ -269,6 +274,7 @@ def _repair_foreign_sources(
     seeder_image: str,
     *,
     pull_never: bool,
+    project: str | None = None,
 ) -> SuricataSourceOwnershipResult:
     """Repair any Suricata seed source files not owned by the invoking user."""
     foreign = _foreign_owned_sources(source_files, uid)
@@ -281,6 +287,7 @@ def _repair_foreign_sources(
             project_dir,
             seeder_image,
             pull_never=pull_never,
+            project=project,
         )
     else:
         repaired = tuple(str(p.relative_to(project_dir)) for p in foreign)

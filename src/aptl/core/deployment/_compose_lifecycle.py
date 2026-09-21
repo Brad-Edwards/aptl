@@ -40,6 +40,9 @@ class _ComposeLifecycleBackend(Protocol):
     def remove_generic_materializer_containers(self) -> list[str]:
         """Force-remove containers the generic materializer started directly."""
 
+    def remove_stranded_helpers(self) -> list[str]:
+        """Remove this project's helpers a killed process left not running."""
+
     def remove_project_containers(self) -> list[str]:
         """Force-remove residual project-labelled containers."""
 
@@ -68,6 +71,7 @@ def kill_compose_lab(
     )
     _run_compose_down(backend, profiles, timeout=timeout)
     container_failures = backend.remove_generic_materializer_containers()
+    container_failures += backend.remove_stranded_helpers()
     container_failures += backend.remove_project_containers()
     if container_failures:
         log.warning(

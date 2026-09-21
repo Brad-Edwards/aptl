@@ -151,3 +151,53 @@ def test_the_removal_scan_counts_inline_argv(tmp_path):
     path.write_text('run(["docker", "rm", "-f", cid])\n', encoding="utf-8")
 
     assert _docker_rm_literals(path) == [1]
+
+
+def _unscoped_helper_calls(path: Path) -> list[int]:
+    """Return lines that mint a helper without deciding its project scope."""
+
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    lines = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "for_role"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "EphemeralContainer"
+            and not any(keyword.arg == "project" for keyword in node.keywords)
+        ):
+            lines.append(node.lineno)
+    return lines
+
+
+def test_every_helper_decides_which_lab_it_belongs_to():
+    """A helper with no project cannot be found by its lab's teardown.
+
+    In-process removal covers a timed-out run, but not a killed ``aptl``
+    process: that leaves a ``Created`` husk only the project label can
+    attribute. Requiring ``project=`` at every mint makes scope a decision at
+    each site rather than an omission nobody notices.
+    """
+
+    offenders = [
+        f"{path.relative_to(ROOT)}:{line}"
+        for path in _source_files()
+        for line in _unscoped_helper_calls(path)
+    ]
+
+    assert offenders == [], (
+        "pass project= when minting an EphemeralContainer (the backend's "
+        f"_ephemeral_container does this): {offenders}"
+    )
+
+
+def test_the_scope_scan_flags_an_unscoped_mint(tmp_path):
+    path = tmp_path / "sample.py"
+    path.write_text(
+        'a = EphemeralContainer.for_role("x")\n'
+        'b = EphemeralContainer.for_role("y", project=project)\n',
+        encoding="utf-8",
+    )
+
+    assert _unscoped_helper_calls(path) == [1]

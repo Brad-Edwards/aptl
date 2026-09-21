@@ -1573,6 +1573,10 @@ services:
                 events.append("generic")
                 return []
 
+            def remove_stranded_helpers(self):
+                events.append("helpers")
+                return []
+
             def remove_project_containers(self):
                 events.append("containers")
                 return []
@@ -1590,7 +1594,14 @@ services:
         )
 
         assert result.success is True
-        assert events == ["generic", "down", "containers", "networks", "verify"]
+        assert events == [
+            "generic",
+            "helpers",
+            "down",
+            "containers",
+            "networks",
+            "verify",
+        ]
 
     def test_stop_fails_when_project_runtime_remains_after_cleanup(self, tmp_path):
         from aptl.core.deployment._compose_stop import stop_compose_lab
@@ -1609,6 +1620,9 @@ services:
                 return MagicMock(returncode=0, stdout="", stderr="")
 
             def remove_generic_materializer_containers(self):
+                return []
+
+            def remove_stranded_helpers(self):
                 return []
 
             def remove_project_containers(self):

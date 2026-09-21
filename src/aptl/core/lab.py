@@ -2008,6 +2008,7 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
             ctx.project_dir,
             SURICATA_IMAGE,
             pull_never=ctx.offline_staged,
+            project=ctx.backend._ephemeral_project(),
         )
         if not ownership.success:
             log.error(
@@ -2049,7 +2050,10 @@ def _step_generate_certs(ctx: _LabStartContext) -> LabResult | None:
         log.debug("Wazuh profile not selected, skipping certificate generation")
     if skip_profile or _WAZUH_CERTIFICATE_OWNERSHIP <= ctx.stateful_artifact_ownership:
         return None
-    cert_result = ensure_ssl_certs(ctx.project_dir)
+    cert_result = ensure_ssl_certs(
+        ctx.project_dir,
+        project=None if ctx.backend is None else ctx.backend._ephemeral_project(),
+    )
     if cert_result.success:
         return None
     log.error("Certificate generation failed: %s", cert_result.error)

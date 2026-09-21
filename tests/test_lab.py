@@ -2710,7 +2710,11 @@ class TestSyncCredentialsStep:
         result = _step_generate_certs(ctx)
 
         assert result is None
-        generator.assert_called_once_with(tmp_path)
+        # The lab's project scopes the generator so teardown can find it if a
+        # killed process strands it.
+        generator.assert_called_once_with(
+            tmp_path, project=ctx.backend._ephemeral_project()
+        )
 
     def test_renders_to_aptl_config_and_leaves_source_untouched(self, mocker, tmp_path):
         """End-to-end (real credential writers): the step renders the

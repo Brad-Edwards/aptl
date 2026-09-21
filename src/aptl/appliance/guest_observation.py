@@ -73,6 +73,8 @@ class _ProbeBackend(Protocol):
 
     def container_inspect(self, container: str) -> dict[str, object]: ...
 
+    def _ephemeral_container(self, role: str) -> EphemeralContainer: ...
+
 
 @dataclass(frozen=True)
 class _LiveContainer:
@@ -211,7 +213,7 @@ def _connect(
 ) -> bool:
     """Run one bounded TCP connection probe from an observed container."""
 
-    helper = EphemeralContainer.for_role("boundary-probe")
+    helper = backend._ephemeral_container("boundary-probe")
     result = helper.run(
         backend._run,
         _probe_command(
@@ -243,7 +245,7 @@ def _start_listener(
 ) -> str | None:
     """Start a temporary bounded listener for an otherwise quiet target."""
 
-    helper = EphemeralContainer.for_role("boundary-listener")
+    helper = backend._ephemeral_container("boundary-listener")
     # Detached, and still auto-removed: the listener exits on its own timeout,
     # so a caller that never gets to remove it does not leave it behind.
     command = _probe_command(

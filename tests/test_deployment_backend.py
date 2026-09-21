@@ -620,7 +620,13 @@ services:
             [
                 {
                     "State": {"Running": True},
-                    "NetworkSettings": {"Networks": {"test_aptl-redteam": {}}},
+                    "NetworkSettings": {
+                        "Networks": {
+                            "test_aptl-redteam": {
+                                "Aliases": ["kali", "red-workbench"]
+                            }
+                        }
+                    },
                 }
             ]
         )
@@ -802,7 +808,10 @@ services:
             command[:4] != ["docker", "compose", "-p", "test"] for command in commands
         )
 
-    def test_realize_reconnects_network_when_static_ip_drifts(self, tmp_path):
+    @pytest.mark.parametrize("observed_ip", ["172.20.1.99", "172.20.1.20"])
+    def test_realize_reconnects_network_when_ip_or_dns_aliases_drift(
+        self, tmp_path, observed_ip
+    ):
         backend = self._make_backend(tmp_path)
         spec = DeploymentRealizationSpec(
             profiles=("enterprise",),
@@ -828,7 +837,12 @@ services:
                 {
                     "State": {"Running": True},
                     "NetworkSettings": {
-                        "Networks": {"test_aptl-dmz": {"IPAddress": "172.20.1.99"}}
+                        "Networks": {
+                            "test_aptl-dmz": {
+                                "IPAddress": observed_ip,
+                                "Aliases": None,
+                            }
+                        }
                     },
                 }
             ]
@@ -875,6 +889,33 @@ services:
             "test_aptl-dmz",
             "aptl-webapp",
         ] in commands
+
+    @pytest.mark.parametrize("static_ip", [None, "172.20.1.20"])
+    def test_network_alias_repair_is_idempotent_and_reports_disconnect_failure(
+        self, tmp_path, static_ip
+    ):
+        backend = self._make_backend(tmp_path)
+        desired = {
+            "test_aptl-dmz": DeploymentNetworkAttachment(
+                network="dmz-net", ipv4_address=static_ip
+            )
+        }
+        endpoint = {"IPAddress": "172.20.1.20", "Aliases": ["webapp", "other"]}
+        info = {"NetworkSettings": {"Networks": {"test_aptl-dmz": endpoint}}}
+        with patch.object(backend, "disconnect_container_network") as disconnect:
+            assert backend._reconnect_static_ip_drifts(
+                "aptl-webapp", info, desired, aliases=("webapp",)
+            ) == ([], [])
+            disconnect.assert_not_called()
+            endpoint["Aliases"] = []
+            disconnect.return_value = LabResult(success=False, error="denied")
+            assert backend._reconnect_static_ip_drifts(
+                "aptl-webapp", info, desired, aliases=("webapp",)
+            ) == ([], ["denied"])
+            disconnect.return_value = LabResult(success=True)
+            assert backend._reconnect_static_ip_drifts(
+                "aptl-webapp", info, desired, aliases=("webapp",)
+            ) == (["test_aptl-dmz"], [])
 
     def test_realize_rejects_existing_network_policy_mismatch(self, tmp_path):
         backend = self._make_backend(tmp_path)

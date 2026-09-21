@@ -400,13 +400,16 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
 
         result = self._backend.container_exec(
             _SURICATA_CONTAINER,
-            ["tail", "-c", str(MAX_SOURCE_BYTES + 1), "/var/log/suricata/eve.json"],
+            ["tail", "-c", str(MAX_SOURCE_BYTES), "/var/log/suricata/eve.json"],
             timeout=30,
         )
         raw = result.stdout.encode()
         if result.returncode != 0 or len(raw) > MAX_SOURCE_BYTES:
             return None
         events: list[Mapping[str, object]] = []
+        # A healthy long-running sensor routinely exceeds the transfer bound.
+        # Read its bounded suffix; a partial first line is discarded below.
+        # Exact window/flow correlation still refuses missing native evidence.
         for line in result.stdout.splitlines():
             try:
                 event = json.loads(line)

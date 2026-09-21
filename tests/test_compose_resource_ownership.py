@@ -21,6 +21,7 @@ from aptl.core.deployment._compose_resource_ownership import (
 )
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment.realization import DeploymentNetworkRealization
+from aptl.core.lab_types import LabResult
 from aptl.runtime_authority import DeploymentSpawnImageRequirement
 
 
@@ -1033,3 +1034,46 @@ def test_a_successful_capture_rolls_nothing_back(tmp_path: Path) -> None:
 
     assert backend._capture_started_resources(scope, ["core"]).success
     backend._run.assert_not_called()
+
+
+def test_a_failed_compose_up_receipts_and_rolls_back_partial_runtime(
+    tmp_path: Path,
+) -> None:
+    """A non-zero Compose up must not strand unreceipted runtime objects."""
+    from aptl.core.deployment._compose_owned_start import _OwnedStartScope
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl")
+    scope = _OwnedStartScope(
+        ownership=backend._ensure_resource_ownership(),
+        attempt_id="attempt-under-test",
+        daemon_id="daemon",
+        compose_files=(tmp_path / "docker-compose.yml",),
+        semantic_by_service={},
+    )
+    backend._prepare_owned_start = MagicMock(return_value=scope)
+    backend._owned_up_command = MagicMock(return_value=["docker", "compose", "up"])
+    backend._run = MagicMock(
+        return_value=subprocess.CompletedProcess(
+            [], 1, stdout="", stderr="service failed"
+        )
+    )
+    backend._capture_started_resources = MagicMock(
+        return_value=LabResult(success=True)
+    )
+    backend._roll_back_started_project = MagicMock()
+
+    result = backend._run_owned_compose_up(
+        ["core"],
+        build=False,
+        compose_files=scope.compose_files,
+        exclude_services=(),
+        only_services=(),
+        scenario_root=None,
+    )
+
+    assert not result.success
+    assert result.error == "service failed"
+    backend._capture_started_resources.assert_called_once_with(scope, ["core"])
+    backend._roll_back_started_project.assert_called_once_with(
+        scope, ["core"], remove_volumes=False
+    )

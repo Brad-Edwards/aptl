@@ -53,15 +53,61 @@ test -f "$payload_dir/oci-images.tar"
 test -f "$payload_dir/appliance-release.env"
 test -f "$payload_dir/aptl-appliance-first-boot"
 test -f "$payload_dir/aptl-appliance-first-boot.service"
+test -f "$payload_dir/aptl-launch.mount"
+test -d "$payload_dir/system-packages"
+test -f "$payload_dir/system-packages.sha256"
 
-python3 -m pip install --no-index --only-binary=:all: --require-hashes \
+set -- "$payload_dir"/wheelhouse/pip-*.whl
+test "$#" -eq 1
+test -f "$1"
+install -d -m 0755 /opt/aptl /opt/aptl/python /usr/local/bin
+PYTHONPATH="$1" python3 -m pip install --no-index --only-binary=:all: \
+    --target /opt/aptl/python \
+    --ignore-installed \
+    --require-hashes \
     --find-links "$payload_dir/wheelhouse" \
     -r "$payload_dir/requirements.txt"
-aptl appliance validate-inputs --staging-dir "$payload_dir"
+
+# The Ubuntu base marks its system Python as externally managed and does not
+# ship ensurepip. Keep the authenticated application closure isolated under
+# /opt and expose only fixed launchers through the system PATH.
+cat > /usr/local/bin/aptl <<'EOF'
+#!/bin/sh
+PYTHONPATH=/opt/aptl/python exec /usr/bin/python3 /opt/aptl/python/bin/aptl "$@"
+EOF
+cat > /usr/local/bin/raes <<'EOF'
+#!/bin/sh
+PYTHONPATH=/opt/aptl/python exec /usr/bin/python3 /opt/aptl/python/bin/raes "$@"
+EOF
+cat > /usr/local/bin/aptl-misp-suricata-sync <<'EOF'
+#!/bin/sh
+PYTHONPATH=/opt/aptl/python exec /usr/bin/python3 /opt/aptl/python/bin/aptl-misp-suricata-sync "$@"
+EOF
+chmod 0755 /usr/local/bin/aptl /usr/local/bin/raes \
+    /usr/local/bin/aptl-misp-suricata-sync
+/usr/local/bin/aptl appliance validate-inputs --staging-dir "$payload_dir"
+
+# Install the content-locked guest runtime without granting the build guest
+# network access. Suppress maintainer-script service starts until first boot.
+(cd "$payload_dir/system-packages" && \
+    sha256sum --check --strict ../system-packages.sha256)
+test ! -e /usr/sbin/policy-rc.d
+cat > /usr/sbin/policy-rc.d <<'EOF'
+#!/bin/sh
+exit 101
+EOF
+chmod 0755 /usr/sbin/policy-rc.d
+dpkg --unpack "$payload_dir"/system-packages/*.deb
+dpkg --configure --pending
+rm -f /usr/sbin/policy-rc.d
+systemctl enable docker.service
 
 install -d -m 0755 /opt/aptl/project
 tar --extract --file "$payload_dir/project.tar" \
     --directory /opt/aptl/project --no-same-owner
+# Only immutable, scanned release inputs exist here. Runtime credentials and
+# evidence are created later under the first-boot service's private umask.
+chmod -R a+rX /opt/aptl/python /opt/aptl/project
 install -d -m 0755 /opt/aptl/offline
 install -m 0444 "$payload_dir/inputs.json" /opt/aptl/offline/inputs.json
 install -m 0444 "$payload_dir/oci-images.tar" \
@@ -74,10 +120,25 @@ install -m 0755 "$payload_dir/aptl-appliance-first-boot" \
     /usr/local/libexec/aptl-appliance-first-boot
 install -m 0644 "$payload_dir/aptl-appliance-first-boot.service" \
     /etc/systemd/system/aptl-appliance-first-boot.service
-install -d -m 0700 /var/lib/aptl
+install -m 0644 "$payload_dir/aptl-launch.mount" \
+    /etc/systemd/system/run-aptl\\x2dlaunch.mount
+install -d -m 0711 /var/lib/aptl
+if ! getent passwd aptl-mcp >/dev/null; then
+    useradd --system --no-create-home --home-dir /var/lib/aptl/mcp \
+        --shell /bin/sh aptl-mcp
+fi
+# sshd disables every password method. An empty password field keeps the
+# account eligible for public-key forced commands on builds that reject locked
+# accounts before consulting AuthorizedKeysFile.
+passwd --delete aptl-mcp >/dev/null
+if getent group docker >/dev/null; then
+    usermod --append --groups docker aptl-mcp
+fi
+install -d -m 0700 -o aptl-mcp -g aptl-mcp /var/lib/aptl/mcp
+systemctl enable run-aptl\\x2dlaunch.mount
 systemctl enable aptl-appliance-first-boot.service
 
 # The release contains installed inputs only. Per-overlay identity, .env,
 # service credentials, Docker writable state, and run evidence are created
 # after the launcher has attached a disposable overlay.
-rm -rf "$payload_dir"
+rm -rf "$stage"

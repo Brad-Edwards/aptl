@@ -15,6 +15,8 @@ from aptl.core.appliance_boundary import (
 )
 from aptl.utils.redaction import redact
 
+_INCOMPLETE_ENFORCEMENT = "boundary.guest-enforcement-incomplete"
+
 
 class _StrictObservation(BaseModel):
     """Base for immutable, closed boundary-observation records."""
@@ -174,7 +176,10 @@ def _append_host_findings(
             host.payload_digest != binding.payload_digest,
             "boundary.host-payload-digest-mismatch",
         ),
-        (host.boot_id != binding.boot_id, "boundary.host-boot-identity-mismatch"),
+        (
+            host.boot_id != (binding.host_boot_id or binding.boot_id),
+            "boundary.host-boot-identity-mismatch",
+        ),
     )
     findings.extend(reason for mismatch, reason in comparisons if mismatch)
     if not host.complete:
@@ -202,7 +207,7 @@ def _append_guest_findings(
             "boundary.guest-raes-plan-digest-mismatch",
         ),
         (
-            guest.boot_id != binding.boot_id,
+            guest.boot_id != (binding.guest_boot_id or binding.boot_id),
             "boundary.guest-boot-identity-mismatch",
         ),
         (
@@ -220,7 +225,7 @@ def _append_guest_findings(
     )
     findings.extend(code for failed, code in comparisons if failed)
     _append_enforcement_findings(policy, binding, guest, findings)
-    _append_probe_findings(binding, guest, findings)
+    _append_probe_findings(policy, binding, guest, findings)
     allowed = set(policy.docker_authority.allowed_holder_labels)
     if {holder.label_selector for holder in guest.docker_authority_holders} - allowed:
         findings.append("boundary.guest-docker-authority-unapproved")
@@ -248,16 +253,14 @@ def _append_enforcement_findings(
     """Require complete, digest-bound readback for every active authority."""
 
     by_authority = {item.authority: item for item in guest.enforcements}
-    if len(by_authority) != len(guest.enforcements) or "platform" not in by_authority:
-        findings.append("boundary.guest-enforcement-incomplete")
+    if len(by_authority) != len(guest.enforcements):
+        findings.append(_INCOMPLETE_ENFORCEMENT)
         return
-    platform = by_authority["platform"]
-    if platform.source_digest != binding.policy_digest:
-        findings.append("boundary.guest-platform-source-mismatch")
-    if set(platform.families) != {"bridge", "inet"}:
-        findings.append("boundary.guest-enforcement-incomplete")
-    if policy.default_deny and not platform.default_deny_observed:
-        findings.append("boundary.guest-default-deny-missing")
+    platform = by_authority.get("platform")
+    if policy.internal_zone_isolation:
+        _append_platform_enforcement_findings(platform, binding.policy_digest, findings)
+    elif platform is not None:
+        findings.append("boundary.guest-unexpected-platform-enforcement")
     raes = by_authority.get("raes")
     if binding.raes_boundary_required and raes is None:
         findings.append("boundary.guest-raes-enforcement-missing")
@@ -265,24 +268,57 @@ def _append_enforcement_findings(
         findings.append("boundary.guest-raes-source-mismatch")
 
 
+def _append_platform_enforcement_findings(
+    platform: BoundaryEnforcementObservation | None,
+    policy_digest: str,
+    findings: list[str],
+) -> None:
+    """Require complete, digest-bound platform firewall enforcement."""
+
+    if platform is None:
+        findings.append(_INCOMPLETE_ENFORCEMENT)
+        return
+    if platform.source_digest != policy_digest:
+        findings.append("boundary.guest-platform-source-mismatch")
+    if set(platform.families) != {"bridge", "inet"}:
+        findings.append(_INCOMPLETE_ENFORCEMENT)
+    if not platform.default_deny_observed:
+        findings.append("boundary.guest-default-deny-missing")
+
+
 def _append_probe_findings(
+    policy: ApplianceBoundaryPolicy,
     binding: ApplianceBoundaryBinding,
     guest: GuestBoundaryObservation,
     findings: list[str],
 ) -> None:
     """Require passing positive and negative probes for each authority."""
 
-    required_authorities = {"platform"}
+    required_authorities = {"platform"} if policy.internal_zone_isolation else set()
+    if not policy.internal_zone_isolation and any(
+        item.authority == "platform" for item in guest.probes
+    ):
+        findings.append("boundary.guest-unexpected-platform-probes")
     if binding.raes_boundary_required:
         required_authorities.add("raes")
     for authority in sorted(required_authorities):
-        scoped = [item for item in guest.probes if item.authority == authority]
-        positive = [item for item in scoped if item.expectation == "reachable"]
-        negative = [item for item in scoped if item.expectation == "blocked"]
-        if not positive or any(not item.passed for item in positive):
+        if _probe_failed(guest, authority, "reachable"):
             findings.append(f"boundary.guest-{authority}-positive-probe-failed")
-        if not negative or any(not item.passed for item in negative):
+        if _probe_failed(guest, authority, "blocked"):
             findings.append(f"boundary.guest-{authority}-negative-probe-failed")
+
+
+def _probe_failed(
+    guest: GuestBoundaryObservation, authority: str, expectation: str
+) -> bool:
+    """Return whether one required authority/expectation has no passing set."""
+
+    scoped = [
+        item
+        for item in guest.probes
+        if item.authority == authority and item.expectation == expectation
+    ]
+    return not scoped or any(not item.passed for item in scoped)
 
 
 def _inventory(
@@ -302,6 +338,9 @@ def _inventory(
             "id": policy.policy_id,
             "generation": policy.generation,
             "digest": binding.policy_digest,
+            "containment": "internal-zones"
+            if policy.internal_zone_isolation
+            else "vm-only",
         },
         "payload_digest": binding.payload_digest,
         "raes_plan_digest": binding.raes_plan_digest,
@@ -311,6 +350,8 @@ def _inventory(
             "egress_proxy": binding.egress_proxy_image,
         },
         "boot_id": binding.boot_id,
+        "host_boot_id": binding.host_boot_id or binding.boot_id,
+        "guest_boot_id": binding.guest_boot_id or binding.boot_id,
         "host": (
             {"observation_id": host.observation_id, "complete": host.complete}
             if host is not None

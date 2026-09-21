@@ -106,8 +106,29 @@ class TechVaultStartupProvider:
             mcp_build_script="mcp/build-all-mcps.sh",
             mcp_server_keys=(
                 McpServerCredentials("aptl-casemgmt", ("THEHIVE_API_KEY",)),
+                McpServerCredentials(
+                    "aptl-indexer",
+                    (
+                        "INDEXER_USERNAME",
+                        "INDEXER_PASSWORD",
+                        "API_USERNAME",
+                        "API_PASSWORD",
+                    ),
+                ),
+                McpServerCredentials(
+                    "aptl-network", ("INDEXER_USERNAME", "INDEXER_PASSWORD")
+                ),
                 McpServerCredentials("aptl-threatintel", ("MISP_API_KEY",)),
                 McpServerCredentials("aptl-soar", ("SHUFFLE_API_KEY",)),
+                McpServerCredentials(
+                    "aptl-wazuh",
+                    (
+                        "INDEXER_USERNAME",
+                        "INDEXER_PASSWORD",
+                        "API_USERNAME",
+                        "API_PASSWORD",
+                    ),
+                ),
             ),
             native_mcp_ingress=True,
         )

@@ -29,7 +29,7 @@ checks observe an effect in the running lab rather than a declaration.
 | `topology`, `network` | Boot gate (the scenario's isolated network). Focused: `tests/test_compose_boundary_realization.py`, `tests/test_network_boundary_helper.py` |
 | `content-placement` | Boot gate, live and causal (exact placed bytes, read inside the container). Focused: `tests/test_content_realization_source_policy.py`, `tests/test_raes_materializer.py`, `tests/test_raes_materializer_engine.py` |
 | `account-placement` | Boot gate observes the declared local user and group. Focused: `tests/test_deployment_backend.py`, `tests/test_account_provider.py`. Directory and domain account features stay outside the boot |
-| `service` | Boot gate, live (`UnitFileState`, `ActiveState`, `Result` read from the service manager). Focused: `tests/test_imagefree_admission_integration.py` covers the dnf substrate, `tests/test_raes_runtime_observation.py` the observation cases |
+| `service` | Boot gate, live (`UnitFileState`, `ActiveState`, `Result` read from the service manager) on the apt/Debian systemd substrate. Focused: `tests/test_raes_materializer.py` pins substrate selection per package family, `tests/test_raes_runtime_observation.py` the observation cases |
 | `resource-allocation` | Focused only: `tests/test_raes_runtime_environment.py`, `tests/test_compose_resource_ownership.py`. The boot gate makes no claim |
 | `image` | Focused only: `tests/test_docker_image_identity.py`, `tests/test_raes_docker_materializer.py`. The boot scenario is image-free, so the boot gate makes no claim |
 | `architecture` | Focused only: `tests/test_raes_observation.py`. The boot gate makes no claim |
@@ -63,6 +63,21 @@ knowing before extending the fixture:
 - A filesystem entry may not declare a content digest, digest algorithm,
   source path or provenance for the same reason
   (`_filesystem_shape_supported`).
+
+## The dnf/RHEL systemd substrate has no live coverage
+
+A service node in the `rhel` package family selects
+`aptl/generic-systemd-base` rather than the Debian substrate the boot scenario
+uses. That selection is a pure lookup, pinned by
+`tests/test_raes_materializer.py::test_service_nodes_use_family_aware_systemd_substrate`,
+which runs in CI. What nothing proves is the live fact: that Rocky's systemd
+boots under APTL's init flags and runs a declared unit.
+
+A second live scenario used to assert that and was retired in issue #993. It
+ran in no CI job, no shipped scenario declares a dnf node, and it re-asserted
+the generic admission contract the shared fixture already covers. Restore live
+coverage when a scenario actually declares a `rhel` service node, and prove it
+through that scenario's own gate rather than a second generic fixture.
 
 These are honest gaps in observation, not defects in the gate. Widening them
 means teaching the backend to read the dimension back, which is outside this

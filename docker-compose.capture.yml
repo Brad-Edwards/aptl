@@ -3,6 +3,7 @@
 services:
   kali-capture:
     profiles: ["kali"]
+    image: aptl-kali-capture:latest
     build:
       context: .
       dockerfile: containers/kali-capture/Dockerfile

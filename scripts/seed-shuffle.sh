@@ -18,7 +18,7 @@ set -euo pipefail
 #   export THEHIVE_API_KEY="your-api-key-here"
 #   ./scripts/seed-shuffle.sh
 #
-# The script is idempotent -- skips creation if the workflow already exists.
+# Reruns reuse workflow identity and converge credentials, actions, and webhook.
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -61,100 +61,71 @@ if ! command -v docker >/dev/null 2>&1; then
     exit 1
 fi
 
-# ---------------------------------------------------------------------------
-# Preflight checks
-# ---------------------------------------------------------------------------
 
-# Auto-provision TheHive API key if not set in env
+# Required integrations fail closed; a placeholder key cannot yield a usable lab.
+if [ -z "${THEHIVE_API_KEY:-}" ] && [ -x "$SCRIPT_DIR/thehive-apikey.sh" ]; then
+    THEHIVE_API_KEY=$("$SCRIPT_DIR/thehive-apikey.sh") || exit 1
+fi
 if [ -z "${THEHIVE_API_KEY:-}" ]; then
-    if [ -x "$SCRIPT_DIR/thehive-apikey.sh" ]; then
-        THEHIVE_API_KEY=$("$SCRIPT_DIR/thehive-apikey.sh" 2>/dev/null) || true
-    fi
+    echo "ERROR: TheHive API key could not be provisioned." >&2
+    exit 1
 fi
-THEHIVE_API_KEY="${THEHIVE_API_KEY:-}"
+export SHUFFLE_API_KEY MISP_API_KEY THEHIVE_API_KEY
+export SHUFFLE_URL
 
-if [ -z "$THEHIVE_API_KEY" ]; then
-    echo "WARNING: THEHIVE_API_KEY not set and auto-provision failed."
-    echo "The Shuffle workflow will be created but TheHive integration may not work."
-    echo "Set THEHIVE_API_KEY or run: export THEHIVE_API_KEY=\$(./scripts/thehive-apikey.sh)"
-    THEHIVE_API_KEY="PLACEHOLDER-SET-ME"
-fi
+# Curl reads credentials and request bodies from stdin, never process argv.
+# JSON quoting is also valid for these curl-config string values.
+shuffle_api() {
+    local method="$1" endpoint="$2" payload="${3:-}"
+    printf '%s' "$payload" | python3 -c '
+import json, os, sys
+method, endpoint = sys.argv[1:]
+fields = [
+    ("request", method),
+    ("url", os.environ["SHUFFLE_URL"] + "/api/v1/" + endpoint),
+    ("header", "Authorization: Bearer " + os.environ["SHUFFLE_API_KEY"]),
+    ("header", "Content-Type: application/json"),
+]
+body = sys.stdin.read()
+if body:
+    fields.append(("data", body))
+for key, value in fields:
+    print(key + " = " + json.dumps(value))
+' "$method" "$endpoint" | docker exec -i "$SHUFFLE_CONTAINER" \
+        curl -fksS --max-time 30 --config - | python3 -c '
+import json, sys
+try:
+    response = json.load(sys.stdin)
+except (ValueError, UnicodeError):
+    raise SystemExit("ERROR: Invalid Shuffle API response.") from None
+if isinstance(response, dict) and "success" in response and response["success"] is not True:
+    raise SystemExit("ERROR: Shuffle rejected the seed operation.")
+print(json.dumps(response))
+'
+}
+
+require_id() {
+    [[ "$1" =~ ^[a-zA-Z0-9_-]+$ ]] || {
+        echo "ERROR: Shuffle returned an invalid resource identity." >&2
+        return 1
+    }
+}
 
 echo "=== APTL Shuffle SOAR Seed ==="
-echo "Shuffle URL:  ${SHUFFLE_URL}"
-echo "TheHive URL:  ${THEHIVE_INTERNAL_URL}"
-echo "MISP URL:     ${MISP_INTERNAL_URL}"
-echo ""
+WORKFLOWS_JSON=$(shuffle_api GET workflows)
+EXISTING_ID=$(printf '%s' "$WORKFLOWS_JSON" | python3 -c '
+import json, sys
+workflows = json.load(sys.stdin)
+if not isinstance(workflows, list):
+    raise SystemExit("ERROR: Invalid Shuffle workflow inventory.")
+matches = [w["id"] for w in workflows if w.get("name") == "APTL Alert to Case"]
+if len(matches) > 1:
+    raise SystemExit("ERROR: Multiple seeded Shuffle workflows found.")
+print(matches[0] if matches else "")
+')
+MISP_HEADERS_JSON=$(python3 -c 'import json, os; print(json.dumps("Authorization: " + os.environ["MISP_API_KEY"] + "\nContent-Type: application/json\nAccept: application/json"))')
+THEHIVE_HEADERS_JSON=$(python3 -c 'import json, os; print(json.dumps("Authorization: Bearer " + os.environ["THEHIVE_API_KEY"] + "\nContent-Type: application/json"))')
 
-# ---------------------------------------------------------------------------
-# Check Shuffle connectivity
-# ---------------------------------------------------------------------------
-echo "Checking Shuffle backend connectivity..."
-# curl -w "%{http_code}" prints "000" itself when the transport fails
-# (e.g. TLS verification refusal under the new --cacert path) AND exits
-# non-zero. The previous ``|| echo "000"`` appended another "000",
-# producing the literal string "000000" and short-circuiting the
-# transport-failure guard below.
-if ! HTTP_CODE=$(docker exec "$SHUFFLE_CONTAINER" curl -sSk -o /dev/null -w "%{http_code}" \
-    -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
-    "${SHUFFLE_URL}/api/v1/workflows" 2>/dev/null); then
-    HTTP_CODE="000"
-fi
-
-if [[ "${HTTP_CODE}" == "000" ]]; then
-    echo "ERROR: Cannot reach Shuffle backend at ${SHUFFLE_URL}."
-    echo "Ensure the SOC profile is running: docker compose --profile soc up -d"
-    exit 1
-fi
-
-if [[ "${HTTP_CODE}" == "401" ]]; then
-    echo "ERROR: Shuffle returned 401 Unauthorized. Check SHUFFLE_API_KEY."
-    exit 1
-fi
-
-echo "Shuffle backend is reachable (HTTP ${HTTP_CODE})."
-echo ""
-
-# ---------------------------------------------------------------------------
-# Check for existing workflow (idempotency)
-# ---------------------------------------------------------------------------
-echo "Checking for existing '${WORKFLOW_NAME}' workflow..."
-
-WORKFLOWS_JSON=$(docker exec "$SHUFFLE_CONTAINER" curl -sk \
-    -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
-    "${SHUFFLE_URL}/api/v1/workflows")
-
-# Search for our workflow by name
-EXISTING_ID=""
-if command -v jq &>/dev/null; then
-    EXISTING_ID=$(echo "${WORKFLOWS_JSON}" | jq -r \
-        --arg name "${WORKFLOW_NAME}" \
-        '.[] | select(.name == $name) | .id // empty' 2>/dev/null | head -n1)
-else
-    # Fallback: grep-based detection
-    if echo "${WORKFLOWS_JSON}" | grep -q "\"${WORKFLOW_NAME}\""; then
-        EXISTING_ID=$(echo "${WORKFLOWS_JSON}" \
-            | grep -o "\"id\":\"[^\"]*\"" \
-            | head -1 \
-            | grep -o '"[^"]*"$' \
-            | tr -d '"')
-    fi
-fi
-
-if [[ -n "${EXISTING_ID}" ]]; then
-    echo "Workflow '${WORKFLOW_NAME}' already exists (id: ${EXISTING_ID})."
-    echo "Skipping creation."
-    echo ""
-    echo "=== Seed Complete (no changes) ==="
-    exit 0
-fi
-
-echo "Workflow not found. Creating..."
-echo ""
-
-# ---------------------------------------------------------------------------
-# Build and create workflow
-# ---------------------------------------------------------------------------
 TRIGGER_ID="trigger-webhook-$(date +%s)"
 MISP_ACTION_ID="action-misp-lookup-$(date +%s)"
 CASE_ACTION_ID="action-create-case-$(date +%s)"
@@ -186,7 +157,7 @@ read -r -d '' WORKFLOW_JSON << ENDJSON || true
             "parameters": [
                 {"name": "url", "value": "${MISP_INTERNAL_URL}/attributes/restSearch"},
                 {"name": "method", "value": "POST"},
-                {"name": "headers", "value": "Authorization: ${MISP_API_KEY}\nContent-Type: application/json\nAccept: application/json"},
+                {"name": "headers", "value": ${MISP_HEADERS_JSON}},
                 {"name": "body", "value": "{\"value\": \"\$exec.data.srcip\", \"type\": \"ip-src\", \"returnFormat\": \"json\"}"},
                 {"name": "verify", "value": "false"}
             ]
@@ -202,7 +173,7 @@ read -r -d '' WORKFLOW_JSON << ENDJSON || true
             "parameters": [
                 {"name": "url", "value": "${THEHIVE_INTERNAL_URL}/api/v1/case"},
                 {"name": "method", "value": "POST"},
-                {"name": "headers", "value": "Authorization: Bearer ${THEHIVE_API_KEY}\nContent-Type: application/json"},
+                {"name": "headers", "value": ${THEHIVE_HEADERS_JSON}},
                 {"name": "body", "value": "{\"title\": \"[Wazuh \$exec.rule.id] \$exec.rule.description\", \"description\": \"Wazuh alert id \$exec.id; rule \$exec.rule.id (\$exec.rule.description); level \$exec.rule.level; source IP \$exec.data.srcip; agent \$exec.agent.name; time \$exec.timestamp; MISP: source IP \$exec.data.srcip checked against threat intelligence.\", \"severity\": 3}"},
                 {"name": "verify", "value": "false"}
             ]
@@ -237,101 +208,60 @@ read -r -d '' WORKFLOW_JSON << ENDJSON || true
 }
 ENDJSON
 
-echo "Creating workflow '${WORKFLOW_NAME}'..."
-
-CREATE_RESPONSE=$(docker exec "$SHUFFLE_CONTAINER" curl -sk -w "\n%{http_code}" \
-    -X POST \
-    -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "${WORKFLOW_JSON}" \
-    "${SHUFFLE_URL}/api/v1/workflows")
-
-CREATE_BODY=$(echo "${CREATE_RESPONSE}" | sed '$d')
-CREATE_CODE=$(echo "${CREATE_RESPONSE}" | tail -n1)
-
-if [[ "${CREATE_CODE}" -ge 200 ]] && [[ "${CREATE_CODE}" -lt 300 ]]; then
-    CREATED_ID="unknown"
-    if command -v jq &>/dev/null; then
-        CREATED_ID=$(echo "${CREATE_BODY}" | jq -r '.id // .workflow_id // "unknown"')
-    else
-        CREATED_ID=$(echo "${CREATE_BODY}" \
-            | grep -o '"id":"[^"]*"' \
-            | head -1 \
-            | grep -o '"[^"]*"$' \
-            | tr -d '"')
-        CREATED_ID="${CREATED_ID:-unknown}"
-    fi
-    echo "Workflow created successfully."
-    echo "  ID: ${CREATED_ID}"
-
-    # Shuffle assigns its own UUIDs to triggers, so the start field
-    # may reference our original trigger ID which no longer exists.
-    # Fetch the workflow and fix the start node to point to the actual trigger.
-    echo "  Fixing start node..."
-    WF_JSON=$(docker exec "$SHUFFLE_CONTAINER" curl -sk \
-        -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
-        "${SHUFFLE_URL}/api/v1/workflows/${CREATED_ID}")
-
-    REAL_TRIGGER_ID=$(echo "${WF_JSON}" \
-        | python3 -c "
-import sys,json
-wf=json.load(sys.stdin)
-triggers=wf.get('triggers',[])
-if triggers:
-    print(triggers[0].get('id',''))
-" 2>/dev/null || true)
-
-    if [[ -n "${REAL_TRIGGER_ID}" ]]; then
-        # Update workflow start to point to real trigger
-        UPDATED=$(echo "${WF_JSON}" \
-            | python3 -c "
-import sys,json
-wf=json.load(sys.stdin)
-wf['start']='${REAL_TRIGGER_ID}'
-print(json.dumps(wf))
-" 2>/dev/null)
-
-        docker exec "$SHUFFLE_CONTAINER" curl -sk -X PUT \
-            -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "${UPDATED}" \
-            "${SHUFFLE_URL}/api/v1/workflows/${CREATED_ID}" > /dev/null
-
-        echo "  Start node set to trigger: ${REAL_TRIGGER_ID}"
-
-        # Register and start the webhook trigger (Shuffle requires explicit registration)
-        echo "  Registering webhook trigger..."
-        docker exec "$SHUFFLE_CONTAINER" curl -sk -X POST \
-            -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "{\"name\": \"Alert Webhook\", \"id\": \"${REAL_TRIGGER_ID}\", \"type\": \"webhook\", \"workflow\": \"${CREATED_ID}\", \"start\": \"${REAL_TRIGGER_ID}\", \"status\": \"running\", \"environment\": \"Shuffle\"}" \
-            "${SHUFFLE_URL}/api/v1/hooks/new" > /dev/null
-
-        # Write webhook URL for Wazuh integration (Shuffle uses webhook_ prefix)
-        echo "http://shuffle-backend:5001/api/v1/hooks/webhook_${REAL_TRIGGER_ID}" > /tmp/aptl_shuffle_webhook_url
-        echo "  Webhook URL written to /tmp/aptl_shuffle_webhook_url"
-    fi
+if [ -n "$EXISTING_ID" ]; then
+    CREATED_ID="$EXISTING_ID"
 else
-    echo "ERROR: Failed to create workflow (HTTP ${CREATE_CODE})."
-    echo "Response: ${CREATE_BODY}"
-    exit 1
+    CREATED=$(shuffle_api POST workflows "$WORKFLOW_JSON")
+    CREATED_ID=$(printf '%s' "$CREATED" | python3 -c \
+        'import json, sys; d=json.load(sys.stdin); print(d.get("id") or d.get("workflow_id") or "")')
 fi
+require_id "$CREATED_ID"
+WF_JSON=$(shuffle_api GET "workflows/$CREATED_ID")
+UPDATED=$(printf '%s' "$WF_JSON" | APTL_SEED_TEMPLATE="$WORKFLOW_JSON" python3 -c '
+import json, os, sys
+workflow = json.load(sys.stdin)
+template = json.loads(os.environ["APTL_SEED_TEMPLATE"])
+triggers = [t for t in workflow.get("triggers", []) if t.get("trigger_type") == "WEBHOOK"]
+if len(triggers) != 1 or not triggers[0].get("id"):
+    raise SystemExit("ERROR: Seeded workflow must have one webhook trigger.")
+workflow["start"] = triggers[0]["id"]
+desired = {a["label"]: a["parameters"] for a in template["actions"]}
+seen = set()
+for action in workflow.get("actions", []):
+    label = action.get("label")
+    if label not in desired:
+        continue
+    if label in seen:
+        raise SystemExit("ERROR: Duplicate seeded workflow action.")
+    seen.add(label)
+    current = {p["name"]: p for p in action.get("parameters", [])}
+    for parameter in desired[label]:
+        current[parameter["name"]] = parameter
+    current.pop("verify_ssl", None)
+    action["parameters"] = list(current.values())
+if seen != set(desired):
+    raise SystemExit("ERROR: Required seeded workflow action is missing.")
+print(json.dumps(workflow))
+')
+REAL_TRIGGER_ID=$(printf '%s' "$UPDATED" | python3 -c \
+    'import json, sys; print(json.load(sys.stdin)["start"])')
+require_id "$REAL_TRIGGER_ID"
+shuffle_api PUT "workflows/$CREATED_ID" "$UPDATED" >/dev/null
+HOOK_JSON=$(python3 -c '
+import json, sys
+workflow, trigger = sys.argv[1:]
+print(json.dumps({"name": "Alert Webhook", "id": trigger, "type": "webhook",
+                  "workflow": workflow, "start": trigger, "status": "running",
+                  "environment": "Shuffle"}))
+' "$CREATED_ID" "$REAL_TRIGGER_ID")
+shuffle_api POST hooks/new "$HOOK_JSON" >/dev/null
 
-echo ""
-
-# ---------------------------------------------------------------------------
-# Summary
-# ---------------------------------------------------------------------------
+# Publish metadata only after both the workflow and trigger are usable.
+WEBHOOK_FILE="${APTL_SHUFFLE_WEBHOOK_FILE:-/tmp/aptl_shuffle_webhook_url}"
+umask 077
+WEBHOOK_TEMP=$(mktemp "${WEBHOOK_FILE}.XXXXXX")
+trap 'rm -f "$WEBHOOK_TEMP"' EXIT
+printf 'http://shuffle-backend:5001/api/v1/hooks/webhook_%s\n' "$REAL_TRIGGER_ID" > "$WEBHOOK_TEMP"
+mv -f -- "$WEBHOOK_TEMP" "$WEBHOOK_FILE"
 echo "=== Shuffle Seed Complete ==="
-echo ""
-echo "Workflow:     ${WORKFLOW_NAME}"
-echo "Workflow ID:  ${CREATED_ID}"
-echo "Description:  Webhook -> MISP IP lookup -> TheHive case"
-echo ""
-echo "Pipeline:     Wazuh alert -> Shuffle webhook"
-echo "              -> MISP source IP enrichment (${MISP_INTERNAL_URL})"
-echo "              -> TheHive case creation (${THEHIVE_INTERNAL_URL})"
-echo ""
-echo "TheHive:      ${THEHIVE_INTERNAL_URL}"
-echo "MISP:         ${MISP_INTERNAL_URL}"
-echo "Shuffle UI:   http://localhost:3443"
+echo "Workflow ID: $CREATED_ID"

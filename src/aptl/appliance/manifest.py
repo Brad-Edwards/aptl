@@ -31,6 +31,7 @@ from aptl.appliance.release_models import ApplianceReleaseTemplate
 from aptl.appliance.release_validation import (
     compute_payload_digest,
     read_release_artifact as _read_release_artifact,
+    release_artifact_identity as _release_artifact_identity,
     verify_artifacts as _verify_artifacts,
     verify_offline_aptl_version as _verify_offline_aptl_version,
     verify_release_evidence as _verify_release_evidence,
@@ -39,6 +40,7 @@ from aptl.validation.participant_qualification_evidence import (
     ParticipantQualificationReport,
     verify_participant_qualification_attestation,
 )
+from aptl.utils.strict_json import model_validate_json_strict
 
 _MANIFEST_NAME = "manifest.json"
 _SIGNATURE_NAME = "manifest.sig.json"
@@ -76,15 +78,15 @@ def describe_artifact(
 ) -> ArtifactReference:
     """Read one contained input once and return its exact release identity."""
 
-    payload = _read_release_artifact(root.resolve(), path)
-    if not payload:
+    digest, size, _pinned = _release_artifact_identity(root.resolve(), path)
+    if not size:
         raise ApplianceManifestError(f"release artifact is empty: {path}")
     return ArtifactReference(
         artifact_id=artifact_id,
         kind=kind,
         path=path,
-        sha256=f"sha256:{hashlib.sha256(payload).hexdigest()}",
-        size_bytes=len(payload),
+        sha256=digest,
+        size_bytes=size,
     )
 
 
@@ -170,8 +172,10 @@ def _load_release_documents(
     manifest_bytes = _read_release_artifact(release_root, _MANIFEST_NAME)
     signature_bytes = _read_release_artifact(release_root, _SIGNATURE_NAME)
     try:
-        manifest = ApplianceReleaseManifest.model_validate_json(manifest_bytes)
-        signature = ApplianceManifestSignature.model_validate_json(signature_bytes)
+        manifest = model_validate_json_strict(ApplianceReleaseManifest, manifest_bytes)
+        signature = model_validate_json_strict(
+            ApplianceManifestSignature, signature_bytes
+        )
     except ValueError as exc:
         raise ApplianceManifestError("invalid appliance release document") from exc
     return manifest, signature
@@ -195,8 +199,9 @@ def prepare_release_manifest(
             "release template must remain outside the release directory"
         )
     try:
-        template = ApplianceReleaseTemplate.model_validate_json(
-            _read_external_file(resolved_template, label="release template")
+        template = model_validate_json_strict(
+            ApplianceReleaseTemplate,
+            _read_external_file(resolved_template, label="release template"),
         )
     except ValueError as exc:
         raise ApplianceManifestError("invalid appliance release template") from exc
@@ -211,11 +216,12 @@ def prepare_release_manifest(
     )
     by_kind = {artifact.kind: artifact for artifact in artifacts}
     try:
-        qualification = ApplianceDrillReport.model_validate_json(
+        qualification = model_validate_json_strict(
+            ApplianceDrillReport,
             _read_release_artifact(
                 release_root,
                 by_kind["machine-drill"].path,
-            )
+            ),
         )
     except ValueError as exc:
         raise ApplianceManifestError("invalid appliance release evidence") from exc
@@ -277,10 +283,13 @@ def _release_checksum_payload(
     lines: list[str] = []
     for relative_path in sorted(paths):
         if relative_path == _SIGNATURE_NAME and signature_bytes is not None:
-            payload = signature_bytes
+            digest = hashlib.sha256(signature_bytes).hexdigest()
         else:
-            payload = _read_release_artifact(release_root, relative_path)
-        lines.append(f"{hashlib.sha256(payload).hexdigest()}  {relative_path}")
+            identity, _size, _pinned = _release_artifact_identity(
+                release_root, relative_path
+            )
+            digest = identity.removeprefix("sha256:")
+        lines.append(f"{digest}  {relative_path}")
     return ("\n".join(lines) + "\n").encode("utf-8")
 
 
@@ -370,7 +379,7 @@ def seal_release_directory(
         raise ApplianceManifestError("appliance release is already sealed")
     manifest_bytes = _read_release_artifact(release_root, _MANIFEST_NAME)
     try:
-        manifest = ApplianceReleaseManifest.model_validate_json(manifest_bytes)
+        manifest = model_validate_json_strict(ApplianceReleaseManifest, manifest_bytes)
     except ValueError as exc:
         raise ApplianceManifestError("invalid appliance release document") from exc
     if manifest_bytes != canonical_manifest_bytes(manifest):
@@ -382,8 +391,8 @@ def seal_release_directory(
     )
     _verify_release_evidence(manifest, payloads)
     try:
-        qualification = ParticipantQualificationReport.model_validate_json(
-            payloads["participant-qualification"]
+        qualification = model_validate_json_strict(
+            ParticipantQualificationReport, payloads["participant-qualification"]
         )
         verify_participant_qualification_attestation(
             qualification,
@@ -445,8 +454,8 @@ def verify_release_directory(
     )
     _verify_release_evidence(manifest, payloads)
     try:
-        qualification = ParticipantQualificationReport.model_validate_json(
-            payloads["participant-qualification"]
+        qualification = model_validate_json_strict(
+            ParticipantQualificationReport, payloads["participant-qualification"]
         )
         verify_participant_qualification_attestation(
             qualification,
@@ -461,3 +470,21 @@ def verify_release_directory(
         ) from exc
     _verify_checksum_file(release_root, manifest)
     return _inspection(manifest)
+
+
+def verify_release_metadata(
+    release_dir: Path,
+    public_key_path: Path,
+) -> ApplianceReleaseManifest:
+    """Authenticate a release manifest before downloading its large artifacts."""
+
+    release_root = release_dir.resolve()
+    if not release_root.is_dir():
+        raise ApplianceManifestError(_MISSING_RELEASE)
+    public_key_pem = _read_external_file(
+        public_key_path,
+        label="release trust anchor",
+    )
+    manifest, signature = _load_release_documents(release_root)
+    verify_manifest_signature(manifest, signature, public_key_pem)
+    return manifest

@@ -71,7 +71,7 @@ def client_entries(
         "-o",
         "GlobalKnownHostsFile=/dev/null",
         "-o",
-        "UserKnownHostsFile=" + json.dumps(str(known_hosts)),
+        "UserKnownHostsFile=" + str(known_hosts),
         "-o",
         "UpdateHostKeys=no",
         "-o",

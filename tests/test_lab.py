@@ -2858,6 +2858,55 @@ class TestResolveHostPortsStep:
         assert "443" in notes
         assert "20009" in notes
 
+    @pytest.mark.parametrize("static_bundle", [False, True])
+    def test_resolves_only_the_admitted_bundles_ports(
+        self, mocker, monkeypatch, tmp_path, static_bundle
+    ):
+        import os
+
+        from aptl.backends._raes_scenario_queries import AdmittedStartSurface
+        from aptl.core.lab import _step_resolve_host_ports
+        from aptl.core.scenario_bundle import ScenarioSourceKind
+
+        # The checkout's legacy service key differs from the pack's generated
+        # wazuh-indexer. Its busy port must not inject a fictitious remap.
+        variable = "APTL_HP_WAZUH_INDEXER_9200"
+        monkeypatch.delenv(variable, raising=False)
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n  wazuh.indexer:\n    ports:\n"
+            f"      - '127.0.0.1:${{{variable}:-9200}}:9200'\n"
+        )
+        bundle = tmp_path / "selected-bundle"
+        bundle.mkdir()
+        if static_bundle:
+            (bundle / "docker-compose.yml").write_text(
+                "services:\n  selected:\n    ports:\n"
+                "      - '127.0.0.1:${APTL_SELECTED_PORT:-18080}:8080'\n"
+            )
+        monkeypatch.delenv("APTL_SELECTED_PORT", raising=False)
+        mocker.patch(
+            "aptl.core.host_ports.port_available",
+            side_effect=lambda port, *_args: port != 9200,
+        )
+        mocker.patch("aptl.core._port_bindings.project_port_bindings", return_value={})
+        ctx = self._ctx(tmp_path)
+        ctx.admitted_surface = AdmittedStartSurface(
+            bundle_root=bundle,
+            source_kind=(
+                ScenarioSourceKind.PROJECT_TREE
+                if static_bundle
+                else ScenarioSourceKind.ENV_PACK
+            ),
+            selected_profiles=(),
+            stateful_artifact_ownership=frozenset(),
+        )
+
+        assert _step_resolve_host_ports(ctx) is None
+        assert os.environ.get(variable) is None
+        assert [port.service for port in ctx.resolved_ports] == (
+            ["selected"] if static_bundle else []
+        )
+
 
 class TestSeedSuricataVolumesStep:
     """Direct tests for ADR-043 Suricata named-volume seeding."""
@@ -4320,6 +4369,32 @@ class TestStartupClassificationWiring:
         result = _step_sync_mcp_config(ctx)
         assert result is None
 
+        assert ctx.diagnostics == []
+
+    def test_mcp_config_sync_prefers_owned_live_port_over_prestart_resolution(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _step_sync_mcp_config
+
+        ctx = self._ctx(tmp_path)
+        prestart = SimpleNamespace(
+            env_var="APTL_HP_WAZUH_INDEXER_9200", resolved_port=9200
+        )
+        live = SimpleNamespace(
+            env_var="APTL_HP_WAZUH_INDEXER_9200", resolved_port=29200
+        )
+        ctx.resolved_ports = [prestart]
+        runtime = mocker.patch(
+            "aptl.core.lab._runtime_mcp_host_ports", return_value=[live]
+        )
+        sync = mocker.patch("aptl.core.lab._sync_mcp_config_keys")
+
+        assert _step_sync_mcp_config(ctx) is None
+
+        runtime.assert_called_once_with(
+            ctx.project_dir, ctx.backend, active_profiles=None
+        )
+        assert sync.call_args.args[1] == [live]
         assert ctx.diagnostics == []
 
 

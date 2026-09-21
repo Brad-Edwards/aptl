@@ -1,5 +1,10 @@
 # Disposable appliance release
 
+Current delivery uses the signed V2 [VM-only containment contract](../adrs/adr-060-vm-only-seat-containment.md).
+It does not claim APP-1 internal-zone isolation, deferred to #1127. Existing V1
+policies still require their stronger enforcement; signature or qualification
+checks must not silently reinterpret them as VM-only releases.
+
 APTL appliance releases package a read-only golden qcow2 guest and every
 participant dependency needed for an offline first boot. Each lab instance is
 a disposable qcow2 overlay. Destroying that overlay destroys its credentials,
@@ -14,7 +19,8 @@ controls, and recovery UI are implemented by [`aptl seat`](appliance-seat-launch
 An appliance release is admitted only when all of these statements are true:
 
 - the source tag is exactly `v<aptl-version>` and names a full source commit;
-- all nine required artifacts and the optional canonical-inputs artifact have their byte size and SHA-256 digest bound
+- all eleven base artifacts plus canonical-input and redistribution-review
+  evidence have their byte size and SHA-256 digest bound
   into a canonical RFC 8785 manifest;
 - the manifest has a valid Ed25519 signature from the configured release trust
   anchor;
@@ -34,11 +40,67 @@ machine identities, or per-instance credentials.
 
 ## Build host prerequisites
 
-The release host needs Python 3.11 or later, `qemu-img`, and libguestfs tools
-providing `virt-customize` and `virt-sysprep`. The pinned Ubuntu base image must
+The release host needs Python 3.11 or later, the guest target Python, `qemu-img`,
+and libguestfs tools providing `virt-customize`, `virt-resize`, and
+`virt-sysprep`. The pinned Ubuntu base image must
 already contain systemd, Python with pip, and Docker Engine. The supported
-participant profile requires at least 8 vCPUs, 32 GiB RAM, 250 GiB available
-disk, and hardware virtualization.
+participant profile requires at least 8 vCPUs, 32 GiB RAM, a 250 GiB-capacity
+disk, 120 GiB of free runtime headroom, and hardware virtualization. The sparse
+guest disk retains its 250 GiB virtual capacity; the launcher reserves the
+separately signed peak-runtime ceiling rather than requiring the full virtual
+capacity to be free.
+
+Run the non-mutating prerequisite report before acquiring large inputs:
+
+```bash
+aptl appliance doctor --build-root build
+```
+
+The report checks Linux/x86-64, available build-root space, QEMU, and both
+libguestfs tools. It reports missing packages but never installs them.
+
+## Build and qualify an exact local commit
+
+The development candidate path builds directly from a clean checkout; it does
+not require a Git tag, GitHub Release, GHCR login, or production signing key.
+It rebuilds all thirteen project-owned OCI images under their canonical local
+names, assembles the wheel and complete offline closure, downloads the pinned
+Ubuntu 26.04 `20260823` qcow2 by its recorded size and SHA-256, and signs the
+candidate with a throwaway qualification-only key:
+
+```bash
+sudo apt-get install libguestfs-tools
+aptl appliance doctor --build-root build
+git status --porcelain
+git rev-parse HEAD
+scripts/appliance/build-local-candidate.sh
+```
+
+The command refuses a tracked-file diff so the candidate manifest can bind the
+exact commit as `commit:<full-sha>`. The resulting files are under
+`build/appliance/candidate-publication/`; they are deliberately not shaped as a
+production release and `seal-release.sh` cannot promote their development
+source identity.
+
+Run the real two-seat KVM qualification locally with a separate temporary
+qualification key. The key is only for local evidence and must not be reused as
+the protected production qualification key:
+
+```bash
+openssl genpkey -algorithm ED25519 -out build/local-qualification.pem
+APTL_CANDIDATE_PUBLICATION="$PWD/build/appliance/candidate-publication" \
+APTL_QUALIFICATION_OUTPUT="$PWD/build/local-machine-a.json" \
+APTL_QUALIFICATION_SEATS=2 \
+APTL_QUALIFICATION_SIGNING_KEY_PEM="$(<build/local-qualification.pem)" \
+scripts/appliance/qualify-candidate.sh
+rm build/local-qualification.pem
+```
+
+This exercises real KVM boot, concurrent overlays and mappings, full guest
+readiness, browser reachability, authenticated Claude and Codex MCP calls,
+revocation, reset, recovery, tamper rejection, and resource measurements. It
+does not replace the two independent machines and production trust anchors
+required before public release sealing.
 
 Network access is permitted while a release engineer resolves and stages
 version-pinned inputs, including the canonical npm builds. The subsequent payload assembly and golden-image build
@@ -57,7 +119,8 @@ It does not build a VM or qualify an offline boot.
 ```bash
 aptl appliance assemble-inputs --staging-dir build/offline-staging \
   --wheelhouse build/wheelhouse --image-archive build/oci-images.tar \
-  --image-roles build/image-roles.json
+  --image-roles build/image-roles.json \
+  --target-python-version 3.14 --target-architecture x86_64
 aptl appliance validate-inputs --staging-dir build/offline-staging
 ```
 
@@ -73,6 +136,7 @@ The canonical staging directory contains exactly these entries:
 | `appliance-release.env` | Non-secret scenario and exact `APTL_APPLIANCE_VERSION` lines |
 | `aptl-appliance-first-boot` | First-boot script from `appliance/guest/` |
 | `aptl-appliance-first-boot.service` | Corresponding systemd unit |
+| `aptl-launch.mount` | Read-only 9p launch-share mount installed as the path-escaped systemd unit |
 
 The wheelhouse must contain exactly one `aptl_labs-*.whl`, and its version must
 equal `APTL_APPLIANCE_VERSION`. Symlinks, unexpected files, empty archives,
@@ -113,16 +177,124 @@ aptl appliance build \
   --request build/golden-build.json
 ```
 
-The command checksum-verifies every input, converts and resizes the base,
+The command checksum-verifies every input, rejects external qcow2 backing/data
+references, creates the requested target disk, expands the Ubuntu root partition
+and filesystem with `virt-resize`,
 provisions it with `virt-customize --no-network`, removes machine identity,
 SSH host keys, logs, caches, Docker writable state, APTL overlay state, and run
 state with `virt-sysprep`, executes the clean-golden scanner offline, runs
 `qemu-img check`, and publishes the disk and inventory as read-only,
 create-once outputs. A failed candidate cannot replace an existing release.
 
+## Large release assets
+
+The signed release manifest continues to identify the canonical qcow2 and
+offline payload bytes. If either cannot be uploaded as one release asset,
+create ordered transport chunks and an independently signed reconstruction
+index with the configured release trust key:
+
+```bash
+aptl appliance split-distribution \
+  --source dist/appliance/v5.5.0/aptl-golden.qcow2 \
+  --output-dir dist/transport/aptl-golden \
+  --release-id aptl-v5.5.0-x86_64 \
+  --manifest-digest sha256:MANIFEST_DIGEST \
+  --private-key /secure/release-signing.pem
+```
+
+After downloading the index, detached signature, and all named chunks,
+reconstruct automatically:
+
+```bash
+aptl appliance reconstruct-distribution \
+  --index downloads/aptl-golden.qcow2.distribution.json \
+  --signature downloads/aptl-golden.qcow2.distribution.sig.json \
+  --chunks-dir downloads --public-key /etc/aptl/trust/release-public.pem \
+  --output cache/aptl-golden.qcow2
+```
+
+The command authenticates canonical index bytes with Ed25519, verifies every
+ordered chunk and the reconstructed size/digest, and publishes the output
+create-once. Chunking is transport only; consumers must still run `aptl
+appliance verify` on the complete reconstructed release directory.
+
+For a public GitHub Release, `fetch-distribution` performs the anonymous HTTPS
+download, authenticated cache staging, and reconstruction in one operation:
+
+```bash
+aptl appliance fetch-distribution \
+  --repository OWNER/REPOSITORY --tag v5.5.0 \
+  --release-id aptl-v5.5.0-x86_64 \
+  --artifact-name aptl-golden.qcow2 \
+  --public-key appliance-release-public.pem \
+  --cache-dir "$XDG_CACHE_HOME/aptl/appliance" \
+  --output release/artifacts/aptl-golden.qcow2
+```
+
+`release-public.pem` and `qualification-public.pem` are independently
+provisioned trust anchors. A downloaded copy may be compared with those anchors
+for convenience, but a key fetched beside the chunks is never trusted merely
+because it came from the same release page. The release workflow pins both
+public keys in protected repository variables and refuses sealing or public
+acceptance when the corresponding private/qualification key differs.
+
+End users normally use the higher-level installer, which performs the metadata
+download, both authenticated reconstructions, complete release verification,
+and atomic publication into their private seat state:
+
+```bash
+aptl seat install --tag v5.5.0 \
+  --release-public-key /etc/aptl/trust/release-public.pem \
+  --qualification-public-key /etc/aptl/trust/qualification-public.pem
+aptl seat start
+```
+
+The lower-level distribution commands remain available for release engineering
+and diagnostics.
+
+Publication also requires a protected `aptl.redistribution-review/v1` approval
+for the exact source commit and canonical-input digest. The review must cover
+the guest base image, every unique OCI image identity, every Python wheel, and
+every packaged npm lock. Sealing signs that review into the release and emits
+`THIRD-PARTY-NOTICES.md`; missing, stale, duplicate, or partial approvals stop
+publication before the production signature is created.
+
+The release environment supplies that reviewed document through the protected
+`APTL_REDISTRIBUTION_REVIEW_JSON` secret. Its closed schema contains
+`schema_version`, `decision: "approved"`, `authority`, UTC `reviewed_at`, the
+40/64-hex `source_commit`, `canonical_inputs_digest`, and `entries`. Each entry
+has `kind` (`base-image`, `oci-image`, `python-wheel`, or `npm-lock`), the exact
+`subject` and `sha256`, an HTTPS `source_url`, `license_expression`, and the
+notice text that must be retained. Subject identities are derived from the
+qualified candidate; a generic approval or approval for another candidate is
+rejected.
+
+## Download and cache
+
+Stage each release asset before offline guest startup using its published
+digest and exact byte size. The cache resumes a matching partial transfer,
+requires HTTPS across redirects, preflights free space, rejects oversized or
+short responses, and publishes verified bytes under their SHA-256 identity:
+
+```bash
+aptl appliance stage-download \
+  --url https://github.com/OWNER/REPOSITORY/releases/download/TAG/ASSET \
+  --cache-dir "$XDG_CACHE_HOME/aptl/appliance" \
+  --filename aptl-golden.qcow2 \
+  --sha256 sha256:DIGEST \
+  --size-bytes EXACT_SIZE
+```
+
+For a split asset, stage the signed index, its detached signature, and every
+named chunk, then run `reconstruct-distribution`. A later invocation reuses an
+unchanged verified cache entry. Downloads and reconstruction finish before
+`aptl seat stage`; guest startup performs no network access.
+
 ## Qualify and seal
 
-Stage these nine non-empty release artifacts beneath one release directory:
+Stage these thirteen non-empty #1022 release artifacts beneath one release
+directory (the historical schema keeps canonical inputs optional only for older
+fixtures):
 
 1. golden disk;
 2. offline payload;
@@ -130,9 +302,13 @@ Stage these nine non-empty release artifacts beneath one release directory:
 4. APP-2 participant readiness suite;
 5. APP-2 participant asset lock;
 6. signed APP-2 participant qualification report;
-7. APP-1 appliance boundary policy;
-8. clean-golden inventory; and
-9. appliance machine-drill report.
+7. the exact successful participant run record;
+8. its correlated range snapshot;
+9. APP-1 appliance boundary policy;
+10. clean-golden inventory;
+11. appliance machine-drill report; and
+12. canonical full-TechVault inputs; and
+13. the exact-closure redistribution approval and notices.
 
 The drill report must contain successful results from at least two distinct
 supported machines. Each must pass the build, offline boot, participant smoke,
@@ -166,7 +342,8 @@ manifest, checksums, every artifact, all cross-bindings, and all evidence.
 The qualification report must contain the exact duplicate-free readiness check
 set and participant surface declared by the signed profile and readiness suite.
 Consumer verification repeats both the release and independent qualification
-signature checks. Unknown fields, duplicate identifiers or paths, unsafe
+signature checks, verifies the run-record/snapshot digests and correlation, and
+enforces measured profile budgets. Unknown fields, duplicate identifiers or paths, unsafe
 paths, unpinned helper images, a mismatched APTL wheel, or inconsistent evidence
 fail closed.
 
@@ -242,6 +419,27 @@ Retain the tagged source identity, canonical manifest, detached signature,
 `SHA256SUMS`, clean-golden inventory, APP-2 qualification, and two-machine drill
 with the release. These records connect the version and checksums to readiness
 and rollback evidence.
+
+## Public release delivery
+
+The release workflow builds the repository-owned container closure from the
+exact release tag into private
+`ghcr.io/<owner>/aptl-candidate/<image>:<tag>` staging packages. A dedicated
+builder records those immutable staging references in the offline payload and
+creates one signed qualification-only candidate. Two distinct KVM
+machines exercise that exact candidate; one boots two seats concurrently. A
+separate sealing runner aggregates their evidence and signs the unchanged
+golden and payload bytes. Only after sealing does the workflow promote those
+same digests to `ghcr.io/<owner>/aptl/<image>:<tag>`, make each destination
+package public, log out, and prove anonymous pulls. The public GitHub Release
+receives a metadata tar, both public keys, and signed chunks smaller than 2 GiB
+for both large artifacts.
+
+Publication is not the final gate. A no-permissions KVM job logs out of GHCR,
+anonymously pulls every image, downloads the GitHub Release assets without an
+API token, reconstructs and verifies the release, boots it, makes real read-only
+Claude and Codex MCP calls, proves those stale calls fail after stop, and resets
+the overlay.
 
 ## Canonical inputs and host access
 

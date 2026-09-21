@@ -27,9 +27,7 @@ from aptl.core.deployment.realization import (
 
 CONTENT_MOUNT_ROOT_RELPATH = Path(".aptl") / "realization" / "content"
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-_EXECUTABLE_SCRIPT_MEDIA_TYPES = frozenset(
-    {"text/x-python", "text/x-shellscript"}
-)
+_EXECUTABLE_SCRIPT_MEDIA_TYPES = frozenset({"text/x-python", "text/x-shellscript"})
 
 
 def image_node_content_override(
@@ -86,7 +84,9 @@ def _content_mounts(
 
     target_root = PurePosixPath("/") / item.dest_relpath.lstrip("/")
     if item.source_kind == "pack-directory" and source.is_dir():
-        entries = sorted(source.rglob("*"), key=lambda path: path.relative_to(source).as_posix())
+        entries = sorted(
+            source.rglob("*"), key=lambda path: path.relative_to(source).as_posix()
+        )
         if any(entry.is_symlink() for entry in entries):
             raise ValueError("pack directory content contains a symlink")
         files = [entry for entry in entries if entry.is_file()]
@@ -130,6 +130,7 @@ def _place_content(
         placed = root / basename
         _remove_previous_output(placed)
         placed.write_text(item.inline_text, encoding="utf-8")
+        placed.chmod(0o600 if item.sensitive else 0o644)
     elif item.source_kind in ("pack-file", "pack-directory") and item.artifact_id:
         root = _content_output_root(realization_root, slug)
         placed = _place_pack_content(item, scenario_root, root, basename)
@@ -202,18 +203,58 @@ def _place_pack_content(
                 f"{digest} != {item.artifact_digest}"
             )
     if item.source_kind == "pack-directory":
-        tree = root / "tree"
-        _remove_previous_output(tree)
-        tree.mkdir()
-        with tarfile.open(fileobj=io.BytesIO(resolved.data), mode="r:*") as archive:
-            archive.extractall(tree, filter="data")
-        return tree
+        return _place_pack_directory(root, resolved.data, sensitive=item.sensitive)
+    return _place_pack_file(
+        root,
+        basename,
+        resolved.data,
+        executable=item.media_type in _EXECUTABLE_SCRIPT_MEDIA_TYPES,
+        sensitive=item.sensitive,
+    )
+
+
+def _place_pack_directory(root: Path, data: bytes, *, sensitive: bool) -> Path:
+    """Extract one verified pack tree and apply closed deterministic modes."""
+
+    tree = root / "tree"
+    _remove_previous_output(tree)
+    tree.mkdir()
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as archive:
+        archive.extractall(tree, filter="data")
+    for path in (tree, *sorted(tree.rglob("*"))):
+        if path.is_symlink():
+            raise ValueError("pack directory content contains a symlink")
+        if path.is_dir():
+            path.chmod(0o700 if sensitive else 0o755)
+        elif path.is_file():
+            executable = bool(path.stat().st_mode & 0o111)
+            path.chmod(_pack_content_mode(sensitive, executable=executable))
+    return tree
+
+
+def _place_pack_file(
+    root: Path,
+    basename: str,
+    data: bytes,
+    *,
+    executable: bool,
+    sensitive: bool,
+) -> Path:
+    """Write one verified pack file with its declared access mode."""
+
     destination = root / basename
     _remove_previous_output(destination)
-    destination.write_bytes(resolved.data)
-    if item.media_type in _EXECUTABLE_SCRIPT_MEDIA_TYPES:
-        # The exact bytes retain their digest identity when the declared script
-        # is made runnable. Without this mode, Cortex cannot execute an analyzer
-        # that was staged with Path.write_bytes().
-        destination.chmod(0o755)
+    destination.write_bytes(data)
+    # The exact bytes retain their digest identity when a declared script is
+    # executable. Set the mode explicitly: guest first boot uses umask 077,
+    # while non-root image users must still read non-sensitive bind content.
+    destination.chmod(_pack_content_mode(sensitive, executable=executable))
     return destination
+
+
+def _pack_content_mode(sensitive: bool, *, executable: bool) -> int:
+    """Return the exact regular-file mode for one realized pack artifact."""
+
+    if sensitive:
+        return 0o700 if executable else 0o600
+    return 0o755 if executable else 0o644

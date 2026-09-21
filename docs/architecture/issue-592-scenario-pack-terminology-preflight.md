@@ -39,6 +39,7 @@ prose must not accidentally rename them.
 
 | Surface | Files | Disposition |
 | --- | --- | --- |
+| Historical seat implementation audit | `docs/architecture/issue-1022-historical-branch-audit.md` | Distinguish historical pack inputs from current APTL guest realization and delivery policy. |
 | Canonical participant delivery and host access | `docs/adrs/adr-059-canonical-techvault-delivery-and-host-mcp-access.md`, `docs/reference/participant-profile.md` | Keep the TechVault pack identity distinct from the APTL-owned delivery, transport and qualification contracts. |
 | Current user and authoring guidance | `README.md`, `docs/index.md`, `docs/reference/techvault-scenario-overview.md`, `docs/sdl/index.md`, `docs/sdl/techvault-curated-variants.md`, `docs/testing/smoke-test-plan.md` | Treat `docs/sdl/index.md` as the exemplar: companion authoring and format links are separate from the APTL-owned operator catalog and runtime section. Qualify nearby catalog prose as APTL startup selection when context is not explicit. |
 | Accepted realization and pack-boundary decisions | `docs/adrs/adr-012-opentelemetry-integration.md`, `docs/adrs/adr-035-raes-sdl-adoption.md`, `docs/adrs/adr-046-dynamic-raes-scenario-realization.md`, `docs/adrs/adr-053-pack-backend-deployment-serving-interaction-seam.md` | Preserve decision history. Add current clarification around historical names instead of mechanically rewriting accepted records. |

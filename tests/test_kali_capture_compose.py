@@ -66,6 +66,13 @@ def _capture_service() -> dict:
     return document["services"]["kali-capture"]
 
 
+def test_capture_sidecar_names_the_staged_offline_image():
+    # Compose otherwise synthesizes <workspace>-kali-capture and rebuilds it,
+    # even though the canonical offline payload already contains the helper.
+    service = _capture_service()
+    assert service.get("image") == "aptl-kali-capture:latest"
+
+
 def _generate_ed25519_key(path: Path) -> None:
     if shutil.which("ssh-keygen") is None:
         pytest.skip("ssh-keygen is not available")

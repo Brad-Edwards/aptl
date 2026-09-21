@@ -66,7 +66,12 @@ def compose_version(value: str) -> tuple[int, int, int] | None:
 
     version: tuple[int, int, int] | None = None
     for token in value.split():
-        candidate = token.strip("()[],").removeprefix("v").split("-", maxsplit=1)[0]
+        candidate = (
+            token.strip("()[],")
+            .removeprefix("v")
+            .split("-", maxsplit=1)[0]
+            .split("+", maxsplit=1)[0]
+        )
         parts = candidate.split(".")
         if len(parts) >= 3 and all(part.isdigit() for part in parts[:3]):
             version = (int(parts[0]), int(parts[1]), int(parts[2]))

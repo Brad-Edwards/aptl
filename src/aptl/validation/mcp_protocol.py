@@ -17,6 +17,9 @@ class McpProtocolError(RuntimeError):
     """A bounded MCP protocol exchange failed without exposing child output."""
 
 
+_CLEAN_SHUTDOWN_GRACE_SECONDS = 35.0
+
+
 def _read_response(
     stdout: TextIO,
     *,
@@ -106,17 +109,17 @@ def _exchange_messages(
     return responses, complete
 
 
-def _stop_server(process: subprocess.Popen[str], deadline: float) -> None:
-    """Close stdin and terminate a server that outlives the exchange."""
+def _stop_server(process: subprocess.Popen[str], *, exchange_complete: bool) -> None:
+    """Close stdin and allow a completed transport to prove clean teardown."""
 
     if process.stdin is not None:
         try:
             process.stdin.close()
         except OSError:
             pass
-    remaining = max(0.0, deadline - time.monotonic())
+    grace = _CLEAN_SHUTDOWN_GRACE_SECONDS if exchange_complete else 0.0
     try:
-        process.wait(timeout=min(1.0, remaining))
+        process.wait(timeout=grace)
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait()
@@ -148,6 +151,7 @@ def exchange_jsonrpc(
         raise McpProtocolError("MCP timeout must be positive")
     process = _start_server(command, cwd=cwd, env=env)
     deadline = time.monotonic() + timeout_seconds
+    complete = False
     try:
         responses, complete = _exchange_messages(
             process,
@@ -156,7 +160,7 @@ def exchange_jsonrpc(
             response_validator,
         )
     finally:
-        _stop_server(process, deadline)
+        _stop_server(process, exchange_complete=complete)
 
     expected_responses = sum("id" in message for message in messages)
     if not complete or len(responses) != expected_responses:

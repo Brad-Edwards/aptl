@@ -39,7 +39,7 @@ def test_guest_enrollment_publishes_private_forced_keys_and_rejects_bad_inventor
         return original_read_text(path, *args, **kwargs)
 
     monkeypatch.setattr(Path, "read_text", read_text)
-    run_id = "c" * 32
+    run_id = "run_20260920T095212Z"
     public = (
         Ed25519PrivateKey.generate()
         .public_key()
@@ -84,6 +84,7 @@ def test_guest_enrollment_publishes_private_forced_keys_and_rejects_bad_inventor
         seat_id=record.seat_id,
         instance_id=record.instance_id,
         generation=record.generation,
+        run_id=run_id,
         guest_endpoint=record.guest_endpoint,
         outer_endpoint=record.outer_endpoint,
         project_dir=tmp_path,
@@ -114,6 +115,13 @@ def test_guest_enrollment_publishes_private_forced_keys_and_rejects_bad_inventor
     for path in output.iterdir():
         assert path.stat().st_mode & 0o777 == 0o600
     assert json.loads((output / "caller.grant.json").read_text())["revoked"] is False
+    monkeypatch.setattr(
+        preparation,
+        "load_active_transcript_authorities",
+        lambda _: [{"run_id": "stale-run"}, {"run_id": run_id}],
+    )
+    retry_output = tmp_path / "transport-retry"
+    assert preparation.prepare_guest_transport(request, retry_output).run_id == run_id
     monkeypatch.setattr(preparation, "observe_guest_containers", lambda _: {})
     with pytest.raises(ValueError, match="inventory"):
         preparation.prepare_guest_transport(request, tmp_path / "rejected")

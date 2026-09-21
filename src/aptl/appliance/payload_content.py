@@ -16,8 +16,9 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from packaging.requirements import Requirement
+from packaging.markers import default_environment
 from packaging.specifiers import SpecifierSet
-from packaging.tags import sys_tags
+from packaging.tags import Tag, sys_tags
 from packaging.utils import canonicalize_name, parse_wheel_filename
 from packaging.version import Version
 
@@ -80,7 +81,28 @@ def read_archive_member(path: Path, name: str, *, limit: int = 4 * 1024**2) -> b
         return archive.extractfile(member).read()
 
 
-def locked_requirements(text: str) -> dict[str, tuple[Requirement, set[str]]]:
+def _target_environment(python_version: str, architecture: str) -> dict[str, str]:
+    """Build packaging marker values for the declared offline guest target."""
+
+    environment = default_environment()
+    environment.update(
+        {
+            "python_version": python_version,
+            "python_full_version": python_version + ".0",
+            "platform_machine": architecture,
+            "platform_system": "Linux",
+            "sys_platform": "linux",
+        }
+    )
+    return environment
+
+
+def locked_requirements(
+    text: str,
+    *,
+    python_version: str | None = None,
+    architecture: str | None = None,
+) -> dict[str, tuple[Requirement, set[str]]]:
     """Admit only uv's hash-pinned requirements grammar for this target."""
     result = {}
     for line in text.replace("\\\n", " ").splitlines():
@@ -88,7 +110,12 @@ def locked_requirements(text: str) -> dict[str, tuple[Requirement, set[str]]]:
         if not line or line.startswith("#"):
             continue
         requirement, hashes = _locked_requirement(line)
-        if requirement.marker and not requirement.marker.evaluate():
+        marker_environment = (
+            _target_environment(python_version, architecture)
+            if python_version is not None and architecture is not None
+            else None
+        )
+        if requirement.marker and not requirement.marker.evaluate(marker_environment):
             continue
         name = canonicalize_name(requirement.name)
         if name in result:
@@ -97,11 +124,48 @@ def locked_requirements(text: str) -> dict[str, tuple[Requirement, set[str]]]:
     return result
 
 
-def _wheel_metadata(path: Path) -> tuple[str, Version, Message]:
+def _tag_matches_target(tag: Tag, python_version: str, architecture: str) -> bool:
+    """Admit universal or Linux wheels compatible with the declared guest."""
+
+    major, minor = (int(item) for item in python_version.split("."))
+    platform_ok = tag.platform == "any" or (
+        tag.platform.startswith(("linux_", "manylinux", "musllinux"))
+        and tag.platform.endswith("_" + architecture)
+    )
+    if not platform_ok:
+        return False
+    if tag.interpreter in {
+        "py3",
+        f"py{major}",
+        f"py{major}{minor}",
+        f"cp{major}{minor}",
+    }:
+        return tag.abi in {"none", "abi3", f"cp{major}{minor}"}
+    if tag.abi == "abi3" and tag.interpreter.startswith(f"cp{major}"):
+        try:
+            return int(tag.interpreter.removeprefix(f"cp{major}")) <= minor
+        except ValueError:
+            return False
+    return False
+
+
+def _wheel_metadata(
+    path: Path,
+    *,
+    python_version: str | None = None,
+    architecture: str | None = None,
+) -> tuple[str, Version, Message]:
     """Validate wheel identity, platform and bounded metadata before use."""
     try:
         name, version, _, tags = parse_wheel_filename(path.name)
-        if not tags.intersection(sys_tags()):
+        compatible = (
+            bool(tags.intersection(sys_tags()))
+            if python_version is None or architecture is None
+            else any(
+                _tag_matches_target(tag, python_version, architecture) for tag in tags
+            )
+        )
+        if not compatible:
             raise ValueError("wheel does not match the input validation platform")
         with open_nofollow(path) as handle, zipfile.ZipFile(handle) as archive:
             names = _wheel_names(archive)
@@ -114,16 +178,31 @@ def _wheel_metadata(path: Path) -> tuple[str, Version, Message]:
             ):
                 raise ValueError("invalid wheel metadata")
             parsed = BytesParser().parsebytes(archive.read(metadata[0]))
-        _validate_wheel_identity(parsed, name, version)
+        _validate_wheel_identity(parsed, name, version, python_version=python_version)
         return name, version, parsed
     except (zipfile.BadZipFile, KeyError, TypeError) as exc:
         raise ValueError("invalid wheel archive") from exc
 
 
-def validate_wheel_closure(wheelhouse: Path, requirements: str) -> dict[str, str]:
+def validate_wheel_closure(
+    wheelhouse: Path,
+    requirements: str,
+    *,
+    python_version: str | None = None,
+    architecture: str | None = None,
+) -> dict[str, str]:
     """Verify hashes, platform tags and every transitive metadata dependency."""
-    locked = locked_requirements(requirements)
-    wheels, hashes = _locked_wheels(wheelhouse, locked)
+    locked = locked_requirements(
+        requirements,
+        python_version=python_version,
+        architecture=architecture,
+    )
+    wheels, hashes = _locked_wheels(
+        wheelhouse,
+        locked,
+        python_version=python_version,
+        architecture=architecture,
+    )
     extras = {name: set(req.extras) for name, (req, _) in locked.items()}
     changed = True
     while changed:
@@ -132,10 +211,18 @@ def validate_wheel_closure(wheelhouse: Path, requirements: str) -> dict[str, str
 
 
 def docker_archive_images(
-    path: Path, files: dict[str, str]
+    path: Path,
+    files: dict[str, str],
+    *,
+    architecture: str | None = None,
 ) -> dict[str, tuple[str, ...]]:
     """Bind Docker-save image IDs to config bytes and their uncompressed layers."""
     manifests = json.loads(read_archive_member(path, "manifest.json"))
+    target_architecture = {"x86_64": "amd64", "aarch64": "arm64"}.get(
+        architecture or platform.machine()
+    )
+    if target_architecture is None:
+        raise ValueError("unsupported image target architecture")
     result = {}
     layer_cache = {}
     if not isinstance(manifests, list) or not manifests:
@@ -144,6 +231,11 @@ def docker_archive_images(
         config_path = safe_member(manifest["Config"])
         layers = manifest["Layers"]
         config = json.loads(read_archive_member(path, config_path))
+        if (
+            config.get("os") != "linux"
+            or config.get("architecture") != target_architecture
+        ):
+            raise ValueError("Docker image does not match the declared Linux target")
         expected = config.get("rootfs", {}).get("diff_ids", [])
         actual = [
             _cached_layer_digest(path, safe_member(layer), layer_cache)
@@ -155,7 +247,7 @@ def docker_archive_images(
         if image_id in result:
             raise ValueError("duplicate Docker image identity")
         result[image_id] = tuple(manifest.get("RepoTags") or ())
-    _verify_oci_graph(path, files, result, layer_cache)
+    _verify_oci_graph(path, files, result, layer_cache, architecture=architecture)
     return result
 
 
@@ -181,6 +273,8 @@ def _verify_oci_graph(
     files: dict[str, str],
     images: dict[str, tuple[str, ...]],
     layer_cache: dict[str, str],
+    *,
+    architecture: str | None = None,
 ) -> None:
     """Check both Docker and OCI views when modern Docker exports both."""
     for name, digest in files.items():
@@ -188,7 +282,9 @@ def _verify_oci_graph(
             raise ValueError("OCI blob content identity mismatch")
     if "index.json" not in files:
         return
-    architecture = {"x86_64": "amd64", "aarch64": "arm64"}.get(platform.machine())
+    architecture = {"x86_64": "amd64", "aarch64": "arm64"}.get(
+        architecture or platform.machine()
+    )
     pending = [json.loads(read_archive_member(path, "index.json"))]
     visited = set()
     found = set()
@@ -243,10 +339,18 @@ def _verify_oci_layers(
         raise ValueError("OCI image layers differ from their config identity")
 
 
-def registry_image_id(path: Path, files: dict[str, str], reference: str) -> str:
+def registry_image_id(
+    path: Path,
+    files: dict[str, str],
+    reference: str,
+    *,
+    architecture: str | None = None,
+) -> str:
     """Resolve a pinned OCI manifest/index to exactly one native image config."""
     digest = reference.rsplit("@", 1)[-1]
-    architecture = {"x86_64": "amd64", "aarch64": "arm64"}[platform.machine()]
+    architecture = {"x86_64": "amd64", "aarch64": "arm64"}[
+        architecture or platform.machine()
+    ]
     pending, seen, found = [digest], set(), set()
     while pending:
         current = pending.pop()
@@ -344,14 +448,22 @@ def _wheel_names(archive: zipfile.ZipFile) -> set[str]:
 
 
 def _locked_wheels(
-    wheelhouse: Path, locked: dict[str, tuple[Requirement, set[str]]]
+    wheelhouse: Path,
+    locked: dict[str, tuple[Requirement, set[str]]],
+    *,
+    python_version: str | None = None,
+    architecture: str | None = None,
 ) -> tuple[dict[str, tuple[Version, Message]], dict[str, str]]:
     """Bind every target wheel to exactly one hash-pinned requirement."""
     wheels = {}
     hashes = {}
     for path in sorted(wheelhouse.iterdir()):
         _require_wheel_file(path)
-        name, version, metadata = _wheel_metadata(path)
+        name, version, metadata = _wheel_metadata(
+            path,
+            python_version=python_version,
+            architecture=architecture,
+        )
         digest, _ = hash_file_nofollow(path)
         if (
             name in wheels
@@ -452,11 +564,18 @@ def _admit_oci_image(
     return set()
 
 
-def _validate_wheel_identity(parsed: Message, name: str, version: Version) -> None:
+def _validate_wheel_identity(
+    parsed: Message,
+    name: str,
+    version: Version,
+    *,
+    python_version: str | None = None,
+) -> None:
     """Require metadata identity and interpreter compatibility."""
-    if parsed.get("Requires-Python") and Version(
-        platform.python_version()
-    ) not in SpecifierSet(parsed["Requires-Python"]):
+    interpreter = python_version or platform.python_version()
+    if parsed.get("Requires-Python") and Version(interpreter) not in SpecifierSet(
+        parsed["Requires-Python"]
+    ):
         raise ValueError("wheel requires a different Python version")
     if (
         canonicalize_name(parsed["Name"]) != name

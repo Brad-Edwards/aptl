@@ -43,7 +43,7 @@ checks observe an effect in the running lab rather than a declaration.
 | Declared service listeners | Boot gate, live, read from outside the container's trust boundary. Focused: `tests/test_declared_listener_readiness.py`, `tests/test_proc_net_listeners.py` |
 | Host-published ports | Boot gate, live: the exact declared loopback tuple, no wider binding, and a real connection. Focused: `tests/test_compose_port_realization.py`, `tests/test_docker_compose_port_bindings.py` |
 | Orchestrator `workflows` | Boot gate, live: one end-only workflow driven to a terminal RAES state with history, parsed with the contract model. Focused: `tests/test_raes_orchestrator.py`, `tests/test_workflow_engine.py` |
-| Lifecycle and teardown | Boot gate: `aptl lab stop --volumes` plus the independent project-scoped absence proof in `scripts/ci/assert_project_teardown.py` |
+| Lifecycle and teardown | Boot gate: `aptl lab stop --volumes` plus the independent absence proof in `scripts/ci/assert_project_teardown.py`, scoped to the project and diffed against a pre-start daemon baseline for anonymous volumes and helper containers. Focused: `tests/test_assert_project_teardown.py`, `tests/test_ephemeral_containers.py`, and `tests/test_container_lifecycle_policy.py`, which fails on any helper or container removal that bypasses the shared policy |
 | The gate's own failure modes | `tests/test_boot_realization_gate.py`, where every check fails closed without Docker |
 
 ## Declared dimensions APTL does not read back

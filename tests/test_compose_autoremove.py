@@ -88,7 +88,10 @@ def test_completed_autoremove_container_is_removed_and_receipted(tmp_path):
 
     def remove(cmd, *, timeout=None):
         nonlocal present
-        assert cmd == ["docker", "rm", _CONTAINER]
+        # Not forced: a still-running container must refuse removal here, not
+        # be killed. ``-v`` takes its anonymous volumes with it; without it they
+        # outlive the container with nothing left to attribute them to the lab.
+        assert cmd == ["docker", "rm", "-v", _CONTAINER]
         assert timeout is not None
         present = False
         return subprocess.CompletedProcess(cmd, 0, "", "")
@@ -136,7 +139,7 @@ def test_autoremove_failure_is_fail_closed_and_has_no_receipt(tmp_path):
             backend,
             "_run",
             return_value=subprocess.CompletedProcess(
-                ["docker", "rm", _CONTAINER], 1, "", "private daemon detail"
+                ["docker", "rm", "-v", _CONTAINER], 1, "", "private daemon detail"
             ),
         ),
     ):

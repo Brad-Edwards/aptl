@@ -1824,3 +1824,6 @@ src/aptl_techvault/evidence/transcript_parsing.py	core-runtime	Retain TechVault 
 src/aptl_techvault/planning_compatibility.py	core-runtime	TechVault planning constraints stay behind the installed adapter seam
 tests/test_pack_adapter_install_artifact.py	tests-follow-owner	Retain real installed second-adapter acceptance coverage
 tests/test_pack_adapter_install_seam.py	tests-follow-owner	Retain generic adapter seam regression coverage
+src/aptl/core/ephemeral_containers.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+tests/test_ephemeral_containers.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_container_lifecycle_policy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import re
-import secrets
 import subprocess
 import time
 from collections.abc import Mapping
@@ -27,6 +26,10 @@ from aptl.core.deployment.boundary import AcesBoundarySpec, PlatformBoundarySpec
 from aptl.core.deployment.realization import (
     DeploymentAclRealization,
     DeploymentRealizationSpec,
+)
+from aptl.core.ephemeral_containers import (
+    EphemeralContainer,
+    remove_container_command,
 )
 
 _CONTAINER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
@@ -166,16 +169,25 @@ def _peer_on_network(
 
 
 def _probe_command(
-    *, image: str, network_container: str, arguments: list[str]
+    *,
+    image: str,
+    network_container: str,
+    arguments: list[str],
+    lifecycle: list[str],
 ) -> list[str]:
-    """Build the fixed, least-privilege active-probe command."""
+    """Build the fixed, least-privilege active-probe command.
+
+    ``lifecycle`` carries how the container is named, detached and removed; the
+    probe itself — the namespace it joins, its capabilities, its image and
+    arguments — is fixed here and not the caller's to vary.
+    """
 
     if not _CONTAINER.fullmatch(network_container):
         raise ValueError("boundary probe container identity is invalid")
     return [
         "docker",
         "run",
-        "--rm",
+        *lifecycle,
         "--network",
         f"container:{network_container}",
         "--cap-drop=ALL",
@@ -199,7 +211,9 @@ def _connect(
 ) -> bool:
     """Run one bounded TCP connection probe from an observed container."""
 
-    result = backend._run(
+    helper = EphemeralContainer.for_role("boundary-probe")
+    result = helper.run(
+        backend._run,
         _probe_command(
             image=image,
             network_container=source.name,
@@ -212,6 +226,7 @@ def _connect(
                 "--timeout",
                 "3",
             ],
+            lifecycle=helper.run_options(),
         ),
         timeout=10,
     )
@@ -228,7 +243,9 @@ def _start_listener(
 ) -> str | None:
     """Start a temporary bounded listener for an otherwise quiet target."""
 
-    name = "aptl-boundary-probe-" + secrets.token_hex(8)
+    helper = EphemeralContainer.for_role("boundary-listener")
+    # Detached, and still auto-removed: the listener exits on its own timeout,
+    # so a caller that never gets to remove it does not leave it behind.
     command = _probe_command(
         image=image,
         network_container=destination.name,
@@ -241,18 +258,25 @@ def _start_listener(
             "--timeout",
             "15",
         ],
+        lifecycle=["-d", *helper.run_options()],
     )
-    command[1:3] = ["run", "-d"]
-    command[3:3] = ["--name", name]
-    started = backend._run(command, timeout=10)
+    # A detached start returns once the container starts, so any failure —
+    # including the timeout killing the CLI — can leave it created and never
+    # started, where auto-remove does not reach it.
+    try:
+        started = backend._run(command, timeout=10)
+    except Exception:
+        helper.discard(backend._run)
+        raise
     if started.returncode != 0:
+        helper.discard(backend._run)
         return None
     for _attempt in range(50):
-        logs = backend._run(["docker", "logs", name], timeout=5)
+        logs = backend._run(["docker", "logs", helper.name], timeout=5)
         if logs.returncode == 0 and logs.stdout.strip() == "ready":
-            return name
+            return helper.name
         time.sleep(0.1)
-    backend._run(["docker", "rm", "-f", name], timeout=10)
+    helper.discard(backend._run)
     return None
 
 
@@ -300,7 +324,7 @@ def _probe_path(
         )
     finally:
         if listener is not None:
-            backend._run(["docker", "rm", "-f", listener], timeout=10)
+            backend._run(remove_container_command(listener), timeout=10)
     return BoundaryProbeObservation(
         identity=path.identity,
         authority=path.authority,

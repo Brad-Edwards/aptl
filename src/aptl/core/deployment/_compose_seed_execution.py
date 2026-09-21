@@ -17,6 +17,7 @@ from aptl.core.deployment._compose_seed_safety import (
     redacted_stderr_hint,
 )
 from aptl.core.deployment.errors import BackendSeedError
+from aptl.core.ephemeral_containers import EphemeralContainer
 from aptl.core.seed_spec import NamedVolumeSeed
 from aptl.utils.logging import get_logger
 
@@ -56,11 +57,12 @@ class ComposeSeedExecutionMixin(object):
         # Project scoping (ADR-037): the real volume name is derived from
         # the configured compose project, never set as an explicit global.
         volume = f"{self._project_name}_{seed.volume_suffix}"
+        helper = EphemeralContainer.for_role("volume-seed")
         cmd = [
             "docker",
             "run",
             *(["--pull=never"] if self._offline_staged else []),
-            "--rm",
+            *helper.run_options(),
             "--user",
             "0:0",
             "--entrypoint",
@@ -73,7 +75,7 @@ class ComposeSeedExecutionMixin(object):
             "-c",
             self._build_seed_script(seed),
         ]
-        result = self._run(cmd, timeout=_SEED_TIMEOUT)
+        result = helper.run(self._run, cmd, timeout=_SEED_TIMEOUT)
         if result.returncode != 0:
             log.error(
                 "Seed of volume %s failed (exit %s)%s",
@@ -119,11 +121,12 @@ class ComposeSeedExecutionMixin(object):
             return
         name = legacy.name
         assert_safe_relpath(name)
+        helper = EphemeralContainer.for_role("legacy-seed-retire")
         cmd = [
             "docker",
             "run",
             *(["--pull=never"] if self._offline_staged else []),
-            "--rm",
+            *helper.run_options(),
             "--user",
             "0:0",
             "--entrypoint",
@@ -134,7 +137,7 @@ class ComposeSeedExecutionMixin(object):
             "-rf",
             f"/legacy/{name}",
         ]
-        result = self._run(cmd, timeout=_SEED_TIMEOUT)
+        result = helper.run(self._run, cmd, timeout=_SEED_TIMEOUT)
         if result.returncode != 0:
             log.error(
                 "Retire of legacy seed path %s failed (exit %s)%s",

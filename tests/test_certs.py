@@ -115,6 +115,9 @@ class TestEnsureSSLCerts:
         result = ensure_ssl_certs(tmp_path, run_command=backend_run)
 
         assert result.success is True
+        generator = commands[0][0]
+        helper_name = generator[generator.index("--name") + 1]
+        assert helper_name.startswith("aptl-cert-generator-")
         assert [command for command, _timeout in commands] == [
             [
                 "docker",
@@ -125,6 +128,10 @@ class TestEnsureSSLCerts:
                 "generate-indexer-certs.yml",
                 "run",
                 "--rm",
+                "--name",
+                helper_name,
+                "--label",
+                "aptl.ephemeral.role=cert-generator",
                 "generator",
             ],
             [
@@ -190,11 +197,16 @@ class TestEnsureSSLCerts:
         generator_cmd = mock_run.call_args_list[0][0][0]
         assert generator_cmd[:3] == ["docker", "compose", "-p"]
         assert generator_cmd[3].startswith("aptl-certs-")
+        helper_name = generator_cmd[generator_cmd.index("--name") + 1]
         assert generator_cmd[4:] == [
             "-f",
             "generate-indexer-certs.yml",
             "run",
             "--rm",
+            "--name",
+            helper_name,
+            "--label",
+            "aptl.ephemeral.role=cert-generator",
             "--user",
             "1000:1000",
             "generator",
@@ -233,11 +245,16 @@ class TestEnsureSSLCerts:
 
         assert result.success is True
         generator_cmd = mock_run.call_args_list[0][0][0]
+        helper_name = generator_cmd[generator_cmd.index("--name") + 1]
         assert generator_cmd[4:] == [
             "-f",
             "generate-indexer-certs.yml",
             "run",
             "--rm",
+            "--name",
+            helper_name,
+            "--label",
+            "aptl.ephemeral.role=cert-generator",
             "--user",
             "0:0",
             "generator",

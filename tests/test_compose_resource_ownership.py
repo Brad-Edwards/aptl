@@ -376,7 +376,9 @@ def test_cleanup_targets_only_receipt_owned_native_ids(tmp_path: Path) -> None:
     )
 
     assert backend.remove_generic_materializer_containers() == []
-    assert backend._run.call_args.args[0] == ["docker", "rm", "-f", _ID_A]
+    # ``-v`` removes the container's anonymous volumes with it; receipt-owned
+    # named volumes are untouched by it and retired separately.
+    assert backend._run.call_args.args[0] == ["docker", "rm", "-f", "-v", _ID_A]
     assert all("--filter" not in call.args[0] for call in backend._run.call_args_list)
 
 

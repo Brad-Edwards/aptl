@@ -8,6 +8,7 @@ from pathlib import Path
 
 from aptl.core.content_seed import build_content_volume_seeds
 from aptl.core.deployment.realization import DeploymentContentRealization
+from aptl.core.ephemeral_containers import EphemeralContainer
 
 # Reuses the Suricata seeder image: it is already pulled unconditionally by
 # every lab start (Suricata is part of the default profile set), so content
@@ -102,12 +103,14 @@ class ComposeRealizationContentMixin:
             f'if [ -d "$1" ]; then exit {_CONTENT_DIRECTORY_EXIT}; fi; '
             f"exit {_CONTENT_MISSING_EXIT}"
         )
-        result = self._run(
+        helper = EphemeralContainer.for_role("content-probe")
+        result = helper.run(
+            self._run,
             [
                 "docker",
                 "run",
                 *(["--pull=never"] if self._offline_staged else []),
-                "--rm",
+                *helper.run_options(),
                 "--user",
                 "0:0",
                 "--network",
@@ -162,12 +165,14 @@ class ComposeRealizationContentMixin:
             f'if [ -d "$1" ]; then exit {_CONTENT_DIRECTORY_EXIT}; fi; '
             f"exit {_CONTENT_MISSING_EXIT}"
         )
-        result = self._run(
+        helper = EphemeralContainer.for_role("bind-source-probe")
+        result = helper.run(
+            self._run,
             [
                 "docker",
                 "run",
                 *(["--pull=never"] if self._offline_staged else []),
-                "--rm",
+                *helper.run_options(),
                 "--user",
                 "0:0",
                 "--network",

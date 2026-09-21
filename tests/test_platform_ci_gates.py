@@ -248,3 +248,25 @@ def test_the_boot_gate_requires_the_service_to_answer_not_just_the_port() -> Non
     )
 
     assert "--endpoint-banner-prefix SSH-" in step
+
+
+def test_the_cleanup_proof_diffs_the_daemon_against_a_pre_start_baseline() -> None:
+    """Debris with no project identity is caught only by a before/after diff.
+
+    Anonymous volumes and ephemeral helpers carry neither the project label nor
+    the ``<project>_`` volume prefix, so the project-scoped proof reported a
+    clean teardown with both still present. The baseline must be recorded
+    before the lab starts, and the proof must read that same file.
+    """
+
+    steps = _jobs()["clean-install-lab-boot"]["steps"]
+    names = [step.get("name") for step in steps]
+    record = names.index("Record the daemon baseline before the lab starts")
+    start = names.index("Start and verify the materialization envelope")
+    proof = names.index("Assert no project containers, networks, or volumes remain")
+
+    assert record < start < proof
+    baseline = '"$RUNNER_TEMP/daemon-baseline.json"'
+    assert f"--record-baseline {baseline}" in steps[record]["run"]
+    assert f"--baseline {baseline}" in steps[proof]["run"]
+    assert steps[proof]["if"] == "always()"

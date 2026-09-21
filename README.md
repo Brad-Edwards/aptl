@@ -1,225 +1,126 @@
 [![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=Brad-Edwards_aptl&token=4dd88be3421d6d030a4615b86ac8ab0e3c9eb4d3)](https://sonarcloud.io/summary/new_code?id=Brad-Edwards_aptl)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Brad-Edwards/aptl/badge)](https://scorecard.dev/viewer/?uri=github.com/Brad-Edwards/aptl)
 
-🎤 **Accepted to [Black Hat USA Arsenal 2026](https://blackhat.com/us-26/arsenal/schedule/#aptl-advanced-purple-team-labs-52322), [SecTor Arsenal 2026](https://blackhat.com/sector/arsenal/schedule/index.html#aptl-advanced-purple-team-labs-54785), and SecTor 2026 Briefings.** Live Arsenal demos at both conferences, plus the SecTor Briefing talk **APTL for Agentic Purple Teaming**.
+🎤 **Accepted to [Black Hat USA Arsenal 2026](https://blackhat.com/us-26/arsenal/schedule/#aptl-advanced-purple-team-labs-52322), [SecTor Arsenal 2026](https://blackhat.com/sector/arsenal/schedule/index.html#aptl-advanced-purple-team-labs-54785), and SecTor 2026 Briefings.**
 
 # APTL—Advanced Purple Team Lab
 
-**Purple-team lab where AI agents drive the red and blue sides against an enterprise target stack.**
+APTL is a local purple-team lab where human operators and AI agents exercise
+red- and blue-team workflows against an intentionally vulnerable enterprise
+range. Scenario documents select and realize the target, attacker, and SOC
+topology; the CLI owns validation, startup, readiness, access discovery,
+teardown, and run records.
 
-One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, DB, file share, and DNS), a Kali red-team box, a SOC stack (Wazuh + Suricata + MISP + TheHive + Cortex + Shuffle), and MCP servers giving AI agents programmatic control over it. Scenarios are [Reproducible Agentic Environments SDL](docs/sdl/index.md) documents, selectable at startup; the Compose topology is realized from the nodes the scenario declares rather than a fixed preset, and each run captures a telemetry archive. Mail and reverse-engineering services are optional profiles and are not part of the default `techvault-operational` scenario.
+Use cases include autonomous cyber-operations research, purple-team training,
+and AI threat-actor assessment.
 
-**Use cases:** autonomous cyber-operations research, purple-team training, AI threat-actor assessment.
+## Status And Safety
 
-## Status
+**Active development. Not for production. Not hardened.** APTL gives AI agents
+penetration-testing tools and starts intentionally vulnerable services. Use a
+dedicated, rebuildable host, keep unrelated credentials and workloads
+elsewhere, control the surrounding network, and operate only on systems you are
+authorized to test.
 
-**🚧 Active development. Not for production. Not hardened.** APTL gives AI
-agents real penetration-testing tools and intentionally vulnerable targets.
-Choose the execution boundary accordingly:
-
-| Command | Isolation boundary | Appropriate use |
-|---|---|---|
-| `aptl lab start` | Containers on the selected host Docker engine | Development and supervised work on a dedicated, rebuildable host |
-| `aptl seat start` | Rootful Docker and the complete lab inside a disposable KVM VM | Agent-driven or multi-user work where stronger host and cross-seat isolation matters |
-
-The VM seat is materially safer than running the lab directly on the host
-Docker engine, but it is not an absolute sandbox. An advanced model with tool
-access can research and attempt container- or VM-escape chains; assume it may
-exploit a reachable kernel, hypervisor, or device-model flaw if one exists.
-Keep the host kernel and QEMU/KVM current, use a host that can be rebuilt, keep
-unrelated credentials and workloads elsewhere, control the surrounding
-network, and monitor active red-team sessions. See the
-[seat security boundary](docs/reference/appliance-seat-launcher.md#security-boundary).
+For stronger host and cross-seat isolation on Linux/KVM, use a disposable
+[`aptl seat`](docs/reference/appliance-seat-launcher.md). A VM boundary reduces
+risk but does not eliminate it; keep the host kernel and hypervisor current.
 
 ## Quick Start
 
-Install the released CLI and materialize a lab, no clone required:
+Install the released CLI and materialize its bundled lab assets. No source
+checkout is required:
 
-```bash
-pipx install aptl-labs          # the released CLI, isolated in its own environment
-aptl lab init my-lab            # materialize the lab assets into ./my-lab
+```shell
+pipx install aptl-labs
+aptl lab init my-lab
 cd my-lab
-aptl lab start
+aptl lab start --scenario techvault
 ```
 
-`aptl lab init <dir>` copies the bundled lab assets (the Compose topology,
-scenarios, config templates, and container build contexts) out of the
-installed package into `<dir>`, which becomes your lab project directory. The
-published wheel ships those assets, so a PyPI install alone can run a lab.
-[pipx](https://pipx.pypa.io/) installs the CLI into its own virtualenv, so the
-system-`pip` block on modern Debian/Ubuntu/WSL2 hosts
-([PEP 668](https://peps.python.org/pep-0668/)) never applies. Install pipx with
-`sudo apt install pipx` if you do not have it.
+Startup validates the selected scenario, creates private project state,
+realizes the topology, waits for required readiness checks, and reports a
+structured outcome. Inspect the runtime-derived state and access information:
 
-To run from source instead (for development), clone the repo and use a
-virtualenv editable install (the `python3 -m venv` step needs `python3-venv` on
-Debian/Ubuntu). The checkout is itself the project directory, so no `lab init`
-is needed:
-
-```bash
-git clone https://github.com/Brad-Edwards/aptl.git
-cd aptl
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-aptl lab start
+```shell
+aptl lab status
+aptl lab info
+aptl container list
 ```
 
-`aptl lab start` creates `.env` automatically when it is missing and replaces
-template placeholder values with lab credentials that match the running
-containers. The startup output points to `.env` for passwords and tokens. Run
-`aptl lab info` later to reprint the same access summary.
+URLs, host ports, available containers, usernames, and credential locations
+belong to the realized project. Use `aptl lab info`; do not rely on static
+values copied from documentation.
 
-By default it boots the full `techvault-operational` scenario. List the catalog
-and start a smaller curated topology with:
+At the end of the session:
 
-```bash
-aptl lab scenarios                                   # list startup scenarios
-aptl lab start --scenario techvault  # the same acquired pack as default start
+```shell
+aptl lab stop      # preserve project volumes
+aptl lab stop -v   # confirm and destroy project volume data
 ```
 
-See [Scenarios](#scenarios) for the catalog.
-
-Once it's up:
-
-| Surface | URL / command |
-|---|---|
-| Wazuh Dashboard | <https://localhost:443> (`admin` / your `INDEXER_PASSWORD` from `.env`) |
-| Victim shell | `aptl container shell aptl-victim` |
-| Kali shell | `aptl container shell aptl-kali` |
-
-Lifecycle:
-
-```bash
-aptl lab status   # running containers
-aptl lab info     # URLs, usernames, and .env credential references
-aptl lab stop     # graceful stop
-aptl lab stop -v  # ⚠ destroys all lab data (Wazuh indexes, MISP, TheHive, configs)
-aptl kill         # emergency: kill MCP server processes
-aptl kill -c      # emergency: kill MCP processes AND all lab containers
-```
+Read the [first-lab guide](docs/getting-started/quick-start.md) for scenario
+selection, safe activity, result inspection, troubleshooting, and teardown.
 
 ## Requirements
 
-- Docker + Docker Compose + Docker Buildx
-- Python 3.11+
-- OpenSSH client (`ssh-keygen` on `PATH`): generates the lab SSH keys at standup. Preinstalled on Linux and macOS; on Windows install the built-in "OpenSSH Client" optional feature (or Git for Windows / WSL2).
-- RAM: 8 GB runs the smaller curated scenarios; the full acquired TechVault stack needs more than 20 GB
-- 20 GB+ disk
-- Linux, macOS, or Windows with Docker Desktop/WSL2
-- Open ports: 443, 8443, 9000, 9001, 9200, 55000 (and the rest of the published ports in `docker-compose.yml`)
+- Python 3.11 or newer and [pipx](https://pipx.pypa.io/)
+- Docker Engine or Docker Desktop with Compose and Buildx
+- OpenSSH client with `ssh-keygen` on `PATH`
+- Node.js 20 or newer and npm for MCP artifact builds
+- 20GB or more of free disk space
+- Sufficient Docker memory for the selected scenario; the full acquired
+  TechVault stack needs more than 20GB
 
-## Architecture
+See [Prerequisites](docs/getting-started/prerequisites.md) for platform-specific
+setup and verification.
 
-```mermaid
-flowchart TD
-    AI([AI Agents])
+## Supported Interfaces
 
-    subgraph MCP[MCP Server Layer]
-        direction LR
-        m1[mcp-red] ~~~ m2[mcp-wazuh] ~~~ m3[mcp-indexer] ~~~ m4[mcp-network]
-        m5[mcp-casemgmt] ~~~ m6[mcp-soar] ~~~ m7[mcp-threatintel] ~~~ m8[mcp-reverse]
-    end
+- [CLI](docs/reference/cli.md) is the primary lab control plane.
+- [MCP servers](docs/reference/mcp.md) give authorized agents scenario-aware
+  red- and blue-team tools through generated private client configuration.
+- [Web interface](docs/reference/web.md) provides a loopback-first local
+  operator UI and typed API.
 
-    Kali[Kali Red Team]
-    Reverse[Optional Malware Analysis<br/>not in the default scenario]
-
-    subgraph Scenario[Scenario Environment]
-        Targets[Scenario-defined target topology<br/>AD · web · DB · file share · DNS · mail · victim hosts · etc.]
-    end
-
-    subgraph SOC[SOC Stack]
-        direction LR
-        S1[Wazuh SIEM] ~~~ S2[Suricata IDS] ~~~ S3[MISP TI]
-        S4[TheHive + Cortex] ~~~ S5[Shuffle SOAR]
-    end
-
-    AI <--> MCP
-    MCP --> Kali
-    MCP --> SOC
-    MCP --> Reverse
-
-    Kali -->|attack| Scenario
-    Scenario -.->|logs / telemetry| SOC
-```
-
-The scenario environment is whatever the SDL scenario defines. The default `techvault-operational` topology (AD, web, DB, file share, DNS, mail, victims) is one shape, and [other scenarios](#scenarios) compose different ones. Component-by-component breakdown: [docs/architecture/index.md](docs/architecture/index.md).
-
-## Scenarios
-
-Scenarios are [Reproducible Agentic Environments SDL](docs/sdl/index.md) documents under `scenarios/`. `aptl lab scenarios` lists the catalog; `aptl lab start --scenario <id>` (or `--scenario-path <file>`) selects one. The Compose profiles that come up are **realized from the nodes the SDL declares**—the topology follows the scenario's content, including dependency closure, rather than a preset keyed off its name.
-
-The SDL language and the reusable environment-pack format live in the RAES companion repositories—[OpenRAE/rae](https://github.com/OpenRAE/rae) (SDL and semantics) and [OpenRAE/env-packs](https://github.com/OpenRAE/env-packs) (pack definitions, templates, schemas, and authoring support). APTL consumes those definitions and realizes them as a running Docker lab; the lab lifecycle and runtime stay APTL-owned.
-
-The default comes from the installed TechVault environment pack. The APTL
-catalog also ships three curated slices:
-
-| Scenario id | Boots | Omits |
-|---|---|---|
-| installed `techvault` pack | TechVault enterprise, Kali, and SOC (default) | Optional backend OTel stack when native evidence is sufficient |
-| `techvault-attacker-target` | Kali + one monitored victim + Wazuh core | Enterprise web tier, wider SOC stack, backend apparatus |
-| `techvault-enterprise-web` | Vulnerable webapp + DB + AD + Wazuh core | Red-team apparatus, wider SOC stack, backend apparatus |
-| `techvault-defensive-min` | Wazuh manager / indexer / dashboard | Attacker and enterprise components, wider SOC stack, backend apparatus |
-
-Authoring and selection details: [SDL Reference](docs/sdl/index.md) · [Curated TechVault Variants](docs/sdl/techvault-curated-variants.md).
-
-## AI Agents (MCP)
-
-`aptl lab start` builds the seven MCP servers for the default scenario and
-creates a private `.mcp.json` client configuration with the generated lab
-credentials. Start your AI client from the project directory so its relative
-entry points resolve correctly.
-
-To rebuild the MCP artifacts without restarting the lab:
-
-```bash
-./mcp/build-all-mcps.sh
-```
-
-The repository still builds the optional reverse MCP artifact, but the
-generated default client config omits it because the default SDL has no
-reverse node. Full setup: [MCP Integration](docs/components/mcp-integration.md).
-
-Smoke-test the wiring once the lab is up:
-
-- Red side: ask the agent *"Use kali_info to show me the lab network"*
-- Blue side: ask the agent *"Use wazuh_query_alerts to show me recent alerts"*
-
-## Optional: Web UI
-
-Localhost-only web UI for lab control and scenario runs.
-
-```bash
-pip install -e ".[web]"        # in the same .venv from Quick Start
-aptl web serve                 # API server
-cd web && npm install && npm run dev   # frontend (separate terminal)
-```
-
-Access at <http://localhost:5173> (dev) or <http://localhost:3000> (prod). The API container needs the host Docker socket; do not expose to untrusted networks.
+The APTL operator UI, vulnerable target applications, and third-party SOC
+interfaces are separate surfaces. The selected scenario determines which ones
+exist.
 
 ## Documentation
 
-**Getting started:** [Installation](docs/getting-started/installation.md) · [Prerequisites](docs/getting-started/prerequisites.md) · [Quick Start Guide](docs/getting-started/quick-start.md)
+The published site is the canonical user manual:
 
-**Architecture:** [Overview](docs/architecture/index.md) · [Networking](docs/architecture/networking.md) · [Enterprise Infrastructure](docs/architecture/enterprise-infrastructure.md)
+- [Documentation home](https://brad-edwards.github.io/aptl/)
+- [Installation](docs/getting-started/installation.md)
+- [Run your first lab](docs/getting-started/quick-start.md)
+- [Troubleshooting](docs/troubleshooting/index.md)
+- [Architecture and historical records](docs/architecture/index.md)
 
-**Components:** [Wazuh SIEM](docs/components/wazuh-siem.md) · [Kali Red Team](docs/components/kali-redteam.md) · [Victim Containers](docs/components/victim-containers.md) · [Reverse Engineering](docs/components/reverse-engineering-container.md) · [MCP Integration](docs/components/mcp-integration.md) · [Default Defensive Posture](docs/components/default-defensive-posture.md)
+The README is the GitHub and package-index gateway, not a second copy of the
+manual.
 
-**Scenarios & SDL:** [SDL Reference](docs/sdl/index.md) · [Curated TechVault Variants](docs/sdl/techvault-curated-variants.md) · [Pack authoring (OpenRAE/env-packs)](https://github.com/OpenRAE/env-packs) · [SOC Architecture Spec](docs/specs/soc-feature-spec.md)
+## Project Links
 
-**Reference:** [TechVault Scenario Overview](docs/reference/techvault-scenario-overview.md) · [TechVault Company Profile](docs/reference/techvault-company-profile.md) · [TechVault OSINT Readiness](docs/reference/techvault-osint-readiness.md) · [Container Template Guide](docs/containers/victim-template-guide.md)
+- [Get support](https://github.com/Brad-Edwards/aptl/blob/dev/SUPPORT.md)
+- [Contribute](https://github.com/Brad-Edwards/aptl/blob/dev/CONTRIBUTING.md)
+- [Report a vulnerability privately](https://github.com/Brad-Edwards/aptl/security/advisories/new)
 
-**Ops:** [Troubleshooting](docs/troubleshooting/) · [Release Candidate Manual QA](docs/testing/smoke-test-plan.md)
+Do not report suspected vulnerabilities through a public issue. The
+[security policy](SECURITY.md) describes scope and the private fallback contact
+path.
 
-## Ethics & Disclaimers
+## Ethics And Disclaimer
 
-APTL uses commodity services and basic integrations. AI agents get Kali access—no enhancements to their latent capabilities beyond that. **No red-team enhancements will be added to this public repository.** An autonomous cyber-operations range is under development as a separate project.
+APTL uses commodity services and standard security tooling. AI agents get Kali
+access; this public repository does not add red-team enhancements to their
+latent capabilities. You are responsible for following all applicable laws and
+for obtaining authorization before testing a system.
 
-You are responsible for following all applicable laws. The author takes no responsibility for your use of this lab. The repository contains intentional **test credentials** (covered by `.gitguardian.yaml`) for lab functionality—dummy values for educational use, not production secrets.
+The repository contains intentional test credentials used only by lab
+fixtures. They are not production secrets. Runtime control-plane credentials
+are generated into private project files and must not be committed or shared.
 
 ## License
 
 MIT
-
----
-
-*10-23 AI hacker shenanigans 🚓*

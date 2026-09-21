@@ -1,239 +1,146 @@
-# Deployment
+# Deployment And Lifecycle
 
-## Quick Setup
+APTL supports a released local project, a source checkout for contributors,
+and a prebuilt disposable appliance. All three use the CLI lifecycle boundary;
+raw Compose commands are not an equivalent deployment path.
 
-```bash
-git clone https://github.com/Brad-Edwards/aptl.git
-cd aptl
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-aptl lab start
+## Released Local Project
+
+Install the released package and materialize its lab assets:
+
+```shell
+pipx install aptl-labs
+aptl lab init my-lab
+cd my-lab
+aptl lab start --scenario techvault
 ```
 
-The virtualenv keeps the editable install off the system Python, so it works
-on modern Debian/Ubuntu/WSL2 hosts that block system-wide `pip` under
-[PEP 668](https://peps.python.org/pep-0668/). Those hosts need the
-`python3-venv` package (`sudo apt install python3-venv`).
+The project directory owns its `aptl.json`, generated private state, run store,
+and Docker resources. Keep lifecycle commands rooted in that directory, or use
+their documented project-directory option.
 
-**Use the CLI.** Manual deployment is error-prone and takes longer.
+`aptl lab start` performs the deployment work as one operation: it validates
+configuration and scenario input, realizes the topology, generates project
+credentials and service configuration, resolves host ports, builds required
+MCP artifacts, starts containers, waits for required readiness, updates client
+configuration, and records the run.
+
+Do not replace it with `docker compose up`. That bypasses control-plane work
+needed by a fresh project and can start a topology that does not match the
+selected scenario.
+
+## Source Checkout
+
+A source checkout is for contributors. Follow the
+[contribution setup](https://github.com/Brad-Edwards/aptl/blob/dev/CONTRIBUTING.md#development-setup)
+to create a virtual environment and editable install. The checkout itself is
+the project directory; do not run `aptl lab init` over it.
+
+## Disposable Appliance
+
+The appliance path puts rootful Docker and the complete lab inside a disposable
+KVM guest. See the [appliance seat launcher](reference/appliance-seat-launcher.md)
+for operator use and the [appliance release reference](reference/appliance-release.md)
+for signed payload creation, staging, qualification, and rollback.
+
+Offline appliance startup accepts only the staged wheels, project assets, and
+OCI images bound by its launch descriptor and trust anchors. Missing inputs
+fail closed instead of pulling or building from the network.
 
 ## Configuration
 
-Edit `aptl.json` to enable/disable containers:
+`aptl.json` is the strict, non-secret project configuration. Inspect and
+validate it through the CLI:
 
-```json
-{
-  "containers": {
-    "wazuh": true,
-    "victim": true,
-    "kali": true,
-    "reverse": false
-  }
-}
+```shell
+aptl config show
+aptl config validate
 ```
 
-For prebuilt, checkout-free QEMU/KVM delivery, see the
-[disposable appliance release guide](reference/appliance-release.md). Appliance
-guests start only from already staged wheels, project assets, and OCI images.
-Their create-once launch descriptor and both release trust anchors are required
-to bind the signed payload into the appliance boundary before startup;
-`aptl lab start --offline-staged` rejects missing images instead of pulling or
-building them.
+Scenario selection belongs to the acquired environment-pack catalog, not an
+ad hoc list of enabled containers. Use `aptl lab scenarios` and pass a catalog
+identity to `aptl lab start --scenario <id>`. Project-local SDL paths are an
+explicit development surface.
 
-## Manual Deployment
+Runtime credentials and generated client bindings belong in private files such
+as `.env` and `.mcp.json`; they are not `aptl.json` fields and must not be
+committed.
 
-**These steps are automated by `aptl lab start`. Use the CLI unless troubleshooting.**
+## Observe A Deployment
 
-#### 1. Prerequisites
+Use APTL's runtime projections after startup:
 
-```bash
-# Check requirements
-docker --version && docker compose version && docker buildx version
-sysctl vm.max_map_count  # Native Linux Docker Engine only; should be >= 262144
-netstat -tlnp | grep -E "(443|2027|8443|9000|9001|9200|55000)"  # Ports must be free
-
-# Fix vm.max_map_count if needed (native Linux Docker Engine)
-sudo sysctl -w vm.max_map_count=262144
-```
-
-#### 2. Setup
-
-```bash
-git clone https://github.com/Brad-Edwards/aptl.git
-cd aptl
-
-# Generate SSH keys
-./scripts/generate-ssh-keys.sh
-
-# Build MCP servers (optional - for AI integration)
-./mcp/build-all-mcps.sh
-```
-
-#### 3. Deploy
-
-```bash
-aptl lab start
-```
-
-**Use `aptl lab start` for the deploy itself.** Beyond the steps above it also
-generates the Wazuh Indexer SSL certificates automatically (producer-owned,
-platform-aware—see [Troubleshooting](troubleshooting/index.md)) and renders
-the credentialized Wazuh config from the checked-in templates into the
-gitignored `.aptl/config/` tree (ADR-028); there is no standalone manual
-command for that render, so a hand-run `docker compose --profile wazuh ... up`
-on a fresh checkout fails at the `.aptl/config/...` bind mounts. Once a lab has
-been started, a raw `docker compose --profile wazuh --profile victim --profile
-kali up -d` (profile flags are required for manual compose commands) reuses the
-already-rendered config.
-
-Wait 5-10 minutes for Wazuh indexer initialization.
-
-## Startup Times
-
-| Component | First Run | Restart |
-|-----------|-----------|---------|
-| SSL cert generation | 30s | 0s |
-| Wazuh Indexer | 2-5 min | 1-2 min |
-| Wazuh Manager | 1-2 min | 30s |
-| Dashboard | 30s | 15s |
-| Victim/Kali | 1-2 min | 30s |
-| **Total** | **5-10 min** | **3-5 min** |
-
-## Access
-
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| Wazuh Dashboard | <https://localhost:443> | `INDEXER_USERNAME` / `INDEXER_PASSWORD` from `.env` |
-| Wazuh Indexer | <https://localhost:9200> | `INDEXER_USERNAME` / `INDEXER_PASSWORD` from `.env` |
-| Wazuh API | <https://localhost:55000> | `API_USERNAME` / `API_PASSWORD` from `.env` |
-| Victim shell | `aptl container shell aptl-victim` | container shell (no host SSH port) |
-| Kali shell | `aptl container shell aptl-kali` | container shell (no host SSH port) |
-
-## Verification
-
-```bash
-# Check status (works against local or SSH-remote labs)
-aptl container list
-
-# Test endpoints
-curl -k https://localhost:443          # Dashboard
-curl -k https://localhost:9200        # Indexer
-ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022 "echo OK"  # Victim
-ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 "echo OK"      # Kali
-```
-
-## Management
-
-```bash
-# Start lab (recommended)
-aptl lab start
-
-# Check status
+```shell
 aptl lab status
-
-# Stop lab
-aptl lab stop
-
-# Stop and remove all volumes
-aptl lab stop -v
-
-# Manual stop (requires profile flags)
-docker compose --profile wazuh --profile victim --profile kali stop
-
-# Manual clean removal
-docker compose --profile wazuh --profile victim --profile kali down -v
+aptl lab info
+aptl container list
 ```
 
-Lifecycle mutations are single-owner per project. If a start, stop, clean boot,
-policy tick, or container kill is already running, another mutating command
-fails with `lifecycle-owner-busy` and does not remove resources from under the
-active operation. Wait for the first command to finish, or stop it and then run
-`aptl lab stop` to reset any abandoned range.
+`aptl lab status` reports current running and container state. The structured
+`aptl lab start` result remains the readiness authority. `aptl lab info` prints
+URLs, remapped host ports, usernames, and credential locations for the realized
+scenario. `aptl container list` reports project-owned containers. These results
+replace fixed port, service, and credential tables.
 
-Normal `aptl lab start` also refuses a free-lock project that still has labelled
-containers (including created or exited containers) or networks. Run `aptl lab
-stop` for a volume-preserving reset, or `aptl lab start --clean` for the
-explicit volume-destroying reset. Detection failures are fail-closed; repair
-the local or SSH Docker connection instead of assuming an empty range.
+Inspect one realized service with:
 
-`aptl lab start` remains in the foreground until Compose health and authenticated
-service readiness finish. Containers showing `Up` is not a successful lab
-realization and does not make it safe to start another lifecycle operation.
-
-## Lifecycle Policy
-
-The lab can auto-teardown on a TTL or idle timeout and provision on a schedule
-(DEP-003). Add a `lifecycle_policy` block to `aptl.json`:
-
-```json
-{
-  "lab": { "name": "aptl" },
-  "lifecycle_policy": {
-    "ttl_minutes": 240,
-    "idle_timeout_minutes": 60,
-    "teardown_remove_volumes": true,
-    "schedule": [
-      { "at": "08:00", "days": ["mon", "tue", "wed", "thu", "fri"], "scenario": null }
-    ]
-  }
-}
+```shell
+aptl container logs <container-name>
+aptl container shell <container-name>
 ```
 
-- `ttl_minutes` tears the range down once it has run that long.
-- `idle_timeout_minutes` tears the range down after no run capture activity for
-  that long.
-- `teardown_remove_volumes` controls whether an auto-teardown removes Compose
-  volumes (a full clean teardown).
-- `schedule` provisions a clean range at each `HH:MM` UTC time. `days` is an
-  optional weekday filter (empty means every day); `scenario` is an optional
-  acquired-pack selector.
+Use a name returned by `aptl container list`. A container in Docker's `running`
+state does not by itself prove that the scenario is ready.
 
-Enforcement is a single idempotent tick that you schedule yourself:
+## Manage The Lifecycle
 
-```bash
-# One evaluate-and-act tick (wire to a systemd timer or cron)
-aptl lab enforce
-
-# Or run a single-owner loop on a host without a timer
-aptl lab monitor --interval 60
-
-# Inspect the resolved policy and current lifecycle state
-aptl lab policy show
+```shell
+aptl lab start --scenario <id>  # validate, realize, start, and await readiness
+aptl lab status                 # inspect lifecycle and realized state
+aptl lab info                   # discover current access information
+aptl lab stop                   # stop while preserving volumes
+aptl lab stop -v                # confirm and destroy project volumes
+aptl lab start --clean --scenario <id>  # confirm a clean boot
 ```
 
-The tick uses the same per-project lock as manual/API start, stop, clean boot,
-and container kill, so policy automation cannot interleave with another lab
-mutation. See
+Lifecycle mutations are single-owner per project. If another start, stop,
+clean boot, policy tick, or container kill owns the project, a second mutation
+fails without removing resources under the active operation. Wait for the
+owner to finish, or stop it and use `aptl lab stop` to reconcile the project.
+
+`aptl kill` is an emergency process-control surface. It is not normal teardown,
+a data reset, or a replacement for the structured startup result.
+
+## Automatic Lifecycle Policy
+
+APTL can enforce project time-to-live, idle-timeout, and scheduled provisioning
+rules declared in the validated `lifecycle_policy` configuration. Inspect the
+installed command contract before enabling automation:
+
+```shell
+aptl lab policy --help
+aptl lab enforce --help
+aptl lab monitor --help
+```
+
+Policy actions use the same per-project lifecycle lock as manual and API
+operations, so they cannot interleave with another mutation. See
 [ADR-045](adrs/adr-045-ephemeral-lifecycle-policy-enforcement.md) for the
-design.
+design and failure model.
 
-## Troubleshooting
+## Recovery
 
-### Port Conflicts
+Use the project-scoped sequence first:
 
-```bash
-netstat -tlnp | grep -E "(443|2027|8443|9000|9001|9200|55000)"
-sudo lsof -t -i:443 | xargs kill
+```shell
+aptl lab stop
+aptl lab start --scenario <id>
 ```
 
-### Certificate Issues
+Use `aptl lab stop -v` only when you intend to destroy the project's
+volume-backed data. Do not use daemon-wide prune commands as routine recovery;
+they can remove images, caches, networks, and volumes owned by unrelated
+projects.
 
-```bash
-rm -rf config/wazuh_indexer_ssl_certs
-aptl lab start
-```
-
-### Container Build Failures
-
-```bash
-docker builder prune -f
-docker compose build --no-cache
-```
-
-### Recovery
-
-```bash
-docker compose down
-docker system prune -f
-aptl lab start
-```
+Continue with the [troubleshooting guide](troubleshooting/index.md) for
+component diagnostics and platform-specific failures.

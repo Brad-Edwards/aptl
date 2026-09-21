@@ -1,81 +1,64 @@
 # Installation
 
-## Python CLI (Recommended)
+The supported first-time path installs the released package in an isolated
+pipx environment. Check the [prerequisites](prerequisites.md) first.
 
-```bash
+## Install The Released Package
+
+Install pipx through your operating system or the
+[official pipx instructions](https://pipx.pypa.io/stable/installation/), then
+install APTL:
+
+```shell
 pipx install aptl-labs
+aptl --version
+```
+
+`aptl-labs` requires Python 3.11 or newer. On macOS, if pipx is bound to the
+Command Line Tools Python 3.9, ask pipx to fetch a supported interpreter:
+
+```shell
+pipx install --python 3.12 --fetch-missing-python aptl-labs
+```
+
+pipx keeps the CLI outside the system Python environment, avoiding the PEP 668
+system-`pip` restriction on current Debian, Ubuntu, and WSL2 hosts.
+
+## Create A Lab Project
+
+Materialize the released lab assets into a new project directory:
+
+```shell
 aptl lab init my-lab
 cd my-lab
-aptl lab start
 ```
 
-The published wheel bundles the APTL runtime assets, so a PyPI install alone can
-run a lab, no clone required. `aptl lab init <dir>` copies the Compose topology,
-config templates, and generic container build contexts out of the installed
-package into `<dir>`, which becomes your lab project directory. Scenario content
-is supplied separately by the installed `raes-env-packs` distribution and is
-staged with verified identity when selected.
-[pipx](https://pipx.pypa.io/) installs the CLI into its own virtualenv, so the
-[PEP 668](https://peps.python.org/pep-0668/) system-`pip` block on modern
-Debian/Ubuntu/WSL2 hosts never applies (`sudo apt install pipx` to get it).
+The wheel includes the Compose topology, configuration templates, container
+build contexts, MCP sources, and web sources. The installed environment-pack
+distribution supplies released scenarios. You do not need to clone the source
+repository.
 
-To develop against the source tree, clone the repo and install it editable in a
-virtualenv (needs `python3-venv` on Debian/Ubuntu; see
-[Prerequisites](prerequisites.md)). The checkout is itself the project
-directory, so no `lab init` is needed:
+`aptl lab init` creates the durable project files. The first `aptl lab start`
+creates private runtime state such as `.env`, `.mcp.json`, keys, and `.aptl/`
+artifacts. Do not publish or attach those files to support reports.
 
-```bash
-git clone https://github.com/Brad-Edwards/aptl.git
-cd aptl
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-aptl lab start
+Continue with [Run your first lab](quick-start.md).
+
+## Upgrade
+
+Upgrade the isolated installation, then initialize a new project when you want
+the complete asset set from the new release:
+
+```shell
+pipx upgrade aptl-labs
+aptl lab init my-new-lab
 ```
 
-`aptl lab start` creates `.env` automatically when it is missing and replaces
-template placeholder values with lab credentials that match the running
-containers. The startup output points to `.env` for passwords and tokens. Run
-`aptl lab info` later to reprint the same access summary.
+Do not copy generated credentials or state between project directories.
 
-The CLI handles SSH keys, SSL certificates, system requirements, image pulling, container startup, service readiness checks, and connection info generation.
+## Source Install For Contributors
 
-## Manual Steps
-
-If you need to run steps individually:
-
-1. Generate SSH keys: `./scripts/generate-ssh-keys.sh`
-2. Set vm.max_map_count if using a native Linux Docker Engine:
-   `sudo sysctl -w vm.max_map_count=262144`
-3. Start the lab: `aptl lab start`. The CLI generates SSL certificates in an
-   isolated temporary Compose project and removes that project before it
-   creates the lab networks.
-
-> Step 3 must be `aptl lab start`, not a raw `docker compose up`: `aptl lab
-> start` also renders the credentialized Wazuh config from the checked-in
-> templates into the gitignored `.aptl/config/` tree (ADR-028), which the
-> manager and dashboard containers bind-mount. There is no standalone command
-> for that render, so `docker compose --profile wazuh ... up` on a fresh
-> checkout fails at the `.aptl/config/...` bind mounts. (Once a lab has been
-> started, raw `docker compose up -d` reuses the already-rendered config.)
-
-## MCP Integration
-
-Build MCP servers for AI agent control:
-```bash
-cd mcp/mcp-red && npm install && npm run build && cd ../..
-cd mcp/mcp-wazuh && npm install && npm run build && cd ../..
-```
-
-See [MCP Integration](../components/mcp-integration.md) for configuration details.
-
-## Verification
-
-Access lab components:
-
-- Wazuh Dashboard: <https://localhost:443> (`admin` / your `INDEXER_PASSWORD` from `.env`)
-- Access summary: `aptl lab info`
-- Victim shell: `aptl container shell aptl-victim`
-- Kali shell: `aptl container shell aptl-kali`
-- Reverse engineering SSH, only when the optional reverse service is enabled
-  and appears in `aptl lab status`:
-  `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`
+A source checkout is a development path, not a prerequisite for operating the
+released lab. Contributors should follow the repository's
+[development setup](https://github.com/Brad-Edwards/aptl/blob/dev/CONTRIBUTING.md#development-setup),
+which creates a virtual environment and uses an editable install.

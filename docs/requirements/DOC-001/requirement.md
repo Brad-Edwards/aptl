@@ -25,6 +25,7 @@ APTL's documentation has drifted: the mkdocs nav references 12 pages that do not
 - DOCUMENTS → ADR `ADR-038` (Documentation Style Lint and Published Docs Site)
 - IMPLEMENTS → CONFIG `.vale.ini` (Vale prose-lint configuration (Google + AptlProject styles))
 - IMPLEMENTS → CONFIG `mkdocs.yml` (mkdocs site configuration (nav reconciled, strict-buildable))
+- TESTS → TEST `tests/test_docs_user_journey.py` (task navigation and live CLI, MCP, and web reference projection)
 - IMPLEMENTS → CONFIG `.github/workflows/docs-deploy.yml` (GitHub Pages docs deploy workflow)
 - IMPLEMENTS → PULL_REQUEST `408` (Docs overhaul: Vale lint gate, mkdocs nav repair, GitHub Pages, accuracy sweep)
 - IMPLEMENTS → PULL_REQUEST `410` (Guard docs-deploy jobs to main ref only)

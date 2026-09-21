@@ -1,152 +1,108 @@
 # Troubleshooting
 
+Start with APTL's project-aware diagnostics. They preserve the selected
+backend, realized scenario, runtime port mapping, and redaction boundaries.
+
 ## Quick Checks
 
-```bash
-# Container status (works against local or SSH-remote labs)
+```shell
+aptl lab status
+aptl lab info
 aptl container list
-
-# Service logs
-aptl container logs aptl-wazuh-manager
-aptl container logs aptl-victim
-aptl container logs aptl-kali
-
-# Network connectivity (raw docker exec is fine for one-off ping/etc.)
-docker exec aptl-kali ping 172.20.2.20
-docker exec aptl-victim ping 172.20.2.30
+aptl config validate
 ```
 
-## Common Issues
+Read the final `aptl lab start` result before investigating an individual
+container. It distinguishes ready, usable degradation, unusable degradation,
+and failure, and names the component and safe operator action when available.
 
-### Containers won't start
+Inspect logs only for a container returned by `aptl container list`:
 
-**Check logs:**
-```bash
+```shell
 aptl container logs <container-name>
-# e.g. aptl container logs aptl-wazuh-manager
 ```
 
-**Port conflicts:**
-```bash
-netstat -tlnp | grep -E "(443|2022|2023|9200|55000)"
-sudo systemctl stop apache2  # if port 443 conflict
+Do not attach `.env`, `.mcp.json`, private keys, authentication headers, or
+unredacted generated configuration to a support report.
+
+## Common First-Run Problems
+
+### A service URL does not open
+
+Run `aptl lab info` again and use the reported URL. Host ports can be remapped
+when a default is already occupied, and the selected scenario can omit a
+service entirely. If the service exists, compare `aptl lab status` with its
+bounded logs:
+
+```shell
+aptl lab status
+aptl container logs <container-name>
 ```
 
-**Memory issues:**
-```bash
-free -h
-# Increase Docker memory in Docker Desktop settings
+Use the generated trust root and service hostname reported for the project. Do
+not bypass a certificate warning, use a client option that disables TLS
+verification, or substitute a fixed port from an older document.
+
+### Startup reports insufficient resources
+
+The acquired TechVault stack can require more than 20GB of RAM, while smaller
+curated scenarios use less. Increase the Docker engine's memory allocation or
+choose another identity from `aptl lab scenarios`.
+
+On a native Linux Docker Engine, startup also checks the OpenSearch
+`vm.max_map_count` requirement. Apply the exact remediation printed by the
+failed preflight. Docker Desktop and WSL2 manage the value inside their Linux
+VM and do not use the host setting.
+
+### A container shell fails
+
+Container names depend on scenario realization. Confirm the target first:
+
+```shell
+aptl container list
+aptl container shell <container-name>
 ```
 
-**vm.max_map_count (native Linux Docker Engine):**
-```bash
-sudo sysctl -w vm.max_map_count=262144
+Use `--shell /bin/sh` only when the image does not provide the default shell.
+Host SSH is available only for a service that the scenario realizes and that
+`aptl lab info` reports.
+
+### MCP servers are unavailable
+
+Confirm that startup completed the MCP phase and that the target exists in the
+realized scenario. Start the client from the project root so it reads the
+generated `.mcp.json`. Then inspect the client's connected-server and tool
+list. A built server is not necessarily enabled for the selected scenario.
+
+Contributors can rebuild all tracked artifacts with
+`./mcp/build-all-mcps.sh`; released-package operators should let
+`aptl lab start` own the build and configuration. See the
+[MCP reference](../reference/mcp.md).
+
+## Project-Scoped Recovery
+
+Retry a normal lifecycle through the control plane:
+
+```shell
+aptl lab stop
+aptl lab start --scenario <id>
 ```
 
-Docker Desktop on macOS, Windows, and WSL2 manages this setting inside the
-Linux VM. On those platforms, `aptl lab start` skips the host sysctl check.
+For a confirmed full reset of this project's volume-backed data:
 
-### SSH access fails
-
-**Key permissions on Linux/macOS:**
-```bash
-chmod 600 ~/.ssh/aptl_lab_key
+```shell
+aptl lab stop -v
+aptl lab start --scenario <id>
 ```
 
-On Windows, `aptl lab start` hardens the key with NTFS ACLs. If OpenSSH still
-rejects it, regenerate the key by moving `%USERPROFILE%\.ssh\aptl_lab_key` and
-running `aptl lab start` again.
+The destructive stop asks for confirmation. It removes project volumes but
+does not prune the Docker daemon. Do not use `docker system prune` as APTL
+recovery: it can remove resources belonging to other projects.
 
-**Test SSH service:**
-```bash
-docker exec aptl-victim systemctl status sshd
-docker exec aptl-kali systemctl status ssh
-```
-
-**Direct container access:**
-```bash
-aptl container shell aptl-victim
-aptl container shell aptl-kali
-# Or, against an alpine-based image: aptl container shell <name> --shell /bin/sh
-```
-
-### Wazuh Dashboard not accessible
-
-**Check container:**
-```bash
-aptl container logs aptl-wazuh-dashboard
-```
-
-**Test port:**
-```bash
-curl -k https://localhost:443
-```
-
-**Regenerate certificates:**
-```bash
-rm -rf config/wazuh_indexer_ssl_certs
-aptl lab start
-```
-
-### No logs in Wazuh
-
-**Test log generation:**
-```bash
-docker exec aptl-victim logger "Test entry $(date)"
-```
-
-**Check log forwarding:**
-```bash
-docker exec aptl-victim cat /etc/rsyslog.d/90-forward.conf
-docker exec aptl-victim systemctl status rsyslog
-```
-
-**Test syslog connectivity:**
-```bash
-docker exec aptl-victim telnet 172.20.2.30 514
-```
-
-### MCP issues
-
-**Build MCP servers:**
-```bash
-cd mcp/mcp-red && npm install && npm run build && cd ../..
-cd mcp/mcp-wazuh && npm install && npm run build && cd ../..
-```
-
-**Check the kali container is reachable:**
-```bash
-docker exec aptl-kali echo test
-```
-
-## Recovery
-
-### Complete reset
-```bash
-docker compose down -v
-docker system prune -f
-aptl lab start
-```
-
-### Service reset
-```bash
-docker compose restart [service_name]
-# or
-docker compose stop [service_name]
-docker compose rm -f [service_name]
-docker compose up -d [service_name]
-```
-
-### Clean rebuild
-```bash
-docker compose down
-docker system prune -f
-aptl lab start
-```
-
-`aptl lab start` re-renders the credentialized Wazuh config under `.aptl/config/`
-and brings up the profiles from `aptl.json`—a bare `docker compose up` would
-skip the credential render and the profile selection.
+Do not replace recovery with raw `docker compose up`. `aptl lab start` owns
+scenario realization, generated configuration, credentials, port selection,
+readiness, MCP setup, and run recording. `aptl kill` is reserved for emergency
+process or container termination; it is not normal teardown.
 
 ## Platform Issues
 
@@ -158,11 +114,11 @@ sudo usermod -aG docker $USER
 ```
 
 ### macOS
-```bash
-# Check AirPlay on port 443
-sudo lsof -i :443
-# Disable in System Preferences → Sharing
-```
+
+Docker Desktop owns the Linux VM and its kernel settings. If another macOS
+service occupies a requested host port, let APTL remap it and use the URL from
+`aptl lab info`. Change or disable the other service only when you explicitly
+need to pin that port.
 
 ### A container is `Up` but reports `unhealthy`, blocking `aptl lab start`
 

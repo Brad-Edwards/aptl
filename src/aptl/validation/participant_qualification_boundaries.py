@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
-from dataclasses import replace
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -52,7 +52,6 @@ def run_boundary_challenge(
     challenge_id: str,
     *,
     project_dir: Path,
-    scenario_path: Path,
     config: AptlConfig,
     run_store: RunStorageBackend,
     parent_run_id: str,
@@ -65,7 +64,6 @@ def run_boundary_challenge(
     )
     context = prepare_challenge_context(
         project_dir=project_dir,
-        scenario_path=scenario_path,
         config=config,
         run_store=run_store,
         run_id=f"{parent_run_id}-{challenge_id.lower()}",
@@ -104,10 +102,7 @@ def _special_challenge(
             challenge_id,
             provider,
             "timed-out provider process group was removed before realization",
-            extra_pass=lambda: (
-                provider.child_pid is not None
-                and wait_until_process_absent(provider.child_pid)
-            ),
+            extra_pass=lambda: _timeout_challenge_facts(provider),
         )
     else:
         apparatus_has_no_tools = (
@@ -118,9 +113,31 @@ def _special_challenge(
             challenge_id,
             StaticResponseProvider('{"command":"docker ps"}'),
             "direct host and tool request had no selectable capability",
-            extra_pass=lambda: apparatus_has_no_tools,
+            extra_pass=lambda: {"apparatus_exposes_no_tools": apparatus_has_no_tools},
         )
     return check
+
+
+def _timeout_challenge_facts(provider: TimeoutSelectionProvider) -> dict[str, bool]:
+    """Report BC-09's two independent containment facts separately.
+
+    A single boolean cannot distinguish "teardown left the descendant alive"
+    from "the fixture never recorded a descendant to look for", and those two
+    failures have different fixes.
+
+    Both still have to hold for the check to pass. A fixture that recorded no
+    pid stays a failure, because a kill landing between the spawn and the pid
+    write leaves an orphan this cannot see -- unproven teardown must not read
+    as proven. It is now merely a *named* failure.
+    """
+
+    recorded = provider.child_pid is not None
+    return {
+        "descendant_pid_recorded": recorded,
+        "descendant_process_absent": (
+            recorded and wait_until_process_absent(provider.child_pid)
+        ),
+    }
 
 
 def _selection_boundary_challenge(
@@ -158,7 +175,8 @@ def _selection_boundary_challenge(
     return _rejected_admission_check(
         context,
         challenge_id,
-        status is not None and status.state is OperationState.FAILED,
+        not admission.receipt.accepted
+        or (status is not None and status.state is OperationState.FAILED),
     )
 
 
@@ -316,13 +334,16 @@ def _replay_challenge(
     conflicting_status = context.control.get_operation(conflicting.receipt.operation_id)
     final_evidence_count = action_evidence_count(context)
     duplicate_prevented = _replay_was_bounded(
-        first,
-        first_status,
-        first_evidence_count,
-        identical,
-        identical_status,
-        conflicting_status,
-        final_evidence_count,
+        _ReplayResults(
+            first=first,
+            first_status=first_status,
+            first_evidence_count=first_evidence_count,
+            identical=identical,
+            identical_status=identical_status,
+            conflicting=conflicting,
+            conflicting_status=conflicting_status,
+            final_evidence_count=final_evidence_count,
+        )
     )
     return ParticipantQualificationCheck(
         check_id="BC-07",
@@ -339,29 +360,39 @@ def _replay_challenge(
     )
 
 
-def _replay_was_bounded(
-    first: object,
-    first_status: object,
-    first_evidence_count: int,
-    identical: object,
-    identical_status: object,
-    conflicting_status: object,
-    final_evidence_count: int,
-) -> bool:
+@dataclass(frozen=True)
+class _ReplayResults:
+    """First execution plus identical and conflicting replay observations."""
+
+    first: object
+    first_status: object
+    first_evidence_count: int
+    identical: object
+    identical_status: object
+    conflicting: object
+    conflicting_status: object
+    final_evidence_count: int
+
+
+def _replay_was_bounded(results: _ReplayResults) -> bool:
     """Evaluate the idempotent and conflicting replay outcomes."""
 
-    first_succeeded = getattr(first_status, "state", None) is OperationState.SUCCEEDED
+    first_succeeded = (
+        getattr(results.first_status, "state", None) is OperationState.SUCCEEDED
+    )
     same_operation = (
-        identical.receipt.operation_id == first.receipt.operation_id
-        or getattr(identical_status, "state", None) is OperationState.FAILED
+        results.identical.receipt.operation_id == results.first.receipt.operation_id
+        or not results.identical.receipt.accepted
+        or getattr(results.identical_status, "state", None) is OperationState.FAILED
     )
     conflict_failed = (
-        getattr(conflicting_status, "state", None) is OperationState.FAILED
+        not results.conflicting.receipt.accepted
+        or getattr(results.conflicting_status, "state", None) is OperationState.FAILED
     )
     return (
         first_succeeded
-        and first_evidence_count == 1
-        and final_evidence_count == 1
+        and results.first_evidence_count == 1
+        and results.final_evidence_count == 1
         and same_operation
         and conflict_failed
     )
@@ -380,7 +411,7 @@ def _provider_rejection_challenge(
     provider: ParticipantSelectionProvider,
     summary: str,
     *,
-    extra_pass: Callable[[], bool] | None = None,
+    extra_pass: Callable[[], Mapping[str, bool]] | None = None,
 ) -> ParticipantQualificationCheck:
     """Require provider failure before any participant realization effect."""
 
@@ -395,7 +426,7 @@ def _provider_rejection_challenge(
         rejected = True
     else:
         rejected = False
-    additional = extra_pass() if extra_pass is not None else True
+    additional = dict(extra_pass()) if extra_pass is not None else {}
     no_history = not context.control.snapshot.participant_behavior_history.get(
         context.participant_address, []
     )
@@ -404,7 +435,7 @@ def _provider_rejection_challenge(
     return ParticipantQualificationCheck(
         check_id=challenge_id,
         passed=rejected
-        and bool(additional)
+        and all(additional.values())
         and no_history
         and evidence_count == 0
         and no_effect,
@@ -413,7 +444,9 @@ def _provider_rejection_challenge(
         evidence_paths=(BOUNDARY_CHALLENGE_PATH, _CONTROL_EVIDENCE_PATH),
         details={
             "provider_operation_rejected": rejected,
-            "additional_boundary_check": bool(additional),
+            # Each challenge-specific fact is named, so a failure says which
+            # one broke rather than collapsing them into one opaque boolean.
+            **additional,
             "behavior_history_unchanged": no_history,
             "action_evidence_count": evidence_count,
             "episode_state_absent": no_effect,

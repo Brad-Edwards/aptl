@@ -25,7 +25,7 @@ def api_client(tmp_path):
         app.dependency_overrides.clear()
 
 
-def test_list_reports_validated_acquired_pack_identity(api_client):
+def test_list_reports_validated_acquired_pack_identity(api_client, tmp_path):
     response = api_client.get("/api/scenarios")
 
     assert response.status_code == 200
@@ -35,16 +35,17 @@ def test_list_reports_validated_acquired_pack_identity(api_client):
     assert body[0]["pack"] == {
         "id": "techvault",
         "version": "0.1.0",
-        "set_digest": "sha256:c532775575d99438f4b4890d49a4fdb7354921f0405afdaa9f370ea4fe3f5a20",
+        "set_digest": "sha256:db98a9daa62a092a0c6b001217027d7f4ad489889e95d01050e77f148e8ef29b",
         "maturity": "built",
     }
     assert body[0]["validation"]["valid"] is True
     assert body[0]["required_containers"]
     assert ".aptl/staged-packs" not in response.text
     assert ".sdl.yaml" not in response.text
+    assert not list(tmp_path.rglob("pack.yaml"))
 
 
-def test_detail_projects_same_validated_identity(api_client):
+def test_detail_projects_same_validated_identity(api_client, tmp_path):
     response = api_client.get("/api/scenarios/techvault")
 
     assert response.status_code == 200
@@ -55,6 +56,7 @@ def test_detail_projects_same_validated_identity(api_client):
     assert body["pack"]["maturity"] == "built"
     assert body["blocks"][0]["type"] == "narrative"
     assert ".aptl/staged-packs" not in response.text
+    assert not list(tmp_path.rglob("pack.yaml"))
 
 
 def test_detail_unknown_id_returns_404(api_client):

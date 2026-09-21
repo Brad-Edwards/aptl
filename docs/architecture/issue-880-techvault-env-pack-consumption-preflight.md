@@ -1,305 +1,244 @@
 # Issue #880 TechVault Env-Pack Consumption Preflight
 
-This note reconciles issue #880 with the repository state on 2026-09-05. The
-physical TechVault pack already exists in `OpenRAE/env-packs/packs/techvault`;
-this issue is now APTL cleanup, uniform acquired-pack consumption, and parity
-evidence. It is architecture guidance, not an implementation plan. It does not
-choose a future pack repository or authorize recreating or moving the pack.
+Reconciled against the current working tree on 2026-09-21. The supplied issue is
+the contract; there is no Ground Control requirement. This is boundary guidance,
+not an implementation plan or completion claim. TechVault already belongs in
+`OpenRAE/env-packs`; do not move it again.
 
-No new ADR is needed. The accepted
-[pack/backend interaction seam](../adrs/adr-053-pack-backend-deployment-serving-interaction-seam.md)
-and the existing
-[bundle-root](issue-874-scenario-bundle-realization-roots-preflight.md),
-[content-declaration](issue-875-scenario-content-declaration-preflight.md), and
-[fresh-start](issue-951-fresh-env-pack-start-preflight.md) boundaries already
-own the mechanisms. Proposed ADR-054 through ADR-058 define the broader LilRAE
-ownership and qualification direction without changing this issue into a
-migration project.
+No new ADR is needed. Reuse accepted
+[ADR-053](../adrs/adr-053-pack-backend-deployment-serving-interaction-seam.md),
+[ADR-059](../adrs/adr-059-canonical-techvault-delivery-and-host-mcp-access.md),
+and the [bundle-root](issue-874-scenario-bundle-realization-roots-preflight.md),
+[content](issue-875-scenario-content-declaration-preflight.md), and
+[fresh-start](issue-951-fresh-env-pack-start-preflight.md) boundaries. This note
+replaces its older baseline and blanket prohibition on APTL-owned fixtures.
+Related preflights [#970](issue-970-generic-lab-lifecycle-preflight.md),
+[#980](issue-980-pack-adapter-install-seam-preflight.md), and
+[#974](issue-974-shuffle-worker-docker-images-preflight.md) retain their broader
+ownership; proposed work is not evidence of an implemented guarantee.
 
-## Reconciled Baseline
+## Current Baseline And Residual Ownership Inventory
 
-The locked `raes-env-packs==4.0.2` distribution currently yields this validated
-identity through `env_pack_bundle()`:
+`pyproject.toml` and hashed runtime requirements pin `raes-env-packs==6.1.0`.
+`aptl_techvault/runtime_parameters.py` and `tests/test_env_pack_bundle.py` bind
+`techvault`, version `0.1.0`, to set digest
+`sha256:db98a9daa62a092a0c6b001217027d7f4ad489889e95d01050e77f148e8ef29b`.
+These are repository pins, not fresh validation or live qualification results.
+Do not carry forward this note's former 4.0.2 identity, maturity or input-closure
+claims as facts about the new release.
 
-| Field | Validated value |
+Several mechanisms already exist: `core/scenario_catalog.py` projects the
+env-packs catalog from a validated bundle; `resolve_scenario_selection()` keeps
+catalog selection on the acquired route; the scenario API uses that projection;
+`raes_repro._scenario_locator()` avoids a transient staged SDL locator; and
+`_asset_manifest.ASSET_ROOTS` excludes `scenarios`. Preserve these incumbents.
+
+This inventory names residual ownership decisions, not a claim that every listed
+file is a duplicate or that matching names prove consumption:
+
+| Surface / current evidence | Owner and guardrail |
 | --- | --- |
-| Pack id | `techvault` |
-| Pack version | `0.1.0` |
-| Associated-artifact set digest | `sha256:c532775575d99438f4b4890d49a4fdb7354921f0405afdaa9f370ea4fe3f5a20` |
-| SDL entry point | `sdl/techvault.sdl.yaml` |
-| Declared maturity | `built`, not `golden` |
+| `scenarios/catalog.json`, TechVault SDL variants, `scenarios/archive/`, `participant-profiles/guided-purple-v1/` | APTL may retain explicit test/development fixtures and historical material. Name their consumer and purpose; exclude scenario fixtures from normal selection and default delivery. ADR-059 distinguishes the guided fixture from full TechVault. Fixtures must not satisfy missing acquired artifacts or serve as clean-package parity evidence. |
+| Removed `config/wazuh_cluster/suricata_rules.xml` | The file is absent at final inspection and forbidden by the asset test. `wazuh_manager.conf` still includes that rule path. Verify that the admitted pack supplies the runtime rule; neither a dangling include nor a checkout fallback is acceptable. |
+| `containers/mailserver/setup.sh`, mail domain/environment in `docker-compose.yml`, `containers/windows-victim/join-domain.ps1` | Remaining authored TechVault accounts/domain defaults need an explicit fixture/legacy-integration owner or removal from active distribution. Classify by runtime reachability, not just the word TechVault. |
+| `scripts/{seed-prime,seed-shuffle,cortex-apikey,thehive-apikey,provision-range}.sh`, `config/{cortex,thehive}/` | Distinguish scenario seeds/configuration from backend/API integration. The installed startup provider selects project-relative seed/build scripts and image-specific config aliases. Retention requires an explicit input/output and mutation contract; replacing admitted pack content is not an integration exception. Workshop fixups remain historical/manual aids, never ordinary-start prerequisites. |
+| `containers/generic-systemd-node22-base/Dockerfile` | The backend build now verifies the exact acquired pack and both source artifacts through `aptl_techvault.build_cache`, derives dependency-only manifests with lifecycle hooks omitted, and retains the npm cache and identity receipt. Source and staging inputs are removed from the image. Runtime content still uses admitted artifacts. |
+| `src/aptl_techvault/` and `pyproject.toml` entry points | Existing APTL-owned integrations cover serving, startup, runtime parameters, planning compatibility, capture and verification. Their source may remain APTL-owned. This does not amend ADR-053’s separate-distribution requirement: the current bundled wheel differs from that decision. Preserve that packaging constraint in its own reconciliation; #880 neither claims a core-only artifact nor authorizes a packaging exception. Reuse exact compatibility and host-observed distribution provenance. |
+| `core/lab.py` source-kind branches | `_load_selected_start_environment`, `_selected_start_steps`, `_selected_mcp_build_script`, `_mcp_startup_policy` and native ingress distinguish project-tree from env-pack behavior. Provenance must not authorize product preparation or skip declared requirements. Preserve explicit development compatibility without a privileged bundled-TechVault route. |
+| Generated-artifact profiles, generic substrate, capture apparatus, MCP servers and backend materializers | APTL-owned mechanisms may remain, including exact named profile integrations selected through admitted typed requirements. Identical historical core/MCP source inside a pack archive does not transfer ownership of the maintained implementation. |
+| `appliance/{inputs,input_profile,input_images,offline,payload_content}.py`, first boot and build/qualification scripts | Delivery consumes the same bundle, plus APTL-owned offline closure and policy. No appliance-only SDL copy, catalog alias, weaker validation or late substitution. Dependency/image/cache closure is distinct from pack identity. |
 
-That release contains the full TechVault scenario only. The four curated
-reduced SDLs and bounded-participant SDL in APTL's `scenarios/catalog.json` are
-not entries in this acquired pack. They must not be synthesized from the full
-pack, represented as acquired content, or retained as shadow copies merely to
-keep current catalog ids working. Their separate pack/release and qualification
-issues own their future.
+For each retained integration or fixture, its guidance/test must identify owner,
+consumer, input authority and mutation/readback boundary. Hash comparison is
+supporting evidence, not the ownership decision. Include renamed, generated and
+archived copies in the inventory.
 
-The current pack also declares APTL-contained component materializations with
-empty `locked_input_ids`. Its exact pack inventory binds the pack bytes; it does
-not bind every APTL build-context input or establish golden-range proof. Closure
-evidence must state that limitation unless a newly released, newly identified
-pack closes it. A changed release gets a new exact identity and compatible
-provider/evidence; do not edit or alias the identity locally.
+`tests/test_assets.py::test_real_repo_ships_no_techvault_scenario_content_copies`
+checks the selected distribution and named forbidden duplicates. Preserve that
+boundary rather than requiring all `scenarios/` or `participant-profiles/` files
+to disappear. Necessary fixtures may remain; their presence must not authorize
+runtime fallback. Consumption and distribution, not blanket absence, prove ownership.
+`_asset_manifest.py` remains the single inventory for `hatch_build.py` and
+`assets.materialize()`; no parallel packaging denylist. Inspect both importable
+packages and the bundled `aptl/_labdata/src` copy.
 
-## Architecture Decisions And Guardrails
+## Architecture Decisions
 
-### One catalog selection must enter one acquisition path
+### One verified bundle, one admitted execution
 
-Default selection already uses the intended boundary:
+Nearby/bundled and separately acquired copies enter the same boundary:
 
 `ScenarioSourceConfig -> resolve_scenario_bundle() -> env_pack_bundle() -> ScenarioBundle`
 
-`--scenario <catalog-id>`, `aptl lab scenarios`, and the scenario list/detail
-API currently bypass it by reading `scenarios/catalog.json` and collapsing a
-catalog id to an APTL-relative `Path`. That path is then deliberately classified
-as `project-tree`, even while the configured default is `env-pack`. This is the
-privileged second ingestion path issue #880 must eliminate.
+Catalog, CLI, API, static/live gates, participant delivery and start consume it.
+Explicit contained project-tree development input remains distinct; it is never
+an implicit fallback after pack/provider failure.
 
-A catalog entry is an operator-facing selector and presentation projection; it
-is not a second content package or a host locator. A TechVault selection must
-select the existing `ScenarioSourceConfig` identity and then return the one
-validated `ScenarioBundle`. The CLI start, CLI list, API list/detail, static
-validation, live validation, and normal lab start must parse/project the SDL
-from that acquired bundle. An explicit `--scenario-path` remains a contained
-project-tree development escape hatch and must stay visibly distinct from an
-acquired pack selection.
+env-packs owns pack format, inventory, digests and catalog semantics. RAES owns
+SDL parsing, instantiation, import locks, compilation and planning. APTL owns
+acquisition and realization. Reuse `validate_pack()`,
+`validate_pack_content_manifest()` and `resolve_pack_artifact()`; do not parse
+`pack.yaml` independently, create a mirror schema, or replace `PackIdentity`
+with an SDL hash. Installed-distribution trust is not publisher authenticity.
+Remote acquisition and new trust policy are outside #880.
 
-This supersedes only issue #951's transitional statement that a *catalog id* is
-always a project-tree bundle. Its one-resolution/one-admission, generated-model,
-secret, failure, and clean-install rules remain in force. Do not add a union of
-APTL pack metadata fields to `ScenarioCatalogEntry`, parse `pack.yaml` locally,
-or create a second pack/catalog schema. Reuse env-packs' public validation and
-catalog/acquisition contracts and keep APTL's current catalog metadata models
-only for backend/UI facts RAES and env-packs do not own.
+Carry the same bundle, instantiated scenario, `AdmittedScenarioStart`, execution
+plan and cached `AptlRealization` through apply, retry, readback and run evidence.
+Runtime flags belong to the existing exact-identity runtime parameter provider
+**before** admission. Do not regenerate them on retry, edit staged SDL or patch
+admitted content/config/image inputs to make boot pass. Keep bundle input,
+operator `project_dir` and backend `realization_root` distinct.
 
-Resolve and admit once per operation. The same `ScenarioBundle`, parsed RAES
-scenario, execution plan, cached `AptlRealization`, and exact pack identity must
-drive projection, pre-mutation decisions, apply, readback, and run evidence.
-Repeated staging paths are transient copies, not distinct identities and not a
-reason to re-plan.
+### Backend integration cannot change scenario authority
 
-### Identity is content identity, never a path or friendly scenario name
+Reuse `ScenarioStartupPlan`, fixed hooks, `PackBackendInteraction`, and the
+existing service/startup policies. Core retains ordering, lifecycle locks,
+timeouts, bounded retry, diagnostics and teardown. Exact providers supply their
+validated contribution; no additional registry or event graph.
 
-`env_pack_bundle()` remains the only current pack ingress. It copies the
-installed source to a fresh isolated tree, applies `validate_pack()` and
-`validate_pack_content_manifest()`, and returns `PackIdentity` on
-`ScenarioBundle`. Every exact content placement continues through
-`resolve_pack_artifact()` and its digest comparison. APTL must not re-read
-`pack.yaml`, derive identity from `techvault`, hash an SDL as a replacement, or
-fall back to `scenarios/` after any failure.
+An image-specific mount alias, generated credential, native log producer or
+readiness probe can realize admitted intent. Preserve declared output/consumer
+identity, sensitivity and native observation obligations. Review
+`aptl_techvault.startup.compose_service_policy()`: certificate aliases and the
+project `config/thehive/application.conf` mount have different ownership claims.
+A contained project path alone does not prove an authorized backend input.
 
-The validated pack id/version/set digest belongs in existing
-`backend_evidence.pack_interaction`. Provider distribution/version, entry point,
-mapping digest, and selected profiles remain separate backend-serving evidence.
-For an acquired bundle, `RunRecordInputs` must not persist the absolute,
-per-invocation staged `sdl_path` as reproducibility identity. Preserve the RAES
-scenario/lock evidence shape, but use a bounded bundle locator/display value and
-the validated pack identity; never persist the staging root.
+Post-start seeding cannot become a second compiler or repair authored bytes
+behind the admission record. Missing required realization is a failure; a soft
+SOC warning cannot hide an unsatisfied admitted demand. Selected-provider reset
+and resource receipts govern cleanup, not broadcasts to every installed provider
+or a fresh default-pack selection.
 
-Content integrity and publisher authenticity are different claims. The current
-package-resource resolver establishes exact content identity under the trust
-of the installed Python distribution. If acquisition is later expanded to an
-archive or remote source, use env-packs' `stage_pack_archive()`,
-`plan_install()`/`apply_install()`, and `verify_pack_release()` policy surface.
-Do not add a URL downloader, signature format, trust store, or authenticity
-claim in this issue.
+## Cross-Cutting Layers And Canonical Incumbents
 
-### Remove content by ownership, not by filename or hash alone
+These are required passages, not assertions that every current call site already
+meets them. Strengthen the existing owner where a gap is found.
 
-The residual inventory has at least four ownership classes:
+| Layer / canonical owner | Required passage |
+| --- | --- |
+| HTTP authority: `api/deps.py`, session/BFF middleware, scenario/lab routers | Keep `verify_token`, Host/Origin/CSRF/session checks and server-owned project selection. No install endpoint, credential-bearing URL or client-selected executable. Participant and operator authority remain distinct. |
+| Config/selector shapes: `core/config.py`, `scenario_catalog.py`, API schemas and web consumers | Preserve strict Pydantic `extra="forbid"`, safe identity/root validation, exclusive selectors and contained explicit paths. Catalog metadata is a presentation projection, not another manifest or arbitrary path union. |
+| Acquisition/filesystem: `scenario_bundle.py`, env-packs gates, `utils/pathsafe.py` | Isolated singly linked staged bytes, bounded inputs, no traversal/special files or symlink escape, exact inventory/member/set verification and digest-bound reads. Direct `env_pack_bundle(source_pack=...)` callers cannot bypass ingress guarantees. |
+| RAES admission: artifact availability, runtime parameters, `raes_planning_compat`, realization and manifest validation | Public RAES shapes, parameters, imports, artifacts, component specifications/locked inputs, topology, capture demands and policy pass before deployment effects. Compatibility remains bounded and pre-admission; it cannot suppress diagnostics or change a persisted plan. |
+| Installed adapters: startup/runtime/capture/planning discovery, `pack_interaction_discovery`, verifier discovery | Preserve API/version/digest/backend checks as applicable, unique selection, validated immutable results, total component mappings and host-observed provenance. Installed Python is trusted code; contract checks are not a sandbox. |
+| Operator secrets: `core/env.py`, credentials, `EnvVars`, startup alias/key validators | Operator `project_dir/.env`, hydration, placeholder rejection, valid names and explicit key allowlists remain canonical. Pack env cannot override secrets. No full environment/config passed to providers or seeds; preserve `DOCKER_TRANSPORT_KEYS` denial and backend transport projection. |
+| Generated env delivery: `raes_stateful_realization`, `deployment/realization.py`, `_compose_stateful_artifact_helpers.py` | Preserve exact output/consumer/delivery shapes and exhaustive generator/profile dispatch. `artifact_environment_bindings()` checks outputs/names; `write_artifact_environment_files()` checks nonempty single-line values and writes private files. Flat env dictionaries or aliases cannot bypass this contract. |
+| Effective deployment: `scenario_service_policy`, `scenario_startup_policy`, `_compose_stateful_model`, Compose model validation | Validate the fully merged model, including aliases, against independently admitted inputs. Preserve crypto/key-pair checks, canonical outputs, least-privilege mounts, ports, capabilities and native readback. Overrides cannot authorize themselves. |
+| OS/backend authority: `DeploymentBackend`, Docker endpoint binding, ownership receipts, SSH and boundary enforcement | Fixed executables/argv, bounded execution/output, validated service/profile selectors, explicit transport and resource ownership. Secrets use existing stdin/private-file/header transports, never argv/logs. No host `shell=True`; guest scripts still require fixed commands and validated input. Preserve TLS/SSH trust and project isolation. |
+| Orchestration children: `raes_runtime_orchestration`, backend realization and #974 contracts | Authored child images/socket intent are separate from host daemon authority. Pack paths/env cannot redirect Docker. A read-only socket is not restricted Docker authority; startup cannot silently change authored image identity. |
+| Errors/observability: `EnvPackError`, `ScenarioError` subclasses, provider errors, RAES `Diagnostic`, `StartupDiagnostic`, `LabResult`, `get_logger`, `redact` | Use existing codes/results and bounded CLI/API messages. Log safe identity/provenance, phase, counts and timings; exclude raw parser/Pydantic input, subprocess output, env, secret prefixes and staging paths. No new exception hierarchy. |
+| Persistence: `raes_repro`, `RunRecordInputs`, `backend_evidence.pack_interaction`, `LocalRunStore`, capture/content stores | Exact pack identity is separate from provider distribution/mapping and image identity. Reuse digests, secure atomic state and durable ownership; omit temporary roots and secret/generated bytes. Integrity, realization success, semantic verification and maturity remain distinct claims. |
+| Distribution: `_asset_manifest`, Hatch, locks, appliance input/archive validation | One asset selection for checkout/wheel, pinned dependencies and verified offline closure. Wheel hash, artifact set digest, provider version and OCI digest answer different questions. No direct resource extraction as another runtime loader. |
 
-| Class | Current examples | Rule |
+### Concrete Security And Reliability Gaps To Catch
+
+- `_stage_and_validate()` uses default link-following `shutil.copytree()` before
+  validation. Checking resulting regular files does not prove source-link
+  containment. Safe acquisition must precede copy; preserve legitimate installer
+  hardlink-to-private-copy handling. Bound copy size/member count before disk
+  exhaustion, not solely in the later validator.
+- Bytecode exclusions accommodate installers; they do not authorize ignoring
+  arbitrary unknown members. Preserve exact inventory validation and digest-bound
+  reads against mutation between admission and use.
+- `_sweep_stale_stagings()` assumes an hour-old tree cannot be active. Long
+  startup/observation and concurrent runs can outlive that assumption. Retain
+  inputs for their consuming operation; age is not ownership or safe cleanup
+  evidence. Reuse lifecycle ownership, not a new pack database.
+- Pack/catalog errors can interpolate raw text or paths; `redact(str(exc))`
+  does not guarantee path removal. The list API logs failures and returns an
+  empty list. That is not successful acquisition; start must still fail closed.
+- Seed helpers contain credential defaults and secret-prefix output. Retained
+  integrations must satisfy the secret/transport contracts above. Python
+  redaction cannot undo exposure through argv, child output or direct invocation.
+- Config aliases need no-follow, ownership-checked access. A successful
+  `.resolve().is_relative_to()` check is not the existing no-follow contract
+  and does not bind the file opened later. Do not weaken `pathsafe` to match it.
+
+## Extensibility And Whole-Repository Boundary
+
+The seam is the existing source selector returning `ScenarioBundle` with exact
+`PackIdentity`, plus backend identity for purpose-specific adapter selection.
+Another release, installed location or offline copy should change data/providers,
+not core enums, config fields, API DTOs or Compose special cases. Future
+acquisition belongs behind the resolver and upstream policy, not a new downloader.
+Build-cache preparation must consume verified artifacts and target runtime
+parameters instead of a TechVault path in a generic Dockerfile; this does not
+require a generic build/plugin framework.
+
+Scope crosses CLI/API/web projection; config/env; staging; RAES/backend admission;
+generated Compose, certificates/content; Docker/SSH/host exposure; startup,
+seed, retry, readiness, reset and teardown; capture/verification/run persistence;
+fixtures/scripts/config/containers; wheel/dependency packaging; participant and
+appliance first boot/offline inputs; and CI/release qualification.
+
+## Regression And Evidence Guardrails
+
+Extend existing catalog/API, `test_env_pack_bundle`, bundle wiring/root,
+`test_pack_content_resolution`, `test_env_pack_realization`, startup adapter,
+runtime-parameter, installed-adapter and asset/wheel tests. Default, catalog and
+API selection must identify the same pack regardless of staging location.
+Exercise missing/corrupt/extra members, link escapes, malformed selectors,
+provider mismatch, concurrent/long-lived staging, safe errors and unchanged
+admitted execution on retry. Local decoys must never satisfy acquired-pack
+failure. Do not freeze today's filenames or prohibit permitted fixtures.
+
+#880 owns uniform-loading regressions and clear ownership. **#870 owns the
+clean-package parity proof**: installed non-editable artifacts, no checkout or
+`PYTHONPATH` assistance, acquired full TechVault through public start, compatible
+packaged adapters, no manual fixups/post-admission substitutions, native
+content/service readback and teardown. Bind evidence to exact pack/provider,
+runtime/dependency/image/platform versions; disclose closure and maturity
+limitations. Static validation, mocks, reduced fixtures and container health
+cannot replace it. No live proof was run in this preflight.
+
+Reuse `.ground-control.yaml`, `.gc/plan-rules.md`, `.github/workflows/checks.yml`
+and `.pre-commit-config.yaml`. Python changes require relevant pytest coverage;
+changed MCP common requires dependent builds/tests. Deployment asset changes
+require clean fresh-machine `aptl lab stop -v && aptl lab start`. Run required
+pre-commit checks; report existing failures/merges without treating them as
+completion or permission to expand scope.
+
+## Non-Goals And Anti-Patterns
+
+No implementation here; no pack move, repository-wide relocation, generic plugin
+infrastructure, broad #970 decomposition, RAES/env-packs schema fork, duplicate
+validators/errors/persistence, remote acquisition or new auth surface. No
+identifier purging, tiny-core dependency split, curated pack authoring, golden
+certification or appliance qualification.
+
+Avoid source/name-based startup privilege, editable-install parity claims,
+checkout fallbacks, prebuilt-image content masquerading as admitted artifacts,
+late script/config/image replacement, broadened digest matching, fixture deletion
+as an ownership shortcut, and paths treated as identity. Necessary fixtures and
+backend integrations may remain APTL-owned; none may become a hidden second
+TechVault content authority.
+
+## Implementation ownership and verification contract
+
+| Retained input | Owner / consumer | Authority and permitted effects |
 | --- | --- | --- |
-| Pack-owned scenario declarations | `scenarios/catalog.json`, TechVault SDLs, `scenarios/archive/` scenario material | Remove from the APTL runtime/distribution once every active consumer uses the acquired bundle. Historical evidence may remain clearly historical. |
-| Exact pack-content duplicates | Wazuh TechVault rule/decoder files, DB seed SQL, DNS zone/config, fileshare config, `custom-shuffle`, and the webapp tree | Retain one active owner: the validated pack artifact. No checkout fallback or copied fixture. |
-| Backend mechanism and substrate | RAES adapters, generated Compose, content materializers/readback, generic substrate, operator control key, safe persistence, and generic container mechanisms | Keep in APTL when the code is scenario-independent and selected by admitted typed requirements. |
-| Pack/backend integration | `aptl-techvault-pack-interaction` exact component-to-operator-group provider | Keep out of core and exact-identity-bound under ADR-053. Release evidence installs a packaged provider, never an editable checkout. Repository relocation is not decided here. |
+| `scenarios/*.sdl.yaml`, `scenarios/catalog.json`, `participant-profiles/guided-purple-v1` | APTL research fixtures; variant, participant and paper tests | Explicit development paths and digest-bound research profiles only. Excluded from the normal acquired catalog and wheel asset inventory. `scenarios/archive` is historical reference. |
+| `src/aptl_techvault`, `config/cortex`, `config/thehive`, `scripts/seed-prime.sh` and its helpers | APTL backend integrations selected by the exact compatible startup provider | Consume admitted services and generated credentials; initialize native service API state and observe required identities. Certificate aliases reuse generated outputs; the image-specific TheHive configuration connects those outputs to its native service. No SDL, content, image or container replacement. Credentials use stdin/private files; provisioners return keys to their caller without logging prefixes. |
+| `containers/mailserver/setup.sh`, `containers/windows-victim/join-domain.ps1`, legacy Compose domain defaults | APTL legacy backend/development fixtures | Used only by explicit legacy profile selection; not sources for acquired TechVault's authored accounts, domains or content. The ordinary full pack realizes its own declared bytes. |
+| `containers/generic-systemd-node22-base/Dockerfile`, `aptl_techvault.build_cache` | APTL offline backend build integration | Acquire and validate the exact compatible pack, resolve both MCP source artifact identities, and read only their package manifests and lockfiles. Retain npm dependency cache and pack identity evidence. Discard extracted manifests and build tools; runtime MCP source still comes from admitted artifacts. |
+| `containers/suricata-wazuh-agent/Dockerfile` | APTL product image integration | Combine only product rules shipped by the pinned upstream image into its built-in ruleset during image build. No network rule update or scenario rules enter this image; the admitted pack still supplies its configuration and local rules. |
+| Generic substrates, capture apparatus, MCP sources and materializers | APTL backend | Selected admitted runtime requirements and existing provider contracts govern realization; no checkout content may satisfy a missing pack artifact. |
 
-Hash equality is useful inventory evidence, not ownership authority. In
-particular, the pack's `misp-sync-src.tar` contains a broad historical
-`src/aptl` snapshot. That does not make APTL core scenario content or authorize
-deleting it. Conversely, a renamed or transformed checkout file can still be
-scenario content. Classify by declaration, active consumer, mutation owner,
-and readback contract.
+The duplicate DB seeds, DNS/fileshare configuration, vulnerable web application,
+and scenario-specific Wazuh rule/decoder/integration copies are removed from the
+runtime asset inventory and legacy Compose mounts. The acquired artifact set
+owns their current versions. Readback must observe those declared runtime paths,
+including Wazuh's rule includes.
 
-Component build contexts are also not planted scenario content. The acquired
-SDL currently digest-selects several APTL-contained materialization
-specifications under `containers/`. Do not delete a selected context until the
-acquired release selects an available replacement artifact. Do not call its
-Dockerfile-only digest a lock for the empty `locked_input_ids`; qualification
-must disclose the actual verified input set.
+Source acquisition copies only bounded regular files through no-follow handles,
+then applies upstream inventory and digest validation. Installer hardlinks become
+private copies. Another acquisition never deletes a runtime bundle based on age;
+retain runtime inputs until the owning lab is torn down and its project state is
+explicitly discarded. Read-only CLI/API catalog views remove only their own
+fresh staging after projection, including failed detail lookups. Invalid source
+selectors and acquisition failures remain bounded and do not expose source paths.
 
-`_asset_manifest.py` stays the single build/runtime inventory for
-`hatch_build.py` and `assets.materialize()`. Narrow that canonical inventory
-based on proven runtime ownership. Do not add a second wheel denylist or let
-the source-checkout and installed-wheel selections drift. Direct APTL wheel
-contents and separately installed dependency contents are separate facts:
-shipping an env-pack alongside APTL is permitted, but its proximity cannot
-bypass acquisition or make its bytes APTL-owned.
-
-### Startup behavior follows admitted requirements, not pack identity
-
-`ScenarioSourceKind` is provenance; it is not a feature flag. The existing
-`_scenario_is_env_pack()` branches for pivot/authorized-key generation and SOC
-certificates conflate source with declared artifact ownership. Pre-realization
-steps must use the admitted typed `stateful_artifact_ownership`, selected
-profiles, and backend capability. `_step_generate_certs()` already demonstrates
-the ownership-driven pattern. Unsupported generated-artifact generator/profile
-pairs continue to fail closed in the exhaustive stateful provider dispatch.
-
-Pack-specific producer profile identifiers are acceptable only as exact inputs
-to a typed backend mechanism with output, sensitivity, containment, consumer,
-and cryptographic validation. They must not spread into catalog selection,
-generic lifecycle ordering, Compose service discovery, or config flags.
-`DEFAULT_RAES_SCENARIO` is a stale path to a deleted local document and must not
-remain an active runtime fallback or be replaced by a different TechVault
-constant.
-
-The remaining lifecycle includes credential sync, Suricata seeding, readiness,
-retry, SSH checks, SOC seeding, and MCP setup. Issue #880 should remove any
-source/name-based privilege those steps depend on and prove required steps are
-selected from admitted state. It is not a mandate to perform issue #970's full
-lifecycle decomposition or issues #915--#918's broader mutation redesign.
-
-### Parity evidence is layered and identity-scoped
-
-Structural parity must come from the installed artifacts: the APTL wheel has no
-active TechVault SDL, catalog, or copied scenario bytes; default, catalog, API,
-static-gate, and start selections report the same validated pack identity; and
-a missing, corrupt, unknown, or extra pack member fails without touching a
-local decoy. Wheel inspection must distinguish APTL's direct bundle from the
-separately packaged env-pack dependency.
-
-Runtime parity must exercise the full acquired TechVault SDL through the public
-start path with the packaged, exact-compatible interaction provider. The
-evidence binds CLI, RAES, env-packs, pack/provider, image, Docker/Compose, and
-platform versions; admitted and selected resources; generated Compose; native
-content and service readback; semantic verifier results when available; reset;
-teardown; residual state; durations; and limitations. Reuse the current run
-record, snapshot, verification-plugin, and project-scoped cleanup surfaces.
-Local variant boots, editable installs, mocks, static validation, or container
-health cannot substitute for this evidence.
-
-Keep claims separate: content relocation, exact pack-byte identity, backend
-realization parity, scenario semantic success, and golden reference maturity
-are five different facts. Passing the first three does not establish the last
-two. Evidence applies only to the exact pack set digest and compatible provider
-mapping; another release does not inherit it.
-
-## Canonical Incumbents To Reuse
-
-| Concern | Canonical owner and required reuse |
-| --- | --- |
-| Selection/config | Strict `ScenarioSourceConfig`/`AptlConfig`, `resolve_scenario_selection()`, `resolve_scenario_bundle()`, and `ScenarioBundle`. Converge the selector on this seam; do not add another resolver. |
-| Pack ingress/identity | `env_pack_bundle()`, env-packs `validate_pack()`, `validate_pack_content_manifest()`, `resolve_pack_artifact()`, validation limits, isolated staging, and `aptl.utils.pathsafe`. |
-| Scenario semantics/admission | RAES parser, compiler, planner, `RuntimeTarget`, diagnostics, `AptlProvisioner`, `AptlRealization`, and `DeploymentRealizationSpec`. No APTL SDL mirror or second admission workflow. |
-| Pack/backend serving | ADR-053's `PackBackendInteractionContext`, exact provider discovery, `BackendIdentity`, `OPERATOR_GROUP_VOCABULARY`, `public_start_profiles()`, immutable total mapping, and core unprofiled default. |
-| Content/component realization | `artifact_availability_for_scenario()`, declared materialization specifications, `raes_content_realization`, `resolve_pack_artifact()`, typed materializer operations, Compose content mounts, and native read-after-write checks. |
-| Generated state | `raes_stateful_realization`, `DeploymentGeneratedArtifactRealization`, `stateful_artifact_ownership`, `ComposeStatefulRealizationMixin`, canonical generated paths, provider output checks, and `DeploymentBackend.realization_root`. |
-| Compose/effects | `render_realization_compose()`, `base_compose_file()`, generated stateful/content overrides, normalized effective-model validation, project identity, and argv-list backend runners with timeouts. |
-| Errors/logs | `EnvPackError`, existing `ScenarioError` subclasses, `PackBackendInteractionError`, RAES `Diagnostic`, unsuccessful `ApplyResult`/`LabResult`, `get_logger()`, and `redact()`. Do not add an exception hierarchy or public error envelope. |
-| Persistence/evidence | `RunRecordInputs`, `build_reproducibility_record()`, `backend_evidence`, `derive_identity()`, `LocalRunStore`, native snapshots/readback, and the scenario-verifier entry-point seam. No new repository or evidence schema for packs. |
-| Distribution/workflow | `_asset_manifest.py`, `hatch_build.py`, `assets.materialize()`, `pyproject.toml`/`uv.lock`/hashed requirements, wheel-inventory tests, and `.github/workflows/checks.yml`. |
-
-## Security And Cross-Cutting Passage
-
-| Layer | Required behavior |
-| --- | --- |
-| HTTP/auth surface | Scenario API routes remain behind `verify_token` and `BFFMiddleware` Host, CSRF, and session gates. The issue adds no unauthenticated acquisition/install endpoint, URL selector, or plugin-install control. CLI selection remains local operator authority. |
-| Config/env shape | `aptl.json` continues through Pydantic models with `extra="forbid"`; source and identity are bounded typed selectors. `project_dir/.env` remains the operator credential source through `hydrate_dotenv()`, `load_dotenv()`, `EnvVars`, and placeholder rejection. A pack-local env file cannot override it. |
-| Catalog/selector shape | Validate ids and mutual exclusivity once. Catalog data selects the canonical source resolver; it never supplies a host path, import target, command, environment-variable name, or arbitrary pack metadata. Explicit paths retain no-follow project containment. |
-| Pack shape/bytes | Treat bytes as untrusted until both env-packs validators pass. Preserve exact inventory/set/per-member digests, bounded limits, no symlink/hardlink/special-file acceptance, isolated staging, and digest-bound `resolve_pack_artifact()` reads. Missing, extra, changed, or unknown content fails closed with no local fallback. |
-| RAES/policy gate | Parsed SDL, exact artifact availability, materialization specifications and locked inputs, generated outputs/consumers, topology, mounts, ports, Linux capabilities, Docker authority, and observation requirements pass existing RAES and APTL admission before deployment mutation. Operator policy remains distinct from authored demand. |
-| Filesystem/secret boundary | Immutable input is rooted at `ScenarioBundle.root`; generated output is rooted at backend `realization_root`; operator state remains at `project_dir`. Reuse no-follow containment, canonical destinations, atomic owner-only writes, declared-output completeness, read-only least-privilege mounts, and crypto/key-pair checks. |
-| Effective Compose/runtime | Generate from typed realization and validate the fully merged `--no-interpolate` model. Preserve loopback publication policy, project labels/namespaces, foreign-resource refusal, backend-local artifact constraints, and native readback. Do not log or persist rendered Compose. |
-| OS/process exposure | Use argument lists, fixed executables, explicit working/project directories and env files, and bounded timeouts. Non-secret operational paths may appear in local argv; tokens, private keys, passphrases, env values, credential-bearing URLs, authored shell, and pack-selected executable names may not. No `shell=True`. |
-| Error envelope | Expected catalog/pack/parser/provider failures map into the existing redacted exceptions/diagnostics and CLI exit or API 404/502 envelopes. Do not expose raw parser/Pydantic/provider/subprocess text, tracebacks, absolute stage paths, commands, environment maps, or Compose stderr. |
-| Logging/persistence | Log bounded phase/code/count, source kind, exact non-secret identity, and host-observed provider metadata via `get_logger()`/`redact()`. Persist exact identity, selected profiles, mapping digest, native outcomes, and limitations; omit staged roots, raw pack/catalog payloads, secrets, and generated bytes. |
-
-## Extensibility Seam
-
-The required parameter is the scenario source selector handed to the existing
-bundle resolver, with pack `identity` already data rather than a TechVault
-constant. The resolver returns one validated `ScenarioBundle` with exact
-`PackIdentity`; every downstream consumer depends on that bundle and admitted
-realization, not on catalog storage or acquisition location. A next pack id can
-therefore vary configuration/catalog data and an installed exact interaction
-provider without editing lab steps, the Compose renderer, API DTOs, or evidence
-storage.
-
-If the next acquisition source adds a version/digest selector, archive, remote
-catalog, or trust policy, that variation belongs behind this resolver and
-env-packs' public install/release gates. It must not introduce another catalog
-locator union or teach deployment code about package resources and URLs.
-
-## Whole-Repository Surface In Scope
-
-- Selection/projection: `aptl.json`, `src/aptl/core/{config,scenario_catalog,scenario_bundle}.py`,
-  `src/aptl/cli/lab.py`, `src/aptl/api/{routers/scenarios,scenario_projection,schemas}.py`,
-  and their web DTO consumers.
-- Admission/realization: `src/aptl/backends/{_raes_scenario_resolution,raes,`
-  `raes_artifact_availability,raes_content_realization,raes_realization,`
-  `raes_stateful_realization,raes_pack_interaction}.py` and the deployment
-  model/materializer/effective-Compose layers.
-- Lifecycle/security: `src/aptl/core/{lab,ssh,env,credentials,soc_ca}.py`,
-  generated-artifact providers, `aptl.utils.pathsafe`, logging/redaction,
-  project ownership, host-port policy, and local/SSH backend boundaries.
-- Persistence/qualification: `raes_repro.py`, run records, snapshots,
-  verification plugins/gates, native observation, reset/teardown, and exact
-  limitation reporting.
-- Content/distribution: `scenarios/`, the semantically owned subsets of
-  `config/`, `containers/`, and `scripts/`, the TechVault interaction plugin,
-  `_asset_manifest.py`, `hatch_build.py`, dependency locks, docs, and installed
-  wheel/dependency inventories.
-- Workflow: scenario/catalog/bundle/content/stateful/pack-interaction tests,
-  wheel tests, the RAES static gate, fresh-start preflight, clean installed lab
-  boot, release reports, `pytest`, `pre-commit run --all-files`, and the clean
-  runtime gate required by `.gc/plan-rules.md` when deployment assets change.
-
-## Gotchas And Anti-Patterns
-
-- Do not move TechVault again, vendor it, select a permanent repository, or
-  edit acquired pack bytes from APTL.
-- Do not keep local SDL/catalog/config copies as a fallback, test fixture, or
-  “in-box optimization.” A failed acquired pack is a failed selection.
-- Do not claim the local curated variants are in the released pack or treat
-  catalog presence, static validation, `built` maturity, or container health as
-  golden/full-range proof.
-- Do not use scenario name, catalog id, source kind, service name, profile name,
-  or a familiar path to decide content ownership or lifecycle behavior.
-- Do not create another pack/catalog/SDL/Compose schema, checksum helper,
-  containment error, provider registry, validation pass, exception hierarchy,
-  evidence repository, or lifecycle state machine.
-- Do not delete generic core because identical historical source appears inside
-  a pack archive; do not retain genuine scenario content because its bytes are
-  not identical.
-- Do not weaken the exact TechVault provider match to survive a pack update.
-  New version/digest means new compatibility and qualification evidence.
-- Do not test parity with `pip install -e`, a checkout-local SDL, an editable
-  interaction plugin, ignored generated state, or a reduced local scenario.
-- Do not expose the transient staged path in API output, logs, errors, run
-  records, or user-facing catalog rows.
-- Do not turn this cleanup into an unbounded lifecycle rewrite or delete an
-  admitted component context before a replacement artifact is available.
-
-## Non-Goals And Implementation Boundaries
-
-This issue does not author or relocate TechVault, create packs for the curated
-variants, select a future repository, make a `built` pack `golden`, define the
-TechVault semantic verifier, redesign RAES/env-packs schemas, add remote
-acquisition, introduce a plugin sandbox, or finish the LilRAE rename/migration.
-
-It does not remove scenario-independent backend capability merely because
-TechVault currently exercises it, and it does not promise a tiny-core dependency
-split that the current env-packs packaging contract does not supply. Issues
-#879, #883--#887, #915--#918, #934, #962, and #970 retain their separate
-ownership.
-
-The implementation boundary is: no active TechVault scenario-content copy in
-APTL; no catalog/startup/distribution privilege for the nearby pack; one
-validated acquired-bundle path for default, catalog, API, gates, and start;
-identity-accurate evidence; and parity proof against the exact released pack
-and packaged interaction provider, with unresolved golden and locked-input
-limitations stated honestly.
+Uniform-loading and installed artifact tests belong to #880. Full clean-package
+release parity, including discovery, attack, telemetry, triage and MCP actions,
+remains #870's acceptance evidence; this cleanup does not claim that proof from
+static tests or a successful image build.

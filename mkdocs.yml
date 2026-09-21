@@ -89,14 +89,24 @@ nav:
     - "Issue #557 Participant Implementation Binding Preflight": architecture/issue-557-participant-implementation-binding-preflight.md
     - "Issue #821 In-Appliance Participant Workbench Preflight": architecture/issue-821-participant-workbench-preflight.md
     - "Issue #823 Versioned Disposable Lab Appliance Preflight": architecture/issue-823-versioned-disposable-appliance-preflight.md
+    - "Issue #1022 Appliance Seat Delivery Preflight": architecture/issue-1022-appliance-seat-delivery-preflight.md
     - "Issue #845 RAES Hard-Rename Preflight": architecture/issue-845-raes-hard-rename-preflight.md
+    - "Issue #934 APTL-To-LilRAE Rename Boundary Preflight": architecture/issue-934-rename-boundary-preflight.md
+    - "Issue #592 Scenario-Pack Terminology Preflight": architecture/issue-592-scenario-pack-terminology-preflight.md
+    - "Issue #591 Scenario-Pack Capture Asset Ownership Preflight": architecture/issue-591-scenario-pack-capture-asset-ownership-preflight.md
     - "Issue #866 TechVault Component Realization Preflight": architecture/issue-866-techvault-realization-contract-preflight.md
     - "Issue #874 Scenario-Bundle Realization Roots Preflight": architecture/issue-874-scenario-bundle-realization-roots-preflight.md
     - "Issue #878 Scenario Verification Plugin Seam Preflight": architecture/issue-878-scenario-verification-plugin-seam-preflight.md
-    - "Issue #880 TechVault Env-Pack Consumption Preflight": architecture/issue-880-techvault-env-pack-consumption-preflight.md
     - "Issue #905 Lab Lifecycle Robustness Preflight": architecture/issue-905-lab-lifecycle-robustness-preflight.md
+    - "Issue #1000 Partial Boot And Manual Release QA Preflight": architecture/issue-1000-manual-release-qa-preflight.md
+    - "Issue #1002 Wazuh API TLS Warm-Up Preflight": architecture/issue-1002-wazuh-api-tls-warmup-preflight.md
     - "Issue #949 Orborus Control Authority Preflight": architecture/issue-949-orborus-control-authority-preflight.md
+    - "Issue #974 Shuffle Worker Docker And Image Realization Preflight": architecture/issue-974-shuffle-worker-docker-images-preflight.md
     - "Issue #951 Fresh Env-Pack Start Preflight": architecture/issue-951-fresh-env-pack-start-preflight.md
+    - "Issue #964 Backend Resource Ownership Preflight": architecture/issue-964-backend-resource-ownership-preflight.md
+    - "Issue #969 Platform Safety Gates Preflight": architecture/issue-969-platform-safety-gates-preflight.md
+    - "Issue #993 Boot Realization Regressions Preflight": architecture/issue-993-boot-realization-regressions-preflight.md
+    - "Issue #992 Backend Observability Ownership Preflight": architecture/issue-992-backend-observability-ownership-preflight.md
     - LilRAE Readiness Review:
       - Assessment: reviews/962-lilrae-readiness/README.md
       - Migration Inventory: reviews/962-lilrae-readiness/migration-inventory.md
@@ -121,7 +131,7 @@ nav:
     - Appliance Network Boundary: components/appliance-boundary.md
   - Scenarios:
     - Authoring Boundary: sdl/index.md
-    - Retired APTL-local Variants: sdl/techvault-curated-variants.md
+    - Curated RAES Variants: sdl/techvault-curated-variants.md
   - RAES:
     - APP-1 Appliance Boundary Materialization Preflight: raes/app-1-appliance-boundary-materialization-preflight.md
     - TechVault Static Validation Preflight: raes/techvault-static-validation-preflight.md
@@ -129,15 +139,18 @@ nav:
     - TechVault Live Validation Preflight: raes/techvault-live-validation-preflight.md
     - TechVault Live Validation Gate: raes/techvault-live-validation-gate.md
     - TechVault Curated Live Validation Preflight: raes/techvault-curated-live-validation-preflight.md
-    - Historical Curated Live Evidence: raes/techvault-curated-live-validation-gate.md
-    - Retired Bounded Participant Readiness: raes/bounded-participant-agency-readiness.md
+    - TechVault Curated Live Validation Gate: raes/techvault-curated-live-validation-gate.md
+    - Bounded Participant Agency Readiness: raes/bounded-participant-agency-readiness.md
   - Testing:
-    - Smoke Test Plan: testing/smoke-test-plan.md
+    - Platform Pull-Request Gates: testing/platform-pr-gates.md
+    - Boot Realization Coverage: testing/boot-realization-coverage.md
+    - Release Candidate Manual QA: testing/smoke-test-plan.md
     - Property-Based Parser Tests: testing/property-based-parser-tests.md
   - Reference:
     - Red Team Taxonomy: red-team-taxonomy.md
-    - Retired Guided Purple Participant Profile: reference/participant-profile.md
+    - Guided Purple Participant Profile: reference/participant-profile.md
     - Disposable Appliance Release: reference/appliance-release.md
+    - Host MCP access: reference/host-mcp-access.md
     - Appliance Seat Launcher: reference/appliance-seat-launcher.md
     - TechVault Scenario Overview: reference/techvault-scenario-overview.md
     - TechVault Company Profile: reference/techvault-company-profile.md
@@ -204,11 +217,12 @@ nav:
     - ADR-051 Component-Level RAES Realization: adrs/adr-051-component-level-raes-realization.md
     - ADR-052 Configured Participant Credential Sourcing: adrs/adr-052-configured-participant-credential-sourcing.md
     - ADR-053 Pack-Backend Deployment-Serving Interaction Seam: adrs/adr-053-pack-backend-deployment-serving-interaction-seam.md
-    - ADR-054 LilRAE Core and Experience Ownership: adrs/adr-054-lilrae-core-and-experience-ownership.md
+    - ADR-054 APTL-to-LilRAE Identity Continuity and Capability Ownership: adrs/adr-054-lilrae-core-and-experience-ownership.md
     - ADR-055 Local Runtime Authority and Ownership: adrs/adr-055-local-runtime-authority-and-ownership.md
     - ADR-056 Scenario-Led Capability Qualification: adrs/adr-056-scenario-led-capability-qualification.md
     - ADR-057 Agent Execution Compartments: adrs/adr-057-agent-execution-compartments.md
     - ADR-058 Adoption and Security Release Gates: adrs/adr-058-adoption-and-security-release-gates.md
+    - ADR-059 Canonical TechVault Delivery and Host MCP Access: adrs/adr-059-canonical-techvault-delivery-and-host-mcp-access.md
 
 extra:
   social:

@@ -27,6 +27,7 @@ from aptl.core.deployment.realization import (
     DeploymentRealizationSpec,
 )
 from aptl.core.deployment.boundary import BoundaryEnforcementSpec
+from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.appliance_boundary import (
     ApplianceBoundaryBinding,
     ApplianceBoundaryPolicy,
@@ -51,6 +52,11 @@ class DeploymentBackend(HostInventoryBackend, ContainerOpsBackend, Protocol):
     ``container_inspect``, ...) from :class:`ContainerOpsBackend`.
     """
 
+    def docker_transport_environment(self) -> dict[str, str]:
+        """Return only Docker transport settings used by this backend."""
+
+        ...
+
     def start(self, profiles: list[str], *, build: bool = True) -> LabResult:
         """Start lab services for the given profiles.
 
@@ -70,6 +76,7 @@ class DeploymentBackend(HostInventoryBackend, ContainerOpsBackend, Protocol):
         build: bool = True,
         scenario_root: Path,
         substrate_digests: Mapping[str, str] | None = None,
+        observation_context: DeploymentObservationContext | None = None,
     ) -> LabResult:
         """Realize a typed scenario deployment through the backend.
 
@@ -90,10 +97,22 @@ class DeploymentBackend(HostInventoryBackend, ContainerOpsBackend, Protocol):
                 route 3, issue #876). A route-3 node's base container starts from
                 exactly this config id with ``--pull=never``, so the mutable tag
                 is never re-resolved at apply.
+            observation_context: Request-scoped evidence carrier shared with the
+                post-apply observation pass. Implementations must not retain it.
 
         Returns:
             LabResult indicating success or failure.
         """
+        ...
+
+    def qualify_runtime_materialization(
+        self,
+        realization: DeploymentRealizationSpec,
+        *,
+        scenario_root: Path,
+    ) -> LabResult:
+        """Read-only qualification that must precede artifact mutation."""
+
         ...
 
     def realize_boundary(self, policy: BoundaryEnforcementSpec) -> LabResult:
@@ -105,8 +124,16 @@ class DeploymentBackend(HostInventoryBackend, ContainerOpsBackend, Protocol):
         self,
         policy: ApplianceBoundaryPolicy,
         binding: ApplianceBoundaryBinding,
+        *,
+        isolated_daemon: bool = False,
     ) -> None:
         """Bind trusted appliance policy inputs to the next realization."""
+
+        ...
+
+    @property
+    def bound_docker_daemon_id(self) -> str | None:
+        """Return the identity of the locally bound Docker daemon, if any."""
 
         ...
 

@@ -3,15 +3,15 @@
 ## Start the Lab
 
 ```bash
-git clone https://github.com/Brad-Edwards/aptl.git
-cd aptl
 pipx install aptl-labs
+aptl lab init my-lab
+cd my-lab
 aptl lab start
 ```
 
-Clone the repo only for a source-tree development install. A released install
-materializes the Compose topology, config templates, and generic build contexts;
-it acquires scenario content from the installed environment-pack distribution.
+The published package includes the Compose topology, backend integrations, config
+templates, and container build contexts. `aptl lab init <dir>` materializes
+those assets into a project directory, so no source clone is required.
 [pipx](https://pipx.pypa.io/) isolates the CLI in its own virtualenv, so the
 [PEP 668](https://peps.python.org/pep-0668/) system-`pip` block on modern
 Debian/Ubuntu/WSL2 hosts never applies (`sudo apt install pipx` to get it). To
@@ -25,6 +25,14 @@ containers. The startup output points to `.env` for passwords and tokens. Run
 `aptl lab info` later to reprint the same access summary.
 
 The CLI handles SSH keys, SSL certificates, system requirements, and container startup.
+
+`aptl lab start` runs the range directly on the selected host Docker engine.
+For agent-driven or multi-user work on Linux/KVM, the disposable
+[`aptl seat start`](../reference/appliance-seat-launcher.md) path provides a
+stronger VM boundary around Docker and the lab. Neither containers nor a VM are
+an absolute sandbox; advanced models with tool access can attempt escape chains.
+Review the [execution-boundary guidance](quick-start.md#choose-the-execution-boundary)
+before choosing a host.
 
 ## Lab Components
 

@@ -2,22 +2,23 @@ schema_version: 1
 project: aptl
 github_repo: Brad-Edwards/aptl
 workflow:
-  # The default suite is parallelized with pytest-xdist (-n auto) and excludes
-  # the slow `integration`-marked tests, matching the CI coverage job
+  # The default suite uses a bounded pytest-xdist worker pool and excludes the
+  # slow `integration`-marked tests, matching the CI coverage job
   # (.github/workflows/checks.yml: `pytest -k "not integration"`).
-  test_command: 'uv run pytest -n auto -k "not integration"'
+  # A fixed pool avoids host-load-dependent OOM kills when `auto` expands to all
+  # logical CPUs on shared development machines.
+  test_command: 'uv run pytest -n 4 -k "not integration"'
   # The completion gate mirrors exactly what CI gates on: the fast suite plus the
-  # scenario static gate (the only integration tests CI runs). Both run under
-  # -n auto. Bare `pytest` would also pull in ~550 other integration tests that
-  # CI never runs and that take ~80 min serially — see the scenario static-gate
+  # scenario static gate (the only integration tests CI runs). Both use the
+  # same bounded worker pool. Bare `pytest` would also pull in ~550 other
+  # integration tests that CI never runs and that take ~80 min serially — see
+  # the scenario static-gate
   # design notes. Coverage runs serially in CI (coverage run can't measure xdist
-  # workers); -n auto is only used where coverage is not collected.
-  completion_command: 'uv run pytest -n auto -k "not integration" && uv run pytest -n auto tests/test_techvault_static_gate.py -m integration'
+  # workers); bounded xdist is only used where coverage is not collected.
+  completion_command: 'uv run pytest -n 4 -k "not integration" && uv run pytest -n 4 tests/test_techvault_static_gate.py -m integration'
   lint_command: pre-commit run --all-files
   format_command: pre-commit run --all-files
   codex_review:
-    pre_push_cap: 1
-  test_quality_review:
     pre_push_cap: 1
   review_disposition:
     enabled: false
@@ -69,6 +70,8 @@ grc:
       paths:
         - docker-compose.yml
         - containers/base/**
+        - appliance/guest/**
+        - src/aptl/appliance/**
         - src/aptl/cli/**
       # src/aptl/cli (python) -> application; docker-compose.yml -> docker-compose;
       # containers/base/Dockerfile.* -> dockerfile.
@@ -78,6 +81,7 @@ grc:
       description: Red/blue MCP servers and orchestrator that AI agents drive — the agent authorization and command-filtering surface.
       paths:
         - mcp/**
+        - src/aptl/workbench/**
       # mcp/** is first-party TypeScript -> application (Dockerfiles under mcp/ are
       # vendored node_modules only).
       surfaces: [application]
@@ -104,20 +108,19 @@ grc:
         - containers/victim/**
         - containers/workstation/**
         - containers/windows-victim/**
-      # ad / fileshare / victim / workstation Dockerfiles -> dockerfile.
+      # fileshare / victim / workstation Dockerfiles -> dockerfile.
       surfaces: [dockerfile]
     - key: security-zone
       name: Security/SOC Zone (aptl-security)
       description: Defensive stack — Wazuh, Suricata, MISP, TheHive, Cortex, Shuffle; zone isolation via multi-homing only (NET-005).
       paths:
-        - containers/wazuh-sidecar/**
         - containers/misp-suricata-sync/**
         - config/wazuh_cluster/**
         - config/cortex/**
         - config/thehive/**
         - config/wazuh_dashboard/**
         - config/wazuh_indexer/**
-      # wazuh-sidecar / misp-suricata-sync Dockerfiles -> dockerfile; config/* uncovered.
+      # misp-suricata-sync Dockerfile -> dockerfile; config/* uncovered.
       surfaces: [dockerfile]
     - key: observability-plane
       name: Observability Plane

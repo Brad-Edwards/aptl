@@ -4,7 +4,7 @@
  * Companion to the OCSF logger. Where `logger.ts` builds an enriched,
  * structured OCSF event, this module appends a minimal (but redacted)
  * record of every tool call to a JSONL file under the per-run mcp-side
- * directory (OBS-003): `<state_dir>/runs/<trace_id>/mcp-side/tool-calls.jsonl`.
+ * directory (OBS-003): `<run_store_base>/<trace_id>/mcp-side/tool-calls.jsonl`.
  *
  * Researchers can re-parse the captured stream with their own logic;
  * the raw command, args, and result text are preserved (modulo
@@ -13,7 +13,7 @@
  *
  * When no scenario context is active (no `trace-context.json` in the
  * state dir), capture falls back to the `_unbound` sentinel
- * (`<state_dir>/runs/_unbound/mcp-side/tool-calls.jsonl`) so MCP
+ * (`<run_store_base>/_unbound/mcp-side/tool-calls.jsonl`) so MCP
  * invocations outside a scenario don't silently drop their record
  * — the sentinel makes the "no active scenario" condition visible.
  *
@@ -53,7 +53,7 @@ function resolveMcpSideDir(env: NodeJS.ProcessEnv): string {
     // `<state>/runs/<trace_id>` -> `.../mcp-side`
     return resolve(active, 'mcp-side');
   }
-  return mcpSideDir(stateDir, UNBOUND_SENTINEL);
+  return mcpSideDir(stateDir, UNBOUND_SENTINEL, env);
 }
 
 /**

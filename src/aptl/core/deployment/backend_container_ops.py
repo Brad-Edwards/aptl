@@ -111,6 +111,16 @@ class ContainerOpsBackend(Protocol):
         """
         ...
 
+    def container_exec_detached(
+        self,
+        name: str,
+        cmd: list[str],
+        *,
+        timeout: int | None = None,
+    ) -> subprocess.CompletedProcess:
+        """Start a detached non-interactive process inside a container."""
+        ...
+
     def container_inspect(self, name: str) -> dict[str, Any]:
         """Return parsed ``docker inspect`` output for a single container.
 
@@ -121,6 +131,21 @@ class ContainerOpsBackend(Protocol):
             The first element of the ``docker inspect`` JSON array, or
             an empty dict on any failure (missing container, parse
             error, etc.).
+        """
+        ...
+
+    def container_file_read(
+        self,
+        name: str,
+        path: str,
+        *,
+        max_bytes: int,
+    ) -> bytes | None:
+        """Read one bounded file from a running or stopped container.
+
+        The read is performed by the Docker provider rather than by executing a
+        workload-controlled binary in the container. ``None`` means the file
+        could not be copied or exceeded the caller's bound.
         """
         ...
 

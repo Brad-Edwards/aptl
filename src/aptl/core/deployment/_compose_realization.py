@@ -8,6 +8,11 @@ from pathlib import Path
 from aptl.core.deployment._compose_account_realization import (
     ComposeRealizationAccountMixin,
 )
+from aptl.core.deployment._compose_observability import ComposeObservabilityMixin
+from aptl.core.deployment._compose_capture_apparatus import (
+    ComposeCaptureApparatusMixin,
+)
+from aptl.core.deployment._compose_traffic_mirror import ComposeTrafficMirrorMixin
 from aptl.core.deployment._compose_content_realization import (
     ComposeRealizationContentMixin,
 )
@@ -24,6 +29,9 @@ from aptl.core.deployment._compose_post_start import (
     ComposeRealizationPostStartMixin,
 )
 from aptl.core.deployment._compose_port_realization import published_port_conflicts
+from aptl.core.deployment._compose_port_readback import (
+    owned_bindings as _owned_bindings,
+)
 from aptl.core.deployment._compose_service_index_realization import (
     ComposeRealizationServiceIndexMixin,
 )
@@ -51,7 +59,11 @@ from aptl.core.deployment._compose_realization_networks import (
 from aptl.core.deployment._compose_runtime_orchestration import (
     ComposeRuntimeOrchestrationRouteMixin,
 )
+from aptl.core.deployment._compose_runtime_materialization import (
+    ComposeRuntimeMaterializationMixin,
+)
 from aptl.core.deployment.realization import DeploymentRealizationSpec
+from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.lab_types import LabResult
 
 __all__ = [
@@ -67,6 +79,10 @@ __all__ = [
 
 
 class ComposeRealizationMixin(
+    ComposeRuntimeMaterializationMixin,
+    ComposeTrafficMirrorMixin,
+    ComposeCaptureApparatusMixin,
+    ComposeObservabilityMixin,
     ComposeRuntimeOrchestrationRouteMixin,
     ComposeMixedRealizationMixin,
     ComposeBoundaryRealizationMixin,
@@ -94,9 +110,9 @@ class ComposeRealizationMixin(
         failure = self._runtime_orchestration_preflight(realization)
         if failure is not None:
             return failure
-        return self._verify_runtime_orchestration(
-            realization, require_children=True
-        ) or LabResult(success=True)
+        return self._verify_runtime_orchestration(realization) or LabResult(
+            success=True
+        )
 
     def realize(
         self,
@@ -105,6 +121,7 @@ class ComposeRealizationMixin(
         build: bool = True,
         scenario_root: Path,
         substrate_digests: Mapping[str, str] | None = None,
+        observation_context: DeploymentObservationContext | None = None,
     ) -> LabResult:
         """Realize a typed scenario deployment through Docker Compose.
 
@@ -123,22 +140,54 @@ class ComposeRealizationMixin(
         resolution of the mutable tag.
         """
 
-        # Request-scoped, like the network bindings below: the base start reads it
-        # by node address and never re-resolves the tag it was verified from.
-        self._realization_substrate_digests = dict(substrate_digests or {})
-        failure = self._runtime_orchestration_preflight(realization)
+        failure = self._runtime_materialization_preflight(
+            realization, scenario_root=scenario_root
+        )
         if failure is not None:
             return failure
-        # Route from per-node facts, never a whole-graph flag. A mixed graph is
-        # normal (ADR-051): some nodes come from a pinned artifact, some are
-        # built from a specification, some are composed from declared state. The
-        # only whole-graph question left is whether Compose has anything to
-        # start.
-        if not _needs_compose(realization):
-            return self._realize_without_compose(realization, scenario_root)
-        return self._realize_mixed_or_legacy(
-            realization, build=build, scenario_root=scenario_root
+
+        observation_context = observation_context or DeploymentObservationContext()
+        attempt_id = observation_context.attempt_id or self._resource_attempt_id
+        ownership = self._ensure_resource_ownership()
+        self._ensure_resource_ownership(
+            attempt_id=attempt_id or ownership.new_attempt_id()
         )
+        failure = self._realization_preflight(
+            realization, scenario_root, substrate_digests
+        )
+        if failure is not None:
+            result = failure
+        elif not _needs_compose(realization):
+            result = self._realize_without_compose(realization, scenario_root)
+        else:
+            result = self._realize_mixed_or_legacy(
+                realization,
+                build=build,
+                scenario_root=scenario_root,
+                observation_context=observation_context,
+            )
+        return result
+
+    def _realization_preflight(
+        self,
+        realization: DeploymentRealizationSpec,
+        scenario_root: Path,
+        substrate_digests: Mapping[str, str] | None,
+    ) -> LabResult | None:
+        """Run ordered backend preflights before any scenario mutation."""
+
+        failure = self._capture_apparatus_preflight(realization, scenario_root)
+        if failure is None:
+            failure = self._traffic_mirror_preflight(realization)
+        if failure is None:
+            failure = self._observability_preflight(realization, scenario_root)
+        if failure is None:
+            # Request-scoped: base start consumes the already-verified identity.
+            self._realization_substrate_digests = dict(substrate_digests or {})
+            failure = self._runtime_orchestration_preflight(realization)
+        if failure is None:
+            failure = self._start_backend_observability(realization.profiles)
+        return failure
 
     def _realize_networks_and_boundaries(
         self,
@@ -212,22 +261,39 @@ class ComposeRealizationMixin(
         compose-side generation reuses the same material.
         """
 
+        self._image_free_generated_environment = {}
         ops_by_address: dict[str, list[object]] = {}
+        generated_environment: dict[str, dict[str, str]] = {}
         for artifact in realization.generated_artifacts:
             consumers = [
                 consumer
                 for consumer in artifact.consumers
                 if consumer.target_address in addresses
             ]
-            if not consumers:
+            environment_consumers = [
+                consumer
+                for consumer in artifact.environment_consumers
+                if consumer.target_address in addresses
+            ]
+            if not consumers and not environment_consumers:
                 continue
-            failure = self._realize_one_generated_artifact(artifact, realization_root)
+            failure = self._realize_one_generated_artifact(
+                artifact, realization_root, realization
+            )
             if failure is None:
                 failure = _append_image_free_artifact_ops(
                     ops_by_address, artifact, consumers, realization_root
                 )
+            if failure is None:
+                failure = _append_image_free_environment_bindings(
+                    generated_environment,
+                    artifact,
+                    environment_consumers,
+                    realization_root,
+                )
             if failure is not None:
                 return failure, {}
+        self._image_free_generated_environment = generated_environment
         return None, {addr: tuple(ops) for addr, ops in ops_by_address.items()}
 
     def _realize_without_compose(
@@ -246,24 +312,30 @@ class ComposeRealizationMixin(
         reports success.
         """
 
-        substrate_failure = self._realize_networks_and_boundaries(realization)
-        if substrate_failure is not None:
-            return substrate_failure
-        addresses = frozenset(node.address for node in realization.nodes)
-        failure, extra_ops = self._image_free_generated_artifact_ops(
-            realization, addresses, self.realization_root
-        )
-        if failure is not None:
-            return failure
-        node_result = _realize_node_subset(
-            self,
-            realization.nodes,
-            realization.content,
-            scenario_root,
-            extra_ops,
-            persistent_volumes=realization.persistent_volumes,
-        )
-        return node_result if node_result is not None else LabResult(success=True)
+        failure = self._realize_networks_and_boundaries(realization)
+        node_result: LabResult | None = None
+        if failure is None:
+            addresses = frozenset(node.address for node in realization.nodes)
+            failure, extra_ops = self._image_free_generated_artifact_ops(
+                realization, addresses, self.realization_root
+            )
+        if failure is None:
+            node_result = _realize_node_subset(
+                self,
+                realization.nodes,
+                realization.content,
+                scenario_root,
+                extra_ops,
+                persistent_volumes=realization.persistent_volumes,
+            )
+            failure = (
+                node_result
+                if node_result is not None and not node_result.success
+                else None
+            )
+        if failure is None:
+            failure = self._realize_platform_boundary()
+        return failure or node_result or LabResult(success=True)
 
     def _realize_published_ports(
         self,
@@ -277,10 +349,69 @@ class ComposeRealizationMixin(
         remapped the way the checked-in stack's convenience ports are.
         """
 
-        conflicts = published_port_conflicts(realization)
+        # Only ask Docker what we already publish when there is an exact
+        # binding whose answer could change, so a realization that declares no
+        # host port costs no round-trip.
+        declares_exact_binding = any(
+            binding.host_port is not None
+            for node in realization.nodes
+            for binding in node.published_ports
+        )
+        owned = self._published_host_ports() if declares_exact_binding else frozenset()
+        conflicts = published_port_conflicts(realization, owned)
         if not conflicts:
             return None
         return LabResult(success=False, error="; ".join(conflicts[:5]))
+
+    def _published_host_ports(self) -> frozenset[tuple[str, int, str]]:
+        """Return the host bindings this project's own containers publish.
+
+        A port probe cannot say who holds a port, and the retry path re-applies
+        the plan with the range still up, so without this every declared binding
+        looks taken by a stranger on the second pass. Ours are not conflicts:
+        Compose reconciles those containers. Unreadable Docker state yields an
+        empty set, which only restores the stricter probe-only behavior.
+        """
+
+        bindings: frozenset[tuple[str, int, str]] = frozenset()
+        try:
+            identifiers = self._project_container_ids()
+            if identifiers:
+                inspected = self._run(
+                    [
+                        "docker",
+                        "inspect",
+                        "--format",
+                        "{{json .NetworkSettings.Ports}}",
+                        *identifiers,
+                    ],
+                    timeout=60,
+                )
+                if inspected.returncode == 0:
+                    bindings = frozenset(_owned_bindings(inspected.stdout))
+        # broad-except: an unreadable daemon must not mask a real port conflict
+        # nor crash the start; falling back to the probe alone is the safe side.
+        except Exception:
+            bindings = frozenset()
+        return bindings
+
+    def _project_container_ids(self) -> list[str]:
+        """Return the ids of containers labelled for this compose project."""
+
+        listed = self._run(
+            [
+                "docker",
+                "ps",
+                "--filter",
+                f"label=com.docker.compose.project={self._project_name}",
+                "--format",
+                "{{.ID}}",
+            ],
+            timeout=60,
+        )
+        if listed.returncode != 0:
+            return []
+        return [line.strip() for line in listed.stdout.splitlines() if line.strip()]
 
 
 def _append_image_free_artifact_ops(
@@ -325,4 +456,39 @@ def _append_image_free_artifact_ops(
             ops_by_address.setdefault(consumer.target_address, []).append(
                 PlaceFileOp(path=destination, content=content, mode=mode)
             )
+    return None
+
+
+def _append_image_free_environment_bindings(
+    bindings_by_address: dict[str, dict[str, str]],
+    artifact: object,
+    consumers: list[object],
+    realization_root: Path,
+) -> LabResult | None:
+    """Resolve admitted generated outputs for generic-container env delivery."""
+
+    from aptl.core.deployment._compose_stateful_model import artifact_source_path
+    from aptl.core.deployment.realization import valid_environment_variable_name
+
+    source_root = artifact_source_path(realization_root, artifact)
+    outputs = {output.name: source_root / output.path for output in artifact.outputs}
+    try:
+        for consumer in consumers:
+            if not valid_environment_variable_name(consumer.environment_variable):
+                raise ValueError("invalid generated environment variable name")
+            output = outputs.get(consumer.output_name)
+            if output is None or not output.is_file():
+                raise ValueError("missing generated output")
+            value = output.read_text(encoding="utf-8").strip()
+            if not value or "\n" in value or "\r" in value:
+                raise ValueError("invalid generated environment value")
+            node_bindings = bindings_by_address.setdefault(consumer.target_address, {})
+            if consumer.environment_variable in node_bindings:
+                raise ValueError("duplicate generated environment target")
+            node_bindings[consumer.environment_variable] = value
+    except (OSError, ValueError):
+        return LabResult(
+            success=False,
+            error=f"Generated artifact {artifact.address} environment delivery failed.",
+        )
     return None

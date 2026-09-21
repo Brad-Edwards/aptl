@@ -8,30 +8,34 @@ native readback the materializer already proved and disclosed into the runtime
 snapshot as the ``service_materialization`` concern.
 
 APTL projects a ``proposition-truth-result/v1`` envelope for an assertion **only
-when it can genuinely corroborate it** — every subject of its proposition is an
-observed content-placement carrying that realized concern. An assertion APTL
-cannot observe (for example a participant/Wazuh-evidenced proposition on an
-evidence channel APTL does not yet project from) gets no result: its truth is
-left unresolved, never fabricated. This keeps the evaluator declaration honest —
-APTL evaluates exactly the observed-state shape it actually observes.
+when it can genuinely corroborate it**. That can be either the realized
+``service_materialization`` concern or one of the three exact TechVault native
+evidence records whose source adapter already proved the authored semantic
+claim. An assertion APTL cannot observe gets no result: its truth is left
+unresolved, never fabricated. This keeps the evaluator declaration honest —
+APTL evaluates exactly the observed-state shapes it actually observes.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Callable
 
+from raes_contracts.contracts import ExperimentEvidenceRecordModel
 from raes_contracts.planning import EvaluationPlan
 from raes_contracts.runtime_state import RuntimeSnapshot
 
 from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, APTL_RAES_TARGET_VERSION
 from aptl.backends.raes_service_index_schema import INTERFACE_PROFILE
+from aptl.core.experiment.trial_plan import compute_source_set_digest
 
 _OBSERVED_STATE = "observed_state"
+_DECLARED_STATE = "declared_state"
 _CONTENT_PLACEMENT = "content-placement"
 _TRUE = "true"
 _FALSE = "false"
 _POSITIVE = "positive"
+_TRUTH_RESULT_SCHEMA = "proposition-truth-result/v1"
 
 # Provenance of the probe that decided an observed-state truth: APTL's native
 # service-search-index-schema readback implementation and the capability it
@@ -54,7 +58,9 @@ def _invert(outcome: str) -> str:
     return outcome
 
 
-def _service_materialization_binding(subject: str, snapshot: RuntimeSnapshot) -> Mapping[str, Any] | None:
+def _service_materialization_binding(
+    subject: str, snapshot: RuntimeSnapshot
+) -> Mapping[str, Any] | None:
     """Return ``subject``'s ``service_materialization`` binding if it is an observed
     content-placement bound to :data:`INTERFACE_PROFILE`, else ``None``.
     """
@@ -64,12 +70,17 @@ def _service_materialization_binding(subject: str, snapshot: RuntimeSnapshot) ->
         return None
     payload = entry.payload if isinstance(entry.payload, Mapping) else {}
     binding = payload.get("service_materialization")
-    if isinstance(binding, Mapping) and binding.get("interface_profile") == INTERFACE_PROFILE:
+    if (
+        isinstance(binding, Mapping)
+        and binding.get("interface_profile") == INTERFACE_PROFILE
+    ):
         return binding
     return None
 
 
-def _corroborated_subject(subject: str, snapshot: RuntimeSnapshot) -> tuple[str, str] | None:
+def _corroborated_subject(
+    subject: str, snapshot: RuntimeSnapshot
+) -> tuple[str, str] | None:
     """Return ``(field_schema_digest, boundary_ref)`` if ``subject`` is an observed
     content-placement corroborating the ``service_materialization`` concern, else
     ``None`` (APTL cannot observe this subject's proposition).
@@ -137,30 +148,148 @@ def _split_plan_operations(
     return propositions, assertions
 
 
+def _declared_node_presence_result(
+    assertion_address: str,
+    proposition_address: str,
+    polarity: str,
+    ppayload: Mapping[str, Any],
+    snapshot: RuntimeSnapshot,
+) -> dict[str, Any] | None:
+    """Decide the one declared-state predicate APTL can evaluate exactly."""
+
+    spec = ppayload.get("spec")
+    predicate = spec.get("predicate") if isinstance(spec, Mapping) else None
+    subjects = _string_tuple(ppayload.get("subject_addresses"))
+    if not _declared_presence_predicate(ppayload, predicate, subjects):
+        return None
+    outcome = (
+        _TRUE
+        if all(
+            (entry := snapshot.entries.get(subject)) is not None
+            and entry.resource_type == "node"
+            for subject in subjects
+        )
+        else _FALSE
+    )
+    return {
+        "schema_version": _TRUTH_RESULT_SCHEMA,
+        "result_id": f"aptl:{assertion_address}",
+        "proposition_address": proposition_address,
+        "assertion_address": assertion_address,
+        "assertion_polarity": polarity,
+        "proposition_outcome": outcome,
+        "assertion_outcome": outcome if polarity == _POSITIVE else _invert(outcome),
+        "evaluation_basis": _DECLARED_STATE,
+        "declared_artifact_digest": compute_source_set_digest(
+            {
+                "proposition_address": proposition_address,
+                "subject_addresses": list(subjects),
+                "predicate": dict(predicate),
+                "quantifier": ppayload.get("quantifier"),
+            }
+        ),
+    }
+
+
+def _declared_presence_predicate(
+    ppayload: Mapping[str, Any],
+    predicate: object,
+    subjects: tuple[str, ...],
+) -> bool:
+    """Validate the one declared-state predicate APTL can decide."""
+
+    return (
+        isinstance(predicate, Mapping)
+        and ppayload.get("predicate_kind") == "presence"
+        and ppayload.get("quantifier") == "all"
+        and not _string_tuple(ppayload.get("evidence_requirement_refs"))
+        and predicate.get("kind") == "presence"
+        and predicate.get("property") == "node"
+        and predicate.get("semantic_ref") == "urn:raes:declared-property:node"
+        and predicate.get("operator") == "exists"
+        and bool(subjects)
+    )
+
+
 def _project_assertion_result(
     assertion_address: str,
     apayload: Mapping[str, Any],
     propositions: Mapping[str, Mapping[str, Any]],
     snapshot: RuntimeSnapshot,
+    evidence_records: tuple[ExperimentEvidenceRecordModel, ...],
+    proposition_interpreter: Callable[..., object] | None,
 ) -> dict[str, Any] | None:
     """Project one assertion's truth-result envelope, or ``None`` if APTL can't corroborate it."""
 
     proposition_address = apayload.get("proposition_address")
-    ppayload = propositions.get(proposition_address) if isinstance(proposition_address, str) else None
-    if ppayload is None or ppayload.get("evaluation_basis") != _OBSERVED_STATE:
-        return None
+    ppayload = (
+        propositions.get(proposition_address)
+        if isinstance(proposition_address, str)
+        else None
+    )
+    result = None
+    if ppayload is None:
+        return result
+    polarity_value = apayload.get("polarity", _POSITIVE)
+    polarity = (
+        polarity_value if polarity_value in (_POSITIVE, "negative") else _POSITIVE
+    )
+    basis = ppayload.get("evaluation_basis")
+    if basis == _DECLARED_STATE:
+        result = _declared_node_presence_result(
+            assertion_address,
+            proposition_address,
+            polarity,
+            ppayload,
+            snapshot,
+        )
+    elif basis == _OBSERVED_STATE:
+        result = _observed_assertion_result(
+            assertion_address,
+            proposition_address,
+            polarity,
+            ppayload,
+            snapshot,
+            evidence_records,
+            proposition_interpreter,
+        )
+    return result
+
+
+def _observed_assertion_result(
+    assertion_address: str,
+    proposition_address: str,
+    polarity: str,
+    ppayload: Mapping[str, Any],
+    snapshot: RuntimeSnapshot,
+    evidence_records: tuple[ExperimentEvidenceRecordModel, ...],
+    proposition_interpreter: Callable[..., object] | None,
+) -> dict[str, Any] | None:
+    """Project native evidence or corroborated service-content truth."""
+
+    native_result = (
+        proposition_interpreter(
+            assertion_address,
+            proposition_address,
+            polarity,
+            ppayload,
+            evidence_records,
+        )
+        if proposition_interpreter is not None
+        else None
+    )
+    if native_result is not None:
+        return native_result
     corroborated = _service_content_subject_outcome(
         _string_tuple(ppayload.get("subject_addresses")), snapshot
     )
     if corroborated is None:
         return None
     outcome, field_schema_digest, boundary_ref = corroborated
-    polarity = apayload.get("polarity", _POSITIVE)
-    polarity = polarity if polarity in (_POSITIVE, "negative") else _POSITIVE
     assertion_outcome = outcome if polarity == _POSITIVE else _invert(outcome)
     evidence_refs = _string_tuple(ppayload.get("evidence_requirement_refs"))
     result: dict[str, Any] = {
-        "schema_version": "proposition-truth-result/v1",
+        "schema_version": _TRUTH_RESULT_SCHEMA,
         "result_id": f"aptl:{assertion_address}",
         "proposition_address": proposition_address,
         "assertion_address": assertion_address,
@@ -191,6 +320,9 @@ def _project_assertion_result(
 def project_proposition_truth_results(
     plan: EvaluationPlan,
     snapshot: RuntimeSnapshot,
+    *,
+    evidence_records: tuple[ExperimentEvidenceRecordModel, ...] = (),
+    proposition_interpreter: Callable[..., object] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Project truth-result envelopes APTL can corroborate, keyed by assertion.
 
@@ -201,7 +333,63 @@ def project_proposition_truth_results(
     propositions, assertions = _split_plan_operations(plan)
     results: dict[str, dict[str, Any]] = {}
     for assertion_address, apayload in assertions.items():
-        result = _project_assertion_result(assertion_address, apayload, propositions, snapshot)
+        result = _project_assertion_result(
+            assertion_address,
+            apayload,
+            propositions,
+            snapshot,
+            evidence_records,
+            proposition_interpreter,
+        )
         if result is not None:
             results[assertion_address] = result
     return results
+
+
+def native_evidence_truth_is_complete(
+    plan: EvaluationPlan,
+    snapshot: RuntimeSnapshot,
+    evidence_records: tuple[ExperimentEvidenceRecordModel, ...],
+    proposition_interpreter: object | None = None,
+) -> bool:
+    """Return whether every planned native truth demand has one bound record.
+
+    This is the terminal fail-closed check used after control-plane
+    reconciliation. A sealed capture set is insufficient if the authored
+    predicate changed and therefore no longer matches APTL's exact evaluator.
+    """
+
+    propositions, _ = _split_plan_operations(plan)
+    capability_ids = getattr(proposition_interpreter, "capability_ids", frozenset())
+    planned_requirements = tuple(
+        requirement_ref
+        for payload in propositions.values()
+        for requirement_ref in _string_tuple(payload.get("evidence_requirement_refs"))
+        if requirement_ref in capability_ids
+    )
+    if not planned_requirements or len(planned_requirements) != len(
+        set(planned_requirements)
+    ):
+        return False
+    records_by_requirement: dict[str, list[ExperimentEvidenceRecordModel]] = {}
+    for record in evidence_records:
+        if record.capture_requirement_ref in capability_ids:
+            records_by_requirement.setdefault(
+                record.capture_requirement_ref,
+                [],
+            ).append(record)
+    if set(planned_requirements) != set(records_by_requirement) or any(
+        len(records) != 1 for records in records_by_requirement.values()
+    ):
+        return False
+    bound_record_ids = {
+        str(evidence_ref)
+        for result in snapshot.proposition_truth_results.values()
+        if isinstance(result, Mapping)
+        for evidence_ref in _string_tuple(result.get("evidence_refs"))
+    }
+    return all(
+        records_by_requirement[requirement_ref][0].evidence_record_id
+        in bound_record_ids
+        for requirement_ref in planned_requirements
+    )

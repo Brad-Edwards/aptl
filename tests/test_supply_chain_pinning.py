@@ -36,7 +36,24 @@ def _tracked(pattern: str) -> list[Path]:
 
 # `FROM <image>@sha256:<64 hex>`, optionally `AS <stage>`.
 _FROM = re.compile(r"^\s*FROM\s+(?P<ref>\S+)", re.IGNORECASE | re.MULTILINE)
+_GLOBAL_ARG = re.compile(
+    r"^\s*ARG\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)=(?P<default>\S+)\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_FROM_ARG = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)\}$")
 _DIGEST_PINNED = re.compile(r"^[^\s@]+@sha256:[0-9a-f]{64}$")
+_LOCALLY_BUILT_BASES = frozenset(
+    {
+        "aptl/generic-samba-ad-base:latest",
+        "aptl/generic-samba-ad-wazuh-agent-base:latest",
+        "aptl/generic-systemd-base:latest",
+        "aptl/generic-systemd-base-debian:latest",
+        "aptl/generic-systemd-node22-base:latest",
+        "aptl/generic-systemd-wazuh-agent-base:latest",
+        "aptl/generic-systemd-wazuh-agent-base-debian:latest",
+        "aptl/generic-wazuh-agent-base-debian:latest",
+    }
+)
 
 
 def _dockerfiles() -> list[Path]:
@@ -44,6 +61,7 @@ def _dockerfiles() -> list[Path]:
         p
         for p in REPO_ROOT.rglob("Dockerfile*")
         if p.is_file()
+        and not p.is_relative_to(REPO_ROOT / "build")
         and "node_modules" not in p.parts
         and "site" not in p.parts
         and ".venv" not in p.parts
@@ -53,18 +71,52 @@ def _dockerfiles() -> list[Path]:
     return sorted(found)
 
 
-@pytest.mark.parametrize("dockerfile", _dockerfiles(), ids=lambda p: str(p.relative_to(REPO_ROOT)))
-def test_dockerfile_base_images_are_digest_pinned(dockerfile: Path) -> None:
+def _registry_base_refs(dockerfile: Path) -> list[str]:
+    """Return external image refs, excluding stages and built-local substrates."""
+
     text = dockerfile.read_text(encoding="utf-8")
-    # Names of earlier build stages are internal references, not registry pulls.
+    first_from = _FROM.search(text)
+    global_args = {
+        match.group("name"): match.group("default")
+        for match in _GLOBAL_ARG.finditer(
+            text[: first_from.start() if first_from else 0]
+        )
+    }
     stages = {
         m.group(1).lower()
-        for m in re.finditer(r"^\s*FROM\s+\S+\s+AS\s+(\S+)", text, re.IGNORECASE | re.MULTILINE)
+        for m in re.finditer(
+            r"^\s*FROM\s+\S+\s+AS\s+(\S+)", text, re.IGNORECASE | re.MULTILINE
+        )
     }
+    external = []
+    for match in _FROM.finditer(text):
+        ref = match.group("ref")
+        argument = _FROM_ARG.fullmatch(ref)
+        resolved = global_args.get(argument.group("name"), ref) if argument else ref
+        if (
+            resolved.lower() not in stages
+            and resolved.lower() != "scratch"
+            and resolved not in _LOCALLY_BUILT_BASES
+        ):
+            external.append(resolved)
+    return external
+
+
+def test_dockerfile_from_arg_keeps_external_defaults_subject_to_pinning(
+    tmp_path: Path,
+) -> None:
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text("ARG PARENT=ubuntu:latest\nFROM ${PARENT}\n")
+
+    assert _registry_base_refs(dockerfile) == ["ubuntu:latest"]
+
+
+@pytest.mark.parametrize(
+    "dockerfile", _dockerfiles(), ids=lambda p: str(p.relative_to(REPO_ROOT))
+)
+def test_dockerfile_base_images_are_digest_pinned(dockerfile: Path) -> None:
     unpinned = [
-        ref
-        for ref in (m.group("ref") for m in _FROM.finditer(text))
-        if ref.lower() not in stages and ref.lower() != "scratch" and not _DIGEST_PINNED.match(ref)
+        ref for ref in _registry_base_refs(dockerfile) if not _DIGEST_PINNED.match(ref)
     ]
     assert not unpinned, (
         f"{dockerfile.relative_to(REPO_ROOT)} pulls a mutable tag: {unpinned}. "
@@ -76,7 +128,9 @@ def test_dependabot_watches_every_dockerfile_directory() -> None:
     """A digest pin that nothing refreshes rots into a stale, unpatched base."""
     import yaml
 
-    config = yaml.safe_load((REPO_ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8"))
+    config = yaml.safe_load(
+        (REPO_ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+    )
     watched = set()
     for update in config["updates"]:
         if update["package-ecosystem"] != "docker":
@@ -84,8 +138,14 @@ def test_dependabot_watches_every_dockerfile_directory() -> None:
         # Dependabot accepts a single `directory` or a `directories` list.
         entries = update.get("directories") or [update["directory"]]
         watched.update(entry.rstrip("/") or "/" for entry in entries)
-    needed = {f"/{p.parent.relative_to(REPO_ROOT)}" for p in _dockerfiles()}
-    assert needed <= watched, f"no docker Dependabot entry for: {sorted(needed - watched)}"
+    needed = {
+        f"/{path.parent.relative_to(REPO_ROOT)}"
+        for path in _dockerfiles()
+        if _registry_base_refs(path)
+    }
+    assert needed <= watched, (
+        f"no docker Dependabot entry for: {sorted(needed - watched)}"
+    )
 
 
 # ------------------------------------------------------------ github actions
@@ -100,7 +160,9 @@ _SHA_PINNED = re.compile(r"^[^@]+@[0-9a-f]{40}$")
 def test_actions_are_sha_pinned(workflow: Path) -> None:
     unpinned = [
         ref
-        for ref in (m.group("ref") for m in _USES.finditer(workflow.read_text(encoding="utf-8")))
+        for ref in (
+            m.group("ref") for m in _USES.finditer(workflow.read_text(encoding="utf-8"))
+        )
         # `./local-action` is first-party content already in the checkout.
         if not ref.startswith("./") and not _SHA_PINNED.match(ref)
     ]
@@ -189,7 +251,9 @@ def test_pip_installs_are_hash_pinned_or_local(source: Path) -> None:
                 or re.search(r"\sdist/\S*\.whl(\s|$|\\)", command)
             )
             closed_offline = "--no-index" in command and "==" in command
-            if not (hashed or closed_offline or (local_source and "--no-deps" in command)):
+            if not (
+                hashed or closed_offline or (local_source and "--no-deps" in command)
+            ):
                 offenders.append(command.strip())
     assert not offenders, (
         f"{source.relative_to(REPO_ROOT)} has an unpinned pip install: {offenders}. "
@@ -214,21 +278,40 @@ def test_release_artifacts_are_attested_and_the_bundle_ships() -> None:
     publish = yaml.safe_load(workflow_text)["jobs"]["publish"]
 
     assert publish["permissions"].get("attestations") == "write"
-    assert publish["permissions"].get("id-token") == "write", "sigstore signing needs OIDC"
+    assert publish["permissions"].get("id-token") == "write", (
+        "sigstore signing needs OIDC"
+    )
 
     attest = next(
-        (s for s in publish["steps"] if s.get("uses", "").startswith("actions/attest-build-provenance@")),
+        (
+            s
+            for s in publish["steps"]
+            if s.get("uses", "").startswith("actions/attest-build-provenance@")
+        ),
         None,
     )
-    assert attest is not None, "release artifacts are published without build provenance"
+
+    assert attest is not None, (
+        "release artifacts are published without build provenance"
+    )
     assert attest["with"]["subject-path"], "the attestation names no subject artifact"
 
     # Sign before publishing, so a signing failure cannot leave an unattested
     # artifact already on PyPI.
     step_names = [s.get("uses", "") for s in publish["steps"]]
-    attest_at = next(i for i, u in enumerate(step_names) if u.startswith("actions/attest-build-provenance@"))
-    publish_at = next(i for i, u in enumerate(step_names) if u.startswith("pypa/gh-action-pypi-publish@"))
-    assert attest_at < publish_at, "provenance must be attested before the artifact is published"
+    attest_at = next(
+        i
+        for i, u in enumerate(step_names)
+        if u.startswith("actions/attest-build-provenance@")
+    )
+    publish_at = next(
+        i
+        for i, u in enumerate(step_names)
+        if u.startswith("pypa/gh-action-pypi-publish@")
+    )
+    assert attest_at < publish_at, (
+        "provenance must be attested before the artifact is published"
+    )
 
     # Prove the bundle is actually uploaded, not merely mentioned. A substring
     # check would pass on a comment or an unused variable, which is exactly the
@@ -260,6 +343,24 @@ def test_release_artifacts_are_attested_and_the_bundle_ships() -> None:
     )
 
 
+def test_scenario_verification_artifact_boundary_runs_in_ci() -> None:
+    """The core-only/plugin-installed wheel proof must not be an optional local test."""
+
+    import yaml
+
+    workflow = yaml.safe_load((WORKFLOW_DIR / "checks.yml").read_text(encoding="utf-8"))
+    job = workflow["jobs"]["scenario-verification-artifacts"]
+    commands = "\n".join(
+        str(step.get("run", "")) for step in job["steps"] if "run" in step
+    )
+
+    # This job executes pytest as well as building wheels, so it needs the
+    # hash-locked development/test export rather than the CI-tool-only export.
+    assert "pip install --require-hashes -r requirements/dev.txt" in commands
+    assert "tests/test_scenario_verification_artifacts.py" in commands
+    assert "-m integration" in commands
+
+
 @pytest.mark.parametrize(
     "source", _pinning_sources(), ids=lambda p: str(p.relative_to(REPO_ROOT))
 )
@@ -289,7 +390,10 @@ def test_source_builds_do_not_re_open_an_unhashed_resolver(source: Path) -> None
                 if "--no-build-isolation" not in command:
                     offenders.append(command.strip())
             # A wheel/sdist build of this project.
-            if re.search(r"python\s+-m\s+build\b", command) and "--no-isolation" not in command:
+            if (
+                re.search(r"python\s+-m\s+build\b", command)
+                and "--no-isolation" not in command
+            ):
                 offenders.append(command.strip())
     assert not offenders, (
         f"{source.relative_to(REPO_ROOT)} builds from source with PEP 517 isolation "
@@ -297,8 +401,21 @@ def test_source_builds_do_not_re_open_an_unhashed_resolver(source: Path) -> None
     )
 
 
-def test_scenario_content_is_not_an_aptl_supply_chain_input() -> None:
-    """Scenario-owned scripts are acquired from packs, not shipped by APTL."""
+def test_scenario_fixture_scripts_are_out_of_scope() -> None:
+    """The lab's fake corporate content is not part of APTL's supply chain.
 
-    assert not (REPO_ROOT / "scenarios").exists()
-    assert all("scenarios" not in path.parts for path in _pinning_sources())
+    ``scenarios/fixtures/techvault-content/`` holds the files a red-team agent
+    discovers on a compromised TechVault host. Its ``deploy.sh`` is a prop: it is
+    never executed by a build, and hash-pinning it would make the artifact read
+    as machine-generated rather than as something a developer checked in. It is
+    excluded here by evidence, not by convenience - and this test fails if the
+    file stops being a fixture, so the exclusion cannot quietly widen.
+    """
+    fixture = (
+        REPO_ROOT
+        / "scenarios/fixtures/techvault-content/dev-user-home/projects/techvault-portal/deploy.sh"
+    )
+    if not fixture.is_file():
+        pytest.skip("fixture removed or relocated")
+    assert fixture not in _pinning_sources()
+    assert "scenarios/fixtures/" in str(fixture.relative_to(REPO_ROOT))

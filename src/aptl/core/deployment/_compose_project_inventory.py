@@ -1,0 +1,170 @@
+"""Checked all-state container inventory for one Docker project."""
+
+from __future__ import annotations
+
+import json
+import re
+from typing import Any
+
+from aptl.core.deployment._compose_resource_ownership import OwnershipConflictError
+from aptl.core.deployment.errors import BackendObservationError, BackendTimeoutError
+from aptl.core.lab_types import LabStatus
+from aptl.utils.redaction import redact
+
+_HOST_INVENTORY_TIMEOUT = 90
+_PROJECT_OWNERSHIP_LABELS = (
+    "com.docker.compose.project",
+    "aptl.lifecycle.project",
+)
+_MAX_INVENTORY_ERROR_LENGTH = 512
+# One JSON object per container rather than a tab-delimited row: image labels
+# are arbitrary text and some upstream images (Ubuntu 26.04's
+# `org.opencontainers.image.description`) carry embedded newlines, which split
+# a single container across several "rows" and made the whole inventory
+# unparseable — the lab realized correctly and then failed at attestation
+# (issue #1006). JSON escapes the value, so label text cannot break the shape.
+_PROJECT_INVENTORY_FORMAT = "{{json .}}"
+
+
+def _parse_labels(labels_str: str) -> dict[str, str]:
+    """Parse a comma-separated ``k=v,k=v`` labels string from ``docker ps``."""
+
+    if not labels_str:
+        return {}
+    out: dict[str, str] = {}
+    for pair in labels_str.split(","):
+        if "=" in pair:
+            key, value = pair.split("=", 1)
+            out[key.strip()] = value.strip()
+    return out
+
+
+def _parse_ports(ports_str: str) -> list[str]:
+    """Parse a comma-separated ports string from ``docker ps``."""
+
+    if not ports_str:
+        return []
+    return [port.strip() for port in ports_str.split(",") if port.strip()]
+
+
+def _parse_lab_row(line: str) -> dict[str, Any] | None:
+    """Parse one project-inventory JSON row, or reject a malformed row."""
+
+    try:
+        row = json.loads(line)
+    except ValueError:
+        return None
+    if not isinstance(row, dict):
+        return None
+    status = str(row.get("Status", ""))
+    health_match = re.search(
+        r"\((healthy|unhealthy|health: starting)\)", status, re.IGNORECASE
+    )
+    health = health_match.group(1).casefold() if health_match else ""
+    if health == "health: starting":
+        health = "starting"
+    return {
+        "name": str(row.get("Names", "")),
+        "image": str(row.get("Image", "")),
+        "id": str(row.get("ID", "")),
+        "status": status,
+        "state": str(row.get("State", "")),
+        "health": health,
+        "labels": _parse_labels(str(row.get("Labels", ""))),
+        "ports": _parse_ports(str(row.get("Ports", ""))),
+    }
+
+
+def _bounded_inventory_error(stderr: str) -> str:
+    """Return a redacted, bounded backend error for the public status envelope."""
+
+    safe = str(redact(stderr)).strip()
+    return (safe or "container inventory command failed")[:_MAX_INVENTORY_ERROR_LENGTH]
+
+
+def _parse_inventory_rows(stdout: str) -> tuple[list[dict[str, Any]], str | None]:
+    """Parse a complete label query without exposing a partial result."""
+
+    rows: list[dict[str, Any]] = []
+    failure: str | None = None
+    for line in stdout.splitlines():
+        if not line.strip():
+            continue
+        row = _parse_lab_row(line)
+        if row is None or not row["id"]:
+            failure = "Failed to parse project container inventory"
+            break
+        rows.append(row)
+    return rows, failure
+
+
+class ComposeProjectInventoryMixin(object):
+    """Project-owned inventory methods shared by local and SSH backends."""
+
+    def _query_project_inventory_label(
+        self, label: str
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """Query and parse the containers owned through one project label."""
+
+        try:
+            result = self._run(
+                [
+                    "docker",
+                    "ps",
+                    "-a",
+                    "--no-trunc",
+                    "--filter",
+                    f"label={label}={self._project_name}",
+                    "--format",
+                    _PROJECT_INVENTORY_FORMAT,
+                ],
+                timeout=_HOST_INVENTORY_TIMEOUT,
+            )
+        except (BackendTimeoutError, OSError):
+            return [], "Project container inventory could not be observed"
+        if result.returncode != 0:
+            return [], _bounded_inventory_error(result.stderr)
+        return _parse_inventory_rows(result.stdout)
+
+    def _project_container_status(self) -> LabStatus:
+        """Return checked, all-state inventory for the configured project."""
+
+        try:
+            self._load_resource_ownership()
+        except OwnershipConflictError:
+            return LabStatus(
+                running=False,
+                error="Backend resource ownership state is unavailable.",
+            )
+        by_id: dict[str, dict[str, Any]] = {}
+        failure: str | None = None
+        for label in _PROJECT_OWNERSHIP_LABELS:
+            rows, failure = self._query_project_inventory_label(label)
+            if failure is not None:
+                break
+            for row in rows:
+                by_id.setdefault(row["id"], row)
+
+        if failure is not None:
+            return LabStatus(running=False, error=failure)
+        containers = sorted(by_id.values(), key=lambda row: (row["name"], row["id"]))
+        return LabStatus(
+            running=any(
+                str(container.get("state", "")).casefold() == "running"
+                for container in containers
+            ),
+            containers=containers,
+        )
+
+    def host_list_lab_containers(self) -> list[dict[str, Any]]:
+        """Return all-state project inventory for snapshot/readback callers.
+
+        Raises :class:`BackendObservationError` when the shared checked query
+        cannot prove the inventory, so snapshot and boundary consumers never
+        collapse a failed observation into an apparently valid empty project.
+        """
+
+        status = self._project_container_status()
+        if status.error:
+            raise BackendObservationError(status.error)
+        return status.containers

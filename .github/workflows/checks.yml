@@ -28,14 +28,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install --require-hashes -r requirements/ci.txt
-      # Skip the local test hooks here — the dedicated python-tests /
-      # mcp-tests / web-tests jobs below already run them with the right
-      # toolchain (deps installed, node available, etc). The test hooks
-      # exist for local pre-commit safety, not CI redundancy. The Vale
-      # hook is likewise covered by the dedicated docs job below.
-      - run: pre-commit run --all-files --show-diff-on-failure
-        env:
-          SKIP: pytest,vitest-mcp-common,vitest-mcp-red,vitest-web,vale-prose-lint
+      - name: Secrets and fast hygiene
+        run: pre-commit run --all-files --show-diff-on-failure
+      - name: Dependency freshness and complexity (CI only)
+        run: pre-commit run --config .pre-commit-ci.yaml --all-files --show-diff-on-failure
 
   docs:
     name: Docs (Vale prose lint + mkdocs strict build)
@@ -69,7 +65,6 @@ jobs:
       - run: |
           pip install --require-hashes -r requirements/dev.txt
           pip install -e . --no-deps --no-build-isolation
-          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
       - run: |
           coverage run -m pytest tests/ -q -k "not integration"
           coverage xml -o coverage.xml
@@ -78,6 +73,43 @@ jobs:
           name: python-coverage
           path: coverage.xml
           retention-days: 7
+
+  scenario-verification-artifacts:
+    name: Scenario verification installed-artifact boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install the hash-verified test and build toolchain
+        run: pip install --require-hashes -r requirements/dev.txt
+      - name: Prove core-only and separately installed verifier wheels
+        run: >-
+          python -m pytest tests/test_scenario_verification_artifacts.py -q
+          -m integration
+
+  pack-identity-compatibility:
+    name: Admitted pack identity and plugin qualification
+    runs-on: ubuntu-latest
+    # Issue #879: the verifier declared scenario content the admitted pack does
+    # not carry, and no gate noticed, because every other test built its context
+    # from the plugin's own declaration. These tests resolve the identity through
+    # env-packs' real validation path and fail on any drift. They are
+    # integration-marked (staging and validating a pack is not fast-suite work)
+    # but need no Docker, so they run here rather than nowhere.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: |
+          pip install --require-hashes -r requirements/dev.txt
+          pip install -e . --no-deps --no-build-isolation
+      - name: Bind every installed plugin's declaration to the admitted pack
+        run: >-
+          python -m pytest tests/test_env_pack_bundle.py
+          tests/test_plugin_pack_compatibility.py -q -m integration
 
   python-cross-platform:
     name: Python cross-platform smoke (${{ matrix.os }})
@@ -116,7 +148,6 @@ jobs:
       - run: |
           pip install --require-hashes -r requirements/dev.txt
           pip install -e . --no-deps --no-build-isolation
-          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
       - name: Python portable suite without lab integration
         run: python -m pytest ${{ matrix.pytest_args }}
       - name: CLI import and help smoke
@@ -128,7 +159,7 @@ jobs:
     name: RAES scenario validation gate (advisory, Phase A)
     runs-on: ubuntu-latest
     # SCN-010E / #322. The static validation gate parses the authoritative
-    # acquired TechVault SDL and spawns the `raes conformance backend` CLI,
+    # techvault-operational SDL and spawns the `raes conformance backend` CLI,
     # so it is integration-marked and runs here rather than in the fast
     # python-tests suite. Advisory in Phase A — `continue-on-error` surfaces
     # failures on the PR without blocking merge; the Phase B cutover PR removes
@@ -146,7 +177,6 @@ jobs:
       - run: |
           pip install --require-hashes -r requirements/dev.txt
           pip install -e . --no-deps --no-build-isolation
-          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
       - name: Generate lab SSH keys
         # issue #581: the operational scenario's content: now declares the
         # SSH-reachable targets' authorized_keys (SEC #417), sourced from the
@@ -166,7 +196,7 @@ jobs:
           assert ensure_pivot_key(pivot_dir=pivot_dir).success
           assert ensure_target_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir).success
           "
-      - name: RAES static validation gate (acquired techvault)
+      - name: RAES static validation gate (techvault-operational)
         # -n auto runs the parse / compile / conformance-CLI checks in parallel
         # via pytest-xdist. No coverage is collected here, so xdist worker
         # measurement is not a concern.
@@ -175,11 +205,10 @@ jobs:
   fresh-start-preflight:
     name: Fresh-install lab-start pre-flight (issue #951)
     runs-on: ubuntu-latest
-    # Blocking, and deliberately separate from `python-tests`: admitting the
-    # acquired env-pack needs Docker and takes minutes, which does not belong in
-    # the fast coverage run. It is the unit-level counterpart to
-    # `clean-install-lab-boot` — same regression, checked from a materialized
-    # project directory without booting containers.
+    # Blocking, and deliberately separate from `python-tests`: this is the
+    # read-only counterpart to `clean-install-lab-boot`, checked from a freshly
+    # materialized project directory without booting containers. The fixture is
+    # product-neutral; scenario-specific behavior belongs behind adapters.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -188,20 +217,17 @@ jobs:
       - run: |
           pip install --require-hashes -r requirements/dev.txt
           pip install -e . --no-deps --no-build-isolation
-          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
       - run: python -m pytest tests/test_lab_fresh_start.py -q -m integration
 
   clean-install-lab-boot:
     name: Clean-install lab boot and teardown (DEP-008)
     runs-on: ubuntu-latest
-    # DEP-008 promises `pipx install aptl-labs && aptl lab init && aptl lab start`
-    # produces a working lab with no git clone. Nothing proved it: every other
-    # job installs the project editable from the checkout, and a developer
-    # checkout carries gitignored generated state (config/soc_certs/, .aptl/)
-    # that hides a fresh-install failure entirely. Issue #951 shipped exactly
-    # that failure to PyPI in 5.2.0 — the quick start failed in nine seconds for
-    # every scenario. This boots the full acquired pack from the built wheels in
-    # a clean environment so the released artifacts are what get tested.
+    timeout-minutes: 60
+    # DEP-008 promises a wheel-installed CLI can init, start, observe, and stop
+    # a lab with no source import. Every other job installs the checkout
+    # editable, and developer state can hide packaging/lifecycle defects. This
+    # job supplies a product-neutral SDL as an adapter would, then exercises the
+    # public CLI and independently reads the realized container state.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -211,11 +237,11 @@ jobs:
         run: |
           pip install --require-hashes -r requirements/ci.txt
           python -m build --wheel --no-isolation --outdir dist/
-          python -m build --wheel --no-isolation --outdir dist/ plugins/aptl-techvault-pack-interaction
       - name: Install the wheel into a clean virtual environment
-        # Deliberately not editable: install both packaged artifacts exactly as
-        # users do. `--no-deps` after the locked runtime set keeps the dependency
-        # closure pinned and hash-verified.
+        # Deliberately NOT `pip install -e .`, not the checkout's CLI, and not
+        # the local pack-interaction plugin: any of those would test something
+        # other than the artifact users install. `--no-deps` after the locked
+        # runtime set keeps the dependency closure pinned and hash-verified.
         run: |
           python -m venv "$RUNNER_TEMP/clean-venv"
           "$RUNNER_TEMP/clean-venv/bin/pip" install --require-hashes -r requirements/runtime.txt
@@ -227,17 +253,61 @@ jobs:
           mkdir -p "$RUNNER_TEMP/clean-install"
           cd "$RUNNER_TEMP/clean-install"
           "$RUNNER_TEMP/clean-venv/bin/aptl" lab init ci-lab
-          test ! -e ci-lab/scenarios
+          mkdir -p ci-lab/scenarios
+          cp "$GITHUB_WORKSPACE/tests/fixtures/materialization-envelope.sdl.yaml" \
+            ci-lab/scenarios/materialization-envelope.sdl.yaml
           test ! -e ci-lab/config/soc_certs
           test ! -e ci-lab/.aptl
-      - name: Start the full acquired TechVault pack
-        # `aptl lab start` enforces the documented vm.max_map_count prerequisite
-        # on a native Linux Docker Engine, so the runner satisfies it the same
-        # way docs/getting-started/prerequisites.md tells an operator to.
+      - name: Start and verify the materialization envelope
         run: |
-          sudo sysctl -w vm.max_map_count=262144
           cd "$RUNNER_TEMP/clean-install/ci-lab"
-          "$RUNNER_TEMP/clean-venv/bin/aptl" lab start --scenario techvault
+          "$RUNNER_TEMP/clean-venv/bin/aptl" lab start \
+            --scenario-path scenarios/materialization-envelope.sdl.yaml
+          status_output=$("$RUNNER_TEMP/clean-venv/bin/aptl" lab status)
+          grep -F "Lab is running." <<<"$status_output"
+          project_name=$("$RUNNER_TEMP/clean-venv/bin/python" -c '
+          from pathlib import Path
+          from aptl.core.config import load_config
+          from aptl.core.deployment._compose_resource_ownership import WorkspaceOwnership
+          config = load_config(Path("aptl.json"))
+          ownership = WorkspaceOwnership.load(Path.cwd(), config.deployment.project_name)
+          if ownership is None:
+              raise SystemExit("lab project ownership is unavailable")
+          print(ownership.project_name)
+          ')
+          container_ids=$(docker ps -q \
+            --filter "label=com.docker.compose.project=$project_name" \
+            --filter label=aptl.node.address=provision.node.smoke-box)
+          test -n "$container_ids"
+          test "$(printf '%s\n' "$container_ids" | wc -l)" -eq 1
+          container_id=$container_ids
+          docker exec "$container_id" dpkg-query -W curl
+          test "$(docker exec "$container_id" id -u analyst)" -gt 0
+          test "$(docker exec "$container_id" \
+            stat -c '%U:%G %a' /var/lib/aptl-smoke)" = "analyst:analysts 750"
+      - name: Verify the realization regressions the scenario declares
+        # Issue #993. The checks above observe packages, accounts and
+        # filesystem state; these are the realization surfaces that shipped
+        # defects the boot gate could not see: content that must execute, the
+        # service it configures, the listener and host publication that service
+        # produces, and the orchestrator workflow. They form one causal chain,
+        # so the content placement cannot silently no-op and leave the rest
+        # passing. The verifier runs from the clean venv, against the installed
+        # package's own identities.
+        run: |
+          cd "$RUNNER_TEMP/clean-install/ci-lab"
+          "$RUNNER_TEMP/clean-venv/bin/python" \
+            "$GITHUB_WORKSPACE/scripts/ci/assert_boot_realization.py" . \
+            --node-address provision.node.smoke-box \
+            --content-path /etc/ssh/sshd_config.d/10-aptl-smoke.conf \
+            --content-text $'Port 2022\n' \
+            --unit-name ssh.service \
+            --container-port 2022 \
+            --protocol tcp \
+            --host-ip 127.0.0.1 \
+            --host-port 32022 \
+            --endpoint-banner-prefix SSH- \
+            --workflow-address orchestration.workflow.smoke-control
       - name: Stop the lab and remove its volumes
         if: always()
         run: |
@@ -246,7 +316,8 @@ jobs:
       - name: Assert no project containers, networks, or volumes remain
         if: always()
         run: |
-          "$RUNNER_TEMP/clean-venv/bin/python" scripts/ci/assert_project_teardown.py \
+          "$RUNNER_TEMP/clean-venv/bin/python" \
+            "$GITHUB_WORKSPACE/scripts/ci/assert_project_teardown.py" \
             "$RUNNER_TEMP/clean-install/ci-lab"
 
   mcp-tests:
@@ -315,6 +386,24 @@ jobs:
             fi
             cd -
           done
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Restricted SSH transport against built MCP processes
+        # Exercises real OpenSSH, dispatcher, relay and MCP processes. Deployment
+        # observations are fixtures; this job does not boot or qualify a lab.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssh-server
+          pip install --require-hashes -r requirements/dev.txt
+          pip install -e . --no-deps --no-build-isolation
+          coverage run --data-file=.coverage.transport -m pytest tests/test_mcp_transport_processes.py tests/test_mcp_payload_processes.py -q -m integration
+          coverage xml --data-file=.coverage.transport -o coverage/transport.xml
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: python-transport-coverage
+          path: coverage/transport.xml
+          retention-days: 7
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mcp-coverage
@@ -351,11 +440,8 @@ jobs:
   dependency-audit:
     name: Dependency vulnerability scan
     runs-on: ubuntu-latest
-    # The Python scan (pip-audit) is BLOCKING: it installs the project's
-    # runtime dependencies and fails the job on any known advisory, so a
-    # vulnerable dependency cannot merge. The npm audit step stays advisory
-    # (non-fatal at the step level) — the lab's large transitive Node tree
-    # carries known findings that are triaged out of band, not gated here.
+    # Audit the shipped platform closures and CI build tools. Intentionally
+    # vulnerable lab targets remain in the separate advisory scanner jobs.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -365,28 +451,28 @@ jobs:
         with:
           node-version: '22'
       - name: pip-audit (Python dependencies) — blocking
-        # Install the project so pip-audit sees aptl's real runtime
-        # dependency tree, not just pip-audit's own. --skip-editable drops the
-        # editable aptl checkout itself (not a published PyPI release, so
-        # --strict would otherwise error on it as unauditable). No `|| true`:
-        # a known advisory in a real dependency fails the job.
+        # Generated, hash-pinned exports are the canonical CLI, API, and build
+        # closures. No editable install or build hook runs during the scan.
         run: |
-          pip install --require-hashes -r requirements/runtime.txt
+          set -euo pipefail
           pip install --require-hashes -r requirements/ci.txt
-          pip install -e . --no-deps --no-build-isolation
-          # No --strict: it treats the skipped editable aptl as an error.
-          # pip-audit still fails on any real dependency vulnerability.
-          pip-audit --skip-editable --progress-spinner=off
+          pip-audit --require-hashes --disable-pip --strict \
+            -r requirements/runtime.txt \
+            -r requirements/web.txt \
+            -r requirements/ci.txt \
+            --progress-spinner=off
       - name: npm audit (JS/TS workspaces)
         run: |
-          set +e
-          for dir in web mcp/aptl-mcp-common mcp/mcp-casemgmt mcp/mcp-indexer mcp/mcp-network mcp/mcp-red mcp/mcp-reverse mcp/mcp-soar mcp/mcp-threatintel mcp/mcp-wazuh; do
-            [ -f "$dir/package.json" ] || continue
+          set -euo pipefail
+          packages=(web/package.json mcp/*/package.json)
+          for manifest in "${packages[@]}"; do
+            test -f "$manifest"
+            dir=${manifest%/package.json}
+            test -f "$dir/package-lock.json"
             echo ""
             echo "=== $dir ==="
-            (cd "$dir" && npm ci --no-audit --no-fund --silent >/dev/null 2>&1 && npm audit --audit-level=high)
+            (cd "$dir" && npm ci --ignore-scripts --no-audit --no-fund --silent && npm audit --omit=dev --audit-level=high)
           done
-          true
 
   trivy-fs:
     name: Trivy filesystem scan (advisory)
@@ -458,24 +544,48 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: ad
-            dockerfile: containers/ad/Dockerfile
-            context: .
           - name: base-rocky
             dockerfile: containers/base/Dockerfile.rocky
             context: ./containers
           - name: base-ubuntu
             dockerfile: containers/base/Dockerfile.ubuntu
             context: ./containers
+          - name: appliance-egress-proxy
+            dockerfile: containers/appliance-egress-proxy/Dockerfile
+            context: .
+          - name: generic-samba-ad-base
+            dockerfile: containers/generic-samba-ad-base/Dockerfile
+            context: ./containers/generic-samba-ad-base
+          - name: generic-systemd-base
+            dockerfile: containers/generic-systemd-base/Dockerfile
+            context: ./containers/generic-systemd-base
+          - name: generic-systemd-base-debian
+            dockerfile: containers/generic-systemd-base-debian/Dockerfile
+            context: .
+          - name: generic-systemd-node22-base
+            dockerfile: containers/generic-systemd-node22-base/Dockerfile
+            context: .
+          - name: generic-wazuh-agent-base-debian
+            dockerfile: containers/generic-wazuh-agent-base-debian/Dockerfile
+            context: .
+          - name: kali-capture
+            dockerfile: containers/kali-capture/Dockerfile
+            context: .
+          - name: network-boundary-helper
+            dockerfile: containers/network-boundary-helper/Dockerfile
+            context: .
+          - name: operator-access-proxy
+            dockerfile: containers/operator-access-proxy/Dockerfile
+            context: .
+          - name: suricata-wazuh-agent
+            dockerfile: containers/suricata-wazuh-agent/Dockerfile
+            context: .
           - name: misp-suricata-sync
             dockerfile: containers/misp-suricata-sync/Dockerfile
             context: .
           - name: reverse
             dockerfile: containers/reverse/Dockerfile
             context: ./containers
-          - name: wazuh-sidecar
-            dockerfile: containers/wazuh-sidecar/Dockerfile
-            context: .
           - name: web
             dockerfile: web/Dockerfile
             context: web
@@ -486,7 +596,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Build image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -593,6 +703,10 @@ jobs:
           path: .
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
+          name: python-transport-coverage
+          path: coverage/
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
           name: mcp-coverage
           path: mcp/aptl-mcp-common/coverage/
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -603,7 +717,7 @@ jobs:
         with:
           name: web-coverage
           path: web/coverage/
-      - uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
+      - uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:

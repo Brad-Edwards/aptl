@@ -26,8 +26,15 @@ _ALLOWED_TOP_LEVEL = frozenset(
         "appliance-release.env",
         "aptl-appliance-first-boot",
         "aptl-appliance-first-boot.service",
+        "aptl-launch.mount",
     }
 )
+_CANONICAL_TOP_LEVEL = _ALLOWED_TOP_LEVEL | {
+    "inputs.json",
+    "requirements.txt",
+    "system-packages",
+    "system-packages.sha256",
+}
 _SCENARIO_RE = re.compile(r"^[a-z0-9][a-z0-9.-]*$")
 _INVALID_RELEASE_ENV = "invalid non-secret appliance release environment"
 
@@ -51,7 +58,7 @@ def _validate_staged_paths(staging: Path) -> list[Path]:
     if staging.is_symlink() or not staging.is_dir():
         raise OfflinePayloadError("offline payload staging directory is invalid")
     entries = {path.name for path in staging.iterdir()}
-    if entries != _ALLOWED_TOP_LEVEL:
+    if entries not in (_ALLOWED_TOP_LEVEL, _CANONICAL_TOP_LEVEL):
         raise OfflinePayloadError("offline payload contains unexpected top-level files")
     paths = sorted(
         staging.rglob("*"),
@@ -115,8 +122,19 @@ def _validate_staging(staging: Path) -> list[Path]:
     for required in ("project.tar", "oci-images.tar"):
         if (staging / required).stat().st_size <= 0:
             raise OfflinePayloadError(f"offline payload {required} is empty")
-    _scenario, version = _release_environment(staging)
+    scenario, version = _release_environment(staging)
     _validate_wheelhouse(staging, version)
+    if scenario == "techvault" or (staging / "inputs.json").exists():
+        from aptl.appliance.inputs import validate_canonical_inputs
+
+        try:
+            inputs = validate_canonical_inputs(staging)
+            if inputs.aptl_version != version or scenario != "techvault":
+                raise ValueError("canonical payload release identity mismatch")
+        except (ValueError, OSError, KeyError) as exc:
+            raise OfflinePayloadError(
+                "canonical payload input validation failed"
+            ) from exc
     return paths
 
 
@@ -143,11 +161,11 @@ def _write_tar(staging: Path, paths: list[Path], candidate: Path) -> None:
     """Write a deterministic USTAR archive from already-validated paths."""
 
     try:
-        with tarfile.open(candidate, "w", format=tarfile.USTAR_FORMAT) as archive:
+        with tarfile.open(candidate, "w", format=tarfile.PAX_FORMAT) as archive:
             for path in paths:
                 relative = path.relative_to(staging).as_posix()
                 _add_tar_member(archive, path, relative)
-    except (OSError, tarfile.TarError) as exc:
+    except (OSError, tarfile.TarError, ValueError) as exc:
         raise OfflinePayloadError("offline payload could not be assembled") from exc
 
 

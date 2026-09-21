@@ -139,7 +139,9 @@ class ScenarioSourceConfig(BaseModel):
         cleaned = value.strip()
         if not cleaned:
             raise ValueError("scenario identity must not be empty")
-        return cleaned
+        from aptl.core.scenario_bundle import validate_scenario_identity
+
+        return validate_scenario_identity(cleaned)
 
     @field_validator("root")
     @classmethod
@@ -199,7 +201,6 @@ class DeploymentConfig(BaseModel):
         """Validate the identity used by Compose and destructive label queries."""
 
         return validate_compose_project_name(value)
-
 
 _TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")

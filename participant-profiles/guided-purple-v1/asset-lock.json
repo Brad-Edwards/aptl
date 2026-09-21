@@ -1,0 +1,148 @@
+{
+  "schema_version": "aptl.participant-asset-lock/v1",
+  "profile_id": "guided-purple",
+  "profile_version": 1,
+  "assets": [
+    {
+      "asset_id": "narrative",
+      "kind": "project-file",
+      "source": "participant-profiles/guided-purple-v1/narrative.json",
+      "sha256": "a1d971348cbf22f97c3f7957ccb1387bef6de7a5f5bd9c031863a7f6959ef8af"
+    },
+    {
+      "asset_id": "readiness",
+      "kind": "project-file",
+      "source": "participant-profiles/guided-purple-v1/readiness.json",
+      "sha256": "a8e991a7c180225488778c8ce7491ec125be078002120eb15a73ba40dd98d57d"
+    },
+    {
+      "asset_id": "aptl-config",
+      "kind": "project-file",
+      "source": "participant-profiles/guided-purple-v1/aptl.json",
+      "sha256": "eca39978d2f457b65e5779e373af706bd22b1614d63d158424a6da143349f0bc"
+    },
+    {
+      "asset_id": "raes-scenario",
+      "kind": "project-file",
+      "source": "scenarios/techvault-attacker-target.sdl.yaml",
+      "sha256": "e010069719372b0371cbd86525457578dc2170ffc7359b125751617d7afab320"
+    },
+    {
+      "asset_id": "scenario-catalog",
+      "kind": "project-file",
+      "source": "scenarios/catalog.json",
+      "sha256": "c0e1fd3df119148f105b3249be69dc44ea3dff5eadcf218ea64a8621331e5760"
+    },
+    {
+      "asset_id": "workbench-registry",
+      "kind": "project-file",
+      "source": "src/aptl/workbench/profiles.py",
+      "sha256": "c52c5ab26d211b42e584a7c890400afdda8a0338622ec40449b4d8e0c60d0734"
+    },
+    {
+      "asset_id": "compose-model",
+      "kind": "project-file",
+      "source": "docker-compose.yml",
+      "sha256": "86153d400dcf006367a36aae75c972c08767812adf21158c9e0cd73951c4711c"
+    },
+    {
+      "asset_id": "mcp-red-build",
+      "kind": "mcp-artifact",
+      "source": "mcp/mcp-red/build/index.js",
+      "sha256": "8e2b2072d2787b6c28d73ec31a54d5da29ce6c0601ee9cbf9ba51de3c93de6e9"
+    },
+    {
+      "asset_id": "mcp-red-dependencies",
+      "kind": "project-file",
+      "source": "mcp/mcp-red/package-lock.json",
+      "sha256": "64d5c41cdb45c179734b652037cc5ca3ea48e8bbb2fecb4324fefde77aae3915"
+    },
+    {
+      "asset_id": "mcp-red-config",
+      "kind": "project-file",
+      "source": "mcp/mcp-red/docker-lab-config.json",
+      "sha256": "7ed86aed3341ff3ffcff07b6dc9b8e57a34745cef6161d2267b4c09c8559c461"
+    },
+    {
+      "asset_id": "mcp-indexer-build",
+      "kind": "mcp-artifact",
+      "source": "mcp/mcp-indexer/build/index.js",
+      "sha256": "11014137cc5f31553cf9a7e104c0e230dbe849b16fcbb52c6c15c15f03820ccb"
+    },
+    {
+      "asset_id": "mcp-indexer-dependencies",
+      "kind": "project-file",
+      "source": "mcp/mcp-indexer/package-lock.json",
+      "sha256": "68bb1aec379dcec005856b9c81974826a0ebbe308fc5c3a56e3f5dd9ad2f462b"
+    },
+    {
+      "asset_id": "mcp-indexer-config",
+      "kind": "project-file",
+      "source": "mcp/mcp-indexer/docker-lab-config.json",
+      "sha256": "27191f9b386e13048fa0121d5252d217a7bb2d1093b8cc2ae998a20f4aad7acb"
+    },
+    {
+      "asset_id": "mcp-wazuh-build",
+      "kind": "mcp-artifact",
+      "source": "mcp/mcp-wazuh/build/index.js",
+      "sha256": "a6413637f5733754ad315d7013ef4d9beeb7d2568e1460002865a75a0be823c8"
+    },
+    {
+      "asset_id": "mcp-wazuh-dependencies",
+      "kind": "project-file",
+      "source": "mcp/mcp-wazuh/package-lock.json",
+      "sha256": "01f2cc525c4077a017b9e2a61116bf4c48927f0da359012a48e64855b218e1e5"
+    },
+    {
+      "asset_id": "mcp-wazuh-config",
+      "kind": "project-file",
+      "source": "mcp/mcp-wazuh/docker-lab-config.json",
+      "sha256": "48b848aedc314fee39ecc9efeb0efc4d9fe657ef0127af3a30a0f6b34959a38b"
+    },
+    {
+      "asset_id": "image-kali",
+      "kind": "oci-image",
+      "source": "local://aptl-kali@sha256:871d2dbe51b579620c86de9f8fdd78002a073eae8b0471e0f5d11c83843d89f0",
+      "sha256": "871d2dbe51b579620c86de9f8fdd78002a073eae8b0471e0f5d11c83843d89f0",
+      "services": [
+        "kali"
+      ]
+    },
+    {
+      "asset_id": "image-victim",
+      "kind": "oci-image",
+      "source": "local://aptl-victim@sha256:7ad2cbc7e0f708513032e923ecad32f53a04db99c899394078d900fe9c353549",
+      "sha256": "7ad2cbc7e0f708513032e923ecad32f53a04db99c899394078d900fe9c353549",
+      "services": [
+        "victim"
+      ]
+    },
+    {
+      "asset_id": "image-wazuh-manager",
+      "kind": "oci-image",
+      "source": "wazuh/wazuh-manager@sha256:dea2fa1e6d5062147b6a85b241f5f501c5f1ba4b817d12bda06f7870a89ad561",
+      "sha256": "dea2fa1e6d5062147b6a85b241f5f501c5f1ba4b817d12bda06f7870a89ad561",
+      "services": [
+        "wazuh.manager"
+      ]
+    },
+    {
+      "asset_id": "image-wazuh-indexer",
+      "kind": "oci-image",
+      "source": "wazuh/wazuh-indexer@sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299",
+      "sha256": "3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299",
+      "services": [
+        "wazuh.indexer"
+      ]
+    },
+    {
+      "asset_id": "image-wazuh-dashboard",
+      "kind": "oci-image",
+      "source": "wazuh/wazuh-dashboard@sha256:8f5b50fde67a0b1c4d2321aa26b12bbc5cef21269cf4f6225746f0b946458bd7",
+      "sha256": "8f5b50fde67a0b1c4d2321aa26b12bbc5cef21269cf4f6225746f0b946458bd7",
+      "services": [
+        "wazuh.dashboard"
+      ]
+    }
+  ]
+}

@@ -5,24 +5,19 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import yaml
-
-from aptl.core.certs import CertResult, ensure_ssl_certs
+from aptl.core.certs import ensure_ssl_certs
+from aptl.core.deployment._authored_service_hosts import authored_service_hosts
 from aptl.core.soc_ca import derive_soc_service_certs, ensure_soc_certs
 from aptl.core.credentials import (
     RENDERED_MANAGER_RELPATH,
-    _atomic_write_secure,
     _canonical_generated_path,
-    _ensure_secure_dir,
     sync_manager_config,
 )
 from aptl.core.deployment._compose_stateful_constants import (
-    CERTIFICATE_PROVENANCE,
     CERTIFICATE_ROOT_RELPATH,
     MIN_OVERRIDE_COMPOSE_VERSION,
     SOC_CERT_PROFILE,
     SOC_CERTS_ROOT_RELPATH,
-    STATEFUL_OVERRIDE_RELPATH,
     WAZUH_MANAGER_CONFIG_PROVENANCES,
 )
 from aptl.core.deployment._compose_stateful_graph import (
@@ -30,22 +25,42 @@ from aptl.core.deployment._compose_stateful_graph import (
     owned_wazuh_services,
     stateful_realization_errors,
 )
+from aptl.core.deployment._compose_stateful_artifact_helpers import (
+    artifact_environment_bindings as _artifact_environment_bindings,
+    artifacts_in_dependency_order as _artifacts_in_dependency_order,
+    certificate_bundle_failure as _certificate_bundle_failure,
+    write_artifact_environment_files as _write_artifact_environment_files,
+)
+from aptl.core.deployment._compose_stateful_constants import (
+    ENVIRONMENT_DELIVERY_PROVENANCES as _ENVIRONMENT_DELIVERY_PROVENANCES,
+)
 from aptl.core.deployment._compose_stateful_model import (
     artifact_source_path as _artifact_source_path,
     effective_stateful_model_errors as _effective_stateful_model_errors,
-    stateful_override_payload,
+    stateful_override_payload as _stateful_override_payload,
+)
+from aptl.core.deployment._compose_stateful_override import write_stateful_override
+from aptl.core.deployment._cortex_service_credentials import (
+    CORTEX_SERVICE_CREDENTIALS_PROFILE,
+    realize_cortex_service_credentials,
+)
+from aptl.core.deployment._misp_cache_credential import (
+    MISP_CACHE_CREDENTIAL_PROFILE,
+    realize_misp_cache_credential,
+)
+from aptl.core.deployment._misp_server_tls import (
+    MISP_SERVER_TLS_PROFILE,
+    realize_misp_server_tls,
 )
 from aptl.core.deployment._compose_stateful_readiness import (
     ComposeStatefulReadinessMixin,
     _load_stateful_env,
 )
-from aptl.core.deployment._compose_stateful_services import StatefulDumper
 from aptl.core.deployment._flag_signing_keys import (
     FLAG_SIGNING_PROFILE_V2,
     realize_flag_signing_keys,
 )
 from aptl.core.deployment._ssh_key_bundle import realize_ssh_key_bundle
-from aptl.core.deployment._stateful_certificates import validate_certificate_bundle
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
@@ -55,6 +70,7 @@ from aptl.core.lab_types import LabResult
 
 artifact_source_path = _artifact_source_path
 effective_stateful_model_errors = _effective_stateful_model_errors
+stateful_override_payload = _stateful_override_payload
 
 
 class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
@@ -118,8 +134,10 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         """
 
         failure: LabResult | None = None
-        for artifact in realization.generated_artifacts:
-            failure = self._realize_one_generated_artifact(artifact, scenario_root)
+        for artifact in _artifacts_in_dependency_order(realization.generated_artifacts):
+            failure = self._realize_one_generated_artifact(
+                artifact, scenario_root, realization
+            )
             if failure is not None:
                 break
         return failure
@@ -128,11 +146,14 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         self,
         artifact: DeploymentGeneratedArtifactRealization,
         scenario_root: Path,
+        realization: DeploymentRealizationSpec,
     ) -> LabResult | None:
         """Materialize one generated artifact, dispatched by generator kind."""
 
         realizer = {
-            "certificate_bundle": self._realize_certificate_bundle,
+            "certificate_bundle": lambda item, root: self._realize_certificate_bundle(
+                item, root, realization
+            ),
             "rendered_config": self._realize_rendered_config,
             "ssh_key_bundle": self._realize_ssh_key_bundle,
         }.get(artifact.generator)
@@ -144,7 +165,10 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
                     f"generator {artifact.generator!r}."
                 ),
             )
-        return realizer(artifact, scenario_root)
+        failure = realizer(artifact, scenario_root)
+        if failure is None and artifact.environment_consumers:
+            failure = self._realize_artifact_environment_files(artifact, scenario_root)
+        return failure
 
     @staticmethod
     def _realize_ssh_key_bundle(
@@ -189,8 +213,34 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         ``project_dir/.env``) and the per-node flag-signing keys (#875).
         """
 
+        result: LabResult | None
         if artifact.provenance == FLAG_SIGNING_PROFILE_V2:
-            return self._realize_flag_signing_keys(artifact, scenario_root)
+            result = self._realize_flag_signing_keys(artifact, scenario_root)
+        elif artifact.provenance == CORTEX_SERVICE_CREDENTIALS_PROFILE:
+            error = realize_cortex_service_credentials(artifact, scenario_root)
+            result = (
+                LabResult(success=False, error=error) if error is not None else None
+            )
+        elif artifact.provenance == MISP_CACHE_CREDENTIAL_PROFILE:
+            error = realize_misp_cache_credential(artifact, scenario_root)
+            result = (
+                LabResult(success=False, error=error) if error is not None else None
+            )
+        elif artifact.provenance == MISP_SERVER_TLS_PROFILE:
+            error = realize_misp_server_tls(artifact, scenario_root)
+            result = (
+                LabResult(success=False, error=error) if error is not None else None
+            )
+        else:
+            result = self._realize_wazuh_config(artifact, scenario_root)
+        return result
+
+    def _realize_wazuh_config(
+        self,
+        artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Render and verify one Wazuh manager configuration artifact."""
 
         unsupported_binding = (
             artifact.provenance not in WAZUH_MANAGER_CONFIG_PROVENANCES
@@ -243,6 +293,33 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         return failure
 
     @staticmethod
+    def _realize_artifact_environment_files(
+        artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Write exact output-to-variable bindings without putting secrets in YAML."""
+
+        failure = None
+        if artifact.provenance not in _ENVIRONMENT_DELIVERY_PROVENANCES:
+            failure = LabResult(
+                success=False,
+                error=(
+                    f"Generated artifact {artifact.address} has unsupported "
+                    "environment delivery."
+                ),
+            )
+        else:
+            try:
+                by_service = _artifact_environment_bindings(artifact, scenario_root)
+                _write_artifact_environment_files(artifact, scenario_root, by_service)
+            except (OSError, ValueError):
+                failure = LabResult(
+                    success=False,
+                    error=f"Generated artifact {artifact.address} environment delivery failed.",
+                )
+        return failure
+
+    @staticmethod
     def _realize_flag_signing_keys(
         artifact: DeploymentGeneratedArtifactRealization,
         scenario_root: Path,
@@ -276,6 +353,7 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         self,
         artifact: DeploymentGeneratedArtifactRealization,
         scenario_root: Path,
+        realization: DeploymentRealizationSpec,
     ) -> LabResult | None:
         """Generate and cryptographically validate a certificate bundle.
 
@@ -284,7 +362,9 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         """
 
         if artifact.provenance == SOC_CERT_PROFILE:
-            return self._realize_soc_certificate_bundle(artifact, scenario_root)
+            return self._realize_soc_certificate_bundle(
+                artifact, scenario_root, realization
+            )
         try:
             _canonical_generated_path(scenario_root, CERTIFICATE_ROOT_RELPATH)
         except ValueError:
@@ -302,6 +382,7 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
     def _realize_soc_certificate_bundle(
         artifact: DeploymentGeneratedArtifactRealization,
         scenario_root: Path,
+        realization: DeploymentRealizationSpec,
     ) -> LabResult | None:
         """Generate the SOC CA + per-service certs (techvault:soc-certificate-profile/v1).
 
@@ -322,7 +403,8 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         # rather than a hardcoded registry, so APTL never decides the range's SOC
         # service identity (issue #875, SDL-authority class remediation).
         services = derive_soc_service_certs(
-            tuple(output.path for output in artifact.outputs)
+            tuple(output.path for output in artifact.outputs),
+            authored_service_hosts(realization),
         )
         result = ensure_soc_certs(scenario_root, services=services)
         failure: LabResult | None = None
@@ -359,71 +441,3 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
             return self._run(command, timeout=timeout)
         except BackendTimeoutError as exc:
             raise subprocess.TimeoutExpired(command, timeout) from exc
-
-
-def _certificate_bundle_failure(
-    artifact: DeploymentGeneratedArtifactRealization,
-    scenario_root: Path,
-    result: CertResult,
-) -> LabResult | None:
-    """Return the first failure in a generated certificate bundle, or ``None``.
-
-    The cryptographic bundle validator reads the in-tree provenance file
-    (config/certs.yml). An env-pack declares its bundle by profile identity
-    (techvault:wazuh-*-certificate-profile/v1), not a provenance document, so it
-    is validated by generator success + declared-output presence; the cert
-    generator issues the material itself, it is not accepted from the pack
-    (issue #875).
-    """
-
-    failure: LabResult | None = None
-    if not result.success:
-        failure = LabResult(
-            success=False,
-            error="Certificate artifact generation failed.",
-        )
-    elif any(
-        not (result.certs_dir / output.path).is_file() for output in artifact.outputs
-    ):
-        failure = LabResult(
-            success=False,
-            error=(
-                f"Generated artifact {artifact.address} is missing declared output."
-            ),
-        )
-    elif artifact.provenance == CERTIFICATE_PROVENANCE:
-        errors = validate_certificate_bundle(
-            result.certs_dir,
-            artifact.outputs,
-            scenario_root / artifact.provenance,
-        )
-        if errors:
-            failure = LabResult(success=False, error=errors[0])
-    return failure
-
-
-def write_stateful_override(
-    scenario_root: Path,
-    project_name: str,
-    realization: DeploymentRealizationSpec,
-) -> Path | None:
-    """Atomically write the contained Compose stateful-resource override.
-
-    The override is a scenario-local generated artifact, written under
-    ``scenario_root`` (the bundle root), not the engine checkout (issue #874).
-    """
-
-    override_path: Path | None = None
-    if realization.generated_artifacts or realization.persistent_volumes:
-        payload = stateful_override_payload(scenario_root, project_name, realization)
-        override_path = _canonical_generated_path(
-            scenario_root,
-            STATEFUL_OVERRIDE_RELPATH,
-        )
-        _ensure_secure_dir(override_path.parent)
-        _canonical_generated_path(scenario_root, STATEFUL_OVERRIDE_RELPATH)
-        _atomic_write_secure(
-            override_path,
-            yaml.dump(payload, Dumper=StatefulDumper, sort_keys=True),
-        )
-    return override_path

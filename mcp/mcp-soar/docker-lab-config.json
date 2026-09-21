@@ -14,7 +14,7 @@
     "network_subnet": "172.20.0.0/24"
   },
   "api": {
-    "baseUrl": "https://localhost:3443",
+    "baseUrl": "https://localhost:${APTL_HP_SHUFFLE_FRONTEND_443}",
     "auth": {
       "type": "apikey",
       "header": "Authorization",
@@ -29,7 +29,7 @@
   },
   "queries": {
     "list_workflows": {
-      "url": "https://localhost:3443/api/v1/workflows",
+      "url": "https://localhost:${APTL_HP_SHUFFLE_FRONTEND_443}/api/v1/workflows",
       "method": "GET",
       "auth": {
         "type": "apikey",
@@ -39,7 +39,7 @@
       "description": "List all available SOAR workflows/playbooks. Returns workflow names, triggers, and status."
     },
     "get_workflow": {
-      "url": "https://localhost:3443/api/v1/workflows/{workflow_id}",
+      "url": "https://localhost:${APTL_HP_SHUFFLE_FRONTEND_443}/api/v1/workflows/{workflow_id}",
       "method": "GET",
       "auth": {
         "type": "apikey",
@@ -49,17 +49,17 @@
       "description": "Get details of a specific workflow. Example: {\"params\": {\"workflow_id\": \"abc-123\"}}"
     },
     "execute_workflow": {
-      "url": "https://localhost:3443/api/v1/workflows/{workflow_id}/execute",
+      "url": "https://localhost:${APTL_HP_SHUFFLE_FRONTEND_443}/api/v1/workflows/{workflow_id}/execute",
       "method": "POST",
       "auth": {
         "type": "apikey",
         "header": "Authorization",
         "apiKey": "Bearer ${SHUFFLE_API_KEY}"
       },
-      "description": "Execute a SOAR workflow/playbook. Pass execution arguments in body. Example: {\"params\": {\"workflow_id\": \"abc-123\"}, \"body\": {\"execution_argument\": {\"alert_id\": \"wazuh-12345\", \"src_ip\": \"172.20.4.30\"}}}"
+      "description": "Execute a SOAR workflow/playbook. The body itself becomes the execution argument. Example: {\"params\": {\"workflow_id\": \"abc-123\"}, \"body\": {\"id\": \"wazuh-12345\", \"data\": {\"srcip\": \"172.20.4.30\"}}}"
     },
     "list_executions": {
-      "url": "https://localhost:3443/api/v1/workflows/{workflow_id}/executions",
+      "url": "https://localhost:${APTL_HP_SHUFFLE_FRONTEND_443}/api/v1/workflows/{workflow_id}/executions",
       "method": "GET",
       "auth": {
         "type": "apikey",
@@ -69,7 +69,7 @@
       "description": "List recent executions of a workflow. Shows status, timing, and results. Example: {\"params\": {\"workflow_id\": \"abc-123\"}}"
     },
     "search_workflows": {
-      "url": "https://localhost:3443/api/v1/workflows/search",
+      "url": "https://localhost:${APTL_HP_SHUFFLE_FRONTEND_443}/api/v1/workflows/search",
       "method": "POST",
       "auth": {
         "type": "apikey",

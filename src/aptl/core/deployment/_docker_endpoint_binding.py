@@ -9,29 +9,63 @@ from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.lab_types import LabResult
 
 _DOCKER_CONTROL_TIMEOUT = 30
-_DOCKER_SOCKET_PATH = "/var/run/docker.sock"
-_DOCKER_SOCKET_HOST = "unix:///var/run/docker.sock"
+_DEFAULT_DOCKER_SOCKET_PATH = "/var/run/docker.sock"
+_DEFAULT_DOCKER_SOCKET_HOST = "unix:///var/run/docker.sock"
+_UNIX_SCHEME = "unix://"
 _DOCKER_ENDPOINT_UNAVAILABLE = "Docker control endpoint unavailable."
 _DOCKER_ENDPOINT_CHANGED = "Docker control endpoint identity changed."
+_DOCKER_ENDPOINT_NOT_LOCAL = (
+    "Docker control authority requires a local unix:// socket; "
+    "DOCKER_HOST does not name one."
+)
 
 
-def _local_docker_socket_identity() -> tuple[int, int] | None:
-    """Return an accessible non-symlink socket identity, or ``None``."""
+def _local_docker_socket_identity(path: str) -> tuple[int, int] | None:
+    """Return an accessible non-symlink socket identity at ``path``, or ``None``."""
 
     try:
-        info = os.lstat(_DOCKER_SOCKET_PATH)
+        info = os.lstat(path)
     except OSError:
         return None
     if not stat.S_ISSOCK(info.st_mode) or not os.access(
-        _DOCKER_SOCKET_PATH,
+        path,
         os.R_OK | os.W_OK,
     ):
         return None
     return int(info.st_dev), int(info.st_ino)
 
 
+def _resolve_local_docker_endpoint() -> tuple[str, str] | None:
+    """Resolve the local Docker ``(socket_path, unix_host)`` from the environment.
+
+    Honors a ``unix://`` ``DOCKER_HOST`` so a rootless daemon at
+    ``unix:///run/user/<uid>/docker.sock`` is driven as the operator authored it,
+    falls back to the system ``/var/run/docker.sock`` when ``DOCKER_HOST`` is
+    unset (default behavior unchanged), and returns ``None`` for a
+    non-``unix://`` ``DOCKER_HOST`` (``tcp://``, ``ssh://``, ...) that cannot
+    carry local artifact authority.
+    """
+
+    docker_host = os.environ.get("DOCKER_HOST", "").strip()
+    if not docker_host:
+        return _DEFAULT_DOCKER_SOCKET_PATH, _DEFAULT_DOCKER_SOCKET_HOST
+    path = (
+        docker_host[len(_UNIX_SCHEME) :] if docker_host.startswith(_UNIX_SCHEME) else ""
+    )
+    # An empty path means DOCKER_HOST was non-unix:// (tcp://, ssh://, ...) or a
+    # malformed unix host; a local-authority backend can only drive a unix
+    # socket named by an absolute path.
+    return (path, docker_host) if path.startswith("/") else None
+
+
 class DockerEndpointBindingMixin:
     """Pin Docker commands to one accessible local socket and daemon."""
+
+    @property
+    def bound_docker_daemon_id(self) -> str | None:
+        """Return the daemon identity only after local socket binding."""
+
+        return self._docker_daemon_id
 
     def bind_local_docker_socket(self) -> LabResult:
         """Bind all subsequent Docker commands to the exact local socket."""
@@ -39,7 +73,11 @@ class DockerEndpointBindingMixin:
         self._docker_socket_identity = None
         self._docker_daemon_id = None
         self._docker_host_override = None
+        self._docker_socket_path = None
+        self._docker_socket_host = None
         failure = self._local_authority_failure()
+        if failure is None:
+            failure = self._resolve_binding_endpoint()
         identity = None
         if failure is None:
             identity, failure = self._binding_socket_identity()
@@ -65,11 +103,31 @@ class DockerEndpointBindingMixin:
             error="Docker control authority requires the local Docker daemon.",
         )
 
-    @staticmethod
-    def _binding_socket_identity() -> tuple[tuple[int, int] | None, LabResult | None]:
+    def _resolve_binding_endpoint(self) -> LabResult | None:
+        """Record the configured local socket path and unix host, or fail."""
+
+        explicit = getattr(self, "_configured_docker_socket_path", None)
+        resolved = (
+            (str(explicit), "unix://" + str(explicit))
+            if explicit is not None
+            else _resolve_local_docker_endpoint()
+        )
+        if resolved is None:
+            return LabResult(success=False, error=_DOCKER_ENDPOINT_NOT_LOCAL)
+        self._docker_socket_path, self._docker_socket_host = resolved
+        return None
+
+    def _bound_socket_identity(self) -> tuple[int, int] | None:
+        """Return the current identity of the resolved socket, or ``None``."""
+
+        return _local_docker_socket_identity(self._docker_socket_path)
+
+    def _binding_socket_identity(
+        self,
+    ) -> tuple[tuple[int, int] | None, LabResult | None]:
         """Return the accessible socket identity or an unavailable diagnostic."""
 
-        identity = _local_docker_socket_identity()
+        identity = self._bound_socket_identity()
         failure = (
             None
             if identity is not None
@@ -84,12 +142,12 @@ class DockerEndpointBindingMixin:
     ) -> tuple[str | None, LabResult | None]:
         """Bind the override and attest the daemon without a socket swap."""
 
-        self._docker_host_override = _DOCKER_SOCKET_HOST
+        self._docker_host_override = self._docker_socket_host
         daemon_id = self._current_docker_daemon_id()
         failure = None
         if daemon_id is None:
             failure = LabResult(success=False, error=_DOCKER_ENDPOINT_UNAVAILABLE)
-        elif _local_docker_socket_identity() != expected_socket:
+        elif self._bound_socket_identity() != expected_socket:
             failure = LabResult(success=False, error=_DOCKER_ENDPOINT_CHANGED)
         return daemon_id, failure
 
@@ -104,7 +162,7 @@ class DockerEndpointBindingMixin:
             )
         identity = None
         if failure is None:
-            identity = _local_docker_socket_identity()
+            identity = self._bound_socket_identity()
             if identity is None:
                 failure = LabResult(
                     success=False,
@@ -119,7 +177,7 @@ class DockerEndpointBindingMixin:
             daemon_id = self._current_docker_daemon_id()
             if (
                 daemon_id != self._docker_daemon_id
-                or _local_docker_socket_identity() != self._docker_socket_identity
+                or self._bound_socket_identity() != self._docker_socket_identity
             ):
                 failure = LabResult(
                     success=False,
@@ -140,3 +198,8 @@ class DockerEndpointBindingMixin:
         if daemon is None or daemon.returncode != 0 or not daemon.stdout.strip():
             return None
         return daemon.stdout.strip()
+
+    def daemon_identity(self) -> str | None:
+        """Read the daemon id through this backend's configured transport."""
+
+        return self._current_docker_daemon_id()

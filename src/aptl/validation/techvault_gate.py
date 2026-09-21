@@ -28,7 +28,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
-    from aptl.core.scenario_bundle import PackIdentity, ScenarioBundle
 
 DEFAULT_PROFILE = "full-remote-control-plane"
 
@@ -49,7 +48,6 @@ class GateReport(object):
     scenario: str
     profile: str
     checks: tuple[GateCheck, ...]
-    pack_identity: PackIdentity | None = None
 
     @property
     def passed(self) -> bool:
@@ -67,12 +65,6 @@ class GateReport(object):
             f"profile={self.profile}: "
             f"{'PASS' if self.passed else 'FAIL'}"
         ]
-        if self.pack_identity is not None:
-            lines.append(
-                "  pack="
-                f"{self.pack_identity.pack_id}@{self.pack_identity.pack_version} "
-                f"{self.pack_identity.set_digest}"
-            )
         for check in self.checks:
             marker = "ok" if check.passed else "FAIL"
             lines.append(f"  [{marker}] {check.name}")
@@ -107,7 +99,6 @@ def validate_scenario(
     project_dir: Path,
     config: AptlConfig,
     options: GateOptions | None = None,
-    bundle: ScenarioBundle | None = None,
 ) -> GateReport:
     """Run the full static validation gate for ``scenario_path``."""
     from aptl.validation import _gate_checks as checks
@@ -119,12 +110,7 @@ def validate_scenario(
     scenario, parse_check = checks.check_parse(scenario_path)
     results.append(parse_check)
     if scenario is None:
-        return GateReport(
-            bundle.identity if bundle else str(scenario_path),
-            opts.profile,
-            tuple(results),
-            bundle.pack_identity if bundle else None,
-        )
+        return GateReport(str(scenario_path), opts.profile, tuple(results))
 
     # 2. Import lock — verify the committed lockfile, trust policy, and imports.
     if opts.check_imports:
@@ -142,13 +128,12 @@ def validate_scenario(
             fixtures_root=opts.fixtures_root,
             profiles_root=opts.profiles_root,
             reference_scenario=scenario,
-            bundle=bundle,
         )
     )
 
     # 5. Provisioning realization — interpret the plan, scenario-generically.
-    _realization_details, realization_check = checks.check_provisioning_realization(
-        scenario=scenario, project_dir=project_dir, config=config, bundle=bundle
+    realization_details, realization_check = checks.check_provisioning_realization(
+        scenario=scenario, project_dir=project_dir, config=config
     )
     results.append(realization_check)
 
@@ -158,13 +143,10 @@ def validate_scenario(
 
     results.append(
         _account_parity.check_account_provisioner_parity(
-            scenario=scenario, project_dir=project_dir
+            scenario=scenario,
+            project_dir=project_dir,
+            realization_details=realization_details,
         )
     )
 
-    return GateReport(
-        bundle.identity if bundle else str(scenario_path),
-        opts.profile,
-        tuple(results),
-        bundle.pack_identity if bundle else None,
-    )
+    return GateReport(str(scenario_path), opts.profile, tuple(results))

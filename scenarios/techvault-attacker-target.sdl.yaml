@@ -1,0 +1,65 @@
+name: techvault-attacker-target
+description: >
+  Curated TechVault attacker-target slice. Declares the Kali red-team host, a
+  single reachable monitored victim, and the Wazuh manager and indexer the
+  victim reports to. Includes one target and the Wazuh dependency the target
+  pulls in by declared content; omits backend-owned capture and observability
+  apparatus, the enterprise web tier, and the wider SOC stack. Proves APTL
+  realizes `kali`, `victim`, and `wazuh` from declared node content and
+  dependency closure, not from the scenario name.
+
+nodes:
+  redteam-net:
+    type: switch
+    description: Red-team operations network.
+  internal-net:
+    type: switch
+    description: Internal enterprise target network.
+  security-net:
+    type: switch
+    description: SOC and security tooling network.
+
+  kali:
+    type: compute
+    os: linux
+    services:
+      - {name: ssh, port: 22, protocol: tcp}
+  victim:
+    type: compute
+    os: linux
+    services:
+      - {name: ssh, port: 22, protocol: tcp}
+
+  wazuh-manager:
+    type: compute
+    os: linux
+    services:
+      - {name: wazuh-api, port: 55000, protocol: tcp}
+      - {name: agent-events, port: 1514, protocol: tcp}
+      - {name: syslog, port: 514, protocol: udp}
+  wazuh-indexer:
+    type: compute
+    os: linux
+    services:
+      - {name: indexer-api, port: 9200, protocol: tcp}
+
+infrastructure:
+  redteam-net:
+    properties: {cidr: 172.20.4.0/24, gateway: 172.20.4.1, internal: true}
+  internal-net:
+    properties: {cidr: 172.20.2.0/24, gateway: 172.20.2.1, internal: true}
+  security-net:
+    properties: {cidr: 172.20.0.0/24, gateway: 172.20.0.1, internal: false}
+
+  kali:
+    links: [redteam-net, internal-net]
+
+  victim:
+    links: [internal-net]
+    dependencies: [wazuh-manager]
+
+  wazuh-manager:
+    links: [security-net, internal-net]
+    dependencies: [wazuh-indexer]
+  wazuh-indexer:
+    links: [security-net]

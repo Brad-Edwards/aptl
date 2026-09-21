@@ -29,7 +29,10 @@ from aptl.backends.raes_materializer import (
     EnsureUserOp,
     InstallDependencyManifestOp,
     InstallPackagesOp,
+    InstallSoftwareComponentOp,
     PlaceFileOp,
+    ProvisionDomainAuthorityOp,
+    SetFilesystemMetadataOp,
     StartServiceUnitOp,
     UnsupportedOsFamilyError,
     base_image_for_os,
@@ -75,7 +78,9 @@ class TestPlanNodeMaterialization:
     def test_groups_ensured_before_users(self):
         runtime = RuntimeConfiguration(
             local_identity=RuntimeLocalIdentityInventory(
-                users=[RuntimeLocalUser(username="wazuh", supplemental_groups=["wazuh"])],
+                users=[
+                    RuntimeLocalUser(username="wazuh", supplemental_groups=["wazuh"])
+                ],
                 groups=[RuntimeLocalGroup(name="wazuh", gid=1000)],
             )
         )
@@ -84,10 +89,17 @@ class TestPlanNodeMaterialization:
         user_idx = next(i for i, op in enumerate(ops) if isinstance(op, EnsureUserOp))
         assert group_idx < user_idx
         assert EnsureGroupOp(name="wazuh", gid=1000) in ops
-        assert EnsureUserOp(
-            username="wazuh", uid=None, primary_group="", supplemental_groups=("wazuh",),
-            shell="", home="",
-        ) in ops
+        assert (
+            EnsureUserOp(
+                username="wazuh",
+                uid=None,
+                primary_group="",
+                supplemental_groups=("wazuh",),
+                shell="",
+                home="",
+            )
+            in ops
+        )
 
     def test_service_units_enable_and_start_from_declared_state(self):
         runtime = RuntimeConfiguration(
@@ -157,10 +169,15 @@ class TestPlanNodeMaterialization:
             ],
         )
         ops = plan_node_materialization(os="linux", os_version="", runtime=runtime)
-        assert EnsureDirectoryOp(
-            path="/var/log/named", owner="bind", group="bind", mode="0755"
-        ) in ops
-        dir_idx = next(i for i, op in enumerate(ops) if isinstance(op, EnsureDirectoryOp))
+        assert (
+            EnsureDirectoryOp(
+                path="/var/log/named", owner="bind", group="bind", mode="0755"
+            )
+            in ops
+        )
+        dir_idx = next(
+            i for i, op in enumerate(ops) if isinstance(op, EnsureDirectoryOp)
+        )
         user_idx = next(i for i, op in enumerate(ops) if isinstance(op, EnsureUserOp))
         assert user_idx < dir_idx
 
@@ -180,6 +197,30 @@ class TestPlanNodeMaterialization:
         ops = plan_node_materialization(os="linux", os_version="", runtime=runtime)
         assert not any(isinstance(op, EnsureDirectoryOp) for op in ops)
 
+    def test_file_metadata_is_applied_after_authored_content_placement(self):
+        runtime = RuntimeConfiguration(
+            filesystem_inventory=[
+                RuntimeFilesystemEntry(
+                    path="/root/root.txt",
+                    entry_type=RuntimeFilesystemEntryType.FILE,
+                    owner_user="root",
+                    owner_group="root",
+                    mode="0600",
+                ),
+            ],
+        )
+        content = (PlaceFileOp(path="/root/root.txt", content="fixture"),)
+
+        ops = plan_node_materialization(
+            os="linux", os_version="", runtime=runtime, content=content
+        )
+
+        content_index = ops.index(content[0])
+        metadata = SetFilesystemMetadataOp(
+            path="/root/root.txt", owner="root", group="root", mode="0600"
+        )
+        assert ops.index(metadata) > content_index
+
     def test_dependency_manifest_installed_after_content_before_services(self):
         runtime = RuntimeConfiguration(
             dependency_manifests=[
@@ -189,7 +230,10 @@ class TestPlanNodeMaterialization:
             ],
             service_manager_units=[
                 ServiceManagerUnit(
-                    unit_id="svc", unit_name="svc.service", enabled_state="enabled", active_state="active"
+                    unit_id="svc",
+                    unit_name="svc.service",
+                    enabled_state="enabled",
+                    active_state="active",
                 ),
             ],
         )
@@ -197,15 +241,80 @@ class TestPlanNodeMaterialization:
         ops = plan_node_materialization(
             os="linux", os_version="", runtime=runtime, content=content
         )
-        assert InstallDependencyManifestOp(
-            ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"
-        ) in ops
+        assert (
+            InstallDependencyManifestOp(
+                ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"
+            )
+            in ops
+        )
         manifest_idx = next(
             i for i, op in enumerate(ops) if isinstance(op, InstallDependencyManifestOp)
         )
         content_idx = next(i for i, op in enumerate(ops) if isinstance(op, PlaceFileOp))
-        start_idx = next(i for i, op in enumerate(ops) if isinstance(op, StartServiceUnitOp))
+        start_idx = next(
+            i for i, op in enumerate(ops) if isinstance(op, StartServiceUnitOp)
+        )
         assert content_idx < manifest_idx < start_idx
+
+    def test_lockfile_backed_software_is_built_after_content_before_services(self):
+        runtime = RuntimeConfiguration.model_validate(
+            {
+                "software_components": [
+                    {
+                        "component_id": "mcp-indexer",
+                        "name": "aptl-indexer-mcp-server",
+                        "version": "0.1.0",
+                        "provenance": "dependency_manifest",
+                        "manifest_path": "/opt/mcp/indexer/package-lock.json",
+                    }
+                ],
+                "service_manager_units": [
+                    {
+                        "unit_id": "ssh",
+                        "unit_name": "ssh.service",
+                        "enabled_state": "enabled",
+                        "active_state": "active",
+                    }
+                ],
+            }
+        )
+        content = (
+            PlaceFileOp(path="/opt/mcp/indexer/package-lock.json", content="{}"),
+        )
+
+        ops = plan_node_materialization(
+            os="linux", os_version="", runtime=runtime, content=content
+        )
+
+        expected = InstallSoftwareComponentOp(
+            ecosystem="npm",
+            manifest_path="/opt/mcp/indexer/package-lock.json",
+            package_name="aptl-indexer-mcp-server",
+            version="0.1.0",
+        )
+        assert expected in ops
+        assert ops.index(content[0]) < ops.index(expected)
+        assert ops.index(expected) < next(
+            i for i, op in enumerate(ops) if isinstance(op, EnableServiceUnitOp)
+        )
+
+    def test_backend_provider_bootstrap_follows_the_selected_base(self):
+        ops = plan_node_materialization(
+            os="linux",
+            os_version="",
+            runtime=RuntimeConfiguration(),
+            backend_base_image_ref="aptl/generic-samba-ad-base:latest",
+            backend_provider_kind="samba-active-directory",
+            backend_provider_parameters=(
+                ("domain", "EXAMPLE"),
+                ("realm", "EXAMPLE.TEST"),
+            ),
+        )
+
+        assert ops[:2] == (
+            BaseSubstrateOp(image_ref="aptl/generic-samba-ad-base:latest"),
+            ProvisionDomainAuthorityOp(domain="EXAMPLE", realm="EXAMPLE.TEST"),
+        )
 
     def test_planner_is_product_agnostic(self):
         # Identical declared state produces identical ops. The planner has no
@@ -223,17 +332,30 @@ class TestPackageFamilyBaseSelection:
     def test_family_from_declared_managers(self):
         from raes.runtime_configuration import RuntimeConfiguration, RuntimePackage
         from aptl.backends.raes_materializer import package_family
+
         assert package_family(None) == "debian"
         assert package_family(RuntimeConfiguration()) == "debian"
-        assert package_family(
-            RuntimeConfiguration(packages=[RuntimePackage(manager="apt", name="curl", version="*")])
-        ) == "debian"
-        assert package_family(
-            RuntimeConfiguration(packages=[RuntimePackage(manager="dnf", name="httpd", version="*")])
-        ) == "rhel"
+        assert (
+            package_family(
+                RuntimeConfiguration(
+                    packages=[RuntimePackage(manager="apt", name="curl", version="*")]
+                )
+            )
+            == "debian"
+        )
+        assert (
+            package_family(
+                RuntimeConfiguration(
+                    packages=[RuntimePackage(manager="dnf", name="httpd", version="*")]
+                )
+            )
+            == "rhel"
+        )
 
     def test_non_service_base_is_family_aware(self):
-        assert base_image_for_os("linux", "", family="debian") == "debian:12-slim"
+        assert base_image_for_os("linux", "", family="debian") == (
+            "aptl/generic-systemd-base-debian:latest"
+        )
         assert base_image_for_os("linux", "", family="rhel") == "rockylinux:9"
 
     def test_service_nodes_use_family_aware_systemd_substrate(self):

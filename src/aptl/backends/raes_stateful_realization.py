@@ -9,8 +9,15 @@ from raes_contracts.diagnostics import Diagnostic
 from raes_contracts.planning import PlannedResource
 
 from aptl.backends.raes_diagnostics import diagnostic
+from aptl.backends._raes_stateful_values import (
+    choice as _choice,
+    only as _only,
+    resource_name as _resource_name,
+    text as _text,
+)
 from aptl.backends.raes_realization_model import NodeRealization
 from aptl.core.deployment.realization import (
+    DeploymentGeneratedArtifactEnvironmentConsumer,
     DeploymentGeneratedArtifactOutput,
     DeploymentGeneratedArtifactRealization,
     DeploymentPersistentVolumeRealization,
@@ -22,6 +29,7 @@ from aptl.core.deployment.realization import (
     StatefulConsumerAccessMode,
     VolumeAccessMode,
     VolumeLifecycle,
+    valid_environment_variable_name,
 )
 
 _GENERATORS = frozenset({"certificate_bundle", "rendered_config", "ssh_key_bundle"})
@@ -84,19 +92,24 @@ def _generated_artifact(
     provenance = _text(spec.get("provenance"))
     outputs = _outputs(resource, spec.get("outputs"), diagnostics)
     consumers = _consumers(resource, spec.get("consumers"), nodes, diagnostics)
+    environment_consumers = _environment_consumers(
+        resource, spec.get("environment_consumers"), nodes, diagnostics
+    )
     incomplete = (
         generator is None
         or lifecycle is None
         or provenance is None
         or not outputs
-        or not consumers
+        or not (consumers or environment_consumers)
     )
     if incomplete:
         _append_invalid(resource, diagnostics)
     # Selection is checked only for a complete declaration: an incomplete one is
     # already rejected, and re-reporting it as a selection failure would
     # double-count the same resource.
-    if incomplete or not _selection_valid(resource, outputs, consumers, diagnostics):
+    if incomplete or not _selection_valid(
+        resource, outputs, consumers, environment_consumers, diagnostics
+    ):
         return None
     return DeploymentGeneratedArtifactRealization(
         address=resource.address,
@@ -106,6 +119,7 @@ def _generated_artifact(
         provenance=provenance,
         outputs=tuple(outputs),
         consumers=tuple(consumers),
+        environment_consumers=tuple(environment_consumers),
         ordering_dependencies=resource.ordering_dependencies,
         refresh_dependencies=resource.refresh_dependencies,
     )
@@ -115,6 +129,7 @@ def _selection_valid(
     resource: PlannedResource,
     outputs: list[DeploymentGeneratedArtifactOutput],
     consumers: list[DeploymentStatefulConsumer],
+    environment_consumers: list[DeploymentGeneratedArtifactEnvironmentConsumer],
     diagnostics: list[Diagnostic],
 ) -> bool:
     """Reject a consumer that selects an undeclared or producer-private output.
@@ -138,6 +153,18 @@ def _selection_valid(
                     )
                 )
                 return False
+    for consumer in environment_consumers:
+        output = by_name.get(consumer.output_name)
+        if output is None or output.disposition == "producer_private":
+            diagnostics.append(
+                diagnostic(
+                    "aptl.provisioner.stateful-output-not-selectable",
+                    resource.address,
+                    "Environment consumer selects an undeclared or "
+                    "producer-private generated-artifact output.",
+                )
+            )
+            return False
     return True
 
 
@@ -246,6 +273,92 @@ def _consumers(
     return consumers
 
 
+def _environment_consumers(
+    resource: PlannedResource,
+    raw_consumers: object,
+    nodes: dict[str, NodeRealization],
+    diagnostics: list[Diagnostic],
+) -> list[DeploymentGeneratedArtifactEnvironmentConsumer]:
+    """Resolve generated outputs delivered through a node environment."""
+
+    result: list[DeploymentGeneratedArtifactEnvironmentConsumer] = []
+    if raw_consumers is None:
+        return result
+    if not isinstance(raw_consumers, list):
+        _append_invalid(resource, diagnostics)
+        return result
+    consumers = [
+        consumer
+        for raw in raw_consumers
+        if (consumer := _environment_consumer(resource, raw, nodes, diagnostics))
+        is not None
+    ]
+    identities = {
+        (consumer.target_address, consumer.environment_variable)
+        for consumer in consumers
+    }
+    complete = len(consumers) == len(raw_consumers)
+    unique = len(identities) == len(consumers)
+    if complete and unique:
+        result = consumers
+    elif complete:
+        _append_invalid(resource, diagnostics)
+    return result
+
+
+def _environment_consumer(
+    resource: PlannedResource,
+    raw: object,
+    nodes: dict[str, NodeRealization],
+    diagnostics: list[Diagnostic],
+) -> DeploymentGeneratedArtifactEnvironmentConsumer | None:
+    """Resolve one environment consumer to one admitted backend service."""
+
+    if not isinstance(raw, Mapping):
+        _append_invalid(resource, diagnostics)
+        return None
+    target_address = _text(raw.get("target_address"))
+    node_name = _text(raw.get("node"))
+    delivery_mode = _text(raw.get("delivery_mode"))
+    output_name = _text(raw.get("output"))
+    environment_variable = _text(raw.get("environment_variable"))
+    node = nodes.get(target_address or "")
+    service_name = _only(node.backend_services) if node is not None else None
+    if node is None:
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.stateful-consumer-unresolved",
+                resource.address,
+                "Stateful environment consumer does not resolve to an admitted node.",
+            )
+        )
+    elif service_name is None:
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.stateful-consumer-service-unresolved",
+                resource.address,
+                "Stateful environment consumer does not resolve to one backend service.",
+            )
+        )
+    elif (
+        node_name is None
+        or delivery_mode != "environment"
+        or output_name is None
+        or environment_variable is None
+        or not valid_environment_variable_name(environment_variable)
+    ):
+        _append_invalid(resource, diagnostics)
+    else:
+        return DeploymentGeneratedArtifactEnvironmentConsumer(
+            target_address=node.address,
+            node_name=node_name,
+            service_name=service_name,
+            output_name=output_name,
+            environment_variable=environment_variable,
+        )
+    return None
+
+
 def _consumer(
     resource: PlannedResource,
     raw: object,
@@ -261,6 +374,7 @@ def _consumer(
     node_name = _text(raw.get("node"))
     mount_destination = _text(raw.get("mount_destination"))
     access_mode = _choice(raw, "access_mode", _CONSUMER_ACCESS_MODES)
+    delivery_mode = _text(raw.get("delivery_mode", "mount"))
     node = nodes.get(target_address or "")
     service_name = _only(node.backend_services) if node is not None else None
     if node is None:
@@ -279,7 +393,12 @@ def _consumer(
                 "Stateful resource consumer does not resolve to one backend service.",
             )
         )
-    elif node_name is None or mount_destination is None or access_mode is None:
+    elif (
+        node_name is None
+        or mount_destination is None
+        or access_mode is None
+        or delivery_mode != "mount"
+    ):
         _append_invalid(resource, diagnostics)
     else:
         selected = _selected_outputs(raw.get("selected_outputs"))
@@ -292,6 +411,7 @@ def _consumer(
                 service_name=service_name,
                 mount_destination=mount_destination,
                 access_mode=cast(StatefulConsumerAccessMode, access_mode),
+                delivery_mode=delivery_mode,
                 selected_outputs=selected,
             )
     return None
@@ -357,32 +477,3 @@ def _append_invalid(
             "Stateful resource payload is incomplete or unsupported by APTL.",
         )
     )
-
-
-def _resource_name(resource: PlannedResource) -> str:
-    """Return the authored resource name or its address suffix."""
-
-    return _text(resource.payload.get("name")) or resource.address.rsplit(".", 1)[-1]
-
-
-def _choice(
-    mapping: Mapping[str, object],
-    key: str,
-    allowed: frozenset[str],
-) -> str | None:
-    """Return a non-empty string only when it belongs to the allowed vocabulary."""
-
-    value = _text(mapping.get(key))
-    return value if value in allowed else None
-
-
-def _text(value: object) -> str | None:
-    """Return a non-empty string value without altering authored whitespace."""
-
-    return value if isinstance(value, str) and value.strip() else None
-
-
-def _only(values: tuple[str, ...]) -> str | None:
-    """Return the sole tuple member, rejecting absent or ambiguous bindings."""
-
-    return values[0] if len(values) == 1 else None

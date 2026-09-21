@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import csv
 import tomllib
 from pathlib import Path
 
@@ -20,19 +21,27 @@ LEGACY_IMPORT_ROOTS = frozenset(
         "aces_sdl",
     }
 )
+IDENTITY_LEDGER = (
+    PROJECT_ROOT
+    / "docs"
+    / "reviews"
+    / "962-lilrae-readiness"
+    / "identity-disposition.tsv"
+)
+KNOWN_PRIVATE_RAES_IMPORTS: set[tuple[str, str, str]] = set()
 
 
-def test_project_depends_on_exact_raes_3_3_release() -> None:
+def test_project_depends_on_exact_raes_4_1_release() -> None:
     """The qualified backend and semantic freeze use the same RAES release."""
 
     project = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text())
 
-    assert "raes==3.3.0" in project["project"]["dependencies"]
+    assert "raes==5.0.0" in project["project"]["dependencies"]
     assert all(
         not dependency.startswith("aces-sdl")
         for dependency in project["project"]["dependencies"]
     )
-    assert raes.__version__ == "3.3.0"
+    assert raes.__version__ == "5.0.0"
 
 
 def test_runtime_and_tests_do_not_import_removed_aces_packages() -> None:
@@ -57,3 +66,49 @@ def test_runtime_and_tests_do_not_import_removed_aces_packages() -> None:
                     )
 
     assert offenders == []
+
+
+def test_no_private_raes_imports_or_manifest_fallback_remain() -> None:
+    """Production source uses the public contracts in the pinned RAES release."""
+
+    observed: set[tuple[str, str, str]] = set()
+    source_root = PROJECT_ROOT / "src"
+    for path in source_root.rglob("*.py"):
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom) or not node.module:
+                continue
+            if not node.module.startswith(("raes.", "raes_")):
+                continue
+            if "._" not in node.module and not any(
+                alias.name.startswith("_") for alias in node.names
+            ):
+                continue
+            observed.update(
+                (
+                    str(path.relative_to(PROJECT_ROOT)),
+                    node.module,
+                    alias.name,
+                )
+                for alias in node.names
+            )
+
+    assert observed == KNOWN_PRIVATE_RAES_IMPORTS
+
+    with IDENTITY_LEDGER.open(newline="", encoding="utf-8") as stream:
+        rows = {
+            row["surface_id"]: row for row in csv.DictReader(stream, delimiter="\t")
+        }
+
+    assert all(
+        not surface_id.startswith("raes-private-") for surface_id in rows
+    )
+
+    manifest = (
+        PROJECT_ROOT / "src" / "aptl" / "backends" / "raes_manifest.py"
+    ).read_text()
+    assert (
+        "from raes_contracts.manifest_authority import BACKEND_SUPPORTED_CONTRACT_IDS"
+        in manifest
+    )
+    assert "except ImportError:" not in manifest

@@ -13,12 +13,15 @@ the local image cache. These tests pin the two properties that matter:
 
 from __future__ import annotations
 
+import hashlib
 import textwrap
 from pathlib import Path
 
 import pytest
 from raes.parser import parse_sdl_file
-from raes_processor.semantics.artifact_realization import artifact_requirement_diagnostics
+from raes_processor.semantics.artifact_realization import (
+    artifact_requirement_diagnostics,
+)
 from raes_processor.semantics.realization import CompiledRealizationRequirement
 from raes_processor.compiler import compile_runtime_model
 
@@ -57,7 +60,7 @@ def _scenario(tmp_path: Path, digest: str = _DIGEST):
             type: switch
             description: Fixture network.
           target:
-            type: vm
+            type: compute
             os: linux
             source:
               name: example/app
@@ -119,7 +122,9 @@ def test_scenario_authoring_an_artifact_requirement_produces_facts(tmp_path):
 
     context = artifact_availability_for_scenario(scenario, probe)
 
-    assert [entry.address for entry in context.requirements] == ["provision.node.target"]
+    assert [entry.address for entry in context.requirements] == [
+        "provision.node.target"
+    ]
     assert context.requirements[0].available_artifact_digests == [_DIGEST]
     assert probe.calls == [(f"example/app@{_DIGEST}", None)]
 
@@ -175,12 +180,80 @@ def test_facts_are_scoped_to_the_declaring_address(tmp_path):
     assert "artifact.unavailable-exact-artifact" in _codes(scenario, availability)
 
 
+def test_materialization_inspection_is_read_only_until_graph_qualification(
+    tmp_path: Path,
+) -> None:
+    from raes.artifact_requirements import ArtifactRequirement
+
+    from aptl.backends.raes_artifact_availability import (
+        _materialized_specifications,
+    )
+    from aptl.backends.raes_artifact_mechanisms import materialization_profile
+
+    dockerfile = tmp_path / "containers" / "component" / "Dockerfile"
+    dockerfile.parent.mkdir(parents=True)
+    dockerfile.write_text("FROM scratch\n", encoding="utf-8")
+    digest = "sha256:" + hashlib.sha256(dockerfile.read_bytes()).hexdigest()
+    profile = materialization_profile()
+    requirement = ArtifactRequirement.model_validate(
+        {
+            "requirement_id": "component",
+            "explicitness": "constrained",
+            "materialization_specifications": [
+                {
+                    "specification_id": "component",
+                    "profile": profile.model_dump(mode="json"),
+                    "digest": digest,
+                }
+            ],
+            "permitted_routes": [
+                {
+                    "mechanism": profile.model_dump(mode="json"),
+                    "acquisition": "none",
+                    "timing": "backend-preparation",
+                }
+            ],
+        }
+    )
+
+    class BuildProbe:
+        calls = 0
+
+        def materialize_component_image(self, *_args):
+            self.calls += 1
+            return _OTHER_DIGEST
+
+    probe = BuildProbe()
+    inspected = _materialized_specifications(
+        requirement, probe, tmp_path, {}, materialize=False
+    )
+
+    assert inspected == ([digest], [])
+    assert probe.calls == 0
+
+    materialized = _materialized_specifications(
+        requirement, probe, tmp_path, {}, materialize=True
+    )
+    assert materialized == ([digest], [_OTHER_DIGEST])
+    assert probe.calls == 1
+
+
 def test_shipped_scenario_declares_artifact_demand_for_every_imaged_node(tmp_path):
     """The shipped scenario pins each artifact-bearing address to an exact artifact."""
+
+    from raes import instantiate_scenario
 
     from tests.helpers import techvault_scenario_path
 
     scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
+    scenario = instantiate_scenario(
+        scenario,
+        parameters={
+            f"flag_{host}_{level}": f"{host}-{level}"
+            for host in ("victim", "workstation", "webapp", "fileshare", "ad")
+            for level in ("user", "root")
+        },
+    )
     probe = _Probe(set())
 
     context = artifact_availability_for_scenario(scenario, probe)
@@ -188,9 +261,9 @@ def test_shipped_scenario_declares_artifact_demand_for_every_imaged_node(tmp_pat
     # One address per artifact-bearing address — every image-backed node and
     # every digest-pinned content placement in the full TechVault env-pack. The
     # ADR-088 conversion (#889) removed the `cortex-index-init` image-backed node.
-    # Env-packs 4.0.2 then added eight digest-pinned rules/decoder/integration
-    # content placements, taking the reviewed inventory from 43 to 51.
-    assert len(context.requirements) == 51
+    # The 6.1.0 pack's backend-neutral inventory contains 31 exact content
+    # demands; compute substrates are selected separately under OPEN authority.
+    assert len(context.requirements) == 31
     addresses = {requirement.address for requirement in context.requirements}
     assert {
         "provision.content.ad-rules",
@@ -342,4 +415,6 @@ def test_a_requirement_routed_to_a_registry_pull_is_not_pack_content(
         timing="backend-preparation",
     )
 
-    assert _env_pack_digest_and_provenance(_pack_requirement(route=pull), tmp_path) is None
+    assert (
+        _env_pack_digest_and_provenance(_pack_requirement(route=pull), tmp_path) is None
+    )

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -14,7 +13,7 @@ from raes_contracts.participant_binding import (
     ParticipantNativeActionExecution,
 )
 from raes_contracts.planning import RuntimeDomain
-from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot, SnapshotEntry
+from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot
 
 from aptl.backends.raes_participant_fixture import (
     VerifiedParticipantOperation,
@@ -227,27 +226,19 @@ def _build_realization_execution(
 
     record = _action_evidence_record(context, observation)
     action_result = _action_result(context, observation)
-    entry_address = (
-        "participant.action-instance."
-        f"{hashlib.sha256(context.request.action_instance_id.encode()).hexdigest()}"
-    )
-    entry = SnapshotEntry(
-        address=entry_address,
-        domain=RuntimeDomain.PARTICIPANT,
-        resource_type="participant-action-instance",
-        payload=record,
-    )
-    working = context.snapshot.with_entries(
-        {**context.snapshot.entries, entry_address: entry}
-    )
     diagnostics = _native_diagnostics(context, observation)
     return ParticipantRealizationExecution(
         native=ParticipantNativeActionExecution(
             apply_result=ApplyResult(
                 success=True,
-                snapshot=working,
+                # Action evidence is committed through the portable behavior
+                # history and the separately staged evaluator/participant
+                # projections below.  It is not a newly realized scenario
+                # resource, so an action must not add an unrequested snapshot
+                # entry or report an entry transition outside RAES authority.
+                snapshot=context.snapshot,
                 diagnostics=diagnostics,
-                changed_addresses=[entry_address],
+                changed_addresses=[],
             ),
             action_result=action_result,
             post_state_digest=observation.post_state_digest,

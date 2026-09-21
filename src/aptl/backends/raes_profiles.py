@@ -14,13 +14,11 @@ from aptl.backends._compose_profile_index import (
     normalize_identifier,
     normalized_identifier_aliases,
 )
-from aptl.core.config import AptlConfig, ContainerSettings
+from aptl.core.config import AptlConfig
 
-CORE_PROFILES = ("otel",)
-# The finite vocabulary a deployment-serving provider may assign. Container
-# toggles and backend-owned always-on profiles are the only authorities; the
-# separate web lifecycle is intentionally absent.
-OPERATOR_GROUP_VOCABULARY = (*ContainerSettings.model_fields, *CORE_PROFILES)
+# No backend apparatus is an always-on scenario profile. Apparatus selection is
+# applied after evidence and scope admission by ``ObservabilityScopeDecision``.
+CORE_PROFILES: tuple[str, ...] = ()
 # Legacy in-tree fallback ONLY (issue #875, SDL-authority class). These map
 # older in-tree scenario node names to their docker-compose service names so
 # node->service binding resolves for the legacy compose path. An env-pack never
@@ -65,8 +63,7 @@ def load_compose_profile_index(project_dir: Path) -> ComposeProfileIndex:
     )
     return ComposeProfileIndex(
         alias_to_profiles={
-            alias: frozenset(profiles)
-            for alias, profiles in alias_to_profiles.items()
+            alias: frozenset(profiles) for alias, profiles in alias_to_profiles.items()
         },
         alias_to_services={
             alias: frozenset(service_names)
@@ -88,9 +85,8 @@ def _prune_source_only_aliases(
 
     An alias derived from a service's *source* — its image repository or its
     build-context directory — records where the image came from, not which
-    service this is. Two services may share one build context (webapp-proxy and
-    kali-ssh-proxy both build ./containers/kali-ssh-proxy), so that directory
-    name is not evidence about either one.
+    service this is. Two services may share one build context, so that
+    directory name is not evidence about either one.
 
     When some service is actually *named* by that alias, its claim wins and the
     source-only claimants drop out. Without this, declaring a node named after
@@ -140,18 +136,19 @@ def configured_profiles(config: AptlConfig) -> list[str]:
 
 def public_start_profiles(config: AptlConfig) -> list[str]:
     """Return the Compose profiles used by the public lab start path."""
-    selected = configured_profiles(config)
-    for profile in CORE_PROFILES:
-        if profile not in selected:
-            selected.append(profile)
-    return selected
+    return configured_profiles(config)
 
 
 def select_backend_profiles(
     config: AptlConfig,
     plan_profiles: frozenset[str],
+    *,
+    admitted_operator_groups: tuple[str, ...] | None = None,
 ) -> list[str]:
-    """Intersect RAES plan profiles with enabled APTL profiles."""
+    """Select profiles from legacy config or an admitted pack vocabulary."""
+    if admitted_operator_groups is not None:
+        admitted = set(admitted_operator_groups)
+        return sorted(profile for profile in plan_profiles if profile in admitted)
     selected = [
         profile
         for profile in public_start_profiles(config)
@@ -379,7 +376,9 @@ def _build_aliases(service_def: Mapping[str, object]) -> set[str]:
 def _raw_node_values(address: str, payload: Mapping[str, Any]) -> set[str]:
     """Collect raw string values that can identify a RAES node."""
     raw_values = {address}
-    raw_values.update(_payload_string_values(payload, ("name", "node_name", "target_node")))
+    raw_values.update(
+        _payload_string_values(payload, ("name", "node_name", "target_node"))
+    )
     spec = payload.get("spec")
     if isinstance(spec, Mapping):
         node_spec = spec.get("node")

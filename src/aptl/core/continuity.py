@@ -32,21 +32,11 @@ from aptl.utils.logging import get_logger
 log = get_logger("continuity")
 
 
-# Default target containers for the carve-out audit. Names are docker
-# container names (``aptl-<svc>``) — the same form
-# ``backend.container_exec`` expects. Set mirrors the in-process
-# Wazuh-agent containers installed by #248 — the only ones with both
-# ``NET_ADMIN`` (required to mutate iptables) and a co-located agent
-# whose ruleset can wedge red→target ingress. ``aptl-victim`` and
-# ``aptl-workstation`` are intentionally excluded: they ship without
-# ``NET_ADMIN`` so iptables introspection silently fails there; their
-# agents are sidecars whose iptables don't affect the target's
-# namespace anyway. ``aptl-db`` is excluded for the same sidecar
-# reason (postgres deferred per #248). ``test_targets_match_in_process_agent_set``
-# pins this to the canonical IN_PROCESS_TARGETS set in
-# ``tests/test_wazuh_active_response.py``;
-# ``test_every_default_target_has_net_admin`` catches compose drift if
-# a target loses the cap.
+# Default targets remain the in-process-agent namespaces protected by the
+# continuity command.  The command only reads/mutates existing iptables state;
+# it never grants CAP_NET_ADMIN.  TechVault 6.1.0 closes that capability scope,
+# so a backend that cannot inspect a target reports AUDIT_FAILED rather than
+# silently adding privilege to make the audit succeed.
 _DEFAULT_TARGETS = (
     "aptl-webapp",
     "aptl-fileshare",

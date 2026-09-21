@@ -31,20 +31,39 @@ from tests.helpers import techvault_scenario_bundle
 
 pytestmark = pytest.mark.integration
 
+_TECHVAULT_FLAG_PARAMETERS = {
+    f"flag_{host}_{level}": f"{host}-{level}"
+    for host in ("victim", "workstation", "webapp", "fileshare", "ad")
+    for level in ("user", "root")
+}
+
 
 def _docker_available() -> bool:
     if shutil.which("docker") is None:
         return False
-    return subprocess.run(["docker", "info"], capture_output=True, text=True).returncode == 0
+    return (
+        subprocess.run(["docker", "info"], capture_output=True, text=True).returncode
+        == 0
+    )
 
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
 def test_dns_node_boots_image_free_and_resolves(tmp_path):
     repo = Path(__file__).resolve().parent.parent
     subprocess.run(
-        ["docker", "build", "-t", "aptl/generic-systemd-base-debian:latest",
-         str(repo / "containers/generic-systemd-base-debian")],
-        capture_output=True, text=True, timeout=600,
+        [
+            "docker",
+            "build",
+            "-t",
+            "aptl/generic-systemd-base-debian:latest",
+            "-f",
+            str(repo / "containers/generic-systemd-base-debian/Dockerfile"),
+            str(repo),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=True,
     )
     subprocess.run(["docker", "rm", "-f", "aptl-dns"], capture_output=True, text=True)
 
@@ -55,7 +74,10 @@ def test_dns_node_boots_image_free_and_resolves(tmp_path):
         create_aptl_runtime_target(
             project_dir=repo, config=cfg, backend=be, bundle=bundle
         )
-    ).plan(parse_sdl_file(bundle.sdl_path))
+    ).plan(
+        parse_sdl_file(bundle.sdl_path),
+        parameters=_TECHVAULT_FLAG_PARAMETERS,
+    )
     real = interpret_provisioning_plan(
         plan=plan.provisioning, config=cfg, bundle=bundle, component_root=repo
     )
@@ -93,19 +115,27 @@ def test_dns_node_boots_image_free_and_resolves(tmp_path):
     try:
         result = realize_node(dns_node, be, tuple(ops), scenario_root=bundle.root)
         assert result is None, getattr(result, "error", None)
-        assert be.container_exec(
-            "aptl-dns", ["systemctl", "is-active", "named.service"]
-        ).stdout.strip() == "active"
+        assert (
+            be.container_exec(
+                "aptl-dns", ["systemctl", "is-active", "named.service"]
+            ).stdout.strip()
+            == "active"
+        )
         # The real named.conf's custom log channels wrote into a directory
         # this materialization must create and chown to bind:bind (the user
         # named drops privileges to via `-u bind`); prove it actually did.
-        assert be.container_exec(
-            "aptl-dns", ["stat", "-c", "%U:%G", "/var/log/named"]
-        ).stdout.strip() == "bind:bind"
+        assert (
+            be.container_exec(
+                "aptl-dns", ["stat", "-c", "%U:%G", "/var/log/named"]
+            ).stdout.strip()
+            == "bind:bind"
+        )
         # named serves the real TechVault zone.
         dig = be.container_exec(
             "aptl-dns", ["dig", "+short", "@127.0.0.1", "webapp.techvault.local"]
         )
         assert "172.20.1.20" in dig.stdout
     finally:
-        subprocess.run(["docker", "rm", "-f", "aptl-dns"], capture_output=True, text=True)
+        subprocess.run(
+            ["docker", "rm", "-f", "aptl-dns"], capture_output=True, text=True
+        )

@@ -6,11 +6,17 @@ from pathlib import PurePosixPath
 from typing import Any
 
 from aptl.core.deployment._compose_stateful_constants import (
+    ENVIRONMENT_DELIVERY_PROVENANCES,
     CERTIFICATE_PROVENANCE,
     SOC_CERT_PROFILE,
     WAZUH_CERT_PROFILES,
 )
 from aptl.core.deployment._flag_signing_keys import FLAG_SIGNING_PROFILE_V2
+from aptl.core.deployment._misp_cache_credential import MISP_CACHE_CREDENTIAL_PROFILE
+from aptl.core.deployment._misp_server_tls import MISP_SERVER_TLS_PROFILE
+from aptl.core.deployment._cortex_service_credentials import (
+    CORTEX_SERVICE_CREDENTIALS_PROFILE,
+)
 from aptl.core.deployment._wazuh_identity import wazuh_cluster_identity
 
 # Certificate-bundle provenances APTL can realize: the in-tree provenance file
@@ -60,7 +66,12 @@ def compose_version(value: str) -> tuple[int, int, int] | None:
 
     version: tuple[int, int, int] | None = None
     for token in value.split():
-        candidate = token.strip("()[],").removeprefix("v").split("-", maxsplit=1)[0]
+        candidate = (
+            token.strip("()[],")
+            .removeprefix("v")
+            .split("-", maxsplit=1)[0]
+            .split("+", maxsplit=1)[0]
+        )
         parts = candidate.split(".")
         if len(parts) >= 3 and all(part.isdigit() for part in parts[:3]):
             version = (int(parts[0]), int(parts[1]), int(parts[2]))
@@ -105,31 +116,50 @@ def _artifact_errors(realization: DeploymentRealizationSpec) -> list[str]:
 
     errors: list[str] = []
     for artifact in realization.generated_artifacts:
-        if (
-            artifact.generator == "certificate_bundle"
-            and artifact.provenance not in _SUPPORTED_CERTIFICATE_PROVENANCES
-        ):
-            errors.append(
-                f"Generated artifact {artifact.address} has unsupported provenance."
-            )
-        if (
-            artifact.generator == "rendered_config"
-            and artifact.provenance != FLAG_SIGNING_PROFILE_V2
-            and len(artifact.outputs) != 1
-        ):
-            # The wazuh manager config renders a single file; the flag-signing
-            # profile legitimately renders a seed plus one key per node (#875).
-            errors.append(
-                f"Rendered config {artifact.address} must declare exactly one output."
-            )
-        if any(consumer.access_mode != "read_only" for consumer in artifact.consumers):
-            errors.append(
-                f"Generated artifact {artifact.address} must be mounted read-only."
-            )
-        if any(not _safe_relative(output.path) for output in artifact.outputs):
-            errors.append(
-                f"Generated artifact {artifact.address} has an unsafe output path."
-            )
+        errors.extend(_one_artifact_errors(artifact))
+    return errors
+
+
+def _one_artifact_errors(artifact: object) -> list[str]:
+    """Return all graph validation errors for one generated artifact."""
+
+    errors: list[str] = []
+    if (
+        artifact.generator == "certificate_bundle"
+        and artifact.provenance not in _SUPPORTED_CERTIFICATE_PROVENANCES
+    ):
+        errors.append(
+            f"Generated artifact {artifact.address} has unsupported provenance."
+        )
+    if (
+        artifact.generator == "rendered_config"
+        and artifact.provenance
+        not in {
+            FLAG_SIGNING_PROFILE_V2,
+            CORTEX_SERVICE_CREDENTIALS_PROFILE,
+            MISP_CACHE_CREDENTIAL_PROFILE,
+            MISP_SERVER_TLS_PROFILE,
+        }
+        and len(artifact.outputs) != 1
+    ):
+        errors.append(
+            f"Rendered config {artifact.address} must declare exactly one output."
+        )
+    if any(consumer.access_mode != "read_only" for consumer in artifact.consumers):
+        errors.append(
+            f"Generated artifact {artifact.address} must be mounted read-only."
+        )
+    if (
+        artifact.environment_consumers
+        and artifact.provenance not in ENVIRONMENT_DELIVERY_PROVENANCES
+    ):
+        errors.append(
+            f"Generated artifact {artifact.address} has unsupported environment delivery."
+        )
+    if any(not _safe_relative(output.path) for output in artifact.outputs):
+        errors.append(
+            f"Generated artifact {artifact.address} has an unsafe output path."
+        )
     return errors
 
 

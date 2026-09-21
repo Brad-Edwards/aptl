@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from raes_contracts.diagnostics import Diagnostic
 from raes.runtime_configuration import RuntimeConfiguration
@@ -11,6 +12,7 @@ from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
     DeploymentAclRealization,
     DeploymentContentRealization,
+    DeploymentCaptureApparatus,
     DeploymentGeneratedArtifactRealization,
     DeploymentImageRealization,
     DeploymentNetworkAttachment,
@@ -25,6 +27,9 @@ from aptl.core.deployment.realization import (
 from aptl.backends.pack_interaction import ResolvedPackBackendInteraction
 from aptl.backends.raes_runtime_orchestration import admit_docker_authorities
 from aptl.core.scenario_bundle import PackIdentity
+
+if TYPE_CHECKING:
+    from aptl.backends.scenario_startup import ScenarioStartupSelection
 
 
 @dataclass(frozen=True)
@@ -56,6 +61,20 @@ class NodeRealization(object):
     # container is started immutably from the verified config id. False for every
     # exact/materialized/Compose-owned node.
     dynamic_composition: bool = False
+    # Value-free accounting for apparatus choices made under OPEN realization
+    # authority.  Exact values remain in the image record and observed runtime
+    # snapshot; this list makes the fact of backend selection explicit in apply
+    # reporting without disclosing credentials.
+    backend_selected_concerns: tuple[str, ...] = ()
+    backend_base_image_ref: str | None = None
+    backend_base_use_image_command: bool = False
+    backend_run_capabilities: tuple[str, ...] = ()
+    backend_provider_kind: str = ""
+    backend_provider_parameters: tuple[tuple[str, str], ...] = ()
+    # Generated prerequisites selected under the same OPEN authority as this
+    # node's backend runtime additions. They are promoted into the realization's
+    # top-level artifact collection so deployment and reporting see them.
+    backend_generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
 
     def service_names(self) -> tuple[str, ...]:
         """Return the declared service names, for profile/alias matching."""
@@ -63,6 +82,8 @@ class NodeRealization(object):
         return tuple(sorted({s.name for s in self.services if s.name}))
 
     def details(self) -> dict[str, object]:
+        """Return the bounded, non-secret realization report for this node."""
+
         details: dict[str, object] = {
             "address": self.address,
             "name": self.name,
@@ -80,26 +101,46 @@ class NodeRealization(object):
             "published_ports": [binding.details() for binding in self.published_ports],
             "ordering_dependencies": list(self.ordering_dependencies),
         }
-        if self.os:
-            details["os"] = self.os
-        if self.os_version:
-            details["os_version"] = self.os_version
-        if self.runtime is not None:
-            details["runtime"] = {
-                "packages": len(self.runtime.packages),
-                "software_components": len(self.runtime.software_components),
-                "local_users": (
-                    len(self.runtime.local_identity.users)
-                    if self.runtime.local_identity is not None
-                    else 0
-                ),
-                "service_units": len(self.runtime.service_manager_units),
-            }
-        if self.image is not None:
-            details["image"] = self.image.details()
-        if self.dynamic_composition:
-            details["dynamic_composition"] = True
+        details.update(_optional_node_details(self))
         return details
+
+
+def _optional_node_details(node: NodeRealization) -> dict[str, object]:
+    """Collect populated optional report fields without exposing credentials."""
+
+    optional: dict[str, object] = {}
+    runtime = node.runtime
+    if runtime is not None:
+        local_identity = runtime.local_identity
+        optional["runtime"] = {
+            "packages": len(runtime.packages),
+            "software_components": len(runtime.software_components),
+            "local_users": len(local_identity.users) if local_identity else 0,
+            "service_units": len(runtime.service_manager_units),
+        }
+    candidates = (
+        ("os", node.os),
+        ("os_version", node.os_version),
+        ("image", node.image.details() if node.image is not None else None),
+        ("dynamic_composition", True if node.dynamic_composition else None),
+        (
+            "backend_selected_concerns",
+            list(node.backend_selected_concerns) or None,
+        ),
+        ("backend_base_image_ref", node.backend_base_image_ref),
+        ("backend_run_capabilities", list(node.backend_run_capabilities) or None),
+        (
+            "backend_provider",
+            {
+                "kind": node.backend_provider_kind,
+                "parameters": dict(node.backend_provider_parameters),
+            }
+            if node.backend_provider_kind
+            else None,
+        ),
+    )
+    optional.update((key, value) for key, value in candidates if value is not None)
+    return optional
 
 
 @dataclass(frozen=True)
@@ -198,7 +239,13 @@ class AptlRealization(object):
     pack_identity: PackIdentity | None = None
     pack_interaction: ResolvedPackBackendInteraction | None = None
 
-    def deployment_spec(self, profiles: list[str]) -> DeploymentRealizationSpec:
+    def deployment_spec(
+        self,
+        profiles: list[str],
+        *,
+        capture_apparatus: tuple[DeploymentCaptureApparatus, ...] = (),
+        startup_selection: ScenarioStartupSelection | None = None,
+    ) -> DeploymentRealizationSpec:
         """Return typed backend realization input for this RAES realization."""
 
         nodes = tuple(
@@ -238,6 +285,9 @@ class AptlRealization(object):
             ),
             generated_artifacts=self.generated_artifacts,
             persistent_volumes=self.persistent_volumes,
+            capture_apparatus=capture_apparatus,
+            pack_identity=self.pack_identity,
+            startup_selection=startup_selection,
         )
 
     def details(self) -> dict[str, object]:
@@ -328,5 +378,10 @@ def _deployment_node_realization(
         os_version=node.os_version,
         runtime=node.runtime,
         dynamic_composition=node.dynamic_composition,
+        backend_base_image_ref=node.backend_base_image_ref,
+        backend_base_use_image_command=node.backend_base_use_image_command,
+        backend_run_capabilities=node.backend_run_capabilities,
+        backend_provider_kind=node.backend_provider_kind,
+        backend_provider_parameters=node.backend_provider_parameters,
         profiles=node.profiles,
     )

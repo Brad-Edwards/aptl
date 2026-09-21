@@ -86,7 +86,7 @@ def _check(
     return LiveGateCheck(
         name=name,
         category=category,
-        passed=not diagnostics,
+        status=not diagnostics,
         diagnostics=tuple(diagnostics),
     )
 

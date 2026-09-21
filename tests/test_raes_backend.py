@@ -1,6 +1,7 @@
 """Tests for the APTL RAES runtime handoff."""
 
 import inspect
+import subprocess
 from pathlib import Path
 from unittest.mock import ANY, MagicMock
 
@@ -22,16 +23,9 @@ from aptl.core.config import AptlConfig, ScenarioSourceConfig
 from aptl.core.deployment._compose_realization_networks import _concrete_network_name
 from aptl.core.lab_types import LabResult
 from aptl.core.scenario_bundle import ScenarioBundle, project_tree_bundle
-from tests.helpers import techvault_scenario_bundle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-
-@pytest.fixture(scope="module")
-def conformance_bundle(tmp_path_factory):
-    """Stage the acquired full-pack conformance input once for this module."""
-
-    return techvault_scenario_bundle(tmp_path_factory.mktemp("aptl-conformance"))
+CONFORMANCE_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-defensive-min.sdl.yaml"
 
 
 def _bundle(root: Path) -> ScenarioBundle:
@@ -100,7 +94,7 @@ def _node_resource(node_name: str) -> PlannedResource:
     payload = {
         "name": node_name,
         "node_name": node_name,
-        "node_type": "vm",
+        "node_kind": "compute",
         "os_family": "linux",
         "spec": {"node": {"name": node_name}, "infrastructure": {}},
     }
@@ -219,6 +213,18 @@ class _RealizedBackend(MagicMock):
             "NetworkSettings": {"Networks": {}},
         }
 
+    def container_exec(self, name: str, command: list[str]):
+        if name not in self._containers or command != ["cat", "/etc/os-release"]:
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="")
+        if self._platform != "linux":
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="")
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout='ID=debian\nVERSION_ID="12"\n',
+            stderr="",
+        )
+
     def host_list_lab_networks(self, name_prefix: str) -> list[str]:
         return list(self._networks)
 
@@ -260,6 +266,7 @@ def _execution_plan_with_realization_requirements():
 
     from raes_processor.compiler import compile_runtime_model
     from raes_processor.planner import plan
+    from raes_contracts.run_scope import PlanScope
     from raes.parser import parse_sdl
 
     from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, create_aptl_manifest
@@ -270,7 +277,7 @@ def _execution_plan_with_realization_requirements():
             name: disclosure-test
             nodes:
               vm:
-                type: vm
+                type: compute
                 os: linux
                 resources: {ram: 1 gib, cpu: 1}
             """
@@ -279,7 +286,7 @@ def _execution_plan_with_realization_requirements():
     return plan(
         compile_runtime_model(scenario),
         create_aptl_manifest(),
-        target_name=APTL_RAES_TARGET_NAME,
+        scope=PlanScope(target_name=APTL_RAES_TARGET_NAME),
     )
 
 
@@ -289,7 +296,7 @@ def _execution_plan_with_derived_realization_requirements():
     The author writes ``os: ${node_os}``, so the processor — not the author —
     supplies the concrete value. RAES classifies that concern
     ``CONSTRAINED`` / ``PROCESSOR_DERIVED`` (substitution downgrades exactness),
-    while the literal ``type: vm`` stays ``EXACT`` / ``AUTHOR_DECLARED``. One
+    while the literal ``type: compute`` stays ``EXACT`` / ``AUTHOR_DECLARED``. One
     scenario therefore exercises both halves of the SEM-218 contract.
 
     raes 0.19.1 could not express this: the compiler dropped the classifier's
@@ -301,6 +308,7 @@ def _execution_plan_with_derived_realization_requirements():
 
     from raes_processor.compiler import compile_runtime_model
     from raes_processor.planner import plan
+    from raes_contracts.run_scope import PlanScope
     from raes.parser import parse_sdl
 
     from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, create_aptl_manifest
@@ -316,7 +324,7 @@ def _execution_plan_with_derived_realization_requirements():
                 default: linux
             nodes:
               vm:
-                type: vm
+                type: compute
                 os: ${node_os}
                 resources: {ram: 1 gib, cpu: 1}
             """
@@ -325,7 +333,7 @@ def _execution_plan_with_derived_realization_requirements():
     return plan(
         compile_runtime_model(scenario),
         create_aptl_manifest(),
-        target_name=APTL_RAES_TARGET_NAME,
+        scope=PlanScope(target_name=APTL_RAES_TARGET_NAME),
     )
 
 
@@ -335,6 +343,7 @@ def _execution_plan_with_content_realization_requirement():
 
     from raes_processor.compiler import compile_runtime_model
     from raes_processor.planner import plan
+    from raes_contracts.run_scope import PlanScope
     from raes.parser import parse_sdl
 
     from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, create_aptl_manifest
@@ -345,7 +354,7 @@ def _execution_plan_with_content_realization_requirement():
             name: disclosure-content
             nodes:
               fileshare:
-                type: vm
+                type: compute
                 os: linux
                 resources: {ram: 1 gib, cpu: 1}
             content:
@@ -360,7 +369,7 @@ def _execution_plan_with_content_realization_requirement():
     return plan(
         compile_runtime_model(scenario),
         create_aptl_manifest(),
-        target_name=APTL_RAES_TARGET_NAME,
+        scope=PlanScope(target_name=APTL_RAES_TARGET_NAME),
     )
 
 
@@ -559,7 +568,7 @@ class _FakeRuntimeManager:
         self.target = target
         self._initial_snapshot = initial_snapshot
 
-    def plan(self, parsed_scenario, *, artifact_availability=None):
+    def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
         raise NotImplementedError
 
     def apply(self, execution_plan):
@@ -604,6 +613,9 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
     )
     assert manifest.evaluator.supports_scoring is False
     assert manifest.evaluator.supports_objectives is True
+    assert manifest.evaluator.supported_evidence_channels == frozenset(
+        {"api_response", "file_artifact", "log"}
+    )
     assert manifest.has_participant_runtime is True
     assert manifest.participant_runtime is not None
     assert manifest.participant_runtime.supported_participant_roles == frozenset(
@@ -619,7 +631,7 @@ def test_manifest_provisioner_declares_only_realized_capabilities():
     manifest = create_aptl_manifest()
     provisioner = manifest.provisioner
 
-    assert provisioner.supported_node_types == frozenset({"switch", "vm"})
+    assert provisioner.supported_node_types == frozenset({"switch", "compute"})
     assert provisioner.supported_os_families == frozenset({"linux"})
     assert provisioner.supported_content_types == frozenset(
         {"dataset", "directory", "file"}
@@ -632,8 +644,12 @@ def test_manifest_provisioner_declares_only_realized_capabilities():
 
 
 def test_manifest_realization_support_matches_exercised_concerns():
-    """Issue #580: constrained support is limited to a non-vacuous witness."""
-    from aptl.backends.raes_manifest import create_aptl_manifest
+    """Runtime claims remain limited to independently observed implementations."""
+    from aptl.backends.raes_manifest import (
+        APTL_PROCESS_RESOURCE_LIMITS,
+        create_aptl_manifest,
+    )
+    from aptl.backends.raes_planning_compat import DAEMON_READBACK_RUNTIME_CONCERNS
 
     (support,) = create_aptl_manifest().realization_support
 
@@ -643,10 +659,61 @@ def test_manifest_realization_support_matches_exercised_concerns():
     )
     assert support.supported_exact_requirement_kinds == frozenset(
         {
+            *DAEMON_READBACK_RUNTIME_CONCERNS,
             "declared-capability-match",
+            "forwarding-agents",
+            "runtime-dependency-manifests",
+            "runtime-filesystem-inventory",
+            "runtime-local-identity",
+            "runtime-packages",
+            "runtime-service-manager-units",
             "service-search-index-schema-materialization",
         }
     )
+    for kind in (
+        "runtime-dependency-manifests",
+        "runtime-filesystem-inventory",
+        "runtime-local-identity",
+        "runtime-packages",
+        "runtime-service-manager-units",
+    ):
+        capability = support.observation_capabilities[kind]
+        assert capability.verification_scope.value == "configuration"
+        assert capability.observation_strength.value == "guest-observed"
+    for kind in (
+        "linux-capabilities",
+        "published-ports",
+        "runtime-environment",
+        "runtime-mounts",
+        "service-listeners",
+    ):
+        capability = support.observation_capabilities[kind]
+        assert capability.verification_scope.value == "configuration"
+        assert capability.observation_strength.value == "daemon-observed"
+    process_observation = support.observation_capabilities["process-resource-limits"]
+    assert process_observation.verification_scope.value == "configuration"
+    assert process_observation.observation_strength.value == "guest-observed"
+    assert support.process_resource_limits == APTL_PROCESS_RESOURCE_LIMITS
+    envelope_limits = create_aptl_manifest().realization_envelope.configuration.process_resource_limits
+    assert {
+        (
+            item.resource.value,
+            tuple(scope.value for scope in item.scopes),
+            item.minimum,
+            item.maximum,
+            item.supports_unlimited,
+        )
+        for item in envelope_limits
+    } == {
+        (
+            item.resource.value,
+            tuple(scope.value for scope in item.scopes),
+            item.minimum,
+            item.maximum,
+            item.supports_unlimited,
+        )
+        for item in APTL_PROCESS_RESOURCE_LIMITS
+    }
     assert support.disclosure_kinds == frozenset(
         {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
     )
@@ -744,7 +811,7 @@ _CONFORMANCE_SCENARIO_CONTAINERS = (
 _CONFORMANCE_SCENARIO_NETWORKS = ("security-net",)
 
 
-def test_aptl_target_passes_provisioning_only_conformance(conformance_bundle):
+def test_aptl_target_passes_provisioning_only_conformance():
     from raes_conformance.conformance import run_target_conformance
 
     from aptl.backends.raes import create_aptl_runtime_target
@@ -756,7 +823,7 @@ def test_aptl_target_passes_provisioning_only_conformance(conformance_bundle):
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=PROJECT_ROOT,
-        bundle=conformance_bundle,
+        bundle=_bundle(PROJECT_ROOT),
         config=config,
         backend=backend,
     )
@@ -764,7 +831,7 @@ def test_aptl_target_passes_provisioning_only_conformance(conformance_bundle):
     report = run_target_conformance(
         target,
         profile="provisioning-only",
-        reference_scenario=conformance_bundle.sdl_path,
+        reference_scenario=CONFORMANCE_SCENARIO,
     )
 
     # The realization-envelope constructive case is live-harness-only and is
@@ -781,9 +848,7 @@ def test_aptl_target_passes_provisioning_only_conformance(conformance_bundle):
     assert report.unsupported_capability_gaps == ()
 
 
-def test_aptl_target_passes_orchestration_evaluation_conformance(
-    conformance_bundle,
-):
+def test_aptl_target_passes_orchestration_evaluation_conformance():
     from raes_conformance.conformance import run_target_conformance
 
     from aptl.backends.raes import create_aptl_runtime_target
@@ -795,7 +860,7 @@ def test_aptl_target_passes_orchestration_evaluation_conformance(
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=PROJECT_ROOT,
-        bundle=conformance_bundle,
+        bundle=_bundle(PROJECT_ROOT),
         config=config,
         backend=backend,
     )
@@ -803,7 +868,7 @@ def test_aptl_target_passes_orchestration_evaluation_conformance(
     report = run_target_conformance(
         target,
         profile="orchestration-evaluation",
-        reference_scenario=conformance_bundle.sdl_path,
+        reference_scenario=CONFORMANCE_SCENARIO,
     )
 
     # The realization-envelope constructive case is live-harness-only and is
@@ -837,9 +902,7 @@ def test_aptl_target_passes_orchestration_evaluation_conformance(
     assert "realization-envelope-constructive" in case_names
 
 
-def test_aptl_target_passes_full_remote_control_plane_conformance(
-    conformance_bundle,
-):
+def test_aptl_target_passes_full_remote_control_plane_conformance():
     from raes_conformance.conformance import run_target_conformance
 
     from aptl.backends.raes import create_aptl_runtime_target
@@ -851,7 +914,7 @@ def test_aptl_target_passes_full_remote_control_plane_conformance(
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=PROJECT_ROOT,
-        bundle=conformance_bundle,
+        bundle=_bundle(PROJECT_ROOT),
         config=config,
         backend=backend,
     )
@@ -859,7 +922,7 @@ def test_aptl_target_passes_full_remote_control_plane_conformance(
     report = run_target_conformance(
         target,
         profile="full-remote-control-plane",
-        reference_scenario=conformance_bundle.sdl_path,
+        reference_scenario=CONFORMANCE_SCENARIO,
     )
 
     # The realization-envelope constructive case is live-harness-only and is
@@ -993,7 +1056,7 @@ def test_legacy_participant_smoke_action_requires_explicit_admission(tmp_path):
         "observation_emitted",
     ]
     assert behavior[0]["actor_provenance"].startswith("participant-implementation:")
-    assert any(
+    assert not any(
         entry.resource_type == "participant-action-instance"
         for entry in snapshot.entries.values()
     )
@@ -1010,37 +1073,59 @@ def test_legacy_participant_smoke_action_requires_explicit_admission(tmp_path):
     )
 
 
-def test_runtime_binding_action_uses_compiled_addresses_and_evidence(
-    tmp_path, mocker
+def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
+    tmp_path,
 ):
     import subprocess
 
+    from raes_processor.compiler import compile_runtime_model
     from raes_contracts.runtime_state import OperationState
     from raes_runtime.control_plane import RuntimeControlPlane
+    from raes_runtime.manager import RuntimeManager
+    from raes import parse_sdl_file
 
-    from aptl.backends.raes import create_aptl_runtime_target
+    from aptl.backends.raes import RuntimeTargetOptions, create_aptl_runtime_target
     from aptl.backends.raes_participant_actions import (
         DEFAULT_PARTICIPANT_ACTIONS,
         participant_action_specs_from_runtime_model,
     )
 
-    participant_address = _BINDING_PARTICIPANT_ADDRESS
-    action_contract_address = _BINDING_ACTION_ADDRESS
-    observation_boundary_address = _BINDING_BOUNDARY_ADDRESS
+    participant_address = "participant.behavior.paper-agent"
+    action_contract_address = "participant.action-contract.probe-customer-portal-login"
+    observation_boundary_address = "participant.observation-boundary.paper-agent-view"
 
     assert participant_address not in DEFAULT_PARTICIPANT_ACTIONS
+    assert not (
+        Path(__file__).resolve().parents[1]
+        / "src/aptl/backends/raes_paper_participant_actions.py"
+    ).exists()
     backend = MagicMock()
     backend.container_exec.return_value = subprocess.CompletedProcess(
         args=["bash"],
         returncode=0,
-        stdout="ready\n",
+        stdout=(
+            "portal_http_status=200\nboundary_db=blocked\nboundary_wazuh_api=blocked\n"
+        ),
         stderr="",
     )
-    model, plan, config = _binding_model_plan_config(mocker)
+    project_root = Path(__file__).resolve().parents[1]
+    scenario = parse_sdl_file(project_root / "scenarios" / "paper-agent-loop.sdl.yaml")
+    model = compile_runtime_model(scenario)
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={"enterprise": True, "kali": True, "wazuh": True},
+    )
+    plan_target = create_aptl_runtime_target(
+        project_dir=project_root,
+        bundle=_bundle(project_root),
+        config=config,
+        backend=MagicMock(),
+    )
+    plan = RuntimeManager(plan_target).plan(scenario)
     participant_action_specs = participant_action_specs_from_runtime_model(
         model,
         provisioning_plan=plan.provisioning,
-        bundle=_bundle(PROJECT_ROOT),
+        bundle=_bundle(project_root),
         config=config,
     )
     target = create_aptl_runtime_target(
@@ -1048,7 +1133,7 @@ def test_runtime_binding_action_uses_compiled_addresses_and_evidence(
         bundle=_bundle(tmp_path),
         config=config,
         backend=backend,
-        participant_action_specs=participant_action_specs,
+        options=RuntimeTargetOptions(participant_action_specs=participant_action_specs),
     )
     control_plane = RuntimeControlPlane(target)
 
@@ -1068,36 +1153,33 @@ def test_runtime_binding_action_uses_compiled_addresses_and_evidence(
     assert action.success is True
     backend.container_exec.assert_called_once()
     container_name, command = backend.container_exec.call_args.args
-    assert container_name == "fixture-source"
-    assert command == ["printf", "ready"]
+    assert container_name == "aptl-kali"
+    assert command[:2] == ["bash", "-lc"]
+    assert "172.20.1.20:8080/login" in command[2]
+    assert "172.20.2.11/5432" in command[2]
+    assert "172.20.2.30/55000" in command[2]
     behavior = action.snapshot.participant_behavior_history[participant_address]
     assert behavior[0]["action_contract_address"] == action_contract_address
     assert behavior[-1]["observation_boundary_address"] == observation_boundary_address
     assert any(
-        "ready" in observation
+        "boundary_db=blocked" in observation
         for observation in behavior[-1]["action_result"]["observations"]
     )
-    entries = action.snapshot.entries
-    assert (
-        entries[participant_address].payload["participant_address"]
-        == participant_address
-    )
-    assert entries[action_contract_address].payload["action_name"] == "fixture-action"
-    assert entries[observation_boundary_address].payload["boundary_name"] == (
-        "fixture-view"
-    )
+    # RAES 4.1 owns participant lifecycle/history projection. Native command
+    # evidence must not mint scenario resources outside the submitted authority.
+    assert action.snapshot.entries == control_plane.snapshot.entries
     shared_state_records = getattr(action.snapshot, "shared_state_records", {})
-    assert {record["state_scope"] for record in shared_state_records.values()} == {
-        participant_address
-    }
+    assert shared_state_records == control_plane.snapshot.shared_state_records
     assert participant_action_specs[participant_address].target_refs == (
-        "container:fixture-source",
+        "container:aptl-kali",
+        "container:aptl-webapp",
+        "http://172.20.1.20:8080/login",
+        "boundary-negative:tcp:172.20.2.11:5432",
+        "boundary-negative:tcp:172.20.2.30:55000",
     )
 
 
-def test_runtime_model_without_binding_artifacts_registers_no_dynamic_action(
-    conformance_bundle,
-):
+def test_runtime_model_without_paper_artifacts_registers_no_paper_action():
     from raes_runtime.manager import RuntimeManager
     from raes import parse_sdl_file
 
@@ -1117,10 +1199,10 @@ def test_runtime_model_without_binding_artifacts_registers_no_dynamic_action(
         lab={"name": "test"},
         containers={"enterprise": True, "kali": True, "wazuh": True},
     )
-    scenario = parse_sdl_file(conformance_bundle.sdl_path)
+    scenario = parse_sdl_file(project_root / "scenarios" / "paper-agent-loop.sdl.yaml")
     target = create_aptl_runtime_target(
         project_dir=project_root,
-        bundle=conformance_bundle,
+        bundle=_bundle(project_root),
         config=config,
         backend=MagicMock(),
     )
@@ -1130,7 +1212,7 @@ def test_runtime_model_without_binding_artifacts_registers_no_dynamic_action(
         participant_action_specs_from_runtime_model(
             EmptyModel(),
             provisioning_plan=plan.provisioning,
-            bundle=conformance_bundle,
+            bundle=_bundle(project_root),
             config=config,
         )
         == {}
@@ -1201,109 +1283,64 @@ def test_runtime_bindings_skip_non_binding_extensions_and_content():
     assert _runtime_bindings(model) == []
 
 
-def _binding_model_plan_config(mocker):
-    """Build a scenario-independent runtime-binding fixture."""
-    from types import SimpleNamespace
+def _compile_paper_model_plan_config():
+    """Compile the real paper scenario for binding fail-closed tests."""
+    from raes_processor.compiler import compile_runtime_model
+    from raes_runtime.manager import RuntimeManager
+    from raes import parse_sdl_file
 
-    from raes_contracts.planning import ProvisioningPlan
+    from aptl.backends.raes import create_aptl_runtime_target
 
-    from aptl.backends.raes_participant_bindings import (
-        _BINDING_EXTENSION_KEY,
-        _BINDING_SCHEMA,
+    scenario = parse_sdl_file(PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml")
+    model = compile_runtime_model(scenario)
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={"enterprise": True, "kali": True, "wazuh": True},
     )
-    from aptl.backends.raes_realization_model import AptlRealization, NodeRealization
-
-    binding = {
-        "schema_version": _BINDING_SCHEMA,
-        "runtime_target": "aptl",
-        "participant_ref": "fixture",
-        "action_contract_ref": "fixture-action",
-        "observation_boundary_ref": "fixture-view",
-        "source_container_ref": "nodes.fixture-source",
-        "command": {"argv": ["printf", "ready"]},
-        "success_markers": ["ready"],
-        "target_refs": ["container:fixture-source"],
-    }
-    behavior = SimpleNamespace(
-        action_contract_addresses=(_BINDING_ACTION_ADDRESS,),
-        observation_boundary_addresses=(_BINDING_BOUNDARY_ADDRESS,),
+    target = create_aptl_runtime_target(
+        project_dir=PROJECT_ROOT,
+        bundle=_bundle(PROJECT_ROOT),
+        config=config,
+        backend=MagicMock(),
     )
-    model = SimpleNamespace(
-        behavior_specifications={
-            _BINDING_SPEC_ADDRESS: SimpleNamespace(
-                spec={"extensions": {_BINDING_EXTENSION_KEY: binding}}
-            )
-        },
-        participant_behaviors={_BINDING_PARTICIPANT_ADDRESS: behavior},
-        action_contracts={_BINDING_ACTION_ADDRESS: object()},
-        observation_boundaries={_BINDING_BOUNDARY_ADDRESS: object()},
-    )
-    realization = AptlRealization(
-        profiles=frozenset(),
-        nodes=(
-            NodeRealization(
-                address="nodes.fixture-source",
-                name="fixture-source",
-                aliases=(),
-                profiles=(),
-                backend_services=(),
-                container_name="fixture-source",
-                services=(),
-                networks=(),
-                static_addresses=(),
-            ),
-        ),
-        networks=(),
-        placements=(),
-        diagnostics=(),
-    )
-    mocker.patch(
-        "aptl.backends.raes_participant_bindings.interpret_provisioning_plan",
-        return_value=realization,
-    )
-    return (
-        model,
-        SimpleNamespace(provisioning=ProvisioningPlan()),
-        AptlConfig(lab={"name": "test"}),
-    )
+    plan = RuntimeManager(target).plan(scenario)
+    return model, plan, config
 
 
-_BINDING_SPEC_ADDRESS = "participant.behavior-specification.fixture"
-_BINDING_PARTICIPANT_ADDRESS = "participant.behavior.fixture"
-_BINDING_ACTION_ADDRESS = "participant.action-contract.fixture-action"
-_BINDING_BOUNDARY_ADDRESS = "participant.observation-boundary.fixture-view"
+_PAPER_BEHAVIOR_SPEC_ADDRESS = "participant.behavior-specification.paper-agent-behavior"
+_PAPER_PARTICIPANT_ADDRESS = "participant.behavior.paper-agent"
 
 
-def _fixture_binding(model):
+def _paper_binding(model):
     from aptl.backends.raes_participant_bindings import _BINDING_EXTENSION_KEY
 
-    spec = model.behavior_specifications[_BINDING_SPEC_ADDRESS].spec
+    spec = model.behavior_specifications[_PAPER_BEHAVIOR_SPEC_ADDRESS].spec
     return spec["extensions"][_BINDING_EXTENSION_KEY]
 
 
-def test_valid_binding_yields_participant_spec_baseline(mocker):
+def test_valid_binding_yields_participant_spec_baseline():
     """Baseline for the fail-closed cases: the untouched binding produces a spec."""
     from aptl.backends.raes_participant_actions import (
         participant_action_specs_from_runtime_model,
     )
 
-    model, plan, config = _binding_model_plan_config(mocker)
+    model, plan, config = _compile_paper_model_plan_config()
     specs = participant_action_specs_from_runtime_model(
         model,
         provisioning_plan=plan.provisioning,
         bundle=_bundle(PROJECT_ROOT),
         config=config,
     )
-    assert _BINDING_PARTICIPANT_ADDRESS in specs
+    assert _PAPER_PARTICIPANT_ADDRESS in specs
 
 
-def test_participant_binding_uses_the_approved_apparatus_timeout_default(mocker):
+def test_participant_binding_uses_the_approved_apparatus_timeout_default():
     from aptl.backends.raes_participant_actions import (
         participant_action_specs_from_runtime_model,
     )
 
-    model, plan, config = _binding_model_plan_config(mocker)
-    _fixture_binding(model).pop("timeout_seconds", None)
+    model, plan, config = _compile_paper_model_plan_config()
+    _paper_binding(model).pop("timeout_seconds", None)
     payload = config.model_dump(mode="python")
     payload["experiment"] = {"participant_action_timeout_seconds": 37}
     configured = AptlConfig.model_validate(payload)
@@ -1315,7 +1352,7 @@ def test_participant_binding_uses_the_approved_apparatus_timeout_default(mocker)
         config=configured,
     )
 
-    assert specs[_BINDING_PARTICIPANT_ADDRESS].timeout_seconds == 37
+    assert specs[_PAPER_PARTICIPANT_ADDRESS].timeout_seconds == 37
 
 
 def _set_runtime_target(binding):
@@ -1361,7 +1398,7 @@ def _empty_success_markers(binding):
         "empty-success-markers",
     ],
 )
-def test_malformed_binding_is_dropped_fail_closed(mutate, mocker):
+def test_malformed_binding_is_dropped_fail_closed(mutate):
     """A semantically invalid binding fails closed — the spec is dropped (#691).
 
     ``participant_action_specs_from_runtime_model`` swallows the per-binding
@@ -1375,8 +1412,8 @@ def test_malformed_binding_is_dropped_fail_closed(mutate, mocker):
         participant_action_specs_from_runtime_model,
     )
 
-    model, plan, config = _binding_model_plan_config(mocker)
-    mutate(_fixture_binding(model))
+    model, plan, config = _compile_paper_model_plan_config()
+    mutate(_paper_binding(model))
 
     specs = participant_action_specs_from_runtime_model(
         model,
@@ -1384,7 +1421,7 @@ def test_malformed_binding_is_dropped_fail_closed(mutate, mocker):
         bundle=_bundle(PROJECT_ROOT),
         config=config,
     )
-    assert _BINDING_PARTICIPANT_ADDRESS not in specs
+    assert _PAPER_PARTICIPANT_ADDRESS not in specs
 
 
 def test_assert_compiled_addresses_rejects_compiled_but_unassigned_refs():
@@ -1690,7 +1727,7 @@ def test_start_raes_scenario_uses_parser_runtime_manager_and_backend(
     calls: dict[str, object] = {}
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, artifact_availability=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             calls["planned_scenario"] = parsed_scenario
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.wazuh-manager", "techvault.kali")
@@ -1716,7 +1753,7 @@ def test_start_raes_scenario_uses_parser_runtime_manager_and_backend(
         tmp_path / "scenarios" / "techvault-operational.sdl.yaml"
     )
     assert calls == {"planned_scenario": scenario}
-    assert _realize_profiles(backend.realize.call_args) == ["wazuh", "kali", "otel"]
+    assert _realize_profiles(backend.realize.call_args) == ["wazuh", "kali"]
 
 
 def test_start_raes_scenario_uses_selected_scenario_path(mocker, tmp_path):
@@ -1727,7 +1764,7 @@ def test_start_raes_scenario_uses_selected_scenario_path(mocker, tmp_path):
     parser = mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=scenario)
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, artifact_availability=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             assert parsed_scenario is scenario
             return _FakeExecutionPlan(_plan_for_nodes("techvault.wazuh-manager"))
 
@@ -1742,6 +1779,58 @@ def test_start_raes_scenario_uses_selected_scenario_path(mocker, tmp_path):
 
     assert result.lab_result.success is True
     parser.assert_called_once_with(selected)
+
+
+def test_admission_preserves_valid_plan_when_backend_cannot_materialize(
+    mocker, tmp_path
+):
+    """Backend qualification limits realization, not SDL validity."""
+    from raes_contracts.contracts import ArtifactAvailabilityContext
+
+    from aptl.backends import raes
+
+    _write_compose(tmp_path, {"victim": ["victim"]})
+    scenario = object()
+    mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=scenario)
+    materialization_modes: list[bool] = []
+
+    def inspect_availability(*_args, materialize=False, **_kwargs):
+        materialization_modes.append(materialize)
+        return ArtifactAvailabilityContext(requirements=[])
+
+    mocker.patch(
+        "aptl.backends.raes.artifact_availability_for_scenario",
+        side_effect=inspect_availability,
+    )
+
+    class FakeRuntimeManager(_FakeRuntimeManager):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
+            assert parsed_scenario is scenario
+            return _FakeExecutionPlan(_plan_for_nodes("victim"))
+
+    mocker.patch("aptl.backends.raes.RuntimeManager", FakeRuntimeManager)
+    backend = MagicMock()
+    backend.bind_local_docker_socket.return_value = LabResult(success=True)
+    backend.qualify_runtime_materialization.return_value = LabResult(
+        success=False,
+        error="selected backend cannot safely realize this runtime",
+    )
+
+    admitted = raes.admit_raes_scenario(
+        tmp_path,
+        AptlConfig(lab={"name": "test"}, containers={"victim": True}),
+        backend,
+    )
+
+    assert admitted.execution_plan.is_valid is True
+    assert admitted.execution_plan.diagnostics == []
+    assert admitted.runtime_materialization_failure is not None
+    assert admitted.runtime_materialization_failure.error == (
+        "selected backend cannot safely realize this runtime"
+    )
+    assert materialization_modes == [False]
+    backend.qualify_runtime_materialization.assert_called_once()
+    backend.realize.assert_not_called()
 
 
 def test_start_raes_scenario_passes_runtime_parameters_to_raes_planner(
@@ -1793,7 +1882,7 @@ def test_start_raes_scenario_threads_resolved_run_target(mocker, tmp_path):
     mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=scenario)
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, artifact_availability=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             assert parsed_scenario is scenario
             return _FakeExecutionPlan(_plan_for_nodes("victim"))
 
@@ -1837,11 +1926,9 @@ def test_start_raes_scenario_uses_planned_runtime_model_for_participant_actions(
     mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=scenario)
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, artifact_availability=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             assert parsed_scenario is scenario
-            return _FakeExecutionPlan(
-                _plan_for_nodes("victim"), model=planned_model
-            )
+            return _FakeExecutionPlan(_plan_for_nodes("victim"), model=planned_model)
 
     mocker.patch("aptl.backends.raes.RuntimeManager", FakeRuntimeManager)
     planned_specs = mocker.patch.object(
@@ -2052,8 +2139,8 @@ def test_lab_start_handoff_forwards_the_admission_to_the_backend(mocker, tmp_pat
     assert handoff.call_args.kwargs["admitted"] is admitted
 
 
-def test_start_raes_scenario_does_not_retry_non_soc_apply(mocker, tmp_path):
-    """A retryable apply is not enough; the admitted plan must select SOC."""
+def test_start_raes_scenario_retries_without_named_profile_branch(mocker, tmp_path):
+    """A retryable apply uses the admitted hook without inspecting profile names."""
     from aptl.backends import raes
 
     _write_compose(tmp_path, {"aptl-victim": ["victim"]})
@@ -2062,7 +2149,7 @@ def test_start_raes_scenario_does_not_retry_non_soc_apply(mocker, tmp_path):
     calls = {"plan": 0, "apply": 0}
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, artifact_availability=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             assert parsed_scenario is scenario
             calls["plan"] += 1
             return _FakeExecutionPlan(_plan_for_nodes("victim"))
@@ -2087,9 +2174,9 @@ def test_start_raes_scenario_does_not_retry_non_soc_apply(mocker, tmp_path):
 
     assert result.lab_result.success is False
     assert result.retryable is True
-    assert calls == {"plan": 1, "apply": 1}
-    backend.realize.assert_called_once()
-    before_retry.assert_not_called()
+    assert calls == {"plan": 1, "apply": 2}
+    assert backend.realize.call_count == 2
+    before_retry.assert_called_once_with()
 
 
 def _workflow_and_evaluation_execution_plan():
@@ -2114,7 +2201,7 @@ def _workflow_and_evaluation_execution_plan():
             name: wf
             nodes:
               vm:
-                type: vm
+                type: compute
                 os: linux
                 resources: {ram: 1 gib, cpu: 1}
                 conditions: {health: ops}
@@ -2198,7 +2285,7 @@ def test_start_raes_scenario_submits_orchestration_for_workflow_scenario(
     orchestrator_start = mocker.spy(AptlOrchestrator, "start")
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, artifact_availability=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("victim"), orchestration=orchestration
             )
@@ -2225,7 +2312,7 @@ def test_start_raes_scenario_fails_when_provisioning_backend_fails(mocker, tmp_p
     mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=object())
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, artifact_availability=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             return _FakeExecutionPlan(_plan_for_nodes("victim"))
 
     mocker.patch("aptl.backends.raes.RuntimeManager", FakeRuntimeManager)
@@ -2264,7 +2351,7 @@ def test_start_raes_scenario_fails_when_orchestration_fails(mocker, tmp_path):
     )
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, artifact_availability=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("victim"), orchestration=bad_orchestration
             )
@@ -2317,7 +2404,7 @@ def test_start_raes_scenario_submits_evaluation_for_objective_scenario(
     evaluator_start = mocker.spy(AptlEvaluator, "start")
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, artifact_availability=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("victim"),
                 orchestration=orchestration,
@@ -2352,7 +2439,7 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
             return super().drive_workflows(**kwargs)
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, artifact_availability=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("victim"),
                 orchestration=orchestration,
@@ -2363,9 +2450,8 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
         project_dir,
         config,
         backend,
-        participant_action_specs=None,
         bundle,
-        artifact_availability=None,
+        options=None,
     ):
         from aptl.backends.raes_participant_runtime import AptlParticipantRuntime
 
@@ -2377,7 +2463,9 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
                 bundle=bundle,
                 config=config,
                 deployment_backend=backend,
-                artifact_availability=artifact_availability,
+                artifact_availability=options.artifact_availability,
+                capture_plan=options.capture_plan,
+                observability_scope=options.observability_scope,
             ),
             orchestrator=RecordingOrchestrator(),
             evaluator=raes.AptlEvaluator(),
@@ -2398,6 +2486,59 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
     assert drive_calls[0]["evaluation_results"] == {}
 
 
+def test_apply_reports_a_realization_error_instead_of_raising(mocker, tmp_path):
+    """A lowering error must reach the operator, not be swallowed by RAES.
+
+    RAES's backend-call boundary catches `TypeError`/`ValueError` out of a
+    backend `apply` and replaces it with the fixed text "Backend could not
+    construct a valid apply result", discarding the message. So a `ValueError`
+    raised while lowering the realization -- which is how the provisioner
+    reports an unlowerable graph -- reached the operator as that sentence and
+    nothing else, with no code, no address and no node name. Diagnosing it
+    needed a debugger.
+
+    The contract is an `ApplyResult` carrying diagnostics, so the message has to
+    survive as one.
+    """
+    from aptl.backends.raes_provisioner import AptlProvisioner
+    from aptl.core.config import AptlConfig
+    from aptl.core.scenario_bundle import ScenarioBundle
+
+    plan = _plan_for_nodes("victim")
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}),
+        deployment_backend=MagicMock(),
+        bundle=ScenarioBundle(
+            identity="test",
+            root=tmp_path,
+            sdl_path=tmp_path / "scenario.sdl.yaml",
+        ),
+    )
+    realization = MagicMock()
+    realization.diagnostics = []
+    realization.profiles = ("soc",)
+    realization.details.return_value = {}
+    realization.deployment_spec.side_effect = ValueError(
+        "aptl.provisioner.spawn-child-correlation-invalid: "
+        "child correlation is incomplete on provision.node.shuffle-orborus."
+    )
+    mocker.patch.object(AptlProvisioner, "realize_plan", return_value=realization)
+    mocker.patch(
+        "aptl.backends.raes_provisioner.select_backend_profiles",
+        return_value=["soc"],
+    )
+
+    result = provisioner.apply(plan, None)
+
+    assert result.success is False
+    rendered = " ".join(diagnostic.message for diagnostic in result.diagnostics)
+    assert "shuffle-orborus" in rendered
+    assert "spawn-child-correlation-invalid" in rendered
+    # And the provisioner's own report is captured for the handoff to re-attach.
+    assert provisioner.last_failure_diagnostics
+
+
 def test_start_raes_scenario_fails_closed_on_evaluator_plan_error(mocker, tmp_path):
     """A planner error in the evaluation domain must fail closed."""
     from raes_contracts.diagnostics import Diagnostic, Severity
@@ -2416,7 +2557,7 @@ def test_start_raes_scenario_fails_closed_on_evaluator_plan_error(mocker, tmp_pa
     )
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, artifact_availability=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("victim"),
                 is_valid=False,
@@ -2452,7 +2593,7 @@ def test_start_raes_scenario_fails_closed_on_provisioning_plan_error(mocker, tmp
     )
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, artifact_availability=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("victim"),
                 is_valid=False,
@@ -2499,11 +2640,13 @@ def test_provisioner_profiles_are_derived_from_plan_content(tmp_path):
 
     assert first.success is True
     assert second.success is True
-    assert _realize_profiles(backend.realize.call_args_list[0]) == ["kali", "otel"]
-    assert _realize_profiles(backend.realize.call_args_list[1]) == ["victim", "otel"]
+    assert _realize_profiles(backend.realize.call_args_list[0]) == ["kali"]
+    assert _realize_profiles(backend.realize.call_args_list[1]) == ["victim"]
 
 
-def test_provisioner_threads_availability_verified_substrate_digest_to_realize(tmp_path):
+def test_provisioner_threads_availability_verified_substrate_digest_to_realize(
+    tmp_path,
+):
     # Cycle-6 review: the address-scoped config id availability verified for a
     # dynamic-composition node is carried into realize(), so the base start uses
     # that exact id and never re-resolves the mutable tag. A non-route-3 node's
@@ -2574,7 +2717,7 @@ def test_provisioner_passes_typed_realization_spec_to_backend(tmp_path):
 
     assert result.success is True
     spec = backend.realize.call_args.args[0]
-    assert list(spec.profiles) == ["kali", "otel"]
+    assert list(spec.profiles) == ["kali"]
     assert len(spec.nodes) == 1
     assert spec.nodes[0].name == "red-workbench"
     assert spec.nodes[0].service_name == "kali"
@@ -2617,6 +2760,34 @@ def test_provisioner_captures_failure_diagnostics_for_handoff(tmp_path):
     recovered = provisioner.apply(_plan_for_nodes("scenario-a.kali"), RuntimeSnapshot())
     assert recovered.success is True
     assert provisioner.last_failure_diagnostics == ()
+
+
+def test_provisioner_reports_backend_realization_value_error(tmp_path):
+    """A deployment lowering error must survive the RAES call boundary."""
+    from aptl.backends.raes import AptlProvisioner
+
+    _write_compose(tmp_path, {"kali": ["kali"]})
+    backend = MagicMock()
+    backend.realize.side_effect = ValueError(
+        "service 'kali' has neither an image nor a build context"
+    )
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
+        config=AptlConfig(lab={"name": "test"}, containers={"kali": True}),
+        deployment_backend=backend,
+    )
+
+    result = provisioner.apply(
+        _plan_for_nodes("scenario-a.kali"), RuntimeSnapshot()
+    )
+
+    assert result.success is False
+    assert [item.code for item in result.diagnostics] == [
+        "aptl.provisioner.backend-start-failed"
+    ]
+    assert "neither an image nor a build context" in result.diagnostics[0].message
+    assert provisioner.last_failure_diagnostics == tuple(result.diagnostics)
 
 
 def test_apply_failure_reattaches_backend_diagnostics_after_gate_flood(
@@ -3136,7 +3307,6 @@ def test_provisioner_closes_subset_dependency_profiles_before_start(tmp_path):
         "wazuh",
         "enterprise",
         "soc",
-        "otel",
     ]
     assert result.details["realization"]["profiles"] == ["enterprise", "soc", "wazuh"]
 
@@ -3174,7 +3344,7 @@ def test_provisioner_treats_compose_network_dependency_as_network_support(tmp_pa
         diagnostic.code != "aptl.provisioner.dependency-unresolved"
         for diagnostic in result.diagnostics
     )
-    assert _realize_profiles(backend.realize.call_args) == ["enterprise", "otel"]
+    assert _realize_profiles(backend.realize.call_args) == ["enterprise"]
 
 
 def test_provisioner_rejects_disabled_dependency_profile(tmp_path):
@@ -3643,6 +3813,9 @@ def test_provisioner_records_supported_placement_realizations(tmp_path):
         "spn": "",
         "mail": "operator@techvault.local",
         "disabled": False,
+        # The authored credential class is reported back with the placement, so
+        # the runtime sees which class the backend realized (issue #1006).
+        "password_strength": "weak",
     }
 
     # Real lowering, not counting: the typed backend spec actually passed
@@ -4082,15 +4255,10 @@ def _apply_disclosure_scenario(tmp_path, backend, execution_plan=None):
     from aptl.core.config import AptlConfig
 
     # The Compose service is named "vm" (matching the scenario's node name,
-    # so container-name resolution binds to it), but its *profile* is "otel":
-    # ``ContainerSettings`` only accepts APTL's known container categories
-    # (wazuh, victim, kali, ...), not arbitrary node names, so "vm" could never
-    # be a selectable profile. "otel" is one of APTL's always-on
-    # ``CORE_PROFILES``, so the realized node maps to a public-start profile
-    # without needing a ``containers=`` override this fixture has no honest
-    # value for.
-    _write_compose(tmp_path, {"vm": ["otel"]})
-    config = AptlConfig(lab={"name": "test"})
+    # so container-name resolution binds to it). Use an explicitly enabled
+    # ordinary scenario profile; backend apparatus is never a default profile.
+    _write_compose(tmp_path, {"vm": ["victim"]})
+    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
     target = create_aptl_runtime_target(
         project_dir=tmp_path,
         bundle=_bundle(tmp_path),
@@ -4116,11 +4284,11 @@ def _apply_content_disclosure_scenario(tmp_path, observed_content_type):
         containers=("fileshare",),
         content_types={content_address: observed_content_type},
     )
-    _write_compose(tmp_path, {"fileshare": ["otel"]})
+    _write_compose(tmp_path, {"fileshare": ["fileshare"]})
     target = create_aptl_runtime_target(
         project_dir=tmp_path,
         bundle=_bundle(tmp_path),
-        config=AptlConfig(lab={"name": "test"}),
+        config=AptlConfig(lab={"name": "test"}, containers={"fileshare": True}),
         backend=backend,
     )
     return RuntimeManager(target, initial_snapshot=execution_plan.base_snapshot).apply(
@@ -4197,6 +4365,97 @@ def test_apply_provisioning_rejects_exact_content_type_probe_mismatch(tmp_path):
     }
 
 
+def test_readback_retry_accepts_only_async_native_evidence():
+    """Readback waits for settling native facts, never closed intrusion."""
+    from dataclasses import replace
+
+    from raes_contracts.diagnostics import Diagnostic, Severity
+    from raes_contracts.runtime_state import SnapshotEntry
+
+    from aptl.backends._raes_provisioning_helpers import (
+        retryable_readback_gaps as _retryable_readback_gaps,
+    )
+
+    plan = _execution_plan_with_realization_requirements().provisioning
+    node_type = next(
+        authority
+        for authority in plan.realization_authority
+        if authority.requirement_kind == "node-type"
+    )
+    authority = replace(
+        node_type,
+        field_path="nodes.vm.runtime.applications",
+        requirement_kind="runtime-applications",
+        payload_pointer="/spec/node/runtime/applications",
+    )
+    plan = replace(plan, realization_authority=(authority,))
+    diagnostic = Diagnostic(
+        code="runtime.backend-contract-invalid",
+        domain="runtime-realization",
+        address="provision.node.vm",
+        message=(
+            "Backend did not realize the exact 'runtime-applications' requirement "
+            "at 'nodes.vm.runtime.applications' as the author declared it."
+        ),
+        severity=Severity.ERROR,
+    )
+    existing_node = SnapshotEntry(
+        address="provision.node.vm",
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="node",
+        payload={"node_kind": "compute"},
+    )
+
+    assert _retryable_readback_gaps(
+        plan,
+        RuntimeSnapshot(entries={existing_node.address: existing_node}),
+        [diagnostic],
+    )
+    assert not _retryable_readback_gaps(plan, RuntimeSnapshot(), [diagnostic])
+
+    wrong_value = replace(
+        existing_node,
+        payload={"spec": {"node": {"runtime": {"applications": ["wrong"]}}}},
+    )
+    assert _retryable_readback_gaps(
+        plan,
+        RuntimeSnapshot(entries={wrong_value.address: wrong_value}),
+        [diagnostic],
+    )
+
+    listener_authority = replace(
+        authority,
+        field_path="nodes.vm.runtime.service_listeners",
+        requirement_kind="service-listeners",
+        payload_pointer="/spec/node/runtime/service_listeners",
+    )
+    listener_diagnostic = replace(
+        diagnostic,
+        message=(
+            "Backend returned no valid effective corroboration for "
+            "'service-listeners' requirement at "
+            "'nodes.vm.runtime.service_listeners'."
+        ),
+    )
+    assert _retryable_readback_gaps(
+        replace(plan, realization_authority=(listener_authority,)),
+        RuntimeSnapshot(entries={wrong_value.address: wrong_value}),
+        [listener_diagnostic],
+    )
+
+    closed = next(
+        item.mode
+        for item in _execution_plan_with_realization_requirements()
+        .provisioning.realization_authority
+        if str(getattr(item.mode, "value", item.mode)) == "closed"
+    )
+    assert not _retryable_readback_gaps(
+        replace(plan, realization_authority=(replace(authority, mode=closed),)),
+        RuntimeSnapshot(entries={existing_node.address: existing_node}),
+        [diagnostic],
+    )
+
+
 def test_apply_provisioning_records_content_type_provenance_when_honored(tmp_path):
     """A matching content probe succeeds and reaches the provenance ledger."""
     result = _apply_content_disclosure_scenario(tmp_path, "file")
@@ -4244,8 +4503,13 @@ def test_apply_provisioning_discloses_author_declared_provenance(tmp_path):
     result = _apply_disclosure_scenario(tmp_path, backend)
 
     assert result.success is True, [d.message for d in result.diagnostics]
-    provenances = {entry.provenance for entry in result.snapshot.realization_provenance}
-    assert provenances == {ExplicitnessProvenance.AUTHOR_DECLARED}
+    by_kind = {
+        entry.requirement_kind: entry.provenance
+        for entry in result.snapshot.realization_provenance
+    }
+    assert by_kind["node-type"] is ExplicitnessProvenance.AUTHOR_DECLARED
+    assert by_kind["os-family"] is ExplicitnessProvenance.AUTHOR_DECLARED
+    assert by_kind["compute-substrate"] is ExplicitnessProvenance.BACKEND_REALIZED
 
 
 def test_apply_provisioning_discloses_processor_derived_provenance(tmp_path):
@@ -4285,16 +4549,8 @@ def test_apply_provisioning_discloses_processor_derived_provenance(tmp_path):
     assert by_explicitness["os-family"] is ExplicitnessClass.CONSTRAINED
 
 
-def test_apply_provisioning_accepts_constrained_concern_realized_in_bounds(tmp_path):
-    """A CONSTRAINED concern the backend realized differently is allowed, not rejected.
-
-    ``os: ${node_os}`` is CONSTRAINED (substitution downgrades exactness), so a
-    backend that realizes a different OS family is making an allowed choice
-    rather than a silent approximation — but it must *say so*: the concern is
-    disclosed as ``backend-realized``, not passed off as the author's. Contrast
-    with the EXACT case, which is rejected outright.
-    """
-    from raes.explicitness import ExplicitnessProvenance
+def test_apply_provisioning_rejects_constrained_os_outside_supported_domain(tmp_path):
+    """A constrained OS still cannot escape the finite backend capability domain."""
 
     backend = _RealizedBackend(containers=("vm",), platform="windows")
 
@@ -4304,12 +4560,10 @@ def test_apply_provisioning_accepts_constrained_concern_realized_in_bounds(tmp_p
         execution_plan=_execution_plan_with_derived_realization_requirements(),
     )
 
-    assert result.success is True, [d.message for d in result.diagnostics]
-    by_kind = {
-        entry.requirement_kind: entry.provenance
-        for entry in result.snapshot.realization_provenance
-    }
-    assert by_kind["os-family"] == ExplicitnessProvenance.BACKEND_REALIZED
+    assert result.success is False
+    assert any(
+        "no valid effective corroboration" in d.message for d in result.diagnostics
+    )
 
 
 def test_shared_build_context_does_not_shadow_the_service_it_names(tmp_path):
@@ -4371,3 +4625,49 @@ def test_a_name_derived_alias_collision_is_still_ambiguous(tmp_path):
     assert index.service_names_for_aliases({normalize_identifier("db")}) == frozenset(
         {"db", "aptl-db"}
     )
+
+
+def test_large_apply_details_compact_without_losing_added_apparatus():
+    import json
+    from types import SimpleNamespace
+
+    from aptl.backends.raes_provisioner import _bounded_apply_details
+
+    apparatus = [{"runtime_address": "apparatus.capture.kali-session-capture"}]
+    realization = SimpleNamespace(
+        details=lambda: {
+            "profiles": ["kali"],
+            "resource_counts": {"node": 1},
+            "oversize": "x" * 70_000,
+        },
+        nodes=(
+            SimpleNamespace(
+                address="provision.node.kali",
+                name="kali",
+                backend_services=("kali",),
+                container_name="aptl-kali",
+                profiles=("kali",),
+            ),
+        ),
+        networks=(),
+        placements=(),
+        generated_artifacts=(),
+        persistent_volumes=(),
+    )
+
+    bounded = _bounded_apply_details(
+        {
+            "realization": realization.details(),
+            "observation_evidence": {"one": {}, "two": {}},
+            "capture_apparatus": apparatus,
+        },
+        realization,
+    )
+
+    assert len(json.dumps(bounded).encode("utf-8")) < 65_536
+    assert bounded["capture_apparatus"] == apparatus
+    assert bounded["observation_evidence"] == {
+        "projection": "runtime-snapshot",
+        "record_count": 2,
+    }
+    assert bounded["realization"]["nodes"][0]["address"] == "provision.node.kali"

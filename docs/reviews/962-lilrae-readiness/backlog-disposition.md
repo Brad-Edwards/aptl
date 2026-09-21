@@ -32,7 +32,7 @@ The new remediation issues are #963–#970. Existing LilRAE #3/#4/#6/#8/#9/#10/#
 | [#910: Wire the TheHive<->Cortex API key via a generated-secret env affordance](https://github.com/Brad-Edwards/aptl/issues/910) | Keep generated-secret dependency wiring with released RAES #1074 and pack declarations; a private env hack is not completion. |
 | [#909: Remove undeclared universal runtime-limit injection](https://github.com/Brad-Edwards/aptl/issues/909) | Keep removal/replacement of blanket unlimits; host safety caps must be operator policy and disclosed, not silently authored scenario facts. |
 | [#869: Restore full TechVault component implementations under dynamic realization](https://github.com/Brad-Edwards/aptl/issues/869) | Clarify to residual component-parity failures now that component realization exists. Reuse the ADR-051 parity ledger. |
-| [#864: Restore default TechVault parity through dynamic RAES composition](https://github.com/Brad-Edwards/aptl/issues/864) | Retain as full TechVault advanced-experience umbrella; its full-stack default must not become the LilRAE tiny default. |
+| [#864: Restore default TechVault parity through dynamic RAES composition](https://github.com/Brad-Edwards/aptl/issues/864) | Retain as the full TechVault scenario-pack qualification umbrella; its full-stack default must not become the small product profile. |
 | [#809: Restore Wazuh endpoint telemetry across composed TechVault nodes](https://github.com/Brad-Edwards/aptl/issues/809) | Keep end-to-end endpoint telemetry proof; enrollment or a running manager alone is insufficient. |
 | [#668: mail profile: mailserver setup.sh is never auto-run, so it shuts down unseeded](https://github.com/Brad-Edwards/aptl/issues/668) | Keep only for an explicitly selected mail profile; move setup/content into its pack and qualify before advertising mail. |
 
@@ -71,7 +71,7 @@ The new remediation issues are #963–#970. Existing LilRAE #3/#4/#6/#8/#9/#10/#
 | [#709: Reduce host_ports return count flagged by Sonar](https://github.com/Brad-Edwards/aptl/issues/709) | Low-priority measured code quality item. Revalidate the current finding before restructuring code to satisfy a stale metric. |
 | [#685: Prove packaged full TechVault on macOS and Windows](https://github.com/Brad-Edwards/aptl/issues/685) | Keep advanced TechVault macOS/Windows proof; distinguish architecture, native host/VM and provider support. Do not generalize Linux tests. |
 
-## Optional: workshop or participant experience
+## Optional: workshop or participant profile
 
 | Issue | Recommendation |
 | --- | --- |
@@ -86,19 +86,19 @@ The new remediation issues are #963–#970. Existing LilRAE #3/#4/#6/#8/#9/#10/#
 | --- | --- |
 | [#604: Program: M6: Local Operator Web GUI v1](https://github.com/Brad-Edwards/aptl/issues/604) | Keep local operator GUI program. Update stale language ownership; no hosted console or mandatory tiny UI dependency. |
 | [#541: UI-008: Implement the APTL web GUI](https://github.com/Brad-Edwards/aptl/issues/541) | Reconcile against existing Svelte/FastAPI implementation; retain missing user behavior only, not a new GUI rewrite. |
-| [#475: OBS-004: Real-Time Observability Dashboard During Scenarios](https://github.com/Brad-Edwards/aptl/issues/475) | Optional live observability experience, after reliable lifecycle/evidence. No new parallel event/state engine. |
-| [#421: DET-003: Live SIEM Query Execution from Web UI](https://github.com/Brad-Edwards/aptl/issues/421) | Optional authenticated SIEM query UI in selected experience; retain request/response bounds and target-scoped credentials. |
+| [#475: OBS-004: Real-Time Observability Dashboard During Scenarios](https://github.com/Brad-Edwards/aptl/issues/475) | Optional live observability surface after reliable lifecycle/evidence. No new parallel event/state engine. |
+| [#421: DET-003: Live SIEM Query Execution from Web UI](https://github.com/Brad-Edwards/aptl/issues/421) | Optional authenticated SIEM query UI for a selected TechVault integration; retain request/response bounds and target-scoped credentials. |
 
 ## Optional: research extension
 
 | Issue | Recommendation |
 | --- | --- |
 | [#753: EXP-011: Apparatus readiness and validity gate](https://github.com/Brad-Edwards/aptl/issues/753) | Keep apparatus validity gate for research profiles. Reuse lifecycle/native/security checks; do not block deterministic tiny use on scientific apparatus breadth. |
-| [#603: Program and architecture: M5: ACES-conformant research apparatus](https://github.com/Brad-Edwards/aptl/issues/603) | Re-scope to optional APTL research apparatus over LilRAE, consuming RAES contracts; core stores evidence but does not own scientific policy. |
+| [#603: Program and architecture: M5: ACES-conformant research apparatus](https://github.com/Brad-Edwards/aptl/issues/603) | Re-scope to an optional research apparatus within the same renamed product, consuming RAES contracts; shared lifecycle code stores evidence but does not own scientific policy. |
 | [#499: SIM-004: Campaign pause, resume, and controlled re-execution](https://github.com/Brad-Edwards/aptl/issues/499) | Keep campaign pause/resume after durable journal #437. Mid-trial checkpoint requires an exact supported state envelope. |
 | [#496: REP-006: Comparable precondition inspection between runs](https://github.com/Brad-Edwards/aptl/issues/496) | Keep comparability inspection over sealed evidence only; avoid inferred replay equivalence or analysis claims. |
 | [#469: DEP-007: Experiment resource budgets and enforcement](https://github.com/Brad-Edwards/aptl/issues/469) | Keep bounded campaign budgets. Basic single-run safety limits belong in core and must not wait for this campaign feature. |
-| [#463: AGT-005: Autonomous Objective Pursuit](https://github.com/Brad-Edwards/aptl/issues/463) | Defer autonomous objective-pursuit breadth to an adopted research experience; not a generic backend requirement. |
+| [#463: AGT-005: Autonomous Objective Pursuit](https://github.com/Brad-Edwards/aptl/issues/463) | Defer autonomous objective-pursuit breadth to an adopted research profile; not a generic backend requirement. |
 | [#461: SIM-005: Pacing Control](https://github.com/Brad-Edwards/aptl/issues/461) | Defer pacing until exact time-domain semantics and a scenario require it. |
 | [#459: SCE-006: Isolated batch trial scheduling](https://github.com/Brad-Edwards/aptl/issues/459) | Keep serial trial scheduling first; parallelism requires proven workspace/name/network/resource isolation. Not a solo quickstart dependency. |
 | [#450: ORC-004: Agent-to-Agent Communication and Shared Context](https://github.com/Brad-Edwards/aptl/issues/450) | Defer shared context/communication until scenario-led portable requirements and separation tests exist. |
@@ -106,7 +106,7 @@ The new remediation issues are #963–#970. Existing LilRAE #3/#4/#6/#8/#9/#10/#
 | [#437: EXP-001: Durable experiment execution and fault recovery](https://github.com/Brad-Edwards/aptl/issues/437) | Keep durable campaign journal outside tiny core. Core crash-safe lifecycle is required independently. |
 | [#425: AGT-003: Persistent Cross-Session Agent Memory](https://github.com/Brad-Edwards/aptl/issues/425) | Defer persistent agent memory until an adopted scenario requires released semantics, reset/lifetime and leakage proof. |
 | [#420: AGT-002 - ACES-Aligned Multi-Agent Coordination](https://github.com/Brad-Edwards/aptl/issues/420) | Defer broad multi-agent coordination; consume RAES contracts and require a concrete adopted scenario. |
-| [#419: AGT-001 - ACES-Aligned Agent Orchestration Layer](https://github.com/Brad-Edwards/aptl/issues/419) | Re-scope to optional participant integration over RAES/LilRAE. Retire any plan to create a second APTL agent runtime. |
+| [#419: AGT-001 - ACES-Aligned Agent Orchestration Layer](https://github.com/Brad-Edwards/aptl/issues/419) | Re-scope to optional participant integration over RAES in the renamed product. Retire any plan to create a second APTL agent runtime. |
 
 ## Defer: scenario-led capability expansion
 
@@ -115,15 +115,15 @@ The new remediation issues are #963–#970. Existing LilRAE #3/#4/#6/#8/#9/#10/#
 | [#497: RNG-004: Multi-node realization of AD forest topologies (backend capability)](https://github.com/Brad-Edwards/aptl/issues/497) | Advanced AD forest pack requirement only; do not build a general forest orchestrator before adoption forces it. |
 | [#479: REP-005: Environment seeding mechanism (backend capability)](https://github.com/Brad-Edwards/aptl/issues/479) | Reconcile existing content/account/materializer mechanisms; add only missing seed effects exposed by a released scenario. |
 | [#478: REP-004: Traffic generation engine (backend capability)](https://github.com/Brad-Edwards/aptl/issues/478) | Optional traffic-generation plugin/pack; specify required fidelity and observed effects before adding an engine. |
-| [#473: INT-001: CALDERA integration capability (backend)](https://github.com/Brad-Edwards/aptl/issues/473) | Optional CALDERA experience integration; keep its client, data and policies outside core. |
+| [#473: INT-001: CALDERA integration capability (backend)](https://github.com/Brad-Edwards/aptl/issues/473) | Optional CALDERA scenario integration; keep its client, data, and policies outside shared lifecycle code. |
 | [#471: DSL-006: Consume CACAO/Attack Flow-aligned scenario schemas (backend consumption)](https://github.com/Brad-Edwards/aptl/issues/471) | Consume published RAES/schema interoperability only when an adopted pack needs it; no local semantics implementation. |
-| [#454: RNG-005: C2 framework realization capability (backend)](https://github.com/Brad-Edwards/aptl/issues/454) | Optional C2 experience under explicit containment, not a default backend capability. |
+| [#454: RNG-005: C2 framework realization capability (backend)](https://github.com/Brad-Edwards/aptl/issues/454) | Optional C2 scenario integration under explicit containment, not a default backend capability. |
 | [#453: RNG-003: Snapshot/Restore for Mid-Scenario Checkpointing](https://github.com/Brad-Edwards/aptl/issues/453) | Defer general mid-scenario snapshots; ordinary reset/teardown remains mandatory and is not a snapshot claim. |
 | [#445: INT-002: Atomic Red Team import pipeline (backend)](https://github.com/Brad-Edwards/aptl/issues/445) | Move Atomic Red Team parsing/conversion to pack authoring ownership; keep only qualified execution of released packs here. |
 | [#436: DSL-009: Drive simulated user behavior profiles in realized ranges (backend realization)](https://github.com/Brad-Edwards/aptl/issues/436) | Optional behavior-profile realization driven by adopted portable declarations. |
 | [#434: DSL-005: Evaluate scenario pre/post-conditions and assertions against realized state (backend consumption)](https://github.com/Brad-Edwards/aptl/issues/434) | Reconcile current evaluator/readback support and add missing predicate shapes only when scenario-required. |
 | [#433: DSL-004: Verify composed RAES scenarios across APTL execution paths](https://github.com/Brad-Edwards/aptl/issues/433) | Keep concrete composed-pack integration and immutable closure tests; no new composition engine. |
-| [#216: Integrate CAPEv2 for dynamic malware analysis](https://github.com/Brad-Edwards/aptl/issues/216) | Defer CAPEv2 as a malware-analysis experience with its own VM/detonation qualification. It is not the agent sandbox solution. |
+| [#216: Integrate CAPEv2 for dynamic malware analysis](https://github.com/Brad-Edwards/aptl/issues/216) | Defer CAPEv2 as a malware-analysis integration with its own VM/detonation qualification. It is not the agent sandbox solution. |
 | [#5: Pre-seeded SIEM data loading capability (backend)](https://github.com/Brad-Edwards/aptl/issues/5) | Supersede obsolete qRadar/Splunk adoption scope under ADR-002. Future preseeded datasets belong to a concrete selected SIEM pack/plugin. |
 
 ## Route or retire: outside personal backend
@@ -131,7 +131,7 @@ The new remediation issues are #963–#970. Existing LilRAE #3/#4/#6/#8/#9/#10/#
 | Issue | Recommendation |
 | --- | --- |
 | [#601: Program: M3: Conformant-Backend Demonstration](https://github.com/Brad-Edwards/aptl/issues/601) | Supersede APTL-versus-LilRAE independent-backend demonstration framing. Use Hub #15 and LilRAE #11. |
-| [#558: research: produce the APTL side of paired-backend participant evidence](https://github.com/Brad-Edwards/aptl/issues/558) | Supersede n=2 APTL-versus-LilRAE premise. Retain reusable APTL experience evidence; paired backend research belongs to LilRAE #11 with BigRAE. |
+| [#558: research: produce the APTL side of paired-backend participant evidence](https://github.com/Brad-Edwards/aptl/issues/558) | Supersede the n=2 APTL-versus-LilRAE premise. Retain reusable research evidence; paired backend research belongs to LilRAE #11 with BigRAE. |
 | [#490: DEP-005: Federation Support](https://github.com/Brad-Edwards/aptl/issues/490) | Route organizational federation to BigRAE/Hub or defer a narrowly justified portable seam; not solo adoption work. |
 | [#486: SIM-003: Abstract Simulation Model](https://github.com/Brad-Edwards/aptl/issues/486) | Route abstract simulation meaning to RAES/research; avoid a competing model inside LilRAE. |
 | [#480: RNG-002: Multi-Node and Cloud Deployment](https://github.com/Brad-Edwards/aptl/issues/480) | Split local multi-node scenario support from hosted/cloud fleet deployment. Local multi-node already exists; cloud scope belongs elsewhere. |

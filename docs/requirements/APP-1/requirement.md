@@ -17,6 +17,10 @@ The APTL backend shall materialize admitted ACES infrastructure ACLs and narrow 
 
 ## Rationale
 
+Internal security review and implementation are deferred to #1127 by the owner
+on 2026-09-20 (ADR-060). This requirement is not a #1022 VM-only delivery gate
+and is not claimed verified by VM-only qualification.
+
 Issue #822 establishes the general materializability and qualification surface consumed by the disposable appliance artifact (#823) and host launcher (#824). Scenario topology and exercise effects remain authoritative in admitted ACES realization; the appliance platform policy must not duplicate current or future scenario nodes, networks, services, or zone membership.
 
 ## Traceability
@@ -43,6 +47,8 @@ Issue #822 establishes the general materializability and qualification surface c
 - IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/realization.py` (Backend-neutral deployment realization contract)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/_compose_boundary.py` (Selected-daemon boundary helper lifecycle)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/backend.py` (Deployment boundary capability contract)
+- IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/backend_host_inventory.py` (Selected daemon identity contract for appliance binding)
+- IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/_docker_endpoint_binding.py` (Daemon identity read through the selected Docker transport)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/docker_compose.py` (Compose boundary integration)
 - IMPLEMENTS → CONFIG `containers/network-boundary-helper/Dockerfile` (Pinned boundary helper image)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/_compose_base_substrate.py` (Network-before-start base substrate realization)

@@ -10,6 +10,7 @@ no Docker daemon is needed.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,14 +18,19 @@ import pytest
 
 from aptl.backends.raes_docker_materializer import (
     DockerMaterializationExecutor,
+    DockerMaterializationSettings,
     MaterializationCommandError,
 )
 from aptl.backends.raes_materializer import (
     EnsureDirectoryOp,
     EnsureUserOp,
     InstallDependencyManifestOp,
+    InstallSoftwareComponentOp,
     PlacePackArtifactOp,
+    ProvisionDomainAuthorityOp,
+    SetFilesystemMetadataOp,
 )
+from aptl.core.deployment.errors import BackendSeedError
 
 
 class _FakeExec:
@@ -41,18 +47,36 @@ class _FakeExec:
         return [argv for _, argv in self.calls]
 
 
-def _executor(exec_fn, *, started=None, sleep=None):
+class _FakeInputExec:
+    def __init__(self, responder=None) -> None:
+        self.calls: list[tuple[str, list[str], str]] = []
+        self._responder = responder or (lambda container, argv, payload: 0)
+
+    def __call__(self, container: str, argv: list[str], payload: str):
+        self.calls.append((container, argv, payload))
+        return SimpleNamespace(
+            returncode=self._responder(container, argv, payload), stdout=""
+        )
+
+
+def _executor(
+    exec_fn, *, started=None, sleep=None, input_fn=None, offline_staged=False
+):
     def start_base(addr, image):
         if started is not None:
             started.append((addr, image))
 
     return DockerMaterializationExecutor(
         run=exec_fn,
+        run_with_input=input_fn,
         container_for=lambda addr: "aptl-" + addr.rsplit(".", 1)[-1],
         start_base=start_base,
         # Real time.sleep would make retry tests (and the unrelated failure
         # tests that now also exhaust the refresh retry) take ~15s each.
-        sleep=sleep or (lambda seconds: None),
+        settings=DockerMaterializationSettings(
+            sleep=sleep or (lambda seconds: None),
+            offline_staged=offline_staged,
+        ),
     )
 
 
@@ -60,14 +84,35 @@ class TestBaseSubstrate:
     def test_ensure_base_substrate_starts_the_base_container(self):
         started: list[tuple[str, str]] = []
         ex = _executor(_FakeExec(), started=started)
-        ex.ensure_base_substrate("techvault.wazuh-manager", "debian:12-slim")
-        assert started == [("techvault.wazuh-manager", "debian:12-slim")]
+        ex.ensure_base_substrate("techvault.wazuh-manager", "debian:13-slim")
+        assert started == [("techvault.wazuh-manager", "debian:13-slim")]
 
 
 class TestPackages:
+    def test_preinstalled_packages_need_no_index_or_install(self):
+        def responder(container, argv):
+            if "dpkg-query" in argv:
+                return 0, "ii \tpostgresql\t1.0\tamd64\t\n"
+            raise AssertionError(f"unexpected package command: {argv}")
+
+        fake = _FakeExec(responder)
+        _executor(fake).install_packages("n.db", "apt", ("postgresql",))
+        assert len(fake.calls) == 1
+
+    def test_offline_missing_package_fails_without_attempting_download(self):
+        fake = _FakeExec(lambda _container, _argv: (1, ""))
+        executor = _executor(fake, offline_staged=True)
+        with pytest.raises(
+            MaterializationCommandError, match="offline image is missing"
+        ):
+            executor.install_packages("n.db", "apt", ("postgresql",))
+        assert len(fake.calls) == 1
+
     def test_install_runs_generic_manager_command_in_the_node_container(self):
         fake = _FakeExec()
-        _executor(fake).install_packages("techvault.wazuh-manager", "apt", ("wazuh-manager",))
+        _executor(fake).install_packages(
+            "techvault.wazuh-manager", "apt", ("wazuh-manager",)
+        )
         container, argv = fake.calls[-1]
         assert container == "aptl-wazuh-manager"
         assert "apt-get" in argv
@@ -93,7 +138,7 @@ class TestPackages:
     def test_observe_installed_parses_manager_query_output(self):
         def responder(container, argv):
             if "dpkg-query" in argv:
-                return 0, "curl\nwazuh-manager\n"
+                return 0, "ii \tcurl\t1.0\tamd64\t\nii \twazuh-manager\t1.0\tamd64\t\n"
             return 0, ""
 
         observed = _executor(_FakeExec(responder)).observe_installed_packages(
@@ -123,14 +168,18 @@ class TestPackageIndexRefreshRetry:
 
         fake = _FakeExec(responder)
         sleeps: list[float] = []
-        _executor(fake, sleep=sleeps.append).install_packages("n.node", "apt", ("curl",))
+        _executor(fake, sleep=sleeps.append).install_packages(
+            "n.node", "apt", ("curl",)
+        )
 
         assert calls["update"] == 3
         assert sleeps == [1.0, 2.0]
         assert any("install" in argv for argv in fake.argvs())
 
     def test_refresh_exhausts_all_retries_then_raises(self):
-        fake = _FakeExec(lambda c, a: (100, "W: GPG error") if "update" in a else (0, ""))
+        fake = _FakeExec(
+            lambda c, a: (100, "W: GPG error") if "update" in a else (0, "")
+        )
         sleeps: list[float] = []
         executor = _executor(fake, sleep=sleeps.append)
 
@@ -164,12 +213,35 @@ class TestIdentity:
         fake = _FakeExec(lambda c, a: (1, "") if a[0] == "id" else (0, ""))
         _executor(fake).ensure_user(
             "n.node",
-            EnsureUserOp(username="wazuh", shell="/bin/bash", supplemental_groups=("wazuh",)),
+            EnsureUserOp(
+                username="wazuh", shell="/bin/bash", supplemental_groups=("wazuh",)
+            ),
         )
         useradd = next(argv for argv in fake.argvs() if argv[0] == "useradd")
         assert useradd[-1] == "wazuh"
         assert "/bin/bash" in useradd
         assert "wazuh" in useradd  # shell + group
+
+    def test_ensure_user_rechecks_and_retries_a_transient_creation_failure(self):
+        attempts = 0
+
+        def responder(_container, argv):
+            nonlocal attempts
+            if argv[0] == "id":
+                return (0, "1000") if attempts >= 2 else (1, "")
+            if argv[0] == "useradd":
+                attempts += 1
+                return (1, "") if attempts == 1 else (0, "")
+            return 0, ""
+
+        sleeps = []
+        fake = _FakeExec(responder)
+        _executor(fake, sleep=sleeps.append).ensure_user(
+            "n.node", EnsureUserOp(username="labadmin")
+        )
+
+        assert attempts == 2
+        assert sleeps == [0.25]
 
     def test_observe_local_user_and_group_from_returncode(self):
         present = _executor(_FakeExec(lambda c, a: (0, "")))
@@ -181,10 +253,83 @@ class TestIdentity:
 
 
 class TestFilesystem:
+    def test_place_file_delivers_secret_only_on_stdin_and_reads_back_exact_bytes(self):
+        secret = "lab flag with a quote ' and newline\n"
+        fake_input = _FakeInputExec()
+        digest = hashlib.sha256(secret.encode()).hexdigest()
+        fake = _FakeExec(
+            lambda _container, argv: (
+                (0, f"{digest}  {argv[1]}") if argv[0] == "sha256sum" else (0, "")
+            )
+        )
+        _executor(fake, input_fn=fake_input).place_file(
+            "n.node", "/root/root.txt", secret, "0600"
+        )
+
+        assert len(fake_input.calls) == 1
+        assert [call[1][0] for call in fake_input.calls] == ["sh"]
+        assert all(call[2] == secret for call in fake_input.calls)
+        assert all(secret not in " ".join(call[1]) for call in fake_input.calls)
+        assert "base64" not in str(fake_input.calls)
+        assert "chmod 0600" in fake_input.calls[0][1][2]
+        assert fake.argvs() == [["sha256sum", "/root/root.txt"]]
+
+    def test_place_file_accepts_exact_readback_after_lost_mutation_result(self):
+        fake_input = _FakeInputExec(
+            lambda _container, argv, _payload: 1 if argv[0] == "sh" else 0
+        )
+        digest = hashlib.sha256(b"value").hexdigest()
+        fake = _FakeExec(lambda _container, argv: (0, f"{digest}  {argv[1]}"))
+        sleeps = []
+
+        _executor(fake, sleep=sleeps.append, input_fn=fake_input).place_file(
+            "n.node", "/tmp/a", "value"
+        )
+
+        assert len(fake_input.calls) == 1
+        assert sleeps == []
+
+    def test_place_file_retries_when_readback_does_not_match(self):
+        checks = 0
+        digest = hashlib.sha256(b"value").hexdigest()
+
+        def responder(_container, argv):
+            nonlocal checks
+            checks += 1
+            value = "0" * 64 if checks == 1 else digest
+            return 0, f"{value}  {argv[1]}"
+
+        fake_input = _FakeInputExec()
+        fake = _FakeExec(responder)
+        sleeps = []
+        _executor(fake, sleep=sleeps.append, input_fn=fake_input).place_file(
+            "n.node", "/tmp/a", "value"
+        )
+
+        assert [call[1][0] for call in fake_input.calls] == ["sh", "sh"]
+        assert fake.argvs() == [["sha256sum", "/tmp/a"]] * 2
+        assert sleeps == [0.25]
+
+    def test_place_file_fails_closed_when_exact_readback_never_matches(self):
+        fake_input = _FakeInputExec(lambda _container, argv, _payload: 1)
+        fake = _FakeExec(lambda _container, argv: (1, ""))
+        sleeps = []
+        executor = _executor(fake, sleep=sleeps.append, input_fn=fake_input)
+
+        with pytest.raises(MaterializationCommandError):
+            executor.place_file("n.node", "/tmp/a", "value")
+
+        assert len(fake_input.calls) == 5
+        assert fake.argvs() == [["sha256sum", "/tmp/a"]] * 5
+        assert sleeps == [0.25, 0.5, 1.0, 2.0]
+
     def test_ensure_directory_mkdirs_then_chowns_and_chmods(self):
         fake = _FakeExec()
         _executor(fake).ensure_directory(
-            "n.node", EnsureDirectoryOp(path="/var/log/named", owner="bind", group="bind", mode="0755")
+            "n.node",
+            EnsureDirectoryOp(
+                path="/var/log/named", owner="bind", group="bind", mode="0755"
+            ),
         )
         argvs = fake.argvs()
         assert ["mkdir", "-p", "/var/log/named"] in argvs
@@ -210,15 +355,67 @@ class TestFilesystem:
         assert present.observe_directory("n.node", "/var/log/named") is True
         assert absent.observe_directory("n.node", "/var/log/named") is False
 
+    def test_set_metadata_uses_discrete_chown_and_chmod_argv(self):
+        fake = _FakeExec()
+        op = SetFilesystemMetadataOp(
+            path="/root/root.txt", owner="root", group="root", mode="0o600"
+        )
+
+        _executor(fake).set_filesystem_metadata("n.node", op)
+
+        assert fake.argvs() == [
+            ["chown", "root:root", "/root/root.txt"],
+            ["chmod", "0600", "/root/root.txt"],
+        ]
+
+    def test_observe_metadata_requires_every_selected_dimension(self):
+        def responder(container, argv):
+            if argv[0] == "stat":
+                return 0, "root:root:0:0:600\n"
+            return 1, ""
+
+        op = SetFilesystemMetadataOp(
+            path="/root/root.txt",
+            owner="root",
+            group="root",
+            uid=0,
+            gid=0,
+            mode="0600",
+        )
+
+        assert _executor(_FakeExec(responder)).observe_filesystem_metadata("n.node", op)
+
 
 class TestDependencyManifest:
     def test_install_runs_ecosystem_install_against_the_manifest_directory(self):
         fake = _FakeExec()
         _executor(fake).install_dependency_manifest(
-            "n.node", InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml")
+            "n.node",
+            InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml"),
+        )
+        assert fake.calls[-1][1] == [
+            "pip",
+            "install",
+            "--break-system-packages",
+            "/app",
+        ]
+
+    def test_offline_install_uses_local_source_without_resolution(self):
+        fake = _FakeExec()
+        _executor(fake, offline_staged=True).install_dependency_manifest(
+            "n.node",
+            InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml"),
         )
         argv = fake.calls[-1][1]
-        assert argv == ["pip", "install", "--break-system-packages", "/app"]
+        assert argv == [
+            "pip",
+            "install",
+            "--break-system-packages",
+            "--no-index",
+            "--no-deps",
+            "--no-build-isolation",
+            "/app",
+        ]
 
     def test_install_nonzero_raises_translatable_command_error(self):
         fake = _FakeExec(lambda c, a: (1, "error"))
@@ -231,7 +428,9 @@ class TestDependencyManifest:
         fake = _FakeExec(lambda c, a: (0, ""))
         observed = _executor(fake).observe_dependency_manifest_installed(
             "n.node",
-            InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"),
+            InstallDependencyManifestOp(
+                ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"
+            ),
         )
         assert observed is True
         assert fake.calls[-1][1] == ["pip", "show", "aptl-labs"]
@@ -240,19 +439,142 @@ class TestDependencyManifest:
         fake = _FakeExec(lambda c, a: (1, ""))
         observed = _executor(fake).observe_dependency_manifest_installed(
             "n.node",
-            InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"),
+            InstallDependencyManifestOp(
+                ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"
+            ),
         )
         assert observed is False
+
+
+class TestSoftwareComponent:
+    def test_npm_component_uses_exact_lockfile_then_builds(self):
+        fake = _FakeExec()
+        op = InstallSoftwareComponentOp(
+            ecosystem="npm",
+            manifest_path="/opt/mcp/common/package-lock.json",
+            package_name="aptl-mcp-common",
+            version="0.1.0",
+        )
+
+        _executor(fake).install_software_component("n.node", op)
+
+        assert fake.argvs() == [
+            ["npm", "--prefix", "/opt/mcp/common", "ci", "--include=dev"],
+            ["npm", "--prefix", "/opt/mcp/common", "run", "build", "--if-present"],
+        ]
+
+    def test_offline_npm_component_uses_preloaded_cache_only(self):
+        fake = _FakeExec()
+        op = InstallSoftwareComponentOp(
+            ecosystem="npm",
+            manifest_path="/opt/mcp/common/package-lock.json",
+            package_name="aptl-mcp-common",
+            version="0.1.0",
+        )
+
+        _executor(fake, offline_staged=True).install_software_component("n.node", op)
+
+        assert fake.argvs() == [
+            ["npm", "--prefix", "/opt/mcp/common", "ci", "--include=dev", "--offline"],
+            ["npm", "--prefix", "/opt/mcp/common", "run", "build", "--if-present"],
+        ]
+
+    def test_observation_requires_exact_identity_and_declared_output(self):
+        package = (
+            '{"name":"aptl-mcp-common","version":"0.1.0","main":"./build/index.js"}'
+        )
+
+        def responder(container, argv):
+            if argv[:4] == ["npm", "--prefix", "/opt/mcp/common", "pkg"]:
+                return 0, package
+            if argv == ["test", "-f", "/opt/mcp/common/build/index.js"]:
+                return 0, ""
+            return 1, ""
+
+        observed = _executor(_FakeExec(responder)).observe_software_component(
+            "n.node",
+            InstallSoftwareComponentOp(
+                ecosystem="npm",
+                manifest_path="/opt/mcp/common/package-lock.json",
+                package_name="aptl-mcp-common",
+                version="0.1.0",
+            ),
+        )
+
+        assert observed is True
+
+    def test_observation_rejects_unsafe_or_missing_outputs(self):
+        package = '{"name":"aptl-mcp-common","version":"0.1.0","main":"../host-file"}'
+        fake = _FakeExec(lambda container, argv: (0, package))
+
+        observed = _executor(fake).observe_software_component(
+            "n.node",
+            InstallSoftwareComponentOp(
+                ecosystem="npm",
+                manifest_path="/opt/mcp/common/package-lock.json",
+                package_name="aptl-mcp-common",
+                version="0.1.0",
+            ),
+        )
+
+        assert observed is False
+        assert not any(argv[:2] == ["test", "-f"] for argv in fake.argvs())
+
+
+class TestDomainAuthority:
+    def test_provider_bootstrap_uses_discrete_authored_arguments(self):
+        fake = _FakeExec()
+        op = ProvisionDomainAuthorityOp(domain="EXAMPLE", realm="EXAMPLE.TEST")
+
+        _executor(fake).provision_domain_authority("n.ad", op)
+
+        assert [
+            "aptl-provision-samba-domain",
+            "EXAMPLE",
+            "EXAMPLE.TEST",
+        ] in fake.argvs()
+
+    def test_observation_requires_exact_served_domain_identity(self):
+        output = (
+            "Forest : example.test\nDomain : example.test\nNetbios domain : EXAMPLE\n"
+        )
+        fake = _FakeExec(lambda container, argv: (0, output))
+
+        observed = _executor(fake).observe_domain_authority(
+            "n.ad",
+            ProvisionDomainAuthorityOp(domain="EXAMPLE", realm="EXAMPLE.TEST"),
+        )
+
+        assert observed is True
 
     def test_observe_installed_fails_closed_without_a_declared_name(self):
         fake = _FakeExec(lambda c, a: (0, ""))
         observed = _executor(fake).observe_dependency_manifest_installed(
-            "n.node", InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml")
+            "n.node",
+            InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml"),
         )
         assert observed is False
 
 
 class TestServices:
+    @pytest.mark.parametrize("already_active", [False, True])
+    def test_service_consumes_authored_configuration_even_if_base_auto_started_it(
+        self, already_active
+    ):
+        state = {"active": already_active, "config": "package-default"}
+
+        def systemctl(_container, argv):
+            if argv[:2] == ["systemctl", "start"] and state["active"]:
+                return (0, "")  # systemd start leaves an active daemon unchanged
+            # BIND's querylog startup option is one real example of authored
+            # state that a successful reload does not activate.
+            if argv[0] == "systemctl" and argv[1] in {"start", "restart"}:
+                state.update(active=True, config="authored")
+            return (0, "")
+
+        _executor(_FakeExec(systemctl)).start_service_unit("n.dns", "named.service")
+        assert state == {"active": True, "config": "authored"}
+
     def test_enable_and_start_run_systemctl(self):
         fake = _FakeExec()
         ex = _executor(fake)
@@ -260,7 +582,7 @@ class TestServices:
         ex.start_service_unit("n.node", "wazuh-manager.service")
         argvs = fake.argvs()
         assert ["systemctl", "enable", "wazuh-manager.service"] in argvs
-        assert ["systemctl", "start", "wazuh-manager.service"] in argvs
+        assert ["systemctl", "restart", "wazuh-manager.service"] in argvs
 
     def test_observe_active_and_enabled_parse_systemctl(self):
         active = _executor(_FakeExec(lambda c, a: (0, "active\n")))
@@ -334,8 +656,65 @@ class TestPackArtifactPlacement:
             container_for=lambda addr: "aptl-" + addr.rsplit(".", 1)[-1],
             start_base=lambda addr, image: None,
             copy_in=_copy_in,
-            scenario_root=tmp_path,
+            settings=DockerMaterializationSettings(scenario_root=tmp_path),
         )
+
+    @pytest.mark.parametrize("directory", [False, True])
+    @pytest.mark.parametrize("sensitive", [False, True])
+    def test_pack_content_readability_does_not_inherit_private_umask(
+        self, tmp_path, stub_pack, directory, sensitive
+    ):
+        import os
+
+        from aptl.core.deployment._compose_image_free_realization import (
+            _content_placement_op,
+        )
+        from aptl.core.deployment.realization import DeploymentContentRealization
+
+        digest = "sha256:" + "a" * 64
+        stub_pack["config"] = _StubResolved(
+            _tar_bytes({"nested/named.conf": b"options {};\n"})
+            if directory
+            else b"options {};\n",
+            digest,
+        )
+
+        def copy(_container, source, _dest, is_directory):
+            root = Path(source)
+            paths = (root, *root.rglob("*")) if is_directory else (root,)
+            for path in paths:
+                expected = 0o755 if path.is_dir() else 0o644
+                if sensitive:
+                    expected &= 0o700
+                assert path.stat().st_mode & 0o777 == expected
+
+        executor = DockerMaterializationExecutor(
+            run=_FakeExec(),
+            container_for=lambda _: "dns",
+            start_base=lambda *_: None,
+            copy_in=copy,
+            settings=DockerMaterializationSettings(scenario_root=tmp_path),
+        )
+        previous = os.umask(0o077)
+        try:
+            executor.place_pack_artifact(
+                "provision.node.dns",
+                _content_placement_op(
+                    DeploymentContentRealization(
+                        address="provision.content.dns-config",
+                        target_address="provision.node.dns",
+                        content_name="dns-config",
+                        volume_suffix="dns-config",
+                        dest_relpath="etc/bind",
+                        source_kind="pack-directory" if directory else "pack-file",
+                        artifact_id="config",
+                        artifact_digest=digest,
+                        sensitive=sensitive,
+                    )
+                ),
+            )
+        finally:
+            os.umask(previous)
 
     def test_file_artifact_bytes_are_staged_and_copied_into_the_node(
         self, tmp_path, stub_pack
@@ -384,6 +763,43 @@ class TestPackArtifactPlacement:
         container, members, dest, is_dir = copied[0]
         assert (container, dest, is_dir) == ("aptl-webapp", "/opt/app", True)
         assert members == ["README", "main.py"]
+
+    def test_transient_pack_copy_failure_retries_exact_staged_bytes(
+        self, tmp_path, stub_pack
+    ):
+        digest = "sha256:" + "b" * 64
+        stub_pack["shares"] = _StubResolved(_tar_bytes({"Public/a": b"x"}), digest)
+        attempts = []
+        sleeps = []
+
+        def copy(_container, src, _dest, _is_dir):
+            attempts.append(Path(src, "Public", "a").read_bytes())
+            if len(attempts) == 1:
+                raise BackendSeedError("transient Docker copy failure")
+
+        ex = DockerMaterializationExecutor(
+            run=_FakeExec(),
+            container_for=lambda _addr: "aptl-fileshare",
+            start_base=lambda *_: None,
+            copy_in=copy,
+            settings=DockerMaterializationSettings(
+                scenario_root=tmp_path,
+                sleep=sleeps.append,
+            ),
+        )
+
+        ex.place_pack_artifact(
+            "provision.node.fileshare",
+            PlacePackArtifactOp(
+                dest_path="/srv/shares",
+                artifact_id="shares",
+                artifact_digest=digest,
+                is_directory=True,
+            ),
+        )
+
+        assert attempts == [b"x", b"x"]
+        assert sleeps == [0.25]
 
     def test_a_digest_mismatch_places_nothing(self, tmp_path, stub_pack):
         """Bytes that are not what the scenario pinned never reach the node."""

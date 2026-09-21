@@ -11,6 +11,8 @@ from __future__ import annotations
 import hashlib
 from types import SimpleNamespace
 
+from aptl.backends import _raes_observation_ordering as observation_ordering
+
 from raes_contracts.planning import (
     ChangeAction,
     PlannedResource,
@@ -27,6 +29,7 @@ from aptl.backends.raes_realization_model import (
     PlacementRealization,
 )
 from aptl.core.deployment.realization import (
+    DeploymentGeneratedArtifactEnvironmentConsumer,
     DeploymentGeneratedArtifactOutput,
     DeploymentGeneratedArtifactRealization,
     DeploymentImageRealization,
@@ -38,6 +41,94 @@ from aptl.core.deployment._compose_realization_networks import _concrete_network
 from aptl.core.deployment.errors import BackendTimeoutError
 
 _PROJECT = "aptl"
+
+
+def test_techvault_order_alignment_only_reorders_equivalent_collections():
+    declared = {
+        "members": [
+            {"id": "first", "groups": ["red", "blue"]},
+            {"id": "second", "groups": ["green"]},
+        ]
+    }
+    observed = {
+        "members": [
+            {"id": "second", "groups": ["green"]},
+            {"id": "first", "groups": ["blue", "red"]},
+        ]
+    }
+
+    assert observation_ordering._align_equivalent_value(declared, observed) == declared
+
+    observed["members"][1]["groups"] = ["blue", "wrong"]
+    assert (
+        observation_ordering._align_equivalent_value(declared, observed)
+        is observation_ordering._MISSING
+    )
+
+
+def test_techvault_order_alignment_uses_declared_operation_not_typed_resource():
+    from dataclasses import replace
+
+    from aptl.backends._raes_observation_helpers import ObservedResource
+    from aptl.backends.raes_runtime_attestation import (
+        TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST,
+    )
+    from aptl.core.scenario_bundle import PackIdentity
+
+    authored = [
+        {"path": "/first", "entry_type": "directory"},
+        {"path": "/second", "entry_type": "directory"},
+    ]
+    normalized = list(reversed(authored))
+    address = "provision.node.vm"
+    pointer = "/spec/node/runtime/filesystem_inventory"
+    path = ("spec", "node", "runtime", "filesystem_inventory")
+    resource_payload = {
+        "spec": {"node": {"runtime": {"filesystem_inventory": normalized}}}
+    }
+    operation_payload = {
+        "spec": {"node": {"runtime": {"filesystem_inventory": authored}}}
+    }
+    resource = PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="node",
+        payload=resource_payload,
+    )
+    operation = ProvisionOp(
+        action=ChangeAction.CREATE,
+        address=address,
+        resource_type="node",
+        payload=operation_payload,
+    )
+    authority = SimpleNamespace(
+        address=address,
+        requirement_kind="runtime-filesystem-inventory",
+        payload_pointer=pointer,
+        constraint_document=object(),
+    )
+    plan = replace(
+        ProvisioningPlan(resources={address: resource}, operations=[operation]),
+        realization_authority=(authority,),
+    )
+
+    result = observation_ordering.align_techvault_identity_collection_observations(
+        plan=plan,
+        observations={
+            address: ObservedResource(
+                realized=True,
+                concerns={path: normalized},
+            )
+        },
+        pack_identity=PackIdentity(
+            pack_id="techvault",
+            pack_version="0.1.0",
+            set_digest=TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST,
+        ),
+    )
+
+    observed = result[address].concerns[path]
+    assert [item["path"] for item in observed] == ["/first", "/second"]
 
 
 class _Backend:
@@ -67,6 +158,10 @@ class _Backend:
         realization_root=None,
         bind_source_types=None,
         bind_probe_raises=False,
+        environments=None,
+        status=None,
+        exit_code=0,
+        file_reads=None,
     ):
         self._containers = set(containers)
         self._networks = [
@@ -90,6 +185,10 @@ class _Backend:
         self.realization_root = realization_root
         self._bind_source_types = bind_source_types or {}
         self._bind_probe_raises = bind_probe_raises
+        self._environments = environments or {}
+        self._status = status
+        self._exit_code = exit_code
+        self._file_reads = file_reads or {}
 
     def container_exec(self, name, cmd, *, timeout=None):
         if self._exec_raises:
@@ -118,14 +217,24 @@ class _Backend:
         if self._health_sequence:
             health = self._health_sequence.pop(0)
         state = {"Running": self._running}
+        if self._status is not None:
+            state["Status"] = self._status
+            state["ExitCode"] = self._exit_code
         if health is not None:
             state["Health"] = {"Status": health}
         return {
             "State": state,
+            "Config": {"Env": self._environments.get(name, [])},
             "Platform": self._platform,
             "NetworkSettings": {"Networks": {}},
             "Mounts": self._mounts.get(name, []),
         }
+
+    def container_file_read(self, name, path, *, max_bytes):
+        payload = self._file_reads.get((name, path))
+        if payload is None or len(payload) > max_bytes:
+            return None
+        return payload
 
     def host_list_lab_networks(self, name_prefix):
         if self._networks_raise:
@@ -145,7 +254,7 @@ class _Backend:
 
 def _node_plan(name="vm"):
     address = f"provision.node.{name}"
-    payload = {"name": name, "node_type": "vm", "os_family": "linux"}
+    payload = {"name": name, "node_kind": "compute", "os_family": "linux"}
     resource = PlannedResource(
         address=address,
         domain=RuntimeDomain.PROVISIONING,
@@ -161,7 +270,13 @@ def _node_plan(name="vm"):
     return address, ProvisioningPlan(resources={address: resource}, operations=[op])
 
 
-def _node_realization(name="vm", container="aptl-vm", *, imaged=False):
+def _node_realization(
+    name="vm",
+    container="aptl-vm",
+    *,
+    imaged=False,
+    runtime=None,
+):
     """Build one realized node.
 
     ``imaged`` makes it a Compose service. Only a Compose service can carry a
@@ -194,6 +309,7 @@ def _node_realization(name="vm", container="aptl-vm", *, imaged=False):
             if imaged
             else None
         ),
+        runtime=runtime,
     )
 
 
@@ -210,7 +326,95 @@ def test_running_healthy_node_is_realized_with_concerns(tmp_path):
         _Backend(containers=("aptl-vm",)), realization, plan, scenario_root=tmp_path
     )
     assert obs[address].realized is True
-    assert obs[address].concerns == {("node_type",): "vm", ("os_family",): "linux"}
+    assert obs[address].concerns == {("node_kind",): "compute", ("os_family",): "linux"}
+
+
+def test_declared_one_shot_node_is_realized_only_after_zero_exit(tmp_path):
+    from raes.runtime_configuration import RuntimeConfiguration
+
+    runtime = RuntimeConfiguration.model_validate(
+        {"container": {"autoremove": True, "entrypoint": ["/bin/initialize"]}}
+    )
+    address, plan = _node_plan("initializer")
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(
+            _node_realization(
+                "initializer",
+                "aptl-initializer",
+                imaged=True,
+                runtime=runtime,
+            ),
+        ),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+    )
+
+    success = observe_realization(
+        _Backend(
+            containers=("aptl-initializer",),
+            running=False,
+            health=None,
+            status="exited",
+            exit_code=0,
+        ),
+        realization,
+        plan,
+        scenario_root=tmp_path,
+    )
+    failure = observe_realization(
+        _Backend(
+            containers=("aptl-initializer",),
+            running=False,
+            health=None,
+            status="exited",
+            exit_code=1,
+        ),
+        realization,
+        plan,
+        scenario_root=tmp_path,
+    )
+
+    assert success[address].realized is True
+    assert failure[address].realized is False
+
+
+def test_guest_os_readback_uses_retained_filesystem_after_one_shot_exit():
+    from aptl.backends.raes_observation import _guest_operating_system
+
+    backend = _Backend(
+        containers=("aptl-initializer",),
+        exec_results={"aptl-initializer": (1, "")},
+        file_reads={
+            ("aptl-initializer", "/etc/os-release"): (b'ID="debian"\nVERSION_ID="12"\n')
+        },
+    )
+
+    identity = _guest_operating_system(backend, "aptl-initializer")
+
+    assert identity is not None
+    assert identity.family == "linux"
+    assert identity.distribution == "debian"
+    assert identity.version == "12"
+
+
+def test_guest_os_readback_normalizes_supported_product_release_lines():
+    from aptl.backends.raes_operating_systems import parse_os_release
+
+    identities = [
+        parse_os_release('ID="almalinux"\nVERSION_ID="9.8"\n'),
+        parse_os_release('ID="alpine"\nVERSION_ID="3.21.7"\n'),
+        parse_os_release('ID="rocky"\nVERSION_ID="9.3"\n'),
+        parse_os_release('ID="debian"\nVERSION_ID="13"\n'),
+    ]
+
+    assert [(item.distribution, item.version) for item in identities if item] == [
+        ("x-aptl:almalinux", "9"),
+        ("x-aptl:alpine", "3.21"),
+        ("rocky-linux", "9"),
+        ("debian", "13"),
+    ]
 
 
 _DECLARED_TOPOLOGY = {
@@ -236,7 +440,7 @@ def _domain_node_plan():
     address = "provision.node.ad"
     payload = {
         "name": "ad",
-        "node_type": "vm",
+        "node_kind": "compute",
         "os_family": "linux",
         "domain_topology": dict(_DECLARED_TOPOLOGY),
     }
@@ -341,7 +545,7 @@ def test_starting_node_settles_before_judgment(monkeypatch, tmp_path):
     )
     obs = observe_realization(backend, realization, plan, scenario_root=tmp_path)
     assert obs[address].realized is True
-    assert obs[address].concerns[("node_type",)] == "vm"
+    assert obs[address].concerns[("node_kind",)] == "compute"
 
 
 def test_settle_deadline_returns_transitional_info_instead_of_hanging(monkeypatch):
@@ -403,7 +607,7 @@ def test_node_without_declared_topology_is_never_probed(tmp_path):
     backend = _Backend(containers=("aptl-vm",))
     obs = observe_realization(backend, realization, plan, scenario_root=tmp_path)
     assert obs[address].realized is True
-    assert obs[address].concerns == {("node_type",): "vm", ("os_family",): "linux"}
+    assert obs[address].concerns == {("node_kind",): "compute", ("os_family",): "linux"}
 
 
 def test_non_running_node_is_not_realized(tmp_path):
@@ -489,7 +693,7 @@ def test_switch_network_realized_under_project_prefixed_name(tmp_path):
         address=address,
         domain=RuntimeDomain.PROVISIONING,
         resource_type="network",
-        payload={"name": "redteam-net", "node_type": "switch"},
+        payload={"name": "redteam-net", "node_kind": "switch"},
     )
     op = ProvisionOp(
         action=ChangeAction.CREATE,
@@ -516,7 +720,7 @@ def test_switch_network_realized_under_project_prefixed_name(tmp_path):
     backend = _Backend(networks=("redteam-net",))
     obs = observe_realization(backend, realization, plan, scenario_root=tmp_path)
     assert obs[address].realized is True
-    assert obs[address].concerns == {("node_type",): "switch"}
+    assert obs[address].concerns == {("node_kind",): "switch"}
 
 
 def test_network_list_timeout_fails_closed(tmp_path):
@@ -661,8 +865,10 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
                 "target_address": "provision.node.wazuh-indexer",
                 "mount_destination": "/usr/share/wazuh-indexer/certs",
                 "access_mode": "read_only",
+                "delivery_mode": "mount",
             }
         ],
+        "environment_consumers": [],
         # raes 0.23 carries dependency wiring inside the declared spec;
         # the observed spec renders the DTO's realized wiring in the same
         # author vocabulary (issue #677).
@@ -732,9 +938,9 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
         },
     )
 
-    observed = observe_realization(
-        backend, realization, plan, scenario_root=tmp_path
-    )[address]
+    observed = observe_realization(backend, realization, plan, scenario_root=tmp_path)[
+        address
+    ]
 
     assert observed.realized is True
     assert observed.concerns == {("spec",): spec}
@@ -788,6 +994,7 @@ def test_rendered_config_observation_records_digest_not_content(tmp_path):
                 "access_mode": "read_only",
             }
         ],
+        "environment_consumers": [],
     }
     resource = PlannedResource(
         address=address,
@@ -861,6 +1068,109 @@ def test_rendered_config_observation_records_digest_not_content(tmp_path):
     assert "must-not-enter-evidence" not in str(observed.evidence)
 
 
+def test_generated_environment_delivery_is_read_back_without_value_disclosure(tmp_path):
+    address = "provision.generated-artifact.cortex-service-credentials"
+    spec = {
+        "generator": "rendered_config",
+        "lifecycle": "reuse_valid",
+        "provenance": "techvault:cortex-service-credentials/v1",
+        "outputs": [
+            {
+                "name": "connector-api-key",
+                "path": "cortex/connector-api-key",
+                "sensitivity": "secret",
+                "disposition": "consumer_selected",
+            }
+        ],
+        "consumers": [],
+        "environment_consumers": [
+            {
+                "node": "thehive",
+                "target_address": "provision.node.thehive",
+                "delivery_mode": "environment",
+                "output": "connector-api-key",
+                "environment_variable": "TH_CORTEX_KEYS",
+            }
+        ],
+        "ordering_dependencies": [],
+        "refresh_dependencies": [],
+    }
+    resource = PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="generated-artifact",
+        payload={"name": "cortex-service-credentials", "spec": spec},
+    )
+    plan = ProvisioningPlan(resources={address: resource})
+    output = (
+        tmp_path
+        / ".aptl/realization/cortex-service-credentials/cortex/connector-api-key"
+    )
+    output.parent.mkdir(parents=True)
+    output.write_text("source-secret\n")
+    consumer = DeploymentGeneratedArtifactEnvironmentConsumer(
+        target_address="provision.node.thehive",
+        node_name="thehive",
+        service_name="thehive",
+        output_name="connector-api-key",
+        environment_variable="TH_CORTEX_KEYS",
+    )
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization("thehive", "aptl-thehive", imaged=True),),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+        generated_artifacts=(
+            DeploymentGeneratedArtifactRealization(
+                address=address,
+                name="cortex-service-credentials",
+                generator="rendered_config",
+                lifecycle="reuse_valid",
+                provenance="techvault:cortex-service-credentials/v1",
+                outputs=(
+                    DeploymentGeneratedArtifactOutput(
+                        name="connector-api-key",
+                        path="cortex/connector-api-key",
+                        sensitivity="secret",
+                    ),
+                ),
+                consumers=(),
+                environment_consumers=(consumer,),
+            ),
+        ),
+    )
+    backend = _Backend(
+        containers=("aptl-thehive",),
+        realization_root=tmp_path,
+        environments={"aptl-thehive": ["TH_CORTEX_KEYS=source-secret"]},
+    )
+
+    observed = observe_realization(backend, realization, plan, scenario_root=tmp_path)[
+        address
+    ]
+
+    assert observed.realized is True
+    assert observed.concerns == {("spec",): spec}
+    assert observed.evidence["environment_bindings"] == [
+        {
+            "target_address": "provision.node.thehive",
+            "environment_variable": "TH_CORTEX_KEYS",
+            "output": "connector-api-key",
+            "status": "present",
+        }
+    ]
+    assert "source-secret" not in repr(observed.evidence)
+
+    backend._environments = {"aptl-thehive": ["TH_CORTEX_KEYS=wrong"]}
+    assert (
+        observe_realization(backend, realization, plan, scenario_root=tmp_path)[
+            address
+        ].realized
+        is False
+    )
+
+
 def test_persistent_volume_is_observed_from_project_scoped_mount(tmp_path):
     address = "provision.persistent-volume.wazuh-indexer-data"
     spec = {
@@ -922,9 +1232,9 @@ def test_persistent_volume_is_observed_from_project_scoped_mount(tmp_path):
         },
     )
 
-    observed = observe_realization(
-        backend, realization, plan, scenario_root=tmp_path
-    )[address]
+    observed = observe_realization(backend, realization, plan, scenario_root=tmp_path)[
+        address
+    ]
 
     assert observed.realized is True
     assert observed.concerns == {("spec",): spec}
@@ -1184,9 +1494,7 @@ def _ssh_bundle_fixture(*, imaged, selected=("labadmin-key",)):
     )
     realization = AptlRealization(
         profiles=frozenset(),
-        nodes=(
-            _node_realization("workstation", "aptl-workstation", imaged=imaged),
-        ),
+        nodes=(_node_realization("workstation", "aptl-workstation", imaged=imaged),),
         networks=(),
         placements=(),
         diagnostics=(),
@@ -1351,7 +1659,9 @@ def test_image_free_consumer_exec_failure_is_not_read_as_delivery(tmp_path):
     assert observed.realized is False
 
 
-def _bind_content_placement_fixture(container="aptl-vm", dest="etc/otelcol/config.yaml"):
+def _bind_content_placement_fixture(
+    container="aptl-vm", dest="etc/otelcol/config.yaml"
+):
     """A content placement delivered to an image node as a read-only bind.
 
     An image node is a Compose service with a fixed image, so its config is
@@ -1447,7 +1757,9 @@ def test_bind_delivered_content_type_read_from_the_daemon_not_the_container(tmp_
     assert observation.concerns == {("spec", "type"): "file"}
 
 
-def test_bind_delivered_content_placement_is_unrealized_on_a_stopped_container(tmp_path):
+def test_bind_delivered_content_placement_is_unrealized_on_a_stopped_container(
+    tmp_path,
+):
     """A stopped target container is never realized, bind mount aside.
 
     ADR-088 (issue #889) retired APTL's only run-to-completion service (the
@@ -1558,5 +1870,8 @@ def test_container_realized_rejects_any_stopped_container():
     assert container_realized(dead_service) is False
 
     # A running healthy service is realized as before.
-    running = {"State": {"Running": True}, "HostConfig": {"RestartPolicy": {"Name": "always"}}}
+    running = {
+        "State": {"Running": True},
+        "HostConfig": {"RestartPolicy": {"Name": "always"}},
+    }
     assert container_realized(running) is True

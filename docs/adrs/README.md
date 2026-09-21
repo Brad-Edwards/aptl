@@ -70,13 +70,15 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [046](adr-046-dynamic-raes-scenario-realization.md) | Dynamic RAES Scenario Realization (Image Realization Addendum superseded by ADR-048) | accepted (amended) | 2026-06-29 |
 | [047](adr-047-raes-experiment-admission-and-trial-plan-boundary.md) | RAES Experiment Admission and Trial-Plan Boundary | accepted | 2026-07-19 |
 | [048](adr-048-image-free-placement-realization.md) | APTL Image-Free, Placement-Based Realization Envelope | superseded in part by ADR-051 | 2026-07-20 |
-| [049](adr-049-sealed-disposable-lab-appliance.md) | Sealed, Disposable Lab Appliance Delivery Boundary | accepted | 2026-07-25 |
+| [049](adr-049-sealed-disposable-lab-appliance.md) | Sealed, Disposable Lab Appliance Delivery Boundary | superseded in part by ADR-060 | 2026-07-25 |
 | [050](adr-050-terminal-attempt-archival-and-atomic-seal.md) | Terminal Attempt Archival And Atomic Seal Boundary | accepted | 2026-07-28 |
 | [051](adr-051-component-level-raes-realization.md) | Component-Level RAES Realization | accepted | 2026-07-28 |
 | [052](adr-052-configured-participant-credential-sourcing.md) | Configured Participant Credential Sourcing | proposed | 2026-08-12 |
 | [053](adr-053-pack-backend-deployment-serving-interaction-seam.md) | Pack-Backend Deployment-Serving Interaction Seam | accepted | 2026-08-10 |
-| [054](adr-054-lilrae-core-and-experience-ownership.md) | LilRAE Core and Experience Ownership | proposed | 2026-09-05 |
+| [054](adr-054-lilrae-core-and-experience-ownership.md) | APTL-to-LilRAE Identity Continuity and Capability Ownership | proposed | 2026-09-05 |
 | [055](adr-055-local-runtime-authority-and-ownership.md) | Local Runtime Authority and Ownership | proposed | 2026-09-05 |
 | [056](adr-056-scenario-led-capability-qualification.md) | Scenario-Led Capability Qualification | proposed | 2026-09-05 |
 | [057](adr-057-agent-execution-compartments.md) | Agent Execution Compartments | proposed | 2026-09-05 |
 | [058](adr-058-adoption-and-security-release-gates.md) | Adoption and Security Release Gates | proposed | 2026-09-05 |
+| [059](adr-059-canonical-techvault-delivery-and-host-mcp-access.md) | Canonical TechVault Delivery and Host MCP Access | superseded in part by ADR-060 | 2026-09-17 |
+| [060](adr-060-vm-only-seat-containment.md) | VM-Only Seat Containment | accepted | 2026-09-20 |

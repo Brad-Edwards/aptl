@@ -28,6 +28,7 @@ from pathlib import Path
 import yaml
 
 from aptl.core.deployment.realization import (
+    DeploymentNodeRealization,
     DeploymentPublishedPort,
     DeploymentRealizationSpec,
 )
@@ -36,11 +37,53 @@ from aptl.core.host_ports import port_available
 _PORT_OVERRIDE_RELATIVE_PATH = Path(".aptl") / "realization" / "compose.ports.yml"
 
 
-def published_port_conflicts(realization: DeploymentRealizationSpec) -> list[str]:
+def _binding_conflict(
+    node: DeploymentNodeRealization,
+    binding: DeploymentPublishedPort,
+    owned_host_ports: frozenset[tuple[str, int, str]] | set[tuple[str, int, str]],
+) -> str | None:
+    """Return the message for one unpublishable exact binding, else ``None``.
+
+    A binding with no host port asks Compose for an ephemeral publish and
+    cannot conflict; one this project already publishes is ours to reconcile,
+    not a foreign holder. Only what survives both gets probed.
+    """
+
+    if (
+        binding.host_port is None
+        or (binding.host_ip, binding.host_port, binding.protocol) in owned_host_ports
+        or port_available(binding.host_port, binding.protocol, binding.host_ip)
+    ):
+        return None
+    return (
+        f"node {node.name!r} declares host port "
+        f"{binding.host_ip}:{binding.host_port}/{binding.protocol} "
+        f"for container port {binding.container_port}, but that "
+        f"host port is already in use. The scenario declares an "
+        f"exact binding, so APTL will not silently publish it "
+        f"elsewhere — free the port or change the scenario."
+    )
+
+
+def published_port_conflicts(
+    realization: DeploymentRealizationSpec,
+    owned_host_ports: frozenset[tuple[str, int, str]] | set[tuple[str, int, str]] = (
+        frozenset()
+    ),
+) -> list[str]:
     """Return one message per exact host binding that cannot be published.
 
     Only bindings with an author-declared ``host_port`` are exact; a binding
     with no host port asks Compose for an ephemeral publish and cannot conflict.
+
+    ``owned_host_ports`` carries the ``(host_ip, host_port, protocol)`` triples
+    this compose project's own containers already publish. A probe cannot tell
+    a foreign holder from one of ours, and the RAES handoff retries a retryable
+    backend-start failure by re-applying the same plan *without* tearing the
+    range down -- the usual cause is a SOC dependency still initializing. On
+    that pass every declared port is held by our own container, which Compose
+    is about to reconcile, so treating it as a conflict failed the retry every
+    time and reported failure over a lab that had come up.
     """
 
     conflicts: list[str] = []
@@ -59,22 +102,11 @@ def published_port_conflicts(realization: DeploymentRealizationSpec) -> list[str
                 f"the published ports."
             )
             continue
-        for binding in node.published_ports:
-            if binding.host_port is None:
-                continue
-            if not port_available(
-                binding.host_port,
-                binding.protocol,
-                binding.host_ip,
-            ):
-                conflicts.append(
-                    f"node {node.name!r} declares host port "
-                    f"{binding.host_ip}:{binding.host_port}/{binding.protocol} "
-                    f"for container port {binding.container_port}, but that "
-                    f"host port is already in use. The scenario declares an "
-                    f"exact binding, so APTL will not silently publish it "
-                    f"elsewhere — free the port or change the scenario."
-                )
+        conflicts.extend(
+            message
+            for binding in node.published_ports
+            if (message := _binding_conflict(node, binding, owned_host_ports))
+        )
     return conflicts
 
 

@@ -3,19 +3,27 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
+import json
+import socket
 import subprocess
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 import rfc8785
 
-from aptl.core.appliance_boundary import ApplianceBoundaryBinding, ApplianceBoundaryPolicy
+from aptl.core.appliance_boundary import (
+    ApplianceBoundaryBinding,
+    ApplianceBoundaryPolicy,
+)
 from aptl.core.appliance_boundary_inventory import (
     BoundaryEndpoint,
     HostBoundaryObservation,
 )
 
 ListenerProbe = Callable[[], tuple[BoundaryEndpoint, ...]]
+HostAddressProbe = Callable[[], tuple[str, ...]]
+ConnectProbe = Callable[[str, int, float], bool]
 
 
 @dataclass(frozen=True)
@@ -43,20 +51,23 @@ def observation_id_for(observation: HostBoundaryObservation) -> str:
 def collect_loopback_listeners(
     *,
     probe: ListenerProbe | None = None,
+    owner_pid: int | None = None,
 ) -> tuple[BoundaryEndpoint, ...]:
-    """Return TCP listeners bound on loopback addresses."""
+    """Return loopback listeners, optionally owned by the tracked VM process."""
 
     if probe is not None:
         return probe()
-    return _collect_listeners_via_ss()
+    return _collect_listeners_via_ss(owner_pid=owner_pid)
 
 
-def _collect_listeners_via_ss() -> tuple[BoundaryEndpoint, ...]:
+def _collect_listeners_via_ss(
+    *, owner_pid: int | None = None
+) -> tuple[BoundaryEndpoint, ...]:
     """Parse loopback TCP listeners from ``ss`` output when available."""
 
     try:
         result = subprocess.run(
-            ["ss", "-H", "-ltn"],
+            ["ss", "-H", "-ltnp"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -68,6 +79,10 @@ def _collect_listeners_via_ss() -> tuple[BoundaryEndpoint, ...]:
         return ()
     endpoints: list[BoundaryEndpoint] = []
     for line in result.stdout.splitlines():
+        if owner_pid is not None and not any(
+            marker in line for marker in (f"pid={owner_pid},", f"pid={owner_pid})")
+        ):
+            continue
         parts = line.split()
         if len(parts) < 4:
             continue
@@ -95,15 +110,92 @@ def _collect_listeners_via_ss() -> tuple[BoundaryEndpoint, ...]:
     return tuple(endpoints)
 
 
+def _host_nonloopback_addresses() -> tuple[str, ...]:
+    """Read bounded global IPv4 addresses from the host network inventory."""
+
+    try:
+        result = subprocess.run(
+            ["ip", "-j", "address", "show"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if result.returncode != 0 or len(result.stdout) > 1024 * 1024:
+            return ()
+        rows = json.loads(result.stdout)
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return ()
+    addresses: set[str] = set()
+    if not isinstance(rows, list):
+        return ()
+    for row in rows:
+        entries = row.get("addr_info", ()) if isinstance(row, dict) else ()
+        for entry in entries if isinstance(entries, list) else ():
+            value = entry.get("local") if isinstance(entry, dict) else None
+            try:
+                parsed = ipaddress.ip_address(value)
+            except (TypeError, ValueError):
+                continue
+            if parsed.version == 4 and not parsed.is_loopback:
+                addresses.add(str(parsed))
+    return tuple(sorted(addresses))
+
+
+def _tcp_reachable(address: str, port: int, timeout: float) -> bool:
+    """Return whether one forbidden non-loopback TCP endpoint accepts a connect."""
+
+    try:
+        with socket.create_connection((address, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def probe_forbidden_host_reachability(
+    mappings: tuple[BoundaryEndpoint, ...],
+    *,
+    address_probe: HostAddressProbe = _host_nonloopback_addresses,
+    connect_probe: ConnectProbe = _tcp_reachable,
+    timeout_seconds: float = 0.5,
+) -> bool:
+    """Prove mapped ports do not answer on any observed non-loopback host IPv4."""
+
+    addresses = address_probe()
+    tcp_ports = {mapping.port for mapping in mappings if mapping.protocol == "tcp"}
+    if not addresses or not tcp_ports:
+        return False
+    return not any(
+        connect_probe(address, port, timeout_seconds)
+        for address in addresses
+        for port in tcp_ports
+    )
+
+
 def map_publications_to_listeners(
     policy: ApplianceBoundaryPolicy,
     observed: Iterable[BoundaryEndpoint],
+    *,
+    mappings: tuple[BoundaryEndpoint, ...] = (),
 ) -> tuple[BoundaryEndpoint, ...]:
     """Attach signed publication audiences to observed loopback listeners."""
 
     by_port = {(item.address, item.port, item.protocol) for item in observed}
     mapped: list[BoundaryEndpoint] = []
+    if mappings:
+        allowed = {
+            (p.audience, p.address, p.port, p.protocol)
+            for p in policy.guest_publications
+        }
+        if any(
+            (m.audience, m.guest_address, m.guest_port, m.protocol) not in allowed
+            for m in mappings
+        ):
+            raise ValueError("outer mapping names an unsigned guest publication")
+        return tuple(m for m in mappings if (m.address, m.port, m.protocol) in by_port)
     for publication in policy.guest_publications:
+        if publication.audience == "host-mcp":
+            raise ValueError("host MCP requires an explicit outer mapping")
         key = (publication.address, publication.port, publication.protocol)
         if key in by_port:
             mapped.append(
@@ -151,29 +243,8 @@ def host_boundary_findings(
 ) -> tuple[str, ...]:
     """Return host-only boundary finding codes."""
 
+    from aptl.core.appliance_boundary_inventory import _append_host_findings
+
     findings: list[str] = []
-    if host.observation_id != binding.host_observation_id:
-        findings.append("boundary.host-observation-identity-mismatch")
-    if host.policy_digest != binding.policy_digest:
-        findings.append("boundary.host-policy-digest-mismatch")
-    if host.payload_digest != binding.payload_digest:
-        findings.append("boundary.host-payload-digest-mismatch")
-    if host.boot_id != binding.boot_id:
-        findings.append("boundary.host-boot-identity-mismatch")
-    if not host.complete:
-        findings.append("boundary.host-observation-incomplete")
-    if not host.forbidden_reachability_passed:
-        findings.append("boundary.host-forbidden-reachability")
-    expected = {
-        (item.audience, item.address, item.port, item.protocol)
-        for item in policy.guest_publications
-    }
-    observed = {
-        (item.audience, item.address, item.port, item.protocol)
-        for item in host.listeners
-    }
-    if observed - expected:
-        findings.append("boundary.host-listener-unapproved")
-    if expected - observed:
-        findings.append("boundary.host-listener-missing")
+    _append_host_findings(policy, binding, host, findings)
     return tuple(findings)

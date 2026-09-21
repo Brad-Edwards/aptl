@@ -364,7 +364,6 @@ def test_real_repo_ships_no_techvault_scenario_content_copies() -> None:
         "containers/webapp/app/app.py",
     }
 
-    assert not (REPO_ROOT / "scenarios").exists()
-    assert not (REPO_ROOT / "participant-profiles").exists()
+    assert not any(path.startswith("scenarios/") for path in tracked)
     assert tracked.isdisjoint(forbidden)
     assert all(not (REPO_ROOT / path).exists() for path in forbidden)

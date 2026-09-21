@@ -1,0 +1,51 @@
+name: techvault-defensive-min
+description: >
+  Curated TechVault defensive-minimum slice. Declares the Wazuh manager, indexer,
+  and dashboard. Includes the Wazuh monitoring core; omits the wider SOC stack (Suricata,
+  MISP, TheHive, Cortex, Shuffle, Wazuh sidecars) and every attacker, target, and
+  enterprise component. Proves APTL realizes the `wazuh` profile from declared
+  defensive node content without pulling the full `soc` profile.
+
+nodes:
+  security-net:
+    type: switch
+    description: SOC and security tooling network.
+
+  wazuh-manager:
+    type: compute
+    os: linux
+    services:
+      - {name: wazuh-api, port: 55000, protocol: tcp}
+      - {name: agent-events, port: 1514, protocol: tcp}
+      - {name: syslog, port: 514, protocol: udp}
+  wazuh-indexer:
+    type: compute
+    os: linux
+    services:
+      - {name: indexer-api, port: 9200, protocol: tcp}
+  wazuh-dashboard:
+    type: compute
+    os: linux
+    services:
+      - {name: dashboard, port: 5601, protocol: tcp}
+
+infrastructure:
+  security-net:
+    properties: {cidr: 172.20.0.0/24, gateway: 172.20.0.1, internal: false}
+
+  wazuh-manager:
+    links: [security-net]
+    dependencies: [wazuh-indexer]
+  wazuh-indexer:
+    links: [security-net]
+  wazuh-dashboard:
+    links: [security-net]
+    dependencies: [wazuh-indexer, wazuh-manager]
+
+features:
+  techvault-defensive-stack:
+    type: service
+    source:
+      name: aptl-soc-stack
+      version: local
+    description: Wazuh manager, indexer, and dashboard monitoring core.

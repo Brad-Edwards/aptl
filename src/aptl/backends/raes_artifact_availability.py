@@ -32,12 +32,12 @@ from typing import TYPE_CHECKING, Protocol
 
 from raes.explicitness import ExplicitnessClass
 from raes.nodes import NodeType
+from raes_contracts.addressing import render_compiled_address
 from raes_contracts.contracts import (
     ArtifactAvailabilityContext,
     ArtifactRequirementAvailability,
 )
 from raes_processor.compiler import compile_runtime_model
-from raes_processor.compiler.addresses import _node_address
 
 import hashlib
 from pathlib import Path
@@ -61,8 +61,7 @@ from aptl.backends.raes_substrate import resolve_substrate
 _CONTEXT_ROOT = "containers"
 
 if TYPE_CHECKING:
-    from raes._source import ArtifactIdentity
-    from raes.artifact_requirements import ArtifactRequirement
+    from raes.artifact_requirements import ArtifactIdentity, ArtifactRequirement
     from raes_processor.semantics.realization import CompiledRealizationRequirement
 
 
@@ -131,8 +130,10 @@ def _materialized_specifications(
     probe: ArtifactProbe,
     component_root: Path | None,
     materialized: dict[str, str],
+    *,
+    materialize: bool,
 ) -> tuple[list[str], list[str]]:
-    """Materialize each authored specification and report what it produced.
+    """Inspect each authored specification and optionally materialize it.
 
     A built image's digest cannot be predicted, so it is only knowable by
     building. That happens here, during backend preparation, which is the timing
@@ -167,12 +168,14 @@ def _materialized_specifications(
         actual = "sha256:" + hashlib.sha256(dockerfile.read_bytes()).hexdigest()
         if actual != specification.digest:
             continue
+        available.append(specification.digest)
+        if not materialize:
+            continue
         # The specification id is the one identity both the availability pass and
         # the realization pass can derive independently, so tagging on it keeps
         # the image they each refer to the same one.
         cached = materialized.get(specification.digest)
         if cached is not None:
-            available.append(specification.digest)
             digests.append(cached)
             continue
         realized = probe.materialize_component_image(
@@ -182,8 +185,12 @@ def _materialized_specifications(
         )
         if isinstance(realized, str) and realized.startswith("sha256:"):
             materialized[specification.digest] = realized
-            available.append(specification.digest)
             digests.append(realized)
+        else:
+            # A failed build is not an available materialization fact.  Remove
+            # the read-only inspection result so the post-qualification context
+            # fails closed instead of claiming a product that was not built.
+            available.remove(specification.digest)
     return available, digests
 
 
@@ -218,6 +225,7 @@ def artifact_availability_for_scenario(
     allow_remote: bool | None = None,
     scenario_root: Path | None = None,
     component_root: Path | None = None,
+    materialize: bool = False,
 ) -> ArtifactAvailabilityContext:
     """Return address-partitioned availability facts for ``scenario``.
 
@@ -249,6 +257,7 @@ def artifact_availability_for_scenario(
         scenario_root=scenario_root,
         component_root=component_root if component_root is not None else scenario_root,
         materialized={},
+        materialize=materialize,
     )
     entries = [
         _availability_entry(
@@ -275,6 +284,7 @@ class _AvailabilityInputs:
     scenario_root: Path | None
     component_root: Path | None
     materialized: dict[str, str]
+    materialize: bool
 
 
 def _availability_entry(
@@ -299,12 +309,16 @@ def _availability_entry(
     provenance: list[str] = []
     if requirement.materialization_specifications:
         specifications, digests = _materialized_specifications(
-            requirement, inputs.probe, inputs.component_root, inputs.materialized
+            requirement,
+            inputs.probe,
+            inputs.component_root,
+            inputs.materialized,
+            materialize=inputs.materialize,
         )
         verified_inputs = _verified_locked_inputs(
             requirement, inputs.probe, inputs.allow_remote
         )
-        if specifications:
+        if digests:
             provenance.append(materialization_provenance_ref())
     exact = _exact_digest_and_provenance(
         requirement, inputs.probe, allow_remote=inputs.allow_remote
@@ -347,10 +361,7 @@ def _env_pack_digest_and_provenance(
     never have.
     """
 
-    if (
-        requirement.explicitness is not ExplicitnessClass.EXACT
-        or scenario_root is None
-    ):
+    if requirement.explicitness is not ExplicitnessClass.EXACT or scenario_root is None:
         return None
     exact = requirement.exact_artifact
     if (
@@ -445,7 +456,7 @@ def _substrate_digest_and_provenance(
 def _nodes_by_address(scenario: object) -> dict[str, object]:
     """Map each vm node's compiled address to its typed scenario node.
 
-    Built with RAES's canonical ``_node_address`` factory (never by parsing an
+    Built with RAES's public compiled-address renderer (never by parsing an
     address), so the open-substrate resolution reads a node's typed OS and
     runtime without a second compile pass. Switch nodes realize as networks, not
     containers, so they carry no substrate.
@@ -455,7 +466,7 @@ def _nodes_by_address(scenario: object) -> dict[str, object]:
     if not nodes:
         return {}
     return {
-        _node_address(name): node
+        render_compiled_address("provision", "node", name): node
         for name, node in nodes.items()
         if getattr(node, "type", None) is not NodeType.SWITCH
     }

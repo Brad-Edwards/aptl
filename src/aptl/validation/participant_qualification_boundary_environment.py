@@ -16,9 +16,9 @@ from aptl.backends.raes_participant_driver import AptlParticipantControlPlane
 from aptl.backends.raes_participant_fixture import participant_episode_state_dir
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.scenario_bundle import project_tree_bundle
-from aptl.core.scenario_catalog import resolve_scenario_selection
 from aptl.validation.participant_agency_readiness import (
     BEHAVIOR_ADDRESSES,
+    SCENARIO_RELATIVE_PATH,
     _verify_live_materialization,
 )
 from aptl.validation.participant_qualification_challenge_support import (
@@ -40,7 +40,6 @@ BOUNDARY_CHALLENGE_PATH = "evaluator/boundary-challenge.json"
 def prepare_challenge_context(
     *,
     project_dir: Path,
-    scenario_path: Path,
     config: AptlConfig,
     run_store: RunStorageBackend,
     run_id: str,
@@ -50,11 +49,7 @@ def prepare_challenge_context(
     """Prepare an isolated, exact-state participant episode."""
 
     run_store.create_run(run_id)
-    scenario_path = resolve_scenario_selection(
-        project_dir,
-        scenario_path=scenario_path,
-    )
-    assert scenario_path is not None
+    scenario_path = project_dir / SCENARIO_RELATIVE_PATH
     admitted = admit_raes_scenario(
         project_dir,
         config,
@@ -165,21 +160,68 @@ def persist_boundary_check(
     )
 
 
-def wait_until_process_absent(pid: int) -> bool:
-    """Wait briefly for the timed-out provider's child process to disappear."""
+# The reap that follows a kill is not instantaneous, and a process whose
+# parent died is reparented before it is reaped -- to init on Linux, to
+# launchd on Darwin -- so the wait has to outlast whatever that takes. No
+# measurement of Darwin's reparent-and-reap latency under CI load was
+# available when this was set, so it is deliberately generous: the wait costs
+# nothing when teardown worked, because the probe returns as soon as the pid
+# is gone.
+_PROCESS_ABSENT_TIMEOUT_SECONDS = 10.0
 
-    deadline = time.monotonic() + 2
-    absent = False
-    while time.monotonic() < deadline and not absent:
+
+def wait_until_process_absent(pid: int) -> bool:
+    """Wait for the timed-out provider's child process to disappear.
+
+    ``kill(pid, 0)`` answers ESRCH once a pid is gone, but a process that has
+    exited and has not yet been reaped is reported differently across
+    platforms: Linux keeps answering 0 for the zombie, while Darwin answers
+    EPERM once the zombie's credentials are cleared. EPERM is therefore
+    inconclusive rather than proof of presence, and abandoning the wait on it
+    reported "still present" for a process that had already exited. Keep
+    polling to the deadline and let the reap turn the answer into ESRCH.
+
+    A pid that stays unsignalable to the deadline returns ``False``. That is
+    the fail-closed answer, and the right one: this backs a containment
+    boundary, so an unproven teardown must not read as a proven one.
+    """
+
+    deadline = time.monotonic() + _PROCESS_ABSENT_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
         try:
             os.kill(pid, 0)
         except ProcessLookupError:
-            absent = True
+            return True
         except PermissionError:
-            break
-        if not absent:
-            time.sleep(0.02)
-    return absent
+            pass
+        if _process_is_zombie(pid):
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def _process_is_zombie(pid: int) -> bool:
+    """Return whether ``pid`` is a terminated, unreaped process-table entry.
+
+    Darwin can retain an orphaned zombie long enough to outlive the bounded
+    qualification wait. Such an entry cannot execute and therefore satisfies
+    the containment check even though ``kill(pid, 0)`` has not reached ESRCH.
+    ``ps`` is available on every supported host and this one-pid query is
+    bounded; observation failures remain the fail-closed ``False`` answer.
+    """
+
+    try:
+        result = subprocess.run(
+            ["ps", "-o", "stat=", "-p", str(pid)],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=1,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    states = result.stdout.decode("ascii", errors="ignore").split()
+    return result.returncode == 0 and any(state.startswith("Z") for state in states)
 
 
 def _behavior_name(behavior_address: str) -> str:

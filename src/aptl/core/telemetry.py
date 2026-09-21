@@ -35,6 +35,8 @@ from opentelemetry.trace import (
 )
 
 from aptl.utils.logging import get_logger
+from aptl.core.telemetry_export import RedactingSpanExporter
+from aptl.utils.redaction import redact
 
 log = get_logger("telemetry")
 
@@ -69,18 +71,20 @@ def init_tracing(service_name: str = "aptl-cli") -> None:
     if _provider is not None:
         return
 
-    endpoint = os.getenv(
-        "OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318"
-    )
+    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
 
     resource = Resource.create({"service.name": service_name})
     _provider = TracerProvider(resource=resource)
 
     exporter = OTLPSpanExporter(endpoint=f"{endpoint}/v1/traces")
-    _provider.add_span_processor(BatchSpanProcessor(exporter))
+    _provider.add_span_processor(BatchSpanProcessor(RedactingSpanExporter(exporter)))
     trace.set_tracer_provider(_provider)
 
-    log.debug("OTel tracing initialized: service=%s endpoint=%s", service_name, endpoint)
+    log.debug(
+        "OTel tracing initialized: service=%s endpoint=%s",
+        redact(service_name),
+        redact(endpoint),
+    )
 
 
 def shutdown_tracing() -> None:
@@ -113,7 +117,7 @@ def generate_trace_context() -> dict:
         zero-padded hex strings.
     """
     trace_id = secrets.token_hex(16)  # 32 hex chars = 128-bit
-    span_id = secrets.token_hex(8)    # 16 hex chars = 64-bit
+    span_id = secrets.token_hex(8)  # 16 hex chars = 64-bit
     return {
         "trace_id": trace_id,
         "span_id": span_id,

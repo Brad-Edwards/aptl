@@ -7,13 +7,29 @@
 
 **Purple-team lab where AI agents drive the red and blue sides against an enterprise target stack.**
 
-One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, DB, file share, and DNS), a Kali red-team box, a SOC stack (Wazuh + Suricata + MISP + TheHive + Cortex + Shuffle), and MCP servers giving AI agents programmatic control over it. Scenarios are acquired [Reproducible Agentic Environments SDL](docs/sdl/index.md) packs; the Compose topology is realized from the nodes the scenario declares rather than a fixed preset, and each run captures a telemetry archive. Mail and reverse-engineering services are optional profiles and are not part of the default `techvault` pack.
+One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, DB, file share, and DNS), a Kali red-team box, a SOC stack (Wazuh + Suricata + MISP + TheHive + Cortex + Shuffle), and MCP servers giving AI agents programmatic control over it. Scenarios are [Reproducible Agentic Environments SDL](docs/sdl/index.md) documents, selectable at startup; the Compose topology is realized from the nodes the scenario declares rather than a fixed preset, and each run captures a telemetry archive. Mail and reverse-engineering services are optional profiles and are not part of the default `techvault-operational` scenario.
 
 **Use cases:** autonomous cyber-operations research, purple-team training, AI threat-actor assessment.
 
 ## Status
 
-**🚧 Active development. Not for production. Not hardened.** This lab gives AI agents access to real penetration-testing tools and runs intentionally vulnerable services. Container escapes and other security issues are possible—keep it on a host you can rebuild and a network you control. Always monitor red-team agents during scenarios.
+**🚧 Active development. Not for production. Not hardened.** APTL gives AI
+agents real penetration-testing tools and intentionally vulnerable targets.
+Choose the execution boundary accordingly:
+
+| Command | Isolation boundary | Appropriate use |
+|---|---|---|
+| `aptl lab start` | Containers on the selected host Docker engine | Development and supervised work on a dedicated, rebuildable host |
+| `aptl seat start` | Rootful Docker and the complete lab inside a disposable KVM VM | Agent-driven or multi-user work where stronger host and cross-seat isolation matters |
+
+The VM seat is materially safer than running the lab directly on the host
+Docker engine, but it is not an absolute sandbox. An advanced model with tool
+access can research and attempt container- or VM-escape chains; assume it may
+exploit a reachable kernel, hypervisor, or device-model flaw if one exists.
+Keep the host kernel and QEMU/KVM current, use a host that can be rebuilt, keep
+unrelated credentials and workloads elsewhere, control the surrounding
+network, and monitor active red-team sessions. See the
+[seat security boundary](docs/reference/appliance-seat-launcher.md#security-boundary).
 
 ## Quick Start
 
@@ -26,12 +42,10 @@ cd my-lab
 aptl lab start
 ```
 
-`aptl lab init <dir>` copies the bundled APTL runtime assets (the Compose
-topology, config templates, and generic container build contexts) out of the
+`aptl lab init <dir>` copies the bundled lab assets (the Compose topology,
+scenarios, config templates, and container build contexts) out of the
 installed package into `<dir>`, which becomes your lab project directory. The
-TechVault scenario is acquired from the installed `raes-env-packs`
-distribution, staged under private project state, and verified before use; the
-APTL wheel contains no scenario catalog or scenario content tree.
+published wheel ships those assets, so a PyPI install alone can run a lab.
 [pipx](https://pipx.pypa.io/) installs the CLI into its own virtualenv, so the
 system-`pip` block on modern Debian/Ubuntu/WSL2 hosts
 ([PEP 668](https://peps.python.org/pep-0668/)) never applies. Install pipx with
@@ -55,12 +69,12 @@ template placeholder values with lab credentials that match the running
 containers. The startup output points to `.env` for passwords and tokens. Run
 `aptl lab info` later to reprint the same access summary.
 
-By default it boots the acquired `techvault` pack. Inspect the catalog or name
-the same selector explicitly with:
+By default it boots the full `techvault-operational` scenario. List the catalog
+and start a smaller curated topology with:
 
 ```bash
-aptl lab scenarios
-aptl lab start --scenario techvault
+aptl lab scenarios                                   # list startup scenarios
+aptl lab start --scenario techvault  # the same acquired pack as default start
 ```
 
 See [Scenarios](#scenarios) for the catalog.
@@ -89,7 +103,7 @@ aptl kill -c      # emergency: kill MCP processes AND all lab containers
 - Docker + Docker Compose + Docker Buildx
 - Python 3.11+
 - OpenSSH client (`ssh-keygen` on `PATH`): generates the lab SSH keys at standup. Preinstalled on Linux and macOS; on Windows install the built-in "OpenSSH Client" optional feature (or Git for Windows / WSL2).
-- RAM: the full `techvault` stack needs more than 20 GB
+- RAM: 8 GB runs the smaller curated scenarios; the full acquired TechVault stack needs more than 20 GB
 - 20 GB+ disk
 - Linux, macOS, or Windows with Docker Desktop/WSL2
 - Open ports: 443, 8443, 9000, 9001, 9200, 55000 (and the rest of the published ports in `docker-compose.yml`)
@@ -128,28 +142,25 @@ flowchart TD
     Scenario -.->|logs / telemetry| SOC
 ```
 
-The scenario environment is whatever the acquired SDL pack defines. APTL
-validates its pack identity before realizing the declared topology.
-Component-by-component breakdown: [docs/architecture/index.md](docs/architecture/index.md).
+The scenario environment is whatever the SDL scenario defines. The default `techvault-operational` topology (AD, web, DB, file share, DNS, mail, victims) is one shape, and [other scenarios](#scenarios) compose different ones. Component-by-component breakdown: [docs/architecture/index.md](docs/architecture/index.md).
 
 ## Scenarios
 
-`aptl lab scenarios` projects the catalog from the configured acquired pack;
-`aptl lab start --scenario techvault` selects it. Pack identifiers are selectors,
-not APTL-relative paths. `--scenario-path <file>` remains available only as an
-explicit project-contained development override. The Compose profiles that come
-up are **realized from the nodes the SDL declares**—the topology follows the
-scenario's content, including dependency closure, rather than a preset keyed off
-its name.
+Scenarios are [Reproducible Agentic Environments SDL](docs/sdl/index.md) documents under `scenarios/`. `aptl lab scenarios` lists the catalog; `aptl lab start --scenario <id>` (or `--scenario-path <file>`) selects one. The Compose profiles that come up are **realized from the nodes the SDL declares**—the topology follows the scenario's content, including dependency closure, rather than a preset keyed off its name.
 
 The SDL language and the reusable environment-pack format live in the RAES companion repositories—[OpenRAE/rae](https://github.com/OpenRAE/rae) (SDL and semantics) and [OpenRAE/env-packs](https://github.com/OpenRAE/env-packs) (pack definitions, templates, schemas, and authoring support). APTL consumes those definitions and realizes them as a running Docker lab; the lab lifecycle and runtime stay APTL-owned.
 
-The current catalog contains the `techvault` pack at its verified released
-version and associated-artifact set digest. The former APTL-local operational,
-reduced, paper, and bounded-participant SDLs are retired; they are not aliases
-for the full pack and are not synthesized by APTL.
+The default comes from the installed TechVault environment pack. The APTL
+catalog also ships three curated slices:
 
-Authoring and selection details: [SDL Reference](docs/sdl/index.md).
+| Scenario id | Boots | Omits |
+|---|---|---|
+| installed `techvault` pack | TechVault enterprise, Kali, and SOC (default) | Optional backend OTel stack when native evidence is sufficient |
+| `techvault-attacker-target` | Kali + one monitored victim + Wazuh core | Enterprise web tier, wider SOC stack, backend apparatus |
+| `techvault-enterprise-web` | Vulnerable webapp + DB + AD + Wazuh core | Red-team apparatus, wider SOC stack, backend apparatus |
+| `techvault-defensive-min` | Wazuh manager / indexer / dashboard | Attacker and enterprise components, wider SOC stack, backend apparatus |
+
+Authoring and selection details: [SDL Reference](docs/sdl/index.md) · [Curated TechVault Variants](docs/sdl/techvault-curated-variants.md).
 
 ## AI Agents (MCP)
 
@@ -193,11 +204,11 @@ Access at <http://localhost:5173> (dev) or <http://localhost:3000> (prod). The A
 
 **Components:** [Wazuh SIEM](docs/components/wazuh-siem.md) · [Kali Red Team](docs/components/kali-redteam.md) · [Victim Containers](docs/components/victim-containers.md) · [Reverse Engineering](docs/components/reverse-engineering-container.md) · [MCP Integration](docs/components/mcp-integration.md) · [Default Defensive Posture](docs/components/default-defensive-posture.md)
 
-**Scenarios & SDL:** [SDL Reference](docs/sdl/index.md) · [Pack authoring (OpenRAE/env-packs)](https://github.com/OpenRAE/env-packs) · [SOC Architecture Spec](docs/specs/soc-feature-spec.md)
+**Scenarios & SDL:** [SDL Reference](docs/sdl/index.md) · [Curated TechVault Variants](docs/sdl/techvault-curated-variants.md) · [Pack authoring (OpenRAE/env-packs)](https://github.com/OpenRAE/env-packs) · [SOC Architecture Spec](docs/specs/soc-feature-spec.md)
 
 **Reference:** [TechVault Scenario Overview](docs/reference/techvault-scenario-overview.md) · [TechVault Company Profile](docs/reference/techvault-company-profile.md) · [TechVault OSINT Readiness](docs/reference/techvault-osint-readiness.md) · [Container Template Guide](docs/containers/victim-template-guide.md)
 
-**Ops:** [Troubleshooting](docs/troubleshooting/) · [Smoke Test Plan](docs/testing/smoke-test-plan.md)
+**Ops:** [Troubleshooting](docs/troubleshooting/) · [Release Candidate Manual QA](docs/testing/smoke-test-plan.md)
 
 ## Ethics & Disclaimers
 

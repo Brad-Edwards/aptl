@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import re
 from pathlib import Path
 
 import pytest
@@ -54,5 +55,18 @@ def test_startup_catalog_contains_only_acquired_pack_selectors():
     assert not hasattr(catalog.scenarios[0], "path")
 
 
-def test_repository_contains_no_scenario_content_tree():
-    assert not (PROJECT_ROOT / "scenarios").exists()
+def test_clean_install_workflow_starts_the_product_neutral_envelope():
+    """CI exercises materialization independently of TechVault's adapter."""
+    workflow = (PROJECT_ROOT / ".github" / "workflows" / "checks.yml").read_text()
+    job_match = re.search(
+        r"(?ms)^  clean-install-lab-boot:.*?(?=^  [a-z][a-z0-9-]*:|\Z)",
+        workflow,
+    )
+    assert job_match is not None
+    job = job_match.group()
+    fixture = "materialization-envelope.sdl.yaml"
+    assert (PROJECT_ROOT / "tests" / "fixtures" / fixture).is_file()
+    assert f"tests/fixtures/{fixture}" in job
+    assert f"--scenario-path scenarios/{fixture}" in job
+    assert 'aptl" lab status' in job
+    assert 'aptl" lab stop --volumes --yes' in job

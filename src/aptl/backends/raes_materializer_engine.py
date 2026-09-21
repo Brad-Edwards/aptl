@@ -27,13 +27,19 @@ from aptl.backends.raes_materializer import (
     EnsureUserOp,
     InstallDependencyManifestOp,
     InstallPackagesOp,
+    InstallSoftwareComponentOp,
     MaterializationOp,
     PlaceFileOp,
     PlacePackArtifactOp,
     PlaceProjectContentOp,
+    ProvisionDomainAuthorityOp,
+    SetFilesystemMetadataOp,
     StartServiceUnitOp,
 )
 from aptl.core.lab_types import LabResult
+from aptl.utils.logging import get_logger
+
+log = get_logger("raes-materializer")
 
 
 class MaterializationExecutor(Protocol):
@@ -45,15 +51,34 @@ class MaterializationExecutor(Protocol):
     """
 
     def ensure_base_substrate(self, node_address: str, image_ref: str) -> None: ...
-    def install_packages(self, node_address: str, manager: str, packages: tuple[str, ...]) -> None: ...
-    def ensure_group(self, node_address: str, name: str, gid: int | str | None) -> None: ...
+    def install_packages(
+        self, node_address: str, manager: str, packages: tuple[str, ...]
+    ) -> None: ...
+    def ensure_group(
+        self, node_address: str, name: str, gid: int | str | None
+    ) -> None: ...
     def ensure_user(self, node_address: str, op: EnsureUserOp) -> None: ...
     def ensure_directory(self, node_address: str, op: EnsureDirectoryOp) -> None: ...
-    def place_file(self, node_address: str, path: str, content: str, mode: str) -> None: ...
-    def place_project_content(self, node_address: str, op: PlaceProjectContentOp) -> None: ...
-    def place_pack_artifact(self, node_address: str, op: PlacePackArtifactOp) -> None: ...
+    def set_filesystem_metadata(
+        self, node_address: str, op: SetFilesystemMetadataOp
+    ) -> None: ...
+    def place_file(
+        self, node_address: str, path: str, content: str, mode: str
+    ) -> None: ...
+    def place_project_content(
+        self, node_address: str, op: PlaceProjectContentOp
+    ) -> None: ...
+    def place_pack_artifact(
+        self, node_address: str, op: PlacePackArtifactOp
+    ) -> None: ...
     def install_dependency_manifest(
         self, node_address: str, op: InstallDependencyManifestOp
+    ) -> None: ...
+    def install_software_component(
+        self, node_address: str, op: InstallSoftwareComponentOp
+    ) -> None: ...
+    def provision_domain_authority(
+        self, node_address: str, op: ProvisionDomainAuthorityOp
     ) -> None: ...
     def enable_service_unit(self, node_address: str, unit_name: str) -> None: ...
     def start_service_unit(self, node_address: str, unit_name: str) -> None: ...
@@ -64,11 +89,24 @@ class MaterializationExecutor(Protocol):
     def observe_local_user(self, node_address: str, username: str) -> bool: ...
     def observe_directory(self, node_address: str, path: str) -> bool: ...
     def observe_file(self, node_address: str, path: str) -> bool: ...
+    def observe_filesystem_metadata(
+        self, node_address: str, op: SetFilesystemMetadataOp
+    ) -> bool: ...
     def observe_dependency_manifest_installed(
         self, node_address: str, op: InstallDependencyManifestOp
     ) -> bool: ...
-    def observe_service_unit_enabled(self, node_address: str, unit_name: str) -> bool: ...
-    def observe_service_unit_active(self, node_address: str, unit_name: str) -> bool: ...
+    def observe_software_component(
+        self, node_address: str, op: InstallSoftwareComponentOp
+    ) -> bool: ...
+    def observe_domain_authority(
+        self, node_address: str, op: ProvisionDomainAuthorityOp
+    ) -> bool: ...
+    def observe_service_unit_enabled(
+        self, node_address: str, unit_name: str
+    ) -> bool: ...
+    def observe_service_unit_active(
+        self, node_address: str, unit_name: str
+    ) -> bool: ...
 
 
 _Execute = Callable[[MaterializationOp, str, MaterializationExecutor], None]
@@ -78,15 +116,28 @@ _Execute = Callable[[MaterializationOp, str, MaterializationExecutor], None]
 # grows as new generic operations are added.
 _EXECUTORS: dict[type, _Execute] = {
     BaseSubstrateOp: lambda op, addr, ex: ex.ensure_base_substrate(addr, op.image_ref),
-    InstallPackagesOp: lambda op, addr, ex: ex.install_packages(addr, op.manager, op.packages),
+    InstallPackagesOp: lambda op, addr, ex: ex.install_packages(
+        addr, op.manager, op.packages
+    ),
     EnsureGroupOp: lambda op, addr, ex: ex.ensure_group(addr, op.name, op.gid),
     EnsureUserOp: lambda op, addr, ex: ex.ensure_user(addr, op),
     EnsureDirectoryOp: lambda op, addr, ex: ex.ensure_directory(addr, op),
+    SetFilesystemMetadataOp: lambda op, addr, ex: ex.set_filesystem_metadata(addr, op),
     PlaceFileOp: lambda op, addr, ex: ex.place_file(addr, op.path, op.content, op.mode),
     PlaceProjectContentOp: lambda op, addr, ex: ex.place_project_content(addr, op),
     PlacePackArtifactOp: lambda op, addr, ex: ex.place_pack_artifact(addr, op),
-    InstallDependencyManifestOp: lambda op, addr, ex: ex.install_dependency_manifest(addr, op),
-    EnableServiceUnitOp: lambda op, addr, ex: ex.enable_service_unit(addr, op.unit_name),
+    InstallDependencyManifestOp: lambda op, addr, ex: ex.install_dependency_manifest(
+        addr, op
+    ),
+    InstallSoftwareComponentOp: lambda op, addr, ex: ex.install_software_component(
+        addr, op
+    ),
+    ProvisionDomainAuthorityOp: lambda op, addr, ex: ex.provision_domain_authority(
+        addr, op
+    ),
+    EnableServiceUnitOp: lambda op, addr, ex: ex.enable_service_unit(
+        addr, op.unit_name
+    ),
     StartServiceUnitOp: lambda op, addr, ex: ex.start_service_unit(addr, op.unit_name),
 }
 
@@ -104,36 +155,76 @@ def _execute_op(
 _Verify = Callable[[MaterializationOp, str, MaterializationExecutor], "str | None"]
 
 
-def _verify_install_packages(op: InstallPackagesOp, addr: str, ex: MaterializationExecutor) -> str | None:
+def _verify_install_packages(
+    op: InstallPackagesOp, addr: str, ex: MaterializationExecutor
+) -> str | None:
     """Verify every declared package is observed installed."""
 
     observed = ex.observe_installed_packages(addr, op.manager, op.packages)
     missing = tuple(name for name in op.packages if name not in observed)
-    return f"packages not installed via {op.manager}: {', '.join(missing)}" if missing else None
+    return (
+        f"packages not installed via {op.manager}: {', '.join(missing)}"
+        if missing
+        else None
+    )
 
 
-def _verify_ensure_group(op: EnsureGroupOp, addr: str, ex: MaterializationExecutor) -> str | None:
+def _verify_ensure_group(
+    op: EnsureGroupOp, addr: str, ex: MaterializationExecutor
+) -> str | None:
     """Verify the declared local group is observed present."""
 
-    return None if ex.observe_local_group(addr, op.name) else f"local group not present: {op.name}"
+    return (
+        None
+        if ex.observe_local_group(addr, op.name)
+        else f"local group not present: {op.name}"
+    )
 
 
-def _verify_ensure_user(op: EnsureUserOp, addr: str, ex: MaterializationExecutor) -> str | None:
+def _verify_ensure_user(
+    op: EnsureUserOp, addr: str, ex: MaterializationExecutor
+) -> str | None:
     """Verify the declared local user is observed present."""
 
-    return None if ex.observe_local_user(addr, op.username) else f"local user not present: {op.username}"
+    return (
+        None
+        if ex.observe_local_user(addr, op.username)
+        else f"local user not present: {op.username}"
+    )
 
 
-def _verify_ensure_directory(op: EnsureDirectoryOp, addr: str, ex: MaterializationExecutor) -> str | None:
+def _verify_ensure_directory(
+    op: EnsureDirectoryOp, addr: str, ex: MaterializationExecutor
+) -> str | None:
     """Verify the declared directory is observed present."""
 
-    return None if ex.observe_directory(addr, op.path) else f"directory not present: {op.path}"
+    return (
+        None
+        if ex.observe_directory(addr, op.path)
+        else f"directory not present: {op.path}"
+    )
 
 
-def _verify_place_file(op: PlaceFileOp, addr: str, ex: MaterializationExecutor) -> str | None:
+def _verify_filesystem_metadata(
+    op: SetFilesystemMetadataOp, addr: str, ex: MaterializationExecutor
+) -> str | None:
+    """Verify exact authored ownership and mode metadata."""
+
+    if ex.observe_filesystem_metadata(addr, op):
+        return None
+    return f"filesystem metadata does not match: {op.path}"
+
+
+def _verify_place_file(
+    op: PlaceFileOp, addr: str, ex: MaterializationExecutor
+) -> str | None:
     """Verify the placed config file is observed present."""
 
-    return None if ex.observe_file(addr, op.path) else f"config file not present: {op.path}"
+    return (
+        None
+        if ex.observe_file(addr, op.path)
+        else f"config file not present: {op.path}"
+    )
 
 
 def _verify_place_project_content(
@@ -141,7 +232,11 @@ def _verify_place_project_content(
 ) -> str | None:
     """Verify the copied project-sourced content is observed present."""
 
-    return None if ex.observe_file(addr, op.dest_path) else f"content not present: {op.dest_path}"
+    return (
+        None
+        if ex.observe_file(addr, op.dest_path)
+        else f"content not present: {op.dest_path}"
+    )
 
 
 def _verify_place_pack_artifact(
@@ -166,7 +261,33 @@ def _verify_install_dependency_manifest(
     return f"dependency manifest not installed: {op.path}"
 
 
-def _verify_enable_service_unit(op: EnableServiceUnitOp, addr: str, ex: MaterializationExecutor) -> str | None:
+def _verify_install_software_component(
+    op: InstallSoftwareComponentOp,
+    addr: str,
+    ex: MaterializationExecutor,
+) -> str | None:
+    """Verify the installed package identity and its declared executable output."""
+
+    if ex.observe_software_component(addr, op):
+        return None
+    return f"software component not installed: {op.package_name}"
+
+
+def _verify_provision_domain_authority(
+    op: ProvisionDomainAuthorityOp,
+    addr: str,
+    ex: MaterializationExecutor,
+) -> str | None:
+    """Verify the exact domain/realm served by the selected provider."""
+
+    if ex.observe_domain_authority(addr, op):
+        return None
+    return f"domain authority not ready: {op.realm}"
+
+
+def _verify_enable_service_unit(
+    op: EnableServiceUnitOp, addr: str, ex: MaterializationExecutor
+) -> str | None:
     """Verify the declared service unit is observed enabled."""
 
     if ex.observe_service_unit_enabled(addr, op.unit_name):
@@ -174,7 +295,9 @@ def _verify_enable_service_unit(op: EnableServiceUnitOp, addr: str, ex: Material
     return f"service unit not enabled: {op.unit_name}"
 
 
-def _verify_start_service_unit(op: StartServiceUnitOp, addr: str, ex: MaterializationExecutor) -> str | None:
+def _verify_start_service_unit(
+    op: StartServiceUnitOp, addr: str, ex: MaterializationExecutor
+) -> str | None:
     """Verify the declared service unit is observed active."""
 
     if ex.observe_service_unit_active(addr, op.unit_name):
@@ -189,10 +312,13 @@ _VERIFIERS: dict[type, _Verify] = {
     EnsureGroupOp: _verify_ensure_group,
     EnsureUserOp: _verify_ensure_user,
     EnsureDirectoryOp: _verify_ensure_directory,
+    SetFilesystemMetadataOp: _verify_filesystem_metadata,
     PlaceFileOp: _verify_place_file,
     PlaceProjectContentOp: _verify_place_project_content,
     PlacePackArtifactOp: _verify_place_pack_artifact,
     InstallDependencyManifestOp: _verify_install_dependency_manifest,
+    InstallSoftwareComponentOp: _verify_install_software_component,
+    ProvisionDomainAuthorityOp: _verify_provision_domain_authority,
     EnableServiceUnitOp: _verify_enable_service_unit,
     StartServiceUnitOp: _verify_start_service_unit,
 }
@@ -205,6 +331,50 @@ def _verify_op(
 
     verifier = _VERIFIERS.get(type(op))
     return verifier(op, node_address, executor) if verifier is not None else None
+
+
+def _safe_failed_step(op: MaterializationOp, node_address: str, exc: Exception) -> str:
+    """Classify only known pack-copy errors without exposing raw details."""
+
+    step = ""
+    if isinstance(op, PlacePackArtifactOp):
+        if exc.args == (f"pack content copy failed on {node_address}",):
+            step = "copy"
+        elif exc.args == (
+            f"generic materialization step 'prep content dir' failed on {node_address}",
+        ):
+            step = "prepare-directory"
+    return step
+
+
+def _operation_failure(
+    op: MaterializationOp, node_address: str, exc: Exception
+) -> LabResult:
+    """Convert an executor failure to the redacted RAES result envelope."""
+
+    nested = exc.__cause__ or exc.__context__
+    safe_step = _safe_failed_step(op, node_address, exc)
+    log.error(
+        "Materialization %s at %s failed: %s%s%s",
+        type(op).__name__,
+        node_address,
+        type(exc).__name__,
+        f"; step={safe_step}" if safe_step else "",
+        f"; cause={type(nested).__name__}" if nested is not None else "",
+    )
+    return LabResult(
+        success=False,
+        error=render_raes_diagnostics(
+            [
+                diagnostic(
+                    "aptl.materializer.operation-failed",
+                    node_address,
+                    f"materialization step {type(op).__name__} failed on "
+                    f"node {node_address}.",
+                )
+            ]
+        ),
+    )
 
 
 def materialize_node(
@@ -222,23 +392,11 @@ def materialize_node(
     for op in operations:
         try:
             _execute_op(op, node_address, executor)
-        except Exception:
+        except Exception as exc:
             # Admission boundary: translate every internal/backend failure into
             # the RAES LabResult envelope; the raw detail is deliberately not
             # echoed (redaction + no verbatim message).
-            return LabResult(
-                success=False,
-                error=render_raes_diagnostics(
-                    [
-                        diagnostic(
-                            "aptl.materializer.operation-failed",
-                            node_address,
-                            f"materialization step {type(op).__name__} failed on "
-                            f"node {node_address}.",
-                        )
-                    ]
-                ),
-            )
+            return _operation_failure(op, node_address, exc)
 
     diagnostics = []
     for op in operations:

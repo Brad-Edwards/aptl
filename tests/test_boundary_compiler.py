@@ -7,6 +7,7 @@ from aptl.core.deployment.boundary import BoundaryNetwork, BoundaryWorkload
 from aptl.core.deployment.boundary_compiler import (
     BoundaryCompileError,
     compile_raes_boundary,
+    compile_platform_bootstrap,
     compile_platform_boundary,
 )
 from aptl.core.deployment.realization import (
@@ -220,6 +221,30 @@ def test_platform_binding_uses_only_exact_labels() -> None:
         "purpose": "model-proxy",
     }
     assert spec.egress_ports == ()
+
+
+def test_platform_bootstrap_binds_networks_without_workload_grants() -> None:
+    networks = tuple(
+        BoundaryNetwork(
+            name=zone,
+            bridge=f"br-{zone[:7]}",
+            labels=(("org.aptl.network", zone),),
+        )
+        for zone in ("participant", "management", "egress")
+    )
+
+    spec = compile_platform_bootstrap(
+        _policy(),
+        policy_digest="sha256:" + "a" * 64,
+        networks=networks,
+        owner="seat-17",
+    )
+
+    assert spec.bootstrap is True
+    assert spec.anchors == ()
+    assert spec.crossings == ()
+    assert spec.egress_ports == ()
+    assert set(dict(spec.zone_networks)) == {"participant", "management", "egress"}
 
 
 def test_platform_binding_rejects_ambiguous_anchor() -> None:

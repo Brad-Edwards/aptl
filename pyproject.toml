@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aptl-labs"
-version = "5.2.0"
+version = "5.5.0"
 description = "Advanced Purple Team Lab CLI"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,10 +31,11 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-http>=1.33.0",
     "opentelemetry-semantic-conventions>=0.54b0",
     "cryptography>=50.0.0",
-    "raes==3.3.0",
-    "raes-env-packs==4.0.2",
-    "mcp>=1.27.0,<2.0.0",
+    "raes==5.0.0",
+    "raes-env-packs==6.1.0",
+    "mcp>=2,<3",
     "rfc8785>=0.1.4,<0.2.0",
+    "packaging>=24.2",
     # Imported directly by aptl.core.experiment.resolver; previously satisfied
     # only transitively through the upstream SDL distribution.
     "blake3>=1.0.8,<2",
@@ -60,6 +61,7 @@ parquet = [
     "pyarrow>=17.0.0",
 ]
 web = [
+    "httpx>=0.28.1",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
     "sse-starlette>=2.0.0",
@@ -105,6 +107,9 @@ ci = [
 # `--no-build-isolation` / `--no-isolation` against a hash-verified backend.
 build = [
     "hatchling>=1.27.0",
+    # Ubuntu cloud images provide Python without pip or ensurepip. The signed
+    # offline payload uses this locked wheel as its bootstrap installer.
+    "pip>=26.2.1",
     # hatchling imports `editables` to build an editable wheel. Under build
     # isolation it would fetch this itself; with isolation off it has to be
     # present (and hashed) up front, or every `pip install -e .` fails at
@@ -112,8 +117,34 @@ build = [
     "editables>=0.5",
 ]
 
+# Per-scenario runtime, startup and verification adapters. The generic
+# materializer under `src/aptl` does not branch on scenario identities. Native
+# evidence declarations and behavior live in the selected adapter package;
+# core owns only the generic request-scoped contracts and execution machinery.
+[project.entry-points."aptl.pack_backend_interactions"]
+"techvault.aptl" = "aptl_techvault.serving:provider"
+
+[project.entry-points."aptl.scenario_capture"]
+"techvault.aptl" = "aptl_techvault.capture:provider"
+
+[project.entry-points."aptl.scenario_planning_compatibility"]
+"techvault.aptl" = "aptl_techvault.planning_compatibility:provider"
+
+[project.entry-points."aptl.scenario_runtime_parameters"]
+"techvault" = "aptl_techvault.runtime_parameters:provider"
+
+[project.entry-points."aptl.scenario_startup"]
+"techvault" = "aptl_techvault.startup:provider"
+
+[project.entry-points."aptl.scenario_verifiers"]
+"techvault.aptl" = "aptl_techvault.verification:verifier"
+
+[project.entry-points."aptl.participant_mcp_smoke_plans"]
+"techvault-full.techvault" = "aptl_techvault.participant_smoke:FULL_TECHVAULT_SMOKE_OPERATIONS"
+"guided-purple.techvault-attacker-target" = "aptl_techvault.participant_smoke:PARTICIPANT_SMOKE_OPERATIONS"
+
 [tool.hatch.build.targets.wheel]
-packages = ["src/aptl"]
+packages = ["src/aptl", "src/aptl_techvault"]
 
 # Bundle the git-tracked lab-asset tree (docker-compose.yml, config/,
 # containers/, web/, scripts/, and the source that container images
@@ -158,7 +189,11 @@ markers = [
 addopts = "-m 'not fuzz'"
 
 [tool.coverage.run]
-source = ["aptl"]
+# Both top-level packages the wheel ships. `aptl_techvault` is a scenario
+# adapter reached only through entry points, but it is production code in this
+# distribution: leaving it out of the source set reported its every line as
+# uncovered while its tests were in fact exercising it.
+source = ["aptl", "aptl_techvault"]
 
 [tool.coverage.report]
 show_missing = true

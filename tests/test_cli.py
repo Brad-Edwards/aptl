@@ -144,17 +144,23 @@ class TestLabStartCommand:
             "aptl.cli.lab.orchestrate_lab_start",
             return_value=LabResult(success=True, message="Lab started"),
         )
+        # The summary reconciles against live Docker state, so pin it empty:
+        # otherwise this asserts against whatever range happens to be up on the
+        # machine running the suite.
+        mocker.patch("aptl.cli.lab_render.live_resolved_ports", return_value=[])
 
         result = runner.invoke(app, ["lab", "start"])
 
         assert result.exit_code == 0
         mock_orchestrate.assert_called_once()
         assert "Credentials file: .env" in result.stdout
-        assert "Wazuh Dashboard: https://localhost:443" in result.stdout
-        assert "see INDEXER_PASSWORD in .env" in result.stdout
+        assert "Wazuh Dashboard" not in result.stdout
+        assert "Grafana" not in result.stdout
 
-    def test_lab_info_prints_access_summary(self, runner, tmp_path):
-        """lab info should reprint access URLs and credential locations."""
+    def test_lab_info_without_a_running_service_omits_access_urls(
+        self, runner, tmp_path
+    ):
+        """lab info must not invent product-specific endpoints."""
         from aptl.cli.main import app
 
         (tmp_path / ".env").touch()
@@ -163,7 +169,8 @@ class TestLabStartCommand:
 
         assert result.exit_code == 0
         assert f"Credentials file: {tmp_path / '.env'}" in result.stdout
-        assert "Grafana: http://localhost:3100" in result.stdout
+        assert "Wazuh Dashboard" not in result.stdout
+        assert "Grafana" not in result.stdout
 
     def test_lab_info_omits_reverse_access_when_service_is_not_running(
         self, runner, tmp_path, mocker
@@ -220,6 +227,137 @@ class TestLabStartCommand:
 
         assert result.exit_code == 1
         assert "run `aptl lab start` first" in result.stderr
+
+    def test_lab_info_omits_grafana_when_the_scenario_publishes_no_host_port(
+        self, runner, tmp_path, mocker
+    ):
+        """Do not advertise a URL the scenario never published.
+
+        TechVault declares no `published_ports` for `aptl-grafana-otel`, so the
+        container exposes 3000/tcp to the range and nothing to the host. The
+        summary printed the compile-time default anyway, sending an operator to
+        `http://localhost:3100`, which answers nothing -- and it is the second
+        line of the quick start.
+
+        A populated resolved-port list that omits the service means it genuinely
+        publishes nothing. An *empty* list means the query failed, which is the
+        separate case covered below.
+        """
+        from aptl.cli.main import app
+        from aptl.core.host_ports import ResolvedPort
+
+        (tmp_path / ".env").touch()
+        mocker.patch(
+            "aptl.cli.lab.live_resolved_ports",
+            return_value=[
+                ResolvedPort(
+                    service="wazuh.dashboard",
+                    env_var=None,
+                    default_port=443,
+                    resolved_port=443,
+                    protos=("tcp",),
+                    host_ip="127.0.0.1",
+                    remapped=False,
+                ),
+            ],
+        )
+
+        result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "Wazuh Dashboard: https://localhost:443" in result.stdout
+        assert "Grafana" not in result.stdout
+        assert "GRAFANA_ADMIN_PASSWORD" not in result.stdout
+
+    def test_lab_start_omits_an_endpoint_docker_never_published(
+        self, runner, tmp_path, mocker
+    ):
+        """`lab start` must advertise what the range published, not what it planned.
+
+        The list `lab start` hands the summary comes from resolving the
+        checked-in Compose stack's convenience ports, so it carries Grafana's
+        3100 default even though TechVault's SDL declares no `published_ports`
+        for it and the container binds nothing to the host. Live Docker state is
+        the ground truth once the range is up, so the summary reconciles against
+        it and stays silent about a URL that answers nothing.
+        """
+        from aptl.cli.main import app
+        from aptl.core.host_ports import ResolvedPort
+        from aptl.core.lab import LabResult
+
+        planned = [
+            ResolvedPort(
+                service="aptl-grafana-otel",
+                env_var=None,
+                default_port=3100,
+                resolved_port=3100,
+                protos=("tcp",),
+                host_ip="127.0.0.1",
+                remapped=False,
+            ),
+        ]
+        published = [
+            ResolvedPort(
+                service="wazuh.dashboard",
+                env_var=None,
+                default_port=443,
+                resolved_port=443,
+                protos=("tcp",),
+                host_ip="127.0.0.1",
+                remapped=False,
+            ),
+        ]
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(
+                success=True, message="Lab started", resolved_ports=planned
+            ),
+        )
+        mocker.patch(
+            "aptl.cli.lab_render.live_resolved_ports", return_value=published
+        )
+
+        result = runner.invoke(app, ["lab", "start"])
+
+        assert result.exit_code == 0
+        assert "Wazuh Dashboard: https://localhost:443" in result.stdout
+        assert "Grafana" not in result.stdout
+
+    def test_lab_info_matches_live_service_names_against_spec_names(
+        self, runner, tmp_path, mocker
+    ):
+        """Docker reports `wazuh-dashboard`; the spec calls it `wazuh.dashboard`.
+
+        The two naming forms never matched, so the live lookup silently missed
+        every Wazuh service and the summary fell back to the compile-time
+        default -- which is exactly the remapped-port bug #737 set out to fix,
+        still live for the dashboard. Here the live port is 8443, so a printed
+        443 would prove the fallback rather than a match.
+        """
+        from aptl.cli.main import app
+        from aptl.core.host_ports import ResolvedPort
+
+        (tmp_path / ".env").touch()
+        mocker.patch(
+            "aptl.cli.lab.live_resolved_ports",
+            return_value=[
+                ResolvedPort(
+                    service="wazuh-dashboard",
+                    env_var=None,
+                    default_port=5601,
+                    resolved_port=8443,
+                    protos=("tcp",),
+                    host_ip="127.0.0.1",
+                    remapped=True,
+                ),
+            ],
+        )
+
+        result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "Wazuh Dashboard: https://localhost:8443" in result.stdout
+        assert "https://localhost:443" not in result.stdout
 
     def test_lab_info_reflects_remapped_ports_from_live_docker_state(
         self, runner, tmp_path, mocker
@@ -638,7 +776,7 @@ class TestLabStartCommand:
 
         mocker.patch(
             "aptl.cli.lab.load_scenario_catalog",
-            return_value=SimpleNamespace(
+            return_value=mocker.MagicMock(
                 scenarios=[
                     SimpleNamespace(
                         id="techvault",
@@ -786,6 +924,30 @@ class TestLabStartCommand:
         assert result.exit_code == 1
         assert "vm.max_map_count" in result.stdout
         assert "failed" in result.stdout.lower()
+
+    def test_start_terminal_attestation_failure_exits_nonzero(self, runner, mocker):
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import StartupOutcome
+
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(
+                success=False,
+                error=(
+                    "Lab start left project containers non-running: "
+                    "'aptl-broken' state='created' status='Created' exit_code=128"
+                ),
+                outcome=StartupOutcome.FAILED,
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "start"])
+
+        assert result.exit_code == 1
+        assert "aptl-broken" in result.stdout
+        assert "created" in result.stdout
+        assert "128" in result.stdout
 
 
 class TestLabStopCommand:
@@ -936,6 +1098,55 @@ class TestLabStatusCommand:
 
         assert "not running" in result.stdout.lower()
         assert "docker daemon not running" in result.output
+
+    def test_status_renders_stopped_inventory_when_nothing_is_running(
+        self, runner, mocker
+    ):
+        from aptl.cli.main import app
+        from aptl.core.lab import LabStatus
+
+        mocker.patch(
+            "aptl.cli.lab.lab_status",
+            return_value=LabStatus(
+                running=False,
+                containers=[
+                    {
+                        "name": "aptl-failed",
+                        "state": "exited",
+                        "status": "Exited (128)",
+                    }
+                ],
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "status"])
+
+        assert result.exit_code == 0
+        assert "not running" in result.stdout.lower()
+        assert "aptl-failed" in result.stdout
+        assert "exited" in result.stdout
+
+    def test_status_json_reports_inventory_observation_failure(
+        self, runner, mocker, tmp_path
+    ):
+        from aptl.cli.main import app
+        from aptl.core.config import AptlConfig
+        from aptl.core.deployment.errors import BackendObservationError
+
+        mocker.patch(
+            "aptl.cli._common.resolve_config_for_cli",
+            return_value=(AptlConfig(), tmp_path),
+        )
+        mocker.patch("aptl.core.deployment.get_backend", return_value=MagicMock())
+        mocker.patch(
+            "aptl.core.snapshot.capture_snapshot",
+            side_effect=BackendObservationError("project inventory unavailable"),
+        )
+
+        result = runner.invoke(app, ["lab", "status", "--json"])
+
+        assert result.exit_code == 1
+        assert "project inventory unavailable" in result.output
 
 
 def _continuity_result(events):

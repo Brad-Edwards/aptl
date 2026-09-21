@@ -8,7 +8,7 @@ appearance of verification - while pinning the wrong artifacts.
 
 So the invariant this file defends is not "the files exist". It is that every
 export is fully hash-pinned, that each one is owned by an ``uv-export``
-pre-commit hook rather than by a human, and that every file CI claims to install
+CI export hook rather than by a human, and that every file CI claims to install
 is actually produced by one of those hooks. Freshness itself is enforced by
 running those hooks in the required "Pre-commit hooks" job; this test makes sure
 the hook set cannot develop a hole.
@@ -24,20 +24,24 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REQUIREMENTS_DIR = REPO_ROOT / "requirements"
-PRE_COMMIT_CONFIG = REPO_ROOT / ".pre-commit-config.yaml"
+PRE_COMMIT_CONFIG = REPO_ROOT / ".pre-commit-ci.yaml"
 UV_HOOK_REPO = "https://github.com/astral-sh/uv-pre-commit"
 
 
 def _requirements_files() -> list[Path]:
     found = sorted(REQUIREMENTS_DIR.glob("*.txt"))
-    assert found, "requirements/ holds no exports - CI has nothing hash-pinned to install"
+    assert found, (
+        "requirements/ holds no exports - CI has nothing hash-pinned to install"
+    )
     return found
 
 
 def _uv_hook_repo() -> dict:
     config = yaml.safe_load(PRE_COMMIT_CONFIG.read_text(encoding="utf-8"))
     repo = next((r for r in config["repos"] if r.get("repo") == UV_HOOK_REPO), None)
-    assert repo is not None, f"{UV_HOOK_REPO} is not configured; the exports would be hand-maintained"
+    assert repo is not None, (
+        f"{UV_HOOK_REPO} is not configured; the exports would be hand-maintained"
+    )
     return repo
 
 
@@ -49,14 +53,14 @@ def _exported_paths() -> set[str]:
             continue
         args = hook["args"]
         # `uv export ... -o <path>`
-        assert "-o" in args, f"uv-export hook {hook.get('alias')} does not name an output file"
+        assert "-o" in args, (
+            f"uv-export hook {hook.get('alias')} does not name an output file"
+        )
         paths.add(args[args.index("-o") + 1])
     return paths
 
 
-@pytest.mark.parametrize(
-    "requirements", _requirements_files(), ids=lambda p: p.name
-)
+@pytest.mark.parametrize("requirements", _requirements_files(), ids=lambda p: p.name)
 def test_every_requirement_is_pinned_and_hashed(requirements: Path) -> None:
     text = requirements.read_text(encoding="utf-8")
     # Join backslash continuations so each requirement is one logical record.
@@ -71,11 +75,17 @@ def test_every_requirement_is_pinned_and_hashed(requirements: Path) -> None:
         if record.startswith("-"):
             continue
         name = record.split()[0]
-        assert "==" in name, f"{requirements.name}: '{name}' is not pinned to an exact version"
-        assert "--hash=sha256:" in record, f"{requirements.name}: '{name}' carries no hash"
+        assert "==" in name, (
+            f"{requirements.name}: '{name}' is not pinned to an exact version"
+        )
+        assert "--hash=sha256:" in record, (
+            f"{requirements.name}: '{name}' carries no hash"
+        )
         checked += 1
 
-    assert checked, f"{requirements.name} pins nothing - an empty export would silently install nothing"
+    assert checked, (
+        f"{requirements.name} pins nothing - an empty export would silently install nothing"
+    )
 
 
 def test_every_third_party_hook_repo_is_sha_pinned() -> None:
@@ -87,7 +97,13 @@ def test_every_third_party_hook_repo_is_sha_pinned() -> None:
     requirements: hashing the exported packages buys nothing if a compromised
     generator can pick malicious artifacts and emit hashes to match them.
     """
-    config = yaml.safe_load(PRE_COMMIT_CONFIG.read_text(encoding="utf-8"))
+    config = {
+        "repos": [
+            repo
+            for path in (PRE_COMMIT_CONFIG, REPO_ROOT / ".pre-commit-config.yaml")
+            for repo in yaml.safe_load(path.read_text())["repos"]
+        ]
+    }
     unpinned = []
     for repo in config["repos"]:
         if repo.get("repo") == "local":
@@ -128,7 +144,9 @@ def test_every_export_on_disk_is_owned_by_a_hook() -> None:
     """A hand-added requirements file would never be regenerated."""
     on_disk = {str(p.relative_to(REPO_ROOT)) for p in _requirements_files()}
     orphans = on_disk - _exported_paths()
-    assert not orphans, f"requirements files with no uv-export hook to regenerate them: {sorted(orphans)}"
+    assert not orphans, (
+        f"requirements files with no uv-export hook to regenerate them: {sorted(orphans)}"
+    )
 
 
 def test_every_requirements_file_ci_installs_exists() -> None:
@@ -141,7 +159,9 @@ def test_every_requirements_file_ci_installs_exists() -> None:
     ]
     for source in sources:
         referenced.update(
-            re.findall(r"--require-hashes\s+-r\s+(\S+)", source.read_text(encoding="utf-8"))
+            re.findall(
+                r"--require-hashes\s+-r\s+(\S+)", source.read_text(encoding="utf-8")
+            )
         )
     assert referenced, "no --require-hashes install found; the pinning wiring is gone"
 
@@ -150,5 +170,9 @@ def test_every_requirements_file_ci_installs_exists() -> None:
         # The Dockerfiles copy the file in and install it by a context-relative
         # path, so compare on the repo-relative suffix.
         normalized = path.lstrip("/")
-        assert (REPO_ROOT / normalized).is_file(), f"CI installs {path}, which does not exist"
-        assert normalized in exported, f"{path} is installed by CI but no uv-export hook writes it"
+        assert (REPO_ROOT / normalized).is_file(), (
+            f"CI installs {path}, which does not exist"
+        )
+        assert normalized in exported, (
+            f"{path} is installed by CI but no uv-export hook writes it"
+        )

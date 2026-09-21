@@ -205,6 +205,50 @@ own log directory (for example, `/var/ossec/logs/ossec.log` for Wazuh) for the
 crash cause. Wazuh-manager silent-crash after startup is tracked in
 [#725](https://github.com/Brad-Edwards/aptl/issues/725).
 
+### `aptl lab start` fails because a Wazuh service did not become ready
+
+A scenario that starts Wazuh needs it working, so Wazuh readiness is fatal.
+After the containers start, `aptl lab start` authenticates to the Wazuh
+indexer and manager APIs. It retries quietly while the APIs warm up. A clean
+boot normally spends a few seconds in that state, because the manager API
+starts listening after its container is already running. If a service is
+still unready when the readiness budget ends, startup fails and names the
+phase and reason for that service:
+
+```
+Authenticated Wazuh readiness validation failed after 300s:
+  wazuh.manager at https://localhost:55000 transport phase failed:
+  tls_handshake (curl exit 35). Inspect `aptl container logs aptl-wazuh-manager`.
+```
+
+Scenarios that don't declare Wazuh certificate or configuration artifacts
+report the same reason in a slightly different form:
+
+```
+Wazuh Manager API did not become ready within 120s:
+  wazuh.manager at https://localhost:55000 transport phase failed:
+  tls_handshake (curl exit 35). Inspect `aptl container logs aptl-wazuh-manager`.
+```
+
+Read the phase first:
+
+- **`transport`**: no HTTP response arrived. `tls_handshake` (curl exit 35) or
+  `connection_reset` from a published port usually means nothing inside the
+  container is listening yet. Docker accepts the connection on the host and
+  then closes it. When this state lasts for the whole budget, the API never
+  started. Inspect the container logs, and check that the container is not
+  restarting or running out of memory.
+- **`authentication`**: the API answered but did not issue a session.
+  `credentials_rejected` (HTTP 401 or 403) means the API rejected the
+  `INDEXER_USERNAME`/`INDEXER_PASSWORD` or `API_USERNAME`/`API_PASSWORD`
+  values from `.env`. For the indexer, a retained `wazuh-indexer-data` volume
+  can still hold an earlier admin password: run `aptl lab stop -v`, then
+  `aptl lab start`, or restore the original `INDEXER_PASSWORD`.
+- **`manager_status`**: the manager API authenticated but reported no running
+  manager daemons. See the silent-daemon failure mode in the previous section.
+
+The message never includes credentials, tokens, or response bodies.
+
 ### `aptl lab start` fails with "Existing network aptl_aptl-... does not match realized network"
 
 Symptom on a machine that has run an older aptl-labs release before the

@@ -46,37 +46,37 @@ def _load_scenario_summaries(project_dir: Path) -> list[ScenarioSummaryResponse]
     except ValueError as exc:
         log.warning("Acquired scenario catalog unavailable; returning empty list: %s", exc)
         return []
-    pack = _pack_response(catalog)
-    summaries: list[ScenarioSummaryResponse] = []
-    for entry in catalog.scenarios:
-        try:
-            resolved = resolve_acquired_scenario(
-                project_dir, entry.id, catalog=catalog
-            )
-        except (ScenarioNotFoundError, ScenarioValidationError) as exc:
-            log.warning("Scenario '%s' failed to project for summary: %s", entry.id, exc)
-            summaries.append(invalid_scenario_summary(entry, pack))
-            continue
-        summaries.append(build_scenario_summary(entry, resolved.scenario, pack))
-    return summaries
+    with catalog:
+        pack = _pack_response(catalog)
+        summaries: list[ScenarioSummaryResponse] = []
+        for entry in catalog.scenarios:
+            try:
+                resolved = resolve_acquired_scenario(
+                    project_dir, entry.id, catalog=catalog
+                )
+            except (ScenarioNotFoundError, ScenarioValidationError) as exc:
+                log.warning("Scenario '%s' failed to project for summary: %s", entry.id, exc)
+                summaries.append(invalid_scenario_summary(entry, pack))
+                continue
+            summaries.append(build_scenario_summary(entry, resolved.scenario, pack))
+        return summaries
 
 
 def _load_scenario_detail(project_dir: Path, scenario_id: str) -> ScenarioDetailResponse:
     """Resolve one acquired scenario and project its bounded detail response."""
     try:
-        catalog = load_scenario_catalog(project_dir)
-        resolved = resolve_acquired_scenario(
-            project_dir, scenario_id, catalog=catalog
-        )
+        with load_scenario_catalog(project_dir) as catalog:
+            resolved = resolve_acquired_scenario(project_dir, scenario_id, catalog=catalog)
+            return build_scenario_detail(
+                resolved.entry, resolved.scenario, _pack_response(catalog)
+            )
     except ScenarioNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Unknown scenario") from exc
     except (ScenarioValidationError, ValueError) as exc:
         raise HTTPException(
             status_code=502, detail="Scenario projection is currently unavailable."
         ) from exc
-    return build_scenario_detail(
-        resolved.entry, resolved.scenario, _pack_response(catalog)
-    )
+
 
 
 @router.get("/scenarios")

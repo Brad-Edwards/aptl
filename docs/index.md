@@ -5,21 +5,28 @@ Docker-based purple team lab: Wazuh SIEM + enterprise infrastructure + Kali + AI
 ## Quick Start
 
 ```bash
-git clone https://github.com/Brad-Edwards/aptl.git
-cd aptl
 pipx install aptl-labs
+aptl lab init my-lab
+cd my-lab
 aptl lab start
 ```
 
-Clone the repo only for a source-tree development install. A released install
-materializes APTL runtime assets and acquires scenario content from the
-installed environment-pack distribution.
+The published package includes the lab assets; `aptl lab init <dir>`
+materializes them into a runnable project directory, so no clone is required.
 [pipx](https://pipx.pypa.io/) isolates the CLI in its own virtualenv, so the
 [PEP 668](https://peps.python.org/pep-0668/) system-`pip` block on modern
 Debian/Ubuntu/WSL2 hosts never applies (`sudo apt install pipx` to get it). To
 run from source instead, use a virtualenv editable install
 (`python3 -m venv .venv && source .venv/bin/activate && pip install -e .`; needs
 `python3-venv`). See [Prerequisites](getting-started/prerequisites.md).
+
+`aptl lab start` runs intentionally vulnerable containers and agent tooling on
+the selected host Docker engine. For stronger host and cross-seat isolation on
+Linux/KVM, use the disposable [appliance seat](reference/appliance-seat-launcher.md).
+The VM boundary reduces risk but does not eliminate it: advanced models with
+tool access can attempt VM-escape chains. See
+[Choose the execution boundary](getting-started/quick-start.md#choose-the-execution-boundary)
+before running APTL on a machine with other workloads or credentials.
 
 **Access:**
 
@@ -78,11 +85,12 @@ run from source instead, use a virtualenv editable install
 - [Emergency Rollout Runbook](workshop/emergency-rollout.md): Hosted-fleet fallback, student claim-page pattern, and teardown checklist
 
 ### Testing
-- [Smoke Test Plan](testing/smoke-test-plan.md): Historical full-stack plan for the pre-SDL scenario engine
+- [Release Candidate Manual QA](testing/smoke-test-plan.md): release-blocking human verification for both install paths
 
 ### Reference
 - [Guided Purple Participant Profile](reference/participant-profile.md): Versioned bounded workshop surface, readiness contract, and qualification ceilings
 - [Disposable Appliance Release](reference/appliance-release.md): Signed golden image, offline payload, local KVM overlays, qualification, and rollback
+- [Appliance Seat Launcher](reference/appliance-seat-launcher.md): Per-user VM lifecycle, host requirements, isolation boundary, and residual risk
 - [TechVault Scenario Overview](reference/techvault-scenario-overview.md): What the default range contains—topology, targets, SOC stack, planted vulnerabilities, and curated variants
 - [TechVault Company Profile](reference/techvault-company-profile.md)
 - [TechVault OSINT Readiness](reference/techvault-osint-readiness.md)

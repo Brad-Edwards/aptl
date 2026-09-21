@@ -12,15 +12,22 @@ from pydantic import ValidationError
 from aptl.appliance.manifest import (
     ApplianceManifestError,
     ApplianceReleaseInspection,
+    _inspection,
     _load_release_documents,
     _read_external_file,
     _read_release_artifact,
     _write_create_once,
     verify_release_directory,
+    verify_release_metadata,
 )
 from aptl.appliance.models import ApplianceReleaseManifest
 from aptl.appliance.release_models import ApplianceLaunchDescriptor
 from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
+from aptl.utils.strict_json import model_validate_json_strict
+from aptl.validation.participant_qualification_evidence import (
+    ParticipantQualificationReport,
+    verify_participant_qualification_attestation,
+)
 
 
 @dataclass(frozen=True)
@@ -61,6 +68,8 @@ def _derive_descriptor(
         boundary_helper_image=manifest.boundary.boundary_helper_image,
         egress_proxy_image=manifest.boundary.egress_proxy_image,
         participant_routes_digest=manifest.delivery.participant_routes_digest,
+        canonical_inputs_digest=manifest.delivery.canonical_inputs_digest,
+        host_mcp_contract=manifest.delivery.host_mcp_contract,
         host_observation_id=host_observation_id,
     )
 
@@ -75,6 +84,31 @@ def prepare_launch_descriptor(
 ) -> ApplianceLaunchDescriptor:
     """Verify a release and atomically publish its runtime launch projection."""
 
+    inspection = verify_release_directory(
+        release_dir,
+        release_public_key_path,
+        qualification_public_key_path=qualification_public_key_path,
+    )
+    manifest, _ = _load_release_documents(release_dir.resolve())
+    return _prepare_verified_launch_descriptor(
+        release_dir,
+        output_path,
+        manifest,
+        inspection,
+        host_observation_id=host_observation_id,
+    )
+
+
+def _prepare_verified_launch_descriptor(
+    release_dir: Path,
+    output_path: Path,
+    manifest: ApplianceReleaseManifest,
+    inspection: ApplianceReleaseInspection,
+    *,
+    host_observation_id: str,
+) -> ApplianceLaunchDescriptor:
+    """Project a release fully verified by the current host staging operation."""
+
     output_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     output_parent = output_path.parent.resolve()
     release_root = release_dir.resolve()
@@ -84,12 +118,6 @@ def prepare_launch_descriptor(
         raise ApplianceManifestError(
             "launch release directory must be beneath the descriptor directory"
         ) from exc
-    inspection = verify_release_directory(
-        release_root,
-        release_public_key_path,
-        qualification_public_key_path=qualification_public_key_path,
-    )
-    manifest, _ = _load_release_documents(release_root)
     descriptor = _derive_descriptor(
         manifest,
         inspection,
@@ -105,11 +133,17 @@ def verify_launch_descriptor(
     release_public_key_path: Path,
     qualification_public_key_path: Path,
 ) -> VerifiedApplianceLaunch:
-    """Reverify the attached release and exact launch projection in the guest."""
+    """Authenticate the guest launch after full release admission on the host.
+
+    The host verifies every artifact before VM launch. The guest checks the
+    signed metadata, qualification attestation, and consumed boundary policy
+    without re-extracting the large payload over the read-only 9p share.
+    """
 
     try:
-        descriptor = ApplianceLaunchDescriptor.model_validate_json(
-            _read_external_file(descriptor_path, label="appliance launch descriptor")
+        descriptor = model_validate_json_strict(
+            ApplianceLaunchDescriptor,
+            _read_external_file(descriptor_path, label="appliance launch descriptor"),
         )
     except (ValidationError, ValueError) as exc:
         raise ApplianceManifestError("invalid appliance launch descriptor") from exc
@@ -117,12 +151,37 @@ def verify_launch_descriptor(
     release_root = (launch_root / descriptor.release_dir).resolve()
     if not release_root.is_relative_to(launch_root):
         raise ApplianceManifestError("appliance launch release path is unsafe")
-    inspection = verify_release_directory(
-        release_root,
-        release_public_key_path,
-        qualification_public_key_path=qualification_public_key_path,
+    manifest = verify_release_metadata(release_root, release_public_key_path)
+    inspection = _inspection(manifest)
+    qualification_artifact = next(
+        artifact
+        for artifact in manifest.artifacts
+        if artifact.kind == "participant-qualification"
     )
-    manifest, _ = _load_release_documents(release_root)
+    qualification_payload = _read_release_artifact(
+        release_root, qualification_artifact.path
+    )
+    if (
+        len(qualification_payload) != qualification_artifact.size_bytes
+        or f"sha256:{hashlib.sha256(qualification_payload).hexdigest()}"
+        != qualification_artifact.sha256
+    ):
+        raise ApplianceManifestError("launch qualification artifact differs")
+    try:
+        qualification = model_validate_json_strict(
+            ParticipantQualificationReport, qualification_payload
+        )
+        verify_participant_qualification_attestation(
+            qualification,
+            _read_external_file(
+                qualification_public_key_path,
+                label="participant qualification trust anchor",
+            ),
+        )
+    except ValueError as exc:
+        raise ApplianceManifestError(
+            "launch qualification attestation is invalid"
+        ) from exc
     expected = _derive_descriptor(
         manifest,
         inspection,
@@ -145,9 +204,13 @@ def verify_launch_descriptor(
             "appliance launch boundary policy does not match the release"
         )
     try:
-        policy = ApplianceBoundaryPolicy.model_validate_json(policy_payload)
+        policy = model_validate_json_strict(ApplianceBoundaryPolicy, policy_payload)
     except ValueError as exc:
         raise ApplianceManifestError(
             "appliance launch boundary policy is invalid"
         ) from exc
+    if policy.host_mcp_contract != descriptor.host_mcp_contract:
+        raise ApplianceManifestError(
+            "launch transport policy differs from signed release"
+        )
     return VerifiedApplianceLaunch(descriptor, release_root, policy)

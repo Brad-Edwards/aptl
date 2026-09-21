@@ -15,11 +15,6 @@ def participant_readiness(
         "-d",
         help="Path to the APTL project directory.",
     ),
-    scenario_path: Path = typer.Option(
-        ...,
-        "--scenario-path",
-        help="Project-contained bounded participant SDL supplied by its owner.",
-    ),
     provider: str = typer.Option(
         "deterministic",
         "--provider",
@@ -82,7 +77,6 @@ def participant_readiness(
         if suite:
             report = validate_participant_agency_qualification(
                 project_dir=project_root,
-                scenario_path=scenario_path,
                 config=config,
                 run_store=store,
                 run_id=run_id,
@@ -93,7 +87,6 @@ def participant_readiness(
             report = validate_participant_agency_readiness(
                 ParticipantReadinessRequest(
                     project_dir=project_root,
-                    scenario_path=scenario_path,
                     config=config,
                     run_store=store,
                     provider_name=provider,

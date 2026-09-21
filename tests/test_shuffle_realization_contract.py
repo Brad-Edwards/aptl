@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import os
-import subprocess
 from importlib.metadata import version
 from pathlib import Path
+
+import pytest
 
 from raes.parser import parse_sdl_file
 
 from tests.helpers import techvault_scenario_path
-from tests.test_env_pack_realization import (
-    _realize_pack,
-    _without_downstream_orborus_authority,
-)
+from tests.test_env_pack_realization import _realize_pack
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -36,8 +33,10 @@ def _enum_value(value: object) -> object:
     return getattr(value, "value", value)
 
 
-def test_released_pack_supplies_the_complete_shuffle_contract(tmp_path: Path) -> None:
-    assert version("raes-env-packs") == "4.0.2"
+def test_released_pack_supplies_shuffle_semantics_and_leaves_mechanics_open(
+    tmp_path: Path,
+) -> None:
+    assert version("raes-env-packs") == "6.1.0"
     scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
     backend = scenario.nodes["shuffle-backend"].runtime
     opensearch = scenario.nodes["shuffle-opensearch"].runtime
@@ -46,7 +45,8 @@ def test_released_pack_supplies_the_complete_shuffle_contract(tmp_path: Path) ->
         item.name: (item.value, _enum_value(item.value_classification))
         for item in backend.environment
     }
-    assert environment == EXPECTED_ENVIRONMENT
+    assert environment == {}
+    assert _enum_value(scenario.realization.default) == "open"
 
     listener = backend.service_listeners[0]
     assert listener.service == "shuffle-api"
@@ -70,7 +70,6 @@ def test_released_pack_supplies_the_complete_shuffle_contract(tmp_path: Path) ->
     )
     assert _enum_value(datastore.transport_security.mode) == "tls"
     assert datastore.transport_security.client_verification is False
-    assert environment["SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY"] == ("true", "plain")
 
     assert scenario.persistent_volumes["shuffle_data"].consumers[0].node == (
         "shuffle-backend"
@@ -87,12 +86,8 @@ def test_generated_compose_uses_only_the_admitted_shuffle_runtime(
     from aptl.core.deployment._compose_node_generation import render_realization_compose
 
     realization = _realize_pack(tmp_path)
-    # Issue #913 covers the released Shuffle backend contract. The independent
-    # Orborus authority remains fail-closed until env-packs #285 supplies its
-    # immutable, correlated child closure required by APTL #949.
-    spec = _without_downstream_orborus_authority(realization).deployment_spec(
-        sorted(realization.profiles)
-    )
+    # The pinned pack now admits the Orborus authority alongside Shuffle.
+    spec = realization.deployment_spec(sorted(realization.profiles))
     document = render_realization_compose(spec)
     backend = document["services"]["shuffle-backend"]
 
@@ -110,6 +105,7 @@ def test_generated_compose_uses_only_the_admitted_shuffle_runtime(
         "service_name": "shuffle-backend",
         "mount_destination": "/shuffle-database",
         "access_mode": "read_write",
+        "delivery_mode": "mount",
         "selected_outputs": [],
     }
     assert volumes["shuffle_opensearch_data"].consumers[0].mount_destination == (
@@ -117,105 +113,62 @@ def test_generated_compose_uses_only_the_admitted_shuffle_runtime(
     )
 
 
-def test_soar_fixups_wait_for_shuffle_without_recreating_backend(
-    tmp_path: Path,
-) -> None:
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    docker_log = tmp_path / "docker.log"
-    docker = fake_bin / "docker"
-    docker.write_text(
-        """#!/bin/sh
-printf '%s\\n' "$*" >> "$APTL_TEST_DOCKER_LOG"
-if [ "$1" = inspect ] && [ "$2" = aptl-shuffle-backend ]; then
-    exit 0
-fi
-if [ "$1" = inspect ]; then
-    exit 1
-fi
-if [ "$1" = exec ] && [ "$2" = aptl-shuffle-backend ]; then
-    printf '{"name":"Shuffle"}\\n'
-fi
-exit 0
-""",
-        encoding="utf-8",
-    )
-    docker.chmod(0o755)
-    env = {
-        **os.environ,
-        "PATH": f"{fake_bin}:{os.environ['PATH']}",
-        "APTL_PROJECT_DIR": str(PROJECT_ROOT),
-        "APTL_TEST_DOCKER_LOG": str(docker_log),
-    }
-
-    result = subprocess.run(
-        [PROJECT_ROOT / "scripts" / "envpack-soar-fixups.sh"],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=env,
+def test_release_manual_has_executable_reverse_negative_harness() -> None:
+    manual = (PROJECT_ROOT / "docs" / "testing" / "smoke-test-plan.md").read_text(
+        encoding="utf-8"
     )
 
-    assert result.returncode == 0, result.stderr
-    operations = docker_log.read_text(encoding="utf-8").splitlines()
-    assert any(
-        line.startswith("exec aptl-shuffle-backend ") and "getenvironments" in line
-        for line in operations
-    )
-    assert not any(
-        line.startswith("rm -f aptl-shuffle-backend")
-        or (line.startswith("run ") and "--name aptl-shuffle-backend" in line)
-        or line.startswith("restart aptl-shuffle-backend")
-        or line.startswith("restart aptl-shuffle-frontend")
-        for line in operations
-    )
+    reverse_section = manual.split("### QA-MCP-REVERSE:", 1)[1].split(
+        "### QA-ARCHIVE:", 1
+    )[0]
+    assert "aptl.validation.mcp_protocol" in reverse_section
+    assert '"mcp/mcp-reverse/build/index.js"' in reverse_section
+    assert '"reverse_run_command"' in reverse_section
+    assert 'payload.get("success") is not False' in reverse_section
+    assert '"outcome": "expected-unavailable"' in reverse_section
 
 
-def test_soar_fixups_fail_when_shuffle_never_reaches_readiness(
-    tmp_path: Path,
-) -> None:
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    docker_log = tmp_path / "docker.log"
-    docker = fake_bin / "docker"
-    docker.write_text(
-        """#!/bin/sh
-printf '%s\\n' "$*" >> "$APTL_TEST_DOCKER_LOG"
-if [ "$1" = inspect ] && [ "$2" = aptl-shuffle-backend ]; then
-    exit 0
-fi
-if [ "$1" = inspect ]; then
-    exit 1
-fi
-exit 0
-""",
-        encoding="utf-8",
-    )
-    docker.chmod(0o755)
-    sleep = fake_bin / "sleep"
-    sleep.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    sleep.chmod(0o755)
-    env = {
-        **os.environ,
-        "PATH": f"{fake_bin}:{os.environ['PATH']}",
-        "APTL_PROJECT_DIR": str(PROJECT_ROOT),
-        "APTL_TEST_DOCKER_LOG": str(docker_log),
-    }
+def test_release_manual_requires_valid_browser_trust_for_soc_uis() -> None:
+    """The hands-on UI path must be executable without TLS bypasses."""
 
-    result = subprocess.run(
-        [PROJECT_ROOT / "scripts" / "envpack-soar-fixups.sh"],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=env,
+    manual = (PROJECT_ROOT / "docs" / "testing" / "smoke-test-plan.md").read_text(
+        encoding="utf-8"
     )
 
-    assert result.returncode == 1
-    assert "ERROR: shuffle-backend not serving" in result.stdout
-    operations = docker_log.read_text(encoding="utf-8").splitlines()
-    assert sum("getenvironments" in line for line in operations) == 30
-    assert not any(
-        line.startswith("rm -f aptl-shuffle-backend")
-        or (line.startswith("run ") and "--name aptl-shuffle-backend" in line)
-        for line in operations
+    assert "config/wazuh_indexer_ssl_certs/root-ca.pem" in manual
+    assert "config/soc_certs/lab-ca.pem" in manual
+    assert "https://wazuh.dashboard:<reported-host-port>" in manual
+    assert "443` is only the default" in manual
+    assert "aptl lab status --json --output qa-start-status.json" in manual
+    assert "certificate warning" in manual
+    assert "aptl container shell aptl-suricata" in manual
+    assert "does not claim passive visibility" in manual
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"success": False},
+        {"success": False, "error": "internal error", "command": "which r2"},
+        {"success": False, "command": "which r2", "output": {"code": 1}},
+        {
+            "success": False,
+            "command": "different",
+            "error": "Reverse Engineering instance is not enabled",
+        },
+    ],
+)
+def test_reverse_negative_harness_rejects_unrelated_failures(monkeypatch, payload):
+    import json
+    from aptl.validation import mcp_protocol
+
+    manual = (PROJECT_ROOT / "docs/testing/smoke-test-plan.md").read_text()
+    section = manual.split("### QA-MCP-REVERSE:", 1)[1].split("### QA-ARCHIVE:", 1)[0]
+    program = section.split("import json\n", 1)[1].split("\nPY\n", 1)[0]
+    monkeypatch.setattr(
+        mcp_protocol,
+        "call_mcp_tool",
+        lambda *_a, **_kw: {"content": [{"type": "text", "text": json.dumps(payload)}]},
     )
+    with pytest.raises(SystemExit, match="FAIL"):
+        exec(compile("import json\n" + program, "reverse-negative-harness", "exec"), {})

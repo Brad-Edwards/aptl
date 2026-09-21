@@ -110,6 +110,35 @@ class TestLoadDotenv:
         result = load_dotenv(env_file)
         assert result["INDEXER_USERNAME"] == "admin"
 
+    def test_update_values_preserves_unrelated_lines_and_is_idempotent(self, tmp_path):
+        from aptl.core.env import load_dotenv, update_dotenv_values
+
+        env_file = tmp_path / ".env"
+        env_file.write_text("# operator note\nSOURCE=opaque\nUNCHANGED=value\n")
+
+        assert update_dotenv_values(env_file, {"TARGET": "opaque"}) == ("TARGET",)
+        first = env_file.read_text(encoding="utf-8")
+        assert update_dotenv_values(env_file, {"TARGET": "opaque"}) == ()
+        assert env_file.read_text(encoding="utf-8") == first
+        assert load_dotenv(env_file) == {
+            "SOURCE": "opaque",
+            "UNCHANGED": "value",
+            "TARGET": "opaque",
+        }
+
+    @pytest.mark.parametrize(
+        "updates",
+        [
+            {"NOT-A-NAME": "value"},
+            {"VALID": "line one\nline two"},
+        ],
+    )
+    def test_update_values_rejects_unsafe_dotenv_content(self, tmp_path, updates):
+        from aptl.core.env import update_dotenv_values
+
+        with pytest.raises(ValueError, match="invalid dotenv update"):
+            update_dotenv_values(tmp_path / ".env", updates)
+
     def test_lines_without_equals_are_skipped(self, tmp_path):
         """Lines without = should be silently skipped."""
         from aptl.core.env import load_dotenv

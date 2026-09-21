@@ -27,8 +27,26 @@ template placeholder values with lab credentials that match the running
 containers. The startup output points to `.env` for passwords and tokens. Run
 `aptl lab info` later to reprint the same access summary.
 
-`aptl lab start` defaults to the acquired TechVault RAES pack. Inspect its
-catalog projection with:
+## Choose the execution boundary
+
+`aptl lab start` runs the intentionally vulnerable range and its agent tools as
+containers on the selected host Docker engine. A container escape or misuse of
+a component with Docker authority can affect that host. Use this path for
+development and supervised exercises on a dedicated, rebuildable machine; do
+not treat an ordinary workstation containing unrelated credentials or
+workloads as disposable lab infrastructure.
+
+For agent-driven or multi-user exercises on a Linux KVM host, prefer
+[`aptl seat start`](../reference/appliance-seat-launcher.md). A seat places the
+rootful Docker daemon and the complete range inside a disposable VM, exposes
+only signed loopback mappings, and separates users with distinct VM instances.
+That is materially stronger isolation, not a perfect sandbox. An advanced
+model with tool access can research and attempt a VM escape, so keep the host
+kernel and QEMU/KVM patched and retain the same dedicated-host and network
+controls where the consequence of host compromise matters.
+
+`aptl lab start` defaults to the validated acquired TechVault pack. List
+the curated startup inputs with:
 
 ```bash
 aptl lab scenarios

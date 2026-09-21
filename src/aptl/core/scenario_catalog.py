@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+import shutil
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from aptl.backends._raes_scenario_resolution import resolve_scenario_bundle
 from aptl.core.config import AptlConfig, find_config, load_config
-from aptl.core.scenario_bundle import EnvPackError, PackIdentity, ScenarioBundle
+from aptl.core.scenario_bundle import (
+    EnvPackError,
+    PackIdentity,
+    ScenarioBundle,
+    validate_scenario_identity,
+)
 from aptl.core.scenarios import ScenarioNotFoundError, ScenarioValidationError
 from aptl.utils.pathsafe import (
     REASON_DOT_COMPONENT,
@@ -34,7 +39,6 @@ _OUTSIDE_PROJECT_REASONS = frozenset(
         REASON_DOT_COMPONENT,
     }
 )
-_SCENARIO_ID = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 
 class ScenarioCatalogMetadata(BaseModel):
@@ -68,9 +72,7 @@ class ScenarioCatalogEntry(BaseModel):
     @field_validator("id")
     @classmethod
     def validate_id(cls, value: str) -> str:
-        if not _SCENARIO_ID.fullmatch(value):
-            raise ValueError("invalid scenario id")
-        return value
+        return validate_scenario_identity(value)
 
 
 @dataclass(frozen=True)
@@ -84,7 +86,17 @@ class ScenarioCatalog:
     version: int = 1
 
     def get(self, scenario_id: str) -> ScenarioCatalogEntry | None:
-        return next((entry for entry in self.scenarios if entry.id == scenario_id), None)
+        return next(
+            (entry for entry in self.scenarios if entry.id == scenario_id), None
+        )
+
+    def __enter__(self) -> "ScenarioCatalog":
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        # Read-only views own this freshly acquired copy. Runtime bundles are
+        # deliberately retained for their containers' and evidence's lifetime.
+        shutil.rmtree(self.bundle.root.parent)
 
 
 @dataclass(frozen=True)
@@ -126,6 +138,7 @@ def load_scenario_catalog(
     selected = config or _config(project_dir)
     if selected.scenario.source != "env-pack":
         raise ValueError("scenario catalog requires an acquired env-pack source")
+    bundle = None
     try:
         bundle = resolve_scenario_bundle(project_dir, None, selected)
         identity = bundle.pack_identity
@@ -143,20 +156,20 @@ def load_scenario_catalog(
             ],
             as_of=date.today().isoformat(),
         )
+        blocking = [diagnostic for diagnostic in diagnostics if diagnostic.blocking]
+        if blocking or len(document.entries) != 1:
+            raise ValueError("Acquired scenario catalog failed validation")
+        raw = document.entries[0]
+        return ScenarioCatalog(
+            scenarios=(_entry_from_projection(raw),),
+            pack_identity=identity,
+            maturity=str(raw.get("maturity") or "unknown"),
+            bundle=bundle,
+        )
     except (EnvPackError, ImportError, OSError, TypeError, ValueError) as exc:
-        raise ValueError(
-            f"Acquired scenario catalog unavailable: {redact(str(exc))}"
-        ) from exc
-    blocking = [diagnostic for diagnostic in diagnostics if diagnostic.blocking]
-    if blocking or len(document.entries) != 1:
-        raise ValueError("Acquired scenario catalog failed validation")
-    raw = document.entries[0]
-    return ScenarioCatalog(
-        scenarios=(_entry_from_projection(raw),),
-        pack_identity=identity,
-        maturity=str(raw.get("maturity") or "unknown"),
-        bundle=bundle,
-    )
+        if bundle is not None:
+            shutil.rmtree(bundle.root.parent)
+        raise ValueError("Acquired scenario catalog unavailable") from exc
 
 
 def resolve_scenario_selection(

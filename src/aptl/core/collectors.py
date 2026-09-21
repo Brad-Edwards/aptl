@@ -11,6 +11,12 @@ here. Collector log lines therefore report counts/status only — never
 payload secrets — and ``_run_cmd`` truncates the logged command to
 ``cmd[:3]`` so flag values (e.g. tokens passed positionally) never
 reach service logs.
+
+For the same reason a failure here logs its exception *class*, never
+``str(exc)``: an exception raised under the credentialed indexer or
+container query can carry the URL, a response body, or a credential in
+its message, and a caller-side redaction after the record is emitted is
+too late (issue #879). The class name is what diagnoses the failure.
 """
 
 import json
@@ -88,7 +94,9 @@ def _run_cmd(
             timeout=timeout,
         )
     except (subprocess.TimeoutExpired, OSError) as e:
-        log.warning("Command failed: %s: %s", " ".join(cmd[:3]), e)
+        log.warning(
+            "Command failed: %s: %s", " ".join(cmd[:3]), type(e).__name__
+        )
         return None
 
 
@@ -154,7 +162,7 @@ def collect_wazuh_alerts(
             scroll_id = data.get("_scroll_id")
 
     except Exception as e:
-        log.warning("Error collecting Wazuh alerts: %s", e)
+        log.warning("Error collecting Wazuh alerts: %s", type(e).__name__)
 
     log.info("Collected %d Wazuh alerts", len(all_hits))
     return all_hits
@@ -173,7 +181,7 @@ def collect_suricata_eve(
             timeout=30,
         )
     except (BackendTimeoutError, OSError) as e:
-        log.warning("Suricata EVE collection failed: %s", e)
+        log.warning("Suricata EVE collection failed: %s", type(e).__name__)
         return []
     if result.returncode != 0:
         log.info("Suricata container not available, skipping EVE collection")
@@ -385,7 +393,9 @@ def collect_container_logs(
                 container, since=start_iso, until=end_iso, timeout=30
             )
         except (BackendTimeoutError, OSError) as e:
-            log.warning("Log collection failed for %s: %s", container, e)
+            log.warning(
+                "Log collection failed for %s: %s", container, type(e).__name__
+            )
             continue
         if result.returncode != 0:
             log.warning("Could not collect logs from container %s", container)

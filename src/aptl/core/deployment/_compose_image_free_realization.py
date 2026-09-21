@@ -33,6 +33,8 @@ def _needs_compose(realization: DeploymentRealizationSpec) -> bool:
     stateful prerequisites and validation.
     """
 
+    if realization.capture_apparatus:
+        return True
     if not realization.nodes:
         return True
     materialized = _image_free_node_addresses(realization)
@@ -80,7 +82,7 @@ def _image_free_node_addresses(
     start, not a bare-OS node to stub.
 
     Keying on ``runtime`` alone silently scaled those services to zero and started
-    a ``debian:12-slim`` ``sleep infinity`` substrate in their place, so declaring
+    a ``debian:13-slim`` ``sleep infinity`` substrate in their place, so declaring
     a node's security tooling turned the actual tool off. The image check is the
     same one the realization-time materializable test applies
     (``_is_materializable_node``); the two must agree, or a node is realized one
@@ -201,7 +203,10 @@ def _ensure_generic_base_images(
     node's own start_base_container discover it missing one at a time.
     """
 
-    from aptl.backends.raes_base_substrate import base_container_spec
+    from aptl.backends.raes_base_substrate import (
+        NodePlanningOptions,
+        base_container_spec,
+    )
 
     failures: list[str] = []
     for image_ref in sorted(
@@ -211,6 +216,9 @@ def _ensure_generic_base_images(
                 os=node.os,
                 os_version=node.os_version,
                 runtime=node.runtime,
+                options=NodePlanningOptions(
+                    backend_base_image_ref=getattr(node, "backend_base_image_ref", None)
+                ),
             ).image_ref
             for node in nodes
         }
@@ -275,6 +283,8 @@ def _content_placement_op(item: object) -> object | None:
             artifact_id=item.artifact_id,
             artifact_digest=item.artifact_digest,
             is_directory=item.source_kind == "pack-directory",
+            sensitive=item.sensitive,
+            executable=item.media_type in {"text/x-python", "text/x-shellscript"},
         )
     elif (
         item.source_kind in ("project-file", "project-directory")

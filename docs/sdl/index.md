@@ -43,4 +43,4 @@ For current TechVault authoring and validation, use the RAES pages:
 
 - [TechVault Static Validation Gate](../raes/techvault-static-validation-gate.md)
 - [TechVault Live Validation Gate](../raes/techvault-live-validation-gate.md)
-- [Retired APTL-local startup variants](techvault-curated-variants.md)
+- [APTL research scenario fixtures](techvault-curated-variants.md)

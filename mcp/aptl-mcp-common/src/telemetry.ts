@@ -19,6 +19,7 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 
 import { redact } from './redaction.js';
+import { RedactingSpanExporter } from './telemetry-export.js';
 
 let provider: NodeTracerProvider | null = null;
 
@@ -45,11 +46,11 @@ export function initTracing(serverName: string): void {
 
   provider = new NodeTracerProvider({
     resource,
-    spanProcessors: [new BatchSpanProcessor(exporter)],
+    spanProcessors: [new BatchSpanProcessor(new RedactingSpanExporter(exporter))],
   });
   provider.register();
 
-  console.error(`[OTel] Tracing initialized: service=${serverName} endpoint=${endpoint}`);
+  console.error(`[OTel] Tracing initialized: service=${redact(serverName)} endpoint=${redact(endpoint)}`);
 }
 
 /**

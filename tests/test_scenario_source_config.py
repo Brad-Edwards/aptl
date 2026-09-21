@@ -60,6 +60,12 @@ def test_an_empty_identity_is_rejected(tmp_path):
         load_config(config_path)
 
 
+@pytest.mark.parametrize("identity", ["../elsewhere", "/etc", "a/b", ".", ".."])
+def test_identity_cannot_act_as_a_path(tmp_path, identity):
+    with pytest.raises(ValueError):
+        load_config(_write(tmp_path, {"scenario": {"identity": identity}}))
+
+
 @pytest.mark.parametrize(
     "hostile", ["../elsewhere", "/etc", "packs/../../etc", "a\x00b"]
 )

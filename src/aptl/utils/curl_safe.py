@@ -35,6 +35,9 @@ import json
 import os
 import subprocess
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from typing import Any
 
 from aptl.utils.logging import get_logger
@@ -43,12 +46,28 @@ log = get_logger("curl_safe")
 
 DEFAULT_TIMEOUT_SECONDS = 30
 
+_JSON_ACCEPT_HEADER = ("-H", "Accept: application/json")
+_JSON_CONTENT_TYPE_HEADER = ("-H", "Content-Type: application/json")
+
+#: curl result codes that mean no HTTP response arrived, by portable meaning.
+#: Only the numeric code is classified; curl's TLS-library-specific stderr is
+#: never parsed. Exit 35 names the incomplete handshake it proves and nothing
+#: more: Docker's published-port proxy produces it for a container port with
+#: no listener behind it, as does a genuine TLS negotiation failure.
+_TRANSPORT_CATEGORIES = {
+    7: "connection_refused",
+    28: "timeout",
+    35: "tls_handshake",
+    52: "empty_reply",
+    56: "connection_reset",
+}
+
 
 def basic_auth_header(username: str, password: str) -> str:
     """Return an HTTP Basic ``Authorization`` header value for *username*/*password*.
 
     The returned ``"Basic <base64>"`` string is meant to be passed as
-    ``auth_header`` to :func:`curl_json` / :func:`curl_status`, so the
+    ``auth_header`` to :func:`curl_json` / :func:`curl_request`, so the
     credentials travel through a 0600 temp header file instead of curl's
     argv-visible ``-u user:pass`` (ADR-029).
     """
@@ -76,41 +95,19 @@ def curl_json(
     non-zero curl exit codes (transport errors, HTTP >= 400), and JSON
     parse errors. Never raises.
     """
-    cmd: list[str] = ["curl", "-sf"]
-    if insecure:
-        cmd.append("-k")
-    elif ca_cert_path:
-        cmd += ["--cacert", ca_cert_path]
+    cmd: list[str] = ["curl", "-sf", *_tls_args(insecure, ca_cert_path)]
     if method:
         cmd += ["-X", method]
     cmd.append(url)
-    cmd += ["-H", "Content-Type: application/json"]
-    cmd += ["-H", "Accept: application/json"]
+    cmd += _json_headers(body)
 
-    header_path: str | None = None
-    body_path: str | None = None
     parsed: Any | None = None
-    try:
-        if auth_header:
-            header_path = _write_temp_0600("aptl-hdr-", "Authorization: " + auth_header + "\n")
-            cmd += ["-H", "@" + header_path]
-
-        if body is not None:
-            body_path = _write_temp_0600("aptl-body-", json.dumps(body))
-            cmd += ["-d", "@" + body_path]
-
+    with _secret_file_args(auth_header, body) as secret_args:
         # A single return keeps the three failure modes (transport error,
         # non-zero exit, unparseable body) collapsing to the same ``None``
         # without a separate return per branch.
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-            )
+            result = _run_curl([*cmd, *secret_args], timeout)
             if result.returncode != 0:
                 log.warning(
                     "curl_safe: curl exit %d for %s", result.returncode, url
@@ -121,83 +118,149 @@ def curl_json(
             log.warning("curl_safe: subprocess failed: %s", exc.__class__.__name__)
         except ValueError:
             log.warning("curl_safe: response from %s was not valid JSON", url)
+    return parsed
+
+
+@dataclass(frozen=True)
+class CurlOutcome:
+    """Secret-free, classified outcome of one :func:`curl_request`.
+
+    Carries only what a caller needs to decide policy: curl's numeric exit
+    (``None`` when curl never completed), the HTTP status (``None`` when no
+    HTTP response arrived), and the parsed JSON payload. The payload may hold
+    a token, so it is excluded from ``repr``; the URL, stdout, stderr, headers
+    and temp-file paths are never retained.
+    """
+
+    exit_code: int | None
+    http_status: int | None
+    payload: Any | None = field(default=None, repr=False)
+    failure: str | None = None
+
+    @property
+    def category(self) -> str:
+        """Return ``http_response`` or the normalized transport failure."""
+
+        if self.http_status is not None:
+            return "http_response"
+        if self.failure is not None:
+            return self.failure
+        return _TRANSPORT_CATEGORIES.get(self.exit_code, "curl_error")
+
+
+def curl_request(
+    url: str,
+    *,
+    auth_header: str | None = None,
+    body: dict | list | None = None,
+    insecure: bool = False,
+    ca_cert_path: str | None = None,
+    method: str | None = None,
+    timeout: int = DEFAULT_TIMEOUT_SECONDS,
+) -> CurlOutcome:
+    """Issue one HTTP request via curl and return its classified outcome.
+
+    The classification seam for callers that poll: unlike :func:`curl_json`
+    it keeps transport failure (curl exit, no HTTP status) apart from an HTTP
+    answer of any status, and it never logs at warning level, because only
+    the polling owner knows whether a failure is expected warm-up or a
+    terminal condition. Secrets use the same 0600 temp files as
+    :func:`curl_json` (ADR-029). Never raises for transport problems.
+    """
+
+    cmd: list[str] = ["curl", "-s", "-w", "\n%{http_code}"]
+    cmd += _tls_args(insecure, ca_cert_path)
+    if method:
+        cmd += ["-X", method]
+    cmd.append(url)
+    cmd += _json_headers(body)
+
+    with _secret_file_args(auth_header, body) as secret_args:
+        try:
+            result = _run_curl([*cmd, *secret_args], timeout)
+        except subprocess.TimeoutExpired:
+            return CurlOutcome(None, None, failure="request_timeout")
+        except OSError:
+            return CurlOutcome(None, None, failure="curl_unavailable")
+
+    text, _, code = result.stdout.rpartition("\n")
+    status = int(code) if code.isdigit() and int(code) > 0 else None
+    payload: Any | None = None
+    if status is not None:
+        try:
+            payload = json.loads(text)
+        except ValueError:
+            payload = None
+    return CurlOutcome(result.returncode, status, payload)
+
+
+def _tls_args(insecure: bool, ca_cert_path: str | None) -> list[str]:
+    """Return curl's TLS arguments in the module's documented priority order."""
+
+    if insecure:
+        return ["-k"]
+    if ca_cert_path:
+        return ["--cacert", ca_cert_path]
+    return []
+
+
+def _json_headers(body: dict | list | None) -> list[str]:
+    """Request JSON and describe JSON content only when content exists.
+
+    Some APIs, including Cortex, interpret a JSON content type on a bodyless
+    GET as a promise of a JSON entity and reject the empty body. ``Accept`` is
+    valid on every request; ``Content-Type`` is valid only when this helper is
+    also sending ``body``.
+    """
+
+    headers = [*_JSON_ACCEPT_HEADER]
+    if body is not None:
+        headers += _JSON_CONTENT_TYPE_HEADER
+    return headers
+
+
+@contextmanager
+def _secret_file_args(
+    auth_header: str | None,
+    body: dict | list | None,
+) -> Iterator[list[str]]:
+    """Yield curl args that read the auth header and body from 0600 files.
+
+    The files are removed when the block exits, however it exits, so a
+    secret never outlives the request (ADR-029).
+    """
+
+    paths: list[str] = []
+    args: list[str] = []
+    try:
+        if auth_header:
+            paths.append(
+                _write_temp_0600("aptl-hdr-", "Authorization: " + auth_header + "\n")
+            )
+            args += ["-H", "@" + paths[-1]]
+        if body is not None:
+            paths.append(_write_temp_0600("aptl-body-", json.dumps(body)))
+            args += ["-d", "@" + paths[-1]]
+        yield args
     finally:
-        for path in (header_path, body_path):
-            if path is None:
-                continue
+        for path in paths:
             try:
                 os.unlink(path)
             except OSError:
                 pass
-    return parsed
 
 
-def curl_status(
-    url: str,
-    *,
-    auth: tuple[str, str] | None = None,
-    insecure: bool = False,
-    ca_cert_path: str | None = None,
-    timeout: int = DEFAULT_TIMEOUT_SECONDS,
-) -> int | None:
-    """Issue an HTTP request via curl and return the response status code.
+def _run_curl(cmd: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+    """Run a list-form curl command with the module's fixed capture settings."""
 
-    Unlike :func:`curl_json`, this does not use ``-f``, so 4xx/5xx
-    responses are reported with their real status rather than treated
-    as errors — this is the classification probe used by callers that
-    need to distinguish "not listening yet" from "listening but
-    rejecting credentials".
-
-    Basic-auth credentials, when provided via ``auth``, are written to
-    a 0600 temp file as a base64-encoded ``Authorization: Basic`` header
-    and passed to curl via ``-H @file`` rather than placed in argv
-    (ADR-029) — unlike ``curl_json``'s ``-u user:pass``, which is
-    visible in argv.
-
-    Returns ``None`` for: subprocess startup failures, command
-    timeouts, unparseable output, and curl's ``000`` sentinel (no HTTP
-    response received at all). Never raises.
-    """
-    cmd: list[str] = ["curl", "-s", "-o", os.devnull, "-w", "%{http_code}"]
-    if insecure:
-        cmd.append("-k")
-    elif ca_cert_path:
-        cmd += ["--cacert", ca_cert_path]
-
-    header_path: str | None = None
-    try:
-        if auth is not None:
-            header_path = _write_temp_0600(
-                "aptl-hdr-", f"Authorization: {basic_auth_header(*auth)}\n"
-            )
-            cmd += ["-H", "@" + header_path]
-
-        cmd.append(url)
-
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-            )
-        except (subprocess.TimeoutExpired, OSError) as exc:
-            log.warning("curl_safe: subprocess failed: %s", exc.__class__.__name__)
-            return None
-
-        stdout = result.stdout.strip()
-        if not stdout.isdigit():
-            return None
-        code = int(stdout)
-        return code if code > 0 else None
-    finally:
-        if header_path is not None:
-            try:
-                os.unlink(header_path)
-            except OSError:
-                pass
+    return subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
 
 
 def _write_temp_0600(prefix: str, content: str) -> str:

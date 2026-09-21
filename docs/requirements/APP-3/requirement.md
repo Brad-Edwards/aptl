@@ -17,9 +17,36 @@ APTL shall assemble and verify a signed, versioned appliance release envelope th
 
 ## Rationale
 
+For current VM-only seats, ADR-060 defines the signed containment policy.
+APP-1 internal-zone implementation is deferred to #1127; the release must name
+its actual containment contract and must not claim internal-isolation evidence.
+
 Issue #823 supplies the release artifact consumed by the host launcher in issue #824 and the hosted per-seat adapter in issue #825. APP-1 remains the boundary-enforcement authority and APP-2 remains the bounded participant-profile authority; this requirement binds those existing contracts into one immutable release unit without duplicating their schemas.
 
 ## Traceability
+
+- IMPLEMENTS → GITHUB_ISSUE `1022` (VM-only seat delivery and qualification)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/policy.py` (Explicit signed VM-only containment policy)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/candidate.py` (Signed candidate policy validation)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/distribution.py` (Authenticated chunked release transport)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/public_install.py` (Anonymous download, reconstruction, and staging)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/qualification.py` (Machine-bound qualification evidence)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/seat/lifecycle.py` (Generation-bound VM seat lifecycle and admission)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/seat/prereqs.py` (Host capacity and runtime resource admission)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/access_service.py` (Authenticated seat-scoped host access)
+- IMPLEMENTS → CONFIG `.github/workflows/release-please.yml` (Qualified release and public GHCR delivery)
+- TESTS → TEST `tests/test_appliance_vm_containment.py` (Containment distinction and retained identity/host checks)
+- TESTS → TEST `tests/test_appliance_candidate.py` (Signed candidate and tamper rejection)
+- TESTS → TEST `tests/test_appliance_distribution.py` (Transport identity, chunk, and signature enforcement)
+- TESTS → TEST `tests/test_appliance_public_install.py` (Anonymous acquisition and safe cache behavior)
+- TESTS → TEST `tests/test_appliance_qualification.py` (Qualification identity and multi-machine gates)
+- TESTS → TEST `tests/test_appliance_seat_lifecycle.py` (VM start, readiness, recovery, and revocation)
+- TESTS → TEST `tests/test_appliance_seat_prereqs.py` (Capacity and free-space admission boundaries)
+- TESTS → TEST `tests/test_appliance_seat_portability.py` (Portable CLI imports and fail-closed POSIX locking)
+- TESTS → TEST `tests/test_mcp_protocol.py` (Bounded MCP teardown proof during qualification)
+- TESTS → TEST `tests/test_appliance_release_workflow.py` (Release workflow permissions and ordering)
+- DOCUMENTS → DOCUMENTATION `docs/adrs/adr-060-vm-only-seat-containment.md` (Owner-approved containment scope)
+- DOCUMENTS → DOCUMENTATION `docs/reference/appliance-seat-launcher.md` (Operator security boundary and residual risk)
 
 - IMPLEMENTS → GITHUB_ISSUE `823` (Issue 823: signed disposable appliance release envelope)
 - IMPLEMENTS → CODE_FILE `src/aptl/appliance/manifest.py` (Signed appliance release manifest)
@@ -35,3 +62,8 @@ Issue #823 supplies the release artifact consumed by the host launcher in issue 
 - IMPLEMENTS → CODE_FILE `appliance/guest/provision-offline.sh` (Offline appliance guest provisioning)
 - TESTS → TEST `tests/test_appliance_guest_assets.py` (Appliance guest asset tests)
 - TESTS → TEST `tests/test_appliance_cli.py` (Appliance CLI tests)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/payload_content.py` (Packaged payload completeness and hash validation)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/input_images.py` (Required OCI configuration and layer identities)
+- TESTS → TEST `tests/test_payload_content.py` (Missing and altered offline input rejection)
+- TESTS → TEST `tests/test_mcp_appliance_admission.py` (Signed launch and fresh boundary binding admission)
+- TESTS → TEST `tests/test_canonical_input_roundtrip.py` (Closed input staging and immutable packaged-byte tamper rejection)

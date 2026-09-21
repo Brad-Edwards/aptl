@@ -46,6 +46,19 @@ describe('session-scoped path helpers', () => {
     );
   });
 
+  it('routes all capture paths to the Python-configured run store', () => {
+    const env = { APTL_MCP_RUN_STORE_BASE: '/project/runs' };
+    expect(mcpSideDir('/project/.aptl', RUN_ID, env)).toBe(
+      `/project/runs/${RUN_ID}/mcp-side`
+    );
+    expect(kaliSideSessionDir('/project/.aptl', RUN_ID, 'sess-1', env)).toBe(
+      `/project/runs/${RUN_ID}/kali-side/sess-1`
+    );
+    expect(mcpSessionJsonl('/project/.aptl', RUN_ID, 'sess-1', env)).toBe(
+      `/project/runs/${RUN_ID}/mcp-side/sessions/sess-1.jsonl`
+    );
+  });
+
   it.each(['../escape', 'has/slash', 'sess..', '..'])(
     'rejects unsafe session id %s',
     (bad) => {
@@ -83,6 +96,15 @@ describe('loadActiveTraceId / resolveActiveRunDir', () => {
     );
     expect(loadActiveTraceId({ APTL_STATE_DIR: tmp })).toBe(tid);
     expect(resolveActiveRunDir({ APTL_STATE_DIR: tmp })).toBe(join(tmp, 'runs', tid));
+  });
+
+  it('uses the admitted run store while still reading trace context from state', () => {
+    const tid = 'd'.repeat(32);
+    writeFileSync(join(tmp, 'trace-context.json'), JSON.stringify({ trace_id: tid }));
+    expect(resolveActiveRunDir({
+      APTL_STATE_DIR: tmp,
+      APTL_MCP_RUN_STORE_BASE: join(tmp, 'archive'),
+    })).toBe(join(tmp, 'archive', tid));
   });
 
   it('returns undefined when the file is malformed', () => {
@@ -132,6 +154,36 @@ describe('createPtyTeeWriter', () => {
   // `flush()` (test-quality review cycle 1 finding-6). A
   // `setTimeout` race produces both flaky failures and false
   // passes under CI load.
+
+  it('creates the expected-session census entry before any output arrives', () => {
+    const tid = 'a'.repeat(32);
+    writeFileSync(
+      join(tmp, 'trace-context.json'),
+      JSON.stringify({ trace_id: tid, span_id: 'b'.repeat(16) }),
+    );
+
+    createPtyTeeWriter('silent-session', env);
+
+    const file = join(
+      tmp,
+      'runs',
+      tid,
+      'mcp-side',
+      'sessions',
+      'silent-session.jsonl',
+    );
+    expect(existsSync(file)).toBe(true);
+    expect(readFileSync(file, 'utf-8')).toBe('');
+  });
+
+  it('creates the census in the configured run archive, not the state tree', () => {
+    const tid = 'a'.repeat(32);
+    writeFileSync(join(tmp, 'trace-context.json'), JSON.stringify({ trace_id: tid }));
+    const archive = join(tmp, 'archive');
+    createPtyTeeWriter('sess-1', { ...env, APTL_MCP_RUN_STORE_BASE: archive });
+    expect(existsSync(join(archive, tid, 'mcp-side/sessions/sess-1.jsonl'))).toBe(true);
+    expect(existsSync(join(tmp, 'runs', tid, 'mcp-side/sessions/sess-1.jsonl'))).toBe(false);
+  });
 
   it('appends one JSONL line per chunk to mcp-side/sessions/<session>.jsonl', async () => {
     const tid = 'a'.repeat(32);
@@ -203,5 +255,15 @@ describe('createPtyTeeWriter', () => {
 
     const file = join(tmp, 'runs', tid, 'mcp-side', 'sessions', '_invalid.jsonl');
     expect(existsSync(file)).toBe(true);
+  });
+});
+
+describe('management-bound MCP run identity', () => {
+  it('uses the admitted lab-start run without a scenario UI trace file', () => {
+    expect(loadActiveTraceId({ APTL_MCP_ADMITTED_RUN_ID: 'run_20260917T120000Z' }))
+      .toBe('run_20260917T120000Z');
+  });
+  it('refuses an invalid explicit admission instead of falling back to ambient state', () => {
+    expect(() => loadActiveTraceId({ APTL_MCP_ADMITTED_RUN_ID: '../other' })).toThrow();
   });
 });

@@ -25,6 +25,7 @@ from raes.runtime_configuration import (
 from aptl.backends.raes_node_materialization import realize_node
 from aptl.backends.raes_realization_model import NodeRealization
 from aptl.core.deployment.docker_compose import DockerComposeBackend
+from tests.helpers import realized_container_name
 
 pytestmark = pytest.mark.integration
 
@@ -38,7 +39,6 @@ def _docker_available() -> bool:
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
 def test_realize_node_through_backend_on_real_docker(tmp_path):
     container = "aptl-e2e-node"
-    subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
 
     backend = DockerComposeBackend(project_dir=tmp_path, project_name="aptl-itest-e2e")
     # A non-service node: packages + identity, so the minimal base (no systemd)
@@ -74,7 +74,11 @@ def test_realize_node_through_backend_on_real_docker(tmp_path):
         assert backend.container_exec(container, ["id", "-u", "analyst"]).returncode == 0
         assert backend.container_exec(container, ["getent", "group", "techvault"]).returncode == 0
     finally:
-        subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
+        subprocess.run(
+            ["docker", "rm", "-f", realized_container_name(backend, container)],
+            capture_output=True,
+            text=True,
+        )
 
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
@@ -91,7 +95,6 @@ def test_dynamic_composition_node_starts_immutably_from_config_id(tmp_path):
     from aptl.backends.raes_base_substrate import base_container_spec
 
     container = "aptl-e2e-dyncompose"
-    subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
     backend = DockerComposeBackend(
         project_dir=tmp_path, project_name="aptl-itest-dyncompose"
     )
@@ -134,7 +137,13 @@ def test_dynamic_composition_node_starts_immutably_from_config_id(tmp_path):
         assert result is None, getattr(result, "error", None)
 
         config_image = subprocess.run(
-            ["docker", "inspect", "--format", "{{.Config.Image}}", container],
+            [
+                "docker",
+                "inspect",
+                "--format",
+                "{{.Config.Image}}",
+                realized_container_name(backend, container),
+            ],
             capture_output=True,
             text=True,
         ).stdout.strip()
@@ -148,7 +157,11 @@ def test_dynamic_composition_node_starts_immutably_from_config_id(tmp_path):
             container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
         ).stdout
     finally:
-        subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
+        subprocess.run(
+            ["docker", "rm", "-f", realized_container_name(backend, container)],
+            capture_output=True,
+            text=True,
+        )
 
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
@@ -160,7 +173,6 @@ def test_realize_routes_image_free_spec_through_materializer(tmp_path):
     )
 
     container = "aptl-e2e-realize"
-    subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
     backend = DockerComposeBackend(project_dir=tmp_path, project_name="aptl-itest-realize")
 
     node = DeploymentNodeRealization(
@@ -189,4 +201,8 @@ def test_realize_routes_image_free_spec_through_materializer(tmp_path):
             container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
         ).stdout
     finally:
-        subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
+        subprocess.run(
+            ["docker", "rm", "-f", realized_container_name(backend, container)],
+            capture_output=True,
+            text=True,
+        )

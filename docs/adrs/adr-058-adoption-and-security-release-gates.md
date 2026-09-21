@@ -48,9 +48,10 @@ acquisition. Record cold acquisition and warm execution separately; change,
 reset and teardown then have their own declared deadlines. Container start
 time and cached developer-machine runs do not satisfy the acquisition gate.
 
-Full TechVault is qualified separately as the advanced APTL experience. Its
-service and telemetry parity requirements remain. An optional web UI or model
-provider cannot become an implicit tiny-profile prerequisite.
+The full TechVault scenario pack is qualified separately as an advanced
+scenario profile on the same product. Its service and telemetry parity
+requirements remain. An optional web UI or model provider cannot become an
+implicit small-profile prerequisite.
 
 ## Existing ADR disposition
 

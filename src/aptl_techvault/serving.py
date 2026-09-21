@@ -1,0 +1,89 @@
+"""TechVault deployment-serving labels for the APTL backend.
+
+The provider maps only exact component addresses that APTL core already
+lowered from one admitted RAES provisioning plan. It owns no artifacts,
+services, images, commands, or materialization behavior.
+"""
+
+from __future__ import annotations
+
+from aptl.backends.pack_interaction import (
+    EXTENSION_API_VERSION,
+    ComponentGroupMembership,
+    PackBackendInteractionContext,
+    PackBackendInteractionResult,
+)
+
+__version__ = "0.1.0"
+
+_PACK_SET_DIGEST = (
+    "sha256:db98a9daa62a092a0c6b001217027d7f4ad489889e95d01050e77f148e8ef29b"
+)
+
+_GROUP_BY_COMPONENT = {
+    # SIEM
+    "provision.node.wazuh-manager": "wazuh",
+    "provision.node.wazuh-indexer": "wazuh",
+    "provision.node.wazuh-dashboard": "wazuh",
+    # SOC stack
+    "provision.node.suricata": "soc",
+    "provision.node.misp": "soc",
+    "provision.node.misp-db": "soc",
+    "provision.node.misp-redis": "soc",
+    "provision.node.misp-suricata-sync": "soc",
+    "provision.node.thehive": "soc",
+    "provision.node.thehive-cassandra": "soc",
+    "provision.node.thehive-es": "soc",
+    "provision.node.cortex": "soc",
+    "provision.node.cortex-initializer": "soc",
+    "provision.node.shuffle-backend": "soc",
+    "provision.node.shuffle-frontend": "soc",
+    "provision.node.shuffle-opensearch": "soc",
+    "provision.node.shuffle-orborus": "soc",
+    "provision.node.soc-workstation": "soc",
+    # Enterprise workloads
+    "provision.node.ad": "enterprise",
+    "provision.node.db": "enterprise",
+    "provision.node.webapp": "enterprise",
+    "provision.node.workstation": "enterprise",
+    # Operator-selectable endpoints and infrastructure
+    "provision.node.dns": "dns",
+    "provision.node.fileshare": "fileshare",
+    "provision.node.victim": "victim",
+    "provision.node.kali": "kali",
+}
+
+
+class TechVaultPackInteraction:
+    """Assign exact TechVault component addresses to APTL operator groups."""
+
+    provider_id = "techvault-aptl-serving"
+    extension_api_version = EXTENSION_API_VERSION
+    supported_pack_id = "techvault"
+    supported_pack_versions = ("0.1.0",)
+    supported_pack_set_digests = (_PACK_SET_DIGEST,)
+    backend_target_name = "aptl"
+    backend_target_versions = ("0.1.0",)
+    backend_profiles = ("full-remote-control-plane",)
+    backend_transports: tuple[str, ...] = ()
+
+    @staticmethod
+    def resolve(
+        context: PackBackendInteractionContext,
+    ) -> PackBackendInteractionResult:
+        """Return a total mapping for the admitted TechVault node inventory."""
+
+        unknown = set(context.component_addresses) - set(_GROUP_BY_COMPONENT)
+        if unknown:
+            raise ValueError("unsupported-component-address")
+        return PackBackendInteractionResult(
+            memberships=tuple(
+                ComponentGroupMembership(address, (_GROUP_BY_COMPONENT[address],))
+                for address in context.component_addresses
+            )
+        )
+
+
+provider = TechVaultPackInteraction()
+
+__all__ = ["TechVaultPackInteraction", "provider"]

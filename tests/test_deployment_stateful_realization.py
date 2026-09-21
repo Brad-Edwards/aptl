@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -18,6 +19,7 @@ from aptl.core.credentials import PathContainmentError
 from aptl.core.certs import CertResult
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment._compose_stateful_realization import (
+    effective_stateful_model_errors,
     stateful_override_payload,
     stateful_realization_errors,
     write_stateful_override,
@@ -26,7 +28,9 @@ from aptl.core.deployment._stateful_certificates import (
     certificate_bundle_evidence,
     validate_certificate_bundle,
 )
+from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.deployment.realization import (
+    DeploymentGeneratedArtifactEnvironmentConsumer,
     DeploymentGeneratedArtifactOutput,
     DeploymentGeneratedArtifactRealization,
     DeploymentImageRealization,
@@ -164,6 +168,267 @@ def _rendered_config_spec() -> DeploymentRealizationSpec:
     )
 
 
+def _cortex_credentials_spec() -> DeploymentRealizationSpec:
+    artifact = DeploymentGeneratedArtifactRealization(
+        address="provision.generated-artifact.cortex-service-credentials",
+        name="cortex-service-credentials",
+        generator="rendered_config",
+        lifecycle="reuse_valid",
+        provenance="techvault:cortex-service-credentials/v1",
+        outputs=(
+            DeploymentGeneratedArtifactOutput(
+                name="initializer-api-key",
+                path="cortex/initializer-api-key",
+                sensitivity="secret",
+            ),
+            DeploymentGeneratedArtifactOutput(
+                name="connector-api-key",
+                path="cortex/connector-api-key",
+                sensitivity="secret",
+            ),
+        ),
+        consumers=(),
+        environment_consumers=(
+            DeploymentGeneratedArtifactEnvironmentConsumer(
+                target_address="provision.node.thehive",
+                node_name="thehive",
+                service_name="thehive",
+                output_name="connector-api-key",
+                environment_variable="TH_CORTEX_KEYS",
+            ),
+            DeploymentGeneratedArtifactEnvironmentConsumer(
+                target_address="provision.node.cortex-initializer",
+                node_name="cortex-initializer",
+                service_name="cortex-initializer",
+                output_name="initializer-api-key",
+                environment_variable="CORTEX_ADMIN_KEY",
+            ),
+        ),
+    )
+    return DeploymentRealizationSpec(
+        profiles=("soc",),
+        nodes=(
+            DeploymentNodeRealization(
+                address="provision.node.thehive",
+                name="thehive",
+                service_name="thehive",
+                container_name="aptl-thehive",
+                networks=(),
+            ),
+            DeploymentNodeRealization(
+                address="provision.node.cortex-initializer",
+                name="cortex-initializer",
+                service_name="cortex-initializer",
+                container_name="aptl-cortex-initializer",
+                networks=(),
+            ),
+        ),
+        networks=(),
+        images=(
+            DeploymentImageRealization(
+                address="provision.node.thehive",
+                service_name="thehive",
+                source_name="thehive",
+                source_version="1",
+                image_ref="thehive@sha256:" + "a" * 64,
+                mode="pull",
+                policy_rule="exact-artifact",
+            ),
+            DeploymentImageRealization(
+                address="provision.node.cortex-initializer",
+                service_name="cortex-initializer",
+                source_name="cortex",
+                source_version="1",
+                image_ref="cortex@sha256:" + "b" * 64,
+                mode="pull",
+                policy_rule="exact-artifact",
+            ),
+        ),
+        generated_artifacts=(artifact,),
+    )
+
+
+def test_cortex_credentials_are_generated_distinctly_and_reused(tmp_path: Path) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    backend._docker_daemon_id = "test-daemon"
+    artifact = _cortex_credentials_spec().generated_artifacts[0]
+
+    assert backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION) is None
+    root = tmp_path / ".aptl/realization/cortex-service-credentials"
+    initializer = (root / "cortex/initializer-api-key").read_text().strip()
+    connector = (root / "cortex/connector-api-key").read_text().strip()
+    assert len(initializer) >= 32
+    assert len(connector) >= 32
+    assert initializer != connector
+    assert (root.stat().st_mode & 0o777) == 0o700
+    assert ((root / "cortex/connector-api-key").stat().st_mode & 0o777) == 0o600
+
+    assert backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION) is None
+    assert (root / "cortex/initializer-api-key").read_text().strip() == initializer
+    assert (root / "cortex/connector-api-key").read_text().strip() == connector
+
+
+def test_cortex_credentials_bind_only_declared_environment_names(
+    tmp_path: Path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    spec = _cortex_credentials_spec()
+    artifact = spec.generated_artifacts[0]
+    assert backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION) is None
+
+    payload = stateful_override_payload(tmp_path, "aptl-test", spec)
+
+    thehive_env_files = payload["services"]["thehive"]["env_file"]
+    assert len(thehive_env_files) == 1
+    text = Path(thehive_env_files[0]).read_text()
+    assert text.startswith("TH_CORTEX_KEYS=")
+    assert "CORTEX_ADMIN_KEY" not in text
+    assert payload["services"]["cortex-initializer"]["env_file"]
+
+
+def test_generated_environment_file_rejects_variable_name_injection(
+    tmp_path: Path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    spec = _cortex_credentials_spec()
+    artifact = spec.generated_artifacts[0]
+    injected = replace(
+        artifact.environment_consumers[0],
+        environment_variable="SAFE\nINJECTED",
+    )
+    artifact = replace(
+        artifact,
+        environment_consumers=(injected, *artifact.environment_consumers[1:]),
+    )
+
+    failure = backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION)
+
+    assert failure is not None
+    assert failure.success is False
+    assert not list((tmp_path / ".aptl/realization/env").glob("*.env"))
+
+
+def test_image_free_generated_environment_uses_the_declared_output(
+    tmp_path: Path,
+) -> None:
+    from dataclasses import replace
+
+    from aptl.backends.raes_base_substrate import BaseContainerSpec
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    spec = _cortex_credentials_spec()
+    artifact = spec.generated_artifacts[0]
+    consumer = replace(
+        artifact.environment_consumers[0],
+        target_address="provision.node.kali",
+        node_name="kali",
+        service_name="kali",
+        environment_variable="CORTEX_KEY",
+    )
+    artifact = replace(artifact, environment_consumers=(consumer,))
+    realization = replace(spec, generated_artifacts=(artifact,))
+
+    failure, operations = backend._image_free_generated_artifact_ops(
+        realization,
+        frozenset({"provision.node.kali"}),
+        tmp_path,
+    )
+
+    assert failure is None
+    assert operations == {}
+    argv: list[str] = []
+    backend._append_base_environment(
+        argv,
+        BaseContainerSpec(
+            node_address="provision.node.kali",
+            container_name="aptl-kali",
+            image_ref="debian:13-slim",
+            runs_services=True,
+            environment_names=("CORTEX_KEY",),
+        ),
+    )
+    body = Path(argv[1]).read_text()
+    expected = (
+        (
+            tmp_path
+            / ".aptl/realization/cortex-service-credentials/cortex/connector-api-key"
+        )
+        .read_text()
+        .strip()
+    )
+    assert body == f"CORTEX_KEY={expected}\n"
+
+
+def test_base_environment_file_rejects_variable_name_injection(tmp_path: Path) -> None:
+    from aptl.backends.raes_base_substrate import BaseContainerSpec
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    argv: list[str] = []
+    spec = BaseContainerSpec(
+        node_address="provision.node.kali",
+        container_name="aptl-kali",
+        image_ref="debian:13-slim",
+        runs_services=False,
+        environment_names=("SAFE\nINJECTED",),
+        environment_defaults=(("SAFE\nINJECTED", "value"),),
+    )
+
+    with pytest.raises(BackendSeedError, match="environment variable name"):
+        backend._append_base_environment(argv, spec)
+
+    assert argv == []
+    assert not (tmp_path / ".aptl/realization/env/aptl-kali.env").exists()
+
+
+def test_base_environment_file_rejects_value_line_injection(tmp_path: Path) -> None:
+    from aptl.backends.raes_base_substrate import BaseContainerSpec
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    argv: list[str] = []
+    spec = BaseContainerSpec(
+        node_address="provision.node.kali",
+        container_name="aptl-kali",
+        image_ref="debian:13-slim",
+        runs_services=False,
+        environment_names=("SAFE",),
+        environment_defaults=(("SAFE", "value\nINJECTED=1"),),
+    )
+
+    with pytest.raises(BackendSeedError, match="environment value"):
+        backend._append_base_environment(argv, spec)
+
+    assert argv == []
+    assert not (tmp_path / ".aptl/realization/env/aptl-kali.env").exists()
+
+
+def test_image_free_environment_binding_rejects_variable_name_injection(
+    tmp_path: Path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    spec = _cortex_credentials_spec()
+    artifact = spec.generated_artifacts[0]
+    consumer = replace(
+        artifact.environment_consumers[0],
+        target_address="provision.node.kali",
+        node_name="kali",
+        service_name="kali",
+        environment_variable="SAFE\nINJECTED",
+    )
+    artifact = replace(artifact, environment_consumers=(consumer,))
+    realization = replace(spec, generated_artifacts=(artifact,))
+
+    failure, operations = backend._image_free_generated_artifact_ops(
+        realization,
+        frozenset({"provision.node.kali"}),
+        tmp_path,
+    )
+
+    assert failure is not None
+    assert failure.success is False
+    assert operations == {}
+    assert backend._image_free_generated_environment == {}
+
+
 def _certificate_outputs() -> tuple[DeploymentGeneratedArtifactOutput, ...]:
     return (
         DeploymentGeneratedArtifactOutput("root-ca", "root-ca.pem", "public"),
@@ -180,14 +445,16 @@ def _certificate_outputs() -> tuple[DeploymentGeneratedArtifactOutput, ...]:
 
 
 def _effective_payload(
-    tmp_path: Path, spec: DeploymentRealizationSpec
+    tmp_path: Path,
+    spec: DeploymentRealizationSpec,
+    project_name: str = "aptl-test",
 ) -> dict[str, object]:
-    payload = stateful_override_payload(tmp_path, "aptl-test", spec)
+    payload = stateful_override_payload(tmp_path, project_name, spec)
     volumes = payload.get("volumes", {})
     assert isinstance(volumes, dict)
     for name, definition in volumes.items():
         assert isinstance(definition, dict)
-        definition["name"] = f"aptl-test_{name}"
+        definition["name"] = f"{project_name}_{name}"
     return payload
 
 
@@ -380,7 +647,7 @@ def test_certificate_materialization_rejects_symlinked_output_before_docker(
     )
 
     result = backend._realize_certificate_bundle(
-        _spec().generated_artifacts[0], tmp_path
+        _spec().generated_artifacts[0], tmp_path, _spec()
     )
 
     assert result is not None
@@ -546,6 +813,7 @@ def test_generated_compose_model_is_validated_before_up(
     tmp_path: Path, monkeypatch
 ) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    backend._docker_daemon_id = "test-daemon"
     commands: list[list[str]] = []
     monkeypatch.setattr(
         backend,
@@ -563,12 +831,19 @@ def test_generated_compose_model_is_validated_before_up(
 
     def run(cmd, **kwargs):
         commands.append(cmd)
+        if cmd[:3] in (
+            ["docker", "network", "inspect"],
+            ["docker", "volume", "inspect"],
+        ):
+            return MagicMock(returncode=1, stdout="", stderr="missing")
         return MagicMock(
             returncode=0,
             stdout=(
                 "2.24.4"
                 if "version" in cmd
-                else json.dumps(_effective_payload(tmp_path, spec))
+                else json.dumps(
+                    _effective_payload(tmp_path, spec, backend.project_name)
+                )
                 if "config" in cmd
                 else ""
             ),
@@ -579,7 +854,7 @@ def test_generated_compose_model_is_validated_before_up(
     monkeypatch.setattr(
         backend,
         "_realization_result",
-        lambda start_result, spec: start_result,
+        lambda start_result, spec, observation_context: start_result,
     )
 
     result = backend.realize(spec, build=False, scenario_root=tmp_path)
@@ -648,6 +923,33 @@ def test_effective_compose_model_rejects_undeclared_certificate_mount(
     assert "undeclared certificate material" in result.error
 
 
+def test_effective_model_ignores_image_free_certificate_delivery(
+    tmp_path: Path,
+) -> None:
+    """Compose validation does not re-demand a mount delivered as a file."""
+
+    from raes.runtime_configuration import RuntimeConfiguration
+
+    spec = _spec()
+    image_free_node = replace(spec.nodes[0], runtime=RuntimeConfiguration())
+    realization = replace(
+        spec,
+        nodes=(image_free_node,),
+        images=(),
+        persistent_volumes=(),
+    )
+    payload = stateful_override_payload(tmp_path, "aptl-test", realization)
+
+    errors = effective_stateful_model_errors(
+        payload,
+        tmp_path,
+        "aptl-test",
+        realization,
+    )
+
+    assert not any("certificate material" in error for error in errors)
+
+
 def test_invalid_generated_compose_model_blocks_up(tmp_path: Path, monkeypatch) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     commands: list[list[str]] = []
@@ -682,9 +984,12 @@ def test_invalid_generated_compose_model_blocks_up(tmp_path: Path, monkeypatch) 
     assert "sensitive" not in result.error
 
 
-def test_stateful_wazuh_readiness_is_authenticated_and_observed(
-    tmp_path: Path, monkeypatch
-) -> None:
+_READINESS = "aptl.core.deployment._compose_stateful_readiness"
+
+
+def _readiness_backend(tmp_path: Path, monkeypatch) -> DockerComposeBackend:
+    """Return a backend with credentials and published Wazuh ports."""
+
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     (tmp_path / ".env").write_text(
         "INDEXER_USERNAME=indexer-user\n"
@@ -704,26 +1009,19 @@ def test_stateful_wazuh_readiness_is_authenticated_and_observed(
             }
         },
     )
-    checked: list[tuple[str, str, str]] = []
-    monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_readiness.check_indexer_ready",
-        lambda url, username, password: (
-            checked.append((url, username, password)) or True
-        ),
-    )
-    monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_readiness.check_manager_api_ready",
-        lambda url, username, password: (
-            checked.append((url, username, password)) or True
-        ),
-    )
+    return backend
+
+
+def _indexer_and_manager_spec() -> DeploymentRealizationSpec:
+    """Return a realization whose certificate bundle both Wazuh APIs consume."""
+
     spec = _spec()
     manager_consumer = _consumer(
         node="wazuh-manager",
         service="wazuh.manager",
         destination="/etc/ssl/wazuh",
     )
-    spec = DeploymentRealizationSpec(
+    return DeploymentRealizationSpec(
         profiles=spec.profiles,
         nodes=(
             *spec.nodes,
@@ -749,7 +1047,68 @@ def test_stateful_wazuh_readiness_is_authenticated_and_observed(
         ),
     )
 
-    result = backend._verify_stateful_authenticated_readiness(spec)
+
+def _polling(monkeypatch, *, timeout: int, clock: list[float]) -> list[float]:
+    """Drive the readiness deadline from an explicit clock; return the sleeps."""
+
+    from aptl.core.deployment._compose_stateful_readiness import ReadinessPolling
+
+    slept: list[float] = []
+    ticks = iter(clock)
+    monkeypatch.setattr(
+        f"{_READINESS}.ReadinessPolling",
+        lambda: ReadinessPolling(
+            timeout=timeout,
+            interval=5,
+            time_source=ticks.__next__,
+            sleep=slept.append,
+        ),
+    )
+    return slept
+
+
+def _manager_probe(phase: str, category: str, **codes):
+    from aptl.core.services import WazuhApiProbe
+
+    return WazuhApiProbe(phase, category, **codes)
+
+
+def _indexer_probe(status):
+    """Map an indexer HTTP status (``None`` = TLS warm-up) to its probe result."""
+
+    if status is None:
+        return _manager_probe("transport", "tls_handshake", curl_exit=35)
+    if 200 <= status < 300:
+        return _manager_probe("ready", "ready", http_status=status)
+    category = "credentials_rejected" if status in (401, 403) else "http_error"
+    return _manager_probe("authentication", category, http_status=status)
+
+
+_MANAGER_READY = ("ready", "ready")
+_MANAGER_TLS_WARMUP = ("transport", "tls_handshake")
+
+
+def test_stateful_wazuh_readiness_is_authenticated_and_observed(
+    tmp_path: Path, monkeypatch
+) -> None:
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    checked: list[tuple[str, str, str]] = []
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: (
+            checked.append((url, username, password)) or _indexer_probe(200)
+        ),
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: (
+            checked.append((url, username, password)) or _manager_probe(*_MANAGER_READY)
+        ),
+    )
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
+    )
 
     assert result is None
     assert checked == [
@@ -768,8 +1127,348 @@ def test_authenticated_readiness_polls_until_credentials_are_accepted(
     """A transient 401 right after health-settle is retried, not fatal.
 
     The indexer's security index (loaded from internal_users.yml) and the
-    manager API keep initializing after the healthcheck first passes, so the
-    probe must poll rather than fail on the first 401 (issue #875).
+    manager API keep initializing after the container settles, so the probe
+    must poll rather than fail on the first 401 (issue #875).
+    """
+
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    statuses = iter([401, 401, 200])
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: _indexer_probe(next(statuses)),
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: _manager_probe(*_MANAGER_READY),
+    )
+    slept = _polling(monkeypatch, timeout=300, clock=[0.0, 5.0, 10.0])
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
+    )
+
+    assert result is None
+    assert slept == [5, 5]  # two retries before the third probe succeeded
+    assert backend.authenticated_readiness == {
+        "wazuh.indexer": True,
+        "wazuh.manager": True,
+    }
+
+
+def test_manager_tls_warm_up_is_retried_quietly_then_ready(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
+    """The clean-boot shape from issue #1002.
+
+    The generated manager service has no healthcheck, so this loop starts while
+    the API is not yet listening and Docker's port proxy reports exit 35. That
+    warm-up is retried inside the budget and logs nothing at warning level.
+    """
+
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: _indexer_probe(200),
+    )
+    probes = iter(
+        [
+            _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35),
+            _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35),
+            _manager_probe("authentication", "credentials_rejected", http_status=401),
+            _manager_probe(*_MANAGER_READY),
+        ]
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: next(probes),
+    )
+    slept = _polling(monkeypatch, timeout=300, clock=[0.0, 5.0, 10.0, 15.0])
+
+    with caplog.at_level("DEBUG", logger="aptl"):
+        result = backend._verify_stateful_authenticated_readiness(
+            _indexer_and_manager_spec()
+        )
+
+    assert result is None
+    assert slept == [5, 5, 5]
+    assert [r for r in caplog.records if r.levelno >= 30] == []
+    assert backend.authenticated_readiness["wazuh.manager"] is True
+
+
+def test_a_proven_service_is_not_reprobed_while_another_warms_up(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Readiness latches per service (issue #1002 review).
+
+    Once the indexer authenticates, it is not probed again while the manager
+    warms up, so a later transient indexer answer cannot overwrite the proof
+    and fail the realization at the manager's deadline.
+    """
+
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    indexer_statuses = iter([200, 401, 401])
+    indexer_probes: list[str] = []
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: (
+            indexer_probes.append(url) or _indexer_probe(next(indexer_statuses))
+        ),
+    )
+    probes = iter(
+        [
+            _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35),
+            _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35),
+            _manager_probe(*_MANAGER_READY),
+        ]
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: next(probes),
+    )
+    slept = _polling(monkeypatch, timeout=300, clock=[0.0, 5.0, 10.0])
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
+    )
+
+    assert result is None
+    assert indexer_probes == ["https://localhost:19200"]
+    assert slept == [5, 5]
+    assert backend.authenticated_readiness == {
+        "wazuh.indexer": True,
+        "wazuh.manager": True,
+    }
+
+
+def test_persistent_manager_tls_failure_fails_closed_with_its_phase(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Recovery is not assumed: exit 35 through the deadline fails startup."""
+
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: _indexer_probe(200),
+    )
+    probes: list[str] = []
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: (
+            probes.append(url) or _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35)
+        ),
+    )
+    slept = _polling(monkeypatch, timeout=10, clock=[0.0, 5.0, 10.0])
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
+    )
+
+    assert result is not None
+
+    assert result.success is False
+    assert result.error == (
+        "Authenticated Wazuh readiness validation failed after 10s: "
+        "wazuh.manager at https://localhost:55001 transport phase failed: "
+        "tls_handshake (curl exit 35). Inspect `aptl container logs "
+        "aptl-wazuh-manager`."
+    )
+    # Bounded: the deadline read after the second round ends the loop.
+    assert len(probes) == 2
+    assert slept == [5]
+    assert backend.authenticated_readiness == {
+        "wazuh.indexer": True,
+        "wazuh.manager": False,
+    }
+
+
+def test_readiness_retry_sleep_is_clamped_to_the_remaining_budget(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """No probe may start after the deadline (issue #1002 review)."""
+
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: _indexer_probe(200),
+    )
+    probes: list[str] = []
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: (
+            probes.append(url) or _manager_probe(*_MANAGER_TLS_WARMUP, curl_exit=35)
+        ),
+    )
+    # 8s budget, 5s interval: after the second round only 2s remain, so the
+    # loop sleeps 2s and makes its last probe at the deadline.
+    slept = _polling(monkeypatch, timeout=8, clock=[0.0, 1.0, 6.0, 8.0])
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
+    )
+
+    assert result is not None
+
+    assert result.success is False
+    assert len(probes) == 3
+    assert slept == [5, 2.0]
+
+
+def test_persistent_credential_rejection_names_both_services_without_secrets(
+    tmp_path: Path, monkeypatch
+) -> None:
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: _indexer_probe(401),
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: _manager_probe(
+            "authentication", "credentials_rejected", http_status=401
+        ),
+    )
+    _polling(monkeypatch, timeout=0, clock=[0.0, 0.0])
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
+    )
+
+    assert result is not None
+
+    assert result.success is False
+    assert result.error == (
+        "Authenticated Wazuh readiness validation failed after 0s: "
+        "wazuh.indexer at https://localhost:19200 authentication phase failed: "
+        "credentials_rejected (HTTP 401); "
+        "wazuh.manager at https://localhost:55001 authentication phase failed: "
+        "credentials_rejected (HTTP 401). Inspect `aptl container logs "
+        "aptl-wazuh-indexer` and `aptl container logs aptl-wazuh-manager`."
+    )
+    for secret in ("indexer-password", "api-password", "indexer-user", "api-user"):
+        assert secret not in result.error
+
+
+@pytest.mark.parametrize(
+    ("status", "detail"),
+    [
+        (None, "transport phase failed: tls_handshake (curl exit 35)"),
+        (500, "authentication phase failed: http_error (HTTP 500)"),
+    ],
+)
+def test_indexer_failures_are_classified_from_its_status_probe(
+    tmp_path: Path, monkeypatch, status, detail
+) -> None:
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: _indexer_probe(status),
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: _manager_probe(*_MANAGER_READY),
+    )
+    _polling(monkeypatch, timeout=0, clock=[0.0, 0.0])
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
+    )
+
+    assert result is not None
+    assert result.error.startswith(
+        "Authenticated Wazuh readiness validation failed after 0s: "
+        f"wazuh.indexer at https://localhost:19200 {detail}. "
+    )
+
+
+def test_unpublished_api_port_is_reported_without_probing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    monkeypatch.setattr(backend, "container_inspect", lambda name: {})
+    probed: list[str] = []
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda url, username, password: probed.append(url) or _indexer_probe(200),
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: (
+            probed.append(url) or _manager_probe(*_MANAGER_READY)
+        ),
+    )
+    _polling(monkeypatch, timeout=0, clock=[0.0, 0.0])
+
+    result = backend._verify_stateful_authenticated_readiness(
+        _indexer_and_manager_spec()
+    )
+
+    assert probed == []
+    assert result is not None
+    assert result.error == (
+        "Authenticated Wazuh readiness validation failed after 0s: "
+        "wazuh.indexer has no published host port for 9200/tcp; "
+        "wazuh.manager has no published host port for 55000/tcp. "
+        "Inspect `aptl container logs aptl-wazuh-indexer` and "
+        "`aptl container logs aptl-wazuh-manager`."
+    )
+
+
+def test_authenticated_readiness_rejects_an_unapplied_manager_config(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A live API cannot mask an init failure that left the stock config active."""
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    (tmp_path / ".env").write_text(
+        "INDEXER_USERNAME=indexer-user\n"
+        "INDEXER_PASSWORD=indexer-password\n"
+        "API_USERNAME=api-user\n"
+        "API_PASSWORD=api-password\n"
+    )
+    monkeypatch.setattr(
+        backend,
+        "container_inspect",
+        lambda name: {
+            "NetworkSettings": {"Ports": {"55000/tcp": [{"HostPort": "55001"}]}}
+        },
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: _manager_probe(*_MANAGER_READY),
+    )
+    commands: list[tuple[str, list[str]]] = []
+
+    def _exec(name, command, *, timeout=None):
+        commands.append((name, command))
+        return MagicMock(returncode=1, stdout="", stderr="")
+
+    monkeypatch.setattr(backend, "container_exec", _exec)
+
+    result = backend._verify_stateful_authenticated_readiness(_rendered_config_spec())
+
+    assert result is not None
+    assert result.success is False
+    assert result.error == "Wazuh manager did not activate its rendered configuration."
+    assert backend.authenticated_readiness == {"wazuh.manager": True}
+    assert commands == [
+        (
+            "aptl-wazuh-manager",
+            [
+                "/bin/sh",
+                "-c",
+                "test \"$(sha256sum /var/ossec/etc/ossec.conf | cut -d' ' -f1)\" = \"$(sha256sum /wazuh-config-mount/etc/ossec.conf | cut -d' ' -f1)\"",
+            ],
+        )
+    ]
+
+
+def test_authenticated_readiness_accepts_an_applied_manager_config(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The success branch of the rendered-config gate: a matching config passes.
+
+    Pairs with the unapplied-config test so a gate that always refuses cannot
+    hide behind the failure case.
     """
 
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
@@ -783,79 +1482,35 @@ def test_authenticated_readiness_polls_until_credentials_are_accepted(
         backend,
         "container_inspect",
         lambda name: {
-            "NetworkSettings": {
-                "Ports": {
-                    "9200/tcp": [{"HostPort": "19200"}],
-                    "55000/tcp": [{"HostPort": "55001"}],
-                }
-            }
+            "NetworkSettings": {"Ports": {"55000/tcp": [{"HostPort": "55001"}]}}
         },
     )
-    # The indexer rejects credentials on the first two probes, then accepts.
-    indexer_attempts = {"n": 0}
-
-    def _indexer_ready(url, username, password):
-        indexer_attempts["n"] += 1
-        return indexer_attempts["n"] >= 3
-
     monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_readiness.check_indexer_ready",
-        _indexer_ready,
+        f"{_READINESS}.probe_manager_api",
+        lambda url, username, password: _manager_probe(*_MANAGER_READY),
     )
-    monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_readiness.check_manager_api_ready",
-        lambda url, username, password: True,
-    )
-    slept: list[float] = []
-    monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_readiness.time.sleep",
-        slept.append,
-    )
+    executed: list[str] = []
 
-    spec = _spec()
-    manager_consumer = _consumer(
-        node="wazuh-manager",
-        service="wazuh.manager",
-        destination="/etc/ssl/wazuh",
-    )
-    spec = DeploymentRealizationSpec(
-        profiles=spec.profiles,
-        nodes=(
-            *spec.nodes,
-            DeploymentNodeRealization(
-                address="provision.node.wazuh-manager",
-                name="wazuh-manager",
-                service_name="wazuh.manager",
-                container_name="aptl-wazuh-manager",
-                networks=(),
-            ),
-        ),
-        networks=(),
-        generated_artifacts=(
-            DeploymentGeneratedArtifactRealization(
-                **{
-                    **spec.generated_artifacts[0].__dict__,
-                    "consumers": (
-                        *spec.generated_artifacts[0].consumers,
-                        manager_consumer,
-                    ),
-                }
-            ),
-        ),
-    )
+    def _exec(name, command, *, timeout=None):
+        executed.append(name)
+        return MagicMock(returncode=0, stdout="", stderr="")
 
-    result = backend._verify_stateful_authenticated_readiness(spec)
+    monkeypatch.setattr(backend, "container_exec", _exec)
+
+    result = backend._verify_stateful_authenticated_readiness(_rendered_config_spec())
 
     assert result is None
-    assert indexer_attempts["n"] == 3
-    assert len(slept) == 2  # two retries before the third probe succeeded
-    assert backend.authenticated_readiness == {
-        "wazuh.indexer": True,
-        "wazuh.manager": True,
-    }
+    assert executed == ["aptl-wazuh-manager"]
+    assert backend.authenticated_readiness == {"wazuh.manager": True}
 
 
 # -- ssh_key_bundle dispatch and image-free delivery (issue #875) -------------
+
+
+#: A realization with no nodes: these tests exercise generator dispatch and
+#: containment, not the authored-host derivation the certificate bundle reads
+#: from the spec, and a scenario with no nodes authors no hosts.
+_EMPTY_REALIZATION = DeploymentRealizationSpec(profiles=(), nodes=(), networks=())
 
 
 def _ssh_artifact(consumers=()) -> DeploymentGeneratedArtifactRealization:
@@ -923,7 +1578,7 @@ def test_ssh_key_bundle_is_generated_under_its_canonical_contained_root(
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     staged = _stub_ssh_generator(monkeypatch)
 
-    assert backend._realize_one_generated_artifact(_ssh_artifact(), tmp_path) is None
+    assert backend._realize_one_generated_artifact(_ssh_artifact(), tmp_path, _EMPTY_REALIZATION) is None
 
     assert staged == [
         tmp_path.resolve() / SSH_KEY_BUNDLE_ROOT_RELPATH / "techvault-ssh-keys"
@@ -938,7 +1593,7 @@ def test_ssh_key_bundle_generation_failure_fails_the_realization_closed(
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     _stub_ssh_generator(monkeypatch, error="ssh-keygen unavailable")
 
-    result = backend._realize_one_generated_artifact(_ssh_artifact(), tmp_path)
+    result = backend._realize_one_generated_artifact(_ssh_artifact(), tmp_path, _EMPTY_REALIZATION)
 
     assert result is not None
     assert result.success is False
@@ -975,7 +1630,7 @@ def test_an_unsupported_generator_kind_is_refused(tmp_path: Path) -> None:
         **{**_ssh_artifact().__dict__, "generator": "quantum_entropy_bundle"}
     )
 
-    result = backend._realize_one_generated_artifact(artifact, tmp_path)
+    result = backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION)
 
     assert result is not None
     assert result.success is False
@@ -1016,7 +1671,9 @@ def test_image_free_consumers_receive_their_selected_outputs_as_placed_files(
         ),
     )
     realization = DeploymentRealizationSpec(
-        profiles=(), nodes=(), networks=(),
+        profiles=(),
+        nodes=(),
+        networks=(),
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
@@ -1043,7 +1700,9 @@ def test_an_artifact_with_no_image_free_consumer_is_not_generated_here(
     staged = _stub_ssh_generator(monkeypatch)
     consumer = _image_free_consumer("kali", selected=("target-authorized-keys",))
     realization = DeploymentRealizationSpec(
-        profiles=(), nodes=(), networks=(),
+        profiles=(),
+        nodes=(),
+        networks=(),
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
@@ -1061,10 +1720,15 @@ def test_a_generator_failure_stops_image_free_placement(
     """Nothing is placed from an artifact that failed to generate."""
 
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    backend._image_free_generated_environment = {
+        "provision.node.workstation": {"STALE_SECRET": "must-not-survive"}
+    }
     _stub_ssh_generator(monkeypatch, error="no entropy source")
     consumer = _image_free_consumer("workstation", selected=("target-authorized-keys",))
     realization = DeploymentRealizationSpec(
-        profiles=(), nodes=(), networks=(),
+        profiles=(),
+        nodes=(),
+        networks=(),
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
@@ -1075,6 +1739,7 @@ def test_a_generator_failure_stops_image_free_placement(
     assert failure is not None
     assert failure.success is False
     assert ops == {}
+    assert backend._image_free_generated_environment == {}
 
 
 def test_a_declared_output_that_never_materialized_stops_image_free_placement(
@@ -1085,11 +1750,15 @@ def test_a_declared_output_that_never_materialized_stops_image_free_placement(
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     monkeypatch.setattr(
         "aptl.core.deployment._compose_stateful_realization.realize_ssh_key_bundle",
-        lambda artifact, staging_root, **kwargs: None,  # reports success, writes nothing
+        lambda artifact, staging_root, **kwargs: (
+            None
+        ),  # reports success, writes nothing
     )
     consumer = _image_free_consumer("workstation", selected=("target-authorized-keys",))
     realization = DeploymentRealizationSpec(
-        profiles=(), nodes=(), networks=(),
+        profiles=(),
+        nodes=(),
+        networks=(),
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
@@ -1160,11 +1829,9 @@ def test_the_soc_service_set_is_derived_from_the_declared_bundle_outputs(
 
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     artifact = _soc_artifact()
-    requested = _stub_soc_certs(
-        monkeypatch, written=[o.path for o in artifact.outputs]
-    )
+    requested = _stub_soc_certs(monkeypatch, written=[o.path for o in artifact.outputs])
 
-    assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
+    assert backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION) is None
 
     # Root-level CA output names no service; each first path segment does.
     assert requested == [("misp", "thehive")]
@@ -1179,7 +1846,7 @@ def test_a_soc_bundle_missing_a_declared_output_fails_closed(
     artifact = _soc_artifact()
     _stub_soc_certs(monkeypatch, written=["lab-ca.pem", "misp/server.pem"])
 
-    result = backend._realize_one_generated_artifact(artifact, tmp_path)
+    result = backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION)
 
     assert result is not None
     assert result.success is False
@@ -1192,7 +1859,7 @@ def test_a_failed_soc_generator_fails_closed(tmp_path: Path, monkeypatch) -> Non
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     _stub_soc_certs(monkeypatch, success=False, error="no openssl")
 
-    result = backend._realize_one_generated_artifact(_soc_artifact(), tmp_path)
+    result = backend._realize_one_generated_artifact(_soc_artifact(), tmp_path, _EMPTY_REALIZATION)
 
     assert result is not None
     assert result.success is False
@@ -1231,7 +1898,7 @@ def test_flag_signing_keys_are_generated_under_their_canonical_root(
         lambda artifact, staging_root: staged.append(staging_root),
     )
 
-    assert backend._realize_one_generated_artifact(_flag_artifact(), tmp_path) is None
+    assert backend._realize_one_generated_artifact(_flag_artifact(), tmp_path, _EMPTY_REALIZATION) is None
 
     assert staged == [tmp_path.resolve() / FLAG_SIGNING_ROOT_RELPATH / "flag-keys"]
 
@@ -1247,7 +1914,7 @@ def test_a_flag_signing_generation_failure_fails_closed(
         lambda artifact, staging_root: "unsupported signing profile",
     )
 
-    result = backend._realize_one_generated_artifact(_flag_artifact(), tmp_path)
+    result = backend._realize_one_generated_artifact(_flag_artifact(), tmp_path, _EMPTY_REALIZATION)
 
     assert result is not None
     assert result.success is False
@@ -1281,7 +1948,7 @@ def test_a_generated_artifact_path_outside_the_bundle_is_refused(
         lambda root, artifact: tmp_path.parent / "elsewhere" / "keys",
     )
 
-    result = backend._realize_one_generated_artifact(artifact_factory(), tmp_path)
+    result = backend._realize_one_generated_artifact(artifact_factory(), tmp_path, _EMPTY_REALIZATION)
 
     assert result is not None
     assert result.success is False
@@ -1298,16 +1965,23 @@ def _content_override_spec(tmp_path: Path):
         profiles=(),
         nodes=(
             DeploymentNodeRealization(
-                address="provision.node.tempo", name="tempo", service_name="tempo",
-                container_name="aptl-tempo", networks=(),
+                address="provision.node.tempo",
+                name="tempo",
+                service_name="tempo",
+                container_name="aptl-tempo",
+                networks=(),
             ),
         ),
         networks=(),
         images=(
             DeploymentImageRealization(
-                address="provision.node.tempo", service_name="tempo",
-                source_name="img", source_version="1", image_ref="img:1",
-                mode="pull", policy_rule="allowed-source",
+                address="provision.node.tempo",
+                service_name="tempo",
+                source_name="img",
+                source_version="1",
+                image_ref="img:1",
+                mode="pull",
+                policy_rule="allowed-source",
             ),
         ),
         content=(
@@ -1368,9 +2042,7 @@ def test_no_image_node_content_means_no_override_file(tmp_path: Path) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     empty = DeploymentRealizationSpec(profiles=(), nodes=(), networks=())
 
-    assert (
-        backend._write_image_node_content_override(empty, tmp_path, tmp_path) is None
-    )
+    assert backend._write_image_node_content_override(empty, tmp_path, tmp_path) is None
     assert not (tmp_path / ".aptl/realization/compose.content.yml").exists()
 
 

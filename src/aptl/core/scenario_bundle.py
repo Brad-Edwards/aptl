@@ -19,7 +19,7 @@ from __future__ import annotations
 import importlib.resources as _resources
 import os
 import shutil
-import time
+import re
 import uuid
 from dataclasses import dataclass
 from enum import Enum
@@ -28,6 +28,13 @@ from pathlib import Path
 from aptl.utils.pathsafe import PathContainmentError, read_contained_nofollow
 
 _ENV_PACK_PACKAGE = "raes_env_packs"
+
+
+def validate_scenario_identity(value: str) -> str:
+    """Require an opaque selector that cannot act as a filesystem path."""
+    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", value):
+        raise ValueError("invalid scenario identity")
+    return value
 
 
 class EnvPackError(Exception):
@@ -159,44 +166,16 @@ def env_pack_bundle(
             or fails either env-packs validation gate.
     """
 
+    try:
+        validate_scenario_identity(identity)
+    except ValueError as exc:
+        raise EnvPackError("invalid env-pack identity") from exc
     staging_root = Path(staging_root)
     if source_pack is not None:
         return _stage_and_validate(Path(source_pack), staging_root, identity)
     resource = _resources.files(package) / "resources" / "packs" / identity
     with _resources.as_file(resource) as located:
         return _stage_and_validate(Path(located), staging_root, identity)
-
-
-_STAGING_SWEEP_AGE_SECONDS = 3600
-
-
-def _sweep_stale_stagings(staging_root: Path, identity: str) -> None:
-    """Best-effort removal of this identity's stale per-invocation staged trees.
-
-    Per-invocation staging (below) never reuses or deletes a tree another caller
-    might be reading, but that means finished invocations leave their tree
-    behind. Sweep siblings older than an hour -- long past any realization that
-    still needs its staged content -- so the staging root does not grow without
-    bound. A tree a live peer is still writing or reading is younger than the
-    threshold and is left alone; a concurrent sweeper losing the race to remove
-    one is expected and ignored.
-    """
-
-    prefix = f"{identity}."
-    try:
-        entries = list(staging_root.iterdir())
-    except OSError:
-        return
-    for entry in entries:
-        if not entry.name.startswith(prefix) or not entry.is_dir():
-            continue
-        try:
-            age = time.time() - entry.stat().st_mtime
-        except OSError:
-            continue
-        if age < _STAGING_SWEEP_AGE_SECONDS:
-            continue
-        shutil.rmtree(entry, ignore_errors=True)
 
 
 def _stage_and_validate(
@@ -210,10 +189,9 @@ def _stage_and_validate(
     """
 
     if not source_pack.is_dir():
-        raise EnvPackError(f"env-pack source not found for {identity!r}: {source_pack}")
+        raise EnvPackError(f"env-pack source not found for {identity!r}")
 
     staging_root.mkdir(parents=True, exist_ok=True)
-    _sweep_stale_stagings(staging_root, identity)
     # Each invocation stages into its own fresh directory. Two concurrent
     # invocations (pytest-xdist workers exercising the gate, or two aptl runs on
     # one project) therefore never share a tree, so none rmtrees or reads a tree
@@ -228,25 +206,27 @@ def _stage_and_validate(
     # identity.
     token = f"{identity}.{os.getpid()}-{uuid.uuid4().hex[:12]}"
     staged = staging_root / token / identity
-    # copytree copies file *contents* (not hardlinks), so every staged member is
-    # a singly-linked regular file, and the tree is fresh, so its inventory is
-    # exactly the pack's -- except that a pip install (unlike uv) byte-compiles
-    # the pack's shipped .py files in place, so the installed source carries
-    # __pycache__/*.pyc the manifest never lists. Those are installer artifacts,
-    # not pack content; excluding them keeps the staged inventory exactly the
-    # manifest's, so the env-packs exact-inventory gate passes (issue #875).
-    shutil.copytree(
-        source_pack,
-        staged,
-        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
-    )
-    pack_identity = _validate_staged_pack(staged, identity)
+    # Inputs can outlive an hour-long startup or observation. Only a lifecycle
+    # owner may remove successful staging; another acquisition never sweeps it.
+    from aptl.core._pack_staging import copy_pack
+
+    staged.mkdir(parents=True, mode=0o700)
+    try:
+        copy_pack(source_pack, staged)
+        pack_identity = _validate_staged_pack(staged, identity)
+    except (OSError, ValueError, PathContainmentError) as exc:
+        shutil.rmtree(staged.parent)
+        raise EnvPackError(
+            "env-pack acquisition rejected unsafe source or exceeded its budget"
+        ) from exc
+    except EnvPackError:
+        shutil.rmtree(staged.parent)
+        raise
 
     sdl_path = staged / "sdl" / f"{identity}.sdl.yaml"
     if not sdl_path.is_file():
-        raise EnvPackError(
-            f"env-pack {identity!r} declares no sdl/{identity}.sdl.yaml"
-        )
+        shutil.rmtree(staged.parent)
+        raise EnvPackError(f"env-pack {identity!r} declares no sdl/{identity}.sdl.yaml")
     return ScenarioBundle(
         identity=identity,
         root=staged.resolve(),
@@ -284,7 +264,7 @@ def _validate_staged_pack(staged: Path, identity: str) -> PackIdentity:
         manifest = validate_pack_content_manifest(str(staged))
     except PackDigestError as exc:
         raise EnvPackError(
-            f"env-pack {identity!r} content manifest is invalid: {exc}"
+            f"env-pack {identity!r} content manifest is invalid"
         ) from exc
     try:
         return PackIdentity(

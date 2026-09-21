@@ -155,3 +155,15 @@ def test_resolve_acquired_scenario_unknown_id_is_not_found():
 
     with pytest.raises(ScenarioNotFoundError):
         resolve_acquired_scenario(Path(__file__).resolve().parents[1], "nope")
+
+
+def test_invalid_catalog_projection_removes_its_staging(mocker, tmp_path):
+    from aptl.core.scenario_catalog import load_scenario_catalog
+
+    mocker.patch(
+        "aptl.core.scenario_catalog._entry_from_projection",
+        side_effect=ValueError("invalid projection"),
+    )
+    with pytest.raises(ValueError, match="catalog unavailable"):
+        load_scenario_catalog(tmp_path)
+    assert not list(tmp_path.rglob("pack.yaml"))

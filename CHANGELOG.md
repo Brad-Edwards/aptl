@@ -9,6 +9,73 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [5.5.0](https://github.com/Brad-Edwards/aptl/compare/v5.4.0...v5.5.0) (2026-09-17)
+
+
+### Features
+
+* enforce scope-aware TechVault evidence capture ([#1046](https://github.com/Brad-Edwards/aptl/issues/1046)) ([042be31](https://github.com/Brad-Edwards/aptl/commit/042be3176a63fda24eef9e8267e6fce5212eb6c0))
+* **mcp:** resolve MCP client host ports from the lab's remapped publications ([#1047](https://github.com/Brad-Edwards/aptl/issues/1047)) ([eb618a9](https://github.com/Brad-Edwards/aptl/commit/eb618a940aa242c29ffe5fa6c80d21ce268cc9c4))
+
+
+### Bug Fixes
+
+* **certs:** run the Wazuh cert generator as container-root under rootless Docker ([#1044](https://github.com/Brad-Edwards/aptl/issues/1044)) ([6b65e71](https://github.com/Brad-Edwards/aptl/commit/6b65e71421a032c9512ff195dd3aaa7c85f838e1))
+
+## [5.4.0](https://github.com/Brad-Edwards/aptl/compare/v5.3.1...v5.4.0) (2026-09-16)
+
+
+### Features
+
+* add scope-aware backend evidence capture ([#1020](https://github.com/Brad-Edwards/aptl/issues/1020)) ([3414c83](https://github.com/Brad-Edwards/aptl/commit/3414c83a001de6076c190496d875b8a081163908))
+* **deployment:** honor a unix:// DOCKER_HOST for the local Docker control endpoint ([#1039](https://github.com/Brad-Edwards/aptl/issues/1039)) ([d4ec7c7](https://github.com/Brad-Edwards/aptl/commit/d4ec7c7af977ab4a006841f3f5d8d58f98a6fea8))
+
+
+### Bug Fixes
+
+* synchronize Starlette lock state ([ace1bda](https://github.com/Brad-Edwards/aptl/commit/ace1bdaced395f7929ff718a1166127e90a477a8))
+* synchronize starlette lock state ([#1035](https://github.com/Brad-Edwards/aptl/issues/1035)) ([ace1bda](https://github.com/Brad-Edwards/aptl/commit/ace1bdaced395f7929ff718a1166127e90a477a8))
+
+## [5.3.1](https://github.com/Brad-Edwards/aptl/compare/v5.3.0...v5.3.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* **env:** reconcile hash-pinned indexer/dashboard fixtures during .env hydration ([#1023](https://github.com/Brad-Edwards/aptl/issues/1023)) ([31d8f85](https://github.com/Brad-Edwards/aptl/commit/31d8f853688c02e3c1047d27e5868eddd53750a2)), closes [#1021](https://github.com/Brad-Edwards/aptl/issues/1021)
+* prevent partial lab startup success ([#1001](https://github.com/Brad-Edwards/aptl/issues/1001)) ([16dc3d3](https://github.com/Brad-Edwards/aptl/commit/16dc3d38694b4017f5c6afcfa50a123cf8279ae2))
+* **readiness:** quiet Wazuh API warm-up and fail closed on persistent failure ([#1016](https://github.com/Brad-Edwards/aptl/issues/1016)) ([29bc37e](https://github.com/Brad-Edwards/aptl/commit/29bc37efea39a8cc8179826394fe5590b15077d8))
+* **validation:** stop BC-09's fixture losing the timeout race to its own setup ([#1008](https://github.com/Brad-Edwards/aptl/issues/1008)) ([d66d7b5](https://github.com/Brad-Edwards/aptl/commit/d66d7b566815ad08eb057b2f82b245aac75c682c))
+
+
+### Documentation
+
+* align CLI-003 with the current lab start sequence and ADR-030 failure policy ([#1019](https://github.com/Brad-Edwards/aptl/issues/1019)) ([30e876e](https://github.com/Brad-Edwards/aptl/commit/30e876eb26d4314b17e4cb2fd3d801b9567d8b58))
+
+## [5.3.0](https://github.com/Brad-Edwards/aptl/compare/v5.2.0...v5.3.0) (2026-09-11)
+
+
+### Features
+
+* define scenario verification plugin seam ([#973](https://github.com/Brad-Edwards/aptl/issues/973)) ([ff73990](https://github.com/Brad-Edwards/aptl/commit/ff739906acb342a7735fecf10f41017ed8ae7c45))
+* realize runtime orchestration authority ([#959](https://github.com/Brad-Edwards/aptl/issues/959)) ([6539050](https://github.com/Brad-Edwards/aptl/commit/65390508db54d118b4dd685db742f3a282b4f366))
+* **scenario:** qualify verifier compatibility atomically and install it on the gate path ([#982](https://github.com/Brad-Edwards/aptl/issues/982)) ([e83dd86](https://github.com/Brad-Edwards/aptl/commit/e83dd86f05db1753128176ac0efdfd799237cb3e))
+
+
+### Bug Fixes
+
+* derive lab-start pre-flight from the admitted realization ([#960](https://github.com/Brad-Edwards/aptl/issues/960)) ([170593a](https://github.com/Brad-Edwards/aptl/commit/170593a6a9b4dc8aac1b4f47bfb209318102cd62))
+* retire Shuffle post-realization mutation ([#950](https://github.com/Brad-Edwards/aptl/issues/950)) ([b6928e5](https://github.com/Brad-Edwards/aptl/commit/b6928e52fdf6f88d02a4422b3592f4f003f1e3c6))
+* **workbench:** escalate group teardown unconditionally and stop reading EPERM as presence ([#997](https://github.com/Brad-Edwards/aptl/issues/997)) ([7c673a1](https://github.com/Brad-Edwards/aptl/commit/7c673a19f9fb6a3eb1d17305104196b600bd59cc))
+
+
+### Documentation
+
+* audit APTL-to-LilRAE rename boundary ([#972](https://github.com/Brad-Edwards/aptl/issues/972)) ([201b258](https://github.com/Brad-Edwards/aptl/commit/201b25835ba394ef1acb7444a08ab6a0b149c143))
+* clarify scenario-pack ownership terminology ([#975](https://github.com/Brad-Edwards/aptl/issues/975)) ([fb7d535](https://github.com/Brad-Edwards/aptl/commit/fb7d53562277fbab513425ddd3994b5393680600))
+* clarify scenario-pack terminology ([fb7d535](https://github.com/Brad-Edwards/aptl/commit/fb7d53562277fbab513425ddd3994b5393680600))
+* record capture asset ownership ([#981](https://github.com/Brad-Edwards/aptl/issues/981)) ([e76f66f](https://github.com/Brad-Edwards/aptl/commit/e76f66f898817381113290b6a49b428bee0329b5))
+* review APTL readiness for LilRAE migration ([#971](https://github.com/Brad-Edwards/aptl/issues/971)) ([d48d2b7](https://github.com/Brad-Edwards/aptl/commit/d48d2b7e7fb1c1828b2982be917b7b0a98aa6db1))
+
 ## [5.2.0](https://github.com/Brad-Edwards/aptl/compare/v5.1.1...v5.2.0) (2026-09-03)
 
 

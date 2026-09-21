@@ -1,0 +1,87 @@
+name: materialization-envelope-smoke
+description: >
+  Product-neutral smoke scenario for the public APTL materialization path.
+  It exercises scenario admission, backend substrate selection, package and
+  local-identity realization, filesystem realization, inline content placement,
+  service-manager unit setup, declared listener and host-published port
+  realization, networking, native readback, orchestration, lifecycle status,
+  and teardown without depending on a scenario adapter.
+
+  The content, service, listener and port declarations form one causal chain
+  (issue #993): the placed config moves the SSH daemon off its package default
+  port, so a content placement that silently did not happen cannot leave the
+  listener, the published binding, or the endpoint probe passing.
+nodes:
+  smoke-net:
+    type: switch
+    description: Isolated smoke-test network.
+  smoke-box:
+    type: compute
+    os: linux
+    runtime:
+      packages:
+        - {manager: apt, name: curl, version: "*"}
+        - {manager: apt, name: openssh-server, version: "*"}
+      local_identity:
+        groups:
+          - {name: analysts}
+        users:
+          - {username: analyst, supplemental_groups: [analysts]}
+      filesystem_inventory:
+        - {path: /var/lib/aptl-smoke, entry_type: directory, owner_user: analyst, owner_group: analysts, mode: "0750"}
+      service_manager_units:
+        - unit_id: smoke-sshd
+          unit_name: ssh.service
+          enabled_state: enabled
+          active_state: active
+          description: >
+            Package-owned SSH daemon configured by the placed content. Only the
+            dimensions APTL reads back are declared: it corroborates load,
+            enabled and active state through the service manager, and refuses a
+            declaration it cannot observe rather than approximating it
+            (SEM-218). `unit_type`, `unit_file_path`, `exec_start` and `service`
+            are deliberately left unset for that reason.
+      service_listeners:
+        - service_listener_id: smoke-sshd-listener
+          address: 0.0.0.0
+          port: 2022
+          protocol: tcp
+          description: >
+            The port the placed content authors. A daemon on the package
+            default 22 does not satisfy this declaration. The daemon binds
+            every address inside its own isolated namespace; the host-facing
+            exposure is the loopback publication below.
+      network:
+        published_ports:
+          - container_port: 2022
+            protocol: tcp
+            host_ip: 127.0.0.1
+            host_port: 32022
+            description: Loopback-only host publication for the smoke listener.
+content:
+  smoke-sshd-config:
+    type: file
+    target: smoke-box
+    path: /etc/ssh/sshd_config.d/10-aptl-smoke.conf
+    text: "Port 2022\n"
+    sensitive: false
+    description: >
+      Non-secret drop-in read through the package's own
+      `Include /etc/ssh/sshd_config.d/*.conf`. It carries no credential and
+      no authentication policy; it moves the listener so the service, listener
+      and port checks all depend on the placement having really happened.
+workflows:
+  smoke-control:
+    description: >
+      Smallest control graph the ordinary orchestrator adapter can drive to a
+      terminal portable result. It selects no runtime Docker authority and
+      spawns no workload.
+    start: finish
+    steps:
+      finish:
+        type: end
+infrastructure:
+  smoke-net:
+    properties: {cidr: 172.31.250.0/24, gateway: 172.31.250.1, internal: true}
+  smoke-box:
+    links: [smoke-net]

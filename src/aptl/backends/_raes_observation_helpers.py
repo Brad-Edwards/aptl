@@ -7,17 +7,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from aptl.core.deployment._compose_realization_networks import (
-    _match_managed_network,
-)
+from raes_contracts.realization_observation import ObservedOperatingSystemIdentity
+
 from aptl.core.deployment._compose_service_health import (
+    container_completed_successfully,
     container_health,
     container_running,
 )
-from aptl.core.deployment.errors import (
-    BackendSeedError,
-    BackendTimeoutError,
-)
+from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
     DeploymentPersistentVolumeRealization,
@@ -44,6 +41,7 @@ class ObservedResource(object):
     realized: bool
     concerns: dict[tuple[str, ...], object] = field(default_factory=dict)
     evidence: dict[str, object] = field(default_factory=dict)
+    operating_system: ObservedOperatingSystemIdentity | None = None
 
 
 def consumer_mount_evidence(
@@ -131,7 +129,13 @@ def artifact_spec(
         "lifecycle": artifact.lifecycle,
         "provenance": artifact.provenance,
         "outputs": [output.details() for output in artifact.outputs],
-        "consumers": [consumer_spec(consumer) for consumer in artifact.consumers],
+        "consumers": [
+            consumer_spec(consumer, include_delivery_mode=True)
+            for consumer in artifact.consumers
+        ],
+        "environment_consumers": [
+            consumer.details() for consumer in artifact.environment_consumers
+        ],
         "ordering_dependencies": _author_dependencies(artifact.ordering_dependencies),
         "refresh_dependencies": _author_dependencies(artifact.refresh_dependencies),
     }
@@ -149,7 +153,9 @@ def volume_spec(volume: DeploymentPersistentVolumeRealization) -> dict[str, obje
     }
 
 
-def consumer_spec(consumer: DeploymentStatefulConsumer) -> dict[str, object]:
+def consumer_spec(
+    consumer: DeploymentStatefulConsumer, *, include_delivery_mode: bool = False
+) -> dict[str, object]:
     """Render one stateful consumer as a non-secret concern value.
 
     ``selected_outputs`` is rendered only when the consumer declares it (a
@@ -164,6 +170,8 @@ def consumer_spec(consumer: DeploymentStatefulConsumer) -> dict[str, object]:
         "access_mode": consumer.access_mode,
         "target_address": consumer.target_address,
     }
+    if include_delivery_mode:
+        spec["delivery_mode"] = consumer.delivery_mode
     if consumer.selected_outputs:
         spec["selected_outputs"] = list(consumer.selected_outputs)
     return spec
@@ -222,7 +230,11 @@ def _transitional_state(info: Mapping[str, Any]) -> bool:
     return container_running(info) and container_health(info) == "starting"
 
 
-def container_realized(info: Mapping[str, Any]) -> bool:
+def container_realized(
+    info: Mapping[str, Any],
+    *,
+    expect_completion: bool = False,
+) -> bool:
     """Return whether an inspected container has reached its realized state.
 
     A running, healthy container is realized. A container that merely exited
@@ -231,6 +243,8 @@ def container_realized(info: Mapping[str, Any]) -> bool:
 
     if not info:
         return False
+    if expect_completion:
+        return container_completed_successfully(dict(info))
     health = container_health(info)
     return container_running(info) and (not health or health == "healthy")
 
@@ -309,9 +323,19 @@ def _exec_probed_content_type(
     """
 
     try:
-        if backend.container_exec(container_name, ["test", "-d", destination]).returncode == 0:
+        if (
+            backend.container_exec(
+                container_name, ["test", "-d", destination]
+            ).returncode
+            == 0
+        ):
             return "directory"
-        if backend.container_exec(container_name, ["test", "-f", destination]).returncode == 0:
+        if (
+            backend.container_exec(
+                container_name, ["test", "-f", destination]
+            ).returncode
+            == 0
+        ):
             return "file"
     except (BackendTimeoutError, OSError) as exc:
         log.warning(
@@ -451,27 +475,3 @@ def _parse_samba_domain_info(text: str) -> dict[str, str]:
         "netbios_domain": fields.get("netbios_domain", "").upper(),
         "dc_name": fields.get("dc_name", ""),
     }
-
-
-def realized_network_names(
-    backend: "DeploymentBackend",
-    project_name: str,
-) -> set[str]:
-    """Return only the current Compose project's realized Docker networks."""
-
-    try:
-        names = backend.host_list_lab_networks(project_name)
-    except (BackendTimeoutError, OSError) as exc:
-        log.warning("could not list realized networks (%s)", type(exc).__name__)
-        return set()
-    return set(names) if isinstance(names, list | tuple | set) else set()
-
-
-def network_realized(
-    network_name: str,
-    realized: set[str],
-    project_name: str,
-) -> bool:
-    """Return whether a managed scenario network exists in provider readback."""
-
-    return _match_managed_network(network_name, realized, project_name) is not None

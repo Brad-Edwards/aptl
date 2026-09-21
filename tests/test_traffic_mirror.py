@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from aptl.core.deployment._compose_boundary import DEFAULT_BOUNDARY_HELPER_IMAGE
 from aptl.core.deployment._compose_traffic_mirror import ComposeTrafficMirrorMixin
 from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.ephemeral_containers import EphemeralContainer
 
 
 class _Apparatus:
@@ -27,6 +28,9 @@ class _Backend(ComposeTrafficMirrorMixin):
 
     def _traffic_mirror_binding(self, _realization):
         return "veth-source", "veth-sensor", "aptl-dmz"
+
+    def _ephemeral_container(self, role):
+        return EphemeralContainer.for_role(role, project="aptl-test")
 
     def _run(self, command, *, timeout=None):
         self.commands.append(command)

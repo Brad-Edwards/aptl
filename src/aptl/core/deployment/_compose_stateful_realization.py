@@ -375,6 +375,7 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
         result = ensure_ssl_certs(
             scenario_root,
             run_command=self._run_certificate_command,
+            project=self._ephemeral_project(),
         )
         return _certificate_bundle_failure(artifact, scenario_root, result)
 

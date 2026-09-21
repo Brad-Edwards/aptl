@@ -21,9 +21,11 @@ import pytest
 
 from aptl.core.ephemeral_containers import (
     DOCKER_DAEMON_ERROR,
+    EPHEMERAL_PROJECT_LABEL,
     EPHEMERAL_ROLE_LABEL,
     EphemeralContainer,
     remove_container_command,
+    stranded_helpers_command,
 )
 
 
@@ -198,3 +200,49 @@ class TestRunGuaranteesRemoval:
 
         assert run.removals() == []
         assert discard.removals() == [remove_container_command(helper.name)]
+
+
+class TestProjectScope:
+    """A helper carries its lab's project so teardown can find a stranded one."""
+
+    def test_a_scoped_helper_is_labelled_with_its_project(self):
+        helper = EphemeralContainer.for_role("boundary-apply", project="aptl-w0123456789ab")
+
+        assert f"{EPHEMERAL_PROJECT_LABEL}=aptl-w0123456789ab" in helper.run_options()
+
+    def test_an_unscoped_helper_carries_no_project_label(self):
+        """No project known means no claim; it is still removed in-process."""
+
+        options = EphemeralContainer.for_role("content-probe").run_options()
+
+        assert not any(str(item).startswith(EPHEMERAL_PROJECT_LABEL) for item in options)
+
+    @pytest.mark.parametrize("project", ["", "Has Upper", "a b", "x;rm -rf /"])
+    def test_a_project_that_is_not_a_compose_name_is_refused(self, project):
+        with pytest.raises(ValueError):
+            EphemeralContainer.for_role("boundary-apply", project=project)
+
+    def test_the_project_label_is_not_the_lifecycle_label(self):
+        """Presence checks read ``aptl.lifecycle.project``; a stranded helper
+        must be removed by teardown, not mistaken for a running lab."""
+
+        assert EPHEMERAL_PROJECT_LABEL != "aptl.lifecycle.project"
+        assert EPHEMERAL_PROJECT_LABEL != "com.docker.compose.project"
+
+
+class TestStrandedHelperQuery:
+    def test_only_this_projects_non_running_helpers_are_selected(self):
+        """A running helper may be in flight; only an inert husk is removed."""
+
+        command = stranded_helpers_command("aptl-w0123456789ab")
+
+        assert command[:3] == ["docker", "ps", "-aq"]
+        assert f"label={EPHEMERAL_PROJECT_LABEL}=aptl-w0123456789ab" in command
+        assert f"label={EPHEMERAL_ROLE_LABEL}" in command
+        statuses = {
+            command[index + 1]
+            for index, item in enumerate(command)
+            if item == "--filter" and command[index + 1].startswith("status=")
+        }
+        assert statuses == {"status=created", "status=exited", "status=dead"}
+        assert "status=running" not in command

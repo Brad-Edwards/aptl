@@ -16,7 +16,6 @@ from aptl.core.deployment._compose_boundary import (
     _ensure_helper,
 )
 from aptl.core.deployment.realization import DeploymentRealizationSpec
-from aptl.core.ephemeral_containers import EphemeralContainer
 from aptl.core.lab_types import LabResult
 
 _TC_PREFERENCE = "492"
@@ -130,7 +129,7 @@ class ComposeTrafficMirrorMixin:
         nothing to find it by.
         """
 
-        helper = EphemeralContainer.for_role("traffic-mirror-tc")
+        helper = self._ephemeral_container("traffic-mirror-tc")
         return helper.run(
             self._run,
             [

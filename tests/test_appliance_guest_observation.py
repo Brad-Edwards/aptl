@@ -26,6 +26,7 @@ from aptl.core.deployment.boundary import (
 )
 from aptl.core.deployment.boundary_compiler import compile_platform_boundary
 from aptl.core.deployment.realization import DeploymentAclRealization
+from aptl.core.ephemeral_containers import EphemeralContainer
 from tests.test_compose_platform_boundary import _binding, _inspect, _network, _policy
 
 
@@ -228,6 +229,9 @@ def test_probe_listener_and_path_use_disposable_fixed_namespace_container() -> N
                 return SimpleNamespace(returncode=0, stdout="ready\n")
             return SimpleNamespace(returncode=0, stdout="")
 
+        def _ephemeral_container(self, role):
+            return EphemeralContainer.for_role(role, project="aptl-test")
+
     backend = ProbeBackend()
     destination = _LiveContainer("dst-id", "destination", ("10.0.2.20",), {})
     listener = _start_listener(
@@ -385,6 +389,9 @@ class _ListenerBackend:
 
     def removals(self):
         return [command for command in self.commands if command[:2] == ["docker", "rm"]]
+
+    def _ephemeral_container(self, role):
+        return EphemeralContainer.for_role(role, project="aptl-test")
 
 
 def _start(backend):

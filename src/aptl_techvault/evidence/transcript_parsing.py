@@ -1,4 +1,4 @@
-"""Restart-safe transcript binding and broker-export parsing."""
+"""TechVault restart-safe transcript binding and broker-export parsing."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from aptl.core.evidence.adapters.sources import SourceResult, _to_outcome
-from aptl.core.evidence.adapters.techvault import (
+from aptl_techvault.evidence.techvault import (
     RedteamSessionTranscriptSource,
     TranscriptFrame,
     TranscriptSession,
@@ -15,11 +15,14 @@ from aptl.core.evidence.adapters.techvault import (
 from aptl.core.evidence.outcomes import CollectorStatus
 from aptl.core.evidence.protocol import CollectorContext, CollectorOutcome
 from aptl.core.experiment.capture_registry import (
-    DEFAULT_COLLECTOR_REGISTRY,
     CaptureBinding,
     CaptureLimits,
     CaptureVisibility,
+    CollectorRegistry,
 )
+from aptl_techvault.capture_registrations import BUILTIN_REGISTRATIONS
+
+_TECHVAULT_REGISTRY = CollectorRegistry(BUILTIN_REGISTRATIONS)
 
 TRANSCRIPT_REGISTRATION = "aptl.collector.redteam-session-transcript"
 
@@ -100,7 +103,7 @@ def _registration_pin_matches(binding: CaptureBinding) -> bool:
     """Compare the persisted binding to the current exact registration pin."""
 
     registrations = {
-        item.registration_id: item for item in DEFAULT_COLLECTOR_REGISTRY.registrations
+        item.registration_id: item for item in _TECHVAULT_REGISTRY.registrations
     }
     registration = registrations.get(binding.registration_id)
     return bool(
@@ -118,7 +121,7 @@ def _binding_schema_keys() -> tuple[str, ...]:
 
     registration = next(
         item
-        for item in DEFAULT_COLLECTOR_REGISTRY.registrations
+        for item in _TECHVAULT_REGISTRY.registrations
         if item.registration_id == TRANSCRIPT_REGISTRATION
     )
     sample = CaptureBinding(

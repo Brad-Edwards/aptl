@@ -66,6 +66,7 @@ from raes_contracts.manifest_authority import BACKEND_SUPPORTED_CONTRACT_IDS
 
 from aptl.backends.raes_participant_runtime import PARTICIPANT_ACTION_ADDRESS
 from aptl.core.experiment.capture_registry import (
+    CollectorRegistry,
     DEFAULT_COLLECTOR_REGISTRY,
     OBSERVATION_EVIDENCE_CONTRACTS,
 )
@@ -407,7 +408,9 @@ _CONCEPT_BINDINGS = (
 )
 
 
-def create_aptl_manifest() -> BackendManifest:
+def create_aptl_manifest(
+    registry: CollectorRegistry | None = None,
+) -> BackendManifest:
     """Return APTL's canonical full remote-control-plane backend manifest.
 
     The ``observation`` capability is an aggregate projection of the code-owned
@@ -421,7 +424,8 @@ def create_aptl_manifest() -> BackendManifest:
     ``supported_contract_versions``, so they are added exactly then and never
     speculatively.
     """
-    observation = DEFAULT_COLLECTOR_REGISTRY.observation_projection()
+    selected_registry = registry if registry is not None else DEFAULT_COLLECTOR_REGISTRY
+    observation = selected_registry.observation_projection()
     supported_contract_versions = _SUPPORTED_CONTRACT_VERSIONS
     capability_options: dict[str, object] = {}
     if observation is not None:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from aptl.core.evidence.adapters.techvault_telemetry_stimulus import (
+from aptl_techvault.evidence.techvault_telemetry_stimulus import (
     _SOURCES,
     emit_missing_agent_events,
 )
@@ -46,7 +46,7 @@ def _realization():
 def test_every_silent_agent_uses_a_native_producer_and_checks_its_declared_file(
     monkeypatch,
 ):
-    from aptl.core.evidence.adapters import (
+    from aptl_techvault.evidence import (
         techvault_telemetry_stimulus as telemetry_stimulus,
     )
 
@@ -81,7 +81,7 @@ def test_every_silent_agent_uses_a_native_producer_and_checks_its_declared_file(
 
 
 def test_a_missing_declared_source_cannot_be_stimulated(monkeypatch):
-    from aptl.core.evidence.adapters import (
+    from aptl_techvault.evidence import (
         techvault_telemetry_stimulus as telemetry_stimulus,
     )
 
@@ -99,7 +99,7 @@ def test_a_missing_declared_source_cannot_be_stimulated(monkeypatch):
 
 
 def test_stimulus_without_native_log_growth_does_not_count_as_telemetry(monkeypatch):
-    from aptl.core.evidence.adapters import techvault_telemetry_stimulus
+    from aptl_techvault.evidence import techvault_telemetry_stimulus
 
     monkeypatch.setattr(techvault_telemetry_stimulus.time, "sleep", lambda _s: None)
 
@@ -122,7 +122,7 @@ def test_stimulus_without_native_log_growth_does_not_count_as_telemetry(monkeypa
 
 
 def test_webapp_stimulus_requires_the_declared_endpoint(monkeypatch):
-    from aptl.core.evidence.adapters import techvault_telemetry_stimulus
+    from aptl_techvault.evidence import techvault_telemetry_stimulus
 
     monkeypatch.setattr(
         techvault_telemetry_stimulus, "webapp_endpoint", lambda _realization: None
@@ -142,7 +142,7 @@ def test_webapp_stimulus_requires_the_declared_endpoint(monkeypatch):
 def test_native_owner_stimulates_only_silent_agents_and_waits_for_ingestion(
     monkeypatch,
 ):
-    from aptl.core.evidence.adapters import techvault_native
+    from aptl_techvault.evidence import techvault_native
 
     owner = object.__new__(techvault_native.TechVaultNativeEvidenceOwner)
     owner._backend = object()

@@ -19,16 +19,12 @@ APTL evaluates exactly the observed-state shapes it actually observes.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Callable
 
 from raes_contracts.contracts import ExperimentEvidenceRecordModel
 from raes_contracts.planning import EvaluationPlan
 from raes_contracts.runtime_state import RuntimeSnapshot
 
-from aptl.backends._raes_native_proposition_truth import (
-    NATIVE_EVIDENCE_CAPABILITIES,
-    native_evidence_result,
-)
 from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, APTL_RAES_TARGET_VERSION
 from aptl.backends.raes_service_index_schema import INTERFACE_PROFILE
 from aptl.core.experiment.trial_plan import compute_source_set_digest
@@ -221,6 +217,7 @@ def _project_assertion_result(
     propositions: Mapping[str, Mapping[str, Any]],
     snapshot: RuntimeSnapshot,
     evidence_records: tuple[ExperimentEvidenceRecordModel, ...],
+    proposition_interpreter: Callable[..., object] | None,
 ) -> dict[str, Any] | None:
     """Project one assertion's truth-result envelope, or ``None`` if APTL can't corroborate it."""
 
@@ -254,6 +251,7 @@ def _project_assertion_result(
             ppayload,
             snapshot,
             evidence_records,
+            proposition_interpreter,
         )
     return result
 
@@ -265,15 +263,20 @@ def _observed_assertion_result(
     ppayload: Mapping[str, Any],
     snapshot: RuntimeSnapshot,
     evidence_records: tuple[ExperimentEvidenceRecordModel, ...],
+    proposition_interpreter: Callable[..., object] | None,
 ) -> dict[str, Any] | None:
     """Project native evidence or corroborated service-content truth."""
 
-    native_result = native_evidence_result(
-        assertion_address,
-        proposition_address,
-        polarity,
-        ppayload,
-        evidence_records,
+    native_result = (
+        proposition_interpreter(
+            assertion_address,
+            proposition_address,
+            polarity,
+            ppayload,
+            evidence_records,
+        )
+        if proposition_interpreter is not None
+        else None
     )
     if native_result is not None:
         return native_result
@@ -319,6 +322,7 @@ def project_proposition_truth_results(
     snapshot: RuntimeSnapshot,
     *,
     evidence_records: tuple[ExperimentEvidenceRecordModel, ...] = (),
+    proposition_interpreter: Callable[..., object] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Project truth-result envelopes APTL can corroborate, keyed by assertion.
 
@@ -335,6 +339,7 @@ def project_proposition_truth_results(
             propositions,
             snapshot,
             evidence_records,
+            proposition_interpreter,
         )
         if result is not None:
             results[assertion_address] = result
@@ -345,6 +350,7 @@ def native_evidence_truth_is_complete(
     plan: EvaluationPlan,
     snapshot: RuntimeSnapshot,
     evidence_records: tuple[ExperimentEvidenceRecordModel, ...],
+    proposition_interpreter: object | None = None,
 ) -> bool:
     """Return whether every planned native truth demand has one bound record.
 
@@ -354,11 +360,12 @@ def native_evidence_truth_is_complete(
     """
 
     propositions, _ = _split_plan_operations(plan)
+    capability_ids = getattr(proposition_interpreter, "capability_ids", frozenset())
     planned_requirements = tuple(
         requirement_ref
         for payload in propositions.values()
         for requirement_ref in _string_tuple(payload.get("evidence_requirement_refs"))
-        if requirement_ref in NATIVE_EVIDENCE_CAPABILITIES
+        if requirement_ref in capability_ids
     )
     if not planned_requirements or len(planned_requirements) != len(
         set(planned_requirements)
@@ -366,7 +373,7 @@ def native_evidence_truth_is_complete(
         return False
     records_by_requirement: dict[str, list[ExperimentEvidenceRecordModel]] = {}
     for record in evidence_records:
-        if record.capture_requirement_ref in NATIVE_EVIDENCE_CAPABILITIES:
+        if record.capture_requirement_ref in capability_ids:
             records_by_requirement.setdefault(
                 record.capture_requirement_ref,
                 [],

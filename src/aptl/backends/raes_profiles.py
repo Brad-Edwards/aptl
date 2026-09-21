@@ -14,15 +14,11 @@ from aptl.backends._compose_profile_index import (
     normalize_identifier,
     normalized_identifier_aliases,
 )
-from aptl.core.config import AptlConfig, ContainerSettings
+from aptl.core.config import AptlConfig
 
 # No backend apparatus is an always-on scenario profile. Apparatus selection is
 # applied after evidence and scope admission by ``ObservabilityScopeDecision``.
 CORE_PROFILES: tuple[str, ...] = ()
-# The finite vocabulary a deployment-serving provider may assign. Container
-# toggles are the only scenario-serving authorities; the separate web and
-# backend-apparatus lifecycles are intentionally absent.
-OPERATOR_GROUP_VOCABULARY = (*ContainerSettings.model_fields, *CORE_PROFILES)
 # Legacy in-tree fallback ONLY (issue #875, SDL-authority class). These map
 # older in-tree scenario node names to their docker-compose service names so
 # node->service binding resolves for the legacy compose path. An env-pack never
@@ -146,8 +142,13 @@ def public_start_profiles(config: AptlConfig) -> list[str]:
 def select_backend_profiles(
     config: AptlConfig,
     plan_profiles: frozenset[str],
+    *,
+    admitted_operator_groups: tuple[str, ...] | None = None,
 ) -> list[str]:
-    """Intersect RAES plan profiles with enabled APTL profiles."""
+    """Select profiles from legacy config or an admitted pack vocabulary."""
+    if admitted_operator_groups is not None:
+        admitted = set(admitted_operator_groups)
+        return sorted(profile for profile in plan_profiles if profile in admitted)
     selected = [
         profile
         for profile in public_start_profiles(config)

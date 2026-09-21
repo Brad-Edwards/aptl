@@ -1,4 +1,4 @@
-"""Native Suricata readiness evidence for the TechVault scenario."""
+"""Adapter-owned Suricata readiness evidence for TechVault."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Native-evidence proposition truth projection for the APTL evaluator."""
+"""TechVault native-evidence proposition truth projection."""
 
 from __future__ import annotations
 

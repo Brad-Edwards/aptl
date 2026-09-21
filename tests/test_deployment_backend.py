@@ -1422,7 +1422,7 @@ services:
     def test_stop_with_volumes_fails_when_seeded_volume_cannot_be_removed(
         self, tmp_path
     ):
-        from aptl.core.evidence.adapters.techvault_enrollment_baseline import (
+        from aptl_techvault.evidence.techvault_enrollment_baseline import (
             enrollment_baseline,
             record_enrollment_baseline,
         )

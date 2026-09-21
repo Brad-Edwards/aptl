@@ -9,9 +9,6 @@ from typing import Protocol
 
 from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
 from aptl.core.deployment.errors import BackendTimeoutError
-from aptl.core.evidence.adapters.techvault_enrollment_baseline import (
-    clear_enrollment_baseline,
-)
 from aptl.core.lab_types import LabResult
 from aptl.utils.logging import get_logger
 
@@ -156,16 +153,7 @@ def _cleanup_failures(
     failures = backend.remove_project_containers()
     failures += backend.remove_project_networks()
     if remove_volumes:
-        volume_failures = backend._remove_owned_volumes()
-        failures.extend(volume_failures)
-        # The retained Wazuh enrollment identities live in those volumes, so
-        # the recorded baseline they are compared against is part of the same
-        # state. Leaving it behind would make every agent look re-enrolled
-        # after a legitimate reset, and readiness would never recover.
-        if not volume_failures:
-            failures.extend(
-                clear_enrollment_baseline(getattr(backend, "project_dir", None))
-            )
+        failures.extend(backend._remove_owned_volumes())
     return failures
 
 

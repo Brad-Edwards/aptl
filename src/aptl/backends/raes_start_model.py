@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
     from aptl.backends.raes_realization_model import AptlRealization
     from aptl.backends.scenario_startup import ScenarioStartupSelection
+    from aptl.backends.scenario_capture import ResolvedScenarioCapture
     from aptl.core.runstore import RunStorageBackend
     from aptl.core.scenario_bundle import ScenarioBundle
 
@@ -42,6 +43,7 @@ class AdmittedScenarioStart:
     capture_plan: CapturePlan = field(default_factory=empty_capture_plan)
     runtime_materialization_failure: LabResult | None = None
     startup_selection: ScenarioStartupSelection | None = None
+    capture_selection: ResolvedScenarioCapture | None = None
 
 
 @dataclass(frozen=True)

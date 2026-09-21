@@ -1,4 +1,4 @@
-"""Bounded native activity for TechVault's per-agent freshness demand.
+"""Bounded adapter activity for TechVault's per-agent freshness demand.
 
 Only the content-qualified adapter knows which real service action can cause
 each declared source to produce a new record. These probes never append a
@@ -14,7 +14,7 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from urllib.parse import quote
 
-from aptl.core.evidence.adapters.techvault_native_support import webapp_endpoint
+from aptl_techvault.evidence.techvault_native_support import webapp_endpoint
 
 _SAFE_SHARE = re.compile(r"[A-Za-z0-9_.-]+")
 _SOURCES = {

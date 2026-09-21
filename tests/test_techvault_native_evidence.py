@@ -8,14 +8,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from aptl.core.evidence.adapters import techvault_native
+from aptl_techvault.evidence import techvault_native
 
 from aptl.core.deployment.realization import (
     DeploymentPublishedPort,
     DeploymentServicePort,
 )
-from aptl.core.evidence.adapters.techvault import TECHVAULT_LOCAL_SIDS
-from aptl.core.evidence.adapters.techvault_native import (
+from aptl_techvault.evidence.techvault import TECHVAULT_LOCAL_SIDS
+from aptl_techvault.evidence.techvault_native import (
     TechVaultNativeDependencies,
     TechVaultNativeEvidenceOwner,
 )
@@ -218,8 +218,8 @@ def test_native_owner_wires_exactly_the_native_registrations(tmp_path):
 def test_the_misp_source_appears_once_the_plan_admits_a_state_to_compare(tmp_path):
     """And it carries the admitted values, not defaults of its own."""
 
-    from aptl.core.evidence.adapters.techvault_misp_readiness import AdmittedMispState
-    from aptl.core.evidence.adapters.techvault_native_readiness import (
+    from aptl_techvault.evidence.techvault_misp_readiness import AdmittedMispState
+    from aptl_techvault.evidence.techvault_native_readiness import (
         admitted_misp_state,
     )
 

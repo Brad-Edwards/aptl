@@ -47,10 +47,16 @@ from aptl.backends.raes_runtime_orchestration import (
     prepare_runtime_orchestration_for_scenario,
 )
 from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, create_aptl_manifest
+from aptl.backends.identity import (
+    APTL_RAES_TARGET_PROFILE,
+    APTL_RAES_TARGET_VERSION,
+    BackendIdentity,
+)
 from aptl.backends.raes_planning_compat import (
     AptlPlanningOptions,
     AptlRuntimeManager,
     plan_aptl_scenario,
+    resolve_target_planning_compatibility,
 )
 from aptl.backends.raes_evaluator import AptlEvaluator
 from aptl.backends.raes_orchestrator import AptlOrchestrator
@@ -125,6 +131,7 @@ def create_aptl_runtime_target(
         or ObservabilityScopeDecision(),
         operator_access=selected.operator_access or OperatorAccessDecision(),
         startup_selection=selected.startup_selection,
+        planning_compatibility=resolve_target_planning_compatibility(bundle, config),
     )
     orchestrator = AptlOrchestrator()
     action_specs = dict(DEFAULT_PARTICIPANT_ACTIONS)
@@ -137,10 +144,22 @@ def create_aptl_runtime_target(
     )
     return RuntimeTarget(
         name=APTL_RAES_TARGET_NAME,
-        manifest=create_aptl_manifest(),
+        manifest=create_aptl_manifest(
+            selected.capture_selection.registry
+            if selected.capture_selection is not None
+            else None
+        )
+        if selected.capture_selection is not None
+        else create_aptl_manifest(),
         provisioner=provisioner,  # type: ignore[arg-type]
         orchestrator=orchestrator,  # type: ignore[arg-type]
-        evaluator=AptlEvaluator(),  # type: ignore[arg-type]
+        evaluator=AptlEvaluator(
+            proposition_interpreter=(
+                selected.capture_selection.contribution.proposition_interpreter
+                if selected.capture_selection is not None
+                else None
+            )
+        ),  # type: ignore[arg-type]
         participant_runtime=participant_runtime,  # type: ignore[arg-type]
     )
 
@@ -230,6 +249,22 @@ def admit_raes_scenario(
         from aptl.backends.scenario_startup import select_scenario_startup
 
         startup_selection = select_scenario_startup(bundle)
+    capture_selection = None
+    if bundle.pack_identity is not None:
+        from aptl.backends.scenario_capture import ScenarioCaptureContext
+        from aptl.backends.scenario_capture_discovery import resolve_scenario_capture
+
+        capture_selection = resolve_scenario_capture(
+            ScenarioCaptureContext(
+                pack=bundle.pack_identity,
+                backend=BackendIdentity(
+                    target_name=APTL_RAES_TARGET_NAME,
+                    target_version=APTL_RAES_TARGET_VERSION,
+                    profile=APTL_RAES_TARGET_PROFILE,
+                    transport=config.deployment.provider,
+                ),
+            )
+        )
     scenario = parse_sdl_file(bundle.sdl_path)
     if parameters is None:
         from aptl.backends.scenario_runtime_parameters import (
@@ -244,7 +279,18 @@ def admit_raes_scenario(
         # artifact probe, which may build an image on the selected daemon.
         scenario = instantiate_scenario(scenario, parameters=parameters)
         parameters = None
-        capture_plan = admit_sdl_evidence(scenario)
+        capture_plan = (
+            admit_sdl_evidence(
+                scenario,
+                registry=(
+                    capture_selection.registry
+                    if capture_selection is not None
+                    else None
+                ),
+            )
+            if capture_selection is not None
+            else admit_sdl_evidence(scenario)
+        )
     # A runtime authority is joined and bound before any artifact probe, so
     # every image fact and later mutation targets the same exact local daemon.
     prepare_runtime_orchestration_for_scenario(scenario, backend)
@@ -271,6 +317,7 @@ def admit_raes_scenario(
             observability_scope=observability_scope_decision(scenario),
             operator_access=operator_access_decision(scenario),
             startup_selection=startup_selection,
+            capture_selection=capture_selection,
         ),
     )
     runtime_manager = RuntimeManager(target)
@@ -321,6 +368,7 @@ def admit_raes_scenario(
         capture_plan=capture_plan,
         runtime_materialization_failure=materialization_failure,
         startup_selection=startup_selection,
+        capture_selection=capture_selection,
     )
 
 
@@ -331,7 +379,7 @@ def _apply_with_backend_retry(
     run_target: AcesRunTarget | None,
     before_backend_retry: Callable[[], None] | None,
 ) -> AcesStartOutcome:
-    """Apply one admitted plan, retrying only its SOC backend-start failure."""
+    """Apply one admitted plan and run one admitted preparation hook on retry."""
 
     run_store = run_target.run_store if run_target is not None else None
     run_id = run_target.run_id if run_target is not None else None
@@ -342,11 +390,7 @@ def _apply_with_backend_retry(
         run_store=run_store,
         run_id=run_id,
     )
-    if (
-        outcome.retryable
-        and "soc" in outcome.selected_profiles
-        and before_backend_retry is not None
-    ):
+    if outcome.retryable and before_backend_retry is not None:
         before_backend_retry()
         return _run_execution_plan(
             target,

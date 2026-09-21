@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from aptl.core.evidence.adapters.techvault import (
+from aptl_techvault.evidence.techvault import (
     TranscriptFrame,
     transcript_chain_digest,
 )

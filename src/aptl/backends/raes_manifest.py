@@ -407,7 +407,9 @@ _CONCEPT_BINDINGS = (
 )
 
 
-def create_aptl_manifest() -> BackendManifest:
+def create_aptl_manifest(
+    registry: CollectorRegistry | None = None,
+) -> BackendManifest:
     """Return APTL's canonical full remote-control-plane backend manifest.
 
     The ``observation`` capability is an aggregate projection of the code-owned
@@ -421,7 +423,10 @@ def create_aptl_manifest() -> BackendManifest:
     ``supported_contract_versions``, so they are added exactly then and never
     speculatively.
     """
-    observation = DEFAULT_COLLECTOR_REGISTRY.observation_projection()
+    selected_registry = (
+        registry if registry is not None else DEFAULT_COLLECTOR_REGISTRY
+    )
+    observation = selected_registry.observation_projection()
     supported_contract_versions = _SUPPORTED_CONTRACT_VERSIONS
     capability_options: dict[str, object] = {}
     if observation is not None:

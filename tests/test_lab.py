@@ -352,8 +352,10 @@ class TestLabStop:
 
         assert result.success is False
 
-    def test_stop_uses_all_profiles_when_no_config(self, mock_subprocess, tmp_path):
-        """stop_lab should fall back to all profiles when no aptl.json exists."""
+    def test_stop_does_not_invent_pack_profiles_when_no_config(
+        self, mock_subprocess, tmp_path
+    ):
+        """Recovery keeps core apparatus but invents no pack vocabulary."""
         from aptl.core.lab import stop_lab
 
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
@@ -362,11 +364,9 @@ class TestLabStop:
 
         assert result.success is True
         cmd_args = self._compose_down_args(mock_subprocess)
-        # Should include all fallback profiles
-        assert "wazuh" in cmd_args
-        assert "victim" in cmd_args
-        assert "kali" in cmd_args
-        assert "soc" in cmd_args
+        assert "otel" in cmd_args
+        assert "wazuh" not in cmd_args
+        assert "soc" not in cmd_args
 
     def test_stop_uses_config_profiles_when_available(self, mock_subprocess, tmp_path):
         """stop_lab should load profiles from aptl.json when present."""
@@ -389,6 +389,32 @@ class TestLabStop:
         cmd_args = self._compose_down_args(mock_subprocess)
         assert "victim" in cmd_args
         assert "wazuh" in cmd_args
+
+    def test_stop_prefers_admitted_groups_over_changed_config(
+        self, mock_subprocess, tmp_path
+    ):
+        """Recovery follows the started run, not today's container toggles."""
+        import json
+
+        from aptl.core.lab import stop_lab
+        from aptl.core.operator_group_state import persist_admitted_operator_groups
+
+        (tmp_path / "aptl.json").write_text(
+            json.dumps(
+                {
+                    "lab": {"name": "test"},
+                    "containers": {"wazuh": True, "victim": False},
+                }
+            )
+        )
+        persist_admitted_operator_groups(tmp_path, {"blue-team"})
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        assert stop_lab(project_dir=tmp_path).success is True
+
+        cmd_args = self._compose_down_args(mock_subprocess)
+        assert "blue-team" in cmd_args
+        assert "wazuh" not in cmd_args
 
     def test_stop_refuses_invalid_present_config_identity(
         self, mock_subprocess, tmp_path
@@ -2147,9 +2173,7 @@ class TestOrchestrateLabStart:
         )
 
         # Re-mock RAES handoff and wait_for_service since config changes
-        mocks["start"].return_value = _raes_outcome(
-            success=True, selected_profiles=()
-        )
+        mocks["start"].return_value = _raes_outcome(success=True, selected_profiles=())
 
         result = orchestrate_lab_start(tmp_path)
 
@@ -4386,9 +4410,32 @@ class TestLabOrchestrationContracts:
     """
 
     def _ctx(self, tmp_path: Path):
-        from aptl.core.lab import _LabStartContext
+        from aptl.backends.scenario_startup import (
+            ScenarioStartupPlan,
+            ScenarioStartupSelection,
+            StartupHook,
+        )
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import StartSelection, _LabStartContext
+        from aptl.core.scenario_bundle import project_tree_bundle
+        from aptl_techvault.startup import TechVaultStartupProvider
 
-        return _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        plan = ScenarioStartupPlan(
+            seed_script="scripts/seed-prime.sh",
+            required_profiles=(),
+            activation_profiles=(),
+            startup_hooks=frozenset({StartupHook.BEFORE_BACKEND_RETRY}),
+        )
+        bundle = project_tree_bundle(tmp_path, tmp_path / "fixture.sdl.yaml")
+        provider_selection = ScenarioStartupSelection(
+            None, TechVaultStartupProvider(), plan
+        )
+        ctx.scenario_startup = plan
+        ctx.start_selection = StartSelection(
+            AptlConfig(), bundle, plan, provider_selection
+        )
+        return ctx
 
     def _full_env(self):
         from aptl.core.env import EnvVars
@@ -5127,10 +5174,11 @@ class TestStopLabCleanupIsContractFree:
         result = stop_lab(project_dir=tmp_path, backend=backend)
 
         assert result.success is True
-        # Fell back to ALL_KNOWN_PROFILES since no aptl.json exists.
+        # Core keeps only its own apparatus profile; pack profiles are supplied
+        # by admitted runtime state, never a global product vocabulary.
         backend.stop.assert_called_once()
         called_profiles = backend.stop.call_args[0][0]
-        assert "wazuh" in called_profiles
+        assert called_profiles == ["otel"]
 
 
 class TestSeedSocPrimeProfileDiagnostic:
@@ -5299,6 +5347,7 @@ class TestGenerateSocCertsStep:
                 scenario=ScenarioSourceConfig(source="project-tree"),
             ),
             backend=backend or MagicMock(),
+            selected_profiles={"soc"} if soc else set(),
         )
 
     def test_skips_when_soc_disabled(self, tmp_path, mocker):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Mapping
 
 from aptl.core.correlation.clock import ClockProvider, SystemClockProvider
 from aptl.core.evidence.coordinator import AcquisitionResult, acquire_evidence
@@ -12,6 +12,7 @@ from aptl.core.evidence.protocol import RunScope
 from aptl.core.runstore import LocalRunStore
 
 if TYPE_CHECKING:
+    from aptl.backends.scenario_capture import ResolvedScenarioCapture
     from aptl.backends.raes_realization_model import AptlRealization
     from aptl.core.experiment.capture_plan import CapturePlan
 
@@ -24,10 +25,10 @@ class NativeEvidenceRequest:
     backend: object
     realization: AptlRealization
     project_dir: Path
-    indexer_auth: tuple[str, str]
-    thehive_api_key: str
+    environment: Mapping[str, str]
     run_store: LocalRunStore
     run_id: str
+    capture_selection: ResolvedScenarioCapture
     clock: ClockProvider | None = None
 
 
@@ -38,21 +39,15 @@ def acquire_native_evidence(request: NativeEvidenceRequest) -> AcquisitionResult
         _OnDemandNativeCollector,
         _native_bindings,
         _persist_capture_plan,
-        TechVaultNativeEvidenceOwner,
     )
 
     if not isinstance(request.run_store, LocalRunStore):
         raise TypeError("native evidence requires a local run store")
-    bindings = _native_bindings(request.plan)
+    bindings = _native_bindings(request.plan, request.capture_selection)
     _persist_capture_plan(request.plan, request.run_store, request.run_id)
-    owner = TechVaultNativeEvidenceOwner(
-        backend=request.backend,
-        realization=request.realization,
-        project_dir=request.project_dir,
-        indexer_auth=request.indexer_auth,
-        thehive_api_key=request.thehive_api_key,
-    )
-    sources = owner.sources()
+    runtime_adapter = request.capture_selection.contribution.runtime_adapter
+    source_factory = getattr(runtime_adapter, "native_sources", None)
+    sources = source_factory(request) if callable(source_factory) else {}
     collectors = {
         binding.registration_id: _OnDemandNativeCollector(
             binding.registration_id,

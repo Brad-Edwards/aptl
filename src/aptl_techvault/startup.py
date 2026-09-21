@@ -9,6 +9,8 @@ from aptl.backends.scenario_startup import (
     McpServerCredentials,
     ScenarioStartupPlan,
     StartupCapability,
+    StartupHook,
+    StartupHookContext,
 )
 from aptl.backends.scenario_startup_policy import (
     ScenarioComposeStartupPolicy,
@@ -24,6 +26,9 @@ from aptl.backends.scenario_service_policy import (
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 from aptl.core.scenario_bundle import ScenarioBundle
 from aptl_techvault.log_sources import realize_log_sources
+from aptl_techvault.evidence.techvault_enrollment_baseline import (
+    clear_enrollment_baseline,
+)
 from aptl_techvault.redis_acl_observation import observe_redis_app_authorizations
 from aptl_techvault.runtime_parameters import TECHVAULT_PACK_SET_DIGEST
 
@@ -35,6 +40,12 @@ class TechVaultStartupProvider:
     supported_pack_id = "techvault"
     supported_pack_versions = ("0.1.0",)
     supported_pack_set_digests = (TECHVAULT_PACK_SET_DIGEST,)
+
+    @staticmethod
+    def prepare_stack_environment(context: StartupHookContext) -> object:
+        """Execute TechVault's selected preparation phase in core order."""
+
+        return context.run_operation()
 
     @staticmethod
     def resolve(_bundle: ScenarioBundle) -> ScenarioStartupPlan:
@@ -68,11 +79,15 @@ class TechVaultStartupProvider:
                 {
                     StartupCapability.SSH,
                     StartupCapability.HOST_TOOLS,
-                    StartupCapability.WAZUH,
-                    StartupCapability.SOC,
                     StartupCapability.MCP,
                     StartupCapability.NATIVE_EVIDENCE,
-                    StartupCapability.WAZUH_REPAIR,
+                }
+            ),
+            startup_hooks=frozenset(
+                {
+                    StartupHook.STACK_ENVIRONMENT,
+                    StartupHook.BEFORE_BACKEND_RETRY,
+                    StartupHook.RESET,
                 }
             ),
             seed_environment_keys=(
@@ -96,6 +111,41 @@ class TechVaultStartupProvider:
             ),
             native_mcp_ingress=True,
         )
+
+    @staticmethod
+    def before_backend_retry(context: StartupHookContext) -> None:
+        """Repair a stuck manager without moving retry policy out of core."""
+
+        container = "aptl-wazuh-manager"
+        probe = [
+            "sh",
+            "-c",
+            "ls /proc/[0-9]*/comm 2>/dev/null | while read f; do "
+            'read n < "$f"; case "$n" in wazuh-*) echo "$n";; esac; '
+            "done | sort -u | wc -l",
+        ]
+        try:
+            info = context.backend.container_inspect(container)
+            if (info.get("State") or {}).get("Status") != "running":
+                return
+            result = context.backend.container_exec(container, probe, timeout=10)
+            count = (
+                int((result.stdout or "0").strip()) if result.returncode == 0 else None
+            )
+            if count == 0:
+                context.backend.container_restart(container)
+        except Exception:
+            return
+
+    @staticmethod
+    def reset(context: StartupHookContext) -> None:
+        """Clear adapter-owned retained evidence state after volume removal."""
+
+        failures = clear_enrollment_baseline(
+            getattr(context.backend, "project_dir", None)
+        )
+        if failures:
+            raise RuntimeError("adapter reset failed")
 
     @staticmethod
     def compose_startup_policy() -> ScenarioComposeStartupPolicy:

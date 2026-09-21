@@ -26,6 +26,13 @@ _DEMAND_IDS = {
 }
 
 
+def _registry():
+    from aptl.core.experiment.capture_registry import CollectorRegistry
+    from aptl_techvault.capture_registrations import BUILTIN_REGISTRATIONS
+
+    return CollectorRegistry(BUILTIN_REGISTRATIONS)
+
+
 @pytest.fixture
 def scenario():
     return parse_sdl_file(
@@ -42,7 +49,7 @@ def test_manifest_exactly_admits_every_released_techvault_demand(scenario):
     from aptl.backends.raes_manifest import create_aptl_manifest
 
     demands = compile_scenario_capture_demands(scenario)
-    observation = create_aptl_manifest().observation
+    observation = create_aptl_manifest(_registry()).observation
 
     assert {demand.demand_id for demand in demands} == _DEMAND_IDS
     assert capture_admission_diagnostics(demands, observation) == []
@@ -63,7 +70,7 @@ def test_sdl_capture_plan_uses_public_demands_without_synthesizing_capture_spec(
     from aptl.backends.raes_evidence import admit_sdl_evidence
 
     before = scenario.model_dump(mode="json")
-    plan = admit_sdl_evidence(scenario)
+    plan = admit_sdl_evidence(scenario, registry=_registry())
 
     assert scenario.model_dump(mode="json") == before
     assert {binding.demand.demand_id for binding in plan.bindings} == _DEMAND_IDS
@@ -84,7 +91,7 @@ def test_sdl_capture_plan_uses_public_demands_without_synthesizing_capture_spec(
 def test_demands_admit_only_the_two_required_minimum_apparatus(scenario):
     from aptl.backends.raes_evidence import admit_sdl_evidence
 
-    plan = admit_sdl_evidence(scenario)
+    plan = admit_sdl_evidence(scenario, registry=_registry())
 
     assert [item.apparatus_id for item in plan.apparatus] == [
         "aptl.apparatus.kali-session-capture",
@@ -112,7 +119,7 @@ def test_closed_scope_rejects_required_kali_capture_addition(scenario):
     scenario.realization = RealizationDesignation(default="closed")
 
     with pytest.raises(AdmissionRejection) as excinfo:
-        admit_sdl_evidence(scenario)
+        admit_sdl_evidence(scenario, registry=_registry())
 
     assert {diagnostic.code for diagnostic in excinfo.value.diagnostics} == {
         "aptl.capture-apparatus.closed-realization-scope"
@@ -126,7 +133,7 @@ def test_closed_scope_rejects_required_traffic_mirror_addition(scenario):
     scenario.realization = RealizationDesignation(default="closed")
 
     with pytest.raises(AdmissionRejection) as excinfo:
-        admit_sdl_evidence(scenario)
+        admit_sdl_evidence(scenario, registry=_registry())
 
     assert {diagnostic.code for diagnostic in excinfo.value.diagnostics} == {
         "aptl.capture-apparatus.closed-realization-scope"
@@ -138,7 +145,7 @@ def test_demands_with_native_visibility_add_no_observability_apparatus(scenario)
 
     del scenario.evidence_requirements["redteam-session-transcript"]
     del scenario.evidence_requirements["suricata-login-sqli-alert"]
-    plan = admit_sdl_evidence(scenario)
+    plan = admit_sdl_evidence(scenario, registry=_registry())
 
     assert plan.apparatus == ()
 
@@ -176,7 +183,7 @@ def test_any_unoffered_required_axis_rejects_the_entire_sdl_capture_plan(
     )
 
     with pytest.raises(AdmissionRejection):
-        admit_sdl_evidence(scenario)
+        admit_sdl_evidence(scenario, registry=_registry())
 
 
 def test_capture_rejection_precedes_artifact_probe(scenario, tmp_path, monkeypatch):
@@ -215,4 +222,4 @@ def test_no_evidence_intent_needs_no_capture_plan(scenario):
     from aptl.backends.raes_evidence import admit_sdl_evidence
 
     scenario.evidence_requirements.clear()
-    assert admit_sdl_evidence(scenario).bindings == ()
+    assert admit_sdl_evidence(scenario, registry=_registry()).bindings == ()

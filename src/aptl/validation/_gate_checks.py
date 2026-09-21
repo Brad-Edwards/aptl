@@ -27,6 +27,14 @@ from aptl.backends.raes import (
 from aptl.backends.raes_artifact_availability import (
     artifact_availability_for_scenario,
 )
+from aptl.backends.identity import (
+    APTL_RAES_TARGET_PROFILE,
+    APTL_RAES_TARGET_VERSION,
+    BackendIdentity,
+)
+from aptl.backends.raes_evidence import admit_sdl_evidence
+from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME
+from aptl.core.experiment.capture_plan import empty_capture_plan
 from aptl.backends._raes_conformance_probe import APTL_TARGET_CONFORMANCE_SCENARIO
 from aptl.backends.raes_planning_compat import AptlPlanningOptions, plan_aptl_scenario
 from aptl.backends.raes_profiles import public_start_profiles, select_backend_profiles
@@ -215,12 +223,44 @@ def check_provisioning_realization(
             scenario_root=bundle.root,
             component_root=project_dir,
         )
+        capture_selection = None
+        if getattr(bundle, "pack_identity", None) is not None:
+            from aptl.backends.scenario_capture import ScenarioCaptureContext
+            from aptl.backends.scenario_capture_discovery import (
+                resolve_scenario_capture,
+            )
+
+            capture_selection = resolve_scenario_capture(
+                ScenarioCaptureContext(
+                    pack=bundle.pack_identity,
+                    backend=BackendIdentity(
+                        target_name=APTL_RAES_TARGET_NAME,
+                        target_version=APTL_RAES_TARGET_VERSION,
+                        profile=APTL_RAES_TARGET_PROFILE,
+                        transport=config.deployment.provider,
+                    ),
+                )
+            )
+        capture_plan = empty_capture_plan()
+        if getattr(static_scenario, "evidence_requirements", None):
+            capture_plan = (
+                admit_sdl_evidence(
+                    static_scenario,
+                    registry=capture_selection.registry,
+                )
+                if capture_selection is not None
+                else admit_sdl_evidence(static_scenario)
+            )
         target = create_aptl_runtime_target(
             project_dir=project_dir,
             config=config,
             backend=backend,
             bundle=bundle,
-            options=RuntimeTargetOptions(artifact_availability=availability),
+            options=RuntimeTargetOptions(
+                artifact_availability=availability,
+                capture_plan=capture_plan,
+                capture_selection=capture_selection,
+            ),
         )
         execution_plan = plan_aptl_scenario(
             target=target,

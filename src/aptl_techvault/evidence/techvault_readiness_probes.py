@@ -1,4 +1,4 @@
-"""Bounded native probes behind the two TechVault readiness demands.
+"""Bounded adapter probes behind the TechVault readiness demands.
 
 Every probe runs inside the container that already holds the credential it
 needs, driven by a fixed ``sh -s`` helper whose script arrives on stdin. No

@@ -26,16 +26,14 @@ from raes_processor.semantics.realization import (
 )
 
 from aptl.backends._raes_observation_helpers import ObservedResource
-from aptl.backends.raes_planning_compat import (
-    TECHVAULT_PACK_ID,
-    TECHVAULT_PACK_VERSION,
-)
 from aptl.backends.raes_runtime_attestation import (
     TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST,
 )
 from aptl.core.scenario_bundle import PackIdentity
 
 _MISSING = object()
+TECHVAULT_PACK_ID = "techvault"
+TECHVAULT_PACK_VERSION = "0.1.0"
 
 # Every sequence in these released concern values is an inventory, identity
 # set, or membership set.  Ordered execution surfaces such as container command

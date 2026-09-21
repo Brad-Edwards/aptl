@@ -364,15 +364,14 @@ class TestKillLabContainers:
         commands = [call.args[0] for call in mock_run.call_args_list]
         first_cmd = next(command for command in commands if "kill" in command)
         assert "kill" in first_cmd
-        assert "--profile" in first_cmd
+        assert "--profile" not in first_cmd
 
         second_cmd = next(command for command in commands if "down" in command)
         assert "down" in second_cmd
 
     @patch("aptl.core.kill.subprocess.run")
-    def test_includes_all_profiles(self, mock_run, tmp_path):
+    def test_does_not_invent_pack_profiles(self, mock_run, tmp_path):
         from aptl.core.kill import kill_lab_containers
-        from aptl.core.lab import ALL_KNOWN_PROFILES
 
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
@@ -381,8 +380,8 @@ class TestKillLabContainers:
         first_cmd = next(
             call.args[0] for call in mock_run.call_args_list if "kill" in call.args[0]
         )
-        for profile in ALL_KNOWN_PROFILES:
-            assert profile in first_cmd
+        assert "wazuh" not in first_cmd
+        assert "soc" not in first_cmd
 
     @patch("aptl.core.kill.subprocess.run")
     def test_handles_docker_failure(self, mock_run, tmp_path):

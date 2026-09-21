@@ -161,8 +161,9 @@ def test_a_timed_out_boundary_helper_is_removed_by_name(tmp_path) -> None:
         side_effect=BackendTimeoutError("docker run timed out after 30s")
     )
 
+    spec = _spec()
     with pytest.raises(BackendTimeoutError):
-        backend.realize_boundary(_spec())
+        backend.realize_boundary(spec)
 
     apply_cmd = backend._run_with_input.call_args.args[0]
     helper_name = apply_cmd[apply_cmd.index("--name") + 1]
@@ -185,8 +186,9 @@ def test_the_boundary_payload_never_reaches_the_helper_removal(tmp_path) -> None
         side_effect=BackendTimeoutError("docker run timed out after 30s")
     )
 
+    spec = _spec()
     with pytest.raises(BackendTimeoutError):
-        backend.realize_boundary(_spec())
+        backend.realize_boundary(spec)
 
     assert all(
         call.args[0][:2] != ["docker", "rm"]

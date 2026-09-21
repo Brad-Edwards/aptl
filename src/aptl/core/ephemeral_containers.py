@@ -120,7 +120,9 @@ class EphemeralContainer:
     def discard(self, run: Runner) -> None:
         """Remove this helper and its anonymous volumes, tolerating absence."""
 
+        # Best effort by design: any failure here is logged and swallowed so it
+        # can never replace the run's own error, which is the one that reports.
         try:
             run(remove_container_command(self.name), timeout=_DISCARD_TIMEOUT)
-        except Exception:  # noqa: BLE001 - best effort; the caller's error is what reports
+        except Exception:
             log.warning("Could not remove ephemeral %s container %s", self.role, self.name)

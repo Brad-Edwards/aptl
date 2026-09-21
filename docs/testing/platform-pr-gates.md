@@ -18,9 +18,22 @@ temporary platform exception. There are currently no such exceptions.
 
 The clean-install job builds a wheel, installs it in an empty virtual
 environment, materializes a fresh project, and starts only the product-neutral
-`materialization-envelope.sdl.yaml` scenario. It checks a native effect in the
+`materialization-envelope.sdl.yaml` scenario. It checks native effects in the
 project's running container, stops the lab with volumes, and proves that the
 effective workspace project has no remaining containers, networks, or volumes.
+
+The scenario carries one causal realization chain, so none of those checks can
+pass on a declaration alone: inline content moves the SSH daemon off its
+package default port, the declared service unit starts it, the declared
+listener binds the moved port, and that port is published on an exact loopback
+host binding. `scripts/ci/assert_boot_realization.py` reads the placed bytes
+inside the container, queries the service manager for the unit's enabled,
+active and result state, observes the live listener from outside the
+container's trust boundary, requires the exact published-port tuple and no
+wider one, opens a connection to it, and parses the persisted workflow with
+the RAES execution-state contract. `docs/testing/boot-realization-coverage.md`
+maps every concern APTL's realization envelope advertises to the tests that
+hold it, and names the concerns this small boot deliberately does not claim.
 
 These checks support the **generic installed-wheel materialization and lab
 lifecycle profile on a GitHub-hosted Ubuntu runner with local Docker**. They do

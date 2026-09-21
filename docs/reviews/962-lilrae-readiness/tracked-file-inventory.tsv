@@ -1708,6 +1708,10 @@ docs/requirements/SEC-008/requirement.md	requirements-follow-owner	Preserve exac
 docs/testing/platform-pr-gates.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 tests/test_assert_project_teardown.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_platform_ci_gates.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+docs/architecture/issue-993-boot-realization-regressions-preflight.md	architecture-history	Preserve boot realization regression decisions and coverage guardrails
+docs/testing/boot-realization-coverage.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+scripts/ci/assert_boot_realization.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+tests/test_boot_realization_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 docs/architecture/issue-980-pack-adapter-install-seam-preflight.md	architecture-history	Preserve issue 980 installed-adapter seam decisions and guardrails
 src/aptl/backends/scenario_capture.py	core-candidate	Retain generic request-scoped capture contribution contract
 src/aptl/backends/scenario_capture_discovery.py	core-candidate	Retain exact installed capture-provider discovery

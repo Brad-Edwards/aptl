@@ -53,6 +53,14 @@ def _docker_available() -> bool:
 def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
     sdl = tmp_path / "imagefree.sdl.yaml"
     shutil.copyfile(_MATERIALIZATION_ENVELOPE, sdl)
+    # The shared fixture declares service units, so the node materializes onto
+    # the init-capable generic substrate, which the backend builds from the
+    # Dockerfile its own project dir ships (issue #1006). Stage that context
+    # exactly as a real lab directory holds it.
+    shutil.copytree(
+        _REPO_ROOT / "containers" / "generic-systemd-base-debian",
+        tmp_path / "containers" / "generic-systemd-base-debian",
+    )
     container = "aptl-smoke-box"
     subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
 
@@ -99,6 +107,24 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
             ).stdout.strip()
             == "analyst:analysts 750"
         )
+        # The #993 causal chain: the placed content is what moves the daemon
+        # off its package default, so the unit and the listener below are
+        # evidence that the placement really happened.
+        assert (
+            backend.container_exec(
+                container, ["cat", "/etc/ssh/sshd_config.d/10-aptl-smoke.conf"]
+            ).stdout
+            == "Port 2022\n"
+        )
+        assert (
+            backend.container_exec(
+                container, ["systemctl", "is-active", "ssh.service"]
+            ).stdout.strip()
+            == "active"
+        )
+        listeners = backend.observe_container_listeners(container)
+        assert listeners is not None
+        assert 2022 in {port for _protocol, _address, port in listeners.sockets}
     finally:
         subprocess.run(
             ["docker", "rm", "-f", realized_container_name(backend, container)],
@@ -137,6 +163,17 @@ nodes:
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
 def test_admit_and_realize_service_node_boots_a_real_service(tmp_path):
+    """The dnf/RHEL counterpart of the shared fixture's apt/Debian service path.
+
+    Since issue #993 the shared `materialization-envelope.sdl.yaml` covers the
+    apt service chain live, all the way through the installed-wheel boot gate.
+    This case is kept for the one boundary that does not cover: a different
+    package family selects a different generic systemd substrate
+    (`generic-systemd-base`, not `generic-systemd-base-debian`) and a
+    differently named unit. Its claim is narrowed accordingly — it proves the
+    dnf substrate boots a declared unit, not the service path in general.
+    """
+
     # A lab directory carries the container build contexts. The backend builds
     # the generic base from the Dockerfile its own project dir ships, on every
     # start, rather than trusting whatever `aptl/...:latest` happens to be local

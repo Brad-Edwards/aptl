@@ -25,10 +25,14 @@ class ScenarioCaptureProviderError(RuntimeError):
 
 
 def _entry_points() -> list[metadata.EntryPoint]:
+    """List capture providers without importing their targets."""
+
     return list(metadata.entry_points(group=ENTRY_POINT_GROUP))
 
 
 def _sequence(provider: object, name: str) -> tuple[str, ...]:
+    """Read one required provider identity tuple."""
+
     value = getattr(provider, name, None)
     if not isinstance(value, tuple) or any(
         not isinstance(item, str) or not item for item in value
@@ -38,6 +42,8 @@ def _sequence(provider: object, name: str) -> tuple[str, ...]:
 
 
 def _compatible(provider: object, context: ScenarioCaptureContext) -> bool:
+    """Check exact pack and backend compatibility."""
+
     provider_id = getattr(provider, "provider_id", "")
     if (
         not isinstance(provider_id, str)
@@ -66,6 +72,8 @@ def _compatible(provider: object, context: ScenarioCaptureContext) -> bool:
 
 
 def _load(entry_point: metadata.EntryPoint) -> object:
+    """Load one provider while redacting implementation failures."""
+
     try:
         target = entry_point.load()
         return target() if isinstance(target, type) else target
@@ -79,6 +87,8 @@ def _load(entry_point: metadata.EntryPoint) -> object:
 
 
 def _validate_contribution(value: object) -> ScenarioCaptureContribution:
+    """Validate the bounded declaration returned by one provider."""
+
     if not isinstance(value, ScenarioCaptureContribution):
         raise ScenarioCaptureProviderError("provider-result-invalid")
     try:

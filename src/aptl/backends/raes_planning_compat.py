@@ -1,16 +1,4 @@
-"""Core application of bounded installed planning-compatibility decisions.
-
-OpenRAE/rae#1285 tracks the upstream contract change that lets an author
-require corroboration without selecting where the backend obtains it. Until
-that lands, an exact installed pack/backend adapter may supply bounded concern
-sets and a finite node limit. Core applies only those validated data and keeps
-compilation, locking, planning, and limit restoration under its own control.
-
-Realization explicitness governs a value, not an unauthored evidence source.
-Unsupported concerns retain the upstream requirement and therefore continue
-to fail admission when APTL cannot meet it. With no compatible adapter, the
-model and runtime limits remain unchanged.
-"""
+"""Apply bounded installed planning compatibility pending OpenRAE/rae#1285."""
 
 from __future__ import annotations
 

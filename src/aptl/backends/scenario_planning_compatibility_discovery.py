@@ -27,10 +27,14 @@ class ScenarioPlanningCompatibilityError(RuntimeError):
 
 
 def _entry_points() -> list[metadata.EntryPoint]:
+    """List planning providers without importing their targets."""
+
     return list(metadata.entry_points(group=ENTRY_POINT_GROUP))
 
 
 def _sequence(provider: object, name: str) -> tuple[str, ...]:
+    """Read one required provider identity tuple."""
+
     value = getattr(provider, name, None)
     if not isinstance(value, tuple) or any(
         not isinstance(item, str) or not item for item in value
@@ -42,6 +46,8 @@ def _sequence(provider: object, name: str) -> tuple[str, ...]:
 def _compatible(
     provider: object, context: ScenarioPlanningCompatibilityContext
 ) -> bool:
+    """Check exact pack and backend compatibility."""
+
     provider_id = getattr(provider, "provider_id", "")
     if (
         not isinstance(provider_id, str)
@@ -70,6 +76,8 @@ def _compatible(
 
 
 def _load(entry_point: metadata.EntryPoint) -> object:
+    """Load one provider while redacting implementation failures."""
+
     try:
         target = entry_point.load()
         return target() if isinstance(target, type) else target
@@ -83,41 +91,49 @@ def _load(entry_point: metadata.EntryPoint) -> object:
 
 
 def _validated_decision(value: object) -> PlanningCompatibilityDecision:
+    """Validate the provider's finite, core-enforced decision."""
+
     if not isinstance(value, PlanningCompatibilityDecision):
         raise ScenarioPlanningCompatibilityError("provider-result-invalid")
-    sets = (
-        value.daemon_readback_concerns,
-        value.open_default_concerns,
-        value.minimum_intrusion_exact_concerns,
+    concern_sets = (
+        (value.daemon_readback_concerns, PERMITTED_DAEMON_READBACK_CONCERNS),
+        (value.open_default_concerns, PERMITTED_OPEN_DEFAULT_CONCERNS),
+        (
+            value.minimum_intrusion_exact_concerns,
+            PERMITTED_MINIMUM_INTRUSION_EXACT_CONCERNS,
+        ),
     )
-    if (
-        any(
-            not isinstance(items, frozenset)
-            or len(items) > 256
-            or any(
-                not isinstance(item, str) or _SAFE_CONCERN.fullmatch(item) is None
-                for item in items
-            )
-            for items in sets
-        )
-        or not value.daemon_readback_concerns.issubset(
-            PERMITTED_DAEMON_READBACK_CONCERNS
-        )
-        or not value.open_default_concerns.issubset(PERMITTED_OPEN_DEFAULT_CONCERNS)
-        or not value.minimum_intrusion_exact_concerns.issubset(
-            PERMITTED_MINIMUM_INTRUSION_EXACT_CONCERNS
-        )
-        or (
-            value.runtime_max_nodes is not None
-            and (
-                not isinstance(value.runtime_max_nodes, int)
-                or isinstance(value.runtime_max_nodes, bool)
-                or not 1 <= value.runtime_max_nodes <= 1_048_576
-            )
-        )
+    if not all(
+        _valid_concern_set(items, permitted) for items, permitted in concern_sets
     ):
         raise ScenarioPlanningCompatibilityError("provider-result-invalid")
+    if not _valid_runtime_max_nodes(value.runtime_max_nodes):
+        raise ScenarioPlanningCompatibilityError("provider-result-invalid")
     return value
+
+
+def _valid_concern_set(items: object, permitted: frozenset[str]) -> bool:
+    """Return whether a concern set is finite, well formed, and authorized."""
+
+    return (
+        isinstance(items, frozenset)
+        and len(items) <= 256
+        and all(
+            isinstance(item, str) and _SAFE_CONCERN.fullmatch(item) is not None
+            for item in items
+        )
+        and items.issubset(permitted)
+    )
+
+
+def _valid_runtime_max_nodes(value: object) -> bool:
+    """Return whether the optional node budget is a bounded integer."""
+
+    return value is None or (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and 1 <= value <= 1_048_576
+    )
 
 
 def resolve_scenario_planning_compatibility(

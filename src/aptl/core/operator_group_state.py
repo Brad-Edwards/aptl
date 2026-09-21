@@ -21,6 +21,8 @@ _SAFE_GROUP = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
 
 
 def _validated(groups: object) -> tuple[str, ...]:
+    """Return a canonical bounded operator-group tuple."""
+
     if not isinstance(groups, (list, tuple, set, frozenset)) or any(
         not isinstance(group, str) or _SAFE_GROUP.fullmatch(group) is None
         for group in groups

@@ -20,6 +20,7 @@ _STATE_DIR = ".aptl/lifecycle/startup-reset-v1"
 _COMPLETED_STATE_DIR = ".aptl/lifecycle/startup-reset-completed-v1"
 _SCHEMA = "aptl-startup-reset-authority/v1"
 _COMPLETED_SCHEMA = "aptl-startup-reset-completion/v1"
+_JSON_SUFFIX = ".json"
 _SAFE_TEXT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,127}")
 _SAFE_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 
@@ -38,6 +39,8 @@ class StartupResetAuthority:
 
 
 def _validated(value: object) -> StartupResetAuthority:
+    """Validate one exact reset authority."""
+
     if not isinstance(value, StartupResetAuthority):
         raise ValueError("invalid startup reset authority")
     text = (
@@ -57,6 +60,8 @@ def _validated(value: object) -> StartupResetAuthority:
 
 
 def _payload(authority: StartupResetAuthority) -> bytes:
+    """Encode one canonical authority receipt."""
+
     return (
         json.dumps(
             {"schema_version": _SCHEMA, **asdict(authority)},
@@ -68,10 +73,14 @@ def _payload(authority: StartupResetAuthority) -> bytes:
 
 
 def _receipt_digest(authority: StartupResetAuthority) -> str:
+    """Return the content address for one authority receipt."""
+
     return hashlib.sha256(_payload(_validated(authority))).hexdigest()
 
 
 def _completion_payload(receipt_digest: str) -> bytes:
+    """Encode the completion marker for one receipt digest."""
+
     return (
         json.dumps(
             {
@@ -119,6 +128,8 @@ def complete_startup_reset_authority(
 
 
 def _completed_receipt_digests(project_dir: Path) -> frozenset[str]:
+    """Load and authenticate every completed receipt digest."""
+
     try:
         names = listdir_contained_nofollow(project_dir, _COMPLETED_STATE_DIR)
     except PathContainmentError as exc:
@@ -134,7 +145,7 @@ def _completed_receipt_digests(project_dir: Path) -> frozenset[str]:
                 project_dir, f"{_COMPLETED_STATE_DIR}/{name}"
             )
             raw = json.loads(encoded)
-            digest = name.removesuffix(".json")
+            digest = name.removesuffix(_JSON_SUFFIX)
             if raw != {
                 "schema_version": _COMPLETED_SCHEMA,
                 "receipt_digest": digest,
@@ -144,6 +155,44 @@ def _completed_receipt_digests(project_dir: Path) -> frozenset[str]:
             raise ValueError("startup reset completion state malformed") from exc
         completed.add(digest)
     return frozenset(completed)
+
+
+def _load_authority_receipt(
+    project_dir: Path, name: str, expected_keys: set[str]
+) -> StartupResetAuthority:
+    """Load and authenticate one content-addressed authority receipt."""
+
+    if re.fullmatch(r"[0-9a-f]{64}\.json", name) is None:
+        raise ValueError("startup reset authority state malformed")
+    try:
+        encoded = read_contained_nofollow(project_dir, f"{_STATE_DIR}/{name}")
+        raw = json.loads(encoded)
+        if (
+            not isinstance(raw, dict)
+            or set(raw) != expected_keys
+            or raw["schema_version"] != _SCHEMA
+        ):
+            raise ValueError
+        authority = _validated(
+            StartupResetAuthority(
+                pack_id=raw["pack_id"],
+                pack_version=raw["pack_version"],
+                pack_set_digest=raw["pack_set_digest"],
+                distribution=raw["distribution"],
+                distribution_version=raw["distribution_version"],
+                entry_point=raw["entry_point"],
+                admission_id=raw["admission_id"],
+            )
+        )
+        canonical = _payload(authority)
+        if (
+            encoded != canonical
+            or hashlib.sha256(canonical).hexdigest() + _JSON_SUFFIX != name
+        ):
+            raise ValueError
+    except (OSError, TypeError, ValueError, PathContainmentError) as exc:
+        raise ValueError("startup reset authority state malformed") from exc
+    return authority
 
 
 def load_startup_reset_authorities(
@@ -170,37 +219,8 @@ def load_startup_reset_authorities(
         "admission_id",
     }
     for name in names:
-        if re.fullmatch(r"[0-9a-f]{64}\.json", name) is None:
-            raise ValueError("startup reset authority state malformed")
-        try:
-            encoded = read_contained_nofollow(project_dir, f"{_STATE_DIR}/{name}")
-            raw = json.loads(encoded)
-            if (
-                not isinstance(raw, dict)
-                or set(raw) != expected_keys
-                or raw["schema_version"] != _SCHEMA
-            ):
-                raise ValueError
-            authority = _validated(
-                StartupResetAuthority(
-                    pack_id=raw["pack_id"],
-                    pack_version=raw["pack_version"],
-                    pack_set_digest=raw["pack_set_digest"],
-                    distribution=raw["distribution"],
-                    distribution_version=raw["distribution_version"],
-                    entry_point=raw["entry_point"],
-                    admission_id=raw["admission_id"],
-                )
-            )
-            canonical = _payload(authority)
-            if (
-                encoded != canonical
-                or hashlib.sha256(canonical).hexdigest() + ".json" != name
-            ):
-                raise ValueError
-        except (OSError, TypeError, ValueError, PathContainmentError) as exc:
-            raise ValueError("startup reset authority state malformed") from exc
-        if name.removesuffix(".json") not in completed:
+        authority = _load_authority_receipt(project_dir, name, expected_keys)
+        if name.removesuffix(_JSON_SUFFIX) not in completed:
             authorities.append(authority)
     return tuple(sorted(set(authorities)))
 

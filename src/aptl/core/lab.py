@@ -482,12 +482,34 @@ def _stop_lab_owned(
 ) -> LabResult:
     """Run teardown while the caller owns the project lifecycle lock."""
 
-    # Load config to get active profiles; fall back to all profiles only when
-    # there is no config. An invalid present config cannot safely identify the
-    # deployment project for destructive label and volume queries.
+    config, profiles, failure = _stop_recovery_configuration(search_dir, backend)
+    if failure is not None:
+        return failure
+    assert profiles is not None
+    if backend is None:
+        backend = _get_backend(search_dir, config)
+
+    capture_failure = _finalize_required_transcript_capture(search_dir, backend)
+    stop_result = backend.stop(profiles, remove_volumes=remove_volumes)
+    result = stop_result
+    if remove_volumes and stop_result.success:
+        reset_failure = _reset_selected_scenario_state(search_dir, backend)
+        if reset_failure is not None:
+            result = reset_failure
+    if result is stop_result and capture_failure is not None:
+        result = capture_failure
+    return result
+
+
+def _stop_recovery_configuration(
+    search_dir: Path, backend: Optional["DeploymentBackend"]
+) -> tuple[AptlConfig | None, list[str] | None, LabResult | None]:
+    """Resolve safe teardown profiles and any blocking recovery failure."""
+
     configured_profiles: list[str] = []
     config_path = find_config(search_dir)
     config: AptlConfig | None = None
+    failure: LabResult | None = None
     if config_path is not None:
         try:
             config = load_config(config_path)
@@ -495,7 +517,7 @@ def _stop_lab_owned(
         except (FileNotFoundError, ValueError) as exc:
             log.warning("Could not load config for profiles: %s", exc)
             if backend is None:
-                return LabResult(
+                failure = LabResult(
                     success=False,
                     error=(
                         "[lifecycle-invalid-configuration] Lab stop blocked: "
@@ -503,34 +525,24 @@ def _stop_lab_owned(
                         "project identity. Repair aptl.json and retry."
                     ),
                 )
-    try:
-        from aptl.core.operator_group_state import load_admitted_operator_groups
+    profiles: list[str] | None = None
+    if failure is None:
+        try:
+            from aptl.core.operator_group_state import load_admitted_operator_groups
 
-        admitted_groups = list(load_admitted_operator_groups(search_dir))
-    except (OSError, ValueError):
-        return LabResult(
-            success=False,
-            error="[lifecycle-state-invalid] Lab stop blocked: invalid operator-group recovery state.",
-        )
-    profiles = admitted_groups or configured_profiles or list(ALL_KNOWN_PROFILES)
-    # Include backend apparatus during recovery teardown even though ordinary
-    # scenario startup omits it. A prior explicitly admitted/operator run may
-    # have created it, and teardown must remain scenario-independent.
-    if "otel" not in profiles:
-        profiles = [*profiles, "otel"]
-
-    if backend is None:
-        backend = _get_backend(search_dir, config)
-
-    capture_failure = _finalize_required_transcript_capture(search_dir, backend)
-    stop_result = backend.stop(profiles, remove_volumes=remove_volumes)
-    if remove_volumes and stop_result.success:
-        reset_failure = _reset_selected_scenario_state(search_dir, backend)
-        if reset_failure is not None:
-            return reset_failure
-    if capture_failure is not None:
-        return capture_failure
-    return stop_result
+            admitted_groups = list(load_admitted_operator_groups(search_dir))
+        except (OSError, ValueError):
+            failure = LabResult(
+                success=False,
+                error="[lifecycle-state-invalid] Lab stop blocked: invalid operator-group recovery state.",
+            )
+        else:
+            profiles = (
+                admitted_groups or configured_profiles or list(ALL_KNOWN_PROFILES)
+            )
+            if "otel" not in profiles:
+                profiles = [*profiles, "otel"]
+    return config, profiles, failure
 
 
 def _reset_selected_scenario_state(
@@ -1176,6 +1188,24 @@ def _emit_diagnostic(
 def _step_load_env(ctx: _LabStartContext) -> LabResult | None:
     """Load the selected source's environment before RAES admission."""
     log.info("Step 1: Loading environment variables...")
+    from aptl.backends.scenario_startup import ScenarioStartupProviderError
+
+    try:
+        result = _load_selected_start_environment(ctx)
+    except ScenarioStartupProviderError:
+        result = LabResult(
+            success=False,
+            error="Scenario startup preparation failed.",
+        )
+    except (OSError, ValueError) as exc:
+        log.exception("Failed to load .env")
+        result = LabResult(success=False, error=f"Failed to load .env: {exc}")
+    return result
+
+
+def _load_selected_start_environment(ctx: _LabStartContext) -> LabResult | None:
+    """Select a source and load its declared environment path."""
+
     selected = _select_start_source(ctx)
     if selected.error is not None:
         return LabResult(success=False, error=selected.error)
@@ -1201,49 +1231,46 @@ def _step_load_env(ctx: _LabStartContext) -> LabResult | None:
     )
     env_path = ctx.project_dir / ".env"
 
-    def load_stack_environment() -> LabResult | None:
-        try:
-            hydration = hydrate_dotenv(env_path)
-            if hydration.changed:
-                action = "created" if hydration.created else "updated"
-                log.info(
-                    "%s .env with %d hydrated credential values",
-                    action.capitalize(),
-                    len(hydration.updated_keys),
-                )
-            ctx.raw_env = load_dotenv(env_path) if env_path.exists() else {}
-            ctx.env = env_vars_from_dict(ctx.raw_env)
-            return _validate_env_secrets(ctx.raw_env)
-        except (OSError, ValueError) as exc:
-            log.exception("Failed to load .env")
-            return LabResult(success=False, error=f"Failed to load .env: {exc}")
+    result = None
+    if needs_stack_env:
+        operation = partial(_load_stack_environment, ctx, env_path)
+        if selection.bundle.source_kind is ScenarioSourceKind.ENV_PACK:
+            result = run_startup_hook(
+                selection.provider_selection,
+                StartupHook.STACK_ENVIRONMENT,
+                StartupHookContext(
+                    ctx.backend,
+                    preparation_phase=StartupPreparationPhase.ENVIRONMENT,
+                    operation=operation,
+                ),
+            )
+            if result is not None and not isinstance(result, LabResult):
+                raise ScenarioStartupProviderError("provider-result-invalid")
+        else:
+            result = operation()
+    else:
+        ctx.raw_env = load_dotenv(env_path) if env_path.exists() else {}
+    return result
+
+
+def _load_stack_environment(ctx: _LabStartContext, env_path: Path) -> LabResult | None:
+    """Hydrate and validate the project stack environment."""
 
     try:
-        if needs_stack_env:
-            if selection.bundle.source_kind is ScenarioSourceKind.ENV_PACK:
-                result = run_startup_hook(
-                    selection.provider_selection,
-                    StartupHook.STACK_ENVIRONMENT,
-                    StartupHookContext(
-                        ctx.backend,
-                        preparation_phase=StartupPreparationPhase.ENVIRONMENT,
-                        operation=load_stack_environment,
-                    ),
-                )
-                if result is not None and not isinstance(result, LabResult):
-                    raise ScenarioStartupProviderError("provider-result-invalid")
-                return result
-            return load_stack_environment()
+        hydration = hydrate_dotenv(env_path)
+        if hydration.changed:
+            action = "created" if hydration.created else "updated"
+            log.info(
+                "%s .env with %d hydrated credential values",
+                action.capitalize(),
+                len(hydration.updated_keys),
+            )
         ctx.raw_env = load_dotenv(env_path) if env_path.exists() else {}
-    except ScenarioStartupProviderError:
-        return LabResult(
-            success=False,
-            error="Scenario startup preparation failed.",
-        )
+        ctx.env = env_vars_from_dict(ctx.raw_env)
+        return _validate_env_secrets(ctx.raw_env)
     except (OSError, ValueError) as exc:
         log.exception("Failed to load .env")
         return LabResult(success=False, error=f"Failed to load .env: {exc}")
-    return None
 
 
 def _select_start_source(ctx: _LabStartContext) -> StartStageResult:
@@ -2142,6 +2169,27 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 8: Starting containers...")
     # Runtime guards above.
     assert ctx.config is not None and ctx.backend is not None
+    recovery_failure = _persist_start_recovery(ctx)
+    if recovery_failure is not None:
+        return recovery_failure
+    ctx.run_store, ctx.run_id = _resolve_run_target(ctx)
+    from aptl.backends.raes_start_model import AcesRunTarget
+
+    outcome = start_raes_scenario(
+        ctx.project_dir,
+        ctx.config,
+        ctx.backend,
+        scenario_path=ctx.scenario_path,
+        admitted=ctx.admitted_start,
+        run_target=AcesRunTarget(run_store=ctx.run_store, run_id=ctx.run_id),
+        before_backend_retry=_backend_retry_callback(ctx),
+    )
+    return _interpret_start_outcome(ctx, outcome)
+
+
+def _persist_start_recovery(ctx: _LabStartContext) -> LabResult | None:
+    """Persist operator groups and any admitted reset authority."""
+
     try:
         from aptl.core.operator_group_state import persist_admitted_operator_groups
 
@@ -2188,28 +2236,16 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
             success=False,
             error="Could not persist scenario reset authority for recovery.",
         )
-    # GAP 4: resolve the single run target ONCE, before the RAES handoff, so
-    # orchestration persists workflow artifacts and the later run-record step
-    # write to the same run directory / run_id.
-    ctx.run_store, ctx.run_id = _resolve_run_target(ctx)
-    from aptl.backends.raes_start_model import AcesRunTarget, AcesStartOutcome
+    return None
 
-    outcome = start_raes_scenario(
-        ctx.project_dir,
-        ctx.config,
-        ctx.backend,
-        scenario_path=ctx.scenario_path,
-        # Apply the execution admitted at `_step_load_config`. Re-planning here
-        # would stage the env-pack a second time and let the pre-start
-        # decisions taken since then describe a different admission (#951).
-        admitted=ctx.admitted_start,
-        run_target=AcesRunTarget(run_store=ctx.run_store, run_id=ctx.run_id),
-        # The RAES handoff invokes this only for a retryable backend-start
-        # failure whose admitted plan actually selected SOC. Keeping that gate
-        # beside the admitted plan avoids both config-flag approximation and a
-        # second parse/plan pass (issues #432 and #550).
-        before_backend_retry=_backend_retry_callback(ctx),
-    )
+
+def _interpret_start_outcome(
+    ctx: _LabStartContext, outcome: object
+) -> LabResult | None:
+    """Normalize the RAES handoff outcome and retain successful state."""
+
+    from aptl.backends.raes_start_model import AcesStartOutcome
+
     result: LabResult | None
     if isinstance(outcome, AcesStartOutcome) and outcome.lab_result.success:
         # Store the RAES start outcome for the run record step (REP-001).
@@ -2706,10 +2742,8 @@ def _activate_required_transcript(
         persist_active_transcript_authority,
     )
 
-    if ctx.run_store is None or ctx.run_id is None:
-        return None
     capture_selection = getattr(ctx.admitted_start, "capture_selection", None)
-    if capture_selection is None:
+    if ctx.run_store is None or ctx.run_id is None or capture_selection is None:
         return None
     try:
         persist_active_transcript_authority(
@@ -3830,11 +3864,12 @@ def _start_progress_message(
     name = step.__name__
     if step in _OPTIONAL_START_STEPS and step not in _selected_start_steps(ctx):
         return None
-    if ctx.admitted_surface is not None:
-        if name in {"_step_build_mcps", "_step_sync_mcp_config"} and not (
-            ctx.selected_profiles
-        ):
-            return None
+    if (
+        ctx.admitted_surface is not None
+        and name in {"_step_build_mcps", "_step_sync_mcp_config"}
+        and not ctx.selected_profiles
+    ):
+        return None
     return _LAB_START_PROGRESS_MESSAGES.get(name)
 
 

@@ -173,8 +173,9 @@ def test_stale_adapter_claims_are_incompatible_not_malformed(monkeypatch) -> Non
         "aptl.backends.scenario_capture_discovery._entry_points",
         lambda: [_EntryPoint(capture)],
     )
+    capture_context = ScenarioCaptureContext(PACK, BACKEND)
     with pytest.raises(ScenarioCaptureProviderError, match="provider-missing"):
-        resolve_scenario_capture(ScenarioCaptureContext(PACK, BACKEND))
+        resolve_scenario_capture(capture_context)
 
     planning = _PlanningProvider()
     planning.supported_pack_versions = ("0.9.0",)
@@ -200,12 +201,11 @@ def test_planning_compatibility_rejects_unbounded_concern_data(monkeypatch) -> N
         lambda: [_EntryPoint(provider)],
     )
 
+    planning_context = ScenarioPlanningCompatibilityContext(PACK, BACKEND)
     with pytest.raises(
         ScenarioPlanningCompatibilityError, match="provider-result-invalid"
     ):
-        resolve_scenario_planning_compatibility(
-            ScenarioPlanningCompatibilityContext(PACK, BACKEND)
-        )
+        resolve_scenario_planning_compatibility(planning_context)
 
 
 @pytest.mark.parametrize(
@@ -228,12 +228,11 @@ def test_planning_compatibility_rejects_semantically_unauthorized_concerns(
         lambda: [_EntryPoint(provider)],
     )
 
+    planning_context = ScenarioPlanningCompatibilityContext(PACK, BACKEND)
     with pytest.raises(
         ScenarioPlanningCompatibilityError, match="provider-result-invalid"
     ):
-        resolve_scenario_planning_compatibility(
-            ScenarioPlanningCompatibilityContext(PACK, BACKEND)
-        )
+        resolve_scenario_planning_compatibility(planning_context)
 
 
 def test_pack_provider_defines_safe_operator_groups(monkeypatch) -> None:

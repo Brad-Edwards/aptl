@@ -787,6 +787,7 @@ src/aptl/appliance/seat/vm.py	optional-delivery	Keep sealed-seat boundary outsid
 src/aptl/appliance/versioning.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/backends/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_compose_profile_index.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_raes_admission_helpers.py	core-candidate	Keep scenario-independent admission adapter resolution and preparation with generic RAES orchestration
 src/aptl/backends/_raes_apply_helpers.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_apply_reporting.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_raes_artifact_delivery_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -829,6 +830,7 @@ src/aptl/backends/_raes_stateful_values.py	backend-owned-runtime	Retain authored
 src/aptl/backends/_runtime_concern_disclosure.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_runtime_concern_excess.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_runtime_mount_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_scenario_startup_runtime.py	core-candidate	Keep scenario-independent startup provider dispatch behind the generic startup adapter contract
 src/aptl/backends/identity.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/pack_interaction.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/pack_interaction_discovery.py	core-candidate	Migrate only after public-import, history and scenario-independence verification

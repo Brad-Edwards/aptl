@@ -1,10 +1,4 @@
-"""Emergency kill switch for all agent and MCP operations.
-
-Discovers and terminates MCP server processes, optionally stops lab
-containers, clears scenario session state, and cleans up trace context
-files. Designed for resilience: each step runs independently so that a
-failure in one does not prevent the others.
-"""
+"""Emergency kill switch for agent, MCP, and lab operations."""
 
 import os
 import signal

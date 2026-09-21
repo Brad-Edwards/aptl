@@ -118,8 +118,9 @@ def test_closed_scope_rejects_required_kali_capture_addition(scenario):
     del scenario.evidence_requirements["suricata-login-sqli-alert"]
     scenario.realization = RealizationDesignation(default="closed")
 
+    registry = _registry()
     with pytest.raises(AdmissionRejection) as excinfo:
-        admit_sdl_evidence(scenario, registry=_registry())
+        admit_sdl_evidence(scenario, registry=registry)
 
     assert {diagnostic.code for diagnostic in excinfo.value.diagnostics} == {
         "aptl.capture-apparatus.closed-realization-scope"
@@ -132,8 +133,9 @@ def test_closed_scope_rejects_required_traffic_mirror_addition(scenario):
     del scenario.evidence_requirements["redteam-session-transcript"]
     scenario.realization = RealizationDesignation(default="closed")
 
+    registry = _registry()
     with pytest.raises(AdmissionRejection) as excinfo:
-        admit_sdl_evidence(scenario, registry=_registry())
+        admit_sdl_evidence(scenario, registry=registry)
 
     assert {diagnostic.code for diagnostic in excinfo.value.diagnostics} == {
         "aptl.capture-apparatus.closed-realization-scope"
@@ -182,8 +184,9 @@ def test_any_unoffered_required_axis_rejects_the_entire_sdl_capture_plan(
         original | changed
     )
 
+    registry = _registry()
     with pytest.raises(AdmissionRejection):
-        admit_sdl_evidence(scenario, registry=_registry())
+        admit_sdl_evidence(scenario, registry=registry)
 
 
 def test_capture_rejection_precedes_artifact_probe(scenario, tmp_path, monkeypatch):

@@ -5,21 +5,13 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from aptl.core.correlation.clock import ClockProvider, SystemClockProvider
-from aptl.core.evidence.adapters.sources import (
-    SourceResult,
-    WindowedSource,
-    _to_outcome,
-)
-from aptl.core.evidence.content_store import create_run_json_once
 from aptl.core.evidence.coordinator import AcquisitionResult, acquire_evidence
-from aptl.core.evidence.outcomes import AcquisitionDisposition, CollectorStatus
-from aptl.core.evidence.protocol import CollectorContext, CollectorOutcome, RunScope
+from aptl.core.evidence.outcomes import AcquisitionDisposition
+from aptl.core.evidence.protocol import RunScope
 from aptl.core.experiment.capture_registry import CaptureBinding
 from aptl.core.runstore import LocalRunStore
 from aptl.utils.pathsafe import (
@@ -45,116 +37,6 @@ _ACTIVE_AUTHORITY_DIR = ".aptl/capture-authorities"
 _FINALIZED_AUTHORITY_DIR = ".aptl/capture-finalized"
 _FAILED_ACTIVATION_DIR = ".aptl/capture-activation-failed"
 _FAILED_FINALIZATION_DIR = ".aptl/capture-finalization-failed"
-
-@dataclass(frozen=True)
-class _OnDemandHandle:
-    """Collector context and the exact native-check start instant."""
-
-    context: CollectorContext
-    started_at: str
-
-
-def _parse_timestamp(value: str) -> datetime:
-    """Parse the canonical UTC timestamp form emitted by capture clocks."""
-
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-
-def _deadline(started_at: str, seconds: float) -> str:
-    """Return the admitted deadline measured from a collector start."""
-
-    value = _parse_timestamp(started_at) + timedelta(seconds=seconds)
-    return value.isoformat().replace("+00:00", "Z")
-
-
-def _source_times_inside_actual_window(
-    result: SourceResult, started_at: str, finished_at: str
-) -> bool:
-    """Return whether all reported source instants fit the actual window."""
-
-    try:
-        start = _parse_timestamp(started_at)
-        finish = _parse_timestamp(finished_at)
-        source_min = (
-            _parse_timestamp(result.source_min_time)
-            if result.source_min_time is not None
-            else None
-        )
-        source_max = (
-            _parse_timestamp(result.source_max_time)
-            if result.source_max_time is not None
-            else None
-        )
-    except (TypeError, ValueError):
-        return False
-    return (
-        start <= finish
-        and (source_min is None or start <= source_min <= finish)
-        and (source_max is None or start <= source_max <= finish)
-        and (source_min is None or source_max is None or source_min <= source_max)
-    )
-
-
-class _OnDemandNativeCollector:
-    """Run one bounded native check and close its window after the check.
-
-    Native adapter checks create fresh evidence while ``fetch`` runs.
-    The query receives the admitted future deadline, but the outcome records
-    the actual post-query finish. Source timestamps outside that actual window
-    are rejected as clock skew.
-    """
-
-    def __init__(self, registration_id: str, source: WindowedSource) -> None:
-        self._registration_id = registration_id
-        self._source = source
-
-    @property
-    def registration_id(self) -> str:
-        return self._registration_id
-
-    @staticmethod
-    def start(context: CollectorContext) -> _OnDemandHandle:
-        return _OnDemandHandle(context=context, started_at=context.clock.now())
-
-    def stop(self, handle: _OnDemandHandle) -> CollectorOutcome:
-        result = self._source.fetch(
-            handle.started_at,
-            _deadline(handle.started_at, handle.context.deadline_seconds),
-        )
-        finished_at = handle.context.clock.now()
-        if not _source_times_inside_actual_window(
-            result, handle.started_at, finished_at
-        ):
-            result = SourceResult(status=CollectorStatus.CLOCK_SKEW)
-        return _to_outcome(result, handle.started_at, finished_at)
-
-
-def _native_bindings(
-    plan: CapturePlan,
-    selection: ResolvedScenarioCapture,
-) -> tuple[CaptureBinding, ...]:
-    """Select immediate bindings declared by the admitted adapter."""
-
-    return tuple(
-        binding
-        for binding in plan.runtime_bindings()
-        if binding.registration_id
-        in selection.contribution.native_registration_ids
-    )
-
-
-def _persist_capture_plan(
-    plan: CapturePlan, run_store: LocalRunStore, run_id: str
-) -> None:
-    """Create the run and seal the admitted capture plan exactly once."""
-
-    run_store.create_run(run_id)
-    create_run_json_once(
-        run_store,
-        run_id,
-        f"evidence/capture-plans/{plan.plan_id}.json",
-        json.loads(plan.canonical_bytes),
-    )
 
 
 def persist_active_transcript_authority(
@@ -462,9 +344,7 @@ def finalize_active_transcript_authority(
     capture_selection = _capture_selection_from_state(state)
     runtime_adapter = capture_selection.contribution.runtime_adapter
     binding_loader = getattr(runtime_adapter, "binding_from_projection", None)
-    collector_factory = getattr(
-        runtime_adapter, "finalized_transcript_collector", None
-    )
+    collector_factory = getattr(runtime_adapter, "finalized_transcript_collector", None)
     if not callable(binding_loader) or not callable(collector_factory):
         raise ValueError("capture adapter cannot finalize transcripts")
     binding = binding_loader(state["binding"])
@@ -551,6 +431,8 @@ def _capture_selection_from_state(
 
 from aptl.backends._raes_native_evidence_acquisition import (
     NativeEvidenceRequest,
+    _OnDemandNativeCollector,
+    _persist_capture_plan,
     acquire_native_evidence,
 )
 

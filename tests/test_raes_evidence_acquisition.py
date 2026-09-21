@@ -711,6 +711,7 @@ def test_active_transcript_authority_rejects_conflicting_binding(tmp_path):
     )
 
     conflicting = replace(binding, requirement_id="different-transcript")
+    capture_selection = _capture_selection()
     with pytest.raises(ValueError, match="active transcript authority conflict"):
         persist_active_transcript_authority(
             project_dir=tmp_path,
@@ -718,7 +719,7 @@ def test_active_transcript_authority_rejects_conflicting_binding(tmp_path):
             binding=conflicting,
             run_store=store,
             run_id="run-1",
-            capture_selection=_capture_selection(),
+            capture_selection=capture_selection,
         )
 
 

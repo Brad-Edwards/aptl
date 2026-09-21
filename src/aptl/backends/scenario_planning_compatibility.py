@@ -71,6 +71,8 @@ PERMITTED_MINIMUM_INTRUSION_EXACT_CONCERNS = frozenset(
 
 @dataclass(frozen=True)
 class ScenarioPlanningCompatibilityContext:
+    """Exact pack and backend identity visible during selection."""
+
     pack: PackIdentity
     backend: BackendIdentity
 
@@ -86,6 +88,8 @@ class PlanningCompatibilityDecision:
 
 
 class ScenarioPlanningCompatibilityProvider(Protocol):
+    """Installed provider contract for bounded compatibility data."""
+
     provider_id: str
     extension_api_version: str
     supported_pack_id: str
@@ -103,6 +107,8 @@ class ScenarioPlanningCompatibilityProvider(Protocol):
 
 @dataclass(frozen=True)
 class ResolvedPlanningCompatibility:
+    """Core-owned decision plus exact installed-provider provenance."""
+
     decision: PlanningCompatibilityDecision
     provider_id: str
     extension_api_version: str

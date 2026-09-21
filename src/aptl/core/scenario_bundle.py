@@ -191,7 +191,9 @@ def _stage_and_validate(
     if not source_pack.is_dir():
         raise EnvPackError(f"env-pack source not found for {identity!r}")
 
-    staging_root.mkdir(parents=True, exist_ok=True)
+    # The caller deliberately selects this output root. The validated opaque
+    # identity and generated token below are the only appended components.
+    staging_root.mkdir(parents=True, exist_ok=True)  # NOSONAR
     # Each invocation stages into its own fresh directory. Two concurrent
     # invocations (pytest-xdist workers exercising the gate, or two aptl runs on
     # one project) therefore never share a tree, so none rmtrees or reads a tree

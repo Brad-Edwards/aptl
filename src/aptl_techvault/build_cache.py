@@ -61,7 +61,9 @@ def prepare_cache_inputs(destination: Path, staging: Path) -> PackIdentity:
                 files[member.name] = payload
     if files.keys() != _LOCKFILES:
         raise ValueError("incomplete cache lockfiles")
-    destination.mkdir(parents=True, exist_ok=False)
+    # The caller deliberately selects this output root; every appended name is
+    # a member of the fixed _LOCKFILES allowlist and is written no-follow.
+    destination.mkdir(parents=True, exist_ok=False)  # NOSONAR
     for name, payload in files.items():
         if name.endswith("/package.json"):
             # These private manifests only populate a dependency cache. npm 10

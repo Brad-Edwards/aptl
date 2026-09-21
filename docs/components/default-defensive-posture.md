@@ -530,9 +530,8 @@ intentional weaknesses on stdout for transparency
 
 **What blue would do to raise it**
 
-- *Observe:* AD detection rules
-  ([`ad_rules.xml`](https://github.com/Brad-Edwards/aptl/blob/main/config/wazuh_cluster/ad_rules.xml)) are
-  already loaded and fire on matches by default (BASELINE ENABLED).
+- *Observe:* the admitted TechVault pack's AD detection rules are loaded and
+  fire on matches by default (BASELINE ENABLED).
   Blue does not need to enable them—they observe automatically.
 - *Couple to enforcement:* enable the `301002` AD Kerberos
   `<active-response>` block (delete `<disabled>yes</disabled>` in
@@ -549,7 +548,7 @@ intentional weaknesses on stdout for transparency
 | Surface | File |
 |---|---|
 | AD provisioner with weak passwords + over-priv | [`containers/ad/provision-users.sh`](https://github.com/Brad-Edwards/aptl/blob/main/containers/ad/provision-users.sh) |
-| Wazuh AD detection rules | [`config/wazuh_cluster/ad_rules.xml`](https://github.com/Brad-Edwards/aptl/blob/main/config/wazuh_cluster/ad_rules.xml) |
+| Wazuh AD detection rules | Acquired [`techvault` environment pack](https://github.com/OpenRAE/env-packs/tree/main/packs/techvault) |
 
 ---
 
@@ -665,18 +664,13 @@ Read it as design intent, not as documentation of today's behavior.
 in the GRC workflow platform describes a `mode (red/blue/purple)` field on each
 scenario YAML that would gate which posture defaults apply per run.
 
-**Today's reality is RAES-only for supported startup:**
-
-- Historical APTL-local scenario YAML files now live under
-  `scenarios/archive/` and are reference-only. They are not catalog rows,
-  startup inputs, or runtime schema examples.
-- Current startup selection uses `scenarios/catalog.json`,
-  `aptl.core.scenario_catalog.resolve_scenario_selection()`, and RAES SDL
-  parsing. The curated TechVault RAES SDL files do not define a local
-  per-run posture mode field.
+**Today's reality is RAES-only for supported startup:** APTL acquires the
+configured pack, validates its associated-artifact identity, and projects its
+catalog metadata. There is no APTL-local catalog, archived scenario tree, or
+curated TechVault SDL input.
 
 **No runtime mode-gating exists.** Even when a scenario YAML's `mode:`
-appears in archived reference fixtures, supported startup code does not read it
+appears in an external authored scenario, supported startup code does not read it
 and no code branches on the value to apply per-mode posture defaults. Any
 future posture-mode feature must be designed against RAES SDL and the catalog
 handoff, not by reviving the archived YAML format.

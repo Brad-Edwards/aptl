@@ -377,7 +377,17 @@ try:
     payload = json.loads(text) if isinstance(text, str) else None
 except json.JSONDecodeError:
     payload = None
-if not isinstance(payload, dict) or payload.get("success") is not False:
+omission_errors = {
+    "Container 'reverse' not found in configuration",
+    "Reverse Engineering instance is not enabled",
+}
+if (
+    not isinstance(payload, dict)
+    or payload.get("success") is not False
+    or payload.get("command") != "which r2"
+    or payload.get("error") not in omission_errors
+    or "output" in payload
+):
     raise SystemExit("FAIL: reverse_run_command did not prove target unavailability")
 print(json.dumps({"outcome": "expected-unavailable", "operation": "reverse_run_command"}))
 PY
@@ -389,7 +399,10 @@ zero exit and bounded `expected-unavailable` result. Cite both the scenario
 declaration and `aptl lab status` inventory proving that the target was
 intentionally not realized. A missing Node runtime, server artifact, registered
 `reverse_run_command` tool, complete protocol response, or structured target
-failure makes the command fail.
+failure makes the command fail. Connection errors, internal errors, and failed
+remote commands cannot count as an intentional omission. The admitted target
+configuration must explicitly omit or disable `reverse`; do not edit it merely
+to obtain this result.
 
 Expected: a realized target returns real target output; an intentionally
 omitted target produces the declared, inventory-backed tested-negative result.

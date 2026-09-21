@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from raes.runtime_configuration import RuntimeConfiguration
 
 from aptl.backends._runtime_concern_disclosure import _disclose
+from aptl.backends.raes_package_managers import apt_package_rows, query_installed_argv
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
@@ -88,16 +89,14 @@ def _query_packages(
     """Query one supported package manager without invoking a shell."""
 
     if manager == "apt":
-        command = [
-            "dpkg-query",
-            "-W",
-            "-f=${Package}\\t${Version}\\t${Architecture}\\n",
-            *names,
-        ]
-        result = backend.container_exec(container_name, command, timeout=30)
-        rows = _tabular_packages(result, fields=3)
-        if rows is None or not all(name in rows for name in names):
-            rows = _apt_rows_with_providers(backend, container_name, names, rows)
+        result = backend.container_exec(
+            container_name, query_installed_argv("apt", names), timeout=30
+        )
+        rows = (
+            apt_package_rows(_stdout(result))
+            if getattr(result, "returncode", 1) == 0
+            else None
+        )
     elif manager in {"dnf", "yum"}:
         command = [
             "rpm",
@@ -114,67 +113,6 @@ def _query_packages(
     else:
         rows = None
     return rows
-
-
-def _apt_rows_with_providers(
-    backend: DeploymentBackend,
-    container_name: str,
-    names: tuple[str, ...],
-    rows: dict[str, tuple[str, str]] | None,
-) -> dict[str, tuple[str, str]] | None:
-    """Resolve declared names that a distribution ships as virtual packages.
-
-    Debian renames real packages into virtual ones across releases — `dnsutils`
-    is `bind9-dnsutils` from trixie on — so `dpkg-query <name>` reports the
-    declared name as absent even though the declared software is installed and
-    `apt-get install <name>` is what installed it. Corroborating through the
-    installed package that Provides the name keeps the readback honest: it
-    still proves something real is installed for the declaration, rather than
-    assuming a missing name is fine (issue #1006).
-    """
-
-    command = [
-        "dpkg-query",
-        "-W",
-        "-f=${Package}\\t${Version}\\t${Architecture}\\t${Provides}\\n",
-    ]
-    result = backend.container_exec(container_name, command, timeout=30)
-    installed = _provider_rows(result)
-    if installed is None:
-        return rows
-    resolved = dict(rows or {})
-    for name in names:
-        if name in resolved:
-            continue
-        provider = installed.get(name)
-        if provider is not None:
-            resolved[name] = provider
-    return resolved if all(name in resolved for name in names) else rows
-
-
-def _provider_rows(result: object) -> dict[str, tuple[str, str]] | None:
-    """Map each provided virtual name to its installed provider's identity."""
-
-    if getattr(result, "returncode", 1) != 0:
-        return None
-    provided: dict[str, tuple[str, str]] = {}
-    for line in _stdout(result).splitlines():
-        columns = line.split("\t")
-        if len(columns) != 4:
-            continue
-        package, version, architecture, provides = columns
-        if not package or not version or not architecture:
-            continue
-        # The batch query fails as a unit, so this listing has to answer for
-        # every declared name: the installed packages themselves as well as the
-        # virtual names they provide.
-        provided.setdefault(package, (version, architecture))
-        for entry in provides.split(","):
-            # `Provides` entries may carry a version, e.g. `name (= 1.2)`.
-            virtual = entry.split("(", 1)[0].strip()
-            if virtual:
-                provided.setdefault(virtual, (version, architecture))
-    return provided
 
 
 def _pip_packages(result: object) -> dict[str, tuple[str, str]] | None:

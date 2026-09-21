@@ -58,6 +58,14 @@ paragraph. The implementation clarifies the current project name, names each
 content and runtime owner, and qualifies the catalog as APTL's startup catalog.
 None justifies changing a code or persisted identifier.
 
+**Issue #880 consumption guidance**
+
+The acquired runtime path and retained backend/fixture ownership are documented
+in `docs/architecture/issue-880-techvault-env-pack-consumption-preflight.md`,
+`docs/components/default-defensive-posture.md`, `docs/components/wazuh-siem.md`,
+`docs/getting-started/installation.md`, `docs/getting-started/quick-start.md`, and
+`docs/sdl/complex-scenarios.md`.
+
 ## Required incumbent boundaries
 
 This is a documentation-only change. It adds no security, configuration,

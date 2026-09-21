@@ -140,7 +140,7 @@ The manual equivalent, for one variant, is to enable that variant's container
 profiles in `aptl.json`, then:
 
 ```bash
-aptl lab start --scenario techvault-defensive-min
+aptl lab start --scenario-path scenarios/techvault-defensive-min.sdl.yaml
 aptl lab status --json
 aptl lab stop -v -y
 ```

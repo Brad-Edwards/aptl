@@ -35,6 +35,7 @@ def admitted_fresh_lab(tmp_path_factory):
     project_dir = tmp_path_factory.mktemp("fresh") / "fresh-lab"
     materialize(project_dir)
     selected = project_dir / "scenarios" / "materialization-envelope.sdl.yaml"
+    selected.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(_MATERIALIZATION_ENVELOPE, selected)
 
     assert not (project_dir / "config" / "soc_certs").exists()

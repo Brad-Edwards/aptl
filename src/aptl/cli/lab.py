@@ -100,7 +100,7 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
     scenario: Optional[str] = typer.Option(
         None,
         "--scenario",
-        help="Curated RAES startup scenario id from the catalog.",
+        help="Acquired RAES environment-pack id from the catalog.",
     ),
     scenario_path: Optional[Path] = typer.Option(
         None,
@@ -296,16 +296,21 @@ def scenarios(
         help="Path to the APTL project directory.",
     ),
 ) -> None:
-    """List curated RAES startup scenarios."""
+    """List validated acquired-pack identities."""
     try:
         catalog = load_scenario_catalog(project_dir)
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=2)
 
-    for entry in catalog.scenarios:
-        description = f" - {entry.description}" if entry.description else ""
-        typer.echo(f"{entry.id}\t{entry.path}\t{entry.name}{description}")
+    with catalog:
+        for entry in catalog.scenarios:
+            description = f" - {entry.description}" if entry.description else ""
+            identity = catalog.pack_identity
+            typer.echo(
+                f"{entry.id}\t{identity.pack_version}\t{catalog.maturity}\t"
+                f"{identity.set_digest}\t{entry.name}{description}"
+            )
 
 
 @app.command()
@@ -445,7 +450,10 @@ def validate_live(
     scenario: Optional[Path] = typer.Option(
         None,
         "--scenario",
-        help="RAES SDL scenario (default: the configured scenario, the bundled TechVault env-pack).",
+        help=(
+            "Explicit project-tree RAES SDL override "
+            "(default: the configured acquired TechVault pack)."
+        ),
     ),
     profile: str = typer.Option(
         "full-remote-control-plane",

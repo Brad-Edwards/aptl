@@ -1,5 +1,10 @@
 # Hosted Backup Seats For A Workshop
 
+> Historical pinned-payload procedure. Its local `--scenario` commands belong
+> to the recorded release and are not current catalog selectors. For a current
+> checkout-only guided fixture, use the explicit staging and `--scenario-path`
+> procedure in [Lab Walkthrough](walkthrough.md).
+
 Historical contingency from `origin/825-hosted-backup-seats` (`2db0f8ac`).
 Statements about the "current" release below describe the July 28, 2026
 trial, not today's code. This recipe uses a pinned reduced guided profile;

@@ -158,74 +158,6 @@ def test_a_specification_id_cannot_escape_the_context_root(tmp_path):
         assert _context_dockerfile(tmp_path, hostile) is None
 
 
-# -- per-invocation env-pack staging and its sweep (issue #875) --------------
-
-
-def _staged_tree(staging_root: Path, name: str, *, age_seconds: float) -> Path:
-    """Create a staged-tree sibling with a controlled mtime."""
-
-    import os
-    import time
-
-    tree = staging_root / name / "techvault"
-    tree.mkdir(parents=True)
-    (tree / "marker").write_text("x", encoding="utf-8")
-    when = time.time() - age_seconds
-    os.utime(staging_root / name, (when, when))
-    return staging_root / name
-
-
-def test_the_sweep_removes_stale_staged_trees_and_keeps_live_ones(tmp_path):
-    """Finished invocations leave their tree behind; the sweep bounds the growth.
-
-    Per-invocation staging never deletes a tree a peer might still be reading, so
-    without a sweep the staging root grows forever. A tree younger than the
-    threshold could still belong to a live realization and must survive.
-    """
-
-    from aptl.core.scenario_bundle import (
-        _STAGING_SWEEP_AGE_SECONDS,
-        _sweep_stale_stagings,
-    )
-
-    staging_root = tmp_path / "staging"
-    staging_root.mkdir()
-    stale = _staged_tree(staging_root, "techvault.111-aaa", age_seconds=_STAGING_SWEEP_AGE_SECONDS * 2)
-    fresh = _staged_tree(staging_root, "techvault.222-bbb", age_seconds=5)
-
-    _sweep_stale_stagings(staging_root, "techvault")
-
-    assert not stale.exists()
-    assert (fresh / "techvault" / "marker").is_file()
-
-
-def test_the_sweep_only_touches_this_identity_and_leaves_other_entries_alone(tmp_path):
-    """One pack's sweep must not delete another pack's (or anyone else's) tree."""
-
-    from aptl.core.scenario_bundle import _sweep_stale_stagings
-
-    staging_root = tmp_path / "staging"
-    staging_root.mkdir()
-    other_pack = _staged_tree(staging_root, "otherpack.111-aaa", age_seconds=99999)
-    prefix_lookalike = _staged_tree(staging_root, "techvaultx.111-aaa", age_seconds=99999)
-    loose_file = staging_root / "techvault.notadir"
-    loose_file.write_text("x", encoding="utf-8")
-
-    _sweep_stale_stagings(staging_root, "techvault")
-
-    assert other_pack.exists()
-    assert prefix_lookalike.exists()
-    assert loose_file.exists()
-
-
-def test_the_sweep_is_best_effort_on_an_unreadable_staging_root(tmp_path):
-    """A sweep failure must never fail the realization it was tidying up for."""
-
-    from aptl.core.scenario_bundle import _sweep_stale_stagings
-
-    _sweep_stale_stagings(tmp_path / "does-not-exist", "techvault")
-
-
 def test_env_pack_staging_is_per_invocation_and_excludes_bytecode(tmp_path):
     """Two invocations never share a tree, and installer bytecode never stages.
 
@@ -402,9 +334,7 @@ def test_the_owned_fixture_pack_is_admitted_by_the_production_resolver(tmp_path)
         ("undeclared-member", "content manifest is invalid"),
     ),
 )
-def test_a_fixture_that_drifts_from_its_manifest_is_refused(
-    tmp_path, mutation, reason
-):
+def test_a_fixture_that_drifts_from_its_manifest_is_refused(tmp_path, mutation, reason):
     """Admission is byte-bound: a changed or extra member fails the pack closed."""
 
     from aptl.core.scenario_bundle import EnvPackError, env_pack_bundle

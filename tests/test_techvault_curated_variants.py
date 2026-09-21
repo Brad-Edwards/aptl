@@ -201,26 +201,18 @@ def _scenario_name(text: str) -> str:
 
 
 @pytest.mark.parametrize("variant", VARIANTS, ids=lambda v: v.catalog_id)
-def test_variant_is_registered_and_resolvable(variant: _Variant):
+def test_variant_is_an_explicit_research_fixture(variant: _Variant):
+    from aptl.validation.research_scenario_catalog import load_research_scenario_catalog
+
+    fixtures = load_research_scenario_catalog(PROJECT_ROOT)
+    assert fixtures.get(variant.catalog_id).path == str(variant.path.relative_to(PROJECT_ROOT))
+    assert load_scenario_catalog(PROJECT_ROOT).get(variant.catalog_id) is None
+    with pytest.raises(ValueError, match="Unknown scenario id"):
+        resolve_scenario_selection(PROJECT_ROOT, scenario_id=variant.catalog_id)
+    assert resolve_scenario_selection(PROJECT_ROOT, scenario_path=variant.path) == variant.path
+
+
+def test_normal_catalog_selects_only_the_acquired_pack():
     catalog = load_scenario_catalog(PROJECT_ROOT)
-    ids = {entry.id for entry in catalog.scenarios}
-    assert variant.catalog_id in ids
-
-    resolved = resolve_scenario_selection(PROJECT_ROOT, scenario_id=variant.catalog_id)
-    assert resolved == variant.path
-
-
-def test_catalog_lists_curated_variants_and_default_is_the_env_pack():
-    """The retired in-tree ``techvault-operational`` is no longer a catalog entry.
-
-    The default public startup contract now resolves from the bundled TechVault
-    env-pack (#875), not a catalog scenario; the curated variants still register.
-    """
-    catalog = load_scenario_catalog(PROJECT_ROOT)
-    ids = [entry.id for entry in catalog.scenarios]
-    assert "techvault-operational" not in ids
-    assert set(VARIANTS_BY_ID).issubset(set(ids))
-
-    default_scenario = AptlConfig().scenario
-    assert default_scenario.source == "env-pack"
-    assert default_scenario.identity == "techvault"
+    assert [entry.id for entry in catalog.scenarios] == ["techvault"]
+    assert AptlConfig().scenario.source == "env-pack"

@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/aptl-env.sh"
+
 # =============================================================================
 # TheHive API Key Provisioner
 # =============================================================================
@@ -26,20 +29,22 @@ ADMIN_PASS="${THEHIVE_ADMIN_PASS:-secret}"
 ORG_NAME="APTL"
 ORG_USER="aptl-svc@thehive.local"
 ORG_USER_NAME="APTL Service Account"
-ORG_USER_PASS="AptlService2024!"
+ORG_USER_PASS=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
 # The session cookie jar lives inside the container so it persists across the
 # separate `docker exec` invocations below (each exec is a fresh process; a host
 # temp path would not be visible to curl running in the container).
-COOKIE="/tmp/aptl-thehive-apikey.cookie"
-trap 'docker exec "$THEHIVE_CONTAINER" rm -f "$COOKIE" 2>/dev/null || true' EXIT
 
 if ! command -v docker >/dev/null 2>&1; then
     echo "ERROR: docker is required to reach TheHive on the container network" >&2
     exit 1
 fi
 
+COOKIE=$(docker exec "$THEHIVE_CONTAINER" mktemp /tmp/aptl-thehive-apikey.XXXXXXXX)
+trap 'docker exec "$THEHIVE_CONTAINER" rm -f "$COOKIE" 2>/dev/null || true' EXIT
+
 _thehive_curl() {
-    docker exec "$THEHIVE_CONTAINER" curl --cacert "$THEHIVE_CA_CERT" "$@" 2>/dev/null
+    aptl_curl_config "$@" | docker exec -i "$THEHIVE_CONTAINER" \
+        curl --cacert "$THEHIVE_CA_CERT" --config - 2>/dev/null
 }
 
 _curl() {

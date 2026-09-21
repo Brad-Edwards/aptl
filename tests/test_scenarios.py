@@ -45,14 +45,14 @@ def test_local_sdl_package_is_removed():
         importlib.import_module("aptl.core.sdl.parser")
 
 
-def test_startup_catalog_contains_only_raes_sdl_paths():
+def test_startup_catalog_contains_only_acquired_pack_selectors():
     from aptl.core.scenario_catalog import load_scenario_catalog
 
     catalog = load_scenario_catalog(PROJECT_ROOT)
 
-    assert catalog.scenarios
-    assert all(entry.path.endswith(".sdl.yaml") for entry in catalog.scenarios)
-    assert all("/archive/" not in entry.path for entry in catalog.scenarios)
+    assert [entry.id for entry in catalog.scenarios] == ["techvault"]
+    assert catalog.pack_identity.pack_id == "techvault"
+    assert not hasattr(catalog.scenarios[0], "path")
 
 
 def test_clean_install_workflow_starts_the_product_neutral_envelope():
@@ -76,23 +76,3 @@ def test_clean_install_workflow_starts_the_product_neutral_envelope():
     assert f"--scenario-path scenarios/{FIXTURE_SDL.name}" in job
     assert 'aptl" lab status' in job
     assert 'aptl" lab stop --volumes --yes' in job
-
-
-def test_archived_legacy_yaml_is_reference_only():
-    from aptl.core.scenario_catalog import load_scenario_catalog
-
-    archive = PROJECT_ROOT / "scenarios" / "archive"
-    catalog_paths = {entry.path for entry in load_scenario_catalog(PROJECT_ROOT).scenarios}
-
-    assert (archive / "README.md").is_file()
-    assert sorted(path.name for path in archive.glob("*.yaml")) == [
-        "ad-domain-compromise.yaml",
-        "detect-brute-force.yaml",
-        "lateral-movement-data-theft.yaml",
-        "prime-enterprise.yaml",
-        "recon-nmap-scan.yaml",
-        "webapp-compromise.yaml",
-    ]
-    assert catalog_paths.isdisjoint(
-        {path.relative_to(PROJECT_ROOT).as_posix() for path in archive.glob("*.yaml")}
-    )

@@ -74,7 +74,7 @@ and start a smaller curated topology with:
 
 ```bash
 aptl lab scenarios                                   # list startup scenarios
-aptl lab start --scenario techvault-attacker-target  # or --scenario-path <file>
+aptl lab start --scenario techvault  # the same acquired pack as default start
 ```
 
 See [Scenarios](#scenarios) for the catalog.
@@ -103,7 +103,7 @@ aptl kill -c      # emergency: kill MCP processes AND all lab containers
 - Docker + Docker Compose + Docker Buildx
 - Python 3.11+
 - OpenSSH client (`ssh-keygen` on `PATH`): generates the lab SSH keys at standup. Preinstalled on Linux and macOS; on Windows install the built-in "OpenSSH Client" optional feature (or Git for Windows / WSL2).
-- RAM: 8 GB runs the smaller curated scenarios; the full `techvault-operational` stack needs more than 20 GB
+- RAM: 8 GB runs the smaller curated scenarios; the full acquired TechVault stack needs more than 20 GB
 - 20 GB+ disk
 - Linux, macOS, or Windows with Docker Desktop/WSL2
 - Open ports: 443, 8443, 9000, 9001, 9200, 55000 (and the rest of the published ports in `docker-compose.yml`)

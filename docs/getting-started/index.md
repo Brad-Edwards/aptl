@@ -9,7 +9,7 @@ cd my-lab
 aptl lab start
 ```
 
-The published package includes the Compose topology, scenarios, config
+The published package includes the Compose topology, backend integrations, config
 templates, and container build contexts. `aptl lab init <dir>` materializes
 those assets into a project directory, so no source clone is required.
 [pipx](https://pipx.pypa.io/) isolates the CLI in its own virtualenv, so the
@@ -54,7 +54,7 @@ Four isolated Docker networks:
 ## Prerequisites
 
 - Docker with Compose and Buildx
-- 8GB RAM for the curated scenarios; more than 20GB for the full `techvault-operational` stack
+- More than 20GB RAM for the full `techvault` stack
 - Native Linux Docker Engine: `vm.max_map_count >= 262144`
 - Docker Desktop on macOS, Windows, or WSL2: `aptl lab start` skips the host
   `sysctl` check because Docker manages it inside the Linux VM

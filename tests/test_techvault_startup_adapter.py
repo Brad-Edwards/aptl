@@ -33,6 +33,16 @@ from aptl.backends.scenario_service_policy import (
     write_scenario_service_override,
 )
 import pytest
+
+
+def test_service_alias_rejects_linked_source(tmp_path):
+    from aptl.backends.scenario_service_policy import _project_file
+    from aptl.backends.scenario_startup import ScenarioStartupProviderError
+
+    (tmp_path / "real").write_text("configuration")
+    (tmp_path / "alias").symlink_to(tmp_path / "real")
+    with pytest.raises(ScenarioStartupProviderError):
+        _project_file(tmp_path, "alias")
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
     DeploymentNodeRealization,

@@ -422,6 +422,23 @@ def test_lab_start_native_step_supports_credential_free_adapter(tmp_path, monkey
     assert dict(requests[0].environment) == {}
 
 
+def test_native_request_reads_credentials_created_during_seeding(tmp_path):
+    """First boot must use seeded keys while retaining the adapter allowlist."""
+    from aptl.core.lab import _native_evidence_request
+
+    context = _lab_context(tmp_path, object())
+    context.raw_env.pop("THEHIVE_API_KEY")
+    (tmp_path / ".env").write_text(
+        "THEHIVE_API_KEY=seeded-test-key\nUNDECLARED_SECRET=not-forwarded\n"
+    )
+
+    request = _native_evidence_request(context, object(), object())
+
+    assert request.environment["THEHIVE_API_KEY"] == "seeded-test-key"
+    assert request.environment["INDEXER_USERNAME"] == "admin"
+    assert "UNDECLARED_SECRET" not in request.environment
+
+
 def test_lab_start_native_step_rejects_failed_truth_refresh(tmp_path, monkeypatch):
     from aptl.backends import raes_evidence_acquisition as acquisition
     from aptl.backends import raes_evaluator

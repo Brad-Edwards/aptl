@@ -18,17 +18,58 @@ this module.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 
 from aptl.core.scenario_bundle import (
+    EnvPackError,
     PackIdentity,
     ScenarioSourceKind,
     env_pack_bundle,
 )
 
 pytestmark = pytest.mark.integration
+
+
+def test_directory_and_bundled_acquisition_preserve_the_same_identity(tmp_path):
+    bundled = env_pack_bundle(tmp_path / "bundled")
+    acquired = env_pack_bundle(tmp_path / "acquired", source_pack=bundled.root)
+    assert acquired.pack_identity == bundled.pack_identity
+    assert acquired.sdl_path.read_bytes() == bundled.sdl_path.read_bytes()
+    assert acquired.root != bundled.root
+
+
+@pytest.mark.parametrize("linked", ["pack.yaml", "sdl"])
+def test_acquisition_rejects_source_links_before_copying(tmp_path, linked):
+    source = env_pack_bundle(tmp_path / "source").root
+    original = source / linked
+    outside = tmp_path / ("outside-" + linked)
+    original.rename(outside)
+    original.symlink_to(outside, target_is_directory=outside.is_dir())
+    with pytest.raises(EnvPackError, match="unsafe source"):
+        env_pack_bundle(tmp_path / "destination", source_pack=source)
+
+
+def test_new_acquisition_does_not_delete_long_running_input(tmp_path):
+    import time
+
+    root = tmp_path / "staged"
+    active = env_pack_bundle(root)
+    old = time.time() - 7200
+    os.utime(active.root.parent, (old, old))
+    env_pack_bundle(root)
+    assert active.sdl_path.is_file()
+    assert active.read_asset("pack.yaml")
+
+
+@pytest.mark.parametrize("identity", ["../escape", "/tmp/escape", "a/b", ".", ".."])
+def test_direct_acquisition_rejects_path_like_identity(tmp_path, identity):
+    source = tmp_path / "source"
+    source.mkdir()
+    with pytest.raises(EnvPackError, match="identity"):
+        env_pack_bundle(tmp_path / "staged", identity, source_pack=source)
 
 
 def test_released_pack_owns_only_scenario_and_retains_its_evidence_contracts(

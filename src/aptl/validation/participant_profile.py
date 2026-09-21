@@ -20,7 +20,7 @@ from aptl.core.scenario_bundle import (
     env_pack_bundle,
     project_tree_bundle,
 )
-from aptl.core.scenario_catalog import load_scenario_catalog
+from aptl.validation.research_scenario_catalog import load_research_scenario_catalog
 from aptl.utils.pathsafe import PathContainmentError, read_contained_nofollow
 from aptl.validation.curated_live_proof import (
     ExpectedMatrix,
@@ -335,7 +335,7 @@ def resolve_profile_scenario(
     if isinstance(reference, EnvPackScenarioReference):
         return _resolve_pack_profile(project_root, config, reference, staging_root)
     payload = _read_reference(project_root, reference)
-    catalog = load_scenario_catalog(project_root)
+    catalog = load_research_scenario_catalog(project_root)
     entry = catalog.get(reference.catalog_id)
     if entry is None or entry.path != reference.path or not payload:
         raise ParticipantProfileError("participant scenario catalog reference mismatch")

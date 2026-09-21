@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import re
 
 
 class UnsupportedPackageManagerError(ValueError):
@@ -51,25 +52,48 @@ def _apt_install(packages: tuple[str, ...]) -> list[str]:
     ]
 
 
-def _apt_query(packages: tuple[str, ...]) -> list[str]:
-    """Build the `dpkg-query` argv that reports which declared packages are installed."""
-
+def _apt_query(_packages: tuple[str, ...]) -> list[str]:
+    """Read installed identities and their virtual Provides in one query."""
     return [
         "dpkg-query",
         "-W",
-        "-f=${db:Status-Abbrev} ${binary:Package}\n",
-        *sorted(packages),
+        "-f=${db:Status-Abbrev}\\t${binary:Package}\\t${Version}\\t${Architecture}\\t${Provides}\\n",
     ]
 
 
-def _apt_parse(stdout: str) -> frozenset[str]:
-    """Return only packages whose dpkg status is installed and configured."""
+def apt_package_rows(stdout: str) -> dict[str, tuple[str, str]]:
+    """Corroborate configured packages and versioned virtual identities.
 
-    return frozenset(
-        line[3:].strip()
-        for line in stdout.splitlines()
-        if line.startswith("ii ") and line[3:].strip()
-    )
+    Package selection (including a hold) does not change installed state.
+    Removed, unpacked and reinst-required packages provide no evidence.
+    An unversioned Provides cannot prove a requested exact virtual version.
+    """
+    packages: dict[str, tuple[str, str]] = {}
+    providers: dict[str, tuple[str, str]] = {}
+    for line in stdout.splitlines():
+        columns = line.split("\t")
+        if len(columns) != 5:
+            continue
+        status, name, version, architecture, provides = columns
+        if (
+            len(status) != 3
+            or status[1:] != "i "  # NOSONAR
+            or not all((name, version, architecture))
+        ):
+            continue
+        packages[name] = (version, architecture)
+        packages.setdefault(name.split(":", 1)[0], (version, architecture))
+        for entry in provides.split(","):
+            match = re.fullmatch(
+                r"([a-z0-9][a-z0-9+.-]*)(?:\s+\(=\s*([^()]+)\))?", entry.strip()  # NOSONAR
+            )
+            if match:
+                providers.setdefault(match[1], ((match[2] or "").strip(), architecture))
+    return providers | packages
+
+
+def _apt_parse(stdout: str) -> frozenset[str]:  # NOSONAR
+    return frozenset(apt_package_rows(stdout))
 
 
 def _lines_to_set(stdout: str) -> frozenset[str]:

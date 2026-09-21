@@ -41,7 +41,10 @@ class _FakeBackend:
         if cmd[:1] == ["dpkg-query"]:
             return SimpleNamespace(
                 returncode=0,
-                stdout="".join(f"ii  {name}\n" for name in sorted(self.installed)),
+                stdout="".join(
+                    f"ii \t{name}\t1.0\tamd64\t\n"
+                    for name in sorted(self.installed)
+                ),
             )
         if "install" in cmd:
             self.installed.update(a for a in cmd if a in {"curl", "wazuh-manager"})

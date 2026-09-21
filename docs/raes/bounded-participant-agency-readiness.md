@@ -1,5 +1,10 @@
 # Bounded Participant Agency Readiness
 
+> Historical qualification record. The current CLI does not register
+> `aptl lab participant-readiness`; the commands and authority digests below
+> describe the earlier qualification candidate and must not be used as a
+> current runbook. The retained SDL is a checkout-only research fixture.
+
 APTL's issue-557 readiness gate proves that one exact RAES 2.0 model can drive
 bounded green, red, and blue participant behavior through the conformant APTL
 backend. It is a qualification operation, not study capture.

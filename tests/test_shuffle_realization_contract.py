@@ -5,6 +5,8 @@ from __future__ import annotations
 from importlib.metadata import version
 from pathlib import Path
 
+import pytest
+
 from raes.parser import parse_sdl_file
 
 from tests.helpers import techvault_scenario_path
@@ -141,3 +143,32 @@ def test_release_manual_requires_valid_browser_trust_for_soc_uis() -> None:
     assert "certificate warning" in manual
     assert "aptl container shell aptl-suricata" in manual
     assert "does not claim passive visibility" in manual
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"success": False},
+        {"success": False, "error": "internal error", "command": "which r2"},
+        {"success": False, "command": "which r2", "output": {"code": 1}},
+        {
+            "success": False,
+            "command": "different",
+            "error": "Reverse Engineering instance is not enabled",
+        },
+    ],
+)
+def test_reverse_negative_harness_rejects_unrelated_failures(monkeypatch, payload):
+    import json
+    from aptl.validation import mcp_protocol
+
+    manual = (PROJECT_ROOT / "docs/testing/smoke-test-plan.md").read_text()
+    section = manual.split("### QA-MCP-REVERSE:", 1)[1].split("### QA-ARCHIVE:", 1)[0]
+    program = section.split("import json\n", 1)[1].split("\nPY\n", 1)[0]
+    monkeypatch.setattr(
+        mcp_protocol,
+        "call_mcp_tool",
+        lambda *_a, **_kw: {"content": [{"type": "text", "text": json.dumps(payload)}]},
+    )
+    with pytest.raises(SystemExit, match="FAIL"):  # NOSONAR
+        exec(compile("import json\n" + program, "reverse-negative-harness", "exec"), {})

@@ -253,6 +253,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/clean-install"
           cd "$RUNNER_TEMP/clean-install"
           "$RUNNER_TEMP/clean-venv/bin/aptl" lab init ci-lab
+          mkdir -p ci-lab/scenarios
           cp "$GITHUB_WORKSPACE/tests/fixtures/packs/materialization-envelope/sdl/materialization-envelope.sdl.yaml" \
             ci-lab/scenarios/materialization-envelope.sdl.yaml
           test ! -e ci-lab/config/soc_certs

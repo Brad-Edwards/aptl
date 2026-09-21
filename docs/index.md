@@ -38,7 +38,7 @@ before running APTL on a machine with other workloads or credentials.
 
 - Docker + Docker Compose
 - Python 3.11+
-- RAM: 8GB for the curated scenarios; more than 20GB for the full `techvault-operational` stack
+- RAM: more than 20GB for the full `techvault` stack
 - 20GB+ disk
 - Ports: 443, 2022, 2023, 9200, 55000
 

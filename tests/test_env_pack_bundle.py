@@ -18,11 +18,13 @@ this module.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 
 from aptl.core.scenario_bundle import (
+    EnvPackError,
     PackIdentity,
     ScenarioSourceKind,
     env_pack_bundle,

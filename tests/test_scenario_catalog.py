@@ -55,6 +55,16 @@ def test_unknown_catalog_id_lists_only_configured_pack(tmp_path):
         resolve_scenario_selection(tmp_path, scenario_id="local-shadow")
 
 
+@pytest.mark.parametrize("scenario_id", ("../techvault", "TechVault", "tech/vault"))
+def test_catalog_selector_rejects_path_shaped_or_noncanonical_ids(
+    tmp_path, scenario_id
+):
+    from aptl.core.scenario_catalog import resolve_scenario_selection
+
+    with pytest.raises(ValueError, match="invalid scenario identity"):
+        resolve_scenario_selection(tmp_path, scenario_id=scenario_id)
+
+
 def test_repository_catalog_projects_validated_pack_identity():
     from aptl.core.scenario_catalog import load_scenario_catalog
 
@@ -149,12 +159,54 @@ def test_resolve_acquired_scenario_returns_same_validated_bundle():
     assert resolved.bundle is catalog.bundle
 
 
-def test_resolve_acquired_scenario_unknown_id_is_not_found():
-    from aptl.core.scenario_catalog import resolve_acquired_scenario
+def test_resolve_acquired_scenario_unknown_id_is_not_found(mocker, tmp_path):
+    from aptl.core.scenario_bundle import PackIdentity, ScenarioBundle
+    from aptl.core.scenario_catalog import ScenarioCatalog, resolve_acquired_scenario
     from aptl.core.scenarios import ScenarioNotFoundError
 
+    root = tmp_path / "staging" / "techvault"
+    root.mkdir(parents=True)
+    catalog = ScenarioCatalog(
+        scenarios=(),
+        pack_identity=PackIdentity("techvault", "0.1.0", "sha256:" + "a" * 64),
+        maturity="built",
+        bundle=ScenarioBundle("techvault", root, root / "sdl/techvault.sdl.yaml"),
+    )
+    mocker.patch(
+        "aptl.core.scenario_catalog.load_scenario_catalog", return_value=catalog
+    )
     with pytest.raises(ScenarioNotFoundError):
-        resolve_acquired_scenario(Path(__file__).resolve().parents[1], "nope")
+        resolve_acquired_scenario(tmp_path, "nope")
+    assert not root.parent.exists()
+
+
+def test_compatibility_projection_removes_its_owned_staging(mocker, tmp_path):
+    from aptl.core.scenario_bundle import PackIdentity, ScenarioBundle
+    from aptl.core.scenario_catalog import (
+        ScenarioCatalog,
+        ScenarioCatalogEntry,
+        resolve_and_parse_scenario,
+    )
+
+    root = tmp_path / "staging" / "techvault"
+    sdl = root / "sdl" / "techvault.sdl.yaml"
+    sdl.parent.mkdir(parents=True)
+    sdl.write_text("name: techvault\n")
+    catalog = ScenarioCatalog(
+        scenarios=(ScenarioCatalogEntry(id="techvault", name="TechVault"),),
+        pack_identity=PackIdentity("techvault", "0.1.0", "sha256:" + "a" * 64),
+        maturity="built",
+        bundle=ScenarioBundle("techvault", root, sdl),
+    )
+    mocker.patch(
+        "aptl.core.scenario_catalog.load_scenario_catalog", return_value=catalog
+    )
+    _patch_parser(mocker, side_effect=None).return_value = object()
+
+    entry, _scenario = resolve_and_parse_scenario(tmp_path, "techvault")
+
+    assert entry.id == "techvault"
+    assert not root.parent.exists()
 
 
 def test_invalid_catalog_projection_removes_its_staging(mocker, tmp_path):

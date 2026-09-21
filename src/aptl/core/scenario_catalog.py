@@ -93,10 +93,14 @@ class ScenarioCatalog:
     def __enter__(self) -> "ScenarioCatalog":
         return self
 
+    def close(self) -> None:
+        """Remove this read-only view's private acquired-pack staging."""
+        shutil.rmtree(self.bundle.root.parent, ignore_errors=True)
+
     def __exit__(self, *_exc) -> None:
         # Read-only views own this freshly acquired copy. Runtime bundles are
         # deliberately retained for their containers' and evidence's lifetime.
-        shutil.rmtree(self.bundle.root.parent)
+        self.close()
 
 
 @dataclass(frozen=True)
@@ -184,6 +188,7 @@ def resolve_scenario_selection(
     if not scenario_id and scenario_path is None:
         return None
     if scenario_id:
+        validate_scenario_identity(scenario_id)
         selected = _config(project_dir).scenario
         available = selected.identity if selected.source == "env-pack" else "none"
         if scenario_id != available:
@@ -226,16 +231,21 @@ def resolve_acquired_scenario(
     catalog: ScenarioCatalog | None = None,
 ) -> ResolvedScenario:
     """Resolve, validate, and parse one acquired catalog selection once."""
+    owns_catalog = catalog is None
     try:
         selected_catalog = catalog or load_scenario_catalog(project_dir)
     except ValueError as exc:
         raise ScenarioValidationError(redact(str(exc))) from exc
     entry = selected_catalog.get(scenario_id)
     if entry is None:
+        if owns_catalog:
+            selected_catalog.close()
         raise ScenarioNotFoundError(scenario_id)
     try:
         scenario = _parse_raes_sdl(selected_catalog.bundle.sdl_path)
     except ValueError as exc:
+        if owns_catalog:
+            selected_catalog.close()
         raise ScenarioValidationError(redact(str(exc))) from exc
     return ResolvedScenario(
         entry, scenario, selected_catalog.bundle, selected_catalog.maturity
@@ -246,8 +256,9 @@ def resolve_and_parse_scenario(
     project_dir: Path, scenario_id: str
 ) -> tuple[ScenarioCatalogEntry, object]:
     """Compatibility projection returning the entry and parsed RAES scenario."""
-    resolved = resolve_acquired_scenario(project_dir, scenario_id)
-    return resolved.entry, resolved.scenario
+    with load_scenario_catalog(project_dir) as catalog:
+        resolved = resolve_acquired_scenario(project_dir, scenario_id, catalog=catalog)
+        return resolved.entry, resolved.scenario
 
 
 def _validate_raes_sdl(path: Path) -> None:

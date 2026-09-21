@@ -126,3 +126,125 @@ def test_wheel_smoke_scopes_native_effect_and_always_proves_cleanup() -> None:
     assert stop["if"] == "always()"
     assert cleanup["if"] == "always()"
     assert '"$GITHUB_WORKSPACE/scripts/ci/assert_project_teardown.py"' in cleanup["run"]
+
+
+class TestBootRealizationCoverage:
+    """The boot job must verify what the shared fixture actually declares (#993).
+
+    These read the SDL rather than grepping the workflow for assertion strings:
+    a job that names a port the scenario no longer publishes, or that keeps its
+    verifier step after the declaration behind it was dropped, is exactly the
+    silently-vacuous gate issue #993 exists to prevent.
+    """
+
+    FIXTURE = ROOT / "tests" / "fixtures" / "materialization-envelope.sdl.yaml"
+    NODE = "smoke-box"
+
+    def _scenario(self) -> dict:
+        return yaml.safe_load(self.FIXTURE.read_text(encoding="utf-8"))
+
+    def _runtime(self) -> dict:
+        return self._scenario()["nodes"][self.NODE]["runtime"]
+
+    def _verifier_step(self) -> str:
+        return _run_step(
+            "clean-install-lab-boot",
+            "Verify the realization regressions the scenario declares",
+        )
+
+    def test_the_fixture_declares_the_whole_causal_chain(self) -> None:
+        """Content, service, listener and published port must all be present."""
+
+        scenario = self._scenario()
+        runtime = self._runtime()
+
+        content = scenario["content"]["smoke-sshd-config"]
+        assert content["target"] == self.NODE
+        assert runtime["service_manager_units"]
+        assert runtime["service_listeners"]
+        assert runtime["network"]["published_ports"]
+        assert scenario["workflows"]
+
+    def test_the_declared_content_configures_the_declared_listener_port(self) -> None:
+        """The chain is causal only while the content names the listener's port."""
+
+        scenario = self._scenario()
+        runtime = self._runtime()
+        listener = runtime["service_listeners"][0]
+        content_text = scenario["content"]["smoke-sshd-config"]["text"]
+
+        assert f"Port {listener['port']}" in content_text
+        assert listener["port"] != 22, "the package default proves nothing"
+
+    def test_the_verifier_is_invoked_with_the_values_the_scenario_declares(
+        self,
+    ) -> None:
+        """Every parameter the job passes must match the SDL, not a stale copy."""
+
+        scenario = self._scenario()
+        runtime = self._runtime()
+        step = self._verifier_step()
+        content = scenario["content"]["smoke-sshd-config"]
+        listener = runtime["service_listeners"][0]
+        published = runtime["network"]["published_ports"][0]
+        unit = runtime["service_manager_units"][0]
+
+        assert "scripts/ci/assert_boot_realization.py" in step
+        assert f"--content-path {content['path']}" in step
+        assert f"--unit-name {unit['unit_name']}" in step
+        assert f"--container-port {listener['port']}" in step
+        assert f"--protocol {listener['protocol']}" in step
+        assert f"--host-ip {published['host_ip']}" in step
+        assert f"--host-port {published['host_port']}" in step
+        for name in scenario["workflows"]:
+            assert f"--workflow-address orchestration.workflow.{name}" in step
+
+    def test_the_host_publication_stays_loopback_only(self) -> None:
+        """ADR-034: a scenario-declared host port never lands on every interface."""
+
+        for published in self._runtime()["network"]["published_ports"]:
+            assert published["host_ip"] == "127.0.0.1"
+
+    def test_the_verifier_runs_from_the_installed_clean_venv(self) -> None:
+        """A checkout interpreter would not prove the installed artifact."""
+
+        step = self._verifier_step()
+
+        assert '"$RUNNER_TEMP/clean-venv/bin/python"' in step
+        assert "uv run" not in step
+
+    def test_the_verifier_runs_before_teardown_and_cleanup_still_always_runs(
+        self,
+    ) -> None:
+        """Verification must see a running lab; cleanup must run regardless."""
+
+        steps = _jobs()["clean-install-lab-boot"]["steps"]
+        names = [step.get("name") for step in steps]
+        verify = names.index("Verify the realization regressions the scenario declares")
+        stop = names.index("Stop the lab and remove its volumes")
+        cleanup = names.index("Assert no project containers, networks, or volumes remain")
+
+        assert verify < stop < cleanup
+        assert steps[stop]["if"] == "always()"
+        assert steps[cleanup]["if"] == "always()"
+        assert "if" not in steps[verify], "a skipped verifier is a green boot gate"
+
+    def test_the_job_keeps_a_bounded_timeout(self) -> None:
+        """A boot gate with no bound can hang the required check set."""
+
+        assert _jobs()["clean-install-lab-boot"]["timeout-minutes"] == 60
+
+
+def test_the_boot_gate_requires_the_service_to_answer_not_just_the_port() -> None:
+    """Docker publishes the host port whether or not anything listens behind it.
+
+    Without an expected greeting the connection probe passes on the publication
+    alone, which `_binding_failures` already covers — so the job must name one.
+    """
+
+    step = _run_step(
+        "clean-install-lab-boot",
+        "Verify the realization regressions the scenario declares",
+    )
+
+    assert "--endpoint-banner-prefix SSH-" in step

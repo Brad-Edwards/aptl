@@ -32,6 +32,7 @@ from aptl.core.deployment import (
     DeploymentRealizationSpec,
     DockerComposeBackend,
 )
+from tests.helpers import realized_container_name, realized_project_name
 
 pytestmark = pytest.mark.integration
 
@@ -64,11 +65,6 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
     (tmp_path / "docker-compose.yml").write_text(_COMPOSE)
     free_container = "aptl-free-box"
     image_container = "aptl-image-box"
-    subprocess.run(
-        ["docker", "rm", "-f", free_container, image_container],
-        capture_output=True,
-        text=True,
-    )
 
     backend = DockerComposeBackend(project_dir=tmp_path, project_name="aptl-mixed-test")
 
@@ -141,6 +137,12 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
         result = backend.realize(spec, build=False, scenario_root=tmp_path)
         assert result.success, result.error
 
+        # Realized resources carry workspace-scoped names (#1054), so every
+        # direct daemon read below has to name what actually exists.
+        realized_free = realized_container_name(backend, free_container)
+        realized_image = realized_container_name(backend, image_container)
+        project = realized_project_name(backend)
+
         # Exactly one container for the runtime: node - Compose was told to
         # scale it to zero, so it never started its own "sleep infinity"
         # placeholder alongside the generic materializer's real container.
@@ -150,28 +152,28 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
                 "ps",
                 "-a",
                 "--filter",
-                f"name=^{free_container}$",
+                f"name=^{realized_free}$",
                 "--format",
                 "{{.Names}}",
             ],
             capture_output=True,
             text=True,
         )
-        assert ps.stdout.split() == [free_container]
+        assert ps.stdout.split() == [realized_free]
 
         # The runtime: node was materialized directly (generic materializer),
         # not via Compose - it is not a Compose-managed container.
         assert (
             "curl"
             in backend.container_exec(
-                free_container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
+                realized_free, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
             ).stdout
         )
 
         # The source: node was started via Compose as usual.
         pg_ready = None
         for _ in range(20):
-            pg_ready = backend.container_exec(image_container, ["pg_isready"])
+            pg_ready = backend.container_exec(realized_image, ["pg_isready"])
             if pg_ready.returncode == 0:
                 break
             time.sleep(1)
@@ -183,12 +185,12 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
         # like a Compose-managed node - the existing post-start network
         # reconciliation step operates by container name, so it already
         # covers both realization styles without any change.
-        network = "aptl-mixed-test_aptl-mixed"
+        network = f"{project}_aptl-mixed"
         inspect = subprocess.run(
             [
                 "docker",
                 "inspect",
-                free_container,
+                realized_free,
                 "--format",
                 f'{{{{(index .NetworkSettings.Networks "{network}").IPAddress}}}}',
             ],
@@ -200,7 +202,7 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
             [
                 "docker",
                 "inspect",
-                free_container,
+                realized_free,
                 "--format",
                 "{{json .NetworkSettings.Networks}}",
             ],
@@ -209,8 +211,17 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
         )
         assert '"bridge"' not in networks.stdout
     finally:
+        # Removing the declared names removed nothing and leaked a container
+        # and a network per run; the leaked subnet then failed the next run.
+        project = realized_project_name(backend)
         subprocess.run(
-            ["docker", "rm", "-f", free_container, image_container],
+            [
+                "docker",
+                "rm",
+                "-f",
+                realized_container_name(backend, free_container),
+                realized_container_name(backend, image_container),
+            ],
             capture_output=True,
             text=True,
         )
@@ -219,8 +230,8 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
                 "docker",
                 "network",
                 "rm",
-                "aptl-mixed-test_aptl-mixed",
-                "aptl-mixed-test_default",
+                f"{project}_aptl-mixed",
+                f"{project}_default",
             ],
             capture_output=True,
             text=True,

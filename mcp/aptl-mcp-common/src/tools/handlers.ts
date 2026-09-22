@@ -235,7 +235,7 @@ const baseHandlers: Record<string, ToolHandler> = {
               target: credentials.target,
               command,
               username: credentials.username,
-              success: true,
+              success: result.code === 0,
               output: result,
             }, null, 2),
           },

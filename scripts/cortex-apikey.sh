@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/aptl-env.sh"
+
 # =============================================================================
 # Cortex API Key Provisioner
 # =============================================================================
@@ -45,7 +48,8 @@ export CORTEX_ADMIN_KEY CORTEX_API_KEY
 # Wazuh path, which also drives its client through `docker exec` rather than a
 # host binding.
 _cortex_curl() {
-    docker exec "$CORTEX_CONTAINER" curl "$@" 2>/dev/null
+    aptl_curl_config "$@" | docker exec -i "$CORTEX_CONTAINER" \
+        curl --config - 2>/dev/null
 }
 
 _curl_json() {

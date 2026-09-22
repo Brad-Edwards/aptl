@@ -20,29 +20,26 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from raes_runtime.manager import RuntimeManager
 from raes.scenario import Scenario
 
-from aptl.backends.raes import create_aptl_runtime_target, resolve_scenario_bundle
-from aptl.backends.raes_artifact_availability import artifact_availability_for_scenario
-from aptl.backends.raes_realization import interpret_provisioning_plan
-from aptl.backends.raes_runtime_orchestration import (
-    prepare_runtime_orchestration_for_scenario,
-)
-from aptl.core.collectors import collect_suricata_eve, collect_wazuh_alerts
+from aptl.backends.raes import admit_raes_scenario
+from aptl.core.collectors import collect_suricata_eve
 from aptl.core.deployment import get_backend
+from aptl.core.deployment._operator_access_endpoints import OPERATOR_ACCESS_ENDPOINTS
 from aptl.core.lab import clean_boot_lab
 from aptl.core.lab_types import StartupOutcome
 from aptl.core.runstore import LocalRunStore
 from aptl.core.snapshot import capture_snapshot
 from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
+from aptl.validation._live_gate_alerts import AlertReader
 from aptl.validation.techvault_live_gate import LiveGateCheck
 
 if TYPE_CHECKING:
     from raes_contracts.diagnostics import Diagnostic
 
     from aptl.backends.raes_realization_model import AptlRealization
+    from aptl.backends.raes_start_model import AdmittedScenarioStart
     from aptl.core.config import AptlConfig
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.lab_types import LabResult
@@ -82,49 +79,74 @@ def _find_container(
 
 
 def _compute_realization(
-    scenario: Scenario, project_dir: Path, config: "AptlConfig"
-) -> tuple[AptlRealization | None, list[str]]:
-    """Interpret the scenario's provisioning plan, returning (realization, diags)."""
+    scenario: Scenario,
+    project_dir: Path,
+    config: "AptlConfig",
+    *,
+    scenario_path: Path | None = None,
+) -> tuple[AptlRealization | None, list[str], tuple[dict[str, str], ...]]:
+    """Read the public start admission's realization without deploying it."""
+    # The static gate checked this scenario. Admission reparses the selected
+    # bundle and binds its runtime parameters before artifact inspection, just
+    # as the public start path does.
+    _ = scenario
     try:
         backend = get_backend(config, project_dir)
-        # Config-driven bundle: the configured env-pack when selected, else the
-        # in-tree scenario (issue #875). Scenario content anchors to the bundle
-        # root; component build contexts always resolve from the engine checkout
-        # (an env-pack ships none), so component_root stays project_dir (ADR-051).
-        bundle = resolve_scenario_bundle(project_dir, None, config)
-        target = create_aptl_runtime_target(
-            project_dir=project_dir, config=config, backend=backend, bundle=bundle
+        admitted = admit_raes_scenario(
+            project_dir,
+            config,
+            backend,
+            scenario_path=scenario_path,
         )
-        prepare_runtime_orchestration_for_scenario(scenario, backend)
-        # Gather artifact availability at the backend trust boundary before
-        # planning, exactly as `aptl lab start` does (`admit_raes_scenario`): the image
-        # policy trusts a node's source image only against verified availability,
-        # so a real-backend plan without it rejects every imaged node as
-        # ``untrusted-image``.
-        availability = artifact_availability_for_scenario(
-            scenario, backend, scenario_root=bundle.root, component_root=project_dir
-        )
-        execution_plan = RuntimeManager(target).plan(
-            scenario, artifact_availability=availability
-        )
-        realization = interpret_provisioning_plan(
-            plan=execution_plan.provisioning,
-            config=config,
-            bundle=bundle,
-            component_root=project_dir,
-        )
+        apparatus = _planned_apparatus(admitted)
     # broad-except: RAES planning/interpretation surfaces diverse error types.
     except Exception as exc:
-        return None, [redact(f"realization interpretation raised: {exc}")]
+        return None, [redact(f"realization interpretation raised: {exc}")], ()
 
+    realization = admitted.realization
+    if realization is None:
+        return None, ["public start admission produced no realization"], ()
     errors = [
         redact(f"{d.code}: {d.message}")
         for d in realization.diagnostics
         if _severity(d) == "error"
     ]
+    if admitted.runtime_materialization_failure is not None:
+        errors.append(
+            redact(
+                admitted.runtime_materialization_failure.error
+                or "runtime materialization qualification failed"
+            )
+        )
     if not realization.nodes:
         errors.append("realization produced no RAES nodes (no model to instantiate)")
-    return realization, errors
+    return realization, errors, apparatus
+
+
+def _planned_apparatus(admitted: "AdmittedScenarioStart") -> tuple[dict[str, str], ...]:
+    """Project only scenario-admitted helper containers into live parity."""
+    planned: list[dict[str, str]] = []
+    for apparatus in admitted.capture_plan.apparatus:
+        if apparatus.container_name:
+            planned.append(
+                {
+                    "name": apparatus.container_name,
+                    "label_key": "com.docker.compose.service",
+                    "label_value": apparatus.service_name,
+                }
+            )
+    for access in admitted.target.provisioner.operator_access.accesses:
+        endpoint = OPERATOR_ACCESS_ENDPOINTS.get(access.target_node)
+        if endpoint is None:
+            raise ValueError(f"operator access {access.access_id} has no endpoint")
+        planned.append(
+            {
+                "name": endpoint.relay_container,
+                "label_key": "aptl.operator-access.id",
+                "label_value": access.access_id,
+            }
+        )
+    return tuple(planned)
 
 
 def _boot_lab(
@@ -267,12 +289,12 @@ class EvidencePollRequest(object):
     """Bounded inputs for one scenario-neutral evidence polling window."""
 
     backend: "DeploymentBackend"
+    realization: object
     start_iso: str
     deadline_monotonic: float
     poll_interval_seconds: float
-    indexer_url: str
-    indexer_auth: tuple[str, str]
     alert_matches: Callable[[object], bool]
+    alert_reader: AlertReader
     sleep_fn: Callable[[float], None] = time.sleep
     monotonic_fn: Callable[[], float] = time.monotonic
     regenerate: Callable[[], None] | None = None
@@ -318,16 +340,18 @@ def _collect_until_evidence(
             break
         now = _now_iso()
         eve = collect_suricata_eve(request.start_iso, now, request.backend)
-        alerts = collect_wazuh_alerts(
+        alert_read = request.alert_reader(
+            request.backend,
+            request.realization,
             request.start_iso,
             now,
-            indexer_url=request.indexer_url,
-            auth=request.indexer_auth,
         )
+        if not alert_read.complete:
+            log.warning("manager alert readback loss: %s", alert_read.loss_category)
+        alerts = [dict(item) for item in alert_read.records]
         if any(request.alert_matches(alert) for alert in alerts):
             break
     return eve, alerts
-
 
 def _is_traffic_event(entry: object) -> bool:
     """Return whether a Suricata EVE entry reflects real traffic (not stats)."""

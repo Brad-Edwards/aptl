@@ -18,17 +18,16 @@ from aptl.core.evidence.adapters.builtins import (
     soc_windowed_source,
 )
 from aptl.core.evidence.adapters.sources import SourceResult, WindowedQueryCollector
-from aptl.core.evidence.adapters.wiring import (
-    BUILTIN_REGISTRATION_IDS,
-    build_collectors,
-)
+from aptl.core.evidence.adapters.wiring import build_collectors
 from aptl.core.evidence.outcomes import CollectorStatus
 from aptl.core.evidence.protocol import CollectorContext
 from aptl.core.experiment.capture_registry import (
     CaptureBinding,
     CaptureLimits,
     CaptureVisibility,
+    CollectorRegistry,
 )
+from aptl_techvault.capture_registrations import BUILTIN_REGISTRATIONS
 from aptl.core.runstore import LocalRunStore
 
 _CLOCK = FixedClockProvider(measurement_time="2026-07-20T00:00:00Z")
@@ -180,7 +179,10 @@ class TestSocWindowedSource:
 class TestWiring:
     def test_builds_collectors_for_known_ids(self):
         source = _FakeSource(SourceResult(status=CollectorStatus.EMPTY_OK))
-        collectors = build_collectors({"aptl.collector.mcp-red": source})
+        registry = CollectorRegistry(BUILTIN_REGISTRATIONS)
+        collectors = build_collectors(
+            {"aptl.collector.mcp-red": source}, registry=registry
+        )
         assert (
             collectors["aptl.collector.mcp-red"].registration_id
             == "aptl.collector.mcp-red"
@@ -192,7 +194,10 @@ class TestWiring:
             build_collectors({"aptl.collector.NOPE": source})
 
     def test_all_builtins_are_registered(self):
-        assert BUILTIN_REGISTRATION_IDS == frozenset(
+        assert frozenset(
+            registration.registration_id
+            for registration in BUILTIN_REGISTRATIONS
+        ) == frozenset(
             {
                 "aptl.collector.mcp-red",
                 "aptl.collector.container-logs",
@@ -200,8 +205,10 @@ class TestWiring:
                 "aptl.collector.wazuh-alerts",
                 "aptl.collector.tempo-traces",
                 "aptl.collector.cortex-enrichment",
+                "aptl.collector.misp-authenticated-api-readiness",
                 "aptl.collector.redteam-session-transcript",
                 "aptl.collector.suricata-rule-readiness",
                 "aptl.collector.suricata-wazuh-sqli",
+                "aptl.collector.wazuh-agent-readiness",
             }
         )

@@ -6,7 +6,7 @@
  * / pty / process-accounting artifacts pulled out of the container)
  * into the same per-run tree:
  *
- *   <state_dir>/runs/<trace_id>/
+ *   <run_store_base>/<trace_id>/
  *     mcp-side/
  *       tool-calls.jsonl
  *       ocsf.jsonl
@@ -18,6 +18,8 @@
  * generates it at scenario start, writes it to
  * `<state_dir>/trace-context.json`, and the MCP servers read it from
  * the same file (already done by `loadParentContext` in telemetry.ts).
+ * The admitted `APTL_MCP_RUN_STORE_BASE` identifies Python's configured run
+ * archive; standalone MCP use falls back to `<state_dir>/runs`.
  */
 
 import {
@@ -53,6 +55,13 @@ function stateDirFromEnv(env: NodeJS.ProcessEnv = process.env): string {
   return env.APTL_STATE_DIR || '.aptl';
 }
 
+function runStoreBase(stateDir: string, env: NodeJS.ProcessEnv): string {
+  // The Python run archive is configurable and need not live under the state
+  // directory. The generated client/guest binding supplies its exact base.
+  // Retain the legacy layout for standalone MCP invocations without a binding.
+  return resolve(env.APTL_MCP_RUN_STORE_BASE || resolve(stateDir, 'runs'));
+}
+
 /**
  * Read `<state_dir>/trace-context.json` and return its `trace_id`
  * if it's present and shape-valid. Returns `undefined` cleanly when
@@ -62,6 +71,11 @@ function stateDirFromEnv(env: NodeJS.ProcessEnv = process.env): string {
  * needed).
  */
 export function loadActiveTraceId(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  // A restricted guest supervisor binds an already-admitted lab-start run.
+  // This never comes from a participant's request or forwarded SSH environment.
+  if (env.APTL_MCP_ADMITTED_RUN_ID !== undefined) {
+    return validateId(env.APTL_MCP_ADMITTED_RUN_ID, 'admitted run');
+  }
   const ctxPath = resolve(stateDirFromEnv(env), 'trace-context.json');
   if (!existsSync(ctxPath)) return undefined;
   let raw: string;
@@ -88,36 +102,49 @@ export function loadActiveTraceId(env: NodeJS.ProcessEnv = process.env): string 
 }
 
 /**
- * Resolve `<state_dir>/runs/<trace_id>` for the active scenario.
+ * Resolve `<run_store_base>/<trace_id>` for the active scenario.
  * Returns `undefined` when no scenario is active (caller decides
  * whether to fall back to an `_unbound` sentinel or skip).
  */
 export function resolveActiveRunDir(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const tid = loadActiveTraceId(env);
   if (!tid) return undefined;
-  return resolve(stateDirFromEnv(env), 'runs', tid);
+  return resolve(runStoreBase(stateDirFromEnv(env), env), tid);
 }
 
-/** `<state_dir>/runs/<run_id>/mcp-side` */
-export function mcpSideDir(stateDir: string, runId: string): string {
-  return resolve(stateDir, 'runs', validateId(runId, 'run_id'), 'mcp-side');
+/** `<run_store_base>/<run_id>/mcp-side` */
+export function mcpSideDir(
+  stateDir: string,
+  runId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return resolve(runStoreBase(stateDir, env), validateId(runId, 'run_id'), 'mcp-side');
 }
 
-/** `<state_dir>/runs/<run_id>/kali-side/<session_id>` */
-export function kaliSideSessionDir(stateDir: string, runId: string, sessionId: string): string {
+/** `<run_store_base>/<run_id>/kali-side/<session_id>` */
+export function kaliSideSessionDir(
+  stateDir: string,
+  runId: string,
+  sessionId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
   return resolve(
-    stateDir,
-    'runs',
+    runStoreBase(stateDir, env),
     validateId(runId, 'run_id'),
     'kali-side',
     validateId(sessionId, 'session_id')
   );
 }
 
-/** `<state_dir>/runs/<run_id>/mcp-side/sessions/<session_id>.jsonl` */
-export function mcpSessionJsonl(stateDir: string, runId: string, sessionId: string): string {
+/** `<run_store_base>/<run_id>/mcp-side/sessions/<session_id>.jsonl` */
+export function mcpSessionJsonl(
+  stateDir: string,
+  runId: string,
+  sessionId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
   return resolve(
-    mcpSideDir(stateDir, runId),
+    mcpSideDir(stateDir, runId, env),
     'sessions',
     `${validateId(sessionId, 'session_id')}.jsonl`
   );
@@ -158,7 +185,7 @@ export interface PtyTeeWriter {
 /**
  * Build a best-effort PTY tee writer for one SSH session. The
  * returned function appends each byte chunk to the per-run JSONL at
- * `<state>/runs/<trace_id>/mcp-side/sessions/<session_id>.jsonl` —
+ * `<run_store_base>/<trace_id>/mcp-side/sessions/<session_id>.jsonl` —
  * or to the `_unbound` sentinel directory when no scenario context
  * is active.
  *
@@ -194,7 +221,7 @@ export function createPtyTeeWriter(
   } catch {
     resolvedSessionId = '_invalid';
   }
-  const file = mcpSessionJsonl(stateDir, tid, resolvedSessionId);
+  const file = mcpSessionJsonl(stateDir, tid, resolvedSessionId, env);
 
   // Create the census entry before the SSH request is made. Its filename is
   // the control-plane-owned expected-session inventory used at finalization,

@@ -13,13 +13,33 @@ from aptl.core.evidence.adapters.sources import SourceResult
 from aptl.core.evidence.outcomes import AcquisitionDisposition, CollectorStatus
 from aptl.core.evidence.protocol import CollectorContext, RunScope
 from aptl.core.experiment.capture_registry import (
-    DEFAULT_COLLECTOR_REGISTRY,
     CaptureBinding,
     CaptureLimits,
     CaptureVisibility,
 )
+from aptl.backends.identity import BackendIdentity
+from aptl.backends.scenario_capture import ScenarioCaptureContext
+from aptl.backends.scenario_capture_discovery import resolve_scenario_capture
+from aptl.core.scenario_bundle import PackIdentity
+from aptl_techvault.runtime_parameters import TECHVAULT_PACK_SET_DIGEST
 from aptl.core.runstore import LocalRunStore
 from aptl.utils.pathsafe import PathContainmentError
+
+
+def _capture_selection(runtime_adapter: object | None = None):
+    selection = resolve_scenario_capture(
+        ScenarioCaptureContext(
+            PackIdentity("techvault", "0.1.0", TECHVAULT_PACK_SET_DIGEST),
+            BackendIdentity("aptl", "0.1.0", "full-remote-control-plane"),
+        )
+    )
+    if runtime_adapter is None:
+        return selection
+    contribution = replace(
+        selection.contribution,
+        runtime_adapter=runtime_adapter,
+    )
+    return replace(selection, contribution=contribution)
 
 
 def _binding(registration_id: str, requirement_id: str) -> CaptureBinding:
@@ -33,7 +53,7 @@ def _binding(registration_id: str, requirement_id: str) -> CaptureBinding:
     registration = next(
         (
             item
-            for item in DEFAULT_COLLECTOR_REGISTRY.registrations
+            for item in _capture_selection().registry.registrations
             if item.registration_id == registration_id
         ),
         None,
@@ -174,8 +194,10 @@ def test_acquire_native_evidence_persists_only_immediate_native_bindings(
 
     native = (
         _binding("aptl.collector.cortex-enrichment", "cortex"),
+        _binding("aptl.collector.misp-authenticated-api-readiness", "misp"),
         _binding("aptl.collector.suricata-rule-readiness", "readiness"),
         _binding("aptl.collector.suricata-wazuh-sqli", "sqli"),
+        _binding("aptl.collector.wazuh-agent-readiness", "wazuh"),
     )
     transcript = _binding("aptl.collector.redteam-session-transcript", "transcript")
     plan = SimpleNamespace(
@@ -197,17 +219,14 @@ def test_acquire_native_evidence_persists_only_immediate_native_bindings(
         )
         for item in native
     }
-    owner = SimpleNamespace(sources=lambda: sources)
-    monkeypatch.setattr(
-        acquisition,
-        "TechVaultNativeEvidenceOwner",
-        lambda **_kwargs: owner,
+    selection = _capture_selection(
+        SimpleNamespace(native_sources=lambda _request: sources)
     )
     store = LocalRunStore(tmp_path / "runs")
     start = datetime(2026, 9, 14, tzinfo=UTC)
     times = tuple(
         (start + timedelta(seconds=offset)).isoformat().replace("+00:00", "Z")
-        for offset in range(6)
+        for offset in range(10)
     )
 
     result = acquisition.acquire_native_evidence(
@@ -216,10 +235,14 @@ def test_acquire_native_evidence_persists_only_immediate_native_bindings(
             backend=object(),
             realization=object(),
             project_dir=tmp_path,
-            indexer_auth=("admin", "password"),
-            thehive_api_key="operator-api-key",
+            environment={
+                "INDEXER_USERNAME": "admin",
+                "INDEXER_PASSWORD": "password",
+                "THEHIVE_API_KEY": "operator-api-key",
+            },
             run_store=store,
             run_id="run-1",
+            capture_selection=selection,
             clock=_SequenceClock(*times),
         )
     )
@@ -228,7 +251,7 @@ def test_acquire_native_evidence_persists_only_immediate_native_bindings(
     assert {report.registration_id for report in result.reports} == {
         item.registration_id for item in native
     }
-    assert len(result.records) == 3
+    assert len(result.records) == 5
     assert (
         store.get_run_path("run-1") / "evidence/capture-plans/capture-plan-test.json"
     ).read_bytes() == plan.canonical_bytes
@@ -245,17 +268,14 @@ def test_acquire_native_evidence_fails_when_a_required_source_is_unavailable(
         canonical_bytes=b"{}",
         runtime_bindings=lambda: (binding,),
     )
-    owner = SimpleNamespace(
-        sources=lambda: {
-            binding.registration_id: _Source(
-                SourceResult(status=CollectorStatus.SOURCE_UNAVAILABLE)
-            )
-        }
-    )
-    monkeypatch.setattr(
-        acquisition,
-        "TechVaultNativeEvidenceOwner",
-        lambda **_kwargs: owner,
+    selection = _capture_selection(
+        SimpleNamespace(
+            native_sources=lambda _request: {
+                binding.registration_id: _Source(
+                    SourceResult(status=CollectorStatus.SOURCE_UNAVAILABLE)
+                )
+            }
+        )
     )
 
     result = acquisition.acquire_native_evidence(
@@ -264,10 +284,14 @@ def test_acquire_native_evidence_fails_when_a_required_source_is_unavailable(
             backend=object(),
             realization=object(),
             project_dir=tmp_path,
-            indexer_auth=("admin", "password"),
-            thehive_api_key="operator-api-key",
+            environment={
+                "INDEXER_USERNAME": "admin",
+                "INDEXER_PASSWORD": "password",
+                "THEHIVE_API_KEY": "operator-api-key",
+            },
             run_store=LocalRunStore(tmp_path / "runs"),
             run_id="run-1",
+            capture_selection=selection,
             clock=_SequenceClock(
                 "2026-09-14T00:00:00Z",
                 "2026-09-14T00:00:01Z",
@@ -286,11 +310,16 @@ def _lab_context(tmp_path, plan):
     return _LabStartContext(
         project_dir=tmp_path,
         skip_seed=False,
-        raw_env={"THEHIVE_API_KEY": "operator-api-key"},
+        raw_env={
+            "INDEXER_USERNAME": "admin",
+            "INDEXER_PASSWORD": "password",
+            "THEHIVE_API_KEY": "operator-api-key",
+        },
         backend=object(),
         env=SimpleNamespace(indexer_username="admin", indexer_password="password"),
         admitted_start=SimpleNamespace(
             capture_plan=plan,
+            capture_selection=_capture_selection(),
             realization=object(),
             target=object(),
             execution_plan=object(),
@@ -350,6 +379,66 @@ def test_lab_start_native_step_retains_successful_acquisition(tmp_path, monkeypa
     assert context.raes_outcome.final_snapshot is refreshed_snapshot
 
 
+def test_lab_start_native_step_supports_credential_free_adapter(tmp_path, monkeypatch):
+    from aptl.backends import raes_evidence_acquisition as acquisition
+    from aptl.backends import raes_evaluator
+    from aptl.core.lab import _step_acquire_required_native_evidence
+    from raes_contracts.runtime_state import OperationState
+
+    binding = _binding("aptl.collector.cortex-enrichment", "cortex")
+    capture = SimpleNamespace(
+        disposition=AcquisitionDisposition.SEALED_READY,
+        records=("native-record",),
+    )
+    requests = []
+    monkeypatch.setattr(
+        acquisition,
+        "acquire_native_evidence",
+        lambda request: requests.append(request) or capture,
+    )
+    monkeypatch.setattr(
+        raes_evaluator,
+        "refresh_evidence_truth",
+        lambda **kwargs: SimpleNamespace(
+            status=OperationState.SUCCEEDED,
+            snapshot=kwargs["snapshot"],
+        ),
+    )
+    context = _lab_context(
+        tmp_path, SimpleNamespace(runtime_bindings=lambda: (binding,))
+    )
+    context.env = None
+    context.raw_env = {"UNDECLARED_SECRET": "must-not-cross-boundary"}
+    context.admitted_start.capture_selection = replace(
+        context.admitted_start.capture_selection,
+        contribution=replace(
+            context.admitted_start.capture_selection.contribution,
+            runtime_environment_keys=(),
+        ),
+    )
+
+    assert _step_acquire_required_native_evidence(context) is None
+    assert len(requests) == 1
+    assert dict(requests[0].environment) == {}
+
+
+def test_native_request_reads_credentials_created_during_seeding(tmp_path):
+    """First boot must use seeded keys while retaining the adapter allowlist."""
+    from aptl.core.lab import _native_evidence_request
+
+    context = _lab_context(tmp_path, object())
+    context.raw_env.pop("THEHIVE_API_KEY")
+    (tmp_path / ".env").write_text(
+        "THEHIVE_API_KEY=seeded-test-key\nUNDECLARED_SECRET=not-forwarded\n"
+    )
+
+    request = _native_evidence_request(context, object(), object())
+
+    assert request.environment["THEHIVE_API_KEY"] == "seeded-test-key"
+    assert request.environment["INDEXER_USERNAME"] == "admin"
+    assert "UNDECLARED_SECRET" not in request.environment
+
+
 def test_lab_start_native_step_rejects_failed_truth_refresh(tmp_path, monkeypatch):
     from aptl.backends import raes_evidence_acquisition as acquisition
     from aptl.backends import raes_evaluator
@@ -381,6 +470,36 @@ def test_lab_start_native_step_rejects_failed_truth_refresh(tmp_path, monkeypatc
     assert result is not None
     assert result.success is False
     assert result.error == "aptl.scenario-evidence.required-native-evaluation-failed"
+
+
+def test_native_failure_messages_expose_codes_not_evidence_payloads():
+    from aptl.core.lab import _native_capture_failure, _native_evaluation_failure
+
+    capture = SimpleNamespace(
+        reports=(
+            SimpleNamespace(
+                registration_id="aptl.collector.wazuh-agent-readiness",
+                status=CollectorStatus.SOURCE_UNAVAILABLE,
+                diagnostic_code="not-ready",
+                payload="secret-body",
+            ),
+        )
+    )
+    refresh = SimpleNamespace(
+        diagnostics=(
+            SimpleNamespace(
+                code="aptl.evaluator.native-evidence-truth-incomplete",
+                message="secret-body",
+            ),
+        )
+    )
+
+    capture_error = _native_capture_failure(capture)
+    evaluation_error = _native_evaluation_failure(refresh)
+
+    assert "wazuh-agent-readiness=source-unavailable" in capture_error
+    assert "aptl.evaluator.native-evidence-truth-incomplete" in evaluation_error
+    assert "secret-body" not in capture_error + evaluation_error
 
 
 def test_lab_start_native_step_rejects_failed_required_acquisition(
@@ -447,6 +566,17 @@ def test_lab_start_activates_admitted_transcript_before_ssh(tmp_path, monkeypatc
         activate_capture_apparatus=lambda **_kwargs: authority
     )
     prepared = []
+    retired = []
+    monkeypatch.setattr(
+        acquisition,
+        "load_active_transcript_authorities",
+        lambda _project: ({"run_id": "run-stale", "capture_plan_id": "old-plan"},),
+    )
+    monkeypatch.setattr(
+        acquisition,
+        "mark_transcript_finalization_failed",
+        lambda **kwargs: retired.append(kwargs),
+    )
     monkeypatch.setattr(
         acquisition,
         "persist_active_transcript_authority",
@@ -455,6 +585,12 @@ def test_lab_start_activates_admitted_transcript_before_ssh(tmp_path, monkeypatc
 
     assert _step_activate_capture_apparatus(context) is None
     assert context.transcript_capture_authority == authority
+    assert retired == [
+        {
+            "project_dir": tmp_path,
+            "state": {"run_id": "run-stale", "capture_plan_id": "old-plan"},
+        }
+    ]
     assert prepared[0]["binding"] is binding
     assert prepared[0]["run_id"] == "run-1"
 
@@ -513,6 +649,7 @@ def test_failed_transcript_activation_is_auditable_but_not_pending(tmp_path):
         binding=binding,
         run_store=store,
         run_id="run-1",
+        capture_selection=_capture_selection(),
     )
 
     mark_transcript_activation_failed(
@@ -545,6 +682,7 @@ def test_active_transcript_authority_is_contained_create_once(tmp_path):
         binding=binding,
         run_store=store,
         run_id="run-1",
+        capture_selection=_capture_selection(),
     )
     persist_active_transcript_authority(
         project_dir=tmp_path,
@@ -552,6 +690,7 @@ def test_active_transcript_authority_is_contained_create_once(tmp_path):
         binding=binding,
         run_store=store,
         run_id="run-1",
+        capture_selection=_capture_selection(),
     )
 
     active = load_active_transcript_authorities(tmp_path)
@@ -577,6 +716,7 @@ def test_failed_transcript_finalization_is_terminal_and_auditable(tmp_path):
         binding=binding,
         run_store=store,
         run_id="run-1",
+        capture_selection=_capture_selection(),
     )
     state = load_active_transcript_authorities(tmp_path)[0]
 
@@ -601,9 +741,11 @@ def test_active_transcript_authority_rejects_conflicting_binding(tmp_path):
         binding=binding,
         run_store=store,
         run_id="run-1",
+        capture_selection=_capture_selection(),
     )
 
     conflicting = replace(binding, requirement_id="different-transcript")
+    capture_selection = _capture_selection()
     with pytest.raises(ValueError, match="active transcript authority conflict"):
         persist_active_transcript_authority(
             project_dir=tmp_path,
@@ -611,6 +753,7 @@ def test_active_transcript_authority_rejects_conflicting_binding(tmp_path):
             binding=conflicting,
             run_store=store,
             run_id="run-1",
+            capture_selection=capture_selection,
         )
 
 
@@ -672,6 +815,7 @@ def test_finalize_transcript_quiesces_broker_persists_evidence_and_marks_complet
         binding=binding,
         run_store=store,
         run_id="run-1",
+        capture_selection=_capture_selection(),
     )
     state = load_active_transcript_authorities(tmp_path)[0]
     authority = {
@@ -751,6 +895,7 @@ def test_finalize_transcript_rejects_mismatched_broker_authority_and_uses_host_c
         binding=binding,
         run_store=store,
         run_id="run-1",
+        capture_selection=_capture_selection(),
     )
     state = load_active_transcript_authorities(tmp_path)[0]
     exported = {
@@ -826,7 +971,9 @@ def _exported_session(*, session_id="session-1", frames=()):
     ids=("duplicate-session-inventory", "malformed-frame", "oversized-export"),
 )
 def test_transcript_export_validation_maps_to_finalization_failure(payload):
-    from aptl.backends.raes_evidence_acquisition import _FinalizedTranscriptCollector
+    from aptl_techvault.evidence.transcript_parsing import (
+        FinalizedTranscriptCollector as _FinalizedTranscriptCollector,
+    )
 
     binding = replace(
         _binding("aptl.collector.redteam-session-transcript", "transcript"),

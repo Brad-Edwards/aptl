@@ -70,11 +70,18 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting Started:
+  - Lab Guide:
     - Overview: getting-started/index.md
     - Prerequisites: getting-started/prerequisites.md
-    - Installation: getting-started/installation.md
-    - Quick Start: getting-started/quick-start.md
+    - Install APTL: getting-started/installation.md
+    - Run Your First Lab: getting-started/quick-start.md
+  - Interfaces:
+    - CLI: reference/cli.md
+    - MCP: reference/mcp.md
+    - Web: reference/web.md
+  - Operations:
+    - Deployment: deployment.md
+    - Troubleshooting: troubleshooting/index.md
   - Workshop:
     - Playbook: workshop/playbook.md
     - Lab Walkthrough: workshop/walkthrough.md
@@ -86,9 +93,11 @@ nav:
     - RNG-001 Ephemeral Environments Preflight: architecture/rng-001-ephemeral-environments-preflight.md
     - DEP-003 Ephemeral Lifecycle Policy Preflight: architecture/dep-003-ephemeral-lifecycle-preflight.md
     - GRC Boundary Surface Vocabulary Preflight: architecture/grc-boundary-surface-vocabulary-preflight.md
+    - "Issue #851 First-Time User Documentation Preflight": architecture/issue-851-first-time-user-docs-preflight.md
     - "Issue #557 Participant Implementation Binding Preflight": architecture/issue-557-participant-implementation-binding-preflight.md
     - "Issue #821 In-Appliance Participant Workbench Preflight": architecture/issue-821-participant-workbench-preflight.md
     - "Issue #823 Versioned Disposable Lab Appliance Preflight": architecture/issue-823-versioned-disposable-appliance-preflight.md
+    - "Issue #1022 Appliance Seat Delivery Preflight": architecture/issue-1022-appliance-seat-delivery-preflight.md
     - "Issue #845 RAES Hard-Rename Preflight": architecture/issue-845-raes-hard-rename-preflight.md
     - "Issue #934 APTL-To-LilRAE Rename Boundary Preflight": architecture/issue-934-rename-boundary-preflight.md
     - "Issue #592 Scenario-Pack Terminology Preflight": architecture/issue-592-scenario-pack-terminology-preflight.md
@@ -100,7 +109,12 @@ nav:
     - "Issue #1000 Partial Boot And Manual Release QA Preflight": architecture/issue-1000-manual-release-qa-preflight.md
     - "Issue #1002 Wazuh API TLS Warm-Up Preflight": architecture/issue-1002-wazuh-api-tls-warmup-preflight.md
     - "Issue #949 Orborus Control Authority Preflight": architecture/issue-949-orborus-control-authority-preflight.md
+    - "Issue #974 Shuffle Worker Docker And Image Realization Preflight": architecture/issue-974-shuffle-worker-docker-images-preflight.md
     - "Issue #951 Fresh Env-Pack Start Preflight": architecture/issue-951-fresh-env-pack-start-preflight.md
+    - "Issue #964 Backend Resource Ownership Preflight": architecture/issue-964-backend-resource-ownership-preflight.md
+    - "Issue #969 Platform Safety Gates Preflight": architecture/issue-969-platform-safety-gates-preflight.md
+    - "Issue #985 Owned Lab Fixture Preflight": architecture/issue-985-owned-lab-fixture-preflight.md
+    - "Issue #993 Boot Realization Regressions Preflight": architecture/issue-993-boot-realization-regressions-preflight.md
     - "Issue #992 Backend Observability Ownership Preflight": architecture/issue-992-backend-observability-ownership-preflight.md
     - LilRAE Readiness Review:
       - Assessment: reviews/962-lilrae-readiness/README.md
@@ -111,7 +125,6 @@ nav:
       - Delivery Plan: reviews/962-lilrae-readiness/delivery-plan.md
       - Upstream update: reviews/962-lilrae-readiness/upstream-update.md
       - Evidence: reviews/962-lilrae-readiness/evidence/README.md
-  - Deployment: deployment.md
   - Components:
     - Wazuh SIEM: components/wazuh-siem.md
     - Wazuh Active Response: components/wazuh-active-response.md
@@ -137,12 +150,17 @@ nav:
     - TechVault Curated Live Validation Gate: raes/techvault-curated-live-validation-gate.md
     - Bounded Participant Agency Readiness: raes/bounded-participant-agency-readiness.md
   - Testing:
+    - Platform Pull-Request Gates: testing/platform-pr-gates.md
+    - Boot Realization Coverage: testing/boot-realization-coverage.md
+    - Lab Fixture Pack: testing/lab-fixture-pack.md
     - Release Candidate Manual QA: testing/smoke-test-plan.md
     - Property-Based Parser Tests: testing/property-based-parser-tests.md
   - Reference:
+    - OpenSSF Best Practices Assessment: security/openssf-best-practices.md
     - Red Team Taxonomy: red-team-taxonomy.md
     - Guided Purple Participant Profile: reference/participant-profile.md
     - Disposable Appliance Release: reference/appliance-release.md
+    - Host MCP access: reference/host-mcp-access.md
     - Appliance Seat Launcher: reference/appliance-seat-launcher.md
     - TechVault Scenario Overview: reference/techvault-scenario-overview.md
     - TechVault Company Profile: reference/techvault-company-profile.md
@@ -153,7 +171,6 @@ nav:
     - Web GUI Design Specification: specs/web-gui-design.md
     - Web GUI Design Preflight Guardrails: specs/web-gui-design-preflight.md
     - Web Component Kit: specs/web-component-kit.md
-  - Troubleshooting: troubleshooting/index.md
   - Decisions:
     - Index: adrs/README.md
     - ADR-000 Use ADRs: adrs/adr-000-use-adrs.md
@@ -214,6 +231,7 @@ nav:
     - ADR-056 Scenario-Led Capability Qualification: adrs/adr-056-scenario-led-capability-qualification.md
     - ADR-057 Agent Execution Compartments: adrs/adr-057-agent-execution-compartments.md
     - ADR-058 Adoption and Security Release Gates: adrs/adr-058-adoption-and-security-release-gates.md
+    - ADR-059 Canonical TechVault Delivery and Host MCP Access: adrs/adr-059-canonical-techvault-delivery-and-host-mcp-access.md
 
 extra:
   social:

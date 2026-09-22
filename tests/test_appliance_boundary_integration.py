@@ -295,7 +295,7 @@ def test_platform_floor_allows_declared_crossing_and_blocks_other_source() -> No
                 "--security-opt=no-new-privileges",
                 "--entrypoint",
                 "nft",
-                "aptl-network-boundary-helper:3",
+                "aptl-network-boundary-helper:5",
                 "flush",
                 "chain",
                 "inet",

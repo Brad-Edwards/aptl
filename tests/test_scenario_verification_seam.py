@@ -607,7 +607,10 @@ def test_the_techvault_adapter_is_its_own_package_in_the_one_distribution():
     assert entry_points["aptl.participant_mcp_smoke_plans"] == {
         "guided-purple.techvault-attacker-target": (
             "aptl_techvault.participant_smoke:PARTICIPANT_SMOKE_OPERATIONS"
-        )
+        ),
+        "techvault-full.techvault": (
+            "aptl_techvault.participant_smoke:FULL_TECHVAULT_SMOKE_OPERATIONS"
+        ),
     }
     # A sibling of the framework in the wheel, never inside it.
     assert core["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"] == [

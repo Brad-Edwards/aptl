@@ -102,12 +102,14 @@ class ComposeRealizationContentMixin:
             f'if [ -d "$1" ]; then exit {_CONTENT_DIRECTORY_EXIT}; fi; '
             f"exit {_CONTENT_MISSING_EXIT}"
         )
-        result = self._run(
+        helper = self._ephemeral_container("content-probe")
+        result = helper.run(
+            self._run,
             [
                 "docker",
                 "run",
                 *(["--pull=never"] if self._offline_staged else []),
-                "--rm",
+                *helper.run_options(),
                 "--user",
                 "0:0",
                 "--network",
@@ -162,12 +164,14 @@ class ComposeRealizationContentMixin:
             f'if [ -d "$1" ]; then exit {_CONTENT_DIRECTORY_EXIT}; fi; '
             f"exit {_CONTENT_MISSING_EXIT}"
         )
-        result = self._run(
+        helper = self._ephemeral_container("bind-source-probe")
+        result = helper.run(
+            self._run,
             [
                 "docker",
                 "run",
                 *(["--pull=never"] if self._offline_staged else []),
-                "--rm",
+                *helper.run_options(),
                 "--user",
                 "0:0",
                 "--network",

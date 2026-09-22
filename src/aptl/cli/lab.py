@@ -100,7 +100,7 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
     scenario: Optional[str] = typer.Option(
         None,
         "--scenario",
-        help="Curated RAES startup scenario id from the catalog.",
+        help="Acquired RAES environment-pack id from the catalog.",
     ),
     scenario_path: Optional[Path] = typer.Option(
         None,
@@ -146,6 +146,28 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
         "--appliance-qualification-public-key",
         help="Independent APP-2 qualification trust anchor.",
     ),
+    appliance_readiness_challenge: Optional[Path] = typer.Option(
+        None,
+        "--appliance-readiness-challenge",
+        hidden=True,
+    ),
+    appliance_readiness_device: Optional[Path] = typer.Option(
+        None,
+        "--appliance-readiness-device",
+        hidden=True,
+    ),
+    appliance_access_request: Optional[Path] = typer.Option(
+        None, "--appliance-access-request", hidden=True
+    ),
+    appliance_access_device: Optional[Path] = typer.Option(
+        None, "--appliance-access-device", hidden=True
+    ),
+    appliance_access_output_dir: Optional[Path] = typer.Option(
+        None, "--appliance-access-output-dir", hidden=True
+    ),
+    appliance_candidate_trust: bool = typer.Option(
+        False, "--appliance-candidate-trust", hidden=True
+    ),
 ) -> None:
     """Start the APTL lab environment."""
     log.info("Starting lab from %s (clean=%s)", project_dir, clean)
@@ -165,9 +187,38 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
         appliance_release_public_key,
         appliance_qualification_public_key,
     )
+    readiness_values = (
+        appliance_readiness_challenge,
+        appliance_readiness_device,
+    )
     if any(launch_values) and (not all(launch_values) or not offline_staged):
         typer.echo(
             "error: appliance launch requires both trust anchors and --offline-staged",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    if appliance_candidate_trust and (not all(launch_values) or not offline_staged):
+        typer.echo(
+            "error: candidate trust requires a complete verified offline launch",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    if any(readiness_values) and (
+        not all(readiness_values) or not all(launch_values) or not offline_staged
+    ):
+        typer.echo(
+            "error: appliance readiness requires a verified offline launch",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    access_values = (
+        appliance_access_request,
+        appliance_access_device,
+        appliance_access_output_dir,
+    )
+    if any(access_values) and (not all(access_values) or not all(readiness_values)):
+        typer.echo(
+            "error: appliance access requires complete readiness and access channels",
             err=True,
         )
         raise typer.Exit(code=2)
@@ -180,6 +231,12 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
             launch_descriptor=appliance_launch_descriptor,
             release_public_key=appliance_release_public_key,
             qualification_public_key=appliance_qualification_public_key,
+            readiness_challenge=appliance_readiness_challenge,
+            readiness_device=appliance_readiness_device,
+            access_request=appliance_access_request,
+            access_device=appliance_access_device,
+            access_output_dir=appliance_access_output_dir,
+            candidate_trust=appliance_candidate_trust,
         )
     if clean:
         if not _confirm_destructive(yes):
@@ -239,16 +296,21 @@ def scenarios(
         help="Path to the APTL project directory.",
     ),
 ) -> None:
-    """List curated RAES startup scenarios."""
+    """List validated acquired-pack identities."""
     try:
         catalog = load_scenario_catalog(project_dir)
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=2)
 
-    for entry in catalog.scenarios:
-        description = f" - {entry.description}" if entry.description else ""
-        typer.echo(f"{entry.id}\t{entry.path}\t{entry.name}{description}")
+    with catalog:
+        for entry in catalog.scenarios:
+            description = f" - {entry.description}" if entry.description else ""
+            identity = catalog.pack_identity
+            typer.echo(
+                f"{entry.id}\t{identity.pack_version}\t{catalog.maturity}\t"
+                f"{identity.set_digest}\t{entry.name}{description}"
+            )
 
 
 @app.command()
@@ -388,7 +450,10 @@ def validate_live(
     scenario: Optional[Path] = typer.Option(
         None,
         "--scenario",
-        help="RAES SDL scenario (default: the configured scenario, the bundled TechVault env-pack).",
+        help=(
+            "Explicit project-tree RAES SDL override "
+            "(default: the configured acquired TechVault pack)."
+        ),
     ),
     profile: str = typer.Option(
         "full-remote-control-plane",

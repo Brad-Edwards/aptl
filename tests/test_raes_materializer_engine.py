@@ -26,11 +26,14 @@ from aptl.backends.raes_materializer import (
     EnsureUserOp,
     InstallDependencyManifestOp,
     InstallSoftwareComponentOp,
+    PlacePackArtifactOp,
     ProvisionDomainAuthorityOp,
     SetFilesystemMetadataOp,
     plan_node_materialization,
 )
 from aptl.backends.raes_materializer_engine import materialize_node
+from aptl.backends.raes_docker_materializer import MaterializationCommandError
+from aptl.core.deployment.errors import BackendSeedError
 
 
 class _RecordingExecutor:
@@ -197,7 +200,7 @@ class TestMaterializeNode:
         assert result.success is False
         assert "wazuh-manager.service" in (result.error or "")
 
-    def test_backend_error_translates_to_labresult_not_exception(self):
+    def test_backend_error_translates_to_labresult_not_exception(self, caplog):
         ops = plan_node_materialization(
             os="linux", os_version="", runtime=_full_runtime()
         )
@@ -213,6 +216,33 @@ class TestMaterializeNode:
         assert "techvault.wazuh-manager" in (result.error or "")
         # The raw internal detail is not echoed verbatim into the envelope.
         assert "hunter2" not in (result.error or "")
+        assert "hunter2" not in caplog.text
+        assert "RuntimeError" in caplog.text
+
+    def test_pack_copy_failure_logs_only_bounded_stage_and_cause(self, caplog):
+        class _Broken(_RecordingExecutor):
+            def place_pack_artifact(self, node_address, op):
+                try:
+                    raise BackendSeedError("secret=do-not-log")
+                except BackendSeedError:
+                    raise MaterializationCommandError(
+                        f"pack content copy failed on {node_address}"
+                    ) from None
+
+        op = PlacePackArtifactOp(
+            dest_path="/opt/example",
+            artifact_id="example-artifact",
+            artifact_digest="sha256:" + "a" * 64,
+        )
+
+        result = materialize_node("provision.node.example", (op,), _Broken())
+
+        assert result is not None
+        assert not result.success
+        assert "step=copy" in caplog.text
+        assert "cause=BackendSeedError" in caplog.text
+        assert "do-not-log" not in caplog.text
+        assert "do-not-log" not in (result.error or "")
 
     def test_directory_entry_is_materialized_and_verified(self):
         runtime = RuntimeConfiguration(

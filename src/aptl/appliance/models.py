@@ -20,14 +20,30 @@ _DIGEST_RE = re.compile(r"^sha256:[a-f0-9]{64}$")
 _IMAGE_DIGEST_RE = re.compile(r"^[a-z0-9][a-z0-9._/:~-]{0,254}@sha256:[a-f0-9]{64}$")
 _COMMIT_RE = re.compile(r"^[a-f0-9]{40}(?:[a-f0-9]{24})?$")
 _IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
+_RESERVED_RELEASE_PATHS = frozenset(
+    {
+        "SHA256SUMS",
+        "candidate-manifest.json",
+        "candidate-manifest.sig.json",
+        "manifest.json",
+        "manifest.sig.json",
+    }
+)
 
 ArtifactKind = Literal[
+    "canonical-inputs",
+    "golden-build-request",
+    "golden-provisioner",
+    "golden-scanner",
     "golden-disk",
     "offline-payload",
     "participant-profile",
     "participant-readiness",
     "participant-asset-lock",
     "participant-qualification",
+    "participant-run-record",
+    "participant-snapshot",
+    "redistribution-review",
     "boundary-policy",
     "golden-inventory",
     "machine-drill",
@@ -40,6 +56,8 @@ _REQUIRED_ARTIFACT_KINDS = frozenset(
         "participant-readiness",
         "participant-asset-lock",
         "participant-qualification",
+        "participant-run-record",
+        "participant-snapshot",
         "boundary-policy",
         "golden-inventory",
         "machine-drill",
@@ -83,6 +101,8 @@ def _validate_relative_path(value: str) -> str:
         or any(part in {"", ".", ".."} for part in path.parts)
     ):
         raise ValueError("artifact path must be a safe relative POSIX path")
+    if value in _RESERVED_RELEASE_PATHS:
+        raise ValueError("artifact path collides with a reserved release document")
     return value
 
 
@@ -136,6 +156,34 @@ class ReleaseSource(_StrictModel):
     def validate_tag(self) -> ReleaseSource:
         if self.source_tag != f"v{self.aptl_version}":
             raise ValueError("source tag must exactly match the APTL version")
+        return self
+
+
+class CandidateSource(_StrictModel):
+    """Exact source revision for a qualification-only development candidate."""
+
+    aptl_version: str
+    source_revision: str
+    source_commit: str
+
+    @field_validator("aptl_version")
+    @classmethod
+    def validate_version(cls, value: str) -> str:
+        if not is_appliance_version(value):
+            raise ValueError("invalid APTL candidate version")
+        return value
+
+    @field_validator("source_commit")
+    @classmethod
+    def validate_commit(cls, value: str) -> str:
+        if not _COMMIT_RE.fullmatch(value):
+            raise ValueError("source commit must be a full hexadecimal object id")
+        return value
+
+    @model_validator(mode="after")
+    def validate_revision(self) -> CandidateSource:
+        if self.source_revision != f"commit:{self.source_commit}":
+            raise ValueError("candidate source revision must name its exact commit")
         return self
 
 
@@ -241,6 +289,8 @@ class DeliveryParity(_StrictModel):
 
     participant_ui_digest: str
     participant_routes_digest: str
+    canonical_inputs_digest: str | None = None
+    host_mcp_contract: Literal["aptl.restricted-ssh-mcp/v1"] | None = None
     adapters: tuple[DeliveryAdapter, ...]
 
     @field_validator("participant_ui_digest", "participant_routes_digest")
@@ -250,6 +300,10 @@ class DeliveryParity(_StrictModel):
 
     @model_validator(mode="after")
     def validate_adapter_parity(self) -> DeliveryParity:
+        if self.canonical_inputs_digest is not None:
+            _validate_digest(self.canonical_inputs_digest)
+        if self.host_mcp_contract and not self.canonical_inputs_digest:
+            raise ValueError("host MCP requires canonical packaged inputs")
         ids = [adapter.adapter_id for adapter in self.adapters]
         kinds = {adapter.kind for adapter in self.adapters}
         if len(ids) != len(set(ids)):
@@ -265,20 +319,52 @@ class MachineDrill(_StrictModel):
     """Bounded result from one independent supported build/rollback host."""
 
     machine_id: str
+    candidate_id: str
+    candidate_manifest_digest: str
+    candidate_payload_digest: str
+    golden_image_digest: str
     architecture: Literal["x86_64", "aarch64"]
     vcpus: int = Field(ge=1)
     memory_bytes: int = Field(gt=0)
     disk_bytes: int = Field(gt=0)
+    hypervisor: Literal["qemu-kvm"]
+    seat_count: int = Field(ge=1)
+    host_access_clients: tuple[Literal["claude", "codex"], ...]
     build_passed: bool
     offline_boot_passed: bool
     participant_smoke_passed: bool
+    host_access_passed: bool
+    revocation_passed: bool
     rollback_passed: bool
     overlay_destroy_passed: bool
+    golden_secret_scan_passed: bool
+    golden_read_only_passed: bool
+    distinct_overlay_identities_passed: bool
+    failed_candidate_preserved_active_passed: bool
 
-    @field_validator("machine_id")
+    @field_validator(
+        "machine_id",
+        "candidate_manifest_digest",
+        "candidate_payload_digest",
+        "golden_image_digest",
+    )
     @classmethod
     def validate_machine_id(cls, value: str) -> str:
         return _validate_digest(value)
+
+    @field_validator("candidate_id")
+    @classmethod
+    def validate_candidate_id(cls, value: str) -> str:
+        return _validate_identifier(value)
+
+    @field_validator("host_access_clients")
+    @classmethod
+    def validate_host_access_clients(
+        cls, value: tuple[Literal["claude", "codex"], ...]
+    ) -> tuple[Literal["claude", "codex"], ...]:
+        if len(value) != len(set(value)):
+            raise ValueError("host access client identities must be unique")
+        return value
 
     @property
     def passed(self) -> bool:
@@ -287,8 +373,13 @@ class MachineDrill(_StrictModel):
                 self.build_passed,
                 self.offline_boot_passed,
                 self.participant_smoke_passed,
+                self.host_access_passed,
+                self.revocation_passed,
                 self.rollback_passed,
                 self.overlay_destroy_passed,
+                self.golden_secret_scan_passed,
+                self.golden_read_only_passed,
+                self.failed_candidate_preserved_active_passed,
             )
         )
 
@@ -296,7 +387,7 @@ class MachineDrill(_StrictModel):
 class ApplianceDrillReport(_StrictModel):
     """Outer release qualification without duplicating APP-2 readiness data."""
 
-    schema_version: Literal["aptl.appliance-drill/v1"]
+    schema_version: Literal["aptl.appliance-drill/v2"]
     machines: tuple[MachineDrill, ...]
     golden_secret_scan_passed: bool
     golden_read_only_passed: bool
@@ -312,6 +403,24 @@ class ApplianceDrillReport(_StrictModel):
             raise ValueError("machine drill identities must be unique")
         if any(not machine.passed for machine in self.machines):
             raise ValueError("every machine drill must pass")
+        bindings = {
+            (
+                machine.candidate_id,
+                machine.candidate_manifest_digest,
+                machine.candidate_payload_digest,
+                machine.golden_image_digest,
+            )
+            for machine in self.machines
+        }
+        if len(bindings) != 1:
+            raise ValueError("machine drills must bind the same exact candidate")
+        if not any(machine.seat_count >= 2 for machine in self.machines):
+            raise ValueError("one machine must prove concurrent seats")
+        if any(
+            set(machine.host_access_clients) != {"claude", "codex"}
+            for machine in self.machines
+        ):
+            raise ValueError("every machine must prove both native MCP clients")
         release_checks = (
             self.golden_secret_scan_passed,
             self.golden_read_only_passed,
@@ -320,6 +429,15 @@ class ApplianceDrillReport(_StrictModel):
         )
         if not all(release_checks):
             raise ValueError("every appliance release drill must pass")
+        if not all(
+            machine.golden_secret_scan_passed
+            and machine.golden_read_only_passed
+            and machine.failed_candidate_preserved_active_passed
+            for machine in self.machines
+        ) or not any(
+            machine.distinct_overlay_identities_passed for machine in self.machines
+        ):
+            raise ValueError("machine drill details do not support release claims")
         return self
 
 
@@ -382,11 +500,24 @@ class ApplianceReleaseManifest(_StrictModel):
             raise ValueError("artifact ids must be unique")
         if len(paths) != len(set(paths)):
             raise ValueError("artifact paths must be unique")
-        if set(kinds) != _REQUIRED_ARTIFACT_KINDS or len(kinds) != len(
-            _REQUIRED_ARTIFACT_KINDS
+        if (
+            not _REQUIRED_ARTIFACT_KINDS <= set(kinds)
+            or set(kinds)
+            - _REQUIRED_ARTIFACT_KINDS
+            - {"canonical-inputs", "redistribution-review"}
+            or len(kinds) != len(set(kinds))
         ):
             raise ValueError("manifest does not contain the required artifact kinds")
         by_kind = {artifact.kind: artifact for artifact in self.artifacts}
+        canonical = by_kind.get("canonical-inputs")
+        if (canonical is None) != (by_kind.get("redistribution-review") is None):
+            raise ValueError(
+                "canonical releases require an exact redistribution review"
+            )
+        if (
+            canonical.sha256 if canonical else None
+        ) != self.delivery.canonical_inputs_digest:
+            raise ValueError("canonical input digest does not match release artifact")
         comparisons = (
             (
                 by_kind["participant-profile"].sha256,

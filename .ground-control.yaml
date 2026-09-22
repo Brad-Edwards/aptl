@@ -2,25 +2,17 @@ schema_version: 1
 project: aptl
 github_repo: Brad-Edwards/aptl
 workflow:
-  # The default suite uses a bounded pytest-xdist worker pool and excludes the
-  # slow `integration`-marked tests, matching the CI coverage job
-  # (.github/workflows/checks.yml: `pytest -k "not integration"`).
-  # A fixed pool avoids host-load-dependent OOM kills when `auto` expands to all
-  # logical CPUs on shared development machines.
-  test_command: 'uv run pytest -n 4 -k "not integration"'
-  # The completion gate mirrors exactly what CI gates on: the fast suite plus the
-  # scenario static gate (the only integration tests CI runs). Both use the
-  # same bounded worker pool. Bare `pytest` would also pull in ~550 other
-  # integration tests that CI never runs and that take ~80 min serially — see
-  # the scenario static-gate
-  # design notes. Coverage runs serially in CI (coverage run can't measure xdist
-  # workers); bounded xdist is only used where coverage is not collected.
-  completion_command: 'uv run pytest -n 4 -k "not integration" && uv run pytest -n 4 tests/test_techvault_static_gate.py -m integration'
-  lint_command: pre-commit run --all-files
-  format_command: pre-commit run --all-files
+  # Local verification is deliberately change-scoped. The helper runs only
+  # changed test files (or explicit paths supplied by the caller); it refuses
+  # to fall back to a bare/full suite. CI/CD owns full suites and coverage.
+  test_command: bash tools/run-targeted-tests.sh
+  # Completion performs rapid staged-file hygiene and secret scanning only.
+  # Whole-tree hooks, dependency checks, complexity, prose, and builds stay in
+  # `.github/workflows/checks.yml`.
+  completion_command: pre-commit run
+  lint_command: pre-commit run
+  format_command: pre-commit run
   codex_review:
-    pre_push_cap: 1
-  test_quality_review:
     pre_push_cap: 1
   review_disposition:
     enabled: false
@@ -72,6 +64,8 @@ grc:
       paths:
         - docker-compose.yml
         - containers/base/**
+        - appliance/guest/**
+        - src/aptl/appliance/**
         - src/aptl/cli/**
       # src/aptl/cli (python) -> application; docker-compose.yml -> docker-compose;
       # containers/base/Dockerfile.* -> dockerfile.
@@ -81,6 +75,7 @@ grc:
       description: Red/blue MCP servers and orchestrator that AI agents drive — the agent authorization and command-filtering surface.
       paths:
         - mcp/**
+        - src/aptl/workbench/**
       # mcp/** is first-party TypeScript -> application (Dockerfiles under mcp/ are
       # vendored node_modules only).
       surfaces: [application]
@@ -95,37 +90,31 @@ grc:
       surfaces: [dockerfile]
     - key: dmz-zone
       name: DMZ Zone (aptl-dmz)
-      description: Semi-exposed victim network — webapp, mailserver, DNS.
+      description: Semi-exposed victim network — generic component build contexts.
       paths:
-        - containers/webapp/**
         - containers/mailserver/**
-        - containers/dns/**
-      # webapp app/ (python) -> application; webapp + dns Dockerfiles -> dockerfile.
-      surfaces: [application, dockerfile]
+      surfaces: [dockerfile]
     - key: internal-zone
       name: Internal Zone (aptl-internal)
       description: Internal enterprise network — Active Directory, PostgreSQL, SMB fileshare, victim/workstation hosts.
       paths:
         - containers/ad/**
-        - containers/db/**
-        - containers/fileshare/**
         - containers/victim/**
         - containers/workstation/**
         - containers/windows-victim/**
-      # ad / fileshare / victim / workstation Dockerfiles -> dockerfile.
+      # fileshare / victim / workstation Dockerfiles -> dockerfile.
       surfaces: [dockerfile]
     - key: security-zone
       name: Security/SOC Zone (aptl-security)
       description: Defensive stack — Wazuh, Suricata, MISP, TheHive, Cortex, Shuffle; zone isolation via multi-homing only (NET-005).
       paths:
-        - containers/wazuh-sidecar/**
         - containers/misp-suricata-sync/**
         - config/wazuh_cluster/**
         - config/cortex/**
         - config/thehive/**
         - config/wazuh_dashboard/**
         - config/wazuh_indexer/**
-      # wazuh-sidecar / misp-suricata-sync Dockerfiles -> dockerfile; config/* uncovered.
+      # misp-suricata-sync Dockerfile -> dockerfile; config/* uncovered.
       surfaces: [dockerfile]
     - key: observability-plane
       name: Observability Plane

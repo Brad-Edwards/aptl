@@ -32,7 +32,10 @@ from aptl.backends.raes_base_substrate import (
     VolumeMount,
     plan_node,
 )
-from aptl.backends.raes_docker_materializer import DockerMaterializationExecutor
+from aptl.backends.raes_docker_materializer import (
+    DockerMaterializationExecutor,
+    DockerMaterializationSettings,
+)
 from aptl.backends.raes_materializer import MaterializationOp
 from aptl.backends.raes_materializer_engine import materialize_node
 from aptl.core.lab_types import LabResult
@@ -46,6 +49,9 @@ class _NodeBackend(Protocol):
     def start_base_container(self, spec: BaseContainerSpec) -> None: ...
     def container_exec(
         self, name: str, cmd: list[str], *, timeout: int | None = None
+    ) -> subprocess.CompletedProcess: ...
+    def container_exec_with_input(
+        self, name: str, cmd: list[str], payload: str, *, timeout: int | None = None
     ) -> subprocess.CompletedProcess: ...
     def copy_into_container(
         self, container: str, source_path: str, dest_path: str, is_directory: bool
@@ -120,15 +126,27 @@ def realize_node(
         """Run one materialization command inside the node's container."""
         return backend.container_exec(container_name, argv)
 
+    def run_in_with_input(
+        container_name: str, argv: list[str], payload: str
+    ) -> subprocess.CompletedProcess:
+        """Deliver authored file bytes without placing them in process argv."""
+        return backend.container_exec_with_input(
+            container_name, argv, payload, timeout=60
+        )
+
     executor = DockerMaterializationExecutor(
         run=run_in,
+        run_with_input=run_in_with_input,
         container_for=lambda _addr: container,
         start_base=start_base,
         copy_in=backend.copy_into_container,
-        scenario_root=(
-            scenario_root
-            if scenario_root is not None
-            else getattr(backend, "project_dir", None)
+        settings=DockerMaterializationSettings(
+            scenario_root=(
+                scenario_root
+                if scenario_root is not None
+                else getattr(backend, "project_dir", None)
+            ),
+            offline_staged=bool(getattr(backend, "_offline_staged", False)),
         ),
     )
     return materialize_node(node.address, ops, executor)

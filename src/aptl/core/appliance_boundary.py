@@ -16,6 +16,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from aptl.utils.strict_json import loads_strict
 
 _DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
 _AUTHORITY = re.compile(
@@ -118,7 +119,7 @@ class EgressAuthority(_StrictModel):
 class GuestPublication(_StrictModel):
     """One loopback-only guest endpoint projected to the physical host."""
 
-    audience: Literal["participant", "recovery"]
+    audience: Literal["participant", "recovery", "host-mcp"]
     address: str
     port: int = Field(ge=1, le=65535)
     protocol: Transport
@@ -161,37 +162,93 @@ class EgressProxyLimits(_StrictModel):
 class ApplianceBoundaryPolicy(_StrictModel):
     """Platform policy that deliberately cannot contain scenario topology."""
 
-    schema_version: Literal["aptl.appliance-boundary/v1"]
+    schema_version: Literal["aptl.appliance-boundary/v1", "aptl.appliance-boundary/v2"]
     policy_id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,79}$")
     generation: int = Field(ge=1)
     workbench_policy_version: str = Field(pattern=r"^[a-z0-9][a-z0-9._/-]{0,127}$")
-    default_deny: Literal[True]
-    platform_networks: PlatformNetworks
-    platform_anchors: PlatformAnchors
+    default_deny: bool
+    platform_networks: PlatformNetworks | None = None
+    platform_anchors: PlatformAnchors | None = None
     fixed_crossings: list[FixedCrossing] = Field(default_factory=list)
     egress_authorities: list[EgressAuthority] = Field(default_factory=list)
-    egress_proxy_limits: EgressProxyLimits
+    egress_proxy_limits: EgressProxyLimits | None = None
     guest_publications: list[GuestPublication] = Field(default_factory=list)
+    host_mcp_contract: Literal["aptl.restricted-ssh-mcp/v1"] | None = None
     docker_authority: DockerAuthorityPolicy
+
+    @property
+    def internal_zone_isolation(self) -> bool:
+        """V1 promises internal enforcement; V2 explicitly promises VM containment."""
+
+        return self.schema_version == "aptl.appliance-boundary/v1"
 
     @model_validator(mode="after")
     def validate_unique_entries(self) -> ApplianceBoundaryPolicy:
-        crossings = [
-            (item.source, item.destination, item.protocol, tuple(item.ports))
-            for item in self.fixed_crossings
-        ]
-        authorities = [(item.authority, item.port) for item in self.egress_authorities]
-        publications = [
-            (item.audience, item.address, item.port, item.protocol)
-            for item in self.guest_publications
-        ]
-        if len(crossings) != len(set(crossings)):
-            raise ValueError("fixed crossings must be unique")
-        if len(authorities) != len(set(authorities)):
-            raise ValueError("egress authorities must be unique")
-        if len(publications) != len(set(publications)):
-            raise ValueError("guest publications must be unique")
+        _validate_containment_contract(self)
+        _validate_host_mcp_contract(self)
+        _validate_unique_policy_entries(self)
         return self
+
+
+def _validate_containment_contract(policy: ApplianceBoundaryPolicy) -> None:
+    """Require the fields promised by exactly one containment model."""
+
+    if policy.internal_zone_isolation:
+        if not policy.default_deny or any(
+            value is None
+            for value in (
+                policy.platform_networks,
+                policy.platform_anchors,
+                policy.egress_proxy_limits,
+            )
+        ):
+            raise ValueError(
+                "internal-zone policy requires its complete deny boundary"
+            )
+        return
+    vm_only_fields = (
+        policy.default_deny,
+        policy.platform_networks,
+        policy.platform_anchors,
+        policy.egress_proxy_limits,
+        policy.fixed_crossings,
+        policy.egress_authorities,
+    )
+    if any(vm_only_fields):
+        raise ValueError("VM-only policy cannot claim internal-zone enforcement")
+
+
+def _validate_host_mcp_contract(policy: ApplianceBoundaryPolicy) -> None:
+    """Bind the supported host MCP contract to one TCP publication."""
+
+    mcp = [item for item in policy.guest_publications if item.audience == "host-mcp"]
+    if bool(mcp) != (policy.host_mcp_contract is not None) or len(mcp) > 1:
+        raise ValueError(
+            "host MCP requires one explicit supported transport publication"
+        )
+    if mcp and mcp[0].protocol != "tcp":
+        raise ValueError("restricted SSH MCP requires TCP")
+
+
+def _validate_unique_policy_entries(policy: ApplianceBoundaryPolicy) -> None:
+    """Reject repeated signed grants and publications."""
+
+    crossings = [
+        (item.source, item.destination, item.protocol, tuple(item.ports))
+        for item in policy.fixed_crossings
+    ]
+    authorities = [(item.authority, item.port) for item in policy.egress_authorities]
+    publications = [
+        (item.audience, item.address, item.port, item.protocol)
+        for item in policy.guest_publications
+    ]
+    for values, message in (
+        (crossings, "fixed crossings must be unique"),
+        (authorities, "egress authorities must be unique"),
+        (publications, "guest publications must be unique"),
+    ):
+        if len(values) != len(set(values)):
+            raise ValueError(message)
 
 
 class ApplianceBoundaryBinding(_StrictModel):
@@ -204,6 +261,8 @@ class ApplianceBoundaryBinding(_StrictModel):
     boundary_helper_image: str = Field(pattern=_IMAGE_DIGEST.pattern)
     egress_proxy_image: str = Field(pattern=_IMAGE_DIGEST.pattern)
     boot_id: str = Field(min_length=1, max_length=128)
+    host_boot_id: str | None = Field(default=None, min_length=1, max_length=128)
+    guest_boot_id: str | None = Field(default=None, min_length=1, max_length=128)
     guest_daemon_id: str = Field(min_length=1, max_length=128)
     host_observation_id: str = Field(min_length=1, max_length=128)
 
@@ -218,7 +277,7 @@ def load_boundary_policy(
     actual = "sha256:" + hashlib.sha256(payload).hexdigest()
     if actual != binding.policy_digest:
         raise ValueError("appliance boundary policy digest does not match binding")
-    parsed = json.loads(payload)
+    parsed = loads_strict(payload)
     if not isinstance(parsed, dict):
         raise ValueError("appliance boundary policy must be a JSON object")
     return ApplianceBoundaryPolicy.model_validate(parsed)

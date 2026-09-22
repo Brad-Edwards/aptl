@@ -22,5 +22,6 @@ A security training lab that has poor code quality or leaks credentials undermin
 ## Traceability
 
 - IMPLEMENTS → CONFIG `eslint.config.js` (Root ESLint flat config: per-function TypeScript complexity gate (issue #286))
-- IMPLEMENTS → CONFIG `.pre-commit-config.yaml` (ts-complexity pre-commit hook (TypeScript complexity gate, issue #286))
+- IMPLEMENTS → CONFIG `.pre-commit-ci.yaml` (Python and TypeScript complexity gates run by CI)
+- IMPLEMENTS → CONFIG `.github/workflows/checks.yml` (Continuous Python and TypeScript tests, pre-commit, and security checks)
 - DOCUMENTS → ADR `ADR-010` (ADR-010 SonarCloud quality: TypeScript complexity gate section + backlog)

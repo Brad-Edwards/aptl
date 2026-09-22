@@ -56,7 +56,7 @@
         "header": "Authorization",
         "apiKey": "Bearer ${SHUFFLE_API_KEY}"
       },
-      "description": "Execute a SOAR workflow/playbook. Pass execution arguments in body. Example: {\"params\": {\"workflow_id\": \"abc-123\"}, \"body\": {\"execution_argument\": {\"alert_id\": \"wazuh-12345\", \"src_ip\": \"172.20.4.30\"}}}"
+      "description": "Execute a SOAR workflow/playbook. The body itself becomes the execution argument. Example: {\"params\": {\"workflow_id\": \"abc-123\"}, \"body\": {\"id\": \"wazuh-12345\", \"data\": {\"srcip\": \"172.20.4.30\"}}}"
     },
     "list_executions": {
       "url": "https://localhost:${APTL_HP_SHUFFLE_FRONTEND_443}/api/v1/workflows/{workflow_id}/executions",

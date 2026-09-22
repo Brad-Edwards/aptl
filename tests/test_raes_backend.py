@@ -614,7 +614,7 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
     assert manifest.evaluator.supports_scoring is False
     assert manifest.evaluator.supports_objectives is True
     assert manifest.evaluator.supported_evidence_channels == frozenset(
-        {"api_response", "log"}
+        {"api_response", "file_artifact", "log"}
     )
     assert manifest.has_participant_runtime is True
     assert manifest.participant_runtime is not None
@@ -1781,6 +1781,58 @@ def test_start_raes_scenario_uses_selected_scenario_path(mocker, tmp_path):
     parser.assert_called_once_with(selected)
 
 
+def test_admission_preserves_valid_plan_when_backend_cannot_materialize(
+    mocker, tmp_path
+):
+    """Backend qualification limits realization, not SDL validity."""
+    from raes_contracts.contracts import ArtifactAvailabilityContext
+
+    from aptl.backends import raes
+
+    _write_compose(tmp_path, {"victim": ["victim"]})
+    scenario = object()
+    mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=scenario)
+    materialization_modes: list[bool] = []
+
+    def inspect_availability(*_args, materialize=False, **_kwargs):
+        materialization_modes.append(materialize)
+        return ArtifactAvailabilityContext(requirements=[])
+
+    mocker.patch(
+        "aptl.backends.raes.artifact_availability_for_scenario",
+        side_effect=inspect_availability,
+    )
+
+    class FakeRuntimeManager(_FakeRuntimeManager):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
+            assert parsed_scenario is scenario
+            return _FakeExecutionPlan(_plan_for_nodes("victim"))
+
+    mocker.patch("aptl.backends.raes.RuntimeManager", FakeRuntimeManager)
+    backend = MagicMock()
+    backend.bind_local_docker_socket.return_value = LabResult(success=True)
+    backend.qualify_runtime_materialization.return_value = LabResult(
+        success=False,
+        error="selected backend cannot safely realize this runtime",
+    )
+
+    admitted = raes.admit_raes_scenario(
+        tmp_path,
+        AptlConfig(lab={"name": "test"}, containers={"victim": True}),
+        backend,
+    )
+
+    assert admitted.execution_plan.is_valid is True
+    assert admitted.execution_plan.diagnostics == []
+    assert admitted.runtime_materialization_failure is not None
+    assert admitted.runtime_materialization_failure.error == (
+        "selected backend cannot safely realize this runtime"
+    )
+    assert materialization_modes == [False]
+    backend.qualify_runtime_materialization.assert_called_once()
+    backend.realize.assert_not_called()
+
+
 def test_start_raes_scenario_passes_runtime_parameters_to_raes_planner(
     mocker, tmp_path
 ):
@@ -2087,8 +2139,8 @@ def test_lab_start_handoff_forwards_the_admission_to_the_backend(mocker, tmp_pat
     assert handoff.call_args.kwargs["admitted"] is admitted
 
 
-def test_start_raes_scenario_does_not_retry_non_soc_apply(mocker, tmp_path):
-    """A retryable apply is not enough; the admitted plan must select SOC."""
+def test_start_raes_scenario_retries_without_named_profile_branch(mocker, tmp_path):
+    """A retryable apply uses the admitted hook without inspecting profile names."""
     from aptl.backends import raes
 
     _write_compose(tmp_path, {"aptl-victim": ["victim"]})
@@ -2122,9 +2174,9 @@ def test_start_raes_scenario_does_not_retry_non_soc_apply(mocker, tmp_path):
 
     assert result.lab_result.success is False
     assert result.retryable is True
-    assert calls == {"plan": 1, "apply": 1}
-    backend.realize.assert_called_once()
-    before_retry.assert_not_called()
+    assert calls == {"plan": 1, "apply": 2}
+    assert backend.realize.call_count == 2
+    before_retry.assert_called_once_with()
 
 
 def _workflow_and_evaluation_execution_plan():
@@ -3761,6 +3813,9 @@ def test_provisioner_records_supported_placement_realizations(tmp_path):
         "spn": "",
         "mail": "operator@techvault.local",
         "disabled": False,
+        # The authored credential class is reported back with the placement, so
+        # the runtime sees which class the backend realized (issue #1006).
+        "password_strength": "weak",
     }
 
     # Real lowering, not counting: the typed backend spec actually passed
@@ -4317,7 +4372,9 @@ def test_readback_retry_accepts_only_async_native_evidence():
     from raes_contracts.diagnostics import Diagnostic, Severity
     from raes_contracts.runtime_state import SnapshotEntry
 
-    from aptl.backends.raes_provisioner import _retryable_readback_gaps
+    from aptl.backends._raes_provisioning_helpers import (
+        retryable_readback_gaps as _retryable_readback_gaps,
+    )
 
     plan = _execution_plan_with_realization_requirements().provisioning
     node_type = next(

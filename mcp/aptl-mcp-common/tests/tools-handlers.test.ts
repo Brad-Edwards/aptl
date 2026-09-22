@@ -250,6 +250,19 @@ describe('handler error paths return a failure envelope', () => {
     } as any,
   };
 
+  it('reports a nonzero remote command exit as unsuccessful', async () => {
+    const context = {
+      ...throwingCtx,
+      sshManager: { executeCommand: vi.fn().mockResolvedValue({
+        stdout: 'session could not start', stderr: '', code: 254,
+      }) } as any,
+    };
+    const result = await handlers.test_run_command({ command: 'id' } as any, context);
+    const body = JSON.parse(result.content[0].text);
+    expect(body.success).toBe(false);
+    expect(body.output.code).toBe(254);
+  });
+
   it.each([
     ['run_command', 'test_run_command', { command: 'whoami' }],
     ['interactive_session', 'test_interactive_session', { session_id: 'sess-1' }],

@@ -177,9 +177,13 @@ def _agent_configured(
     if implementation == "wazuh_agent":
         return _wazuh_agent_configured(backend, container, agent)
     configurations = {
-        "rsyslog": ("/usr/sbin/rsyslogd", _RSYSLOG_CONFIG, _rsyslog_config),
+        "rsyslog": (
+            ["test", "-x", "/usr/sbin/rsyslogd"],
+            _RSYSLOG_CONFIG,
+            _rsyslog_config,
+        ),
         "misp_suricata_sync": (
-            "/usr/local/bin/aptl-misp-suricata-sync",
+            ["sh", "-c", 'test -x "$(command -v aptl-misp-suricata-sync)"'],
             _MISP_SYNC_CONFIG,
             _misp_sync_config,
         ),
@@ -187,11 +191,11 @@ def _agent_configured(
     selected = configurations.get(implementation)
     if selected is None:
         return False
-    executable, path, render = selected
+    executable_probe, path, render = selected
     payload = render(agent)
     return bool(
         payload is not None
-        and _exec_ok(backend, container, ["test", "-x", executable])
+        and _exec_ok(backend, container, executable_probe)
         and _file_digest_matches(backend, container, path, payload)
     )
 

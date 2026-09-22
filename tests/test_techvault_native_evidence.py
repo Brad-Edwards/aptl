@@ -6,13 +6,16 @@ import json
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
+
+from aptl_techvault.evidence import techvault_native
 
 from aptl.core.deployment.realization import (
     DeploymentPublishedPort,
     DeploymentServicePort,
 )
-from aptl.core.evidence.adapters.techvault import TECHVAULT_LOCAL_SIDS
-from aptl.core.evidence.adapters.techvault_native import (
+from aptl_techvault.evidence.techvault import TECHVAULT_LOCAL_SIDS
+from aptl_techvault.evidence.techvault_native import (
     TechVaultNativeDependencies,
     TechVaultNativeEvidenceOwner,
 )
@@ -28,6 +31,7 @@ _DIGEST = "sha256:" + "a" * 64
 def _node(name, *, port=None, address=None, image=None, services=()):
     return SimpleNamespace(
         name=name,
+        container_name=f"aptl-{name}",
         published_ports=(
             (DeploymentPublishedPort(container_port=port, host_port=port),)
             if port is not None
@@ -55,6 +59,15 @@ def _realization(project_dir: Path):
         provenance="techvault:cortex-service-credentials/v1",
         outputs=(output,),
     )
+    ca_path = project_dir / "config/soc_certs/lab-ca.pem"
+    ca_path.parent.mkdir(parents=True, exist_ok=True)
+    ca_path.write_text("public-test-ca\n", encoding="utf-8")
+    ca_artifact = SimpleNamespace(
+        name="techvault-soc-certificates",
+        generator="certificate_bundle",
+        provenance="techvault:soc-certificate-profile/v1",
+        outputs=(SimpleNamespace(name="ca-certificate", path="lab-ca.pem"),),
+    )
     image = SimpleNamespace(image_ref="jasonish/suricata@" + _DIGEST)
     content = (
         SimpleNamespace(
@@ -76,6 +89,7 @@ def _realization(project_dir: Path):
         nodes=(
             _node("cortex", port=9001),
             _node("thehive", port=9000),
+            _node("wazuh-manager", port=55000),
             _node("wazuh-indexer", port=9200),
             _node("suricata", image=image),
             _node("kali", address="172.20.1.30"),
@@ -86,13 +100,14 @@ def _realization(project_dir: Path):
             ),
         ),
         placements=content,
-        generated_artifacts=(artifact,),
+        generated_artifacts=(artifact, ca_artifact),
     )
 
 
 class _Backend:
     def __init__(self):
         self.probe_payload = ""
+        self.exec_calls = []
 
     @staticmethod
     def container_inspect(_name):
@@ -117,15 +132,28 @@ class _Backend:
         assert "-f" not in cmd[1]
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
-    @staticmethod
-    def container_exec(_name, cmd, *, timeout):
-        event = {
-            "timestamp": _FINISH,
-            "src_ip": "172.20.1.30",
-            "dest_ip": "172.20.1.20",
-            "flow_id": 42,
-            "alert": {"signature_id": 1000010},
-        }
+    def container_exec(self, name, cmd, *, timeout):
+        self.exec_calls.append((name, cmd, timeout))
+        event = (
+            {
+                "timestamp": _FINISH,
+                "rule": {"id": "303020"},
+                "data": {
+                    "flow_id": "42.000000",
+                    "src_ip": "172.20.1.30",
+                    "dest_ip": "172.20.1.20",
+                    "alert": {"signature_id": 1000010},
+                },
+            }
+            if name == "aptl-wazuh-manager"
+            else {
+                "timestamp": _FINISH,
+                "src_ip": "172.20.1.30",
+                "dest_ip": "172.20.1.20",
+                "flow_id": 42,
+                "alert": {"signature_id": 1000010},
+            }
+        )
         return subprocess.CompletedProcess(cmd, 0, json.dumps(event) + "\n", "")
 
 
@@ -145,6 +173,8 @@ def _request(url, **kwargs):
             "report": {"full": {"scenario_role": "attacker", "secret": "drop"}},
         }
     if url.endswith("/api/v1/status"):
+        assert url.startswith("https://127.0.0.1:9000/")
+        assert kwargs["ca_cert_path"].endswith("/config/soc_certs/lab-ca.pem")
         return {"services": [{"name": "Cortex", "status": "OK"}]}
     if url.endswith("/_search"):
         return {
@@ -184,12 +214,47 @@ def _owner(tmp_path, backend=None, request_json=_request):
     )
 
 
-def test_native_owner_wires_only_the_three_native_registrations(tmp_path):
+def test_native_owner_wires_exactly_the_native_registrations(tmp_path):
+    """Every source the native owner offers can actually produce its evidence.
+
+    A source without the state it compares against would accept whatever it
+    observed, so the MISP readiness source is offered only when the plan admits
+    MISP. This realization does not, and its absence leaves the demand
+    uncovered rather than covered by something that cannot decide it.
+    """
+
     assert set(_owner(tmp_path).sources()) == {
         "aptl.collector.cortex-enrichment",
         "aptl.collector.suricata-rule-readiness",
         "aptl.collector.suricata-wazuh-sqli",
+        "aptl.collector.wazuh-agent-readiness",
     }
+
+
+def test_the_misp_source_appears_once_the_plan_admits_a_state_to_compare(tmp_path):
+    """And it carries the admitted values, not defaults of its own."""
+
+    from aptl_techvault.evidence.techvault_misp_readiness import AdmittedMispState
+    from aptl_techvault.evidence.techvault_native_readiness import (
+        admitted_misp_state,
+    )
+
+    owner = _owner(tmp_path)
+    admitted = AdmittedMispState(
+        canonical_url="https://misp.techvault.local",
+        database_identity="misp",
+        database_role="misp",
+        cache_persistence_policy="no",
+        cache_eviction_policy="noeviction",
+    )
+    with mock.patch.object(
+        techvault_native, "admitted_misp_state", return_value=admitted
+    ):
+        sources = owner.sources()
+
+    assert "aptl.collector.misp-authenticated-api-readiness" in sources
+    # The helper reads the admitted plan; it invents nothing when MISP is absent.
+    assert admitted_misp_state(owner._realization) is None
 
 
 def test_cortex_owner_executes_exact_analyzer_and_projects_no_full_report(tmp_path):
@@ -220,9 +285,33 @@ def test_cortex_owner_uses_runtime_thehive_api_key_without_admin_fallback(tmp_pa
     assert result.status is CollectorStatus.OK
     status_request = next(item for item in requests if item[0].endswith("/status"))
     assert status_request[1]["auth_header"] == "Bearer operator-api-key"
+    assert status_request[0].startswith("https://127.0.0.1:9000/")
     assert status_request[1]["ca_cert_path"] == str(
         tmp_path / "config/soc_certs/lab-ca.pem"
     )
+
+
+def test_cortex_owner_fails_closed_when_declared_thehive_ca_is_missing(tmp_path):
+    realization = _realization(tmp_path)
+    (tmp_path / "config/soc_certs/lab-ca.pem").unlink()
+    requests = []
+
+    def request(url, **kwargs):
+        requests.append((url, kwargs))
+        return _request(url, **kwargs)
+
+    owner = TechVaultNativeEvidenceOwner(
+        backend=_Backend(),
+        realization=realization,
+        project_dir=tmp_path,
+        indexer_auth=("admin", "password"),
+        thehive_api_key="operator-api-key",
+        dependencies=TechVaultNativeDependencies(request_json=request),
+    )
+    result = owner.sources()["aptl.collector.cortex-enrichment"].fetch(_START, _END)
+
+    assert result.status is CollectorStatus.SOURCE_UNAVAILABLE
+    assert requests == []
 
 
 def test_cortex_owner_polls_until_thehive_connector_refreshes(tmp_path):
@@ -233,11 +322,7 @@ def test_cortex_owner_polls_until_thehive_connector_refreshes(tmp_path):
         if url.endswith("/api/v1/status"):
             status_calls += 1
             if status_calls == 1:
-                return {
-                    "connectors": {
-                        "cortex": {"status": "ERROR", "servers": []}
-                    }
-                }
+                return {"connectors": {"cortex": {"status": "ERROR", "servers": []}}}
         return _request(url, **kwargs)
 
     result = (
@@ -279,6 +364,83 @@ def test_sqli_owner_keeps_probe_body_off_argv_and_requires_flow_join(tmp_path):
     assert "UNION" in backend.probe_payload
     assert '"flow_id":"42"' in b"".join(result.chunks).decode()
     assert result.observer_effect == "one fixed POST /login containing UNION SELECT"
+
+
+def test_sqli_owner_reads_wazuh_half_from_declared_manager_log_not_indexer(tmp_path):
+    backend = _Backend()
+    requests = []
+
+    result = (
+        _owner(
+            tmp_path,
+            backend,
+            request_json=lambda *args, **kwargs: requests.append((args, kwargs)),
+        )
+        .sources()["aptl.collector.suricata-wazuh-sqli"]
+        .fetch(_START, _END)
+    )
+
+    assert result.status is CollectorStatus.OK
+    assert requests == []
+    manager_reads = [
+        call for call in backend.exec_calls if call[0] == "aptl-wazuh-manager"
+    ]
+    assert manager_reads == [
+        (
+            "aptl-wazuh-manager",
+            [
+                "tail",
+                "-c",
+                str(techvault_native.MAX_SOURCE_BYTES),
+                "/var/ossec/logs/alerts/alerts.json",
+            ],
+            30,
+        )
+    ]
+
+
+def test_wazuh_manager_log_discloses_loss_when_correlated_record_is_absent(tmp_path):
+    backend = _Backend()
+    backend.container_exec = lambda name, cmd, *, timeout: subprocess.CompletedProcess(
+        cmd,
+        0,
+        "{partial\n"
+        if name == "aptl-wazuh-manager"
+        else _Backend().container_exec(name, cmd, timeout=timeout).stdout,
+        "",
+    )
+
+    result = (
+        _owner(tmp_path, backend)
+        .sources()["aptl.collector.suricata-wazuh-sqli"]
+        .fetch(_START, _END)
+    )
+
+    assert result.status is CollectorStatus.MID_RUN_LOSS
+
+
+def test_suricata_query_reads_recent_events_from_a_large_native_log(tmp_path):
+    log = tmp_path / "eve.json"
+    event = {
+        "timestamp": _FINISH,
+        "src_ip": "172.20.1.40",
+        "dest_ip": "172.20.1.20",
+        "flow_id": 42,
+        "alert": {"signature_id": 1000010},
+    }
+    # Exercise the real tail command, including a cut through an older line.
+    log.write_text(
+        "x" * (techvault_native.MAX_SOURCE_BYTES + 100)
+        + "\n"
+        + json.dumps(event)
+        + "\n"
+    )
+    backend = _Backend()
+    backend.container_exec = lambda _name, argv, *, timeout: subprocess.run(
+        [*argv[:-1], str(log)], capture_output=True, text=True, timeout=timeout
+    )
+
+    assert _owner(tmp_path, backend).query_suricata(_START, _END) == [event]
 
 
 def test_missing_connector_credential_is_source_unavailable(tmp_path):

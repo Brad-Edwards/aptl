@@ -1,7 +1,7 @@
 """Runtime environment binding and closed-scope preservation.
 
 The generic binding path remains available for scenarios that author runtime
-environment requirements.  TechVault 6.0.1 deliberately does not: its portable
+environment requirements.  TechVault 6.1.0 deliberately does not: its portable
 semantic state leaves backend mechanics out of the scenario and resolves the
 unspecified environment and mount scopes CLOSED.  APTL must preserve that
 absence rather than restoring old Docker Compose details behind the author's
@@ -57,7 +57,7 @@ def _spec(names: tuple[str, ...]) -> BaseContainerSpec:
     return BaseContainerSpec(
         node_address="provision.node.webapp",
         container_name="aptl-webapp",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=True,
         environment_names=names,
     )
@@ -212,7 +212,7 @@ def test_credentials_and_operator_overrides_beat_authored_defaults(
     spec = BaseContainerSpec(
         node_address="provision.node.webapp",
         container_name="aptl-webapp",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=True,
         environment_names=("DB_HOST", "DB_NAME", "DB_PORT"),
         environment_defaults=(

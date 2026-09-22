@@ -20,8 +20,6 @@ from aptl.backends.pack_interaction_discovery import (
     PackBackendInteractionError,
     resolve_pack_backend_interaction,
 )
-from aptl.backends.raes_profiles import CORE_PROFILES, OPERATOR_GROUP_VOCABULARY
-from aptl.core.config import ContainerSettings
 from aptl.core.scenario_bundle import PackIdentity
 
 
@@ -42,7 +40,6 @@ def _context(*addresses: str) -> PackBackendInteractionContext:
         pack=PACK,
         backend=BACKEND,
         component_addresses=tuple(addresses or ("provision.node.a", "provision.node.b")),
-        operator_groups=OPERATOR_GROUP_VOCABULARY,
     )
 
 
@@ -115,12 +112,18 @@ def _provider_contract(**overrides: object) -> SimpleNamespace:
     return SimpleNamespace(**values)
 
 
-def test_operator_group_vocabulary_has_one_code_owned_source() -> None:
-    assert OPERATOR_GROUP_VOCABULARY == tuple(
-        (*ContainerSettings.model_fields, *CORE_PROFILES)
+def test_operator_group_vocabulary_comes_from_the_provider_mapping(monkeypatch) -> None:
+    provider = _Provider(
+        (
+            ComponentGroupMembership("provision.node.a", ("blue-team",)),
+            ComponentGroupMembership("provision.node.b", ()),
+        )
     )
-    assert len(OPERATOR_GROUP_VOCABULARY) == len(set(OPERATOR_GROUP_VOCABULARY))
-    assert "web" not in OPERATOR_GROUP_VOCABULARY
+    _install(monkeypatch, _EntryPoint("techvault.aptl", provider))
+
+    assert resolve_pack_backend_interaction(_context()).operator_groups == (
+        "blue-team",
+    )
 
 
 def test_the_framework_holds_no_pack_specific_serving_logic() -> None:
@@ -202,10 +205,6 @@ def test_exact_provider_is_loaded_once_and_host_metadata_is_recorded(monkeypatch
             ComponentGroupMembership("provision.node.a", ()),
             ComponentGroupMembership("provision.node.b", ()),
             ComponentGroupMembership("provision.node.extra", ()),
-        ),
-        (
-            ComponentGroupMembership("provision.node.a", ("web",)),
-            ComponentGroupMembership("provision.node.b", ()),
         ),
     ],
 )
@@ -356,7 +355,6 @@ def test_transport_constraint_matches_the_actual_backend_transport(monkeypatch) 
             transport="ssh-compose",
         ),
         component_addresses=("provision.node.a", "provision.node.b"),
-        operator_groups=OPERATOR_GROUP_VOCABULARY,
     )
 
     resolved = resolve_pack_backend_interaction(context)

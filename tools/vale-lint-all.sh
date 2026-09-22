@@ -5,7 +5,7 @@
 # The exclusions mirror the per-path `BasedOnStyles =` resets in
 # .vale.ini (generated artifacts, agent-facing contracts, dated
 # point-in-time records) plus files Vale cannot parse. The
-# vale-prose-lint hook in .pre-commit-config.yaml carries the same
+# former vale-prose-lint hook carried the same
 # regex in its `exclude:` — keep the two in sync.
 set -euo pipefail
 

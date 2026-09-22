@@ -20,6 +20,7 @@ import subprocess
 import sys
 import termios
 import time
+import tty
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -389,6 +390,7 @@ def inner_ssh_command(original_command: str | None) -> list[str]:
         "StrictHostKeyChecking=yes",
         "-o",
         f"UserKnownHostsFile={_INNER_KNOWN_HOSTS}",
+        "--",
         "kali@127.0.0.1",
     ]
     if original_command:
@@ -440,6 +442,19 @@ def _relay(
     return child.wait(timeout=10)
 
 
+@contextmanager
+def _raw_terminal(fd: int) -> Iterator[None]:
+    if not os.isatty(fd):
+        yield
+        return
+    saved = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd, when=termios.TCSANOW)
+        yield
+    finally:
+        termios.tcsetattr(fd, termios.TCSANOW, saved)
+
+
 def run_broker() -> int:
     recorder: SessionRecorder | None = None
     pid_path: Path | None = None
@@ -458,8 +473,9 @@ def run_broker() -> int:
             if (_RUNTIME_ROOT / "quiesce").exists():
                 raise ValueError("capture session admission is closed")
             session_id = session_identity_from_environment(authority)
-            pid_path = _RUNTIME_ROOT / "sessions" / f"{session_id}.pid"
-            _write_exclusive(pid_path, f"{os.getpid()}\n".encode())
+            registration = _RUNTIME_ROOT / "sessions" / f"{session_id}.pid"
+            _write_exclusive(registration, f"{os.getpid()}\n".encode())
+            pid_path = registration
             try:
                 recorder = SessionRecorder(
                     _CAPTURE_ROOT,
@@ -472,16 +488,17 @@ def run_broker() -> int:
         original = os.environ.get("SSH_ORIGINAL_COMMAND")
         master, slave = pty.openpty()
         _copy_window_size(sys.stdin.fileno(), slave)
-        child = subprocess.Popen(
-            inner_ssh_command(original),
-            stdin=slave,
-            stdout=slave,
-            stderr=slave,
-            start_new_session=True,
-        )
-        os.close(slave)
-        slave = -1
-        returncode = _relay(child, master, recorder)
+        with _raw_terminal(sys.stdin.fileno()):
+            child = subprocess.Popen(
+                inner_ssh_command(original),
+                stdin=slave,
+                stdout=slave,
+                stderr=slave,
+                start_new_session=True,
+            )
+            os.close(slave)
+            slave = -1
+            returncode = _relay(child, master, recorder)
         close_reason = "clean-exit" if returncode == 0 else "remote-eof"
         return returncode
     except _ForcedTeardown:

@@ -1,4 +1,4 @@
-"""Model-derived reduced-surface matrix for curated RAES startup variants.
+"""Model-derived runtime matrices for packaged and curated RAES scenarios.
 
 Issue #535 live-proves the small catalog variants from
 ``docs/sdl/techvault-curated-variants.md`` by booting them through the public
@@ -26,12 +26,10 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from raes_runtime.manager import RuntimeManager
 from raes import parse_sdl_file
 
 from aptl.backends.raes import create_aptl_runtime_target
 from aptl.backends.raes_participant_runtime import PARTICIPANT_ACTION_ADDRESS
-from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.backends.raes_profiles import (
     load_compose_profile_index,
     normalized_identifier_aliases,
@@ -39,8 +37,10 @@ from aptl.backends.raes_profiles import (
     steady_state_service_aliases_for_profiles,
 )
 from aptl.backends.raes_realization import interpret_provisioning_plan
+from aptl.backends.raes_realization_model import AptlRealization
 from aptl.core.config import AptlConfig
 from aptl.core.deployment import get_backend
+from aptl.core.scenario_bundle import ScenarioBundle, project_tree_bundle
 from aptl.core.snapshot import capture_snapshot
 from aptl.validation._gate_checks import _NoStartBackend
 from aptl.validation.participant_live_proof import (
@@ -53,7 +53,7 @@ from aptl.validation.range_snapshot_summary import (
 
 @dataclass(frozen=True)
 class ExpectedMatrix(object):
-    """The reduced live surface a curated variant should realize.
+    """The live workload and network surface the admitted scenario should realize.
 
     ``service_aliases`` / ``network_aliases`` map each expected Compose service
     and network to its normalized alias set, so the comparison can bind a
@@ -92,18 +92,19 @@ def expected_reduced_matrix(
     expected steady-state Compose services and networks to that selected profile
     set through the shared ``ComposeProfileIndex``. No Docker is started.
     """
-    scenario = parse_sdl_file(scenario_path)
-    bundle = project_tree_bundle(project_dir, scenario_path)
-    target = create_aptl_runtime_target(
-        project_dir=project_dir,
-        config=config,
-        backend=_NoStartBackend(),
-        bundle=bundle,
+    return expected_bundle_matrix(
+        project_dir, config, project_tree_bundle(project_dir, scenario_path)
     )
-    execution_plan = RuntimeManager(target).plan(scenario)
-    realization = interpret_provisioning_plan(
-        plan=execution_plan.provisioning, config=config, bundle=bundle
-    )
+
+
+def expected_bundle_matrix(
+    project_dir: Path,
+    config: AptlConfig,
+    bundle: ScenarioBundle,
+) -> ExpectedMatrix:
+    """Derive either full packaged or curated surfaces from the canonical bundle."""
+    scenario_path = bundle.sdl_path
+    realization = bundle_realization(project_dir, config, bundle)
     selected_profiles = select_backend_profiles(config, realization.profiles)
 
     details = realization.details()
@@ -115,19 +116,22 @@ def expected_reduced_matrix(
         )
     )
 
-    service_aliases = steady_state_service_aliases_for_profiles(
-        bundle.root, selected_profiles
-    )
-    index = load_compose_profile_index(bundle.root)
-    network_aliases: dict[str, frozenset[str]] = {}
-    for service_name in service_aliases:
-        service = index.services.get(service_name)
-        if service is None:
-            continue
-        for network in service.networks:
-            network_aliases.setdefault(
-                network, frozenset(normalized_identifier_aliases(network))
-            )
+    if bundle.pack_identity is not None:
+        service_aliases, network_aliases = _pack_runtime_aliases(realization)
+    else:
+        service_aliases = steady_state_service_aliases_for_profiles(
+            project_dir, selected_profiles
+        )
+        index = load_compose_profile_index(project_dir)
+        network_aliases: dict[str, frozenset[str]] = {}
+        for service_name in service_aliases:
+            service = index.services.get(service_name)
+            if service is None:
+                continue
+            for network in service.networks:
+                network_aliases.setdefault(
+                    network, frozenset(normalized_identifier_aliases(network))
+                )
 
     return ExpectedMatrix(
         scenario=scenario_path.name,
@@ -140,6 +144,53 @@ def expected_reduced_matrix(
         },
         network_aliases=network_aliases,
     )
+
+
+def _pack_runtime_aliases(
+    realization: AptlRealization,
+) -> tuple[dict[str, frozenset[str]], dict[str, frozenset[str]]]:
+    """Pack runtime nodes are authoritative; Compose catalog extras are not nodes."""
+    services = {}
+    for node in realization.nodes:
+        names = (node.name, node.container_name, *node.backend_services)
+        services[node.name] = frozenset().union(
+            *(normalized_identifier_aliases(name) for name in names if name)
+        )
+    networks = {
+        network.name: frozenset(normalized_identifier_aliases(network.name))
+        for network in realization.networks
+    }
+    return services, networks
+
+
+def bundle_realization(
+    project_dir: Path, config: AptlConfig, bundle: ScenarioBundle
+) -> AptlRealization:
+    """Reuse canonical admission for package input inventory without starting Docker."""
+    scenario_path = bundle.sdl_path
+    scenario = parse_sdl_file(scenario_path)
+    target = create_aptl_runtime_target(
+        project_dir=project_dir,
+        config=config,
+        backend=_NoStartBackend(),
+        bundle=bundle,
+    )
+    from aptl.backends.raes_planning_compat import (
+        AptlPlanningOptions,
+        plan_aptl_scenario,
+    )
+    from aptl.backends.scenario_runtime_parameters import resolve_runtime_parameters
+
+    execution_plan = plan_aptl_scenario(
+        target=target,
+        bundle=bundle,
+        scenario=scenario,
+        options=AptlPlanningOptions(parameters=resolve_runtime_parameters(bundle)),
+    )
+    realization = interpret_provisioning_plan(
+        plan=execution_plan.provisioning, config=config, bundle=bundle
+    )
+    return realization
 
 
 def _running_container_names(snapshot: Mapping[str, object]) -> list[str]:

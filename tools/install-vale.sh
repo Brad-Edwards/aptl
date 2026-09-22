@@ -30,7 +30,7 @@ STYLES_DIR="${REPO_ROOT}/.vale/styles"
 GOOGLE_STYLE_DIR="${STYLES_DIR}/Google"
 
 # Run `vale sync` against the repo's .vale.ini to populate the configured
-# styles (StylesPath / Packages) deterministically so `make policy` does not
+# styles (StylesPath / Packages) deterministically so the CI prose gate does not
 # depend on developer-supplied style files.
 sync_vale_styles() {
     if [ ! -f "${REPO_ROOT}/.vale.ini" ]; then

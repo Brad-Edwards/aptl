@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from raes.runtime_configuration import RuntimeConfiguration
 
 from aptl.backends._runtime_concern_disclosure import _disclose
+from aptl.backends.raes_package_managers import apt_package_rows, query_installed_argv
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
@@ -88,14 +89,14 @@ def _query_packages(
     """Query one supported package manager without invoking a shell."""
 
     if manager == "apt":
-        command = [
-            "dpkg-query",
-            "-W",
-            "-f=${Package}\\t${Version}\\t${Architecture}\\n",
-            *names,
-        ]
-        result = backend.container_exec(container_name, command, timeout=30)
-        rows = _tabular_packages(result, fields=3)
+        result = backend.container_exec(
+            container_name, query_installed_argv("apt", names), timeout=30
+        )
+        rows = (
+            apt_package_rows(_stdout(result))
+            if getattr(result, "returncode", 1) == 0
+            else None
+        )
     elif manager in {"dnf", "yum"}:
         command = [
             "rpm",

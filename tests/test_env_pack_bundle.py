@@ -1,17 +1,19 @@
-"""The pack-backed bundle resolver: APTL realizes the scenario from an env-pack.
+"""Released-pack compatibility: APTL admits the TechVault pack it ships against.
 
-Content #875: APTL must realize TechVault from the ``raes-env-packs`` pack, not
-its own checkout. The env-pack ships inside the installed ``raes_env_packs``
+Content #875: APTL realizes TechVault from the ``raes-env-packs`` pack, not its
+own checkout. The env-pack ships inside the installed ``raes_env_packs``
 package; APTL's job (its side of the ADR-046 seam) is *trusted source
 acquisition*: locate the bundled pack, stage an immutable owned copy, and refuse
 to use it unless env-packs' own ``validate_pack`` /
-``validate_pack_content_manifest`` gates pass. The staged root becomes the
-``ScenarioBundle`` root every downstream consumer already resolves against.
+``validate_pack_content_manifest`` gates pass.
 
-Staging is not incidental: a pip/uv install hardlinks package files, and
-env-packs refuses any pack member that is not a singly-linked regular file, so
-the bundled location cannot be validated in place. Staging a fresh copy is what
-makes the pack a singly-linked, containment-checked, owned tree.
+These cases pin the *released* pack: its exact content identity, the evidence
+contracts it still owns, and the configured default selection that resolves it.
+The generic resolver behaviour -- staging isolation, singly-linked members,
+containment, bytecode exclusion and fail-closed admission -- is proven against
+APTL's owned fixture pack in ``tests/test_scenario_bundle.py`` (issue #985), so a
+pack release cannot break it. The ``pack-identity-compatibility`` CI job runs
+this module.
 """
 
 from __future__ import annotations
@@ -24,7 +26,6 @@ import pytest
 from aptl.core.scenario_bundle import (
     EnvPackError,
     PackIdentity,
-    PathContainmentError,
     ScenarioSourceKind,
     env_pack_bundle,
 )
@@ -32,14 +33,53 @@ from aptl.core.scenario_bundle import (
 pytestmark = pytest.mark.integration
 
 
-def test_released_pack_owns_only_scenario_and_retains_all_four_evidence_contracts(
+def test_directory_and_bundled_acquisition_preserve_the_same_identity(tmp_path):
+    bundled = env_pack_bundle(tmp_path / "bundled")
+    acquired = env_pack_bundle(tmp_path / "acquired", source_pack=bundled.root)
+    assert acquired.pack_identity == bundled.pack_identity
+    assert acquired.sdl_path.read_bytes() == bundled.sdl_path.read_bytes()
+    assert acquired.root != bundled.root
+
+
+@pytest.mark.parametrize("linked", ["pack.yaml", "sdl"])
+def test_acquisition_rejects_source_links_before_copying(tmp_path, linked):
+    source = env_pack_bundle(tmp_path / "source").root
+    original = source / linked
+    outside = tmp_path / ("outside-" + linked)
+    original.rename(outside)
+    original.symlink_to(outside, target_is_directory=outside.is_dir())
+    with pytest.raises(EnvPackError, match="unsafe source"):
+        env_pack_bundle(tmp_path / "destination", source_pack=source)
+
+
+def test_new_acquisition_does_not_delete_long_running_input(tmp_path):
+    import time
+
+    root = tmp_path / "staged"
+    active = env_pack_bundle(root)
+    old = time.time() - 7200
+    os.utime(active.root.parent, (old, old))
+    env_pack_bundle(root)
+    assert active.sdl_path.is_file()
+    assert active.read_asset("pack.yaml")
+
+
+@pytest.mark.parametrize("identity", ["../escape", "/tmp/escape", "a/b", ".", ".."])
+def test_direct_acquisition_rejects_path_like_identity(tmp_path, identity):
+    source = tmp_path / "source"
+    source.mkdir()
+    with pytest.raises(EnvPackError, match="identity"):
+        env_pack_bundle(tmp_path / "staged", identity, source_pack=source)
+
+
+def test_released_pack_owns_only_scenario_and_retains_its_evidence_contracts(
     tmp_path,
 ):
     from importlib.metadata import version
     from raes import parse_sdl
     from raes_processor.capture_admission import compile_scenario_capture_demands
 
-    assert version("raes-env-packs") == "6.0.1"
+    assert version("raes-env-packs") == "6.1.0"
     assert version("raes") == "5.0.0"
     bundle = env_pack_bundle(tmp_path / "released", "techvault")
     scenario = parse_sdl(bundle.sdl_path.read_text())
@@ -48,9 +88,11 @@ def test_released_pack_owns_only_scenario_and_retains_all_four_evidence_contract
     )
     assert set(scenario.evidence_requirements) == {
         "cortex-enrichment-readback",
+        "misp-authenticated-api-readiness",
         "suricata-local-rule-readiness",
         "suricata-login-sqli-alert",
         "redteam-session-transcript",
+        "wazuh-agent-readiness",
     }
     transcript = scenario.evidence_requirements["redteam-session-transcript"]
     assert transcript.integrity == "chain_of_custody"
@@ -79,7 +121,7 @@ def test_env_pack_bundle_stages_and_validates_the_bundled_techvault_pack(
         pack_id="techvault",
         pack_version="0.1.0",
         set_digest=(
-            "sha256:edd3bb6252990aeaf506904767182d5a3ef2b3828a498fe64c897dccaf954934"
+            "sha256:db98a9daa62a092a0c6b001217027d7f4ad489889e95d01050e77f148e8ef29b"
         ),
     )
     # The bundle roots at the staged copy, never at the installed package.
@@ -88,46 +130,6 @@ def test_env_pack_bundle_stages_and_validates_the_bundled_techvault_pack(
     assert bundle.sdl_path.is_file()
     assert (bundle.root / "pack.yaml").is_file()
     assert (bundle.root / "associated-artifacts.json").is_file()
-
-
-def test_staged_pack_members_are_singly_linked_regular_files(tmp_path: Path) -> None:
-    # The installer hardlinks package data (st_nlink >= 2); staging must yield
-    # fresh singly-linked files or env-packs' validator rejects the pack.
-    bundle = env_pack_bundle(tmp_path / "staged", "techvault")
-    assert os.stat(bundle.root / "pack.yaml").st_nlink == 1
-
-    # And env-packs' own gate passes on the staged root.
-    from raes_env_packs import validate_pack
-
-    result = validate_pack(str(bundle.root))
-    assert getattr(result, "ok", None) is True
-    assert not getattr(result, "diagnostics", [])
-
-
-def test_read_asset_is_contained_to_the_staged_root(tmp_path: Path) -> None:
-    bundle = env_pack_bundle(tmp_path / "staged", "techvault")
-    # A real in-pack asset reads back.
-    assert bundle.read_asset("pack.yaml")
-    # A path escaping the staged root is refused, not silently satisfied from
-    # elsewhere.
-    with pytest.raises(PathContainmentError):
-        bundle.read_asset("../pack.yaml")
-
-
-def test_resolver_fails_closed_on_an_invalid_pack(tmp_path: Path) -> None:
-    # A source that is not a valid pack must raise, never return a usable bundle.
-    broken = tmp_path / "broken-pack"
-    broken.mkdir()
-    (broken / "pack.yaml").write_text("name: broken\n", encoding="utf-8")
-    with pytest.raises(EnvPackError):
-        env_pack_bundle(tmp_path / "staged", "broken", source_pack=broken)
-
-
-def test_resolver_fails_closed_on_a_missing_pack(tmp_path: Path) -> None:
-    with pytest.raises(EnvPackError):
-        env_pack_bundle(
-            tmp_path / "staged", "nope", source_pack=tmp_path / "does-not-exist"
-        )
 
 
 def test_scenario_selection_resolves_the_env_pack_when_configured(
@@ -147,122 +149,3 @@ def test_scenario_selection_resolves_the_env_pack_when_configured(
     local = tmp_path / "scenarios" / "custom.sdl.yaml"
     override = resolve_scenario_bundle(tmp_path, local, config)
     assert override.source_kind is ScenarioSourceKind.PROJECT_TREE
-
-
-def test_concurrent_staging_of_one_root_each_gets_a_valid_isolated_tree(
-    tmp_path: Path,
-) -> None:
-    """Concurrent staging to one root must give every caller a valid tree.
-
-    Several suites stage the default pack under one shared root; under -n auto
-    two workers staging the same tree at once would otherwise rmtree/copytree
-    over each other and one would read a half-copied pack ("associated artifact
-    manifest failed RAES byte binding"). Per-invocation isolation gives each
-    caller its own fresh directory, so all concurrent stages succeed and none
-    share a tree another is copying (issue #875).
-    """
-
-    from concurrent.futures import ThreadPoolExecutor
-
-    staging = tmp_path / "staged-packs"
-
-    def _stage() -> Path:
-        return env_pack_bundle(staging, "techvault").sdl_path
-
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        results = [f.result() for f in [pool.submit(_stage) for _ in range(16)]]
-
-    # Every concurrent stage returned a valid staged SDL (a raise on a
-    # half-copied tree would surface through f.result()), and each is its own
-    # isolated tree under the shared root.
-    assert len(results) == 16
-    assert len({p for p in results}) == 16
-    assert all(p.is_file() and p.name == "techvault.sdl.yaml" for p in results)
-    assert all(staging in p.parents for p in results)
-
-
-def test_staging_excludes_installer_bytecode_from_the_pack(tmp_path: Path) -> None:
-    """A pip install byte-compiles the pack's .py files in place; staging must
-    not carry the resulting __pycache__/*.pyc, or the env-packs exact-inventory
-    gate rejects the staged tree (the manifest never lists bytecode). uv does not
-    compile, so this only bites under pip -- i.e. in CI (issue #875).
-    """
-
-    import compileall
-    import shutil as _shutil
-
-    from aptl.core.scenario_bundle import env_pack_bundle as _bundle
-
-    # A real, valid source pack copied out of the installed package, then
-    # byte-compiled in place exactly as pip would on install.
-    installed = Path(
-        str(
-            __import__("importlib.resources", fromlist=["files"]).files(
-                "raes_env_packs"
-            )
-            / "resources"
-            / "packs"
-            / "techvault"
-        )
-    )
-    source = tmp_path / "src" / "techvault"
-    _shutil.copytree(installed, source)
-    compileall.compile_dir(str(source), quiet=1)
-    assert list(source.rglob("__pycache__")), "precondition: source has bytecode"
-
-    bundle = _bundle(tmp_path / "staged", "techvault", source_pack=source)
-
-    # The staged tree carries no bytecode and passes env-packs' own gate.
-    assert not list(bundle.root.rglob("__pycache__"))
-    assert not list(bundle.root.rglob("*.pyc"))
-    assert bundle.sdl_path.is_file()
-
-
-def test_a_changed_source_pack_is_restaged_not_reused(tmp_path: Path) -> None:
-    """A new pack release (different set digest) re-stages; it is not reused.
-
-    Reuse keys on the pack's associated-artifacts set digest, so staging the
-    same identity from a source whose content changed must replace the staged
-    tree rather than serve the previous release's bytes (issue #875).
-    """
-
-    import json
-    import shutil
-
-    from aptl.core.scenario_bundle import env_pack_bundle as _bundle
-
-    # A first source, staged once.
-    src_a = tmp_path / "src-a" / "demo"
-    (src_a / "sdl").mkdir(parents=True)
-    (src_a / "sdl" / "demo.sdl.yaml").write_text("version: 1\n", encoding="utf-8")
-    (src_a / "associated-artifacts.json").write_text(
-        json.dumps({"set_digest": "sha256:aaaa"}), encoding="utf-8"
-    )
-    staging = tmp_path / "staged"
-
-    def _stage(source: Path):
-        # Bypass env-packs' full validator (the synthetic packs here are minimal);
-        # exercise only the stage/reuse decision in _stage_and_validate.
-        import aptl.core.scenario_bundle as sb
-
-        original = sb._validate_staged_pack
-        sb._validate_staged_pack = lambda *_a, **_k: None
-        try:
-            return _bundle(staging, "demo", source_pack=source)
-        finally:
-            sb._validate_staged_pack = original
-
-    first = _stage(src_a)
-    assert first.sdl_path.read_text(encoding="utf-8") == "version: 1\n"
-
-    # A second source at the same identity with different content + set digest.
-    src_b = tmp_path / "src-b" / "demo"
-    shutil.copytree(src_a, src_b)
-    (src_b / "sdl" / "demo.sdl.yaml").write_text("version: 2\n", encoding="utf-8")
-    (src_b / "associated-artifacts.json").write_text(
-        json.dumps({"set_digest": "sha256:bbbb"}), encoding="utf-8"
-    )
-
-    second = _stage(src_b)
-    # The changed source is realized, not the reused first-release bytes.
-    assert second.sdl_path.read_text(encoding="utf-8") == "version: 2\n"

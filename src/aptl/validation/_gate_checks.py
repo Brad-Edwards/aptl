@@ -27,6 +27,14 @@ from aptl.backends.raes import (
 from aptl.backends.raes_artifact_availability import (
     artifact_availability_for_scenario,
 )
+from aptl.backends.identity import (
+    APTL_RAES_TARGET_PROFILE,
+    APTL_RAES_TARGET_VERSION,
+    BackendIdentity,
+)
+from aptl.backends.raes_evidence import admit_sdl_evidence
+from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME
+from aptl.core.experiment.capture_plan import empty_capture_plan
 from aptl.backends._raes_conformance_probe import APTL_TARGET_CONFORMANCE_SCENARIO
 from aptl.backends.raes_planning_compat import AptlPlanningOptions, plan_aptl_scenario
 from aptl.backends.raes_profiles import public_start_profiles, select_backend_profiles
@@ -201,49 +209,8 @@ def check_provisioning_realization(
 ) -> tuple[Mapping[str, object] | None, GateCheck]:
     """Interpret the provisioning plan and confirm it realizes nodes/services/networks."""
     try:
-        # Config-driven bundle: the configured env-pack when selected, else the
-        # in-tree scenario (issue #875). Scenario content anchors to the bundle
-        # root, but APTL's own component build contexts (``containers/``) always
-        # resolve from the engine checkout — a pack ships none — so component_root
-        # stays project_dir (ADR-051), matching the live start path.
-        bundle = resolve_scenario_bundle(project_dir, None, config)
-        backend = _NoStartBackend()
-        static_scenario = _static_validation_scenario(scenario)
-        availability = artifact_availability_for_scenario(
-            static_scenario,
-            backend,
-            scenario_root=bundle.root,
-            component_root=project_dir,
-        )
-        target = create_aptl_runtime_target(
-            project_dir=project_dir,
-            config=config,
-            backend=backend,
-            bundle=bundle,
-            options=RuntimeTargetOptions(artifact_availability=availability),
-        )
-        execution_plan = plan_aptl_scenario(
-            target=target,
-            bundle=bundle,
-            scenario=static_scenario,
-            options=AptlPlanningOptions(artifact_availability=availability),
-        )
-        planning_diagnostics = [
-            redact(f"{d.code}: {d.message}")
-            for d in execution_plan.diagnostics
-            if _severity(d) == "error"
-        ]
-        if planning_diagnostics:
-            return None, GateCheck(
-                "provisioning_realization",
-                False,
-                tuple(planning_diagnostics),
-            )
-        realization = interpret_provisioning_plan(
-            plan=execution_plan.provisioning,
-            config=config,
-            bundle=bundle,
-            component_root=project_dir,
+        realization, planning_diagnostics = _static_provisioning_realization(
+            scenario, project_dir, config
         )
     # broad-except: RAES surfaces diverse errors
     except Exception as exc:
@@ -252,6 +219,13 @@ def check_provisioning_realization(
             False,
             (redact(f"provisioning realization raised: {exc}"),),
         )
+    if planning_diagnostics:
+        return None, GateCheck(
+            "provisioning_realization",
+            False,
+            tuple(planning_diagnostics),
+        )
+    assert realization is not None
 
     diagnostics = [
         redact(f"{d.code}: {d.message}")
@@ -275,6 +249,85 @@ def check_provisioning_realization(
             f"{expected_profiles}; scenario would not instantiate the same range"
         )
     return details, GateCheck("provisioning_realization", *_outcome(diagnostics))
+
+
+def _static_provisioning_realization(
+    scenario: Scenario, project_dir: Path, config: AptlConfig
+) -> tuple[object | None, list[str]]:
+    """Plan and interpret one static scenario without starting its backend."""
+
+    bundle = resolve_scenario_bundle(project_dir, None, config)
+    backend = _NoStartBackend()
+    static_scenario = _static_validation_scenario(scenario)
+    availability = artifact_availability_for_scenario(
+        static_scenario,
+        backend,
+        scenario_root=bundle.root,
+        component_root=project_dir,
+    )
+    capture_selection = _static_capture_selection(bundle, config)
+    capture_plan = empty_capture_plan()
+    if getattr(static_scenario, "evidence_requirements", None):
+        if capture_selection is None:
+            capture_plan = admit_sdl_evidence(static_scenario)
+        else:
+            capture_plan = admit_sdl_evidence(
+                static_scenario,
+                registry=capture_selection.registry,
+            )
+    target = create_aptl_runtime_target(
+        project_dir=project_dir,
+        config=config,
+        backend=backend,
+        bundle=bundle,
+        options=RuntimeTargetOptions(
+            artifact_availability=availability,
+            capture_plan=capture_plan,
+            capture_selection=capture_selection,
+        ),
+    )
+    execution_plan = plan_aptl_scenario(
+        target=target,
+        bundle=bundle,
+        scenario=static_scenario,
+        options=AptlPlanningOptions(artifact_availability=availability),
+    )
+    diagnostics = [
+        redact(f"{item.code}: {item.message}")
+        for item in execution_plan.diagnostics
+        if _severity(item) == "error"
+    ]
+    realization = None
+    if not diagnostics:
+        realization = interpret_provisioning_plan(
+            plan=execution_plan.provisioning,
+            config=config,
+            bundle=bundle,
+            component_root=project_dir,
+        )
+    return realization, diagnostics
+
+
+def _static_capture_selection(bundle: object, config: AptlConfig) -> object | None:
+    """Resolve capture declarations for one static pack validation."""
+
+    identity = getattr(bundle, "pack_identity", None)
+    if identity is None:
+        return None
+    from aptl.backends.scenario_capture import ScenarioCaptureContext
+    from aptl.backends.scenario_capture_discovery import resolve_scenario_capture
+
+    return resolve_scenario_capture(
+        ScenarioCaptureContext(
+            pack=identity,
+            backend=BackendIdentity(
+                target_name=APTL_RAES_TARGET_NAME,
+                target_version=APTL_RAES_TARGET_VERSION,
+                profile=APTL_RAES_TARGET_PROFILE,
+                transport=config.deployment.provider,
+            ),
+        )
+    )
 
 
 # Realization-envelope constructive probes are derived and exercised only through

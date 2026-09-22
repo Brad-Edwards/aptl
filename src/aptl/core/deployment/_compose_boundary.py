@@ -11,6 +11,7 @@ from aptl.core.deployment.boundary import (
     AcesBoundarySpec,
     BoundaryEnforcementSpec,
 )
+from aptl.core.ephemeral_containers import EphemeralContainer
 from aptl.core.lab_types import LabResult
 
 #: The tag is the helper's wire-contract version, not a build counter. The
@@ -19,7 +20,7 @@ from aptl.core.lab_types import LabResult
 #: ``raes`` -> ``raes`` with the RAES migration - MUST bump this tag. Leaving it
 #: pinned would pair a cached older helper with newer APTL code and fail every
 #: boundary mutation closed on hosts that already built the previous image.
-DEFAULT_BOUNDARY_HELPER_IMAGE = "aptl-network-boundary-helper:3"
+DEFAULT_BOUNDARY_HELPER_IMAGE = "aptl-network-boundary-helper:5"
 _BOUNDARY_TIMEOUT = 30
 
 
@@ -44,20 +45,29 @@ class _BoundaryRunner(Protocol):
         timeout: int | None = None,
     ) -> subprocess.CompletedProcess: ...
 
+    def _ephemeral_container(self, role: str) -> EphemeralContainer: ...
+
 
 def _helper_command(
     action: str,
     image: str = DEFAULT_BOUNDARY_HELPER_IMAGE,
     *,
     pull_never: bool = False,
+    helper: EphemeralContainer | None = None,
 ) -> list[str]:
-    """Build the fixed, capability-minimal helper invocation."""
+    """Build the fixed, capability-minimal helper invocation.
 
+    ``helper`` names the container so the run can remove it if it does not
+    complete; a caller that only needs the argv shape may omit it.
+    """
+
+    # An argv-only caller runs nothing, so there is nothing for teardown to find.
+    helper = helper or EphemeralContainer.for_role(f"boundary-{action}", project=None)
     return [
         "docker",
         "run",
         *(["--pull=never"] if pull_never else []),
-        "--rm",
+        *helper.run_options(),
         "--network",
         "host",
         "--cap-drop=ALL",
@@ -90,23 +100,39 @@ def realize_boundary(
         if isinstance(policy, AcesBoundarySpec) and not policy.rules
         else "apply"
     )
-    mutation = backend._run_with_input(
-        _helper_command(action, helper_image, pull_never=pull_never),
-        payload,
-        timeout=_BOUNDARY_TIMEOUT,
-    )
+    mutation = _run_helper(backend, action, payload, helper_image, pull_never)
     if mutation.returncode != 0:
         return LabResult(success=False, error="Boundary policy mutation failed.")
     observation = (
-        backend._run_with_input(
-            _helper_command("observe", helper_image, pull_never=pull_never),
-            payload,
-            timeout=_BOUNDARY_TIMEOUT,
-        )
+        _run_helper(backend, "observe", payload, helper_image, pull_never)
         if action == "apply"
         else mutation
     )
     return _boundary_observation_result(policy, action, observation)
+
+
+def _run_helper(
+    backend: _BoundaryRunner,
+    action: str,
+    payload: str,
+    helper_image: str,
+    pull_never: bool,
+) -> subprocess.CompletedProcess:
+    """Run one helper action, removing its container if the run does not complete.
+
+    The policy travels on stdin, so removal goes through the plain runner and
+    never receives it.
+    """
+
+    helper = backend._ephemeral_container(f"boundary-{action}")
+    return helper.run(
+        lambda command, *, timeout: backend._run_with_input(
+            command, payload, timeout=timeout
+        ),
+        _helper_command(action, helper_image, pull_never=pull_never, helper=helper),
+        timeout=_BOUNDARY_TIMEOUT,
+        discard=backend._run,
+    )
 
 
 def _boundary_observation_result(

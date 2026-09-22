@@ -8,6 +8,10 @@ from pathlib import Path, PurePosixPath
 
 from aptl.core.credentials import RENDERED_MANAGER_RELPATH
 from aptl.core.deployment._flag_signing_keys import FLAG_SIGNING_PROFILE_V2
+from aptl.core.deployment._misp_cache_credential import (
+    MISP_CACHE_CREDENTIAL_PROFILE,
+)
+from aptl.core.deployment._misp_server_tls import MISP_SERVER_TLS_PROFILE
 from aptl.core.deployment._cortex_service_credentials import (
     CORTEX_SERVICE_CREDENTIALS_PROFILE,
     CORTEX_SERVICE_CREDENTIALS_ROOT_RELPATH,
@@ -15,6 +19,8 @@ from aptl.core.deployment._cortex_service_credentials import (
 from aptl.core.deployment._compose_stateful_constants import (
     CERTIFICATE_ROOT_RELPATH,
     FLAG_SIGNING_ROOT_RELPATH,
+    MISP_CACHE_CREDENTIAL_ROOT_RELPATH,
+    MISP_SERVER_TLS_ROOT_RELPATH,
     SOC_CERT_PROFILE,
     SOC_CERTS_ROOT_RELPATH,
     SSH_KEY_BUNDLE_ROOT_RELPATH,
@@ -114,6 +120,10 @@ def artifact_source_path(
         relative = Path(FLAG_SIGNING_ROOT_RELPATH) / artifact.name
     elif provenance == CORTEX_SERVICE_CREDENTIALS_PROFILE:
         relative = Path(CORTEX_SERVICE_CREDENTIALS_ROOT_RELPATH)
+    elif provenance == MISP_CACHE_CREDENTIAL_PROFILE:
+        relative = Path(MISP_CACHE_CREDENTIAL_ROOT_RELPATH)
+    elif provenance == MISP_SERVER_TLS_PROFILE:
+        relative = Path(MISP_SERVER_TLS_ROOT_RELPATH)
     else:
         relative = Path(RENDERED_MANAGER_RELPATH)
     return scenario_root.resolve() / relative
@@ -399,6 +409,12 @@ def _certificate_exposure_errors(
         if artifact.generator == "certificate_bundle"
     }
     expected = _expected_certificate_mounts(scenario_root, realization)
+    # An exact-pack adapter may alias one SDL-produced certificate into an
+    # upstream image's native TLS path. The author still owns the source,
+    # consumer service and cert bytes; the adapter owns only that image path.
+    from aptl.backends.scenario_service_policy import certificate_mount_aliases
+
+    aliases = certificate_mount_aliases(realization, scenario_root, expected)
     return [
         f"Effective stateful service {service_name} exposes undeclared "
         "certificate material."
@@ -407,7 +423,7 @@ def _certificate_exposure_errors(
             services.get(service_name),
             cert_roots,
         )
-        != allowed
+        != allowed | aliases.get(service_name, set())
     ]
 
 

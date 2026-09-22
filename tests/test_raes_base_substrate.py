@@ -76,11 +76,13 @@ class TestBaseContainerSpec:
         spec = base_container_spec(
             "n.node", os="linux", os_version="", runtime=_runtime_with_service()
         )
-        # A distinct, init-capable generic substrate (not the minimal base).
+        # Offline non-service nodes share the package-complete Debian image,
+        # but only a service node receives init/run capabilities.
         non_service = base_container_spec(
             "n.node", os="linux", os_version="", runtime=None
         )
-        assert spec.image_ref != non_service.image_ref
+        assert spec.image_ref == non_service.image_ref
+        assert non_service.init is None
         # The validated systemd run requirements are carried, not fabricated per call.
         assert spec.init is not None
         assert "SYS_ADMIN" in spec.init.capabilities
@@ -110,9 +112,9 @@ class TestBaseContainerSpec:
         # The fixed systemd requirements are still present alongside the addition.
         assert "SYS_ADMIN" in spec.init.capabilities
 
-    def test_declared_capability_outside_the_allowlist_is_rejected(self):
-        # issue #816: a scenario declaring a host-impacting capability APTL
-        # has no verified need for must fail admission, not be granted.
+    def test_declared_capability_is_not_filtered_by_a_content_allowlist(self):
+        # Backend containment qualification decides whether this contract can
+        # run; the generic substrate planner must not rewrite valid SDL.
         runtime = RuntimeConfiguration(
             service_manager_units=[
                 ServiceManagerUnit(
@@ -121,8 +123,12 @@ class TestBaseContainerSpec:
             ],
             linux_capabilities=RuntimeCapabilityPolicy(add=["CAP_SYS_ADMIN"]),
         )
-        with pytest.raises(UnauthorizedCapabilityError, match="CAP_SYS_ADMIN"):
-            base_container_spec("n.node", os="linux", os_version="", runtime=runtime)
+        spec = base_container_spec(
+            "n.node", os="linux", os_version="", runtime=runtime
+        )
+
+        assert spec.init is not None
+        assert "SYS_ADMIN" in spec.init.capabilities
 
     def test_no_declared_capabilities_keeps_the_fixed_default_set(self):
         spec = base_container_spec(

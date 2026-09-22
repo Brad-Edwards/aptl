@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 
 from aptl.core.deployment import get_backend
 from aptl.validation import _live_gate_telemetry as telemetry
+from aptl.validation._live_gate_alerts import AlertReader
 from aptl.validation._live_gate_probes import (
     _find_container,
     _ping_from_container,
@@ -133,6 +134,10 @@ class LiveGateOperations(object):
             return None
         return min(requested_seconds, floor(remaining))
 
+    def _observed_origin(self, origin: str) -> str:
+        """Resolve a plugin's semantic node to its observed native identity."""
+        return self._state.semantic_container_names.get(origin, origin)
+
     def reachability_from(self, origin: str) -> ReachabilityResult:
         """Return whether ``origin`` reaches every host on its shared networks.
 
@@ -141,7 +146,7 @@ class LiveGateOperations(object):
         """
 
         containers = (self._state.snapshot or {}).get("containers", [])
-        origin_container = _find_container(containers, origin)
+        origin_container = _find_container(containers, self._observed_origin(origin))
         if origin_container is None:
             return ReachabilityResult(
                 False, (), (f"origin {origin!r} not present in the booted range",)
@@ -178,7 +183,7 @@ class LiveGateOperations(object):
         """Return admitted ``(node, address)`` peers sharing a network with origin."""
 
         containers = (self._state.snapshot or {}).get("containers", [])
-        origin_container = _find_container(containers, origin)
+        origin_container = _find_container(containers, self._observed_origin(origin))
         if origin_container is None:
             return ()
         networks = set((origin_container.get("networks") or {}).keys())
@@ -229,10 +234,11 @@ class LiveGateOperations(object):
         *,
         trigger: Callable[[], None],
         alert_matches: Callable[[object], bool],
+        alert_reader: AlertReader,
         deadline_monotonic: float,
         poll_interval_seconds: float,
     ) -> DetectionResult:
-        """Poll core-owned collectors for one plugin-defined correlation rule."""
+        """Poll core and plugin-owned sources for a plugin correlation rule."""
 
         effective_deadline = min(deadline_monotonic, self._deadline_monotonic)
         diagnostics = telemetry.collect_evidence_diagnostics(
@@ -242,6 +248,7 @@ class LiveGateOperations(object):
             telemetry.EvidenceCollectionRequest(
                 trigger=trigger,
                 alert_matches=alert_matches,
+                alert_reader=alert_reader,
                 deadline_monotonic=effective_deadline,
                 poll_interval_seconds=poll_interval_seconds,
                 monotonic_fn=self._monotonic,

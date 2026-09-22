@@ -160,6 +160,43 @@ def test_mcp_sync_injects_resolved_host_ports(tmp_path) -> None:
     assert env["OTEL_EXPORTER_OTLP_ENDPOINT"] == "http://x"  # preserved
 
 
+def test_runtime_mcp_ports_use_only_owned_generated_service_binding(
+    mocker, tmp_path
+) -> None:
+    """Env-pack MCP sync maps dotted source services to owned live bindings."""
+    from aptl.core.lab import _runtime_mcp_host_ports
+
+    (tmp_path / "docker-compose.yml").write_text(
+        "services:\n"
+        "  wazuh.indexer:\n"
+        "    ports:\n"
+        "      - '127.0.0.1:${APTL_HP_WAZUH_INDEXER_9200:-9200}:9200'\n"
+        "  foreign:\n"
+        "    ports:\n"
+        "      - '127.0.0.1:${APTL_HP_FOREIGN_8080:-8080}:8080'\n",
+        encoding="utf-8",
+    )
+    backend = mocker.MagicMock()
+    backend.container_list.return_value = [
+        {"Service": "wazuh-indexer", "Name": "generated-wazuh-indexer"}
+    ]
+    backend.container_inspect.return_value = {
+        "NetworkSettings": {
+            "Ports": {
+                "9200/tcp": [
+                    {"HostIp": "127.0.0.1", "HostPort": "29200"}
+                ]
+            }
+        }
+    }
+
+    ports = _runtime_mcp_host_ports(tmp_path, backend)
+
+    assert [(port.env_var, port.resolved_port) for port in ports] == [
+        ("APTL_HP_WAZUH_INDEXER_9200", 29200)
+    ]
+
+
 def test_shipped_mcp_configs_reference_resolved_host_ports() -> None:
     """Shipped MCP configs must not hardcode host ports (use ${APTL_HP_*})."""
     import re

@@ -49,13 +49,15 @@ fi
     )
     _write_executable(
         fake_bin / "curl",
-        "#!/bin/sh\nprintf '{\"status\":\"green\"}\\n'\n",
+        '#!/bin/sh\nprintf \'{"status":"green"}\\n\'\n',
     )
     webhook_file = tmp_path / "shuffle-webhook"
     env = {
         **os.environ,
         "PATH": f"{fake_bin}:{os.environ['PATH']}",
         "APTL_SHUFFLE_WEBHOOK_FILE": str(webhook_file),
+        "INDEXER_USERNAME": "test-indexer-user",
+        "INDEXER_PASSWORD": "test-indexer-password",
     }
 
     result = subprocess.run(
@@ -72,31 +74,10 @@ fi
     assert "Prime Scenario Seed Complete" not in result.stdout
 
 
-def test_shuffle_readiness_failure_stops_before_seed_content_mutation(tmp_path):
-    project = tmp_path / "project"
-    scripts = project / "scripts"
-    scripts.mkdir(parents=True)
-    shutil.copy2(PROJECT_ROOT / "scripts" / "seed-prime.sh", scripts)
-    (scripts / "seed-prime.sh").chmod(0o755)
-    shutil.copy2(PROJECT_ROOT / "scripts" / "aptl-env.sh", scripts)
+def test_seed_does_not_repair_or_replace_realized_containers():
+    text = (PROJECT_ROOT / "scripts" / "seed-prime.sh").read_text(encoding="utf-8")
 
-    _write_executable(scripts / "envpack-soar-fixups.sh", "#!/bin/sh\nexit 1\n")
-    mutation_log = tmp_path / "seed-mutations"
-    for script_name in ("seed-misp.sh", "seed-shuffle.sh"):
-        _write_executable(
-            scripts / script_name,
-            f"#!/bin/sh\nprintf '%s\\n' {script_name} >> '{mutation_log}'\n",
-        )
-
-    result = subprocess.run(
-        [scripts / "seed-prime.sh"],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=os.environ,
-    )
-
-    assert result.returncode == 1
-    assert "Shuffle readiness failed; refusing to seed scenario content" in result.stdout
-    assert not mutation_log.exists()
-    assert "[1/6]" not in result.stdout
+    assert "envpack-soar-fixups.sh" not in text
+    assert "envpack-kali-fixups.sh" not in text
+    assert "docker rm" not in text
+    assert "docker run" not in text

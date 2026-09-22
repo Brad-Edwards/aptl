@@ -7,10 +7,13 @@ calls are mocked.
 
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import ANY, MagicMock, call, patch
 from uuid import uuid4
 
 import pytest
+
+from tests.helpers import docker_ps_inventory_row
 
 
 def _env_key(*parts: str) -> str:
@@ -68,6 +71,16 @@ def _admitted_surface(
         ),
         selected_profiles=selected_profiles,
         stateful_artifact_ownership=ownership,
+    )
+
+
+def _admitted_start_fixture(bundle_root: Path):
+    """Model a non-pack admission without invoking scenario-specific adapters."""
+    from aptl.core.scenario_bundle import project_tree_bundle
+
+    return SimpleNamespace(
+        bundle=project_tree_bundle(bundle_root, bundle_root / "fixture.sdl.yaml"),
+        runtime_materialization_failure=None,
     )
 
 
@@ -222,6 +235,15 @@ class TestLabStart:
         """Return empty ownership inventories before the Compose result."""
 
         def run(command, **_kwargs):
+            if command[:3] == ["docker", "info", "--format"]:
+                return MagicMock(returncode=0, stdout="test-daemon\n", stderr="")
+            if command[:2] == ["docker", "inspect"]:
+                return MagicMock(returncode=1, stdout="", stderr="not found")
+            if command[:3] in (
+                ["docker", "network", "inspect"],
+                ["docker", "volume", "inspect"],
+            ):
+                return MagicMock(returncode=1, stdout="", stderr="not found")
             if "compose" in command and "up" in command:
                 return MagicMock(
                     returncode=compose_returncode,
@@ -330,8 +352,10 @@ class TestLabStop:
 
         assert result.success is False
 
-    def test_stop_uses_all_profiles_when_no_config(self, mock_subprocess, tmp_path):
-        """stop_lab should fall back to all profiles when no aptl.json exists."""
+    def test_stop_does_not_invent_pack_profiles_when_no_config(
+        self, mock_subprocess, tmp_path
+    ):
+        """Recovery keeps core apparatus but invents no pack vocabulary."""
         from aptl.core.lab import stop_lab
 
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
@@ -340,11 +364,9 @@ class TestLabStop:
 
         assert result.success is True
         cmd_args = self._compose_down_args(mock_subprocess)
-        # Should include all fallback profiles
-        assert "wazuh" in cmd_args
-        assert "victim" in cmd_args
-        assert "kali" in cmd_args
-        assert "soc" in cmd_args
+        assert "otel" in cmd_args
+        assert "wazuh" not in cmd_args
+        assert "soc" not in cmd_args
 
     def test_stop_uses_config_profiles_when_available(self, mock_subprocess, tmp_path):
         """stop_lab should load profiles from aptl.json when present."""
@@ -367,6 +389,32 @@ class TestLabStop:
         cmd_args = self._compose_down_args(mock_subprocess)
         assert "victim" in cmd_args
         assert "wazuh" in cmd_args
+
+    def test_stop_prefers_admitted_groups_over_changed_config(
+        self, mock_subprocess, tmp_path
+    ):
+        """Recovery follows the started run, not today's container toggles."""
+        import json
+
+        from aptl.core.lab import stop_lab
+        from aptl.core.operator_group_state import persist_admitted_operator_groups
+
+        (tmp_path / "aptl.json").write_text(
+            json.dumps(
+                {
+                    "lab": {"name": "test"},
+                    "containers": {"wazuh": True, "victim": False},
+                }
+            )
+        )
+        persist_admitted_operator_groups(tmp_path, {"blue-team"})
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        assert stop_lab(project_dir=tmp_path).success is True
+
+        cmd_args = self._compose_down_args(mock_subprocess)
+        assert "blue-team" in cmd_args
+        assert "wazuh" not in cmd_args
 
     def test_stop_refuses_invalid_present_config_identity(
         self, mock_subprocess, tmp_path
@@ -675,8 +723,11 @@ class TestLabStatus:
         mock_subprocess.return_value = MagicMock(
             returncode=0,
             stdout=(
-                "aptl-victim\tvictim:latest\tabc\tUp 1 minute (healthy)\t"
-                "running\tcom.docker.compose.project=aptl\t"
+                docker_ps_inventory_row(
+                    "aptl-victim",
+                    status="Up 1 minute (healthy)",
+                    labels="com.docker.compose.project=aptl",
+                )
             ),
             stderr="",
         )
@@ -702,11 +753,20 @@ class TestLabStatus:
         """lab_status should handle one TSV record per project container."""
         from aptl.core.lab import lab_status
 
-        rows = (
-            "aptl-victim\tvictim:latest\taaa\tUp 1 minute\trunning\t"
-            "com.docker.compose.project=aptl\t\n"
-            "aptl-kali\tkali:latest\tbbb\tUp 1 minute\trunning\t"
-            "aptl.lifecycle.project=aptl\t"
+        rows = "\n".join(
+            (
+                docker_ps_inventory_row(
+                    "aptl-victim",
+                    container_id="aaa",
+                    labels="com.docker.compose.project=aptl",
+                ),
+                docker_ps_inventory_row(
+                    "aptl-kali",
+                    image="kali:latest",
+                    container_id="bbb",
+                    labels="aptl.lifecycle.project=aptl",
+                ),
+            )
         )
         mock_subprocess.return_value = MagicMock(returncode=0, stdout=rows, stderr="")
 
@@ -1594,11 +1654,24 @@ class TestOrchestrateLabStart:
         pack_root = tmp_path / ".aptl" / "staged-packs" / "fixture"
         pack_root.mkdir(parents=True)
         mocks["admitted_surface"] = _admitted_surface(
-            pack_root, selected_profiles=("wazuh", "victim", "kali", "otel")
+            pack_root,
+            env_pack=False,
+            selected_profiles=(
+                "wazuh",
+                "victim",
+                "kali",
+                "otel",
+                "soc",
+                "enterprise",
+                "fileshare",
+            ),
         )
         mocks["admit"] = mocker.patch(
             "aptl.core.lab.admit_start_surface",
-            return_value=(object(), mocks["admitted_surface"]),
+            return_value=(
+                _admitted_start_fixture(pack_root),
+                mocks["admitted_surface"],
+            ),
         )
 
         # Mock RAES runtime handoff start. The planned profile set is part of
@@ -1607,7 +1680,15 @@ class TestOrchestrateLabStart:
             "aptl.core.lab.start_raes_scenario",
             return_value=_raes_outcome(
                 success=True,
-                selected_profiles=("wazuh", "victim", "kali", "otel"),
+                selected_profiles=(
+                    "wazuh",
+                    "victim",
+                    "kali",
+                    "otel",
+                    "soc",
+                    "enterprise",
+                    "fileshare",
+                ),
             ),
         )
 
@@ -1632,6 +1713,10 @@ class TestOrchestrateLabStart:
             "aptl.core.lab.subprocess.run",
             return_value=MagicMock(returncode=0, stdout="", stderr=""),
         )
+        seed_script = tmp_path / "scripts" / "seed-prime.sh"
+        seed_script.parent.mkdir(exist_ok=True)
+        seed_script.write_text("#!/bin/sh\nexit 0\n")
+        seed_script.chmod(0o755)
 
         # Mock container IP resolution for the SSH readiness step —
         # lab targets are addressed by container IP (issue #293).
@@ -1677,8 +1762,6 @@ class TestOrchestrateLabStart:
             "sysreqs",
             "certs",
             "start",
-            "wait_indexer",
-            "wait_indexer",
             "wait_indexer",
             "wait_indexer",
             "terminal_status",
@@ -1737,6 +1820,28 @@ class TestOrchestrateLabStart:
         )
         progress.assert_any_call("Waiting for Wazuh services to become ready.")
 
+    def test_product_neutral_progress_omits_adapter_specific_phases(self, tmp_path):
+        """An admitted scenario with no adapter profiles stays product-neutral."""
+
+        from aptl.core.lab import (
+            _LabStartContext,
+            _start_progress_message,
+            _step_build_mcps,
+            _step_generate_certs,
+            _step_start_containers,
+            _step_wait_for_services,
+        )
+
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.admitted_surface = object()
+
+        assert _start_progress_message(ctx, _step_generate_certs) is None
+        assert _start_progress_message(ctx, _step_wait_for_services) is None
+        assert _start_progress_message(ctx, _step_build_mcps) is None
+        assert "Starting containers" in str(
+            _start_progress_message(ctx, _step_start_containers)
+        )
+
     def test_orchestrates_selected_scenario_path(self, mocker, tmp_path):
         """Selected RAES SDL paths should reach the startup handoff."""
         from aptl.core.lab import orchestrate_lab_start
@@ -1763,10 +1868,8 @@ class TestOrchestrateLabStart:
 
         assert result.success is True
         assert find_placeholder_env_values(env) == []
-        assert (
-            env[_env_key("INDEXER", "PASSWORD")] == mocks["template_values"]["indexer"]
-        )
-        assert env[_env_key("API", "PASSWORD")] == mocks["template_values"]["api"]
+        assert env[_env_key("INDEXER", "PASSWORD")]
+        assert env[_env_key("API", "PASSWORD")]
         mocks["dashboard_creds"].assert_called_once()
         assert (
             mocks["dashboard_creds"].call_args.args[1]
@@ -1953,10 +2056,14 @@ class TestOrchestrateLabStart:
 
         orchestrate_lab_start(tmp_path)
 
-        # Dashboard config should be called with API password
+        from aptl.core.env import load_dotenv
+
+        env = load_dotenv(tmp_path / ".env")
+        # Dashboard config receives the admitted scenario API fixture pair.
         mocks["dashboard_creds"].assert_called_once()
         call_args = mocks["dashboard_creds"].call_args
-        assert call_args[0][1] == "apisecret"
+        assert call_args[0][1] == env["API_PASSWORD"]
+        assert call_args[0][2] == env["API_USERNAME"]
 
         # Manager config should be called with cluster key
         mocks["manager_creds"].assert_called_once()
@@ -2066,9 +2173,7 @@ class TestOrchestrateLabStart:
         )
 
         # Re-mock RAES handoff and wait_for_service since config changes
-        from aptl.core.lab import LabResult
-
-        mocks["start"].return_value = LabResult(success=True, message="Lab started")
+        mocks["start"].return_value = _raes_outcome(success=True, selected_profiles=())
 
         result = orchestrate_lab_start(tmp_path)
 
@@ -2145,7 +2250,10 @@ class TestAdmittedStartSurface:
         ctx = self._ctx(tmp_path)
         admit = mocker.patch(
             "aptl.core.lab.admit_start_surface",
-            return_value=(object(), _admitted_surface(tmp_path / "pack")),
+            return_value=(
+                _admitted_start_fixture(tmp_path / "pack"),
+                _admitted_surface(tmp_path / "pack"),
+            ),
         )
 
         assert _load_admitted_start_surface(ctx) is None
@@ -2160,7 +2268,10 @@ class TestAdmittedStartSurface:
         ctx = self._ctx(tmp_path, scenario_path=selected)
         admit = mocker.patch(
             "aptl.core.lab.admit_start_surface",
-            return_value=(object(), _admitted_surface(tmp_path, env_pack=False)),
+            return_value=(
+                _admitted_start_fixture(tmp_path),
+                _admitted_surface(tmp_path, env_pack=False),
+            ),
         )
 
         assert _load_admitted_start_surface(ctx) is None
@@ -2172,7 +2283,7 @@ class TestAdmittedStartSurface:
         from aptl.core.lab import _load_admitted_start_surface
 
         ctx = self._ctx(tmp_path)
-        admitted = object()
+        admitted = _admitted_start_fixture(tmp_path / "pack")
         surface = _admitted_surface(
             tmp_path / "pack",
             selected_profiles=("otel",),
@@ -2187,6 +2298,35 @@ class TestAdmittedStartSurface:
         assert ctx.admitted_start is admitted
         assert ctx.admitted_surface is surface
         assert ctx.stateful_artifact_ownership == surface.stateful_artifact_ownership
+
+    def test_runtime_materialization_failure_stops_before_legacy_mutation(
+        self, mocker, tmp_path
+    ):
+        """A valid SDL plan can still be unsupported by the selected backend."""
+        from aptl.core.lab import _load_admitted_start_surface
+        from aptl.core.lab_types import LabResult
+
+        ctx = self._ctx(tmp_path)
+        failure = LabResult(
+            success=False,
+            error=(
+                "aptl.provisioner.runtime-materialization-unsupported: "
+                "node=provision.node.probe field=runtime.container.privileged "
+                "backend=shared-docker"
+            ),
+        )
+        admitted = SimpleNamespace(runtime_materialization_failure=failure)
+        mocker.patch(
+            "aptl.core.lab.admit_start_surface",
+            return_value=(admitted, _admitted_surface(tmp_path)),
+        )
+
+        result = _load_admitted_start_surface(ctx)
+
+        assert result is failure
+        assert ctx.admitted_start is None
+        assert ctx.admitted_surface is None
+        assert ctx.stateful_artifact_ownership == frozenset()
 
     def test_admission_failure_fails_closed_before_legacy_mutation(
         self, mocker, tmp_path
@@ -2570,7 +2710,11 @@ class TestSyncCredentialsStep:
         result = _step_generate_certs(ctx)
 
         assert result is None
-        generator.assert_called_once_with(tmp_path)
+        # The lab's project scopes the generator so teardown can find it if a
+        # killed process strands it.
+        generator.assert_called_once_with(
+            tmp_path, project=ctx.backend._ephemeral_project()
+        )
 
     def test_renders_to_aptl_config_and_leaves_source_untouched(self, mocker, tmp_path):
         """End-to-end (real credential writers): the step renders the
@@ -2580,7 +2724,10 @@ class TestSyncCredentialsStep:
 
         dashboard_src = tmp_path / "config" / "wazuh_dashboard" / "wazuh.yml"
         dashboard_src.parent.mkdir(parents=True)
-        dashboard_src.write_text('      password: "TEMPLATE_PW"\n')
+        dashboard_src.write_text(
+            '      username: "__APTL_API_USERNAME__"\n'
+            '      password: "__APTL_API_PASSWORD__"\n'
+        )
         manager_src = tmp_path / "config" / "wazuh_cluster" / "wazuh_manager.conf"
         manager_src.parent.mkdir(parents=True)
         manager_src.write_text("<cluster>\n  <key>TEMPLATE_KEY</key>\n</cluster>\n")
@@ -2670,7 +2817,7 @@ class TestResolveHostPortsStep:
             "aptl.core.host_ports.resolve_host_ports", return_value=resolution
         )
         bindings = mocker.patch(
-            "aptl.core.host_ports.project_port_bindings", return_value={}
+            "aptl.core._port_bindings.project_port_bindings", return_value={}
         )
         ctx = self._ctx(tmp_path, raw_env={"APTL_DNS_HOST_PORT": "9"})
 
@@ -2708,7 +2855,7 @@ class TestResolveHostPortsStep:
             remapped=True,
         )
         mocker.patch("aptl.core.host_ports.resolve_host_ports", return_value=[remapped])
-        mocker.patch("aptl.core.host_ports.project_port_bindings", return_value={})
+        mocker.patch("aptl.core._port_bindings.project_port_bindings", return_value={})
         progress = MagicMock()
 
         _step_resolve_host_ports(self._ctx(tmp_path, progress=progress))
@@ -2717,6 +2864,55 @@ class TestResolveHostPortsStep:
         assert "wazuh.dashboard" in notes
         assert "443" in notes
         assert "20009" in notes
+
+    @pytest.mark.parametrize("static_bundle", [False, True])
+    def test_resolves_only_the_admitted_bundles_ports(
+        self, mocker, monkeypatch, tmp_path, static_bundle
+    ):
+        import os
+
+        from aptl.backends._raes_scenario_queries import AdmittedStartSurface
+        from aptl.core.lab import _step_resolve_host_ports
+        from aptl.core.scenario_bundle import ScenarioSourceKind
+
+        # The checkout's legacy service key differs from the pack's generated
+        # wazuh-indexer. Its busy port must not inject a fictitious remap.
+        variable = "APTL_HP_WAZUH_INDEXER_9200"
+        monkeypatch.delenv(variable, raising=False)
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n  wazuh.indexer:\n    ports:\n"
+            f"      - '127.0.0.1:${{{variable}:-9200}}:9200'\n"
+        )
+        bundle = tmp_path / "selected-bundle"
+        bundle.mkdir()
+        if static_bundle:
+            (bundle / "docker-compose.yml").write_text(
+                "services:\n  selected:\n    ports:\n"
+                "      - '127.0.0.1:${APTL_SELECTED_PORT:-18080}:8080'\n"
+            )
+        monkeypatch.delenv("APTL_SELECTED_PORT", raising=False)
+        mocker.patch(
+            "aptl.core.host_ports.port_available",
+            side_effect=lambda port, *_args: port != 9200,
+        )
+        mocker.patch("aptl.core._port_bindings.project_port_bindings", return_value={})
+        ctx = self._ctx(tmp_path)
+        ctx.admitted_surface = AdmittedStartSurface(
+            bundle_root=bundle,
+            source_kind=(
+                ScenarioSourceKind.PROJECT_TREE
+                if static_bundle
+                else ScenarioSourceKind.ENV_PACK
+            ),
+            selected_profiles=(),
+            stateful_artifact_ownership=frozenset(),
+        )
+
+        assert _step_resolve_host_ports(ctx) is None
+        assert os.environ.get(variable) is None
+        assert [port.service for port in ctx.resolved_ports] == (
+            ["selected"] if static_bundle else []
+        )
 
 
 class TestSeedSuricataVolumesStep:
@@ -2880,6 +3076,7 @@ class TestStartupClassificationWiring:
         )
 
     def _ctx(self, tmp_path, *, config=None, selected_profiles=None):
+        from aptl.backends.scenario_startup import ScenarioStartupPlan
         from aptl.core.lab import _LabStartContext
 
         cfg = config or self._make_config()
@@ -2890,6 +3087,9 @@ class TestStartupClassificationWiring:
         if selected_profiles is None:
             selected_profiles = set(cfg.containers.enabled_profiles()) | {"otel"}
 
+        backend = MagicMock()
+        backend.docker_transport_environment.return_value = {}
+
         return _LabStartContext(
             project_dir=tmp_path,
             skip_seed=False,
@@ -2897,7 +3097,20 @@ class TestStartupClassificationWiring:
             config=cfg,
             ssh_key_path=Path("/tmp/aptl_lab_key"),
             selected_profiles=selected_profiles,
-            backend=MagicMock(),
+            backend=backend,
+            scenario_startup=ScenarioStartupPlan(
+                seed_script="scripts/seed-prime.sh",
+                required_profiles=(
+                    "wazuh",
+                    "enterprise",
+                    "victim",
+                    "kali",
+                    "fileshare",
+                    "soc",
+                ),
+                activation_profiles=("soc",),
+                seed_environment_keys=("MISP_API_KEY", "SHUFFLE_API_KEY"),
+            ),
         )
 
     # -- redaction at the diagnostic boundary --------------------------
@@ -3095,363 +3308,28 @@ class TestStartupClassificationWiring:
         assert "rate limit" not in diag.message
         assert "2" in diag.message  # number of failed images
 
-    # -- wait_for_services (fail-closed Wazuh readiness) ------------------
+    # -- wait_for_services (backend-owned Wazuh attestation) -------------
 
-    @staticmethod
-    def _wait_running_checks(mocker, *outcomes):
-        """Patch ``wait_for_service`` so each wait really polls its check.
-
-        Each outcome is ``(attempts, ready)``: the fake calls ``check_fn``
-        that many times, as the real loop would inside its budget, then
-        reports the wait's result. Classification must come from those
-        in-budget observations, never from an extra probe afterwards.
-        """
-        from aptl.core.services import ServiceResult
-
-        queue = list(outcomes)
-
-        def fake_wait(*, check_fn, timeout, **_kwargs):
-            attempts, ready = queue.pop(0)
-            for _ in range(attempts):
-                check_fn()
-            return ServiceResult(
-                ready=ready,
-                elapsed_seconds=float(timeout),
-                error="" if ready else "timed out",
-            )
-
-        return mocker.patch("aptl.core.lab.wait_for_service", side_effect=fake_wait)
-
-    def test_wait_for_services_indexer_without_http_response_fails_startup(
-        self, tmp_path, mocker
-    ):
-        """Wazuh is part of the scenario's goal: an indexer that never answers
-        fails startup with its classified reason instead of degrading (#1002)."""
+    def test_wait_for_services_does_not_reconnect_to_wazuh(self, tmp_path, mocker):
+        """The backend post-start gate is the sole Wazuh login owner."""
         from aptl.core.lab import _step_wait_for_services
 
-        from aptl.core.services import WazuhApiProbe
-
         ctx = self._ctx(tmp_path)
-        self._wait_running_checks(mocker, (3, False))
-        status = mocker.patch(
-            "aptl.core.lab.probe_indexer_api",
-            return_value=WazuhApiProbe("transport", "tls_handshake", curl_exit=35),
-        )
-        manager = mocker.patch("aptl.core.lab.probe_manager_api")
-
-        result = _step_wait_for_services(ctx)
-
-        assert result is not None
-
-        assert result.success is False
-        assert result.error == (
-            "Wazuh Indexer did not become ready within 600s: wazuh.indexer at "
-            "https://localhost:9200 transport phase failed: tls_handshake "
-            "(curl exit 35). Inspect `aptl container logs aptl-wazuh-indexer`."
-        )
-        assert status.call_count == 3  # in-budget attempts only, no extra probe
-        manager.assert_not_called()  # first failure wins
-        assert ctx.diagnostics == []
-
-    @pytest.mark.parametrize("http_status", [401, 403])
-    def test_wait_for_services_indexer_stale_credentials_fail_with_recovery(
-        self, tmp_path, mocker, http_status
-    ):
-        """The retained-volume credential mismatch from #623 is now fatal, and
-        still points the operator at the clean-state recovery path."""
-        from aptl.core.lab import _step_wait_for_services
-
-        from aptl.core.services import WazuhApiProbe
-
-        ctx = self._ctx(tmp_path)
-        self._wait_running_checks(mocker, (2, False))
-        status = mocker.patch(
-            "aptl.core.lab.probe_indexer_api",
-            side_effect=[
-                WazuhApiProbe("transport", "tls_handshake", curl_exit=35),
-                WazuhApiProbe(
-                    "authentication", "credentials_rejected", http_status=http_status
-                ),
-            ],
-        )
-
-        result = _step_wait_for_services(ctx)
-
-        assert result is not None
-
-        assert result.success is False
-        assert (
-            "authentication phase failed: credentials_rejected "
-            f"(HTTP {http_status})" in result.error
-        )
-        assert "aptl lab stop -v" in result.error
-        assert "INDEXER_PASSWORD" in result.error
-        assert ctx.env.indexer_password not in result.error
-        status.assert_called_with(
-            url="https://localhost:9200",
-            username=ctx.env.indexer_username,
-            password=ctx.env.indexer_password,
-        )
-
-    def test_wait_for_services_probes_the_resolved_indexer_port_not_9200(
-        self, tmp_path, mocker
-    ):
-        """When 9200 is already in use on the host, `_step_resolve_host_ports`
-        remaps the indexer publish; the readiness probe must follow the
-        remap or it hits whatever else is on 9200 and reports the SIEM
-        store as unready even though it is fully healthy on the remapped
-        port."""
-        from aptl.core.host_ports import ResolvedPort
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import WazuhApiProbe
-
-        ctx = self._ctx(tmp_path)
-        ctx.resolved_ports = [
-            ResolvedPort(
-                service="wazuh.indexer",
-                env_var="APTL_HP_WAZUH_INDEXER_9200",
-                default_port=9200,
-                resolved_port=20015,
-                protos=("tcp",),
-                host_ip="127.0.0.1",
-                remapped=True,
-            ),
-        ]
-        self._wait_running_checks(mocker, (1, True), (1, True))
-        status = mocker.patch(
-            "aptl.core.lab.probe_indexer_api",
-            return_value=WazuhApiProbe("ready", "ready", http_status=200),
-        )
-        mocker.patch(
-            "aptl.core.lab.probe_manager_api",
-            return_value=WazuhApiProbe("ready", "ready", http_status=200),
-        )
+        indexer = mocker.patch("aptl.core.services.probe_indexer_api")
+        manager = mocker.patch("aptl.core.services.probe_manager_api")
 
         assert _step_wait_for_services(ctx) is None
 
-        assert status.call_args.kwargs["url"] == "https://localhost:20015"
+        indexer.assert_not_called()
+        manager.assert_not_called()
+        assert ctx.diagnostics == []
 
-    def test_wait_for_services_falls_back_to_9200_when_no_remap(self, tmp_path, mocker):
-        """No entry for wazuh.indexer in `ctx.resolved_ports` (the common
-        case where 9200 was free) keeps the historical URL."""
+    def test_wait_for_services_skips_when_wazuh_not_selected(self, tmp_path):
         from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import WazuhApiProbe
 
-        ctx = self._ctx(tmp_path)
-        self._wait_running_checks(mocker, (1, True), (1, True))
-        status = mocker.patch(
-            "aptl.core.lab.probe_indexer_api",
-            return_value=WazuhApiProbe("ready", "ready", http_status=200),
-        )
-        manager = mocker.patch(
-            "aptl.core.lab.probe_manager_api",
-            return_value=WazuhApiProbe("ready", "ready", http_status=200),
-        )
+        ctx = self._ctx(tmp_path, selected_profiles={"otel"})
 
         assert _step_wait_for_services(ctx) is None
-
-        assert status.call_args.kwargs["url"] == "https://localhost:9200"
-        assert manager.call_args.kwargs["url"] == "https://localhost:55000"
-
-    def test_wait_for_services_manager_tls_failure_fails_with_last_in_budget_reason(
-        self, tmp_path, mocker
-    ):
-        """The terminal reason is the last observation inside the budget.
-
-        A probe after the deadline could answer differently and erase the
-        result the budget reached, so none is made.
-        """
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import WazuhApiProbe
-
-        ctx = self._ctx(tmp_path)
-        self._wait_running_checks(mocker, (1, True), (3, False))
-        mocker.patch(
-            "aptl.core.lab.probe_indexer_api",
-            return_value=WazuhApiProbe("ready", "ready", http_status=200),
-        )
-        manager = mocker.patch(
-            "aptl.core.lab.probe_manager_api",
-            side_effect=[
-                WazuhApiProbe("transport", "tls_handshake", curl_exit=35),
-                WazuhApiProbe(
-                    "authentication", "credentials_rejected", http_status=401
-                ),
-                WazuhApiProbe("transport", "tls_handshake", curl_exit=35),
-            ],
-        )
-
-        result = _step_wait_for_services(ctx)
-
-        assert result is not None
-
-        assert result.success is False
-        assert result.error == (
-            "Wazuh Manager API did not become ready within 120s: wazuh.manager at "
-            "https://localhost:55000 transport phase failed: tls_handshake "
-            "(curl exit 35). Inspect `aptl container logs aptl-wazuh-manager`."
-        )
-        assert manager.call_count == 3
-        manager.assert_called_with(
-            url="https://localhost:55000",
-            username=ctx.env.api_username,
-            password=ctx.env.api_password,
-        )
-        assert ctx.diagnostics == []
-
-    def test_wait_for_services_manager_credential_rejection_names_env_keys(
-        self, tmp_path, mocker
-    ):
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import WazuhApiProbe
-
-        ctx = self._ctx(tmp_path)
-        self._wait_running_checks(mocker, (1, True), (1, False))
-        mocker.patch(
-            "aptl.core.lab.probe_indexer_api",
-            return_value=WazuhApiProbe("ready", "ready", http_status=200),
-        )
-        mocker.patch(
-            "aptl.core.lab.probe_manager_api",
-            return_value=WazuhApiProbe(
-                "authentication", "credentials_rejected", http_status=401
-            ),
-        )
-
-        result = _step_wait_for_services(ctx)
-
-        assert result is not None
-
-        assert result.success is False
-        assert (
-            "authentication phase failed: credentials_rejected (HTTP 401)"
-            in result.error
-        )
-        assert "API_USERNAME/API_PASSWORD" in result.error
-        assert ctx.env.api_password not in result.error
-
-    def test_wait_for_services_failure_makes_the_start_fail(self, tmp_path, mocker):
-        """End to end through the orchestrator's contract: a fatal step result
-        is a FAILED startup, never a degraded-usable one."""
-        from aptl.core.lab import _step_wait_for_services, derive_startup_outcome
-        from aptl.core.lab_types import StartupOutcome
-
-        from aptl.core.services import WazuhApiProbe
-
-        ctx = self._ctx(tmp_path)
-        self._wait_running_checks(mocker, (1, False))
-        mocker.patch(
-            "aptl.core.lab.probe_indexer_api",
-            return_value=WazuhApiProbe("transport", "connection_refused", curl_exit=7),
-        )
-
-        result = _step_wait_for_services(ctx)
-
-        assert result is not None
-        assert (
-            derive_startup_outcome(ctx.diagnostics, fatal=True) is StartupOutcome.FAILED
-        )
-
-    def test_wait_for_services_skips_services_the_backend_already_proved(
-        self, tmp_path, mocker
-    ):
-        """One readiness authority per realized service (issue #1002).
-
-        The RAES backend's post-start gate already authenticated graph-owned
-        Wazuh APIs and failed closed if they were not ready, so this step must
-        not authenticate them a second time.
-        """
-        from aptl.core.lab import _step_wait_for_services
-
-        ctx = self._ctx(tmp_path)
-        ctx.backend.authenticated_readiness = {
-            "wazuh.indexer": True,
-            "wazuh.manager": True,
-        }
-        wait = mocker.patch("aptl.core.lab.wait_for_service")
-
-        assert _step_wait_for_services(ctx) is None
-
-        wait.assert_not_called()
-        assert ctx.diagnostics == []
-
-    def test_wait_for_services_still_waits_for_services_not_proved(
-        self, tmp_path, mocker
-    ):
-        """Only a recorded ``True`` counts; an unproved service is still probed."""
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import ServiceResult
-
-        ctx = self._ctx(tmp_path)
-        ctx.backend.authenticated_readiness = {
-            "wazuh.indexer": True,
-            "wazuh.manager": False,
-        }
-        wait = mocker.patch(
-            "aptl.core.lab.wait_for_service",
-            return_value=ServiceResult(ready=True, elapsed_seconds=3.0),
-        )
-
-        assert _step_wait_for_services(ctx) is None
-
-        assert [c.kwargs["service_name"] for c in wait.call_args_list] == [
-            "Wazuh Manager API"
-        ]
-
-    def test_wait_for_services_clean_emits_no_diagnostic(self, tmp_path, mocker):
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import ServiceResult
-
-        ctx = self._ctx(tmp_path)
-        mocker.patch(
-            "aptl.core.lab.wait_for_service",
-            return_value=ServiceResult(ready=True, elapsed_seconds=10.0),
-        )
-
-        result = _step_wait_for_services(ctx)
-        assert result is None
-
-        assert ctx.diagnostics == []
-
-    def test_wait_for_services_skipped_when_wazuh_disabled(self, tmp_path, mocker):
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import ServiceResult
-
-        ctx = self._ctx(tmp_path, config=self._make_config(wazuh=False))
-        wait_mock = mocker.patch(
-            "aptl.core.lab.wait_for_service",
-            return_value=ServiceResult(
-                ready=False, elapsed_seconds=300.0, error="timed out"
-            ),
-        )
-
-        result = _step_wait_for_services(ctx)
-        assert result is None
-
-        # Wazuh probes never ran -> no diagnostics.
-        assert ctx.diagnostics == []
-        wait_mock.assert_not_called()
-
-    def test_wait_for_services_skipped_when_wazuh_not_in_selected_profiles(
-        self, tmp_path, mocker
-    ):
-        """A bounded scenario may omit Wazuh even when the container is enabled
-        in config. The readiness wait must gate on the scenario's selected
-        profiles, not the config flag, so it does not falsely wait on (and warn
-        about) a Wazuh the scenario never started."""
-        from aptl.core.lab import _step_wait_for_services
-
-        ctx = self._ctx(
-            tmp_path,
-            config=self._make_config(wazuh=True),
-            selected_profiles={"otel"},
-        )
-        wait_mock = mocker.patch("aptl.core.lab.wait_for_service")
-
-        result = _step_wait_for_services(ctx)
-        assert result is None
-
-        wait_mock.assert_not_called()
         assert ctx.diagnostics == []
 
     # -- test_ssh (readiness) ------------------------------------------
@@ -3640,6 +3518,18 @@ class TestStartupClassificationWiring:
         assert ctx.diagnostics == []
 
     # -- build_mcps (capability) ---------------------------------------
+
+    def test_product_neutral_start_skips_mcp_build(self, tmp_path, mocker):
+        from aptl.core.lab import _step_build_mcps
+
+        ctx = self._ctx(tmp_path, selected_profiles=set())
+        ctx.admitted_surface = object()
+        run_script = mocker.patch("aptl.utils.shell.run_shell_script")
+
+        assert _step_build_mcps(ctx) is None
+
+        run_script.assert_not_called()
+        assert ctx.diagnostics == []
 
     def test_build_mcps_missing_script_emits_capability_warning(self, tmp_path):
         from aptl.core.lab import _step_build_mcps
@@ -4108,6 +3998,18 @@ class TestStartupClassificationWiring:
 
     # -- mcp_config_sync (capability) ----------------------------------
 
+    def test_product_neutral_start_skips_mcp_config_sync(self, tmp_path, mocker):
+        from aptl.core.lab import _step_sync_mcp_config
+
+        ctx = self._ctx(tmp_path, selected_profiles=set())
+        ctx.admitted_surface = object()
+        sync = mocker.patch("aptl.core.lab._sync_mcp_config_keys")
+
+        assert _step_sync_mcp_config(ctx) is None
+
+        sync.assert_not_called()
+        assert ctx.diagnostics == []
+
     def test_mcp_config_sync_exception_emits_capability_warning(self, tmp_path, mocker):
         from aptl.core.lab import _step_sync_mcp_config
         from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
@@ -4139,6 +4041,32 @@ class TestStartupClassificationWiring:
         result = _step_sync_mcp_config(ctx)
         assert result is None
 
+        assert ctx.diagnostics == []
+
+    def test_mcp_config_sync_prefers_owned_live_port_over_prestart_resolution(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _step_sync_mcp_config
+
+        ctx = self._ctx(tmp_path)
+        prestart = SimpleNamespace(
+            env_var="APTL_HP_WAZUH_INDEXER_9200", resolved_port=9200
+        )
+        live = SimpleNamespace(
+            env_var="APTL_HP_WAZUH_INDEXER_9200", resolved_port=29200
+        )
+        ctx.resolved_ports = [prestart]
+        runtime = mocker.patch(
+            "aptl.core.lab._runtime_mcp_host_ports", return_value=[live]
+        )
+        sync = mocker.patch("aptl.core.lab._sync_mcp_config_keys")
+
+        assert _step_sync_mcp_config(ctx) is None
+
+        runtime.assert_called_once_with(
+            ctx.project_dir, ctx.backend, active_profiles=None
+        )
+        assert sync.call_args.args[1] == [live]
         assert ctx.diagnostics == []
 
 
@@ -4229,9 +4157,32 @@ class TestLabOrchestrationContracts:
     """
 
     def _ctx(self, tmp_path: Path):
-        from aptl.core.lab import _LabStartContext
+        from aptl.backends.scenario_startup import (
+            ScenarioStartupPlan,
+            ScenarioStartupSelection,
+            StartupHook,
+        )
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import StartSelection, _LabStartContext
+        from aptl.core.scenario_bundle import project_tree_bundle
+        from aptl_techvault.startup import TechVaultStartupProvider
 
-        return _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        plan = ScenarioStartupPlan(
+            seed_script="scripts/seed-prime.sh",
+            required_profiles=(),
+            activation_profiles=(),
+            startup_hooks=frozenset({StartupHook.BEFORE_BACKEND_RETRY}),
+        )
+        bundle = project_tree_bundle(tmp_path, tmp_path / "fixture.sdl.yaml")
+        provider_selection = ScenarioStartupSelection(
+            None, TechVaultStartupProvider(), plan
+        )
+        ctx.scenario_startup = plan
+        ctx.start_selection = StartSelection(
+            AptlConfig(), bundle, plan, provider_selection
+        )
+        return ctx
 
     def _full_env(self):
         from aptl.core.env import EnvVars
@@ -4970,24 +4921,18 @@ class TestStopLabCleanupIsContractFree:
         result = stop_lab(project_dir=tmp_path, backend=backend)
 
         assert result.success is True
-        # Fell back to ALL_KNOWN_PROFILES since no aptl.json exists.
+        # Core keeps only its own apparatus profile; pack profiles are supplied
+        # by admitted runtime state, never a global product vocabulary.
         backend.stop.assert_called_once()
         called_profiles = backend.stop.call_args[0][0]
-        assert "wazuh" in called_profiles
+        assert called_profiles == ["otel"]
 
 
 class TestSeedSocPrimeProfileDiagnostic:
-    """Soft check against `_PRIME_REQUIRED_PROFILES`, diffed against
-    `ctx.selected_profiles` (the scenario-realized surface, issue #550) at
-    the SOC seed boundary. ADR-005 supports selective SOC labs, so a
-    missing prime profile must NOT fatally refuse lab startup — it
-    surfaces as a CAPABILITY diagnostic and the step returns None. The
-    config-bound `required_profiles_enabled` predicate in
-    `aptl.core.contracts` remains available as a hard contract for a
-    future explicit prime-scenario entrypoint; this boundary uses plain
-    set containment against the selected surface instead."""
+    """Soft checks use the adapter's required scenario profile surface."""
 
     def _ctx(self, tmp_path: Path, *, soc: bool, selected_profiles=None, **extra):
+        from aptl.backends.scenario_startup import ScenarioStartupPlan
         from aptl.core.config import AptlConfig
         from aptl.core.env import EnvVars
         from aptl.core.lab import _LabStartContext
@@ -5011,6 +4956,18 @@ class TestSeedSocPrimeProfileDiagnostic:
             ),
             config=cfg,
             selected_profiles=selected_profiles,
+            scenario_startup=ScenarioStartupPlan(
+                seed_script="scripts/seed-prime.sh",
+                required_profiles=(
+                    "wazuh",
+                    "enterprise",
+                    "victim",
+                    "kali",
+                    "fileshare",
+                    "soc",
+                ),
+                activation_profiles=("soc",),
+            ),
         )
 
     def test_partial_prime_set_emits_capability_diagnostic(self, tmp_path):
@@ -5137,6 +5094,7 @@ class TestGenerateSocCertsStep:
                 scenario=ScenarioSourceConfig(source="project-tree"),
             ),
             backend=backend or MagicMock(),
+            selected_profiles={"soc"} if soc else set(),
         )
 
     def test_skips_when_soc_disabled(self, tmp_path, mocker):

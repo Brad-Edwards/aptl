@@ -36,33 +36,19 @@ def _spawn_requirement_is_complete(
     *,
     node_address: str,
 ) -> bool:
-    """Whether a carried child contract contains every field core code consumes."""
+    """Whether a carried image requirement names what core code consumes.
 
-    return bool(
-        _spawn_requirement_identity_is_complete(
-            requirement,
-            node_address=node_address,
-        )
-        and _positive_int(requirement.execution_timeout_seconds)
-        and _positive_int(requirement.expected_count)
-    )
+    This is an integrity check on APTL's own carried decision, not a judgement
+    about the scenario. It confirms the requirement still belongs to its node
+    and names an image and a bounded deadline.
+    """
 
-
-def _spawn_requirement_identity_is_complete(
-    requirement: DeploymentSpawnImageRequirement,
-    *,
-    node_address: str,
-) -> bool:
-    """Whether a child contract carries its complete immutable identity."""
-
-    label_name, _separator, label_value = requirement.child_label.partition("=")
     return bool(
         requirement.node_address == node_address
         and requirement.authority_id
         and requirement.template_id
         and requirement.image_ref
-        and label_name
-        and label_value
+        and _positive_int(requirement.execution_timeout_seconds)
     )
 
 
@@ -72,10 +58,22 @@ def _positive_int(value: object) -> bool:
     return bool(isinstance(value, int) and not isinstance(value, bool) and value > 0)
 
 
+def _declared_node_networks(node: object) -> set[str]:
+    """Return the carried network names from either node representation."""
+
+    return {
+        str(network) for network in getattr(node, "networks", ()) or () if str(network)
+    } | {
+        str(getattr(attachment, "network", ""))
+        for attachment in getattr(node, "network_attachments", ()) or ()
+        if str(getattr(attachment, "network", ""))
+    }
+
+
 def docker_socket_volume(
     admission: DeploymentDockerAuthorityAdmission | None,
 ) -> dict[str, object] | None:
-    """Return the sole admitted Compose socket bind for one node."""
+    """Return the exact host-root-equivalent endpoint admitted for one node."""
 
     if admission is None:
         return None
@@ -86,7 +84,7 @@ def docker_socket_volume(
         )
     return {
         "type": "bind",
-        "source": DOCKER_SOCKET_PATH,
+        "source": admission.endpoint_source,
         "target": DOCKER_SOCKET_PATH,
         "read_only": False,
     }
@@ -99,35 +97,9 @@ def docker_authority_admissions(
 
     admissions = realization.docker_authority_admissions
     nodes = {node.address: node for node in realization.nodes}
-    addresses = [admission.node_address for admission in admissions]
-    services = [admission.service_name for admission in admissions]
-    labels = [
-        requirement.child_label
+    valid = _authority_identifiers_are_unique(admissions) and all(
+        _authority_admission_is_complete(admission, nodes.get(admission.node_address))
         for admission in admissions
-        for requirement in admission.spawn_requirements
-    ]
-    valid = bool(
-        len(addresses) == len(set(addresses))
-        and len(services) == len(set(services))
-        and len(labels) == len(set(labels))
-        and all(
-            admission.node_address in nodes
-            and nodes[admission.node_address].service_name == admission.service_name
-            and _admission_endpoint_is_supported(admission)
-            # No non-emptiness requirement: an authority may declare its
-            # privilege without declaring an expected child inventory, and a
-            # realized child is an observation, so there is nothing to carry
-            # before anything has run. Every contract that *is* carried is still
-            # checked in full below.
-            and all(
-                _spawn_requirement_is_complete(
-                    requirement,
-                    node_address=admission.node_address,
-                )
-                for requirement in admission.spawn_requirements
-            )
-            for admission in admissions
-        )
     )
     if admissions and not valid:
         raise ValueError(
@@ -135,6 +107,40 @@ def docker_authority_admissions(
             "Docker authority graph admission is incomplete or stale."
         )
     return admissions
+
+
+def _authority_identifiers_are_unique(
+    admissions: tuple[DeploymentDockerAuthorityAdmission, ...],
+) -> bool:
+    """Return whether one authority owns a unique node address and service."""
+
+    addresses = [admission.node_address for admission in admissions]
+    services = [admission.service_name for admission in admissions]
+    return bool(
+        len(addresses) == len(set(addresses))
+        and len(services) == len(set(services))
+    )
+
+
+def _authority_admission_is_complete(
+    admission: DeploymentDockerAuthorityAdmission, node: object | None
+) -> bool:
+    """Validate one carried authority against its realized node and children."""
+
+    if node is None:
+        return False
+    return bool(
+        getattr(node, "service_name", None) == admission.service_name
+        and set(admission.allowed_networks) == _declared_node_networks(node)
+        and _admission_endpoint_is_supported(admission)
+        and all(
+            _spawn_requirement_is_complete(
+                requirement,
+                node_address=admission.node_address,
+            )
+            for requirement in admission.spawn_requirements
+        )
+    )
 
 
 def docker_authority_admissions_by_address(
@@ -177,11 +183,12 @@ def _environment_names(raw: object) -> set[str]:
 
 
 def _mount_is_exact_socket(mount: object) -> bool:
-    """Whether one effective mount is the canonical admitted socket bind."""
+    """Whether one effective mount is the declared host-socket bind."""
 
+    if not isinstance(mount, Mapping):
+        return False
     return bool(
-        isinstance(mount, Mapping)
-        and mount.get("type") == "bind"
+        mount.get("type") == "bind"
         and mount.get("source") == DOCKER_SOCKET_PATH
         and mount.get("target") == DOCKER_SOCKET_PATH
         and mount.get("read_only", False) is False
@@ -227,10 +234,6 @@ def _authority_service_errors(
         errors.append(
             f"Docker authority service {service_name} has a Docker endpoint override."
         )
-    if raw_service.get("privileged") is True:
-        errors.append(
-            f"Docker authority service {service_name} must not be privileged."
-        )
     return errors
 
 
@@ -239,7 +242,7 @@ def _effective_service_errors(
     raw_service: object,
     holders: Mapping[str, str],
 ) -> list[str]:
-    """Return authority-containment errors for one effective service."""
+    """Return authority-integrity errors for one effective service."""
 
     errors: list[str] = []
     if isinstance(raw_service, Mapping):
@@ -282,7 +285,11 @@ def effective_orchestration_model_errors(
     errors = [
         error
         for service_name, raw_service in services.items()
-        for error in _effective_service_errors(service_name, raw_service, holders)
+        for error in _effective_service_errors(
+            service_name,
+            raw_service,
+            holders,
+        )
     ]
     errors.extend(
         f"Docker authority service {holder} is absent from Compose model."
@@ -326,19 +333,20 @@ class ComposeRuntimeOrchestrationRouteMixin:
     ) -> LabResult | None:
         """Validate child closure and bind the exact local control endpoint."""
 
+        outcome: LabResult | None = None
         try:
             required = realization_has_docker_authority(realization)
-            deployment_spawn_image_requirements(realization)
         except ValueError as exc:
-            return LabResult(success=False, error=str(exc))
-        if not required:
-            return None
-        endpoint = (
-            self.revalidate_local_docker_socket()
-            if getattr(self, "_docker_socket_identity", None) is not None
-            else self.bind_local_docker_socket()
-        )
-        return None if endpoint.success else endpoint
+            outcome = LabResult(success=False, error=str(exc))
+        else:
+            if required:
+                endpoint = (
+                    self.revalidate_local_docker_socket()
+                    if getattr(self, "_docker_socket_identity", None) is not None
+                    else self.bind_local_docker_socket()
+                )
+                outcome = None if endpoint.success else endpoint
+        return outcome
 
     def _runtime_orchestration_preflight(
         self,

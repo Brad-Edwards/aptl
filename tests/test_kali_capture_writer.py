@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from aptl.core.evidence.adapters.techvault import (
+from aptl_techvault.evidence.techvault import (
     TranscriptFrame,
     transcript_chain_digest,
 )
@@ -278,3 +278,86 @@ def test_recorder_discloses_loss_instead_of_exceeding_run_quota(
     session = broker.export_capture(tmp_path / "captures", authority)["sessions"][0]
     assert session["frames"] == []
     assert session["loss_count"] == 1
+
+
+def test_leading_option_command_cannot_configure_inner_ssh(broker):
+    import subprocess
+
+    command = broker.inner_ssh_command("-oProxyCommand=printf option-injected")
+    result = subprocess.run(
+        [command[0], "-G", "-F", "none", *command[1:]],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "proxycommand printf option-injected" not in result.stdout
+
+
+def _prepare_broker_session(broker, tmp_path, monkeypatch):
+    runtime = tmp_path / "runtime"
+    broker.activate_authority(
+        runtime,
+        run_id="run-1",
+        plan_id="plan-1",
+        binding_id="aptl.collector.redteam-session-transcript",
+    )
+    monkeypatch.setattr(broker, "_RUNTIME_ROOT", runtime)
+    monkeypatch.setattr(broker, "_CAPTURE_ROOT", tmp_path / "captures")
+    for name, value in (
+        ("APTL_SESSION_ID", "session-1"),
+        ("APTL_RUN_ID", "run-1"),
+        ("APTL_TRACE_ID", "run-1"),
+    ):
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(broker.signal, "signal", lambda *_args: None)
+    return runtime
+
+
+def test_duplicate_session_preserves_original_pid_registration(
+    broker, tmp_path, monkeypatch
+):
+    runtime = _prepare_broker_session(broker, tmp_path, monkeypatch)
+    record = runtime / "sessions" / "session-1.pid"
+    record.parent.mkdir(exist_ok=True)
+    record.write_text("12345\n")
+    with pytest.raises(FileExistsError):
+        broker.run_broker()
+    assert record.read_text() == "12345\n"
+
+
+def test_broker_relays_characters_and_interrupt_bytes_and_restores_outer_terminal(
+    broker, tmp_path, monkeypatch, mocker
+):
+    import os
+    import pty
+    import select
+    import termios
+
+    _prepare_broker_session(broker, tmp_path, monkeypatch)
+    master, slave = pty.openpty()
+    saved = termios.tcgetattr(slave)
+    child = mocker.Mock()
+    child.poll.return_value = 0
+    monkeypatch.setattr(broker.subprocess, "Popen", lambda *_args, **_kwargs: child)
+    monkeypatch.setattr(broker.sys, "stdin", mocker.Mock(fileno=lambda: slave))
+
+    def relay(*_args):
+        flags = termios.tcgetattr(slave)[3]
+        assert not flags & (termios.ICANON | termios.ECHO | termios.ISIG)
+        os.write(master, b"x\x03")
+        assert select.select([slave], [], [], 1)[0]
+        assert os.read(slave, 2) == b"x\x03"
+        return 0
+
+    monkeypatch.setattr(broker, "_relay", relay)
+    try:
+        assert broker.run_broker() == 0
+        restored = termios.tcgetattr(slave)
+        # Darwin may report PENDIN after switching back to canonical mode.
+        # It is kernel-maintained input state, not a configured terminal mode.
+        for attributes in (saved, restored):
+            attributes[3] &= ~getattr(termios, "PENDIN", 0)
+        assert restored == saved
+    finally:
+        os.close(master)
+        os.close(slave)

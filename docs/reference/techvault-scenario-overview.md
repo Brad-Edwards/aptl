@@ -14,11 +14,10 @@ boundary and curated startup slices, see
 
 ## Where the scenario is defined
 
-- `scenarios/techvault-operational.sdl.yaml` is the canonical RAES SDL that
-  public startup boots by default (nodes, vulnerabilities, accounts, content,
-  and relationships).
-- `scenarios/catalog.json` registers the operational default plus the four
-  curated variants as startup aliases.
+- The verified acquired `techvault` bundle supplies the canonical SDL, content,
+  and artifact identity used by ordinary startup.
+- The operator catalog projects that acquired identity. `scenarios/catalog.json`
+  belongs to checkout-only research fixtures and does not add startup aliases.
 
 Compose profiles are realized from the nodes the SDL declares (including
 dependency closure), not from a preset keyed off the scenario name.
@@ -57,8 +56,17 @@ response per [ADR-019](../adrs/adr-019-suricata-ids-only-prevention-via-wazuh-ar
 MISP threat intelligence (with its MariaDB and Redis backends plus a Suricata
 IOC sync); TheHive case management (backed by Cassandra and Elasticsearch)
 alongside Cortex; Shuffle SOAR (backend, frontend, orborus, and OpenSearch); and
-an OpenTelemetry collector feeding Tempo and Grafana. Two off-node Wazuh
-sidecars forward PostgreSQL and Suricata logs into the manager.
+an OpenTelemetry collector feeding Tempo and Grafana. Eight monitored hosts --
+the web app, domain controller, DNS, file share, victim, workstation, database,
+and Suricata -- each run their own enrolled Wazuh agent and keep their
+enrollment identity across a restart, so events stay attributable to the host
+that produced them.
+
+MISP is reached at its scenario identity, `https://misp.techvault.local`, and
+its certificate is issued by the lab CA for that name. Its database and cache
+connections, the cache's authentication, and its administrator identity are all
+part of the admitted plan before anything starts: the lab does not start MISP
+and then reconfigure it.
 
 ### Host-published ports
 
@@ -101,7 +109,7 @@ By design, secret-named values in this synthetic range are scenario content, not
 real operator secrets. They remain in the exact portable content or semantic
 fixtures that need them so the range stays reproducible. They are not expressed
 as Docker environment or mount instructions when the author did not choose
-those mechanics: TechVault 6.0.1 leaves those runtime scopes unspecified, which
+those mechanics: TechVault 6.1.0 leaves those runtime scopes unspecified, which
 RAES resolves CLOSED. The Active Directory, Flask, JWT, and workstation fixture
 secrets remain scenario content; genuine operator secrets are withheld.
 
@@ -122,7 +130,8 @@ only admitted apparatus that is necessary for required evidence and permitted
 by the scenario's realization scopes. TechVault's native evidence paths do not
 require OTel, so its normal startup omits that optional stack.
 
-Select a variant with `aptl lab start --scenario <catalog id>`. See
+From a matching source checkout, select a research fixture with
+`aptl lab start --scenario-path scenarios/<fixture-id>.sdl.yaml`. See
 [Curated RAES Variants](../sdl/techvault-curated-variants.md) for the full
 authoring and proof detail.
 
@@ -130,5 +139,5 @@ The versioned [Guided Purple Participant Profile](participant-profile.md)
 binds `techvault-attacker-target` to one supported workshop narrative, strict
 config, participant surface, readiness suite, and qualification budget. The
 curated scenario remains general RAES content; it is not renamed or forked for
-an event. The full `techvault-operational` stack remains the broader developer
-and research path.
+an event. The full acquired `techvault` pack supplies ordinary startup and participant
+appliance delivery; the guided fixture is a separate research input.

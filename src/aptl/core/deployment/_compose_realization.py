@@ -59,6 +59,9 @@ from aptl.core.deployment._compose_realization_networks import (
 from aptl.core.deployment._compose_runtime_orchestration import (
     ComposeRuntimeOrchestrationRouteMixin,
 )
+from aptl.core.deployment._compose_runtime_materialization import (
+    ComposeRuntimeMaterializationMixin,
+)
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.lab_types import LabResult
@@ -76,6 +79,7 @@ __all__ = [
 
 
 class ComposeRealizationMixin(
+    ComposeRuntimeMaterializationMixin,
     ComposeTrafficMirrorMixin,
     ComposeCaptureApparatusMixin,
     ComposeObservabilityMixin,
@@ -106,9 +110,9 @@ class ComposeRealizationMixin(
         failure = self._runtime_orchestration_preflight(realization)
         if failure is not None:
             return failure
-        return self._verify_runtime_orchestration(
-            realization, require_children=True
-        ) or LabResult(success=True)
+        return self._verify_runtime_orchestration(realization) or LabResult(
+            success=True
+        )
 
     def realize(
         self,
@@ -136,7 +140,18 @@ class ComposeRealizationMixin(
         resolution of the mutable tag.
         """
 
+        failure = self._runtime_materialization_preflight(
+            realization, scenario_root=scenario_root
+        )
+        if failure is not None:
+            return failure
+
         observation_context = observation_context or DeploymentObservationContext()
+        attempt_id = observation_context.attempt_id or self._resource_attempt_id
+        ownership = self._ensure_resource_ownership()
+        self._ensure_resource_ownership(
+            attempt_id=attempt_id or ownership.new_attempt_id()
+        )
         failure = self._realization_preflight(
             realization, scenario_root, substrate_digests
         )
@@ -262,7 +277,9 @@ class ComposeRealizationMixin(
             ]
             if not consumers and not environment_consumers:
                 continue
-            failure = self._realize_one_generated_artifact(artifact, realization_root)
+            failure = self._realize_one_generated_artifact(
+                artifact, realization_root, realization
+            )
             if failure is None:
                 failure = _append_image_free_artifact_ops(
                     ops_by_address, artifact, consumers, realization_root
@@ -295,24 +312,30 @@ class ComposeRealizationMixin(
         reports success.
         """
 
-        substrate_failure = self._realize_networks_and_boundaries(realization)
-        if substrate_failure is not None:
-            return substrate_failure
-        addresses = frozenset(node.address for node in realization.nodes)
-        failure, extra_ops = self._image_free_generated_artifact_ops(
-            realization, addresses, self.realization_root
-        )
-        if failure is not None:
-            return failure
-        node_result = _realize_node_subset(
-            self,
-            realization.nodes,
-            realization.content,
-            scenario_root,
-            extra_ops,
-            persistent_volumes=realization.persistent_volumes,
-        )
-        return node_result if node_result is not None else LabResult(success=True)
+        failure = self._realize_networks_and_boundaries(realization)
+        node_result: LabResult | None = None
+        if failure is None:
+            addresses = frozenset(node.address for node in realization.nodes)
+            failure, extra_ops = self._image_free_generated_artifact_ops(
+                realization, addresses, self.realization_root
+            )
+        if failure is None:
+            node_result = _realize_node_subset(
+                self,
+                realization.nodes,
+                realization.content,
+                scenario_root,
+                extra_ops,
+                persistent_volumes=realization.persistent_volumes,
+            )
+            failure = (
+                node_result
+                if node_result is not None and not node_result.success
+                else None
+            )
+        if failure is None:
+            failure = self._realize_platform_boundary()
+        return failure or node_result or LabResult(success=True)
 
     def _realize_published_ports(
         self,

@@ -35,7 +35,6 @@ from raes_backend_protocols.capabilities import (
 from raes_backend_protocols.manifest import backend_manifest_v2_model
 from raes_contracts.apparatus import (
     ConceptBinding,
-    ProcessResourceLimitCapability,
     RealizationObservationCapability,
     RealizationSupportDeclaration,
     RealizationSupportMode,
@@ -51,6 +50,7 @@ from raes_contracts.contracts import (
 )
 from raes_contracts.realization_envelope import BackendRealizationEnvelopeModel
 from aptl.backends.raes_artifact_mechanisms import aptl_artifact_mechanisms
+from aptl.backends._raes_manifest_resources import APTL_PROCESS_RESOURCE_LIMITS
 from aptl.backends.identity import APTL_RAES_TARGET_NAME, APTL_RAES_TARGET_VERSION
 from aptl.backends.raes_operating_systems import APTL_OPERATING_SYSTEMS
 from aptl.backends.raes_planning_compat import DAEMON_READBACK_RUNTIME_CONCERNS
@@ -58,42 +58,20 @@ from aptl.backends.raes_realization_envelope import build_aptl_realization_envel
 from raes_contracts.vocabulary import (
     ObservationStrength,
     ParticipantFeatureSupportLevel,
-    ProcessResourceLimitKind,
-    ProcessResourceLimitScope,
     WorkflowFeature,
     WorkflowStatePredicateFeature,
 )
 
-try:
-    from raes_contracts.manifest_authority import BACKEND_SUPPORTED_CONTRACT_IDS
-except ImportError:
-    # Older RAES packages still expose validation without manifest authority.
-    BACKEND_SUPPORTED_CONTRACT_IDS = ()
+from raes_contracts.manifest_authority import BACKEND_SUPPORTED_CONTRACT_IDS
 
 from aptl.backends.raes_participant_runtime import PARTICIPANT_ACTION_ADDRESS
 from aptl.core.experiment.capture_registry import (
+    CollectorRegistry,
     DEFAULT_COLLECTOR_REGISTRY,
     OBSERVATION_EVIDENCE_CONTRACTS,
 )
 
 APTL_EXPERIMENT_ACTION_TIMEOUT_TARGET = "participant-runtime.action-timeout-seconds"
-
-APTL_PROCESS_RESOURCE_LIMITS = (
-    ProcessResourceLimitCapability(
-        resource=ProcessResourceLimitKind.OPEN_FILE_DESCRIPTORS,
-        scopes=frozenset({ProcessResourceLimitScope.SUBTREE}),
-        minimum=0,
-        maximum=None,
-        supports_unlimited=True,
-    ),
-    ProcessResourceLimitCapability(
-        resource=ProcessResourceLimitKind.LOCKED_MEMORY_BYTES,
-        scopes=frozenset({ProcessResourceLimitScope.SUBTREE}),
-        minimum=0,
-        maximum=None,
-        supports_unlimited=True,
-    ),
-)
 
 _EXPERIMENT_CONFIGURATION_REGISTRY = ConfigurationTargetRegistryModel(
     owner=BindingOwnerModel(
@@ -192,8 +170,11 @@ _ORCHESTRATOR = OrchestratorCapabilities(
 # ADR-088 service materialization (#889) and EXP-010 TechVault native evidence
 # (#992) declare boolean observed-state postconditions. APTL evaluates only the
 # exact predicate/evidence bindings implemented by its fresh native readbacks;
-# those bindings use api_response and log channels. This is not a general
-# proposition-evaluation engine.
+# those bindings use the api_response, log, and file_artifact channels. This is
+# not a general proposition-evaluation engine: the channel set below is exactly
+# the set of channels NATIVE_EVIDENCE_CAPABILITIES can decide a proposition on,
+# and adding a channel here without its capability entry would claim an
+# evaluation APTL cannot perform.
 _EVALUATOR = EvaluatorCapabilities(
     name="aptl-rte-evaluator",
     supported_sections=frozenset(
@@ -204,7 +185,7 @@ _EVALUATOR = EvaluatorCapabilities(
     supported_predicate_families=frozenset({"boolean", "presence"}),
     supported_quantifiers=frozenset({"all"}),
     supported_truth_outcomes=frozenset({"true", "false", "unknown", "unsupported"}),
-    supported_evidence_channels=frozenset({"api_response", "log"}),
+    supported_evidence_channels=frozenset({"api_response", "file_artifact", "log"}),
     supported_time_domains=frozenset({"scenario_time"}),
     preserves_binding_provenance=True,
 )
@@ -427,7 +408,9 @@ _CONCEPT_BINDINGS = (
 )
 
 
-def create_aptl_manifest() -> BackendManifest:
+def create_aptl_manifest(
+    registry: CollectorRegistry | None = None,
+) -> BackendManifest:
     """Return APTL's canonical full remote-control-plane backend manifest.
 
     The ``observation`` capability is an aggregate projection of the code-owned
@@ -441,7 +424,8 @@ def create_aptl_manifest() -> BackendManifest:
     ``supported_contract_versions``, so they are added exactly then and never
     speculatively.
     """
-    observation = DEFAULT_COLLECTOR_REGISTRY.observation_projection()
+    selected_registry = registry if registry is not None else DEFAULT_COLLECTOR_REGISTRY
+    observation = selected_registry.observation_projection()
     supported_contract_versions = _SUPPORTED_CONTRACT_VERSIONS
     capability_options: dict[str, object] = {}
     if observation is not None:

@@ -7,12 +7,17 @@ node-to-node dependencies resolve against realized services, and component
 builds resolve from the engine checkout (``component_root``), not the bundle. A
 regression in any of those re-introduces provisioner diagnostics that block the
 boot.
+
+The TechVault cases pin the released pack. The pack path itself -- a pack with
+no installed adapter, admitted by the production resolver -- is proven against
+APTL's owned fixture pack (issue #985), so it runs in the fast suite and no pack
+release can break it.
 """
 
 from __future__ import annotations
 
 import importlib.resources as ir
-from dataclasses import replace
+import os
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -76,21 +81,6 @@ def techvault_realization(tmp_path_factory):
     return _realize_pack(tmp_path_factory.mktemp("techvault-realization"))
 
 
-def _without_downstream_orborus_authority(realization):
-    """Isolate non-authority tests until env-packs #285 completes the closure."""
-
-    nodes = tuple(
-        replace(
-            node,
-            runtime=node.runtime.model_copy(update={"orchestration_authorities": []}),
-        )
-        if node.name == "shuffle-orborus" and node.runtime is not None
-        else node
-        for node in realization.nodes
-    )
-    return replace(realization, nodes=nodes)
-
-
 @pytest.mark.integration
 def test_techvault_pack_realizes_without_provisioner_diagnostics(
     techvault_realization,
@@ -114,9 +104,91 @@ def test_techvault_pack_realizes_without_provisioner_diagnostics(
     assert evidence["provider"]["mapping_digest"].startswith("sha256:")
 
 
+def test_owned_fixture_pack_realizes_through_the_pack_path(tmp_path):
+    """A pack with no installed adapter realizes through the core default (#985).
+
+    The owned fixture is admitted by the same resolver as a released pack, so it
+    takes the pack-only realization path: its content identity is carried into
+    the realization, and serving groups resolve through the installed-provider
+    seam. No provider is registered for this identity, so the core unprofiled
+    default answers -- a generic pack must neither need an adapter nor borrow
+    TechVault's profiles to realize.
+    """
+
+    from aptl.backends.raes import (
+        RuntimeManager,
+        create_aptl_runtime_target,
+        parse_sdl_file,
+    )
+    from aptl.backends.raes_realization import interpret_provisioning_plan
+    from aptl.core.config import AptlConfig
+    from aptl.core.scenario_bundle import ScenarioSourceKind
+    from tests.fixture_pack import admit_fixture_pack
+
+    bundle = admit_fixture_pack(tmp_path / "staged")
+    config = AptlConfig(lab={"name": "fixture"}, containers={})
+    target = create_aptl_runtime_target(
+        project_dir=PROJECT_ROOT, config=config, backend=MagicMock(), bundle=bundle
+    )
+    plan = RuntimeManager(target).plan(parse_sdl_file(bundle.sdl_path))
+    assert [d.code for d in plan.diagnostics] == []
+
+    realization = interpret_provisioning_plan(
+        plan=plan.provisioning,
+        config=config,
+        bundle=bundle,
+        component_root=PROJECT_ROOT,
+    )
+
+    assert bundle.source_kind is ScenarioSourceKind.ENV_PACK
+    assert [d.code for d in realization.diagnostics] == []
+    assert [node.address for node in realization.nodes] == ["provision.node.smoke-box"]
+    assert [item.address for item in realization.placements] == [
+        "provision.content.smoke-sshd-config"
+    ]
+    assert realization.profiles == frozenset()
+    assert realization.pack_identity == bundle.pack_identity
+    evidence = realization.pack_interaction_evidence([])
+    assert evidence["pack"]["pack_id"] == "materialization-envelope"
+    assert evidence["pack"]["set_digest"] == bundle.pack_identity.set_digest
+    assert evidence["provider"]["provider_id"] == "aptl.core.unprofiled-default"
+    assert evidence["provider"]["entry_point"] == ""
+
+
+@pytest.mark.integration
+def test_real_pack_cassandra_has_bounded_heap(techvault_realization):
+    """The guest must not size Cassandra's heap from all available VM RAM."""
+    from aptl.core.deployment._compose_node_generation import render_realization_compose
+
+    realization = techvault_realization
+    spec = realization.deployment_spec(sorted(realization.profiles))
+    service = render_realization_compose(spec)["services"]["thehive-cassandra"]
+
+    assert service.get("environment", {}).get("MAX_HEAP_SIZE") == "512M"
+    assert service["environment"]["HEAP_NEWSIZE"] == "128M"
+    node = next(node for node in realization.nodes if node.name == "thehive-cassandra")
+    assert "runtime-environment" in node.backend_selected_concerns
+
+
+@pytest.mark.integration
+def test_real_pack_orborus_disables_undeclared_pipeline_startup(techvault_realization):
+    """Offline worker startup must not auto-provision a Tenzir/Sigma stack."""
+    from aptl.core.deployment._compose_node_generation import render_realization_compose
+
+    spec = techvault_realization.deployment_spec(sorted(techvault_realization.profiles))
+    services = render_realization_compose(spec)["services"]
+    environment = services["shuffle-orborus"]["environment"]
+
+    assert environment.get("SHUFFLE_SKIP_PIPELINES") == "true"
+    assert environment.get("SHUFFLE_STATS_DISABLED") == "true"
+    assert environment.get("SHUFFLE_LOGS_DISABLED") == "true"
+    assert environment["SHUFFLE_AUTO_IMAGE_DOWNLOAD"] == "false"
+    assert "@sha256:" in environment["SHUFFLE_WORKER_IMAGE"]
+
+
 @pytest.mark.integration
 def test_generated_compose_covers_image_nodes_networks_and_ordering(
-    techvault_realization,
+    techvault_realization, tmp_path
 ):
     """The generated base compose renders image nodes, networks, and safe deps."""
 
@@ -127,9 +199,7 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
     # which must replace Shuffle's mutable child image and author the realized
     # child correlation before APTL can admit its Docker authority. Strip only
     # that downstream declaration so the generic Compose surface remains covered.
-    spec = _without_downstream_orborus_authority(realization).deployment_spec(
-        sorted(realization.profiles)
-    )
+    spec = realization.deployment_spec(sorted(realization.profiles))
     document = render_realization_compose(spec)
 
     services = document["services"]
@@ -138,6 +208,9 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
     assert services["misp"]["image"]
     assert services["misp"]["container_name"] == "aptl-misp"
     assert services["misp"]["profiles"] == ["soc"]
+    assert services["suricata"]["labels"]["aptl.node.address"] == (
+        "provision.node.suricata"
+    )
     misp = next(node for node in realization.nodes if node.name == "misp")
     assert misp.image.policy_rule == "backend-open-profile"
     assert set(misp.backend_selected_concerns) == {
@@ -190,9 +263,14 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
 
     # depends_on never references a service the document does not define.
     defined = set(services)
+    # Every dependency comes from the admitted scenario graph; plain lab start
+    # does not insert a mediation service around declared Docker authority.
+    external_dependencies: set[str] = set()
     for service in services.values():
         for dependency in service.get("depends_on", []):
-            assert dependency in defined
+            if dependency not in defined:
+                external_dependencies.add(dependency)
+    assert external_dependencies == set()
 
     # The backend-neutral release no longer authors a Cortex initializer node.
     # The generated model must not resurrect the removed implementation detail.
@@ -220,23 +298,73 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(
 
 
 @pytest.mark.integration
-def test_techvault_does_not_invent_a_docker_authority_for_orborus(
+def test_orborus_docker_authority_is_admitted_only_as_the_pack_authored_it(
     techvault_realization,
 ):
-    """Backend selection must not add host-root Docker access TechVault omitted."""
+    """Host-root Docker access is granted by the pack, never by the backend.
+
+    Until raes-env-packs 6.1.0 (OpenRAE/env-packs#285) TechVault declared no
+    Orborus authority, so the only correct behaviour was to admit none. The
+    released pack now authors the control interface and the authority Shuffle
+    workflow execution needs, so the contract under test flips: the admission
+    must mirror exactly what was authored, and the backend must still add
+    nothing of its own -- no extra mount targets, no second holder, and no
+    widening of the endpoint.
+    """
 
     realization = techvault_realization
 
     spec = realization.deployment_spec(sorted(realization.profiles))
 
-    assert [
+    admissions = [
         admission
         for admission in spec.docker_authority_admissions
         if admission.node_address == "provision.node.shuffle-orborus"
-    ] == []
+    ]
+    assert len(admissions) == 1
+    admission = admissions[0]
+    assert admission.engine == "docker"
+    assert admission.privilege_class == "host_root_equivalent"
+    assert admission.endpoint_kind == "unix_socket"
+    assert admission.endpoint_target == "/var/run/docker.sock"
+    assert admission.endpoint_read_write is True
+    # The authority holder mounts nothing else, so no mount target is admitted
+    # alongside the socket.
+    assert admission.allowed_mount_targets == ()
+
+    # The pack names two spawn templates, and this asserts they are realized as
+    # authored. It is not a bound on what the holder may launch: a
+    # host-root-equivalent daemon holder can pull or build anything regardless
+    # of what APTL staged, so the image list is realization demand rather than
+    # a gate. This pack happens to pin both templates by digest, under the
+    # authority's own bounded execution deadline.
+    requirements = admission.spawn_requirements
+    assert len(requirements) == 2
+    assert {requirement.template_id for requirement in requirements} == {
+        "shuffle-worker",
+        "shuffle-http-1-4-0",
+    }
+    for requirement in requirements:
+        assert "@sha256:" in requirement.image_ref, requirement.template_id
+        assert requirement.execution_timeout_seconds == 600
+        # realized_children is an optional description the author may omit.
+        # APTL reads nothing from it, so nothing here depends on one.
+        assert requirement.tag_reference in {"", "frikky/shuffle:http_1.4.0"}
+
     orborus = next(node for node in realization.nodes if node.name == "shuffle-orborus")
-    assert orborus.runtime.local_control_interfaces == []
-    assert orborus.runtime.orchestration_authorities == []
+    interfaces = orborus.runtime.local_control_interfaces
+    assert [interface.control_interface_id for interface in interfaces] == [
+        "docker-sock"
+    ]
+    authorities = orborus.runtime.orchestration_authorities
+    assert [authority.orchestration_authority_id for authority in authorities] == [
+        "shuffle-orborus"
+    ]
+    # Orborus is the only holder: no other node acquires Docker authority
+    # because the pack grew one.
+    assert {
+        admission.node_address for admission in spec.docker_authority_admissions
+    } == {"provision.node.shuffle-orborus"}
 
 
 def test_generated_base_compose_is_written_under_realization_root_not_the_pack(
@@ -249,14 +377,17 @@ def test_generated_base_compose_is_written_under_realization_root_not_the_pack(
     base is written under the writable realization root instead.
     """
 
+    from raes_env_packs import validate_pack_content_manifest
+
     from aptl.core.deployment._compose_node_generation import (
         GENERATED_COMPOSE_RELPATH,
         base_compose_file,
     )
     from aptl.core.deployment.realization import DeploymentRealizationSpec
+    from tests.fixture_pack import admit_fixture_pack
 
-    content_root = tmp_path / "staged-pack"  # pristine, no docker-compose.yml
-    content_root.mkdir()
+    # A real staged, validated pack: pristine, with no docker-compose.yml.
+    content_root = admit_fixture_pack(tmp_path / "staged").root
     realization_root = tmp_path / "engine"
     realization_root.mkdir()
     spec = DeploymentRealizationSpec(profiles=(), nodes=(), networks=())
@@ -265,8 +396,10 @@ def test_generated_base_compose_is_written_under_realization_root_not_the_pack(
 
     assert path == realization_root / GENERATED_COMPOSE_RELPATH
     assert path.is_file()
-    # Nothing generated under the pristine pack root.
+    # Nothing generated under the pristine pack root, so its exact inventory
+    # still passes env-packs' own gate.
     assert not (content_root / ".aptl").exists()
+    validate_pack_content_manifest(str(content_root))
 
 
 def test_in_tree_base_compose_uses_the_static_file(tmp_path):
@@ -630,7 +763,9 @@ def test_network_without_pinned_addresses_emits_no_ip_range():
 def test_pinned_address_in_the_dynamic_half_fails_loudly():
     """A pin that would still collide with the dynamic pool raises, not silently ships."""
 
-    from aptl.core.deployment._compose_node_generation import _dynamic_ip_range
+    from aptl.core.deployment._compose_node_topology import (
+        dynamic_ip_range as _dynamic_ip_range,
+    )
 
     with pytest.raises(ValueError, match="no longer isolates"):
         _dynamic_ip_range("172.20.0.0/24", "172.20.0.1", {"172.20.0.200"})
@@ -864,6 +999,36 @@ def test_pack_file_content_for_an_image_node_is_bound_from_the_resolved_bytes(
     assert not (scenario_root / ".aptl").exists()
 
 
+@pytest.mark.parametrize("source_kind", ("inline-text", "pack-file"))
+@pytest.mark.parametrize("sensitive", (False, True))
+def test_image_content_mount_mode_ignores_boot_umask(
+    tmp_path, stub_pack, source_kind, sensitive
+):
+    """Non-root image users read public config; secrets stay owner-only."""
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+
+    fields = {"sensitive": sensitive}
+    if source_kind == "inline-text":
+        fields["inline_text"] = "setting: value\n"
+    else:
+        digest = "sha256:" + "a" * 64
+        stub_pack["config"] = _StubResolved(b"setting: value\n", digest)
+        fields.update(artifact_id="config", artifact_digest=digest)
+    spec = _content_spec(content=(_content_item(source_kind, **fields),))
+
+    previous_umask = os.umask(0o077)
+    try:
+        override = image_node_content_override(
+            spec, tmp_path / "pack", tmp_path / "engine"
+        )
+    finally:
+        os.umask(previous_umask)
+
+    source = Path(override["services"]["tempo"]["volumes"][0]["source"])
+    assert source.read_bytes() == b"setting: value\n"
+    assert source.stat().st_mode & 0o777 == (0o600 if sensitive else 0o644)
+
+
 def test_pack_directory_content_for_an_image_node_merges_files_into_target(
     tmp_path, stub_pack
 ):
@@ -907,6 +1072,41 @@ def test_pack_directory_content_for_an_image_node_merges_files_into_target(
     assert not any(mount["target"] == "/etc/suricata/rules" for mount in mounts)
 
 
+@pytest.mark.parametrize("sensitive", (False, True))
+def test_pack_directory_mount_modes_ignore_boot_umask(tmp_path, stub_pack, sensitive):
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+
+    digest = "sha256:" + "b" * 64
+    stub_pack["rules"] = _StubResolved(
+        _tar_bytes({"nested/reference.conf": b"reference\n"}), digest
+    )
+    spec = _content_spec(
+        content=(
+            _content_item(
+                "pack-directory",
+                dest_relpath="etc/suricata/rules",
+                artifact_id="rules",
+                artifact_digest=digest,
+                sensitive=sensitive,
+            ),
+        )
+    )
+
+    previous_umask = os.umask(0o077)
+    try:
+        override = image_node_content_override(
+            spec, tmp_path / "pack", tmp_path / "engine"
+        )
+    finally:
+        os.umask(previous_umask)
+
+    source = Path(override["services"]["tempo"]["volumes"][0]["source"])
+    assert source.stat().st_mode & 0o777 == (0o600 if sensitive else 0o644)
+    tree = source.parent.parent
+    assert tree.stat().st_mode & 0o777 == (0o700 if sensitive else 0o755)
+    assert source.parent.stat().st_mode & 0o777 == (0o700 if sensitive else 0o755)
+
+
 def test_pack_script_content_for_an_image_node_is_staged_executable(
     tmp_path, stub_pack
 ):
@@ -927,9 +1127,7 @@ def test_pack_script_content_for_an_image_node_is_staged_executable(
         )
     )
 
-    override = image_node_content_override(
-        spec, tmp_path / "pack", tmp_path / "engine"
-    )
+    override = image_node_content_override(spec, tmp_path / "pack", tmp_path / "engine")
 
     source = Path(override["services"]["tempo"]["volumes"][0]["source"])
     assert source.stat().st_mode & 0o111 == 0o111

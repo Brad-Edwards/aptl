@@ -1,8 +1,9 @@
-FROM alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 
-RUN apk add --no-cache iproute2=6.15.0-r0 nftables=1.1.3-r0 python3=3.12.14-r0 \
+RUN apk add --no-cache iproute2=7.0.0-r0 nftables=1.1.6-r1 python3=3.14.7-r1 \
     && adduser -D -H -u 65532 boundary
 
 COPY containers/network-boundary-helper/helper.py /usr/local/bin/aptl-boundary-helper
+COPY containers/network-boundary-helper/probe.py /usr/local/bin/aptl-boundary-probe
 
 ENTRYPOINT ["python3", "/usr/local/bin/aptl-boundary-helper"]

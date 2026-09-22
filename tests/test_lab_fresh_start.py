@@ -1,102 +1,98 @@
-"""Issue #951: lab start's pre-flight must pass on a freshly installed lab.
+"""Fresh-install preflight against the product-neutral materialization envelope.
 
-The regression this file guards shipped to PyPI in 5.2.0 and was invisible to
-every existing test. Two things hid it:
+The fixture starts from the public ``aptl lab init`` asset materializer, then
+selects the same small SDL used by the real-Docker materializer integration
+test. The scenario intentionally belongs to APTL's test suite rather than to a
+scenario adapter: it proves the generic parse, plan, qualification, generated
+model, and pre-mutation lifecycle path without borrowing TechVault semantics.
+It is the SDL of APTL's owned fixture pack (issue #985), selected by explicit
+path exactly as the clean-wheel job selects it, so this is project-tree
+admission; admission of the pack itself is proven in
+``tests/test_scenario_bundle.py``.
 
-- the unit suite asserted the *old* behaviour directly — a scenario path that
-  resolves to nothing left ownership empty and returned success;
-- every developer checkout that has ever booted a lab carries the gitignored
-  ``config/soc_certs/`` and ``.aptl/`` trees, so the bind-mount pre-flight found
-  the sources it wanted and passed for the wrong reason.
-
-So these tests start from a directory materialized by the public ``aptl lab
-init`` path and assert those generated roots are absent before anything runs.
-They then drive the real ordered lab-start steps that produced the failure —
-load the environment, admit the configured scenario, prepare SOC TLS material,
-check bind mounts — against the bundled env-pack default, with no stubs on the
-admission seam.
-
-Integration-marked and integration-named: admitting the default scenario stages
-the bundled pack and asks the deployment backend for component-image
-availability, so it needs Docker and does not belong in the fast suite. That
-admission is also expensive enough that the module admits **once** and both
-tests assert against the same result — admitting per test built the component
-image set twice per CI job.
+The live clean-wheel job continues from this boundary through public CLI start,
+status, native readback, and teardown. Keeping the preflight here separately
+makes failures before Docker mutation fast and precise.
 """
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
 
+from tests.fixture_pack import FIXTURE_SDL as _MATERIALIZATION_ENVELOPE
+
 
 @pytest.fixture(scope="module")
 def admitted_fresh_lab(tmp_path_factory):
-    """Materialize a lab the way ``aptl lab init`` does, then admit it once.
+    """Materialize a clean project and admit the generic smoke SDL once."""
 
-    Returns the startup context after the real `_step_load_env` and
-    `_step_load_config` have run, so the assertions below read one admission.
-    """
     from aptl.core.assets import materialize
     from aptl.core.lab import _LabStartContext, _step_load_config, _step_load_env
 
     project_dir = tmp_path_factory.mktemp("fresh") / "fresh-lab"
     materialize(project_dir)
+    selected = project_dir / "scenarios" / "materialization-envelope.sdl.yaml"
+    selected.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(_MATERIALIZATION_ENVELOPE, selected)
 
-    # No pre-existing generated state: a developer's ignored trees are exactly
-    # what masked this failure, so they must not be a fixture here.
     assert not (project_dir / "config" / "soc_certs").exists()
     assert not (project_dir / ".aptl").exists()
 
-    ctx = _LabStartContext(project_dir=project_dir, skip_seed=True)
+    ctx = _LabStartContext(
+        project_dir=project_dir,
+        skip_seed=True,
+        scenario_path=Path("scenarios/materialization-envelope.sdl.yaml"),
+    )
     assert _step_load_env(ctx) is None
-    load_config_result = _step_load_config(ctx)
-    assert load_config_result is None, load_config_result
+    result = _step_load_config(ctx)
+    assert result is None, result
     return ctx
 
 
 @pytest.mark.integration
-def test_fresh_init_directory_passes_bind_mount_preflight_integration(
+def test_fresh_init_admits_product_neutral_materialization_envelope(
     admitted_fresh_lab,
 ):
-    """A clean install reaches the end of the bind-mount pre-flight.
+    """Fresh project admission reaches no scenario-specific adapter surface."""
 
-    Before the fix this failed with eight missing ``config/soc_certs/`` sources
-    for `misp`, `thehive`, `shuffle-frontend`, and `cortex` — services the
-    env-pack realization starts from a *generated* Compose base that never binds
-    those paths, described by a static ``docker-compose.yml`` the run does not
-    use.
-    """
-    from aptl.core.lab import _step_check_bind_mounts, _step_generate_soc_certs
-
-    ctx = admitted_fresh_lab
-    # The configured default is the bundled env-pack, and admission must have
-    # resolved it rather than substituting a scenario path deleted in #908.
-    assert ctx.admitted_surface is not None
-    assert ctx.stateful_artifact_ownership
-
-    assert _step_generate_soc_certs(ctx) is None
-    assert _step_check_bind_mounts(ctx) is None
-
-
-@pytest.mark.integration
-def test_fresh_init_admits_the_compose_model_the_run_applies_integration(
-    admitted_fresh_lab,
-):
-    """The admitted bundle root, not the project directory, holds the model.
-
-    The env-pack ships no ``docker-compose.yml``; the backend generates the base
-    Compose model from the realization. The materialized project directory does
-    ship one, so a pre-flight that reads the project directory is reading a file
-    with no bearing on the run.
-    """
     from aptl.core.scenario_bundle import ScenarioSourceKind
 
     ctx = admitted_fresh_lab
+    admitted = ctx.admitted_start
     surface = ctx.admitted_surface
+    assert admitted is not None
+    assert admitted.runtime_materialization_failure is None
+    assert admitted.bundle.pack_identity is None
     assert surface is not None
-    assert surface.source_kind is ScenarioSourceKind.ENV_PACK
-    assert (Path(ctx.project_dir) / "docker-compose.yml").is_file()
-    assert surface.bundle_root != ctx.project_dir
-    assert not (surface.bundle_root / "docker-compose.yml").exists()
+    assert surface.source_kind is ScenarioSourceKind.PROJECT_TREE
+    assert surface.bundle_root == ctx.project_dir
+    assert surface.selected_profiles == ()
+
+
+@pytest.mark.integration
+def test_fresh_init_qualification_is_read_only(admitted_fresh_lab):
+    """Admission and backend qualification publish no lifecycle state."""
+
+    ctx = admitted_fresh_lab
+    assert not (ctx.project_dir / "config" / "soc_certs").exists()
+    assert not (
+        ctx.project_dir / ".aptl" / "lifecycle" / "workspace-ownership-v1.json"
+    ).exists()
+
+
+@pytest.mark.integration
+def test_fresh_init_passes_bind_mount_preflight_without_adapter_state(
+    admitted_fresh_lab,
+):
+    """The admitted generated model, not an unrelated product model, is checked."""
+
+    from aptl.core.lab import _step_check_bind_mounts, _step_generate_soc_certs
+
+    ctx = admitted_fresh_lab
+    assert ctx.stateful_artifact_ownership == frozenset()
+    assert _step_generate_soc_certs(ctx) is None
+    assert _step_check_bind_mounts(ctx) is None
+    assert not (ctx.project_dir / "config" / "soc_certs").exists()

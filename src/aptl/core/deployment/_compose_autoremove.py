@@ -12,6 +12,7 @@ from aptl.core.deployment.observation import (
     DeploymentObservationContext,
 )
 from aptl.core.deployment.realization import DeploymentRealizationSpec
+from aptl.core.ephemeral_containers import remove_container_command
 
 _REMOVE_TIMEOUT = 90
 _OS_RELEASE_PATH = "/etc/os-release"
@@ -147,7 +148,12 @@ class ComposeAutoremoveMixin:
     def _remove_completed_container(self, name: str) -> str | None:
         """Remove one exact container and verify that it is absent."""
 
-        result = self._run(["docker", "rm", name], timeout=_REMOVE_TIMEOUT)
+        result = self._run(
+            remove_container_command(
+                self._resolve_owned_container_id(name), force=False
+            ),
+            timeout=_REMOVE_TIMEOUT,
+        )
         failure = None
         if result.returncode != 0:
             failure = f"container {name!r} could not be auto-removed"

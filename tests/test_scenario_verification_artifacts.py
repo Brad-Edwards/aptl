@@ -199,6 +199,9 @@ def test_the_wheel_keeps_scenario_knowledge_out_of_the_framework_package(
     for group in (
         b"aptl.scenario_verifiers",
         b"aptl.pack_backend_interactions",
+        b"aptl.scenario_capture",
+        b"aptl.scenario_planning_compatibility",
+        b"aptl.scenario_runtime_parameters",
         b"aptl.participant_mcp_smoke_plans",
     ):
         assert group in entry_points

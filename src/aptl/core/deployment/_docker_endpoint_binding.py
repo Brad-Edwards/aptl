@@ -50,9 +50,7 @@ def _resolve_local_docker_endpoint() -> tuple[str, str] | None:
     if not docker_host:
         return _DEFAULT_DOCKER_SOCKET_PATH, _DEFAULT_DOCKER_SOCKET_HOST
     path = (
-        docker_host[len(_UNIX_SCHEME):]
-        if docker_host.startswith(_UNIX_SCHEME)
-        else ""
+        docker_host[len(_UNIX_SCHEME) :] if docker_host.startswith(_UNIX_SCHEME) else ""
     )
     # An empty path means DOCKER_HOST was non-unix:// (tcp://, ssh://, ...) or a
     # malformed unix host; a local-authority backend can only drive a unix
@@ -62,6 +60,12 @@ def _resolve_local_docker_endpoint() -> tuple[str, str] | None:
 
 class DockerEndpointBindingMixin:
     """Pin Docker commands to one accessible local socket and daemon."""
+
+    @property
+    def bound_docker_daemon_id(self) -> str | None:
+        """Return the daemon identity only after local socket binding."""
+
+        return self._docker_daemon_id
 
     def bind_local_docker_socket(self) -> LabResult:
         """Bind all subsequent Docker commands to the exact local socket."""
@@ -102,7 +106,12 @@ class DockerEndpointBindingMixin:
     def _resolve_binding_endpoint(self) -> LabResult | None:
         """Record the configured local socket path and unix host, or fail."""
 
-        resolved = _resolve_local_docker_endpoint()
+        explicit = getattr(self, "_configured_docker_socket_path", None)
+        resolved = (
+            (str(explicit), "unix://" + str(explicit))
+            if explicit is not None
+            else _resolve_local_docker_endpoint()
+        )
         if resolved is None:
             return LabResult(success=False, error=_DOCKER_ENDPOINT_NOT_LOCAL)
         self._docker_socket_path, self._docker_socket_host = resolved
@@ -189,3 +198,8 @@ class DockerEndpointBindingMixin:
         if daemon is None or daemon.returncode != 0 or not daemon.stdout.strip():
             return None
         return daemon.stdout.strip()
+
+    def daemon_identity(self) -> str | None:
+        """Read the daemon id through this backend's configured transport."""
+
+        return self._current_docker_daemon_id()

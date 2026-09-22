@@ -82,7 +82,7 @@ def _image_free_node_addresses(
     start, not a bare-OS node to stub.
 
     Keying on ``runtime`` alone silently scaled those services to zero and started
-    a ``debian:12-slim`` ``sleep infinity`` substrate in their place, so declaring
+    a ``debian:13-slim`` ``sleep infinity`` substrate in their place, so declaring
     a node's security tooling turned the actual tool off. The image check is the
     same one the realization-time materializable test applies
     (``_is_materializable_node``); the two must agree, or a node is realized one
@@ -283,6 +283,8 @@ def _content_placement_op(item: object) -> object | None:
             artifact_id=item.artifact_id,
             artifact_digest=item.artifact_digest,
             is_directory=item.source_kind == "pack-directory",
+            sensitive=item.sensitive,
+            executable=item.media_type in {"text/x-python", "text/x-shellscript"},
         )
     elif (
         item.source_kind in ("project-file", "project-directory")

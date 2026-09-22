@@ -44,7 +44,6 @@ from aptl.backends.identity import (
     APTL_RAES_TARGET_VERSION,
     BackendIdentity,
 )
-from aptl.backends.raes import DEFAULT_RAES_SCENARIO
 from aptl.validation._live_gate_models import (
     CATEGORY_BACKEND_INSTANTIATION,
     CATEGORY_BACKEND_INTERPRETATION,
@@ -279,7 +278,9 @@ def _semantic_checks(
         ctx.options.profile,
         ctx.config.deployment.provider,
     )
-    containers = [
+    # The verifier names authored semantic containers. Workspace-scoped Docker
+    # names are backend identities and must not leak into its answer key.
+    containers = list(state.semantic_container_names) or [
         str(c.get("name", ""))
         for c in (state.snapshot or {}).get("containers", [])
         if c.get("name")

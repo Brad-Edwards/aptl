@@ -155,7 +155,8 @@ def test_required_narrative_operations_have_readiness_checks() -> None:
     } == set(profile.browser_refs)
 
 
-def test_participant_profiles_are_packaged_lab_assets() -> None:
+def test_only_the_full_acquired_profile_is_a_packaged_lab_asset() -> None:
     from aptl._asset_manifest import ASSET_ROOTS
 
-    assert "participant-profiles" in ASSET_ROOTS
+    assert "participant-profiles/techvault-full-v1" in ASSET_ROOTS
+    assert "participant-profiles" not in ASSET_ROOTS

@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from aptl.core import hostenv
+from aptl.core.ephemeral_containers import EphemeralContainer
 from aptl.utils.logging import get_logger
 
 log = get_logger("certs")
@@ -43,6 +44,7 @@ def ensure_ssl_certs(
     project_dir: Path,
     *,
     run_command: CommandRunner | None = None,
+    project: str | None = None,
 ) -> CertResult:
     """Ensure SSL certificates exist for the Wazuh Indexer.
 
@@ -91,18 +93,22 @@ def ensure_ssl_certs(
             certs_dir=certs_dir,
         )
 
-    return _generate_ssl_certs(project_dir, certs_dir, run_command)
+    return _generate_ssl_certs(project_dir, certs_dir, run_command, project=project)
 
 
 def _generate_ssl_certs(
     project_dir: Path,
     certs_dir: Path,
     run_command: CommandRunner | None,
+    *,
+    project: str | None = None,
 ) -> CertResult:
     """Run certificate generation and convert the generator outcome."""
     log.info("Generating SSL certificates...")
     rootless = _docker_is_rootless(run_command, project_dir)
-    error = _run_cert_generator(project_dir, certs_dir, run_command, rootless)
+    error = _run_cert_generator(
+        project_dir, certs_dir, run_command, rootless, project=project
+    )
     result = error
     if result is None:
         alias_error = _ensure_manager_root_ca_alias(certs_dir)
@@ -170,12 +176,14 @@ def _run_cert_generator(
     certs_dir: Path,
     run_command: CommandRunner | None,
     rootless: bool,
+    *,
+    project: str | None = None,
 ) -> CertResult | None:
     """Run the compose cert generator, returning a failure result when needed."""
     error_msg = None
     try:
         result = _execute_command(
-            _cert_generator_command(project_dir, certs_dir, rootless),
+            _cert_generator_command(project_dir, certs_dir, rootless, project=project),
             run_command=run_command,
             project_dir=project_dir,
             timeout=300,
@@ -262,7 +270,7 @@ def _reclaim_certs_dir(certs_dir: Path, uid: int) -> None:
 
 
 def _cert_generator_command(
-    project_dir: Path, certs_dir: Path, rootless: bool
+    project_dir: Path, certs_dir: Path, rootless: bool, *, project: str | None = None
 ) -> list[str]:
     """Build the isolated Docker Compose command for the cert generator.
 
@@ -280,6 +288,11 @@ def _cert_generator_command(
     host_user = _native_linux_user()
     if host_user is not None:
         certs_dir.mkdir(parents=True, exist_ok=True)
+    # Named and labelled like every other helper. Removal is not left to
+    # ``--rm`` alone: the generator runs under its own Compose project, and
+    # :func:`_cleanup_cert_generator` takes that project down after every
+    # outcome, a timeout included. ``project`` also lets the lab's own
+    # teardown find one stranded by a killed process.
     command = [
         "docker",
         "compose",
@@ -288,7 +301,7 @@ def _cert_generator_command(
         "-f",
         _CERT_COMPOSE_FILE,
         "run",
-        "--rm",
+        *EphemeralContainer.for_role("cert-generator", project=project).run_options(),
     ]
     user = _container_cert_user(host_user, rootless)
     if user is not None:

@@ -23,6 +23,7 @@ from aptl.core.credentials import (
     _canonical_generated_path,
     _resolve_within_project,
 )
+from aptl.core.ephemeral_containers import EphemeralContainer
 from aptl.core.seed_spec import NamedVolumeSeed, SeedFile
 from aptl.utils.logging import get_logger
 
@@ -106,6 +107,15 @@ def _chown_direct(paths: list[Path], uid: int, gid: int) -> list[Path]:
     return [p for p in paths if p.stat().st_uid != uid]
 
 
+
+def _captured_run(
+    command: list[str], *, timeout: int
+) -> subprocess.CompletedProcess[str]:
+    """Run one Docker command with its output captured rather than inherited."""
+
+    return subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+
+
 def _restore_via_container(
     still_foreign: list[Path],
     uid: int,
@@ -114,6 +124,7 @@ def _restore_via_container(
     seeder_image: str,
     *,
     pull_never: bool,
+    project: str | None = None,
 ) -> SuricataSourceOwnershipResult:
     """Chown the still-foreign sources from inside a root container.
 
@@ -132,13 +143,15 @@ def _restore_via_container(
     rel_targets = [
         f"/project/{p.relative_to(project_dir).as_posix()}" for p in still_foreign
     ]
+    helper = EphemeralContainer.for_role("suricata-source-chown", project=project)
     try:
-        perm_result = subprocess.run(
+        perm_result = helper.run(
+            subprocess.run,
             [
                 "docker",
                 "run",
                 *(["--pull=never"] if pull_never else []),
-                "--rm",
+                *helper.run_options(),
                 # Harden the throwaway repair helper: no network namespace
                 # (it only chowns local bind-mounted files — zero egress
                 # surface), and an explicit root identity so the chown works
@@ -155,10 +168,13 @@ def _restore_via_container(
                 f"{uid}:{gid}",
                 *rel_targets,
             ],
+            timeout=60,
+            # A root helper that outlives a killed CLI is removed by name; the
+            # removal is captured too, so no daemon output reaches the terminal.
+            discard=_captured_run,
             capture_output=True,
             text=True,
             cwd=project_dir,
-            timeout=60,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return SuricataSourceOwnershipResult(
@@ -194,6 +210,7 @@ def ensure_suricata_config_source_ownership(
     seeder_image: str = _SURICATA_SEEDER_IMAGE,
     *,
     pull_never: bool = False,
+    project: str | None = None,
 ) -> SuricataSourceOwnershipResult:
     """Return checked-in Suricata seed sources to the invoking operator's uid/gid.
 
@@ -217,6 +234,7 @@ def ensure_suricata_config_source_ownership(
         project_dir,
         seeder_image,
         pull_never=pull_never,
+        project=project,
     )
 
 
@@ -225,6 +243,7 @@ def _ensure_suricata_config_source_ownership_linux(
     seeder_image: str,
     *,
     pull_never: bool,
+    project: str | None = None,
 ) -> SuricataSourceOwnershipResult:
     """Repair legacy Suricata source ownership on native Linux Docker hosts."""
     uid = os.getuid()
@@ -242,6 +261,7 @@ def _ensure_suricata_config_source_ownership_linux(
             project_dir,
             seeder_image,
             pull_never=pull_never,
+            project=project,
         )
     return result
 
@@ -254,6 +274,7 @@ def _repair_foreign_sources(
     seeder_image: str,
     *,
     pull_never: bool,
+    project: str | None = None,
 ) -> SuricataSourceOwnershipResult:
     """Repair any Suricata seed source files not owned by the invoking user."""
     foreign = _foreign_owned_sources(source_files, uid)
@@ -266,6 +287,7 @@ def _repair_foreign_sources(
             project_dir,
             seeder_image,
             pull_never=pull_never,
+            project=project,
         )
     else:
         repaired = tuple(str(p.relative_to(project_dir)) for p in foreign)

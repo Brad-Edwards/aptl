@@ -15,7 +15,6 @@ CORTEX_INDEX_INIT_SCRIPT = PROJECT_ROOT / "scripts" / "cortex-index-init.sh"
 CORTEX_INDEX_MAPPING = PROJECT_ROOT / "config" / "cortex" / "index-mapping.json"
 CORTEX_APIKEY_SCRIPT = PROJECT_ROOT / "scripts" / "cortex-apikey.sh"
 SEED_PRIME_SCRIPT = PROJECT_ROOT / "scripts" / "seed-prime.sh"
-SOAR_FIXUP_SCRIPT = PROJECT_ROOT / "scripts" / "envpack-soar-fixups.sh"
 CORTEX_ANALYZER_DIR = PROJECT_ROOT / "config" / "cortex" / "analyzers"
 CORTEX_ANALYZER_DESCRIPTOR = (
     CORTEX_ANALYZER_DIR / "APTLObservable" / "APTL_Observable.json"
@@ -95,12 +94,9 @@ def test_cortex_bundles_an_executable_offline_observable_analyzer(tmp_path):
     assert output["operations"] == []
 
 
-def test_envpack_fixup_preserves_the_released_cortex_realization():
-    text = SOAR_FIXUP_SCRIPT.read_text(encoding="utf-8")
+def test_cortex_key_seeding_uses_the_released_runtime_api():
     key_script = CORTEX_APIKEY_SCRIPT.read_text(encoding="utf-8")
 
-    assert "fix_cortex_analyzers" not in text
-    assert "/opt/aptl/cortex-analyzers" not in text
     assert "TechVaultScenarioContext_1_0" in key_script
     assert "/api/analyzer" in key_script
 
@@ -178,7 +174,10 @@ def test_cortex_seed_script_uses_the_realized_thehive_connector_key():
 def test_prime_seed_provisions_and_persists_cortex_key():
     text = SEED_PRIME_SCRIPT.read_text(encoding="utf-8")
 
-    assert "aptl-cortex aptl-thehive aptl-misp aptl-shuffle-frontend" in text
+    assert '"$CORTEX_CONTAINER"' in text
+    assert '"$THEHIVE_CONTAINER"' in text
+    assert '"$MISP_CONTAINER"' in text
+    assert '"$SHUFFLE_CONTAINER"' in text
     assert 'INDEXER_PORT="${APTL_HP_WAZUH_INDEXER_9200:-9200}"' in text
     assert 'INDEXER_URL="${INDEXER_URL:-https://localhost:${INDEXER_PORT}}"' in text
     assert 'CORTEX_API_KEY=$("$SCRIPT_DIR/cortex-apikey.sh"' in text

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import ipaddress
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -13,6 +14,8 @@ from aptl.core.appliance_boundary import (
     Digest,
 )
 from aptl.utils.redaction import redact
+
+_INCOMPLETE_ENFORCEMENT = "boundary.guest-enforcement-incomplete"
 
 
 class _StrictObservation(BaseModel):
@@ -24,10 +27,25 @@ class _StrictObservation(BaseModel):
 class BoundaryEndpoint(_StrictObservation):
     """One physical-host endpoint attributed to an approved audience."""
 
-    audience: Literal["participant", "recovery"]
+    audience: Literal["participant", "recovery", "host-mcp"]
     address: str
     port: int = Field(ge=1, le=65535)
     protocol: Literal["tcp", "udp"]
+
+    guest_address: str | None = None
+    guest_port: int | None = Field(default=None, ge=1, le=65535)
+
+    @model_validator(mode="after")
+    def validate_mapping(self) -> Self:
+        """Require a complete guest endpoint for mapped host listeners."""
+        if (self.guest_address is None) != (self.guest_port is None):
+            raise ValueError("guest mapping requires both address and port")
+        for address in (self.address, self.guest_address):
+            if address is not None and not ipaddress.ip_address(address).is_loopback:
+                raise ValueError("boundary endpoints must bind loopback")
+        if self.audience == "host-mcp" and self.guest_port is None:
+            raise ValueError("host MCP requires an explicit guest endpoint mapping")
+        return self
 
 
 class HostBoundaryObservation(_StrictObservation):
@@ -66,6 +84,7 @@ class BoundaryProbeObservation(_StrictObservation):
 
     @model_validator(mode="after")
     def validate_transport_port(self) -> BoundaryProbeObservation:
+        """Require ports only for TCP and UDP boundary probes."""
         if (self.protocol in {"tcp", "udp"}) != (self.port is not None):
             raise ValueError("probe port must match its transport")
         return self
@@ -139,30 +158,35 @@ def _append_host_findings(
 ) -> None:
     """Compare fresh outer-host evidence with the signed binding."""
 
-    if host.observation_id != binding.host_observation_id:
-        findings.append("boundary.host-observation-identity-mismatch")
-    if host.policy_digest != binding.policy_digest:
-        findings.append("boundary.host-policy-digest-mismatch")
-    if host.payload_digest != binding.payload_digest:
-        findings.append("boundary.host-payload-digest-mismatch")
-    if host.boot_id != binding.boot_id:
-        findings.append("boundary.host-boot-identity-mismatch")
+    if policy.host_mcp_contract is not None:
+        from aptl.appliance.seat.observation import observation_id_for
+
+        if host.observation_id != observation_id_for(host):
+            findings.append("boundary.host-observation-content-mismatch")
+    comparisons = (
+        (
+            host.observation_id != binding.host_observation_id,
+            "boundary.host-observation-identity-mismatch",
+        ),
+        (
+            host.policy_digest != binding.policy_digest,
+            "boundary.host-policy-digest-mismatch",
+        ),
+        (
+            host.payload_digest != binding.payload_digest,
+            "boundary.host-payload-digest-mismatch",
+        ),
+        (
+            host.boot_id != (binding.host_boot_id or binding.boot_id),
+            "boundary.host-boot-identity-mismatch",
+        ),
+    )
+    findings.extend(reason for mismatch, reason in comparisons if mismatch)
     if not host.complete:
         findings.append("boundary.host-observation-incomplete")
     if not host.forbidden_reachability_passed:
         findings.append("boundary.host-forbidden-reachability")
-    expected = {
-        (item.audience, item.address, item.port, item.protocol)
-        for item in policy.guest_publications
-    }
-    observed = {
-        (item.audience, item.address, item.port, item.protocol)
-        for item in host.listeners
-    }
-    if observed - expected:
-        findings.append("boundary.host-listener-unapproved")
-    if expected - observed:
-        findings.append("boundary.host-listener-missing")
+    _append_host_listener_findings(policy, host, findings)
 
 
 def _append_guest_findings(
@@ -183,7 +207,7 @@ def _append_guest_findings(
             "boundary.guest-raes-plan-digest-mismatch",
         ),
         (
-            guest.boot_id != binding.boot_id,
+            guest.boot_id != (binding.guest_boot_id or binding.boot_id),
             "boundary.guest-boot-identity-mismatch",
         ),
         (
@@ -201,7 +225,7 @@ def _append_guest_findings(
     )
     findings.extend(code for failed, code in comparisons if failed)
     _append_enforcement_findings(policy, binding, guest, findings)
-    _append_probe_findings(binding, guest, findings)
+    _append_probe_findings(policy, binding, guest, findings)
     allowed = set(policy.docker_authority.allowed_holder_labels)
     if {holder.label_selector for holder in guest.docker_authority_holders} - allowed:
         findings.append("boundary.guest-docker-authority-unapproved")
@@ -229,16 +253,14 @@ def _append_enforcement_findings(
     """Require complete, digest-bound readback for every active authority."""
 
     by_authority = {item.authority: item for item in guest.enforcements}
-    if len(by_authority) != len(guest.enforcements) or "platform" not in by_authority:
-        findings.append("boundary.guest-enforcement-incomplete")
+    if len(by_authority) != len(guest.enforcements):
+        findings.append(_INCOMPLETE_ENFORCEMENT)
         return
-    platform = by_authority["platform"]
-    if platform.source_digest != binding.policy_digest:
-        findings.append("boundary.guest-platform-source-mismatch")
-    if set(platform.families) != {"bridge", "inet"}:
-        findings.append("boundary.guest-enforcement-incomplete")
-    if policy.default_deny and not platform.default_deny_observed:
-        findings.append("boundary.guest-default-deny-missing")
+    platform = by_authority.get("platform")
+    if policy.internal_zone_isolation:
+        _append_platform_enforcement_findings(platform, binding.policy_digest, findings)
+    elif platform is not None:
+        findings.append("boundary.guest-unexpected-platform-enforcement")
     raes = by_authority.get("raes")
     if binding.raes_boundary_required and raes is None:
         findings.append("boundary.guest-raes-enforcement-missing")
@@ -246,24 +268,57 @@ def _append_enforcement_findings(
         findings.append("boundary.guest-raes-source-mismatch")
 
 
+def _append_platform_enforcement_findings(
+    platform: BoundaryEnforcementObservation | None,
+    policy_digest: str,
+    findings: list[str],
+) -> None:
+    """Require complete, digest-bound platform firewall enforcement."""
+
+    if platform is None:
+        findings.append(_INCOMPLETE_ENFORCEMENT)
+        return
+    if platform.source_digest != policy_digest:
+        findings.append("boundary.guest-platform-source-mismatch")
+    if set(platform.families) != {"bridge", "inet"}:
+        findings.append(_INCOMPLETE_ENFORCEMENT)
+    if not platform.default_deny_observed:
+        findings.append("boundary.guest-default-deny-missing")
+
+
 def _append_probe_findings(
+    policy: ApplianceBoundaryPolicy,
     binding: ApplianceBoundaryBinding,
     guest: GuestBoundaryObservation,
     findings: list[str],
 ) -> None:
     """Require passing positive and negative probes for each authority."""
 
-    required_authorities = {"platform"}
+    required_authorities = {"platform"} if policy.internal_zone_isolation else set()
+    if not policy.internal_zone_isolation and any(
+        item.authority == "platform" for item in guest.probes
+    ):
+        findings.append("boundary.guest-unexpected-platform-probes")
     if binding.raes_boundary_required:
         required_authorities.add("raes")
     for authority in sorted(required_authorities):
-        scoped = [item for item in guest.probes if item.authority == authority]
-        positive = [item for item in scoped if item.expectation == "reachable"]
-        negative = [item for item in scoped if item.expectation == "blocked"]
-        if not positive or any(not item.passed for item in positive):
+        if _probe_failed(guest, authority, "reachable"):
             findings.append(f"boundary.guest-{authority}-positive-probe-failed")
-        if not negative or any(not item.passed for item in negative):
+        if _probe_failed(guest, authority, "blocked"):
             findings.append(f"boundary.guest-{authority}-negative-probe-failed")
+
+
+def _probe_failed(
+    guest: GuestBoundaryObservation, authority: str, expectation: str
+) -> bool:
+    """Return whether one required authority/expectation has no passing set."""
+
+    scoped = [
+        item
+        for item in guest.probes
+        if item.authority == authority and item.expectation == expectation
+    ]
+    return not scoped or any(not item.passed for item in scoped)
 
 
 def _inventory(
@@ -283,6 +338,9 @@ def _inventory(
             "id": policy.policy_id,
             "generation": policy.generation,
             "digest": binding.policy_digest,
+            "containment": "internal-zones"
+            if policy.internal_zone_isolation
+            else "vm-only",
         },
         "payload_digest": binding.payload_digest,
         "raes_plan_digest": binding.raes_plan_digest,
@@ -292,6 +350,8 @@ def _inventory(
             "egress_proxy": binding.egress_proxy_image,
         },
         "boot_id": binding.boot_id,
+        "host_boot_id": binding.host_boot_id or binding.boot_id,
+        "guest_boot_id": binding.guest_boot_id or binding.boot_id,
         "host": (
             {"observation_id": host.observation_id, "complete": host.complete}
             if host is not None
@@ -337,3 +397,26 @@ def _inventory(
         "findings": list(findings),
         "passed": not findings,
     }
+
+
+def _append_host_listener_findings(
+    policy: ApplianceBoundaryPolicy, host: HostBoundaryObservation, findings: list[str]
+) -> None:
+    """Compare mapped listener endpoints with the signed guest publications."""
+    expected = {
+        (item.audience, item.address, item.port, item.protocol)
+        for item in policy.guest_publications
+    }
+    observed = {
+        (
+            item.audience,
+            item.guest_address or item.address,
+            item.guest_port or item.port,
+            item.protocol,
+        )
+        for item in host.listeners
+    }
+    if observed - expected:
+        findings.append("boundary.host-listener-unapproved")
+    if expected - observed:
+        findings.append("boundary.host-listener-missing")

@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from aptl.core.session import ScenarioSession
 from aptl.core.runstore import LocalRunStore
+from aptl.core.session import ScenarioSession
 from aptl.workbench.runtime import WorkbenchPaths
 
 
@@ -270,7 +270,7 @@ def test_profile_switch_closes_the_previous_runtime_and_records_the_active_trace
 def test_profile_runtime_fails_closed_without_an_active_scenario(
     tmp_path: Path,
 ) -> None:
-    from aptl.workbench import ProfileId, WorkbenchStateError, WorkbenchRuntime
+    from aptl.workbench import ProfileId, WorkbenchRuntime, WorkbenchStateError
 
     runtime = WorkbenchRuntime(
         ScenarioSession(tmp_path / "state"),
@@ -491,8 +491,8 @@ def test_profile_switch_waits_for_an_active_agent_turn(tmp_path: Path) -> None:
 def test_browser_workbench_is_a_separate_authenticated_profile_surface(
     tmp_path: Path,
 ) -> None:
-    from aptl.workbench.app import create_participant_workbench_app
     from aptl.workbench import WorkbenchRuntime
+    from aptl.workbench.app import BrowserPrincipal, create_participant_workbench_app
 
     session_manager = ScenarioSession(tmp_path / "state")
     session_manager.start("techvault")
@@ -509,7 +509,11 @@ def test_browser_workbench_is_a_separate_authenticated_profile_surface(
     )
     app = create_participant_workbench_app(
         runtime,
-        lambda request: request.headers.get("X-APTL-Participant-Session") == "seat",
+        lambda request: (
+            BrowserPrincipal("seat", ("red", "guided-blue"))
+            if request.headers.get("X-APTL-Participant-Session") == "seat"
+            else None
+        ),
     )
     client = TestClient(app)
     participant_headers = {"X-APTL-Participant-Session": "seat"}
@@ -540,7 +544,7 @@ def test_browser_workbench_is_a_separate_authenticated_profile_surface(
     assert view.json()["mcp_servers"] == ["aptl-red"]
     assert view.json()["bookmarks"] == [
         {"label": "APTL guide", "href": "/guide/"},
-        {"label": "Kali desktop", "href": "/desktop/kali/"},
+        {"label": "Kali terminal", "href": "/desktop/kali/"},
     ]
     assert "docker" not in view.json()
 

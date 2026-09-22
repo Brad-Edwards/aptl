@@ -49,11 +49,12 @@ for line in sys.stdin:
         tool = message["params"]["name"]
         arguments = message["params"]["arguments"]
         if tool == "kali_run_command" and arguments["command"] == "id":
-            text = (
+            identity = (
                 "uid=0(root) gid=0(root)"
                 if FAIL_RED
                 else "uid=1000(kali) gid=1000(kali)"
             )
+            text = json.dumps({"success": True, "output": {"stdout": identity, "code": 0}})
         elif tool == "kali_run_command":
             text = json.dumps({
                 "success": True,
@@ -271,6 +272,31 @@ def test_profile_smoke_rejects_incomplete_attack_semantics(
         if item.check_id == "mcp.red.ssh-authentication-attack"
     )
     assert attack.status == "failed"
+
+
+def test_attack_semantics_accepts_ssh_transport_epilogue_after_marker() -> None:
+    from aptl_techvault.participant_smoke import _attack_completed
+
+    result = {
+        "content": [
+            {
+                "type": "text",
+                "text": json.dumps(
+                    {
+                        "success": True,
+                        "output": {
+                            "code": 0,
+                            "stdout": (
+                                "done\r\nConnection to 127.0.0.1 closed.\r\r\n"
+                            ),
+                        },
+                    }
+                ),
+            }
+        ]
+    }
+
+    assert _attack_completed(result)
 
 
 def test_profile_smoke_rejects_empty_alert_results(tmp_path: Path) -> None:

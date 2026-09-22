@@ -156,13 +156,23 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [Issue #851 First-Time User Documentation](issue-851-first-time-user-docs-preflight.md)
+- [Issue #880 TechVault Env-Pack Consumption](issue-880-techvault-env-pack-consumption-preflight.md)
+- [Issue #980 Pack Adapter Install Seam](issue-980-pack-adapter-install-seam-preflight.md)
+- [Issue #985 Owned Lab Fixture](issue-985-owned-lab-fixture-preflight.md)
+- [Issue #993 Boot Realization Regressions](issue-993-boot-realization-regressions-preflight.md)
+- [Issue #970 Generic Lab Lifecycle Boundary](issue-970-generic-lab-lifecycle-preflight.md)
+- [Issue #956 SDL Runtime Materialization](issue-956-sdl-runtime-authority-materialization-preflight.md)
+- [Issue #957 Wazuh Attestation, Evidence, And Credentials](issue-957-wazuh-attestation-evidence-credentials-preflight.md)
 - [Issue #1002 Wazuh API TLS Warm-Up](issue-1002-wazuh-api-tls-warmup-preflight.md)
 - [Issue #1000 Partial Boot And Manual Release QA](issue-1000-manual-release-qa-preflight.md)
 - [Issue #992 Backend Observability Ownership](issue-992-backend-observability-ownership-preflight.md)
+- [Issue #974 Shuffle Worker Docker And Image Realization](issue-974-shuffle-worker-docker-images-preflight.md)
 - [Issue #934 APTL-To-LilRAE Rename Boundary](issue-934-rename-boundary-preflight.md)
 - [Issue #592 Scenario-Pack Terminology](issue-592-scenario-pack-terminology-preflight.md)
 - [Issue #951 Fresh Env-Pack Start](issue-951-fresh-env-pack-start-preflight.md)
 - [Issue #913 Shuffle Post-Realization Mutation](issue-913-shuffle-post-realization-mutation-preflight.md)
+- [Issue #912 MISP/Redis Post-Realization Mutation](issue-912-misp-redis-post-realization-mutation-preflight.md)
 - [Issue #905 Lab Lifecycle Robustness](issue-905-lab-lifecycle-robustness-preflight.md)
 - [Issue #874 Scenario-Bundle Realization Roots](issue-874-scenario-bundle-realization-roots-preflight.md)
 - [Issue #878 Scenario Verification Plugin Seam](issue-878-scenario-verification-plugin-seam-preflight.md)
@@ -190,3 +200,4 @@ The victim and kali containers publish no host ports; use
 - [Issue #821 In-Appliance Participant Workbench](issue-821-participant-workbench-preflight.md)
 - [Issue #823 Versioned Disposable Lab Appliance](issue-823-versioned-disposable-appliance-preflight.md)
 - [Issue #824 Kiosk Launcher, Reset, And Recovery](issue-824-kiosk-launcher-reset-recovery-preflight.md)
+- [Issue #1022 Appliance Seat Delivery](issue-1022-appliance-seat-delivery-preflight.md)

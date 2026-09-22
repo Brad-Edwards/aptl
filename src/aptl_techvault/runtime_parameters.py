@@ -5,10 +5,11 @@ from __future__ import annotations
 import secrets
 from collections.abc import Mapping
 
+from aptl.backends.scenario_runtime_parameters import EXTENSION_API_VERSION
 from aptl.core.scenario_bundle import ScenarioBundle
 
 TECHVAULT_PACK_SET_DIGEST = (
-    "sha256:edd3bb6252990aeaf506904767182d5a3ef2b3828a498fe64c897dccaf954934"
+    "sha256:db98a9daa62a092a0c6b001217027d7f4ad489889e95d01050e77f148e8ef29b"
 )
 _TECHVAULT_PACK_VERSION = "0.1.0"
 _FLAG_HOSTS = ("victim", "workstation", "webapp", "fileshare", "ad")
@@ -25,7 +26,7 @@ def runtime_parameters_for_bundle(
 ) -> Mapping[str, object] | None:
     """Return the exact runtime-owned bindings for a supported pack.
 
-    The 6.0.1 TechVault release deliberately leaves ten per-host flag values to
+    The 6.1.0 TechVault release deliberately leaves ten per-host flag values to
     the scenario instantiator. Bind only the content-identified release APTL was
     qualified against; another pack or a changed TechVault release remains an
     ordinary required-parameter admission failure.
@@ -45,4 +46,25 @@ def runtime_parameters_for_bundle(
     }
 
 
-__all__ = ["TECHVAULT_PACK_SET_DIGEST", "runtime_parameters_for_bundle"]
+class TechVaultRuntimeParameterProvider:
+    """Bind runtime-owned values only for the exact qualified pack release."""
+
+    extension_api_version = EXTENSION_API_VERSION
+    supported_pack_id = "techvault"
+    supported_pack_versions = (_TECHVAULT_PACK_VERSION,)
+    supported_pack_set_digests = (TECHVAULT_PACK_SET_DIGEST,)
+
+    @staticmethod
+    def resolve(bundle: ScenarioBundle) -> Mapping[str, object] | None:
+        return runtime_parameters_for_bundle(bundle)
+
+
+provider = TechVaultRuntimeParameterProvider()
+
+
+__all__ = [
+    "TECHVAULT_PACK_SET_DIGEST",
+    "TechVaultRuntimeParameterProvider",
+    "provider",
+    "runtime_parameters_for_bundle",
+]

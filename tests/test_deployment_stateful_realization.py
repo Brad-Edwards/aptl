@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 import yaml
+from raes.runtime_configuration import RuntimeConfiguration
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -111,6 +112,17 @@ def _spec() -> DeploymentRealizationSpec:
                         name="indexer-api", port=9200, protocol="tcp"
                     ),
                 ),
+                runtime=RuntimeConfiguration.model_validate(
+                    {
+                        "datastore_services": [
+                            {
+                                "datastore_service_id": "wazuh-indexer",
+                                "engine": "opensearch",
+                                "data_model": "search_index",
+                            }
+                        ]
+                    }
+                ),
             ),
         ),
         networks=(),
@@ -161,6 +173,17 @@ def _rendered_config_spec() -> DeploymentRealizationSpec:
                 service_name="wazuh.manager",
                 container_name="aptl-wazuh-manager",
                 networks=(),
+                runtime=RuntimeConfiguration.model_validate(
+                    {
+                        "security_monitoring_managers": [
+                            {
+                                "security_monitoring_manager_id": "wazuh-manager",
+                                "implementation": "wazuh",
+                                "manager_kind": "siem",
+                            }
+                        ]
+                    }
+                ),
             ),
         ),
         networks=(),
@@ -250,9 +273,13 @@ def _cortex_credentials_spec() -> DeploymentRealizationSpec:
 
 def test_cortex_credentials_are_generated_distinctly_and_reused(tmp_path: Path) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    backend._docker_daemon_id = "test-daemon"
     artifact = _cortex_credentials_spec().generated_artifacts[0]
 
-    assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
+    assert (
+        backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION)
+        is None
+    )
     root = tmp_path / ".aptl/realization/cortex-service-credentials"
     initializer = (root / "cortex/initializer-api-key").read_text().strip()
     connector = (root / "cortex/connector-api-key").read_text().strip()
@@ -262,7 +289,10 @@ def test_cortex_credentials_are_generated_distinctly_and_reused(tmp_path: Path) 
     assert (root.stat().st_mode & 0o777) == 0o700
     assert ((root / "cortex/connector-api-key").stat().st_mode & 0o777) == 0o600
 
-    assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
+    assert (
+        backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION)
+        is None
+    )
     assert (root / "cortex/initializer-api-key").read_text().strip() == initializer
     assert (root / "cortex/connector-api-key").read_text().strip() == connector
 
@@ -273,7 +303,10 @@ def test_cortex_credentials_bind_only_declared_environment_names(
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     spec = _cortex_credentials_spec()
     artifact = spec.generated_artifacts[0]
-    assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
+    assert (
+        backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION)
+        is None
+    )
 
     payload = stateful_override_payload(tmp_path, "aptl-test", spec)
 
@@ -300,7 +333,9 @@ def test_generated_environment_file_rejects_variable_name_injection(
         environment_consumers=(injected, *artifact.environment_consumers[1:]),
     )
 
-    failure = backend._realize_one_generated_artifact(artifact, tmp_path)
+    failure = backend._realize_one_generated_artifact(
+        artifact, tmp_path, _EMPTY_REALIZATION
+    )
 
     assert failure is not None
     assert failure.success is False
@@ -341,7 +376,7 @@ def test_image_free_generated_environment_uses_the_declared_output(
         BaseContainerSpec(
             node_address="provision.node.kali",
             container_name="aptl-kali",
-            image_ref="debian:12-slim",
+            image_ref="debian:13-slim",
             runs_services=True,
             environment_names=("CORTEX_KEY",),
         ),
@@ -366,7 +401,7 @@ def test_base_environment_file_rejects_variable_name_injection(tmp_path: Path) -
     spec = BaseContainerSpec(
         node_address="provision.node.kali",
         container_name="aptl-kali",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
         environment_names=("SAFE\nINJECTED",),
         environment_defaults=(("SAFE\nINJECTED", "value"),),
@@ -387,7 +422,7 @@ def test_base_environment_file_rejects_value_line_injection(tmp_path: Path) -> N
     spec = BaseContainerSpec(
         node_address="provision.node.kali",
         container_name="aptl-kali",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
         environment_names=("SAFE",),
         environment_defaults=(("SAFE", "value\nINJECTED=1"),),
@@ -444,14 +479,16 @@ def _certificate_outputs() -> tuple[DeploymentGeneratedArtifactOutput, ...]:
 
 
 def _effective_payload(
-    tmp_path: Path, spec: DeploymentRealizationSpec
+    tmp_path: Path,
+    spec: DeploymentRealizationSpec,
+    project_name: str = "aptl-test",
 ) -> dict[str, object]:
-    payload = stateful_override_payload(tmp_path, "aptl-test", spec)
+    payload = stateful_override_payload(tmp_path, project_name, spec)
     volumes = payload.get("volumes", {})
     assert isinstance(volumes, dict)
     for name, definition in volumes.items():
         assert isinstance(definition, dict)
-        definition["name"] = f"aptl-test_{name}"
+        definition["name"] = f"{project_name}_{name}"
     return payload
 
 
@@ -644,7 +681,7 @@ def test_certificate_materialization_rejects_symlinked_output_before_docker(
     )
 
     result = backend._realize_certificate_bundle(
-        _spec().generated_artifacts[0], tmp_path
+        _spec().generated_artifacts[0], tmp_path, _spec()
     )
 
     assert result is not None
@@ -810,6 +847,7 @@ def test_generated_compose_model_is_validated_before_up(
     tmp_path: Path, monkeypatch
 ) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    backend._docker_daemon_id = "test-daemon"
     commands: list[list[str]] = []
     monkeypatch.setattr(
         backend,
@@ -827,12 +865,19 @@ def test_generated_compose_model_is_validated_before_up(
 
     def run(cmd, **kwargs):
         commands.append(cmd)
+        if cmd[:3] in (
+            ["docker", "network", "inspect"],
+            ["docker", "volume", "inspect"],
+        ):
+            return MagicMock(returncode=1, stdout="", stderr="missing")
         return MagicMock(
             returncode=0,
             stdout=(
                 "2.24.4"
                 if "version" in cmd
-                else json.dumps(_effective_payload(tmp_path, spec))
+                else json.dumps(
+                    _effective_payload(tmp_path, spec, backend.project_name)
+                )
                 if "config" in cmd
                 else ""
             ),
@@ -985,6 +1030,8 @@ def _readiness_backend(tmp_path: Path, monkeypatch) -> DockerComposeBackend:
         "INDEXER_PASSWORD=indexer-password\n"
         "API_USERNAME=api-user\n"
         "API_PASSWORD=api-password\n"
+        "DASHBOARD_USERNAME=dashboard-user\n"
+        "DASHBOARD_PASSWORD=dashboard-password\n"
     )
     monkeypatch.setattr(
         backend,
@@ -1020,6 +1067,17 @@ def _indexer_and_manager_spec() -> DeploymentRealizationSpec:
                 service_name="wazuh.manager",
                 container_name="aptl-wazuh-manager",
                 networks=(),
+                runtime=RuntimeConfiguration.model_validate(
+                    {
+                        "security_monitoring_managers": [
+                            {
+                                "security_monitoring_manager_id": "wazuh-manager",
+                                "implementation": "wazuh",
+                                "manager_kind": "siem",
+                            }
+                        ]
+                    }
+                ),
             ),
         ),
         networks=(),
@@ -1108,6 +1166,141 @@ def test_stateful_wazuh_readiness_is_authenticated_and_observed(
         "wazuh.indexer": True,
         "wazuh.manager": True,
     }
+    assert backend.declared_wazuh_attestation == {
+        "wazuh.indexer": (
+            {
+                "fact_id": "api:authenticated",
+                "expected": "authenticated",
+                "observed": "authenticated",
+                "status": "matched",
+                "failure_category": "",
+            },
+        ),
+        "wazuh.manager": (
+            {
+                "fact_id": "api:authenticated",
+                "expected": "authenticated",
+                "observed": "authenticated",
+                "status": "matched",
+                "failure_category": "",
+            },
+        ),
+    }
+
+
+def test_wazuh_api_is_not_contacted_without_a_declared_native_service(
+    tmp_path: Path, monkeypatch
+) -> None:
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    spec = _indexer_and_manager_spec()
+    spec = replace(
+        spec,
+        nodes=tuple(replace(node, runtime=None) for node in spec.nodes),
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda *_args: pytest.fail("undeclared indexer connection"),
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda *_args: pytest.fail("undeclared manager connection"),
+    )
+
+    assert backend._verify_stateful_authenticated_readiness(spec) is None
+    assert backend.declared_wazuh_attestation == {}
+
+
+def test_manager_native_attestation_does_not_require_listener_host_publication(
+    tmp_path: Path, monkeypatch
+) -> None:
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    spec = _indexer_and_manager_spec()
+    manager = spec.nodes[-1]
+    runtime = RuntimeConfiguration.model_validate(
+        {
+            "security_monitoring_managers": [
+                {
+                    "security_monitoring_manager_id": "wazuh-manager",
+                    "implementation": "wazuh",
+                    "manager_kind": "siem",
+                    "listeners": [
+                        {
+                            "listener_id": "agent-events",
+                            "role": "agent_event_ingestion",
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+    spec = replace(spec, nodes=(*spec.nodes[:-1], replace(manager, runtime=runtime)))
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api", lambda *_args: _indexer_probe(200)
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda *_args: _manager_probe(*_MANAGER_READY),
+    )
+
+    assert backend._verify_stateful_authenticated_readiness(spec) is None
+    assert backend.authenticated_readiness["wazuh.manager"] is True
+
+
+def test_declared_indexer_fact_mismatch_fails_realization(
+    tmp_path: Path, monkeypatch
+) -> None:
+    backend = _readiness_backend(tmp_path, monkeypatch)
+    spec = _indexer_and_manager_spec()
+    indexer = spec.nodes[0]
+    runtime = RuntimeConfiguration.model_validate(
+        {
+            "datastore_services": [
+                {
+                    "datastore_service_id": "wazuh-indexer",
+                    "engine": "opensearch",
+                    "data_model": "search_index",
+                    "partitions": [
+                        {
+                            "partition_id": "security",
+                            "kind": "index",
+                            "name": ".opendistro_security",
+                            "shard_count": 1,
+                            "replica_count": 0,
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+    spec = replace(spec, nodes=(replace(indexer, runtime=runtime), *spec.nodes[1:]))
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_indexer_api",
+        lambda *_args: _indexer_probe(200),
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.probe_manager_api",
+        lambda *_args: _manager_probe(*_MANAGER_READY),
+    )
+    monkeypatch.setattr(
+        f"{_READINESS}.observe_indexer_declared_facts",
+        lambda *_args, **_kwargs: (
+            {
+                "fact_id": "partition:.opendistro_security",
+                "expected": "shards=1,replicas=0",
+                "observed": "missing",
+                "status": "failed",
+                "failure_category": "declared-partition-missing-or-mismatched",
+            },
+        ),
+    )
+    _polling(monkeypatch, timeout=0, clock=[0.0, 0.0])
+
+    result = backend._verify_stateful_authenticated_readiness(spec)
+
+    assert result is not None
+    assert result.success is False
+    assert "declared-partition-missing-or-mismatched" in result.error
+    assert backend.declared_wazuh_attestation["wazuh.indexer"][0]["status"] == "failed"
 
 
 def test_authenticated_readiness_polls_until_credentials_are_accepted(
@@ -1413,6 +1606,8 @@ def test_authenticated_readiness_rejects_an_unapplied_manager_config(
         "INDEXER_PASSWORD=indexer-password\n"
         "API_USERNAME=api-user\n"
         "API_PASSWORD=api-password\n"
+        "DASHBOARD_USERNAME=dashboard-user\n"
+        "DASHBOARD_PASSWORD=dashboard-password\n"
     )
     monkeypatch.setattr(
         backend,
@@ -1466,6 +1661,8 @@ def test_authenticated_readiness_accepts_an_applied_manager_config(
         "INDEXER_PASSWORD=indexer-password\n"
         "API_USERNAME=api-user\n"
         "API_PASSWORD=api-password\n"
+        "DASHBOARD_USERNAME=dashboard-user\n"
+        "DASHBOARD_PASSWORD=dashboard-password\n"
     )
     monkeypatch.setattr(
         backend,
@@ -1494,6 +1691,12 @@ def test_authenticated_readiness_accepts_an_applied_manager_config(
 
 
 # -- ssh_key_bundle dispatch and image-free delivery (issue #875) -------------
+
+
+#: A realization with no nodes: these tests exercise generator dispatch and
+#: containment, not the authored-host derivation the certificate bundle reads
+#: from the spec, and a scenario with no nodes authors no hosts.
+_EMPTY_REALIZATION = DeploymentRealizationSpec(profiles=(), nodes=(), networks=())
 
 
 def _ssh_artifact(consumers=()) -> DeploymentGeneratedArtifactRealization:
@@ -1561,7 +1764,12 @@ def test_ssh_key_bundle_is_generated_under_its_canonical_contained_root(
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     staged = _stub_ssh_generator(monkeypatch)
 
-    assert backend._realize_one_generated_artifact(_ssh_artifact(), tmp_path) is None
+    assert (
+        backend._realize_one_generated_artifact(
+            _ssh_artifact(), tmp_path, _EMPTY_REALIZATION
+        )
+        is None
+    )
 
     assert staged == [
         tmp_path.resolve() / SSH_KEY_BUNDLE_ROOT_RELPATH / "techvault-ssh-keys"
@@ -1576,7 +1784,9 @@ def test_ssh_key_bundle_generation_failure_fails_the_realization_closed(
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     _stub_ssh_generator(monkeypatch, error="ssh-keygen unavailable")
 
-    result = backend._realize_one_generated_artifact(_ssh_artifact(), tmp_path)
+    result = backend._realize_one_generated_artifact(
+        _ssh_artifact(), tmp_path, _EMPTY_REALIZATION
+    )
 
     assert result is not None
     assert result.success is False
@@ -1613,7 +1823,9 @@ def test_an_unsupported_generator_kind_is_refused(tmp_path: Path) -> None:
         **{**_ssh_artifact().__dict__, "generator": "quantum_entropy_bundle"}
     )
 
-    result = backend._realize_one_generated_artifact(artifact, tmp_path)
+    result = backend._realize_one_generated_artifact(
+        artifact, tmp_path, _EMPTY_REALIZATION
+    )
 
     assert result is not None
     assert result.success is False
@@ -1814,7 +2026,10 @@ def test_the_soc_service_set_is_derived_from_the_declared_bundle_outputs(
     artifact = _soc_artifact()
     requested = _stub_soc_certs(monkeypatch, written=[o.path for o in artifact.outputs])
 
-    assert backend._realize_one_generated_artifact(artifact, tmp_path) is None
+    assert (
+        backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION)
+        is None
+    )
 
     # Root-level CA output names no service; each first path segment does.
     assert requested == [("misp", "thehive")]
@@ -1829,7 +2044,9 @@ def test_a_soc_bundle_missing_a_declared_output_fails_closed(
     artifact = _soc_artifact()
     _stub_soc_certs(monkeypatch, written=["lab-ca.pem", "misp/server.pem"])
 
-    result = backend._realize_one_generated_artifact(artifact, tmp_path)
+    result = backend._realize_one_generated_artifact(
+        artifact, tmp_path, _EMPTY_REALIZATION
+    )
 
     assert result is not None
     assert result.success is False
@@ -1842,7 +2059,9 @@ def test_a_failed_soc_generator_fails_closed(tmp_path: Path, monkeypatch) -> Non
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     _stub_soc_certs(monkeypatch, success=False, error="no openssl")
 
-    result = backend._realize_one_generated_artifact(_soc_artifact(), tmp_path)
+    result = backend._realize_one_generated_artifact(
+        _soc_artifact(), tmp_path, _EMPTY_REALIZATION
+    )
 
     assert result is not None
     assert result.success is False
@@ -1881,7 +2100,12 @@ def test_flag_signing_keys_are_generated_under_their_canonical_root(
         lambda artifact, staging_root: staged.append(staging_root),
     )
 
-    assert backend._realize_one_generated_artifact(_flag_artifact(), tmp_path) is None
+    assert (
+        backend._realize_one_generated_artifact(
+            _flag_artifact(), tmp_path, _EMPTY_REALIZATION
+        )
+        is None
+    )
 
     assert staged == [tmp_path.resolve() / FLAG_SIGNING_ROOT_RELPATH / "flag-keys"]
 
@@ -1897,7 +2121,9 @@ def test_a_flag_signing_generation_failure_fails_closed(
         lambda artifact, staging_root: "unsupported signing profile",
     )
 
-    result = backend._realize_one_generated_artifact(_flag_artifact(), tmp_path)
+    result = backend._realize_one_generated_artifact(
+        _flag_artifact(), tmp_path, _EMPTY_REALIZATION
+    )
 
     assert result is not None
     assert result.success is False
@@ -1931,7 +2157,9 @@ def test_a_generated_artifact_path_outside_the_bundle_is_refused(
         lambda root, artifact: tmp_path.parent / "elsewhere" / "keys",
     )
 
-    result = backend._realize_one_generated_artifact(artifact_factory(), tmp_path)
+    result = backend._realize_one_generated_artifact(
+        artifact_factory(), tmp_path, _EMPTY_REALIZATION
+    )
 
     assert result is not None
     assert result.success is False

@@ -257,6 +257,7 @@ class TestProbeManagerApi:
 
         assert result.ready is True
         assert (result.phase, result.category) == ("ready", "ready")
+        assert result.observed_components == ("wazuh-manager",)
         urls = [c.args[0] for c in request.call_args_list]
         assert urls == [
             "https://localhost:55000/",
@@ -316,7 +317,9 @@ class TestProbeManagerApi:
         [None, {"error": 1}, {"error": 0, "data": {"token": ""}}, ["not", "a", "map"]],
     )
     def test_missing_token_is_an_invalid_response(self, mocker, payload):
-        result, request = _probe(mocker, _outcome(401, _ROOT_401), _outcome(200, payload))
+        result, request = _probe(
+            mocker, _outcome(401, _ROOT_401), _outcome(200, payload)
+        )
 
         assert (result.phase, result.category) == ("authentication", "invalid_response")
         assert request.call_count == 2
@@ -372,9 +375,7 @@ class TestProbeIndexerApi:
     def _probe(self, mocker, *outcomes):
         from aptl.core.services import probe_indexer_api
 
-        request = mocker.patch(
-            "aptl.core.services.curl_request", side_effect=outcomes
-        )
+        request = mocker.patch("aptl.core.services.curl_request", side_effect=outcomes)
         result = probe_indexer_api(
             url="https://localhost:9200/",
             username="admin",
@@ -398,7 +399,9 @@ class TestProbeIndexerApi:
 
         assert request.call_count == 1
         assert request.call_args.kwargs.get("auth_header") is None
-        assert result.describe() == "transport phase failed: tls_handshake (curl exit 35)"
+        assert (
+            result.describe() == "transport phase failed: tls_handshake (curl exit 35)"
+        )
 
     @pytest.mark.parametrize("status", [401, 403])
     def test_rejected_credentials(self, mocker, status):
@@ -450,9 +453,7 @@ class TestManagerApiWarmUpIsQuiet:
     a WARNING per attempt.
     """
 
-    def test_no_https_response_is_not_ready_and_logs_no_warning(
-        self, mocker, caplog
-    ):
+    def test_no_https_response_is_not_ready_and_logs_no_warning(self, mocker, caplog):
         from aptl.core.services import probe_manager_api
         from aptl.utils import curl_safe
 

@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- RAM: 8GB runs the smaller curated scenarios; the full `techvault-operational` stack needs more than 20GB
+- RAM: the full `techvault` stack needs more than 20GB
 - 20GB+ disk
 - Docker Engine 20.10+ on native Linux, or Docker Desktop on macOS, Windows, or Linux
 - Docker Compose 2.0+ (`docker compose version`)
@@ -14,7 +14,7 @@
   (POSIX mode on Linux/macOS, NTFS ACLs via `icacls` on Windows). Preinstalled on
   Linux and macOS; on Windows enable the built-in **OpenSSH Client** optional
   feature (Settings → Apps → Optional features), or use Git for Windows / WSL2.
-- Node.js 18+ and npm (for the MCP servers, the AI-agent control plane that
+- Node.js 20+ and npm (for the MCP servers, the AI-agent control plane that
   `aptl lab start` builds via `mcp/build-all-mcps.sh`; without them the lab
   still boots but reports `degraded` with MCP servers unavailable)
 - Git (only for the from-source dev install; `pipx install aptl-labs` needs no clone)
@@ -39,7 +39,7 @@ sudo apt install docker.io docker-compose-v2 docker-buildx
 Docker CE repositories name the last package `docker-buildx-plugin` instead.
 
 **macOS (Docker Desktop):** Install Docker Desktop and allocate enough memory
-in Settings -> Resources. The full `techvault-operational` stack needs more
+in Settings -> Resources. The full `techvault` stack needs more
 than 20GB.
 
 **macOS (Colima alternative, no Docker Desktop):** If you cannot use Docker
@@ -55,7 +55,7 @@ ln -sf "$(brew --prefix docker-compose)/bin/docker-compose" ~/.docker/cli-plugin
 colima start --cpu 4 --memory 8 --disk 60
 ```
 
-Bump the resources for the full `techvault-operational` stack (see the
+Bump the resources for the full `techvault` stack (see the
 RAM/disk requirements above). `colima start` also sets the active `docker`
 context to `colima`; verify with `docker context ls`.
 
@@ -79,18 +79,11 @@ sudo sysctl -w vm.max_map_count=262144
 echo 'vm.max_map_count=262144' | sudo tee -a /etc/sysctl.conf
 ```
 
-**Check ports available:**
-```bash
-netstat -tlnp | grep -E "(443|2027|8443|9000|9001|9200|55000)"
-```
-
-You do not have to free these by hand: `aptl lab start` probes every published
-host port and, if a default is already in use (Windows reserves UDP 5353 for
-mDNS; an editor's automatic port-forwarding may hold others), publishes that
-service on a free port instead and prints the real ports under "Host port
-remaps" in the start summary. Use the reported ports (for example, the Wazuh Dashboard
-URL, or `dig @localhost -p <reported-port> techvault.local SOA`). Pin a specific
-port with the matching `APTL_HP_*` / `APTL_DNS_HOST_PORT` variable to override.
+You do not need to reserve a fixed list of ports. `aptl lab start` probes each
+host port requested by the realized scenario and remaps a service when its
+default is occupied. Read the start summary or run `aptl lab info` for the
+actual URLs and ports. Pin a port only through the matching documented
+`APTL_HP_*` or `APTL_DNS_HOST_PORT` runtime setting.
 
 ## Python environment
 

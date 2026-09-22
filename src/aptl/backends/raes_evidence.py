@@ -16,6 +16,10 @@ from aptl.core.experiment.capture_plan import (
     CapturePlan,
     admit_capture_demands,
 )
+from aptl.core.experiment.capture_registry import (
+    DEFAULT_COLLECTOR_REGISTRY,
+    CollectorRegistry,
+)
 from aptl.core.experiment.errors import AdmissionRejection, diagnostic
 
 _TRANSCRIPT_DEMAND_ID = "redteam-session-transcript"
@@ -150,6 +154,8 @@ def _require_open_footprint(
 
 def admit_sdl_evidence(
     scenario: Scenario | InstantiatedScenario,
+    *,
+    registry: CollectorRegistry = DEFAULT_COLLECTOR_REGISTRY,
 ) -> CapturePlan:
     """Compile and admit every required SDL evidence demand without mutation."""
 
@@ -162,6 +168,7 @@ def admit_sdl_evidence(
     return admit_capture_demands(
         demands,
         source_identity=digest,
+        registry=registry,
         apparatus=_capture_apparatus(
             scenario, frozenset(demand.demand_id for demand in demands)
         ),

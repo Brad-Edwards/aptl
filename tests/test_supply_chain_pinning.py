@@ -36,6 +36,11 @@ def _tracked(pattern: str) -> list[Path]:
 
 # `FROM <image>@sha256:<64 hex>`, optionally `AS <stage>`.
 _FROM = re.compile(r"^\s*FROM\s+(?P<ref>\S+)", re.IGNORECASE | re.MULTILINE)
+_GLOBAL_ARG = re.compile(
+    r"^\s*ARG\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)=(?P<default>\S+)\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_FROM_ARG = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)\}$")
 _DIGEST_PINNED = re.compile(r"^[^\s@]+@sha256:[0-9a-f]{64}$")
 _LOCALLY_BUILT_BASES = frozenset(
     {
@@ -56,6 +61,7 @@ def _dockerfiles() -> list[Path]:
         p
         for p in REPO_ROOT.rglob("Dockerfile*")
         if p.is_file()
+        and not p.is_relative_to(REPO_ROOT / "build")
         and "node_modules" not in p.parts
         and "site" not in p.parts
         and ".venv" not in p.parts
@@ -69,19 +75,40 @@ def _registry_base_refs(dockerfile: Path) -> list[str]:
     """Return external image refs, excluding stages and built-local substrates."""
 
     text = dockerfile.read_text(encoding="utf-8")
+    first_from = _FROM.search(text)
+    global_args = {
+        match.group("name"): match.group("default")
+        for match in _GLOBAL_ARG.finditer(
+            text[: first_from.start() if first_from else 0]
+        )
+    }
     stages = {
         m.group(1).lower()
         for m in re.finditer(
             r"^\s*FROM\s+\S+\s+AS\s+(\S+)", text, re.IGNORECASE | re.MULTILINE
         )
     }
-    return [
-        ref
-        for ref in (m.group("ref") for m in _FROM.finditer(text))
-        if ref.lower() not in stages
-        and ref.lower() != "scratch"
-        and ref not in _LOCALLY_BUILT_BASES
-    ]
+    external = []
+    for match in _FROM.finditer(text):
+        ref = match.group("ref")
+        argument = _FROM_ARG.fullmatch(ref)
+        resolved = global_args.get(argument.group("name"), ref) if argument else ref
+        if (
+            resolved.lower() not in stages
+            and resolved.lower() != "scratch"
+            and resolved not in _LOCALLY_BUILT_BASES
+        ):
+            external.append(resolved)
+    return external
+
+
+def test_dockerfile_from_arg_keeps_external_defaults_subject_to_pinning(
+    tmp_path: Path,
+) -> None:
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text("ARG PARENT=ubuntu:latest\nFROM ${PARENT}\n")
+
+    assert _registry_base_refs(dockerfile) == ["ubuntu:latest"]
 
 
 @pytest.mark.parametrize(

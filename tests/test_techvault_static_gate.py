@@ -12,6 +12,7 @@ gate validates.
 
 import copy
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -615,6 +616,57 @@ def test_conformance_cli_diagnostics(monkeypatch):
     assert conformance_cli_diagnostics("provisioning-only", None, None) == []
 
 
+@pytest.mark.parametrize("path_executable", [None, "/usr/bin/raes"])
+def test_run_raes_uses_active_python_environment_without_path_activation(
+    monkeypatch, tmp_path, path_executable
+):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python = bin_dir / "python"
+    python.touch()
+    raes = bin_dir / "raes"
+    raes.touch()
+    raes.chmod(0o755)
+    monkeypatch.setattr(sys, "executable", str(python))
+    monkeypatch.setattr(gcli.shutil, "which", lambda name: path_executable)
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return _proc(0)
+
+    monkeypatch.setattr(gcli.subprocess, "run", fake_run)
+
+    result = gcli.run_raes(["conformance", "backend"])
+    assert result is not None
+    assert result.returncode == 0
+    assert calls[0][0] == [str(raes), "conformance", "backend"]
+
+
+def test_run_raes_falls_back_to_path_when_sibling_is_not_executable(
+    monkeypatch, tmp_path
+):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python = bin_dir / "python"
+    python.touch()
+    (bin_dir / "raes").touch()
+    monkeypatch.setattr(sys, "executable", str(python))
+    monkeypatch.setattr(gcli.shutil, "which", lambda name: "/usr/bin/raes")
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(argv)
+        return _proc(0)
+
+    monkeypatch.setattr(gcli.subprocess, "run", fake_run)
+
+    result = gcli.run_raes(["sdl", "verify-imports"])
+    assert result is not None
+    assert result.returncode == 0
+    assert calls == [["/usr/bin/raes", "sdl", "verify-imports"]]
+
+
 def test_cli_detail_json_and_plain():
     payload = '{"diagnostics": [{"code": "conformance.profile-load-failed"}]}'
     assert "profile-load-failed" in _cli_detail(_proc(1, stdout=payload))
@@ -645,7 +697,9 @@ def test_check_import_lock_missing_and_unavailable(tmp_path, monkeypatch):
     monkeypatch.setattr(gc, "run_raes", lambda *a, **k: None)
     check = check_import_lock(path, scenario)
     assert not check.passed
-    assert any("not found on PATH" in d for d in check.diagnostics)
+    assert any(
+        "not found beside active Python or on PATH" in d for d in check.diagnostics
+    )
 
 
 def test_check_import_lock_passes_when_scenario_declares_no_imports(tmp_path):
@@ -1091,7 +1145,14 @@ def test_account_provisioner_parity_fails_on_undisabled_account(
     assert any("disabled" in d.lower() for d in check.diagnostics)
 
 
-def test_account_provisioner_parity_fallback_fails_when_script_missing(tmp_path):
+def test_account_provisioner_parity_fails_without_an_admitted_realization(tmp_path):
+    """No realization means nothing to compare accounts against, so fail closed.
+
+    Parity used to fall back to scraping a checked-in ``provision-users.sh``
+    from the ``ad`` image. The pack no longer declares that image and nothing
+    builds it, so the admitted realization is the only authority left; absent
+    it, the gate must refuse rather than pass (issue #1006).
+    """
     scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
     assert parse_check.passed
     assert scenario is not None
@@ -1099,45 +1160,8 @@ def test_account_provisioner_parity_fallback_fails_when_script_missing(tmp_path)
     check = check_account_provisioner_parity(scenario=scenario, project_dir=tmp_path)
 
     assert not check.passed
-    assert any("provisioner script missing" in d.lower() for d in check.diagnostics)
-
-
-def test_provisioner_relaxes_password_policy_before_user_creation():
-    """Declared weak-password personas must actually provision at boot.
-
-    The Samba domain default password policy (complexity on, min length 7)
-    rejects deliberately-weak passwords (e.g. jessica.williams / password123)
-    at ``samba-tool user create``; the script's ``|| true`` masks the failure,
-    so the account silently never exists — a runtime honesty gap the static
-    parity gate cannot see. The provisioner must disable complexity BEFORE it
-    creates any user so every declared weak-password account is realized
-    (issue #689 account-realization honesty).
-    """
-    script = (PROJECT_ROOT / "containers" / "ad" / "provision-users.sh").read_text(
-        encoding="utf-8"
-    )
-    lines = script.splitlines()
-    complexity_off = next(
-        (
-            i
-            for i, line in enumerate(lines)
-            if "passwordsettings set --complexity=off" in line
-        ),
-        None,
-    )
-    first_user_create = next(
-        (i for i, line in enumerate(lines) if "samba-tool user create " in line),
-        None,
-    )
-
-    assert complexity_off is not None, (
-        "provisioner must disable password complexity so weak-password "
-        "personas can be created"
-    )
-    assert first_user_create is not None
-    assert complexity_off < first_user_create, (
-        "password complexity must be disabled BEFORE the first user is "
-        "created, or weak-password accounts silently fail to provision"
+    assert any(
+        "no admitted provisioning realization" in d.lower() for d in check.diagnostics
     )
 
 

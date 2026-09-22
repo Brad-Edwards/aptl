@@ -28,6 +28,9 @@ from raes_processor.semantics.realization import (
 )
 
 from aptl.backends._runtime_concern_disclosure import _disclose
+from aptl.core.deployment._wazuh_attestation import (
+    declared_wazuh_facts_match,
+)
 from aptl.core.scenario_bundle import PackIdentity
 
 if TYPE_CHECKING:
@@ -37,7 +40,7 @@ if TYPE_CHECKING:
 
 
 TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST = (
-    "sha256:edd3bb6252990aeaf506904767182d5a3ef2b3828a498fe64c897dccaf954934"
+    "sha256:db98a9daa62a092a0c6b001217027d7f4ad489889e95d01050e77f148e8ef29b"
 )
 
 # These are configuration descriptions whose realized implementation is bound
@@ -78,14 +81,14 @@ _RUNTIME_FIELD_BY_KIND = {
     "runtime-software-components": "software_components",
 }
 
-# Canonical projections from raes-env-packs 6.0.1's content-identified
+# Canonical projections from raes-env-packs 6.1.0's content-identified
 # TechVault semantic parent.  Each key is independently pinned so changing one
 # SDL claim cannot borrow the pack-level identity and pass as the old contract.
 _TECHVAULT_PROJECTION_DIGESTS: Mapping[tuple[str, str], str] = {
     (
         "wazuh-manager",
         "runtime-security-monitoring-managers",
-    ): "sha256:0cfca5532722a7b61f24ab57de9e76d8dbffe1a4091dd29a15363fce888a3a72",
+    ): "sha256:72687494a6fb4ada178d1827425b9321b3d9697ece1204c12081ed4f5a5f8272",
     (
         "wazuh-indexer",
         "runtime-datastore-services",
@@ -113,19 +116,19 @@ _TECHVAULT_PROJECTION_DIGESTS: Mapping[tuple[str, str], str] = {
     (
         "misp",
         "runtime-platform-applications",
-    ): "sha256:f7e2d3503de6f5f313f0fd169497000c971e642618bdb3373420dfee7a2c232c",
+    ): "sha256:8f624772231c88df702acaa80459c03c42c8262239b100a1e2efa881a77a0258",
     (
         "misp",
         "runtime-app-authorizations",
-    ): "sha256:15fd58cfe6d1fd416150bb3e6d2120059bf19b97720c03972b8f7f6a460ea551",
+    ): "sha256:8ac233f5a5fa7d0db293530e3e358a2087c86b56249e8bb52cb4ac5c4bf1b373",
     (
         "misp-db",
         "runtime-database-services",
-    ): "sha256:bc89148f7c07e122f6fb1f2c1c684b44bce44ca49d22924e896eaa356603d1f0",
+    ): "sha256:2709e6a3c901c70357ca10c2ecd3a050d64a0cc2904ca43ae2504232996924ca",
     (
         "misp-redis",
         "runtime-datastore-services",
-    ): "sha256:1260238e5ee1d35df057d7345c5199c201d6c6904dd0b2b16c842ad8679bcc87",
+    ): "sha256:d61c29f46d1fe792418f5ebb6dc523af9742646c9bffc76244b33709986bda28",
     (
         "thehive",
         "runtime-applications",
@@ -177,7 +180,7 @@ _TECHVAULT_PROJECTION_DIGESTS: Mapping[tuple[str, str], str] = {
     (
         "shuffle-orborus",
         "runtime-orchestration-authorities",
-    ): "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    ): "sha256:e1c3a94200650b644c26ee8c99538be39c88349da45d23aecd465b35d9184e20",
     (
         "shuffle-opensearch",
         "runtime-datastore-services",
@@ -287,33 +290,85 @@ def observe_techvault_attested_concerns(
 ) -> dict[tuple[str, ...], object]:
     """Return only released, implementation-bound TechVault configuration."""
 
-    runtime = node.runtime
-    if (
-        runtime is None
-        or not node.container_name
-        or not _identified_release(pack_identity)
-        or not _implementation_observed(
-            backend,
-            node,
-            content_verified=content_verified,
-            observation_context=observation_context,
-        )
+    if not _node_is_attestable(
+        backend,
+        node,
+        pack_identity,
+        content_verified=content_verified,
+        observation_context=observation_context,
     ):
         return {}
 
     concerns: dict[tuple[str, ...], object] = {}
     for kind, field in _RUNTIME_FIELD_BY_KIND.items():
-        value = getattr(runtime, field, None)
-        expected = _TECHVAULT_PROJECTION_DIGESTS.get((node.name, kind))
-        if value in (None, [], {}) or expected is None:
-            continue
-        projected = project_realization_concern(kind, value, observed=False)
-        if canonical_json_digest(projected) != expected:
-            continue
-        disclosed = _disclose(kind, value)
+        disclosed = _attested_concern(backend, node, kind, field)
         if disclosed is not None:
             concerns[CONCERN_PAYLOAD_PATH[kind]] = disclosed
     return concerns
+
+
+def _node_is_attestable(
+    backend: DeploymentBackend,
+    node: NodeRealization,
+    pack_identity: PackIdentity | None,
+    *,
+    content_verified: bool,
+    observation_context: DeploymentObservationContext | None,
+) -> bool:
+    """Return whether one node is bound to an admitted released implementation."""
+
+    return bool(
+        node.runtime is not None
+        and node.container_name
+        and _identified_release(pack_identity)
+        and _implementation_observed(
+            backend,
+            node,
+            content_verified=content_verified,
+            observation_context=observation_context,
+        )
+    )
+
+
+def _attested_concern(
+    backend: DeploymentBackend,
+    node: NodeRealization,
+    kind: str,
+    field: str,
+) -> object | None:
+    """Return one digest-bound concern after its required native observation."""
+
+    value = getattr(node.runtime, field, None)
+    expected = _TECHVAULT_PROJECTION_DIGESTS.get((node.name, kind))
+    result: object | None = None
+    observation_ok = not _requires_declared_wazuh_attestation(
+        node, kind
+    ) or _declared_wazuh_facts_observed(backend, node)
+    if value not in (None, [], {}) and expected is not None and observation_ok:
+        projected = project_realization_concern(kind, value, observed=False)
+        if canonical_json_digest(projected) == expected:
+            result = _disclose(kind, value)
+    return result
+
+
+def _declared_wazuh_facts_observed(
+    backend: DeploymentBackend, node: NodeRealization
+) -> bool:
+    """Require native API evidence before disclosing Wazuh runtime facts."""
+
+    readiness = getattr(backend, "declared_wazuh_attestation", {})
+    services = tuple(getattr(node, "backend_services", ()))
+    service = services[0] if len(services) == 1 else None
+    return declared_wazuh_facts_match(readiness, service, node)
+
+
+def _requires_declared_wazuh_attestation(node: NodeRealization, kind: str) -> bool:
+    """Identify the two Wazuh declarations backed by native API observations."""
+
+    return (node.name, kind) in {
+        ("wazuh-indexer", "runtime-datastore-services"),
+        ("wazuh-manager", "runtime-security-monitoring-managers"),
+    }
 
 
 __all__ = [

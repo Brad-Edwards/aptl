@@ -70,6 +70,20 @@ do
     aptl_load_env_key "$ENV_FILE" "$key"
 done
 
+# The normal installed startup path supplies receipt-resolved container names
+# through the scenario adapter. The legacy defaults keep a manual invocation
+# useful for an older, unscoped checkout without teaching this script how to
+# query or infer deployment ownership.
+CORTEX_CONTAINER="${CORTEX_CONTAINER:-aptl-cortex}"
+THEHIVE_CONTAINER="${THEHIVE_CONTAINER:-aptl-thehive}"
+MISP_CONTAINER="${MISP_CONTAINER:-aptl-misp}"
+SHUFFLE_CONTAINER="${SHUFFLE_CONTAINER:-aptl-shuffle-frontend}"
+KALI_CONTAINER="${KALI_CONTAINER:-aptl-kali}"
+WAZUH_MANAGER_CONTAINER="${WAZUH_MANAGER_CONTAINER:-aptl-wazuh-manager}"
+export CORTEX_CONTAINER THEHIVE_CONTAINER MISP_CONTAINER SHUFFLE_CONTAINER
+export KALI_CONTAINER WAZUH_MANAGER_CONTAINER
+export MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
+
 echo "============================================="
 echo "  APTL Prime Scenario Seed"
 echo "============================================="
@@ -80,37 +94,17 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "[0/6] Waiting for SOC tools to be healthy..."
 
-# Apply the remaining temporary env-pack SOAR fixups before waiting on health.
-# The released pack now owns Shuffle's complete backend runtime contract; this
-# helper only repairs the independently tracked MISP/Redis contract. It still
-# waits for MISP and Shuffle readiness so the seed
-# steps below do not race their APIs. Failed Shuffle readiness stops before any
-# seed content is written; it never triggers a post-realization replacement.
-export MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
-if [ -x "$SCRIPT_DIR/envpack-soar-fixups.sh" ]; then
-    if ! "$SCRIPT_DIR/envpack-soar-fixups.sh"; then
-        echo "  ERROR: Shuffle readiness failed; refusing to seed scenario content"
-        exit 1
-    fi
-fi
-
-# Apply the temporary env-pack Kali capture-wrapper fixup. The frozen env-pack
-# ships a fail-closed ForceCommand wrapper that denies every SSH session unless
-# a control-plane APTL_CAPTURE_CAPABILITY token is present, but nothing in this
-# realization provisions that token, so kali is 100% unusable (lab readiness
-# reports "SSH to kali not ready"; kali_run_command is denied). This relaxes the
-# wrapper to run shells when no capability is provisioned (capture is preserved
-# when it is). See scripts/envpack-kali-fixups.sh.
-if [ -x "$SCRIPT_DIR/envpack-kali-fixups.sh" ]; then
-    "$SCRIPT_DIR/envpack-kali-fixups.sh" || echo "  WARNING: env-pack Kali fixups reported issues"
-fi
-
 # SEC-006 / ADR-034: seed-shuffle.sh now talks to the HTTPS frontend
 # at https://localhost:3443. The readiness gate waits for
 # `aptl-shuffle-frontend` (which has a healthcheck post-SEC-006)
 # rather than the headless `aptl-shuffle-backend` container that
 # Docker reports without a `.State.Health.Status`.
-for svc in aptl-cortex aptl-thehive aptl-misp aptl-shuffle-frontend; do
+for svc in \
+    "$CORTEX_CONTAINER" \
+    "$THEHIVE_CONTAINER" \
+    "$MISP_CONTAINER" \
+    "$SHUFFLE_CONTAINER"
+do
     max_wait=600
     elapsed=0
     while [ $elapsed -lt $max_wait ]; do
@@ -144,7 +138,7 @@ if [ -x "$SCRIPT_DIR/thehive-apikey.sh" ]; then
     if THEHIVE_API_KEY=$("$SCRIPT_DIR/thehive-apikey.sh" 2>/dev/null) && \
         [ -n "$THEHIVE_API_KEY" ]; then
         export THEHIVE_API_KEY
-        echo "  TheHive API key provisioned: ${THEHIVE_API_KEY:0:8}..."
+        echo "  TheHive API key provisioned"
 
         # Persist provisioned + default seed keys back to .env so MCP servers
         # (which spawn fresh per tool call and load .env at startup) can
@@ -192,14 +186,14 @@ echo "[3/6] Waiting for Wazuh Indexer to be healthy..."
 
 INDEXER_PORT="${APTL_HP_WAZUH_INDEXER_9200:-9200}"
 INDEXER_URL="${INDEXER_URL:-https://localhost:${INDEXER_PORT}}"
-INDEXER_USER="${INDEXER_USERNAME:-admin}"
-INDEXER_PASS="${INDEXER_PASSWORD:-SecretPassword}"
+INDEXER_USER="${INDEXER_USERNAME:?admitted scenario did not provide INDEXER_USERNAME}"
+INDEXER_PASS="${INDEXER_PASSWORD:?admitted scenario did not provide INDEXER_PASSWORD}"
 
 max_wait=600
 elapsed=0
 while [ $elapsed -lt $max_wait ]; do
-    status=$(curl -ks -u "$INDEXER_USER:$INDEXER_PASS" \
-        "$INDEXER_URL/_cluster/health" 2>/dev/null \
+    status=$(aptl_curl_config -ks -u "$INDEXER_USER:$INDEXER_PASS" \
+        "$INDEXER_URL/_cluster/health" | curl --config - 2>/dev/null \
         | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4) || true
 
     if [ "$status" = "green" ] || [ "$status" = "yellow" ]; then
@@ -257,9 +251,9 @@ echo "[6/6] Configuring Wazuh -> Shuffle integration..."
 WEBHOOK_FILE="${APTL_SHUFFLE_WEBHOOK_FILE:-/tmp/aptl_shuffle_webhook_url}"
 if [ -f "$WEBHOOK_FILE" ]; then
     WEBHOOK_URL=$(cat "$WEBHOOK_FILE")
-    if docker exec aptl-wazuh-manager bash -c \
-        "echo '${WEBHOOK_URL}' > /var/ossec/etc/shuffle_webhook_url"; then
-        echo "  Webhook URL written to Wazuh manager: ${WEBHOOK_URL}"
+    if docker exec -i "$WAZUH_MANAGER_CONTAINER" bash -c \
+        'cat > /var/ossec/etc/shuffle_webhook_url' <<<"$WEBHOOK_URL"; then
+        echo "  Webhook URL written to Wazuh manager"
     else
         record_seed_failure \
             "Wazuh to Shuffle" \

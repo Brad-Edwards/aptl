@@ -33,6 +33,19 @@ def _binding() -> ApplianceBoundaryBinding:
     )
 
 
+def test_boundary_binding_distinguishes_host_and_guest_boot_identities() -> None:
+    binding = _binding().model_copy(
+        update={"host_boot_id": "host-boot-42", "guest_boot_id": "guest-boot-42"}
+    )
+    host = _host().model_copy(update={"boot_id": "host-boot-42"})
+    guest = _guest().model_copy(update={"boot_id": "guest-boot-42"})
+
+    result = qualify_appliance_boundary(_policy(), binding, host, guest)
+
+    assert "boundary.host-boot-identity-mismatch" not in result.findings
+    assert "boundary.guest-boot-identity-mismatch" not in result.findings
+
+
 def _policy() -> ApplianceBoundaryPolicy:
     return ApplianceBoundaryPolicy.model_validate(
         {

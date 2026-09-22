@@ -353,7 +353,9 @@ class TestPackageFamilyBaseSelection:
         )
 
     def test_non_service_base_is_family_aware(self):
-        assert base_image_for_os("linux", "", family="debian") == "debian:12-slim"
+        assert base_image_for_os("linux", "", family="debian") == (
+            "aptl/generic-systemd-base-debian:latest"
+        )
         assert base_image_for_os("linux", "", family="rhel") == "rockylinux:9"
 
     def test_service_nodes_use_family_aware_systemd_substrate(self):

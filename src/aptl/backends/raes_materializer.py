@@ -26,20 +26,18 @@ from raes.runtime_configuration import (
 from raes.runtime_filesystem import RuntimeFilesystemEntryType
 
 # Fixed, scenario-independent base substrate per (OS family, package family). A
-# node runs on a generic OS base image; its scenario-meaningful software is
-# materialized onto that base from declared state, never baked into an appliance
-# image (ADR-048). The package family (from the declared package manager) picks a
-# base whose package manager matches: apt -> Debian, dnf/yum -> RHEL.
+# node runs on an OS base image. The offline appliance's immutable image closure
+# contains declared packages, but services, configuration, and identities are
+# still materialized and verified from the admitted plan. The package family
+# picks a base whose package manager matches: apt -> Debian, dnf/yum -> RHEL.
 _NON_SERVICE_BASE_IMAGE: dict[tuple[str, str], str] = {
-    ("linux", "debian"): "debian:12-slim",
+    ("linux", "debian"): "aptl/generic-systemd-base-debian:latest",
     ("linux", "rhel"): "rockylinux:9",
 }
 
-# Generic OS + init substrate for nodes that declare service units, so a service
-# manager (systemd) actually runs inside the container. Still generic: OS + init
-# only, no product. Family-aware so an apt node keeps apt and a dnf node keeps
-# dnf. Built from containers/generic-systemd-base{,-debian}/Dockerfile and
-# validated locally against Docker.
+# Init-capable substrate for nodes that declare service units. It uses the same
+# offline package closure as the non-service Debian base. Family-aware so an
+# apt node keeps apt and a dnf node keeps dnf.
 _SERVICE_BASE_IMAGE: dict[tuple[str, str], str] = {
     ("linux", "debian"): "aptl/generic-systemd-base-debian:latest",
     ("linux", "rhel"): "aptl/generic-systemd-base:latest",
@@ -163,6 +161,8 @@ class PlacePackArtifactOp:
     artifact_id: str
     artifact_digest: str
     is_directory: bool = False
+    sensitive: bool = False
+    executable: bool = False
 
 
 @dataclass(frozen=True)

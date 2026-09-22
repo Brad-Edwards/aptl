@@ -6,26 +6,30 @@ package manager for packages, `groupadd`/`useradd`/`getent`/`id` for identity,
 and `systemctl` for service units. Dispatch is product-agnostic; the same code
 paths materialize any node from its declared state.
 
-Commands run as an argv list through an injected exec callable (the deployment
-backend's `container_exec`), never a shell string, so no scenario value is ever
-interpolated into a shell. A non-zero mutation exit raises
+Commands run through an injected exec callable (the deployment backend's
+`container_exec`). Sensitive file bodies use stdin, never process argv. A
+non-zero mutation exit raises
 :class:`MaterializationCommandError`, which the materialization engine catches at
 the admission boundary and translates into the RAES `LabResult` envelope.
 """
 
 from __future__ import annotations
 
-import base64
+import hashlib
 import io
-import json
 import shlex
 import tarfile
 import tempfile
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Protocol
 
+from aptl.backends._raes_docker_materializer_observations import (
+    DockerMaterializationObservationMixin,
+    _ExecOutcome,
+    _normalized_mode,
+)
 from aptl.backends.raes_materializer import (
     EnsureDirectoryOp,
     EnsureUserOp,
@@ -36,19 +40,12 @@ from aptl.backends.raes_materializer import (
     ProvisionDomainAuthorityOp,
     SetFilesystemMetadataOp,
 )
-from aptl.backends._raes_docker_observation_values import (
-    metadata_dimension_matches as _metadata_dimension_matches,
-    npm_entrypoint_paths as _npm_entrypoint_paths,
-    samba_domain_info as _samba_domain_info,
-)
 from aptl.backends.raes_package_managers import (
     install_argv,
     manifest_install_argv,
-    manifest_query_argv,
-    parse_installed,
-    query_installed_argv,
     refresh_argv,
 )
+from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 
 # A just-started container's network interface is not always immediately ready
 # for outbound traffic: a fresh-VM reproduction (issue #581) showed a node's
@@ -58,6 +55,7 @@ from aptl.backends.raes_package_managers import (
 # handles this general Docker-boot timing characteristic without a blind
 # fixed delay that would be wrong for both slower and faster hosts.
 _PACKAGE_INDEX_REFRESH_RETRY_DELAYS_SECONDS: tuple[float, ...] = (1.0, 2.0, 4.0, 8.0)
+_IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS: tuple[float, ...] = (0.25, 0.5, 1.0, 2.0)
 
 
 class MaterializationCommandError(RuntimeError):
@@ -68,35 +66,41 @@ class MaterializationCommandError(RuntimeError):
     """
 
 
-class _ExecOutcome(Protocol):
-    """The result shape a backend's exec callable returns."""
-
-    returncode: int
-    stdout: str
-
-
 ExecFn = Callable[[str, list[str]], _ExecOutcome]
+ExecWithInputFn = Callable[[str, list[str], str], _ExecOutcome]
 
 
-class DockerMaterializationExecutor:
+@dataclass(frozen=True)
+class DockerMaterializationSettings:
+    """Optional execution context for Docker node materialization."""
+
+    scenario_root: Path | None = None
+    sleep: Callable[[float], None] = time.sleep
+    offline_staged: bool = False
+
+
+class DockerMaterializationExecutor(DockerMaterializationObservationMixin):
     """Run generic materialization operations inside per-node base containers."""
 
     def __init__(
         self,
         *,
         run: ExecFn,
+        run_with_input: ExecWithInputFn | None = None,
         container_for: Callable[[str], str],
         start_base: Callable[[str, str], None],
         copy_in: Callable[[str, str, str, bool], None] | None = None,
-        scenario_root: Path | None = None,
-        sleep: Callable[[float], None] = time.sleep,
+        settings: DockerMaterializationSettings | None = None,
     ) -> None:
+        configured = settings or DockerMaterializationSettings()
         self._run = run
+        self._run_with_input = run_with_input
         self._container_for = container_for
         self._start_base = start_base
         self._copy_in = copy_in
-        self._scenario_root = scenario_root
-        self._sleep = sleep
+        self._scenario_root = configured.scenario_root
+        self._sleep = configured.sleep
+        self._offline_staged = configured.offline_staged
 
     # -- mutations -------------------------------------------------------
 
@@ -106,6 +110,15 @@ class DockerMaterializationExecutor:
     def install_packages(
         self, node_address: str, manager: str, packages: tuple[str, ...]
     ) -> None:
+        installed = self.observe_installed_packages(node_address, manager, packages)
+        missing = tuple(package for package in packages if package not in installed)
+        if not missing:
+            return
+        if self._offline_staged:
+            raise MaterializationCommandError(
+                f"offline image is missing declared {manager} packages on "
+                f"{node_address}: {', '.join(missing)}"
+            )
         refresh = refresh_argv(manager)
         if refresh is not None:
             self._require_ok_with_retry(
@@ -115,7 +128,7 @@ class DockerMaterializationExecutor:
                 _PACKAGE_INDEX_REFRESH_RETRY_DELAYS_SECONDS,
             )
         self._require_ok(
-            node_address, install_argv(manager, packages), "install packages"
+            node_address, install_argv(manager, missing), "install packages"
         )
 
     def ensure_group(self, node_address: str, name: str, gid: int | str | None) -> None:
@@ -129,7 +142,32 @@ class DockerMaterializationExecutor:
         if self.observe_local_user(node_address, op.username):
             # reconcile-not-recreate: a present user is left in place
             return
-        self._require_ok(node_address, _useradd_argv(op), "ensure user")
+        argv = _useradd_argv(op)
+        outcome = self._exec(node_address, argv)
+        if outcome.returncode == 0:
+            return
+        # A Docker exec can report failure after useradd committed (or while
+        # the guest's account database was briefly busy). Re-read before any
+        # repeat mutation, then retry only the idempotent ensure operation.
+        self._retry_ensure_user(node_address, op.username, argv)
+
+    def _retry_ensure_user(
+        self, node_address: str, username: str, argv: list[str]
+    ) -> None:
+        """Retry an ambiguous user creation only after checking guest state."""
+
+        for delay in _IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS:
+            self._sleep(delay)
+            if self.observe_local_user(node_address, username):
+                return
+            outcome = self._exec(node_address, argv)
+            if outcome.returncode == 0 or self.observe_local_user(
+                node_address, username
+            ):
+                return
+        raise MaterializationCommandError(
+            f"generic materialization step 'ensure user' failed on {node_address}"
+        )
 
     def ensure_directory(self, node_address: str, op: EnsureDirectoryOp) -> None:
         self._require_ok(node_address, ["mkdir", "-p", op.path], "ensure directory")
@@ -165,15 +203,45 @@ class DockerMaterializationExecutor:
     def place_file(
         self, node_address: str, path: str, content: str, mode: str = ""
     ) -> None:
-        # base64-encode the content so no authored value is interpreted by the
-        # shell; the path is quoted. Creates parent dirs, then chmods if asked.
-        encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+        if self._run_with_input is None:
+            raise MaterializationCommandError(
+                f"file placement needs stdin delivery on {node_address}"
+            )
+        # Never put an authored body, even reversibly encoded, in docker exec's
+        # argv. Stage it in the destination directory and atomically replace the
+        # file. A cryptographic readback makes an ambiguous exec outcome
+        # safe to retry and avoids treating a truncated file as realized.
         quoted_path = shlex.quote(path)
         parent = shlex.quote(str(PurePosixPath(path).parent))
-        script = f"mkdir -p {parent} && printf %s {shlex.quote(encoded)} | base64 -d > {quoted_path}"
+        script = (
+            "set -eu; "
+            f"mkdir -p {parent}; "
+            f"tmp=$(mktemp {shlex.quote(path + '.aptl.XXXXXX')}); "
+            "trap 'rm -f \"$tmp\"' EXIT; "
+            'cat > "$tmp"; '
+        )
         if mode:
-            script += f" && chmod {shlex.quote(mode)} {quoted_path}"
-        self._require_ok(node_address, ["sh", "-c", script], "place file")
+            script += f'chmod {shlex.quote(mode)} "$tmp"; '
+        script += f'mv -f "$tmp" {quoted_path}'
+        container = self._container_for(node_address)
+        expected_digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        for attempt in range(len(_IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS) + 1):
+            self._run_with_input(container, ["sh", "-c", script], content)
+            readback = self._exec(node_address, ["sha256sum", path])
+            actual_digest = (
+                readback.stdout.split(maxsplit=1)[0]
+                if readback.returncode == 0 and readback.stdout.strip()
+                else ""
+            )
+            if actual_digest == expected_digest:
+                # The exact bytes are present, even if the provider lost the
+                # successful mutation result. No second write is needed.
+                return
+            if attempt < len(_IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS):
+                self._sleep(_IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS[attempt])
+        raise MaterializationCommandError(
+            f"generic materialization step 'place file' failed on {node_address}"
+        )
 
     def place_project_content(
         self, node_address: str, op: PlaceProjectContentOp
@@ -194,7 +262,12 @@ class DockerMaterializationExecutor:
             )
         container = self._container_for(node_address)
         parent = str(PurePosixPath(op.dest_path).parent)
-        self._require_ok(node_address, ["mkdir", "-p", parent], "prep content dir")
+        self._require_ok_with_retry(
+            node_address,
+            ["mkdir", "-p", parent],
+            "prep content dir",
+            _IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS,
+        )
         self._copy_in(container, str(source), op.dest_path, op.is_directory)
 
     def place_pack_artifact(self, node_address: str, op: PlacePackArtifactOp) -> None:
@@ -211,19 +284,79 @@ class DockerMaterializationExecutor:
             )
         container = self._container_for(node_address)
         parent = str(PurePosixPath(op.dest_path).parent)
-        self._require_ok(node_address, ["mkdir", "-p", parent], "prep content dir")
+        self._require_ok_with_retry(
+            node_address,
+            ["mkdir", "-p", parent],
+            "prep content dir",
+            _IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS,
+        )
         with tempfile.TemporaryDirectory() as staging:
-            if op.is_directory:
-                staged = Path(staging) / "tree"
-                staged.mkdir()
-                with tarfile.open(
-                    fileobj=io.BytesIO(resolved.data), mode="r:*"
-                ) as archive:
-                    archive.extractall(staged, filter="data")
-            else:
-                staged = Path(staging) / PurePosixPath(op.dest_path).name
-                staged.write_bytes(resolved.data)
-            self._copy_in(container, str(staged), op.dest_path, op.is_directory)
+            staged = self._stage_pack_artifact(Path(staging), resolved.data, op)
+            self._secure_pack_artifact(staged, op)
+            self._copy_pack_artifact(container, staged, node_address, op)
+
+    @staticmethod
+    def _stage_pack_artifact(
+        staging: Path, payload: bytes, op: PlacePackArtifactOp
+    ) -> Path:
+        """Expand or write a resolved pack artifact into private staging."""
+
+        if not op.is_directory:
+            staged = staging / PurePosixPath(op.dest_path).name
+            staged.write_bytes(payload)
+            return staged
+        staged = staging / "tree"
+        staged.mkdir()
+        with tarfile.open(fileobj=io.BytesIO(payload), mode="r:*") as archive:
+            archive.extractall(staged, filter="data")
+        return staged
+
+    @staticmethod
+    def _pack_artifact_mode(path: Path, op: PlacePackArtifactOp) -> int:
+        """Return the least-permissive executable or data mode for one path."""
+
+        executable = (
+            path.is_dir()
+            or bool(path.stat().st_mode & 0o111)
+            or (not op.is_directory and op.executable)
+        )
+        if op.sensitive:
+            return 0o700 if executable else 0o600
+        return 0o755 if executable else 0o644
+
+    def _secure_pack_artifact(self, staged: Path, op: PlacePackArtifactOp) -> None:
+        """Reject links and normalize every staged artifact mode."""
+
+        descendants = sorted(staged.rglob("*")) if op.is_directory else []
+        for path in (staged, *descendants):
+            if path.is_symlink():
+                raise MaterializationCommandError(
+                    "pack content contains a symbolic link"
+                )
+            path.chmod(self._pack_artifact_mode(path, op))
+
+    def _copy_pack_artifact(
+        self,
+        container: str,
+        staged: Path,
+        node_address: str,
+        op: PlacePackArtifactOp,
+    ) -> None:
+        """Retry the idempotent copy after ambiguous backend failures."""
+
+        if self._copy_in is None:
+            raise MaterializationCommandError("pack content copy is unavailable")
+        retries = _IDEMPOTENT_MUTATION_RETRY_DELAYS_SECONDS
+        for attempt in range(len(retries) + 1):
+            try:
+                self._copy_in(container, str(staged), op.dest_path, op.is_directory)
+                return
+            except (BackendSeedError, BackendTimeoutError, OSError):
+                if attempt == len(retries):
+                    raise MaterializationCommandError(
+                        f"pack content copy failed on {node_address}"
+                    ) from None
+                self._sleep(retries[attempt])
 
     def install_dependency_manifest(
         self, node_address: str, op: InstallDependencyManifestOp
@@ -231,7 +364,9 @@ class DockerMaterializationExecutor:
         directory = str(PurePosixPath(op.path).parent)
         self._require_ok(
             node_address,
-            manifest_install_argv(op.ecosystem, directory),
+            manifest_install_argv(
+                op.ecosystem, directory, offline=self._offline_staged
+            ),
             "install dependency manifest",
         )
 
@@ -245,11 +380,10 @@ class DockerMaterializationExecutor:
                 f"unsupported software component ecosystem on {node_address}"
             )
         directory = str(PurePosixPath(op.manifest_path).parent)
-        self._require_ok(
-            node_address,
-            ["npm", "--prefix", directory, "ci", "--include=dev"],
-            "install software component",
-        )
+        install_argv = ["npm", "--prefix", directory, "ci", "--include=dev"]
+        if self._offline_staged:
+            install_argv.append("--offline")
+        self._require_ok(node_address, install_argv, "install software component")
         self._require_ok(
             node_address,
             ["npm", "--prefix", directory, "run", "build", "--if-present"],
@@ -283,144 +417,14 @@ class DockerMaterializationExecutor:
         )
 
     def start_service_unit(self, node_address: str, unit_name: str) -> None:
-        self._require_ok(node_address, ["systemctl", "start", unit_name], "start unit")
-
-    # -- observations (read-after-write) ---------------------------------
-
-    def observe_installed_packages(
-        self, node_address: str, manager: str, packages: tuple[str, ...]
-    ) -> frozenset[str]:
-        outcome = self._exec(node_address, query_installed_argv(manager, packages))
-        return parse_installed(manager, outcome.stdout)
-
-    def observe_local_group(self, node_address: str, name: str) -> bool:
-        return self._exec(node_address, ["getent", "group", name]).returncode == 0
-
-    def observe_local_user(self, node_address: str, username: str) -> bool:
-        return self._exec(node_address, ["id", "-u", username]).returncode == 0
-
-    def observe_directory(self, node_address: str, path: str) -> bool:
-        return self._exec(node_address, ["test", "-d", path]).returncode == 0
-
-    def observe_file(self, node_address: str, path: str) -> bool:
-        return self._exec(node_address, ["test", "-e", path]).returncode == 0
-
-    def observe_filesystem_metadata(
-        self, node_address: str, op: SetFilesystemMetadataOp
-    ) -> bool:
-        """Read owner/group/id/mode with one bounded GNU stat invocation."""
-
-        outcome = self._exec(
-            node_address,
-            ["stat", "-c", "%U:%G:%u:%g:%a", op.path],
+        # A preinstalled package can auto-start with its default configuration
+        # before authored content is placed. Plain start preserves that stale
+        # process, and reload is insufficient for startup-only settings (BIND
+        # query logging is one example). Restart applies the complete authored
+        # state and also starts an inactive unit.
+        self._require_ok(
+            node_address, ["systemctl", "restart", unit_name], "start unit"
         )
-        fields = outcome.stdout.strip().split(":") if outcome.returncode == 0 else []
-        if len(fields) != 5:
-            return False
-        owner, group, uid, gid, mode = fields
-        return all(
-            _metadata_dimension_matches(actual, expected)
-            for actual, expected in (
-                (owner, op.owner),
-                (group, op.group),
-                (uid, op.uid),
-                (gid, op.gid),
-                (mode.zfill(4), _normalized_mode(op.mode) if op.mode else ""),
-            )
-        )
-
-    def observe_dependency_manifest_installed(
-        self, node_address: str, op: InstallDependencyManifestOp
-    ) -> bool:
-        # A manifest with no declared package name has nothing a query tool
-        # can check by name; the manifest file existing is not proof the
-        # install succeeded, so this fails closed rather than accepting a
-        # weaker check.
-        if not op.name:
-            return False
-        return (
-            self._exec(
-                node_address, manifest_query_argv(op.ecosystem, op.name)
-            ).returncode
-            == 0
-        )
-
-    def observe_software_component(
-        self, node_address: str, op: InstallSoftwareComponentOp
-    ) -> bool:
-        """Read npm package identity and verify its main/bin output exists."""
-
-        package = self._observed_npm_package(node_address, op)
-        directory = str(PurePosixPath(op.manifest_path).parent)
-        outputs = _npm_entrypoint_paths(package or {})
-        return bool(
-            package
-            and package.get("name") == op.package_name
-            and package.get("version") == op.version
-            and outputs
-            and all(
-                self._exec(
-                    node_address, ["test", "-f", f"{directory}/{path}"]
-                ).returncode
-                == 0
-                for path in outputs
-            )
-        )
-
-    def _observed_npm_package(
-        self, node_address: str, op: InstallSoftwareComponentOp
-    ) -> dict[str, object] | None:
-        """Read the selected npm package metadata, failing closed on bad output."""
-
-        if op.ecosystem != "npm":
-            return None
-        directory = str(PurePosixPath(op.manifest_path).parent)
-        outcome = self._exec(
-            node_address,
-            [
-                "npm",
-                "--prefix",
-                directory,
-                "pkg",
-                "get",
-                "name",
-                "version",
-                "main",
-                "bin",
-            ],
-        )
-        package: object = None
-        if outcome.returncode == 0:
-            try:
-                package = json.loads(outcome.stdout)
-            except (TypeError, ValueError):
-                pass
-        return package if isinstance(package, dict) else None
-
-    def observe_domain_authority(
-        self, node_address: str, op: ProvisionDomainAuthorityOp
-    ) -> bool:
-        """Read Samba's served DNS and NetBIOS identities back exactly."""
-
-        outcome = self._exec(
-            node_address, ["samba-tool", "domain", "info", "127.0.0.1"]
-        )
-        if outcome.returncode != 0:
-            return False
-        observed = _samba_domain_info(outcome.stdout)
-        return (
-            observed.get("forest", "").casefold() == op.realm.casefold()
-            and observed.get("domain", "").casefold() == op.realm.casefold()
-            and observed.get("netbios domain", "").casefold() == op.domain.casefold()
-        )
-
-    def observe_service_unit_enabled(self, node_address: str, unit_name: str) -> bool:
-        outcome = self._exec(node_address, ["systemctl", "is-enabled", unit_name])
-        return outcome.stdout.strip() == "enabled"
-
-    def observe_service_unit_active(self, node_address: str, unit_name: str) -> bool:
-        outcome = self._exec(node_address, ["systemctl", "is-active", unit_name])
-        return outcome.stdout.strip() == "active"
 
     # -- internals -------------------------------------------------------
 
@@ -468,10 +472,3 @@ def _useradd_argv(op: EnsureUserOp) -> list[str]:
         argv += ["-d", op.home]
     argv.append(op.username)
     return argv
-
-
-def _normalized_mode(mode: str) -> str:
-    """Return an SDL octal mode in the four-digit form used by chmod/stat."""
-
-    value = mode[2:] if mode.startswith("0o") else mode
-    return value.zfill(4)

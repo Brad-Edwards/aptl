@@ -134,9 +134,24 @@ def resolve_participant_mcp_smoke_operations(
     """Load the one installed operation plan matching an admitted profile."""
 
     selector = _profile_selector(profile)
-    operations = _validated_operations(_load_installed_plan(selector))
+    operations = resolve_participant_mcp_smoke_plan(selector)
     _validate_profile_binding(profile, operations)
     return operations
+
+
+def resolve_participant_mcp_smoke_plan(
+    selector: str,
+) -> tuple[McpSmokeOperation, ...]:
+    """Load one adapter-owned plan by its bounded release selector.
+
+    Appliance assembly uses this discovery-only form before a resolved profile
+    exists. Runtime qualification uses :func:`resolve_participant_mcp_smoke_operations`
+    so the loaded plan is additionally checked against the admitted profile.
+    """
+
+    if _SAFE_ID.fullmatch(selector) is None:
+        raise ParticipantMcpSmokeError("participant smoke selector is invalid")
+    return _validated_operations(_load_installed_plan(selector))
 
 
 def run_participant_mcp_smoke(
@@ -202,6 +217,7 @@ __all__ = [
     "McpRegistration",
     "McpSmokeOperation",
     "ParticipantMcpSmokeError",
+    "resolve_participant_mcp_smoke_plan",
     "resolve_participant_mcp_smoke_operations",
     "run_participant_mcp_smoke",
 ]

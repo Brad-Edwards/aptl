@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from collections.abc import Mapping
 
 from aptl.core.deployment._compose_capture_config import (
@@ -18,6 +19,10 @@ from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
 
 _TC_PREFERENCE = "492"
+# Docker may take longer than a bare tc invocation to create the short-lived
+# helper while the SOC stack is starting. Keep the provider call bounded, but
+# do not mistake Docker startup contention for an unavailable mirror.
+_TC_HELPER_TIMEOUT = 60
 _SAFE_INTERFACE = re.compile(r"^[A-Za-z0-9_.-]{1,15}$")
 _UNAVAILABLE = "aptl.capture-apparatus.traffic-mirror-unavailable"
 
@@ -42,7 +47,8 @@ class ComposeTrafficMirrorMixin:
         return bool(
             getattr(self, "supports_local_artifacts", True)
             and _ensure_helper(self, DEFAULT_BOUNDARY_HELPER_IMAGE) is None
-            and self._run(self._tc_command("-V"), timeout=5).returncode == 0
+            and self._run_tc("-V").returncode
+            == 0
         )
 
     def _realize_traffic_mirrors(
@@ -58,10 +64,7 @@ class ComposeTrafficMirrorMixin:
     def _configure_traffic_mirror(self, source: str, sensor: str) -> bool:
         """Install and verify both frame-copy directions."""
 
-        qdisc = self._run(
-            self._tc_command("qdisc", "replace", "dev", source, "clsact"),
-            timeout=10,
-        )
+        qdisc = self._run_tc("qdisc", "replace", "dev", source, "clsact")
         active = qdisc.returncode == 0
         for direction in ("ingress", "egress"):
             if not active:
@@ -70,38 +73,26 @@ class ComposeTrafficMirrorMixin:
             # Compose has already replaced. tc cannot replace a matchall action
             # in place, so remove only APTL's preference and add the current
             # binding. A missing old filter is expected.
-            self._run(
-                self._tc_command(
-                    "filter",
-                    "del",
-                    "dev",
-                    source,
-                    direction,
-                    "pref",
-                    _TC_PREFERENCE,
-                ),
-                timeout=10,
+            self._run_tc(
+                "filter", "del", "dev", source, direction, "pref", _TC_PREFERENCE
             )
-            added = self._run(
-                self._tc_command(
-                    "filter",
-                    "add",
-                    "dev",
-                    source,
-                    direction,
-                    "pref",
-                    _TC_PREFERENCE,
-                    "protocol",
-                    "all",
-                    "matchall",
-                    "action",
-                    "mirred",
-                    "egress",
-                    "mirror",
-                    "dev",
-                    sensor,
-                ),
-                timeout=10,
+            added = self._run_tc(
+                "filter",
+                "add",
+                "dev",
+                source,
+                direction,
+                "pref",
+                _TC_PREFERENCE,
+                "protocol",
+                "all",
+                "matchall",
+                "action",
+                "mirred",
+                "egress",
+                "mirror",
+                "dev",
+                sensor,
             )
             if added.returncode != 0:
                 active = False
@@ -130,26 +121,35 @@ class ComposeTrafficMirrorMixin:
             "implementation_privileges": ["CAP_NET_ADMIN"],
         }
 
-    @staticmethod
-    def _tc_command(*args: str) -> list[str]:
-        """Run tc in the fixed, capability-minimal host-network helper."""
+    def _run_tc(self, *args: str) -> subprocess.CompletedProcess:
+        """Run tc in the fixed, capability-minimal host-network helper.
 
-        return [
-            "docker",
-            "run",
-            "--pull=never",
-            "--rm",
-            "--network",
-            "host",
-            "--cap-drop=ALL",
-            "--cap-add=NET_ADMIN",
-            "--security-opt=no-new-privileges",
-            "--read-only",
-            "--entrypoint",
-            "tc",
-            DEFAULT_BOUNDARY_HELPER_IMAGE,
-            *args,
-        ]
+        The helper is named so a run the timeout kills removes it, rather than
+        leaving a ``Created`` host-network NET_ADMIN container behind with
+        nothing to find it by.
+        """
+
+        helper = self._ephemeral_container("traffic-mirror-tc")
+        return helper.run(
+            self._run,
+            [
+                "docker",
+                "run",
+                "--pull=never",
+                *helper.run_options(),
+                "--network",
+                "host",
+                "--cap-drop=ALL",
+                "--cap-add=NET_ADMIN",
+                "--security-opt=no-new-privileges",
+                "--read-only",
+                "--entrypoint",
+                "tc",
+                DEFAULT_BOUNDARY_HELPER_IMAGE,
+                *args,
+            ],
+            timeout=_TC_HELPER_TIMEOUT,
+        )
 
     def _traffic_mirror_binding(
         self, realization: DeploymentRealizationSpec
@@ -204,10 +204,7 @@ class ComposeTrafficMirrorMixin:
 
     def _traffic_mirror_active(self, source: str, sensor: str) -> bool:
         for direction in ("ingress", "egress"):
-            observed = self._run(
-                self._tc_command("filter", "show", "dev", source, direction),
-                timeout=10,
-            )
+            observed = self._run_tc("filter", "show", "dev", source, direction)
             output = observed.stdout or ""
             if (
                 observed.returncode != 0

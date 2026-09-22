@@ -1,92 +1,86 @@
 # APTL—Advanced Purple Team Lab
 
-Docker-based purple team lab: Wazuh SIEM + enterprise infrastructure + Kali + AI agent integration via MCP.
+APTL is a local purple-team lab where human operators and AI agents exercise
+red- and blue-team workflows against an intentionally vulnerable enterprise
+range. The released Python package supplies the CLI and materializes the lab
+assets; Docker runs the selected scenario on your chosen engine.
 
-## Quick Start
+!!! warning "Use a dedicated, rebuildable environment"
 
-```bash
-git clone https://github.com/Brad-Edwards/aptl.git
-cd aptl
+    APTL starts vulnerable services and gives agent tooling access to
+    penetration-testing capabilities. Use a dedicated host or the stronger
+    disposable [appliance seat](reference/appliance-seat-launcher.md), keep
+    unrelated credentials elsewhere, and use APTL only on systems you are
+    authorized to test.
+
+## Run Your First Lab
+
+Follow these tasks in order. The path uses the released package and does not
+require a source checkout or an architecture record.
+
+1. [Check prerequisites](getting-started/prerequisites.md) for Docker, Python,
+   host resources, and the required command-line tools.
+2. [Install APTL](getting-started/installation.md) with pipx and create a lab
+   project from the assets in the release.
+3. [Choose a scenario](getting-started/quick-start.md#choose-a-scenario) from
+   the catalog provided by the installed environment pack.
+4. [Start and verify the lab](getting-started/quick-start.md#start-and-verify-the-lab)
+   through the CLI readiness checks.
+5. [Inspect the running lab](getting-started/quick-start.md#inspect-the-running-lab)
+   for realized containers, URLs, remapped ports, usernames, and credential
+   locations.
+6. [Generate safe test activity](getting-started/quick-start.md#generate-safe-test-activity)
+   inside the authorized range.
+7. [Inspect results](getting-started/quick-start.md#inspect-results) in the
+   realized services and APTL run records.
+8. [Troubleshoot](troubleshooting/index.md) with project-scoped diagnostics and
+   recovery steps.
+9. [Stop or reset the lab](getting-started/quick-start.md#stop-or-reset-the-lab)
+   when the session ends.
+
+The shortest installation and start sequence is:
+
+```shell
 pipx install aptl-labs
-aptl lab start
+aptl lab init my-lab
+cd my-lab
+aptl lab start --scenario techvault
 ```
 
-Clone the repo even with the published package: `aptl lab start` reads the
-Compose topology, scenarios, and config templates from the checkout.
-[pipx](https://pipx.pypa.io/) isolates the CLI in its own virtualenv, so the
-[PEP 668](https://peps.python.org/pep-0668/) system-`pip` block on modern
-Debian/Ubuntu/WSL2 hosts never applies (`sudo apt install pipx` to get it). To
-run from source instead, use a virtualenv editable install
-(`python3 -m venv .venv && source .venv/bin/activate && pip install -e .`; needs
-`python3-venv`). See [Prerequisites](getting-started/prerequisites.md).
+Startup creates project-local runtime files, validates the selected scenario,
+realizes its topology, waits for required services, and prints a structured
+result. A running container alone does not mean the lab is ready.
 
-**Access:**
+## Supported Interfaces
 
-- Wazuh Dashboard: <https://localhost:443> (admin/SecretPassword)
-- Victim shell: `aptl container shell aptl-victim`
-- Kali shell: `aptl container shell aptl-kali`
+- [CLI reference](reference/cli.md): lab lifecycle, configuration, containers,
+  runs, web, appliance, and participant-seat commands.
+- [MCP reference](reference/mcp.md): generated client configuration, server
+  availability, fully qualified tools, and credential handling.
+- [Web reference](reference/web.md): the local operator UI, its supported API,
+  one-time login flow, and safe exposure boundary.
 
-## Requirements
+The operator UI, intentionally vulnerable target applications, and SOC product
+interfaces are different surfaces. Use `aptl lab info` to discover the URLs
+that exist for the current scenario rather than relying on fixed ports. Wazuh
+values reported from `.env` are scenario credentials, not APTL control-plane
+logins.
 
-- Docker + Docker Compose
-- Python 3.11+
-- RAM: 8GB for the curated scenarios; more than 20GB for the full `techvault-operational` stack
-- 20GB+ disk
-- Ports: 443, 2022, 2023, 9200, 55000
+## Help And Project Policies
 
-## Documentation
+- [Get support](https://github.com/Brad-Edwards/aptl/blob/dev/SUPPORT.md) for a
+  reproducible problem or focused usage question.
+- [Contribute](https://github.com/Brad-Edwards/aptl/blob/dev/CONTRIBUTING.md) a
+  fix or improvement against the `dev` branch.
+- [Report a vulnerability privately](https://github.com/Brad-Edwards/aptl/security/advisories/new).
+  Do not disclose suspected vulnerabilities in a public issue.
+- [Review the OpenSSF Best Practices assessment](security/openssf-best-practices.md)
+  and the evidence behind the project's self-certification.
 
-### Getting Started
-- [Installation](getting-started/installation.md)
-- [Prerequisites](getting-started/prerequisites.md)
-- [Quick Start Guide](getting-started/quick-start.md)
+## Design And Historical Records
 
-### Architecture
-- [Overview](architecture/index.md)
-- [Networking](architecture/networking.md)
-- [Enterprise Infrastructure](architecture/enterprise-infrastructure.md): TechVault design rationale
-
-### Components
-- [Wazuh SIEM](components/wazuh-siem.md)
-- [Wazuh Active Response](components/wazuh-active-response.md)
-- [Default Defensive Posture](components/default-defensive-posture.md): what ships enabled vs disabled at first boot
-- [Kali Red Team](components/kali-redteam.md)
-- [Red Team Activity Taxonomy](red-team-taxonomy.md): OCSF activity classes the Kali MCP server emits
-- [Victim Containers](components/victim-containers.md)
-- [MCP Integration](components/mcp-integration.md)
-- [Reverse Engineering](components/reverse-engineering-container.md)
-
-### Architecture Decision Records
-- [ADR Index](adrs/README.md) -- Why we built it this way
-
-### Scenario Authoring
-- [Authoring Boundary](sdl/index.md): Current RAES-owned scenario handoff
-- [RAES SDL & runtime (OpenRAE/rae)](https://github.com/OpenRAE/rae): Companion repo owning SDL shape and semantics
-- [Pack definitions & authoring (OpenRAE/env-packs)](https://github.com/OpenRAE/env-packs): Companion repo for the environment-pack format, templates, schemas, and authoring support
-- [Curated RAES Variants](sdl/techvault-curated-variants.md): Supported startup catalog variants
-- [TechVault Static Validation Gate](raes/techvault-static-validation-gate.md): Current static scenario gate
-- [TechVault Live Validation Gate](raes/techvault-live-validation-gate.md): Current runtime realization gate
-
-### Scenarios & Runs
-- [SOC Architecture Spec](specs/soc-feature-spec.md): Historical pre-SDL runtime spec retained for context
-- [Web GUI Design Specification](specs/web-gui-design.md): v1 product scope, route map, interaction design, component inventory, and implementation hand-off
-
-### Workshops
-- [Workshop Playbook](workshop/playbook.md): Facilitator guide for the TechVault workshop
-- [Lab Walkthrough](workshop/walkthrough.md): Runnable command and prompt companion to the playbook
-- [Emergency Rollout Runbook](workshop/emergency-rollout.md): Hosted-fleet fallback, student claim-page pattern, and teardown checklist
-
-### Testing
-- [Release Candidate Manual QA](testing/smoke-test-plan.md): release-blocking human verification for both install paths
-
-### Reference
-- [Guided Purple Participant Profile](reference/participant-profile.md): Versioned bounded workshop surface, readiness contract, and qualification ceilings
-- [Disposable Appliance Release](reference/appliance-release.md): Signed golden image, offline payload, local KVM overlays, qualification, and rollback
-- [TechVault Scenario Overview](reference/techvault-scenario-overview.md): What the default range contains—topology, targets, SOC stack, planted vulnerabilities, and curated variants
-- [TechVault Company Profile](reference/techvault-company-profile.md)
-- [TechVault OSINT Readiness](reference/techvault-osint-readiness.md)
-- [Container Template Guide](containers/victim-template-guide.md)
-
-### Operations
-- [Deployment](deployment.md)
-- [Troubleshooting](troubleshooting/)
+The task guides above are sufficient to operate a first lab. For implementation
+context, see the [architecture overview](architecture/index.md),
+[architecture decisions](adrs/README.md), [scenario authoring boundary](sdl/index.md),
+and [release qualification plan](testing/smoke-test-plan.md). These records
+remain available without sitting in the first-time path.

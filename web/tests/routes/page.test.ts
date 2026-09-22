@@ -16,6 +16,12 @@ function summary(overrides: Partial<ScenarioSummary> = {}): ScenarioSummary {
 		tags: [],
 		required_containers: [],
 		validation: { valid: true, detail: null },
+		pack: {
+			id: 'techvault',
+			version: '0.1.0',
+			set_digest: `sha256:${'a'.repeat(64)}`,
+			maturity: 'built'
+		},
 		...overrides
 	};
 }

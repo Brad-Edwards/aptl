@@ -154,6 +154,13 @@ class LiveGateState(object):
     """Mutable scratchpad threaded through the live-gate checks."""
 
     realization_details: dict | None = None
+    # Backend apparatus derived from admitted capture and operator-access
+    # declarations; each entry carries the exact native identity label to read
+    # back. It is not an allowlist for arbitrary project containers.
+    planned_apparatus: tuple[dict[str, str], ...] = ()
+    # Semantic node container name -> observed project-scoped native name.
+    # Plugins use stable scenario identities; core resolves them for readback.
+    semantic_container_names: dict[str, str] = field(default_factory=dict)
     deployment_spec: object | None = None
     selected_profiles: list[str] = field(default_factory=list)
     snapshot: dict | None = None

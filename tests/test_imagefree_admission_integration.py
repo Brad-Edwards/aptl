@@ -1,10 +1,23 @@
-"""Full-stack real-Docker test: admit an image-free SDL and realize it (ADR-048).
+"""Full-stack real-Docker test: admit an image-free pack and realize it (ADR-048).
 
 Exercises the entire path through the real RAES compiler:
-parse -> plan -> interpret -> deployment_spec (image_free derived) ->
-backend.realize -> generic materializer -> real container, verified by
-read-after-write. Zero product code; proves an arbitrary image-free scenario
+pack admission -> parse -> plan -> interpret -> deployment_spec (image_free
+derived) -> backend.realize -> generic materializer -> real container, verified
+by read-after-write. Zero product code; proves an arbitrary image-free scenario
 composes and boots on local Docker.
+
+One scenario, the shared `materialization-envelope.sdl.yaml`, admitted as
+APTL's owned fixture pack (issue #985) through the same resolver a released pack
+passes, so the live realization runs the pack path rather than a project-tree
+one and no released pack can break it. A second live
+scenario used to boot the same service path on the dnf/RHEL substrate; issue
+#993 retired it, because the shared fixture now proves that path live here and
+again in the installed-wheel boot gate, while the family-aware substrate
+selection the second scenario actually distinguished is a pure lookup already
+pinned in `tests/test_raes_materializer.py` — which, unlike either live test,
+runs in CI. What no longer has live coverage is Rocky's systemd booting under
+APTL's init flags; no shipped scenario declares a dnf node, and
+`docs/testing/boot-realization-coverage.md` records that as an explicit gap.
 
 Marked `integration`; skipped without Docker.
 """
@@ -13,6 +26,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 from raes import parse_sdl_file
@@ -22,34 +36,13 @@ from aptl.backends.raes import create_aptl_runtime_target
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
 from aptl.core.deployment.docker_compose import DockerComposeBackend
-from aptl.core.scenario_bundle import project_tree_bundle
+from aptl.core.scenario_bundle import ScenarioSourceKind
+from tests.fixture_pack import admit_fixture_pack
+from tests.helpers import realized_container_name, realized_project_name
 
 pytestmark = pytest.mark.integration
 
-
-def _bundle(root):
-    return project_tree_bundle(root, root / "scenarios" / "demo.sdl.yaml")
-
-
-_SDL = """\
-name: imagefree-admission-smoke
-description: Minimal image-free scenario (ADR-048 full-stack validation).
-nodes:
-  smoke-net:
-    type: switch
-    description: smoke net
-  smoke-box:
-    type: compute
-    os: linux
-    runtime:
-      packages:
-        - {manager: apt, name: curl, version: "1.0"}
-      local_identity:
-        groups:
-          - {name: analysts}
-        users:
-          - {username: analyst, supplemental_groups: [analysts]}
-"""
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _docker_available() -> bool:
@@ -63,8 +56,21 @@ def _docker_available() -> bool:
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
 def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
-    sdl = tmp_path / "imagefree.sdl.yaml"
-    sdl.write_text(_SDL, encoding="utf-8")
+    bundle = admit_fixture_pack(tmp_path / "staged-packs")
+    assert bundle.source_kind is ScenarioSourceKind.ENV_PACK
+    # The shared fixture declares service units, so the node materializes onto
+    # the init-capable generic substrate, which the backend builds from the
+    # Dockerfile its own project dir ships (issue #1006). Stage that context
+    # exactly as a real lab directory holds it.
+    shutil.copytree(
+        _REPO_ROOT / "containers" / "generic-systemd-base-debian",
+        tmp_path / "containers" / "generic-systemd-base-debian",
+    )
+    (tmp_path / "requirements").mkdir()
+    shutil.copyfile(
+        _REPO_ROOT / "requirements" / "runtime.txt",
+        tmp_path / "requirements" / "runtime.txt",
+    )
     container = "aptl-smoke-box"
     subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
 
@@ -74,8 +80,7 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
     )
 
     # Admit through the real RAES compiler/planner/interpreter.
-    scenario = parse_sdl_file(sdl)
-    bundle = _bundle(tmp_path)
+    scenario = parse_sdl_file(bundle.sdl_path)
     target = create_aptl_runtime_target(
         project_dir=tmp_path, config=cfg, backend=backend, bundle=bundle
     )
@@ -84,6 +89,7 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
         plan=plan.provisioning, config=cfg, bundle=bundle
     )
     assert [d.message for d in realization.diagnostics if d.is_error] == []
+    assert realization.pack_identity == bundle.pack_identity
 
     spec = realization.deployment_spec([])
     # Fully image-free: every node is materialized, so nothing is left for the
@@ -93,7 +99,7 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
     assert _needs_compose(spec) is False
 
     try:
-        result = backend.realize(spec, scenario_root=tmp_path)
+        result = backend.realize(spec, scenario_root=bundle.root)
         assert result.success, result.error
         assert (
             "curl"
@@ -104,90 +110,44 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
         assert (
             backend.container_exec(container, ["id", "-u", "analyst"]).returncode == 0
         )
+        assert (
+            backend.container_exec(
+                container,
+                ["stat", "-c", "%U:%G %a", "/var/lib/aptl-smoke"],
+            ).stdout.strip()
+            == "analyst:analysts 750"
+        )
+        # The #993 causal chain: the placed content is what moves the daemon
+        # off its package default, so the unit and the listener below are
+        # evidence that the placement really happened.
+        assert (
+            backend.container_exec(
+                container, ["cat", "/etc/ssh/sshd_config.d/10-aptl-smoke.conf"]
+            ).stdout
+            == "Port 2022\n"
+        )
+        assert (
+            backend.container_exec(
+                container, ["systemctl", "is-active", "ssh.service"]
+            ).stdout.strip()
+            == "active"
+        )
+        listeners = backend.observe_container_listeners(container)
+        assert listeners is not None
+        assert 2022 in {port for _protocol, _address, port in listeners.sockets}
     finally:
         subprocess.run(
-            ["docker", "rm", "-f", container], capture_output=True, text=True
-        )
-        subprocess.run(
-            ["docker", "network", "rm", "aptl-imagefree-admit_aptl-smoke"],
+            ["docker", "rm", "-f", realized_container_name(backend, container)],
             capture_output=True,
             text=True,
         )
-
-
-_SERVICE_SDL = """\
-name: imagefree-service-smoke
-description: Image-free scenario with a running service (ADR-048 systemd path).
-nodes:
-  svc-net:
-    type: switch
-    description: svc net
-  svc-box:
-    type: compute
-    os: linux
-    runtime:
-      packages:
-        - {manager: dnf, name: openssh-server, version: "*"}
-      service_manager_units:
-        - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
-"""
-
-
-@pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
-def test_admit_and_realize_service_node_boots_a_real_service(tmp_path):
-    # Ensure the generic systemd base exists (built from the checked-in Dockerfile).
-    subprocess.run(
-        [
-            "docker",
-            "build",
-            "-t",
-            "aptl/generic-systemd-base:latest",
-            "containers/generic-systemd-base",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
-    sdl = tmp_path / "svc.sdl.yaml"
-    sdl.write_text(_SERVICE_SDL, encoding="utf-8")
-    container = "aptl-svc-box"
-    subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
-
-    cfg = AptlConfig(lab={"name": "svc"}, containers={})
-    backend = DockerComposeBackend(
-        project_dir=tmp_path, project_name="aptl-imagefree-svc"
-    )
-    scenario = parse_sdl_file(sdl)
-    bundle = _bundle(tmp_path)
-    target = create_aptl_runtime_target(
-        project_dir=tmp_path, config=cfg, backend=backend, bundle=bundle
-    )
-    plan = RuntimeManager(target).plan(scenario)
-    realization = interpret_provisioning_plan(
-        plan=plan.provisioning, config=cfg, bundle=bundle
-    )
-    assert [d.message for d in realization.diagnostics if d.is_error] == []
-    spec = realization.deployment_spec([])
-    # Fully image-free: every node is materialized, so nothing is left for the
-    # Compose path (this replaces the removed whole-spec image_free flag).
-    from aptl.core.deployment._compose_realization import _needs_compose
-
-    assert _needs_compose(spec) is False
-
-    try:
-        result = backend.realize(spec, scenario_root=tmp_path)
-        assert result.success, result.error
-        # The service the SDL declared is really running.
-        active = backend.container_exec(
-            container, ["systemctl", "is-active", "sshd.service"]
-        )
-        assert active.stdout.strip() == "active"
-    finally:
         subprocess.run(
-            ["docker", "rm", "-f", container], capture_output=True, text=True
-        )
-        subprocess.run(
-            ["docker", "network", "rm", "aptl-imagefree-svc_aptl-svc"],
+            [
+                "docker",
+                "network",
+                "rm",
+                f"{realized_project_name(backend)}_aptl-smoke",
+            ],
             capture_output=True,
             text=True,
         )

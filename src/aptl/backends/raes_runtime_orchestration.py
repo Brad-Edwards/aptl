@@ -7,7 +7,6 @@ the local Compose backend can faithfully enforce (issue #949).
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING, Protocol
 
 from raes.runtime_configuration import (
@@ -15,8 +14,9 @@ from raes.runtime_configuration import (
     RuntimeControlInterface,
     RuntimeOrchestrationAuthority,
 )
-from raes_processor.compiler.addresses import _node_address
+from raes_contracts.addressing import render_compiled_address
 
+from aptl.core.deployment._docker_image_identity import authored_tag_reference
 from aptl.core.lab_types import LabResult
 from aptl.runtime_authority import (
     DOCKER_SOCKET_PATH,
@@ -27,11 +27,6 @@ from aptl.runtime_authority import (
 if TYPE_CHECKING:
     from aptl.core.deployment.realization import DeploymentNodeRealization
 
-_DIGEST_IMAGE = re.compile(r"^[^\s@]+@sha256:[0-9a-f]{64}$")
-_CHILD_LABEL = re.compile(
-    r"^docker-label:([a-z0-9][a-z0-9._/-]*)=([a-z0-9][a-z0-9._-]*)$"
-)
-_MANAGEMENT_PROFILES = frozenset({"soc"})
 
 
 class DockerControlBinder(Protocol):
@@ -161,79 +156,29 @@ def _bounded_execution_timeout(
     return timeout
 
 
-def _children_by_template_image(
-    authority: RuntimeOrchestrationAuthority,
-    *,
-    node_address: str,
-) -> dict[str, object]:
-    """Join a non-empty, one-to-one child closure by exact authored image."""
-
-    if not authority.spawn_templates:
-        raise ValueError(
-            "aptl.provisioner.spawn-image-identity-invalid: "
-            f"empty child-image closure on {node_address}."
-        )
-    template_images = [
-        str(template.image_ref or "") for template in authority.spawn_templates
-    ]
-    child_images = [str(child.image_ref or "") for child in authority.realized_children]
-    children = {
-        str(child.image_ref or ""): child for child in authority.realized_children
-    }
-    complete = bool(
-        len(template_images) == len(set(template_images))
-        and len(child_images) == len(set(child_images))
-        and set(child_images) == set(template_images)
-    )
-    if not complete:
-        raise ValueError(
-            "aptl.provisioner.spawn-child-correlation-invalid: "
-            f"child correlation is incomplete on {node_address}."
-        )
-    return children
-
-
 def _spawn_image_requirement(
     authority: RuntimeOrchestrationAuthority,
     template: object,
-    child: object,
     *,
     node_address: str,
     timeout: int,
 ) -> DeploymentSpawnImageRequirement:
-    """Validate and lower one exact template/realized-child pair."""
+    """Lower one template's authored image reference as written.
+
+    ``RuntimeOrchestrationSpawnTemplate`` requires only ``template_id``;
+    ``image_ref`` is an unconstrained string defaulting to empty. A tag-only,
+    digest-only, or tag-and-digest reference is equally valid, and the backend
+    realizes whichever the author wrote.
+    """
 
     image_ref = str(getattr(template, "image_ref", "") or "")
-    if not _DIGEST_IMAGE.fullmatch(image_ref):
-        raise ValueError(
-            "aptl.provisioner.spawn-image-identity-invalid: "
-            f"mutable child image on {node_address}."
-        )
-    label_match = _CHILD_LABEL.fullmatch(str(getattr(child, "evidence_ref", "") or ""))
-    count = getattr(child, "count", None)
-    child_image_ref = str(getattr(child, "image_ref", "") or "")
-    correlation_valid = bool(
-        label_match is not None
-        and isinstance(count, int)
-        and not isinstance(count, bool)
-        and 0 < count <= 1000
-        and child_image_ref == image_ref
-    )
-    if not correlation_valid:
-        raise ValueError(
-            "aptl.provisioner.spawn-child-correlation-invalid: "
-            f"unsupported child correlation on {node_address}."
-        )
-    assert label_match is not None
-    assert isinstance(count, int)
     return DeploymentSpawnImageRequirement(
         node_address=node_address,
         authority_id=str(authority.orchestration_authority_id),
         template_id=str(getattr(template, "template_id", "")),
         image_ref=image_ref,
         execution_timeout_seconds=timeout,
-        child_label=f"{label_match.group(1)}={label_match.group(2)}",
-        expected_count=count,
+        tag_reference=authored_tag_reference(image_ref) or "",
     )
 
 
@@ -242,34 +187,39 @@ def spawn_image_requirements(
     *,
     node_address: str,
 ) -> tuple[DeploymentSpawnImageRequirement, ...]:
-    """Return digest-qualified child-image requirements with provenance."""
+    """Return the images each authority's templates name, as authored.
+
+    A spawn template is realization demand: it says which image to fetch so
+    the authority can run it. It is not a bound on what the holder may launch
+    -- a host-root-equivalent socket holder can pull, build, or reuse anything
+    on that daemon regardless of what APTL staged -- so nothing here rejects a
+    scenario on the strength of the image list.
+
+    ``realized_children`` is an optional description of what the author
+    observed. It is not read here: it is not desired state, not an image
+    source, and not a correlation contract. Its ``evidence_ref`` and ``count``
+    carry no APTL meaning.
+
+    A template naming no image has nothing to fetch and yields no requirement.
+    """
 
     requirements: list[DeploymentSpawnImageRequirement] = []
     for authority, _interface in docker_control_authorities(
         runtime, node_address=node_address
     ):
-        # A realized child is, per RAES, "an observed, realized child workload",
-        # and the field defaults to empty. An authority that declares only its
-        # privilege has declared no observation contract, so there is nothing to
-        # correlate and no child image to pre-stage. Requiring one here asked for
-        # runtime observation at plan time and refused every boot of a pack that
-        # states the privilege for transparency without an expected inventory.
-        # The admission, and every mount and access control on it, is unaffected.
-        if not authority.realized_children:
+        if not authority.spawn_templates:
             continue
         timeout = _bounded_execution_timeout(authority, node_address=node_address)
-        children = _children_by_template_image(authority, node_address=node_address)
-        for template in authority.spawn_templates:
-            image_ref = str(template.image_ref or "")
-            requirements.append(
-                _spawn_image_requirement(
-                    authority,
-                    template,
-                    children[image_ref],
-                    node_address=node_address,
-                    timeout=timeout,
-                )
+        requirements.extend(
+            _spawn_image_requirement(
+                authority,
+                template,
+                node_address=node_address,
+                timeout=timeout,
             )
+            for template in authority.spawn_templates
+            if str(template.image_ref or "")
+        )
     return tuple(requirements)
 
 
@@ -279,23 +229,6 @@ def _node_networks(node: DeploymentNodeRealization) -> set[str]:
     return set(node.networks) | {
         attachment.network for attachment in node.network_attachments
     }
-
-
-def _authority_holder_is_management_only(node: DeploymentNodeRealization) -> bool:
-    """Whether an authority holder is isolated from participant workloads."""
-
-    container = getattr(node.runtime, "container", None)
-    namespaces = getattr(container, "namespaces", None)
-    network_namespace = getattr(namespaces, "network", None)
-    return bool(
-        node.service_name
-        and _node_networks(node)
-        and node.profiles
-        and set(node.profiles) <= _MANAGEMENT_PROFILES
-        and not node.services
-        and not node.published_ports
-        and not getattr(network_namespace, "target_node_ref", None)
-    )
 
 
 def _allowed_mount_targets(node: DeploymentNodeRealization) -> set[str]:
@@ -314,18 +247,19 @@ def _allowed_mount_targets(node: DeploymentNodeRealization) -> set[str]:
 def admit_docker_authorities(
     nodes: tuple[DeploymentNodeRealization, ...],
 ) -> tuple[DeploymentDockerAuthorityAdmission, ...]:
-    """Return one immutable admission per management-only authority holder."""
+    """Return one immutable admission per authored authority holder.
+
+    Network, profile, and service placement do not attenuate a raw Docker
+    socket.  Whether the selected backend contains that authority is decided by
+    the graph-wide runtime materialization gate, not by censoring valid SDL
+    holder shapes here.
+    """
 
     admissions: list[DeploymentDockerAuthorityAdmission] = []
     for node in nodes:
         bindings = docker_control_authorities(node.runtime, node_address=node.address)
         if not bindings:
             continue
-        if not _authority_holder_is_management_only(node):
-            raise ValueError(
-                "aptl.provisioner.runtime-authority-not-management-only: "
-                f"Docker authority is not management-only on {node.address}."
-            )
         authority, interface = bindings[0]
         requirements = spawn_image_requirements(node.runtime, node_address=node.address)
         allowed_mount_targets = _allowed_mount_targets(node)
@@ -340,19 +274,13 @@ def admit_docker_authorities(
                 endpoint_target=str(interface.path),
                 endpoint_read_write=_value(interface.access) == "read_write",
                 spawn_requirements=requirements,
+                authority_id=str(authority.orchestration_authority_id),
+                image_template_ids=tuple(
+                    str(template.template_id) for template in authority.spawn_templates
+                ),
                 allowed_mount_targets=tuple(sorted(allowed_mount_targets)),
+                allowed_networks=tuple(sorted(_node_networks(node))),
             )
-        )
-    requirements = [
-        requirement
-        for admission in admissions
-        for requirement in admission.spawn_requirements
-    ]
-    labels = [requirement.child_label for requirement in requirements]
-    if len(labels) != len(set(labels)):
-        raise ValueError(
-            "aptl.provisioner.spawn-child-correlation-invalid: "
-            "child correlation labels must be unique across authorities."
         )
     return tuple(admissions)
 
@@ -372,7 +300,7 @@ def prepare_runtime_orchestration_for_scenario(
     nodes = getattr(scenario, "nodes", None) or {}
     required = False
     for name, node in nodes.items():
-        address = _node_address(name)
+        address = render_compiled_address("provision", "node", name)
         runtime = getattr(node, "runtime", None)
         if docker_control_authorities(runtime, node_address=address):
             required = True

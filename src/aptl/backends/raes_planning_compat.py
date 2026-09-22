@@ -1,19 +1,4 @@
-"""Temporary RAES planning compatibility for the TechVault environment pack.
-
-OpenRAE/rae#1285 tracks the upstream contract change that lets an author
-require corroboration without selecting where the backend obtains it.  RAES
-4.1 currently assigns ``guest-observed`` to runtime concern kinds regardless
-of author intent.  TechVault is explicitly substrate-agnostic, while APTL
-reads the concern set below from the Docker daemon without adding a probe to
-the scenario.
-
-Keep this adapter narrow and removable (APTL #1017): only a content-identified
-TechVault environment pack and only concern kinds backed by APTL daemon
-readback are adjusted.  Realization explicitness governs the value, not the
-un-authored evidence source, so an exact value may still use daemon readback.
-Unsupported concerns retain the upstream requirement and therefore continue
-to fail admission when APTL cannot meet it.
-"""
+"""Apply bounded installed planning compatibility pending OpenRAE/rae#1285."""
 
 from __future__ import annotations
 
@@ -46,32 +31,40 @@ if TYPE_CHECKING:
     from raes_processor.models import ExecutionPlan
     from raes_runtime.registry import RuntimeTarget
 
-from aptl.core.scenario_bundle import ScenarioBundle, ScenarioSourceKind
-from aptl.backends.raes_runtime_attestation import (
-    ARTIFACT_ATTESTED_RUNTIME_CONCERNS,
-    TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST,
+from aptl.core.scenario_bundle import ScenarioBundle
+from aptl.backends.identity import (
+    APTL_RAES_TARGET_NAME,
+    APTL_RAES_TARGET_PROFILE,
+    APTL_RAES_TARGET_VERSION,
+    BackendIdentity,
+)
+from aptl.backends.scenario_planning_compatibility import (
+    PlanningCompatibilityDecision,
+    ResolvedPlanningCompatibility,
+    ScenarioPlanningCompatibilityContext,
+)
+from aptl.backends.scenario_planning_compatibility_discovery import (
+    resolve_scenario_planning_compatibility,
 )
 from aptl.backends._raes_backend_implementation_profiles import (
     backend_profile_selected_concerns,
 )
+from aptl.backends.raes_runtime_attestation import (
+    ARTIFACT_ATTESTED_RUNTIME_CONCERNS,
+)
+from aptl.backends import _raes_runtime_container_observation as container_observation
 
-TECHVAULT_PACK_ID = "techvault"
-TECHVAULT_PACK_VERSION = "0.1.0"
-
-# RAES 4.1.0 expands the released TechVault plan to 87,526 portable-value
-# nodes, above its general 65,536 backend input/snapshot traversal cap.  Keep a
-# finite power-of-two ceiling for this exact content-identified release while
-# the upstream runtime learns to admit a complete large authority inventory.
-_TECHVAULT_RUNTIME_MAX_NODES = 131_072
 _RAES_LIMIT_OVERRIDE_LOCK = RLock()
 
-# Every member has a real host-side readback in raes_runtime_observation.py.
-# Forwarding agents are already daemon-observed in RAES and need no rewrite.
+# Backend-manifest realization claims remain a core capability declaration.
+# An adapter decision chooses which of these claims one pack release needs
+# rewritten during planning; it cannot add a capability the manifest lacks.
 DAEMON_READBACK_RUNTIME_CONCERNS = frozenset(
     {
         *ARTIFACT_ATTESTED_RUNTIME_CONCERNS,
         "linux-capabilities",
         "published-ports",
+        *container_observation.RUNTIME_CONTAINER_DAEMON_CONCERNS,
         "runtime-container-autoremove",
         "runtime-container-command",
         "runtime-container-entrypoint",
@@ -84,50 +77,36 @@ DAEMON_READBACK_RUNTIME_CONCERNS = frozenset(
     }
 )
 
-# APTL deliberately selects these values when an open node leaves them absent:
-# the restart policy keeps long-lived services alive, and the process limits are
-# the minimum required by the exact OpenSearch artifacts.  They therefore stay
-# in the demand graph and must be observed/disclosed as backend-realized state.
-_APTL_OPEN_DEFAULT_CONCERNS = frozenset(
-    {"process-resource-limits", "runtime-restart-policy"}
-)
 
-# RAES 5.0's recursive relation cannot evaluate these released, authored OPEN
-# values against their own constraint documents (UNRESOLVED, or LIMIT_EXCEEDED
-# for the web application inventory).  APTL's minimum-intrusion realization is
-# the exact authored value with no additions.  Commit that narrower backend
-# choice to the plan so RAES verifies exact native readback instead of applying
-# an unevaluable open relation.  The content-identified pack guard above and
-# APTL #1017 keep this release bridge narrow and removable.
-_TECHVAULT_MINIMUM_INTRUSION_EXACT_CONCERNS = frozenset(
-    {
-        "forwarding-agents",
-        "runtime-applications",
-        "runtime-datastore-services",
-    }
-)
+def resolve_target_planning_compatibility(
+    bundle: ScenarioBundle | None, config: object
+) -> ResolvedPlanningCompatibility | None:
+    """Resolve compatibility once while constructing the admitted target."""
 
-
-def _is_identified_techvault_pack(bundle: ScenarioBundle) -> bool:
-    """Return whether this is the exact pack authorized for compatibility."""
-
-    identity = bundle.pack_identity
-    return (
-        bundle.source_kind is ScenarioSourceKind.ENV_PACK
-        and identity is not None
-        and identity.pack_id == TECHVAULT_PACK_ID
-        and identity.pack_version == TECHVAULT_PACK_VERSION
-        and identity.set_digest == TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST
+    identity = bundle.pack_identity if isinstance(bundle, ScenarioBundle) else None
+    if identity is None:
+        return None
+    deployment = getattr(config, "deployment", None)
+    return resolve_scenario_planning_compatibility(
+        ScenarioPlanningCompatibilityContext(
+            pack=identity,
+            backend=BackendIdentity(
+                APTL_RAES_TARGET_NAME,
+                APTL_RAES_TARGET_VERSION,
+                APTL_RAES_TARGET_PROFILE,
+                transport=str(getattr(deployment, "provider", "") or ""),
+            ),
+        )
     )
 
 
 @contextmanager
-def _techvault_runtime_value_limits(
-    bundle: ScenarioBundle | None,
+def _runtime_value_limits(
+    decision: PlanningCompatibilityDecision | None,
 ) -> Iterator[None]:
-    """Temporarily retain RAES's finite bounds with a larger node budget."""
+    """Temporarily apply an admitted finite node budget."""
 
-    if bundle is None or not _is_identified_techvault_pack(bundle):
+    if decision is None or decision.runtime_max_nodes is None:
         yield
         return
 
@@ -138,14 +117,12 @@ def _techvault_runtime_value_limits(
         snapshot_limits = backend_snapshot_contracts._VALUE_LIMITS
         widened_input = input_limits.model_copy(
             update={
-                "max_nodes": max(input_limits.max_nodes, _TECHVAULT_RUNTIME_MAX_NODES)
+                "max_nodes": max(input_limits.max_nodes, decision.runtime_max_nodes)
             }
         )
         widened_snapshot = snapshot_limits.model_copy(
             update={
-                "max_nodes": max(
-                    snapshot_limits.max_nodes, _TECHVAULT_RUNTIME_MAX_NODES
-                )
+                "max_nodes": max(snapshot_limits.max_nodes, decision.runtime_max_nodes)
             }
         )
         backend_input_contracts.RUNTIME_SNAPSHOT_VALUE_LIMITS = widened_input
@@ -190,7 +167,11 @@ def _authored_concern(scenario: object, requirement: object) -> bool:
     )
 
 
-def _selected_open_requirement(scenario: object | None, requirement: object) -> bool:
+def _selected_open_requirement(
+    scenario: object | None,
+    requirement: object,
+    decision: PlanningCompatibilityDecision,
+) -> bool:
     """Keep authored state and the two open defaults APTL actually selects."""
 
     kind = getattr(requirement, "requirement_kind", None)
@@ -200,7 +181,7 @@ def _selected_open_requirement(scenario: object | None, requirement: object) -> 
         or _authored_concern(scenario, requirement)
         or _backend_profile_selects_concern(scenario, requirement)
         or (
-            kind in _APTL_OPEN_DEFAULT_CONCERNS
+            kind in decision.open_default_concerns
             and _image_backed_node(scenario, requirement)
         )
     )
@@ -236,13 +217,13 @@ def _image_backed_node(scenario: object, requirement: object) -> bool:
     return node is None or getattr(node, "source", None) is not None
 
 
-def apply_techvault_observation_strength_compatibility(
+def apply_planning_compatibility(
     model: RuntimeModel,
-    bundle: ScenarioBundle,
+    decision: PlanningCompatibilityDecision | None,
     *,
     scenario: object | None = None,
 ) -> RuntimeModel:
-    """Apply release-scoped TechVault planning compatibility.
+    """Apply one adapter's validated bounded compatibility decision.
 
     Configuration-scope corroboration remains mandatory and no evidence is
     relabelled.  For the finite concern set whose released OPEN relation RAES
@@ -250,7 +231,7 @@ def apply_techvault_observation_strength_compatibility(
     authored value, with no backend additions, verified by native readback.
     """
 
-    if not _is_identified_techvault_pack(bundle):
+    if decision is None:
         return model
 
     authority_identities = {
@@ -265,6 +246,7 @@ def apply_techvault_observation_strength_compatibility(
             requirement,
             scenario=scenario,
             authority_identities=authority_identities,
+            decision=decision,
         )
         identity = _requirement_identity(requirement)
         if adjusted:
@@ -299,16 +281,17 @@ def _adjust_requirement(
     *,
     scenario: object | None,
     authority_identities: set[tuple[object, ...]],
+    decision: PlanningCompatibilityDecision,
 ) -> tuple[object, bool, bool, bool]:
     """Apply delegation and provenance compatibility to one requirement."""
 
     identity = _requirement_identity(requirement)
     delegated = identity in authority_identities and not _selected_open_requirement(
-        scenario, requirement
+        scenario, requirement, decision
     )
     if delegated:
         requirement = replace(requirement, explicitness=None, delegated=True)
-    exact = _requires_exact_native_evidence(requirement, scenario)
+    exact = _requires_exact_native_evidence(requirement, scenario, decision)
     if exact:
         requirement = replace(
             requirement,
@@ -320,7 +303,7 @@ def _adjust_requirement(
         )
     adjusted = (
         not requirement.delegated
-        and requirement.requirement_kind in DAEMON_READBACK_RUNTIME_CONCERNS
+        and requirement.requirement_kind in decision.daemon_readback_concerns
         and requirement.required_observation_strength
         is ObservationStrength.GUEST_OBSERVED
     )
@@ -333,7 +316,9 @@ def _adjust_requirement(
 
 
 def _requires_exact_native_evidence(
-    requirement: object, scenario: object | None
+    requirement: object,
+    scenario: object | None,
+    decision: PlanningCompatibilityDecision,
 ) -> bool:
     """Return whether minimum intrusion closes an authored open concern."""
 
@@ -341,7 +326,7 @@ def _requires_exact_native_evidence(
     return bool(
         not requirement.delegated
         and requirement.explicitness is ExplicitnessClass.OPEN
-        and requirement.requirement_kind in _TECHVAULT_MINIMUM_INTRUSION_EXACT_CONCERNS
+        and requirement.requirement_kind in decision.minimum_intrusion_exact_concerns
         and authored
     )
 
@@ -396,11 +381,18 @@ class AptlRuntimeManager(_RaesRuntimeManager):
             information_state_context_resolver=information_state_context_resolver,
         )
         self._aptl_bundle = bundle or getattr(target.provisioner, "bundle", None)
+        self._aptl_planning_compatibility_selection = getattr(
+            target.provisioner, "planning_compatibility", None
+        )
+        selection = self._aptl_planning_compatibility_selection
+        self._aptl_planning_compatibility = (
+            selection.decision if selection is not None else None
+        )
 
     def apply(self, execution_plan: ExecutionPlan) -> ApplyResult:
         """Apply with a finite node budget for the exact released large plan."""
 
-        with _techvault_runtime_value_limits(self._aptl_bundle):
+        with _runtime_value_limits(getattr(self, "_aptl_planning_compatibility", None)):
             return super().apply(execution_plan)
 
     def plan(
@@ -422,12 +414,11 @@ class AptlRuntimeManager(_RaesRuntimeManager):
             profile=profile,
             profile_authority=profile_authority,
         )
-        if isinstance(self._aptl_bundle, ScenarioBundle):
-            model = apply_techvault_observation_strength_compatibility(
-                model,
-                self._aptl_bundle,
-                scenario=scenario,
-            )
+        model = apply_planning_compatibility(
+            model,
+            getattr(self, "_aptl_planning_compatibility", None),
+            scenario=scenario,
+        )
         effective_snapshot = snapshot if snapshot is not None else self._snapshot
         scope = PlanScope(
             target_name=self._target.name,
@@ -493,6 +484,7 @@ __all__ = [
     "AptlRuntimeManager",
     "AptlPlanningOptions",
     "DAEMON_READBACK_RUNTIME_CONCERNS",
-    "apply_techvault_observation_strength_compatibility",
+    "apply_planning_compatibility",
     "plan_aptl_scenario",
+    "resolve_target_planning_compatibility",
 ]

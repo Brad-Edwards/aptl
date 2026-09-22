@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+import stat
 import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
@@ -125,6 +126,78 @@ def parse_seat_image_reference(reference: str) -> SeatImageReference:
     return SeatImageReference(
         registry=registry, repository=rest, tag=tag, digest=digest
     )
+
+
+def _cache_entry(cache_dir: Path, digest: str) -> Path:
+    return cache_dir / digest.removeprefix("sha256:") / "seat-disk.qcow2"
+
+
+def _stamp_path(disk: Path) -> Path:
+    return disk.with_suffix(".verified.json")
+
+
+def write_verification_stamp(disk: Path, *, digest: str, size_bytes: int) -> None:
+    """Record the identity a full hash verification just established.
+
+    Hashing a multi-gigabyte disk is affordable once, when it is downloaded.
+    Repeating it on every seat start is not, so the result is recorded and
+    later starts re-check only what is cheap.
+    """
+
+    status = disk.stat(follow_symlinks=False)
+    _stamp_path(disk).write_text(
+        json.dumps(
+            {
+                "schema_version": "aptl.seat-disk-verification/v1",
+                "digest": digest,
+                "size_bytes": size_bytes,
+                "inode": status.st_ino,
+                "mtime_ns": status.st_mtime_ns,
+                "mode": status.st_mode & 0o7777,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+
+def verified_cached_disk(
+    cache_dir: Path, *, digest: str, size_bytes: int | None = None
+) -> Path | None:
+    """Return the cached disk for ``digest`` when it is cheaply provable.
+
+    The disk is a read-only qcow2 backing file that the VM never writes, so
+    these checks are looking for tampering or corruption, not for ordinary
+    mutation.  Anything that disagrees returns ``None`` and the caller falls
+    back to the full hash.
+    """
+
+    disk = _cache_entry(cache_dir, digest)
+    try:
+        status = disk.stat(follow_symlinks=False)
+    except OSError:
+        return None
+    if not stat.S_ISREG(status.st_mode):
+        return None
+    try:
+        stamp = json.loads(_stamp_path(disk).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(stamp, dict):
+        return None
+    expected = {
+        "digest": digest,
+        "inode": status.st_ino,
+        "mtime_ns": status.st_mtime_ns,
+        "mode": status.st_mode & 0o7777,
+        "size_bytes": status.st_size,
+    }
+    if any(stamp.get(key) != value for key, value in expected.items()):
+        return None
+    if size_bytes is not None and status.st_size != size_bytes:
+        return None
+    return disk
 
 
 def _anonymous_token(reference: SeatImageReference) -> str | None:
@@ -241,13 +314,24 @@ def _resolve_index(
     return _fetch_manifest(reference, digest, token)
 
 
-def resolve_seat_image(
-    reference: str | SeatImageReference, *, cache_dir: Path
-) -> StagedSeatImage:
-    """Pull, verify and cache the VM disk one seat reference names.
+@dataclass(frozen=True)
+class SeatDiskDescriptor:
+    """What a reference currently resolves to, before any disk is fetched."""
 
-    The returned disk is immutable and shared by digest, so a second seat on
-    the same reference reuses the cached bytes instead of pulling again.
+    reference: SeatImageReference
+    digest: str
+    size_bytes: int
+    manifest_digest: str
+    token: str | None
+
+
+def resolve_disk_descriptor(
+    reference: str | SeatImageReference,
+) -> SeatDiskDescriptor:
+    """Resolve a reference to its disk descriptor without downloading it.
+
+    This is the cheap half of resolution: a token and one manifest, a few
+    kilobytes.  Checking whether a newer image exists uses only this.
     """
 
     parsed = (
@@ -267,25 +351,81 @@ def resolve_seat_image(
         raise SeatImageError("seat image disk layer has no usable digest")
     if not isinstance(size, int) or not 0 < size <= _MAX_DISK_BYTES:
         raise SeatImageError("seat image disk layer declares no usable size")
+    return SeatDiskDescriptor(
+        reference=parsed,
+        digest=digest,
+        size_bytes=size,
+        manifest_digest=manifest_digest,
+        token=token,
+    )
 
-    blob_url = f"https://{parsed.registry}/v2/{parsed.repository}/blobs/{urllib.parse.quote(digest, safe=':')}"
+
+def resolve_seat_image(
+    reference: str | SeatImageReference, *, cache_dir: Path
+) -> StagedSeatImage:
+    """Pull, verify and cache the VM disk one seat reference names.
+
+    The returned disk is immutable and shared by digest, so a second seat on
+    the same reference reuses the cached bytes instead of pulling again.
+    """
+
+    descriptor = resolve_disk_descriptor(reference)
+    reused = (
+        verified_cached_disk(
+            cache_dir, digest=descriptor.digest, size_bytes=descriptor.size_bytes
+        )
+        is not None
+    )
+    return StagedSeatImage(
+        path=fetch_seat_disk(
+            descriptor.reference,
+            digest=descriptor.digest,
+            size_bytes=descriptor.size_bytes,
+            cache_dir=cache_dir,
+            token=descriptor.token,
+        ),
+        digest=descriptor.digest,
+        size_bytes=descriptor.size_bytes,
+        reference=descriptor.reference,
+        manifest_digest=descriptor.manifest_digest,
+        reused=reused,
+    )
+
+
+def fetch_seat_disk(
+    reference: SeatImageReference,
+    *,
+    digest: str,
+    size_bytes: int,
+    cache_dir: Path,
+    token: str | None = None,
+) -> Path:
+    """Return the cached disk for ``digest``, downloading it when absent.
+
+    A cached disk that its stamp still proves is returned without reading the
+    file, so a warm start does not pay for a full hash of the disk it is about
+    to boot.
+    """
+
+    cached = verified_cached_disk(cache_dir, digest=digest, size_bytes=size_bytes)
+    if cached is not None:
+        return cached
+
+    quoted = urllib.parse.quote(digest, safe=":")
+    blob_url = f"https://{reference.registry}/v2/{reference.repository}/blobs/{quoted}"
     try:
         staged = stage_https_artifact(
             url=blob_url,
             cache_dir=cache_dir,
             filename="seat-disk.qcow2",
             sha256=digest,
-            size_bytes=size,
-            headers=_registry_headers(token, "*/*"),
+            size_bytes=size_bytes,
+            headers=_registry_headers(
+                token if token is not None else _anonymous_token(reference), "*/*"
+            ),
         )
     except ApplianceDownloadError as exc:
-        raise SeatImageError(f"seat image disk download failed: {parsed}") from exc
-
-    return StagedSeatImage(
-        path=staged.path,
-        digest=digest,
-        size_bytes=size,
-        reference=parsed,
-        manifest_digest=manifest_digest,
-        reused=staged.reused,
-    )
+        raise SeatImageError(f"seat image disk download failed: {reference}") from exc
+    # stage_https_artifact has just proven the digest by reading every byte.
+    write_verification_stamp(staged.path, digest=digest, size_bytes=size_bytes)
+    return staged.path

@@ -1,0 +1,238 @@
+"""Decide which seat VM disk boots, and when a newer one is merely offered.
+
+A mutable tag such as ``:latest`` must not silently change what an operator
+boots.  The digest a reference first resolved to is therefore *sticky*: it is
+recorded and keeps booting until the operator adopts something else.  Checking
+for a newer image is separate from adopting one, never gates the boot path,
+and fails open so that a registry outage, a captive portal or an aeroplane
+cannot stop a seat starting.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import time
+from dataclasses import dataclass
+from pathlib import Path
+
+from aptl.appliance.seat.image import (
+    SeatImageError,
+    SeatImageReference,
+    fetch_seat_disk,
+    parse_seat_image_reference,
+    resolve_disk_descriptor,
+    resolve_seat_image,
+    verified_cached_disk,
+)
+
+SELECTION_SCHEMA = "aptl.seat-image-selection/v1"
+
+# A warm start must not depend on the registry, so the update check is
+# rate-limited rather than run on every launch.
+DEFAULT_CHECK_INTERVAL_SECONDS = 24 * 60 * 60
+
+
+@dataclass(frozen=True)
+class SeatImageSelection:
+    """The disk one reference boots, plus any newer one observed."""
+
+    reference: SeatImageReference
+    digest: str
+    size_bytes: int
+    path: Path
+    available_digest: str | None = None
+    available_size_bytes: int | None = None
+    pulled: bool = False
+
+    @property
+    def update_available(self) -> bool:
+        return (
+            self.available_digest is not None and self.available_digest != self.digest
+        )
+
+
+def _selection_path(cache_dir: Path, reference: SeatImageReference) -> Path:
+    key = hashlib.sha256(str(reference).encode()).hexdigest()[:32]
+    return cache_dir / "refs" / f"{key}.json"
+
+
+def load_selection(cache_dir: Path, reference: SeatImageReference) -> dict[str, object]:
+    """Read the recorded selection for one reference, tolerating absence."""
+
+    try:
+        document = json.loads(
+            _selection_path(cache_dir, reference).read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(document, dict) or document.get("schema_version") != (
+        SELECTION_SCHEMA
+    ):
+        return {}
+    return document
+
+
+def save_selection(
+    cache_dir: Path,
+    reference: SeatImageReference,
+    *,
+    digest: str,
+    size_bytes: int,
+    available_digest: str | None = None,
+    available_size_bytes: int | None = None,
+    last_checked: float | None = None,
+) -> None:
+    """Record which digest this reference boots, atomically."""
+
+    path = _selection_path(cache_dir, reference)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    document = {
+        "schema_version": SELECTION_SCHEMA,
+        "reference": str(reference),
+        "digest": digest,
+        "size_bytes": size_bytes,
+        "available_digest": available_digest,
+        "available_size_bytes": available_size_bytes,
+        "last_checked": last_checked,
+    }
+    temporary = path.with_suffix(".partial")
+    temporary.write_text(
+        json.dumps(document, separators=(",", ":"), sort_keys=True), encoding="utf-8"
+    )
+    temporary.replace(path)
+
+
+def check_for_update(
+    cache_dir: Path,
+    reference: SeatImageReference,
+    *,
+    selected_digest: str,
+    now: float | None = None,
+    interval_seconds: int = DEFAULT_CHECK_INTERVAL_SECONDS,
+    force: bool = False,
+) -> tuple[str, int] | None:
+    """Return a newer ``(digest, size)`` when one is published, else ``None``.
+
+    This never raises for a registry problem.  A seat that cannot reach the
+    registry is not out of date as far as it can tell, and must still boot.
+    """
+
+    if reference.digest is not None:
+        # A digest-pinned reference is exactly what the operator asked for.
+        return None
+    recorded = load_selection(cache_dir, reference)
+    last_checked = recorded.get("last_checked")
+    if (
+        not force
+        and isinstance(last_checked, int | float)
+        and (now or time.time()) - last_checked < interval_seconds
+    ):
+        available = recorded.get("available_digest")
+        size = recorded.get("available_size_bytes")
+        if isinstance(available, str) and isinstance(size, int):
+            return (available, size)
+        return None
+
+    try:
+        remote = resolve_disk_descriptor(reference)
+    except SeatImageError:
+        return None
+
+    available = None if remote.digest == selected_digest else remote.digest
+    save_selection(
+        cache_dir,
+        reference,
+        digest=selected_digest,
+        size_bytes=int(recorded.get("size_bytes") or remote.size_bytes),
+        available_digest=available,
+        available_size_bytes=remote.size_bytes if available else None,
+        last_checked=now or time.time(),
+    )
+    return (remote.digest, remote.size_bytes) if available else None
+
+
+def select_seat_image(
+    reference: str | SeatImageReference,
+    *,
+    cache_dir: Path,
+    adopt: bool = False,
+    adopt_digest: str | None = None,
+    check: bool = True,
+    now: float | None = None,
+) -> SeatImageSelection:
+    """Resolve which disk this seat boots, pulling only when it must.
+
+    ``adopt`` moves the selection to whatever the reference resolves to now;
+    ``adopt_digest`` moves it to a specific already-known digest, which is how
+    a rollback re-selects a previous image.  Neither happens on an ordinary
+    start.
+    """
+
+    parsed = (
+        reference
+        if isinstance(reference, SeatImageReference)
+        else parse_seat_image_reference(reference)
+    )
+    recorded = load_selection(cache_dir, parsed)
+    selected = recorded.get("digest")
+    selected_size = recorded.get("size_bytes")
+
+    if adopt_digest is not None:
+        disk = verified_cached_disk(cache_dir, digest=adopt_digest)
+        if disk is None:
+            raise SeatImageError(
+                f"seat image {adopt_digest} is not in the local cache; "
+                "pull it before selecting it"
+            )
+        size = disk.stat().st_size
+        save_selection(
+            cache_dir, parsed, digest=adopt_digest, size_bytes=size, last_checked=now
+        )
+        return SeatImageSelection(
+            reference=parsed, digest=adopt_digest, size_bytes=size, path=disk
+        )
+
+    # A pinned reference, a first use, or an explicit adoption all resolve
+    # against the registry. Everything else boots what is already selected.
+    if adopt or not isinstance(selected, str) or not isinstance(selected_size, int):
+        staged = resolve_seat_image(parsed, cache_dir=cache_dir)
+        save_selection(
+            cache_dir,
+            parsed,
+            digest=staged.digest,
+            size_bytes=staged.size_bytes,
+            last_checked=now or time.time(),
+        )
+        return SeatImageSelection(
+            reference=parsed,
+            digest=staged.digest,
+            size_bytes=staged.size_bytes,
+            path=staged.path,
+            pulled=not staged.reused,
+        )
+
+    disk = verified_cached_disk(cache_dir, digest=selected, size_bytes=selected_size)
+    pulled = False
+    if disk is None:
+        # The selection survives a cleared cache: re-fetch that exact digest
+        # rather than silently moving to whatever the tag points at now.
+        disk = fetch_seat_disk(
+            parsed, digest=selected, size_bytes=selected_size, cache_dir=cache_dir
+        )
+        pulled = True
+
+    newer = (
+        check_for_update(cache_dir, parsed, selected_digest=selected, now=now)
+        if check
+        else None
+    )
+    return SeatImageSelection(
+        reference=parsed,
+        digest=selected,
+        size_bytes=selected_size,
+        path=disk,
+        available_digest=newer[0] if newer else None,
+        available_size_bytes=newer[1] if newer else None,
+        pulled=pulled,
+    )

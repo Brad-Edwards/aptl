@@ -248,16 +248,18 @@ class TestEnvVarsFromDict:
         assert result.dashboard_password == ""
         assert result.wazuh_cluster_key == ""
 
-    def test_raises_when_required_vars_missing(self):
-        """Should raise ValueError when required env vars are missing."""
+    def test_non_wazuh_scenario_allows_wazuh_vars_to_be_absent(self):
+        """Generic core does not require scenario-owned Wazuh fixtures."""
         from aptl.core.env import env_vars_from_dict
 
-        env = {"INDEXER_USERNAME": "admin"}  # Missing others
-        with pytest.raises(ValueError, match="INDEXER_PASSWORD"):
-            env_vars_from_dict(env)
+        result = env_vars_from_dict({})
+        assert result.indexer_username == ""
+        assert result.indexer_password == ""
+        assert result.api_username == ""
+        assert result.api_password == ""
 
-    def test_raises_when_required_var_is_empty(self):
-        """Should raise ValueError when a required var has empty value."""
+    def test_empty_scenario_values_remain_empty_until_admission(self):
+        """Empty values are not replaced by generic core defaults."""
         from aptl.core.env import env_vars_from_dict
 
         env = {
@@ -266,8 +268,8 @@ class TestEnvVarsFromDict:
             "API_USERNAME": "wazuh",
             "API_PASSWORD": "secret",
         }
-        with pytest.raises(ValueError, match="INDEXER_PASSWORD"):
-            env_vars_from_dict(env)
+        result = env_vars_from_dict(env)
+        assert result.indexer_password == ""
 
 
 class TestFindPlaceholderEnvValues:

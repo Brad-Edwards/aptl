@@ -19,22 +19,15 @@ from aptl.utils.placeholders import contains_placeholder
 
 log = get_logger("env")
 
-_REQUIRED_VARS = [
-    "INDEXER_USERNAME",
-    "INDEXER_PASSWORD",
-    "API_USERNAME",
-    "API_PASSWORD",
-]
-
 
 @dataclass
 class EnvVars:
-    """Typed container for environment variables loaded from .env."""
+    """Typed optional scenario environment loaded from the project ``.env``."""
 
-    indexer_username: str
-    indexer_password: str
-    api_username: str
-    api_password: str
+    indexer_username: str = ""
+    indexer_password: str = ""
+    api_username: str = ""
+    api_password: str = ""
     dashboard_username: str = ""
     dashboard_password: str = ""
     wazuh_cluster_key: str = ""
@@ -378,8 +371,10 @@ def find_placeholder_env_values(env: dict[str, str]) -> list[str]:
 def env_vars_from_dict(env: dict[str, str]) -> EnvVars:
     """Build a typed EnvVars instance from a raw env dict.
 
-    Validates that all required variables are present and non-empty before
-    constructing the dataclass.
+    The generic project environment has no globally required Wazuh values.
+    An admitted scenario adapter supplies its declared fixtures, and the
+    Wazuh-native readiness owner fails closed if those values are unavailable
+    for a realization that actually declares Wazuh.
 
     Args:
         env: Dictionary of environment variables (from load_dotenv).
@@ -387,20 +382,12 @@ def env_vars_from_dict(env: dict[str, str]) -> EnvVars:
     Returns:
         Populated EnvVars instance.
 
-    Raises:
-        ValueError: If any required variable is missing or empty.
     """
-    missing = validate_required_env(env, _REQUIRED_VARS)
-    if missing:
-        raise ValueError(
-            f"Required environment variables missing or empty: {', '.join(missing)}"
-        )
-
     return EnvVars(
-        indexer_username=env["INDEXER_USERNAME"],
-        indexer_password=env["INDEXER_PASSWORD"],
-        api_username=env["API_USERNAME"],
-        api_password=env["API_PASSWORD"],
+        indexer_username=env.get("INDEXER_USERNAME", ""),
+        indexer_password=env.get("INDEXER_PASSWORD", ""),
+        api_username=env.get("API_USERNAME", ""),
+        api_password=env.get("API_PASSWORD", ""),
         dashboard_username=env.get("DASHBOARD_USERNAME", ""),
         dashboard_password=env.get("DASHBOARD_PASSWORD", ""),
         wazuh_cluster_key=env.get("WAZUH_CLUSTER_KEY", ""),

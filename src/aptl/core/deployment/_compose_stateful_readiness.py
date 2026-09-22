@@ -373,7 +373,16 @@ def _load_stateful_env(project_dir: Path) -> tuple[EnvVars | None, bool]:
         raw_env = load_dotenv(project_dir / ".env")
         placeholder_input = bool(find_placeholder_env_values(raw_env))
         if not placeholder_input:
-            env = env_vars_from_dict(raw_env)
+            candidate = env_vars_from_dict(raw_env)
+            if all(
+                (
+                    candidate.indexer_username,
+                    candidate.indexer_password,
+                    candidate.api_username,
+                    candidate.api_password,
+                )
+            ):
+                env = candidate
     except (OSError, ValueError):
         env = None
     return env, placeholder_input

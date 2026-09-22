@@ -1,8 +1,10 @@
 name: Docs deploy
 
-# Builds the mkdocs site and publishes it to GitHub Pages (ADR-038,
-# DOC-001). Runs only on main: PRs get the same `mkdocs build --strict`
-# validation from the docs job in checks.yml, without deploying.
+# Builds the canonical mkdocs site and publishes it to GitHub Pages (ADR-038,
+# DOC-001). Read the Docs mirrors the same source through `.readthedocs.yaml`;
+# it does not replace this stable URL. Runs only on main: PRs get the same
+# `mkdocs build --strict` validation from the docs job in checks.yml, without
+# deploying.
 on:
   push:
     branches: [main]

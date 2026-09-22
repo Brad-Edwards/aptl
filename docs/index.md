@@ -72,6 +72,8 @@ that exist for the current scenario rather than relying on fixed ports.
   fix or improvement against the `dev` branch.
 - [Report a vulnerability privately](https://github.com/Brad-Edwards/aptl/security/advisories/new).
   Do not disclose suspected vulnerabilities in a public issue.
+- [Review the OpenSSF Best Practices assessment](security/openssf-best-practices.md)
+  and the evidence behind the project's self-certification.
 
 ## Design And Historical Records
 

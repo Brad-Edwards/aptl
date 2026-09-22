@@ -35,8 +35,9 @@ updates:
   # more that only looked upgradable through a flattened export.
   #
   # Note the remaining manual step: Dependabot updates `uv.lock` but does not
-  # re-run the exports, so run `pre-commit run --all-files` on the branch and
-  # commit the regenerated `requirements/*.txt` before merging.
+  # re-run the exports. CI runs the whole-tree checks; locally, stage the
+  # intended files and run `pre-commit run` for fast hygiene and secret scans.
+  # Commit the regenerated `requirements/*.txt` before merging.
   - package-ecosystem: "uv"
     directory: "/"
     exclude-paths:

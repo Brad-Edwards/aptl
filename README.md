@@ -104,6 +104,7 @@ The published site is the canonical user manual:
 - [Run your first lab](docs/getting-started/quick-start.md)
 - [Troubleshooting](docs/troubleshooting/index.md)
 - [Architecture and historical records](docs/architecture/index.md)
+- [OpenSSF Best Practices assessment](docs/security/openssf-best-practices.md)
 
 The README is the GitHub and package-index gateway, not a second copy of the
 manual.
@@ -113,6 +114,7 @@ manual.
 - [Get support](https://github.com/Brad-Edwards/aptl/blob/dev/SUPPORT.md)
 - [Contribute](https://github.com/Brad-Edwards/aptl/blob/dev/CONTRIBUTING.md)
 - [Report a vulnerability privately](https://github.com/Brad-Edwards/aptl/security/advisories/new)
+- [Review the OpenSSF Best Practices assessment](docs/security/openssf-best-practices.md)
 
 Do not report suspected vulnerabilities through a public issue. The
 [security policy](SECURITY.md) describes scope and the private fallback contact

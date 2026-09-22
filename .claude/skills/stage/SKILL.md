@@ -19,7 +19,8 @@ disable-model-invocation: true
 
 Run up to 5 iterations:
 
-1. Run `pre-commit run --all-files`.
+1. Run `pre-commit run` against the staged files. Never use `--all-files`
+   locally; CI/CD owns whole-tree checks.
 2. If it passes, proceed to Step 4.
 3. If it fails:
    - Read the failure output.

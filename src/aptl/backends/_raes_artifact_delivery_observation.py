@@ -15,7 +15,7 @@ from aptl.core.deployment._compose_stateful_model import (
     _consumer_output_names,
     _uses_per_output_mounts,
 )
-from aptl.core.deployment._compose_stateful_readiness import (
+from aptl.core.deployment._wazuh_attestation import (
     declared_wazuh_facts_match,
 )
 from aptl.core.deployment.backend import DeploymentBackend

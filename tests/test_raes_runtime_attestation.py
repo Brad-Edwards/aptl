@@ -10,7 +10,7 @@ from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 from aptl.backends.raes_runtime_attestation import (
     observe_techvault_attested_concerns,
 )
-from aptl.core.deployment._compose_stateful_readiness import declared_wazuh_fact_ids
+from aptl.core.deployment._wazuh_attestation import declared_wazuh_fact_ids
 from aptl.validation._gate_checks import check_parse
 from tests.helpers import techvault_scenario_bundle
 

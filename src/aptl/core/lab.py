@@ -2422,7 +2422,7 @@ def _backend_proved_readiness(ctx: _LabStartContext) -> set[str]:
     readiness = getattr(ctx.backend, "declared_wazuh_attestation", None)
     if not isinstance(readiness, Mapping):
         return set()
-    from aptl.core.deployment._compose_stateful_readiness import (
+    from aptl.core.deployment._wazuh_attestation import (
         declared_wazuh_facts_match,
     )
 

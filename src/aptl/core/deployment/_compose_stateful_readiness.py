@@ -30,8 +30,6 @@ from aptl.core.deployment._wazuh_attestation import (
     AUTHENTICATED_FACT_ID,
     declared_indexer as _declared_indexer,
     declared_manager_components as _declared_manager_components,
-    declared_wazuh_fact_ids,
-    declared_wazuh_facts_match,
     declares_wazuh_native_service as _declares_wazuh_native_service,
     fact_observation as _fact_observation,
     load_stateful_env as _load_stateful_env,

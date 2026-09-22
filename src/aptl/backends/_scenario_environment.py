@@ -31,10 +31,9 @@ class ScenarioEnvironmentFixture:
 def validated_aliases(value: object) -> tuple[EnvironmentAlias, ...]:
     """Validate unique, well-formed operator environment aliases."""
 
-    valid_type = isinstance(value, tuple) and all(
-        isinstance(item, EnvironmentAlias) for item in value
-    )
-    if not valid_type:
+    if not isinstance(value, tuple):
+        raise ScenarioStartupProviderError("provider-result-invalid")
+    if any(not isinstance(item, EnvironmentAlias) for item in value):
         raise ScenarioStartupProviderError("provider-result-invalid")
     valid_names = all(
         valid_environment_variable_name(item.target)
@@ -52,10 +51,9 @@ def validated_environment_fixtures(
 ) -> tuple[ScenarioEnvironmentFixture, ...]:
     """Validate fixed values without copying their bytes into diagnostics."""
 
-    valid_type = isinstance(value, tuple) and all(
-        isinstance(item, ScenarioEnvironmentFixture) for item in value
-    )
-    if not valid_type:
+    if not isinstance(value, tuple):
+        raise ScenarioStartupProviderError("provider-result-invalid")
+    if any(not isinstance(item, ScenarioEnvironmentFixture) for item in value):
         raise ScenarioStartupProviderError("provider-result-invalid")
     names = [item.name for item in value]
     valid_names = all(

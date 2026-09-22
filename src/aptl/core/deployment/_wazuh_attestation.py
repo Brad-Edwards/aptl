@@ -312,28 +312,24 @@ def declared_wazuh_facts_match(
 ) -> bool:
     """Require matched structured observations for the exact declaration."""
 
-    facts = (
-        attestation.get(service)
-        if isinstance(attestation, Mapping) and service
-        else None
-    )
-    valid_facts = isinstance(facts, (tuple, list)) and bool(facts)
-    observed = (
-        {
-            fact.get("fact_id")
-            for fact in facts
-            if isinstance(fact, Mapping) and fact.get("status") == "matched"
-        }
-        if valid_facts
-        else set()
-    )
+    if not isinstance(attestation, Mapping) or not service:
+        return False
+    facts = attestation.get(service)
+    if not isinstance(facts, (tuple, list)) or not facts:
+        return False
+    observed = _matched_fact_ids(facts)
     expected = declared_wazuh_fact_ids(node) if node is not None else observed
-    return (
-        bool(expected)
-        and valid_facts
-        and len(observed) == len(facts)
-        and observed == expected
-    )
+    return bool(expected) and len(observed) == len(facts) and observed == expected
+
+
+def _matched_fact_ids(facts: tuple[object, ...] | list[object]) -> set[object]:
+    """Project only successful fact identities from a typed observation list."""
+
+    observed: set[object] = set()
+    for fact in facts:
+        if isinstance(fact, Mapping) and fact.get("status") == "matched":
+            observed.add(fact.get("fact_id"))
+    return observed
 
 
 def _index_metadata(payload: object) -> Mapping[str, object]:

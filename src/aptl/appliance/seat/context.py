@@ -29,7 +29,8 @@ class StartSeatOptions:
     access_identity_file: Path | None = None
     access_project_dir: Path | None = None
     access_clients: tuple[str, ...] = ()
-    candidate_trust: bool = False
+    adopt_image_update: bool = False
+    check_for_image_update: bool = True
 
     def with_mappings(self, mappings: tuple[BoundaryEndpoint, ...]) -> Self:
         """Clone options with allocator-selected mappings and reservation disabled."""
@@ -47,7 +48,8 @@ class StartSeatOptions:
             access_identity_file=self.access_identity_file,
             access_project_dir=self.access_project_dir,
             access_clients=self.access_clients,
-            candidate_trust=self.candidate_trust,
+            adopt_image_update=self.adopt_image_update,
+            check_for_image_update=self.check_for_image_update,
         )
 
 
@@ -56,10 +58,10 @@ class SeatPaths:
     """Contained directory layout for one physical seat."""
 
     seat_root: Path
-    release_dir: Path
-    release_public_key: Path
-    qualification_public_key: Path
+    image_reference: str
+    image_cache_dir: Path
     launch_dir: Path
     launch_descriptor: Path
+    boundary_policy: Path
     overlay_path: Path
     overlay_state_dir: Path

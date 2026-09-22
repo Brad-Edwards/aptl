@@ -76,6 +76,7 @@ assets/images/qradar_landing_empty.png	repository-metadata	Inspect identity/cont
 assets/images/qradar_offences.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 bin/install-raes-inventory-skill.sh	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+git-env-isolation.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/+seat-boots-a-registry-image.changed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+seat-image-config.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+seat-image-from-registry.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+seat-image-selection.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
@@ -820,10 +821,12 @@ src/aptl/appliance/seat/image.py	optional-delivery	Keep sealed-seat boundary out
 src/aptl/appliance/seat/image_config.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/image_selection.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/kiosk.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/launch_descriptor.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/lifecycle.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/locking.py	optional-delivery	Keep owner-scoped lifecycle serialization with delivery owner
 src/aptl/appliance/seat/models.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/observation.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/overlay.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/overlay_cleanup.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/paths.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/persistence.py	optional-delivery	Keep sealed-seat boundary outside default install

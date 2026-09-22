@@ -21,11 +21,17 @@ from aptl.appliance.manifest import ApplianceManifestError
 from aptl.appliance.seat.access import SeatAccessEnrollment, ensure_transport_identity
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.appliance.seat.kiosk import open_participant_kiosk
+from aptl.appliance.seat.image import SeatImageError
+from aptl.appliance.seat.image_selection import (
+    list_cached_images,
+    prune_cached_images,
+    select_seat_image,
+)
 from aptl.appliance.seat.lifecycle import (
     reconcile_seat_after_reboot,
     recover_seat,
     reset_seat,
-    release_requires_host_access,
+    image_requires_host_access,
     stage_seat,
     start_seat,
     status_seat,
@@ -37,6 +43,10 @@ from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.workbench.profiles import WorkbenchConfigurationError
 
 app = typer.Typer(help="Operate one disposable appliance seat on a physical host.")
+
+# The published seat image. A user who does not want it points --image
+# somewhere else; nothing else about the seat changes.
+DEFAULT_SEAT_IMAGE = "ghcr.io/brad-edwards/aptl-seat:latest"
 
 
 def _emit(payload: dict[str, object]) -> None:
@@ -88,22 +98,6 @@ def _resolved_seat_root(seat_root: Path | None) -> Path:
     return (seat_root if seat_root is not None else default_seat_root()).resolve()
 
 
-def _resolved_release_inputs(
-    seat_root: Path,
-    release_dir: Path | None,
-    release_public_key: Path | None,
-    qualification_public_key: Path | None,
-) -> tuple[Path, Path, Path]:
-    """Resolve the release installed in the seat's private launch directory."""
-
-    launch_dir = seat_root / "launch"
-    return (
-        release_dir or launch_dir / "release",
-        release_public_key or launch_dir / "release-public.pem",
-        qualification_public_key or launch_dir / "qualification-public.pem",
-    )
-
-
 def _default_appliance_cache() -> Path:
     """Return the current user's XDG-compatible appliance cache."""
 
@@ -115,71 +109,25 @@ def _default_appliance_cache() -> Path:
     return Path.home() / ".cache" / "aptl" / "appliance"
 
 
-@app.command("install")
-def install(
-    tag: str = typer.Option(..., "--tag"),
-    release_public_key: Path = typer.Option(..., "--release-public-key"),
-    qualification_public_key: Path = typer.Option(..., "--qualification-public-key"),
-    repository: str = typer.Option("Brad-Edwards/aptl", "--repository"),
-    release_id: str | None = typer.Option(None, "--release-id"),
-    seat_root: Path | None = typer.Option(None, "--seat-root"),
-    cache_dir: Path | None = typer.Option(None, "--cache-dir"),
-) -> None:
-    """Install and verify a public appliance release for this user."""
-
-    selected_release_id = release_id or f"aptl-{tag}-x86_64"
-    try:
-        result = install_public_release(
-            selection=PublicReleaseSelection(
-                repository=repository, tag=tag, release_id=selected_release_id
-            ),
-            release_public_key=release_public_key,
-            qualification_public_key=qualification_public_key,
-            seat_root=_resolved_seat_root(seat_root),
-            cache_dir=cache_dir or _default_appliance_cache(),
-        )
-    except AppliancePublicInstallError as exc:
-        _fail(SeatLauncherError("public-install-failed", str(exc)))
-    _emit(
-        {
-            "installed": True,
-            "release_id": result.release_id,
-            "release_dir": str(result.release_dir),
-            "reused": result.reused,
-        }
-    )
-
-
 @app.command("stage")
 def stage(
     seat_root: Path | None = typer.Option(None, "--seat-root"),
     seat_id: str = typer.Option("seat-01", "--seat-id"),
-    release_dir: Path | None = typer.Option(None, "--release-dir"),
-    release_public_key: Path | None = typer.Option(None, "--release-public-key"),
-    qualification_public_key: Path | None = typer.Option(
-        None, "--qualification-public-key"
-    ),
+    image: str = typer.Option(DEFAULT_SEAT_IMAGE, "--image"),
+    image_cache: Path | None = typer.Option(None, "--image-cache"),
     mapping: list[str] | None = typer.Option(None, "--mapping"),
 ) -> None:
-    """Verify release admission and persist a staged seat record."""
+    """Resolve the seat image and persist a staged seat record."""
 
     try:
         seat_root = _resolved_seat_root(seat_root)
-        release_dir, release_public_key, qualification_public_key = (
-            _resolved_release_inputs(
-                seat_root,
-                release_dir,
-                release_public_key,
-                qualification_public_key,
-            )
-        )
+        image_cache = image_cache or _default_appliance_cache()
         mappings = _parse_mappings(mapping)
         record = stage_seat(
             seat_root,
             seat_id=seat_id,
-            release_dir=release_dir,
-            release_public_key=release_public_key,
-            qualification_public_key=qualification_public_key,
+            image_reference=image,
+            image_cache_dir=image_cache,
             mappings=mappings,
         )
     except SeatLauncherError as exc:
@@ -191,11 +139,8 @@ def stage(
 def start(
     seat_root: Path | None = typer.Option(None, "--seat-root"),
     seat_id: str = typer.Option("seat-01", "--seat-id"),
-    release_dir: Path | None = typer.Option(None, "--release-dir"),
-    release_public_key: Path | None = typer.Option(None, "--release-public-key"),
-    qualification_public_key: Path | None = typer.Option(
-        None, "--qualification-public-key"
-    ),
+    image: str = typer.Option(DEFAULT_SEAT_IMAGE, "--image"),
+    image_cache: Path | None = typer.Option(None, "--image-cache"),
     mapping: list[str] | None = typer.Option(None, "--mapping"),
     access_owner: str | None = typer.Option(None, "--access-owner"),
     access_public_key: Path | None = typer.Option(None, "--access-public-key"),
@@ -204,22 +149,14 @@ def start(
     access_profile: str = typer.Option("red", "--access-profile"),
     access_client: list[str] | None = typer.Option(None, "--access-client"),
     access_hours: int = typer.Option(8, "--access-hours", min=1, max=24),
-    qualification_candidate: bool = typer.Option(
-        False, "--qualification-candidate", hidden=True
-    ),
+    update: bool = typer.Option(False, "--update"),
+    no_check: bool = typer.Option(False, "--no-check"),
 ) -> None:
     """Start the seat VM and validate host exposure."""
 
     try:
         seat_root = _resolved_seat_root(seat_root)
-        release_dir, release_public_key, qualification_public_key = (
-            _resolved_release_inputs(
-                seat_root,
-                release_dir,
-                release_public_key,
-                qualification_public_key,
-            )
-        )
+        image_cache = image_cache or _default_appliance_cache()
         mappings = _parse_mappings(mapping)
         access_values = (
             access_owner,
@@ -228,12 +165,7 @@ def start(
             access_project_dir,
         )
         if not any(value is not None for value in access_values) and (
-            release_requires_host_access(
-                release_dir=release_dir,
-                release_public_key=release_public_key,
-                qualification_public_key=qualification_public_key,
-                candidate_trust=qualification_candidate,
-            )
+            image_requires_host_access(image)
         ):
             access_identity_file, access_public_key = ensure_transport_identity(
                 seat_root
@@ -278,16 +210,16 @@ def start(
         record = start_seat(
             seat_root,
             seat_id=seat_id,
-            release_dir=release_dir,
-            release_public_key=release_public_key,
-            qualification_public_key=qualification_public_key,
+            image_reference=image,
+            image_cache_dir=image_cache,
             options=StartSeatOptions(
                 mappings=mappings,
                 access_enrollment=enrollment,
                 access_identity_file=access_identity_file,
                 access_project_dir=access_project_dir,
                 access_clients=clients,
-                candidate_trust=qualification_candidate,
+                adopt_image_update=update,
+                check_for_image_update=not no_check,
             ),
         )
     except ApplianceManifestError as exc:
@@ -317,30 +249,19 @@ def stop(seat_root: Path | None = typer.Option(None, "--seat-root")) -> None:
 def reset(
     seat_root: Path | None = typer.Option(None, "--seat-root"),
     seat_id: str = typer.Option("seat-01", "--seat-id"),
-    release_dir: Path | None = typer.Option(None, "--release-dir"),
-    release_public_key: Path | None = typer.Option(None, "--release-public-key"),
-    qualification_public_key: Path | None = typer.Option(
-        None, "--qualification-public-key"
-    ),
+    image: str = typer.Option(DEFAULT_SEAT_IMAGE, "--image"),
+    image_cache: Path | None = typer.Option(None, "--image-cache"),
 ) -> None:
     """Destroy overlay state and restage the seat."""
 
     try:
         seat_root = _resolved_seat_root(seat_root)
-        release_dir, release_public_key, qualification_public_key = (
-            _resolved_release_inputs(
-                seat_root,
-                release_dir,
-                release_public_key,
-                qualification_public_key,
-            )
-        )
+        image_cache = image_cache or _default_appliance_cache()
         record = reset_seat(
             seat_root,
             seat_id=seat_id,
-            release_dir=release_dir,
-            release_public_key=release_public_key,
-            qualification_public_key=qualification_public_key,
+            image_reference=image,
+            image_cache_dir=image_cache,
         )
     except SeatLauncherError as exc:
         _fail(exc)
@@ -351,30 +272,19 @@ def reset(
 def recover(
     seat_root: Path | None = typer.Option(None, "--seat-root"),
     seat_id: str = typer.Option("seat-01", "--seat-id"),
-    release_dir: Path | None = typer.Option(None, "--release-dir"),
-    release_public_key: Path | None = typer.Option(None, "--release-public-key"),
-    qualification_public_key: Path | None = typer.Option(
-        None, "--qualification-public-key"
-    ),
+    image: str = typer.Option(DEFAULT_SEAT_IMAGE, "--image"),
+    image_cache: Path | None = typer.Option(None, "--image-cache"),
 ) -> None:
     """Instructor recovery: reset and start the seat."""
 
     try:
         seat_root = _resolved_seat_root(seat_root)
-        release_dir, release_public_key, qualification_public_key = (
-            _resolved_release_inputs(
-                seat_root,
-                release_dir,
-                release_public_key,
-                qualification_public_key,
-            )
-        )
+        image_cache = image_cache or _default_appliance_cache()
         record = recover_seat(
             seat_root,
             seat_id=seat_id,
-            release_dir=release_dir,
-            release_public_key=release_public_key,
-            qualification_public_key=qualification_public_key,
+            image_reference=image,
+            image_cache_dir=image_cache,
         )
     except SeatLauncherError as exc:
         _fail(exc)
@@ -439,3 +349,66 @@ def open_kiosk(
         dry_run=dry_run,
     )
     _emit({"kiosk": True, "argv": list(plan.argv), "url": plan.url})
+
+
+@app.command("update")
+def update_image(
+    image: str = typer.Option(DEFAULT_SEAT_IMAGE, "--image"),
+    image_cache: Path | None = typer.Option(None, "--image-cache"),
+    to: str | None = typer.Option(None, "--to"),
+) -> None:
+    """Adopt a newer seat image, or roll back to one already cached.
+
+    Adoption takes effect on the next start; a running seat is untouched.
+    """
+
+    try:
+        selection = select_seat_image(
+            image,
+            cache_dir=image_cache or _default_appliance_cache(),
+            adopt=to is None,
+            adopt_digest=to,
+        )
+    except SeatImageError as exc:
+        _fail(SeatLauncherError("image-unavailable", str(exc)))
+    _emit(
+        {
+            "selected": True,
+            "reference": str(selection.reference),
+            "digest": selection.digest,
+            "size_bytes": selection.size_bytes,
+            "pulled": selection.pulled,
+        }
+    )
+
+
+@app.command("images")
+def images(
+    image_cache: Path | None = typer.Option(None, "--image-cache"),
+    prune: bool = typer.Option(False, "--prune"),
+) -> None:
+    """List cached seat images, optionally removing unselected ones.
+
+    Pruning never removes an image a reference currently selects, so a
+    rollback target only disappears when it is no longer selected anywhere.
+    """
+
+    cache_dir = image_cache or _default_appliance_cache()
+    try:
+        cached = list_cached_images(cache_dir)
+        removed = prune_cached_images(cache_dir) if prune else ()
+    except OSError as exc:
+        _fail(SeatLauncherError("image-cache-unreadable", str(exc)))
+    _emit(
+        {
+            "images": [
+                {
+                    "digest": item.digest,
+                    "size_bytes": item.size_bytes,
+                    "selected_by": list(item.selected_by),
+                }
+                for item in cached
+            ],
+            "removed": list(removed),
+        }
+    )

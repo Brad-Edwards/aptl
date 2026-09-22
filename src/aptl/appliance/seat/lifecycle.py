@@ -9,24 +9,9 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
+import rfc8785
+
 from aptl.appliance.bootstrap import initialize_overlay_state
-from aptl.appliance.build import OverlayCreateRequest, create_disposable_overlay
-from aptl.appliance.candidate import (
-    ApplianceCandidateManifest,
-    _prepare_verified_candidate_launch_descriptor,
-    _verify_candidate_metadata,
-    verify_candidate_directory,
-)
-from aptl.appliance.launch import _prepare_verified_launch_descriptor
-from aptl.appliance.manifest import (
-    ApplianceManifestError,
-    ApplianceReleaseInspection,
-    _load_release_documents,
-    verify_release_directory,
-    verify_release_metadata,
-)
-from aptl.appliance.models import ApplianceReleaseManifest
-from aptl.appliance.release_validation import read_release_artifact
 from aptl.appliance.seat.access import (
     GuestAccessRequest,
     invalidate_host_access,
@@ -42,8 +27,23 @@ from aptl.appliance.seat.allocation import (
 from aptl.appliance.seat.context import SeatPaths, StartSeatOptions
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.appliance.seat.exposure import require_host_exposure
+from aptl.appliance.seat.image import (
+    SeatImageError,
+    fetch_seat_image_config,
+    resolve_disk_descriptor,
+)
+from aptl.appliance.seat.image_config import SeatImageConfig
+from aptl.appliance.seat.image_selection import (
+    SeatImageSelection,
+    select_seat_image,
+)
+from aptl.appliance.seat.launch_descriptor import (
+    SeatLaunchDescriptor,
+    canonical_launch_bytes,
+)
 from aptl.appliance.seat.locking import serialized_seat_mutation
 from aptl.appliance.seat.models import SeatRecord, SeatStatusProjection
+from aptl.appliance.seat.overlay import create_seat_overlay
 from aptl.appliance.seat.observation import (
     HostObservationBundle,
     build_host_observation,
@@ -84,8 +84,12 @@ from aptl.validation.participant_profile_models import ParticipantProfileManifes
 SEAT_RECORD_SCHEMA = "aptl.seat-record/v2"
 SEAT_NOT_STAGED = "seat is not staged"
 ACCESS_REQUEST_NAME = "access-request.json"
-_STANDARD_ACCESS_TIMEOUT_SECONDS = 120
-_CANDIDATE_ACCESS_TIMEOUT_SECONDS = 600
+# How long a real guest may take to offer host access after boot is not
+# measured here, and the previous 120s applied only to pre-qualified
+# releases that no longer exist. This is a deliberately generous ceiling;
+# the caller's readiness timeout still bounds it, and a guest that is
+# never coming is caught by the liveness check rather than by this value.
+_ACCESS_TIMEOUT_SECONDS = 600
 
 
 @dataclass(frozen=True)
@@ -125,26 +129,19 @@ def _launch_descriptor_digest(path: Path) -> str:
     return f"sha256:{hashlib.sha256(payload).hexdigest()}"
 
 
-def _stage_public_anchor(source: Path, destination: Path) -> None:
-    """Copy one bounded public trust anchor without following a leaf symlink."""
+def _atomic_write(destination: Path, payload: bytes) -> None:
+    """Publish one immutable launcher document atomically, or not at all."""
 
-    flags = os.O_RDONLY | os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
     temporary: Path | None = None
     try:
-        descriptor = os.open(source, flags)
-        with os.fdopen(descriptor, "rb") as handle:
-            payload = handle.read(64 * 1024 + 1)
-        if not payload or len(payload) > 64 * 1024:
-            raise OSError("public trust anchor has invalid size")
         temporary = destination.with_name(f".{destination.name}.{secrets.token_hex(8)}")
         temporary.write_bytes(payload)
         temporary.chmod(0o444)
         os.replace(temporary, destination)
+        temporary = None
     except OSError as exc:
         raise SeatLauncherError(
-            "invalid-trust-anchor", "public trust anchor could not be staged"
+            "corrupt-seat-state", f"{destination.name} could not be written"
         ) from exc
     finally:
         if temporary is not None:
@@ -196,88 +193,101 @@ def _validated_mappings(
     return mappings
 
 
-def _load_verified_release(
-    paths: SeatPaths, *, candidate_trust: bool = False
-) -> tuple[
-    ApplianceReleaseInspection,
-    ApplianceBoundaryPolicy,
-    ApplianceCandidateManifest | ApplianceReleaseManifest,
-    int,
-]:
-    """Verify the release and load its policy and runtime disk reservation."""
+@dataclass(frozen=True)
+class ResolvedSeatImage:
+    """One seat image resolved to everything a launch needs from it."""
 
-    if candidate_trust:
-        manifest, inspection = verify_candidate_directory(
-            paths.release_dir, paths.release_public_key
-        )
-    else:
-        inspection = verify_release_directory(
-            paths.release_dir,
-            paths.release_public_key,
-            qualification_public_key_path=paths.qualification_public_key,
-        )
-        manifest, _signature = _load_release_documents(paths.release_dir)
-    policy_path = paths.release_dir / next(
-        artifact.path
-        for artifact in manifest.artifacts
-        if artifact.kind == "boundary-policy"
-    )
-    binding = ApplianceBoundaryBinding(
-        policy_digest=manifest.boundary.policy_digest,
-        payload_digest=manifest.payload_digest,
-        raes_plan_digest=manifest.delivery.participant_routes_digest,
-        raes_boundary_required=True,
-        boundary_helper_image=manifest.boundary.boundary_helper_image,
-        egress_proxy_image=manifest.boundary.egress_proxy_image,
-        boot_id=_read_host_boot_id(),
-        guest_daemon_id="pending-guest",
-        host_observation_id="pending",
-    )
-    policy = load_boundary_policy(policy_path, binding)
-    profile_path = next(
-        artifact.path
-        for artifact in manifest.artifacts
-        if artifact.kind == "participant-profile"
-    )
-    try:
-        profile = model_validate_json_strict(
-            ParticipantProfileManifest,
-            read_release_artifact(paths.release_dir, profile_path),
-        )
-    except ValueError as exc:
-        raise ApplianceManifestError("participant profile is invalid") from exc
-    runtime_disk_bytes = profile.budgets.maximums.peak_runtime_disk_bytes
-    if runtime_disk_bytes > manifest.host_prerequisites.disk_bytes:
-        raise ApplianceManifestError("runtime disk ceiling exceeds host disk capacity")
-    return inspection, policy, manifest, runtime_disk_bytes
+    selection: SeatImageSelection
+    config: SeatImageConfig
+    policy_digest: str
+    config_digest: str
+
+    @property
+    def policy(self) -> ApplianceBoundaryPolicy:
+        return self.config.boundary
+
+    @property
+    def runtime_disk_bytes(self) -> int:
+        return self.config.resources.disk_bytes
 
 
-def release_requires_host_access(
+def _canonical_policy_digest(policy: ApplianceBoundaryPolicy) -> str:
+    """Digest the exact policy bytes the gate will be bound to."""
+
+    return (
+        "sha256:"
+        + hashlib.sha256(rfc8785.dumps(policy.model_dump(mode="json"))).hexdigest()
+    )
+
+
+def _load_seat_image(
+    paths: SeatPaths,
     *,
-    release_dir: Path,
-    release_public_key: Path,
-    qualification_public_key: Path,
-    candidate_trust: bool = False,
-) -> bool:
-    """Read signed transport metadata before the full host staging admission."""
+    adopt: bool = False,
+    check: bool = True,
+) -> ResolvedSeatImage:
+    """Resolve the seat image and the declaration a launch is bound to."""
 
-    del qualification_public_key
-    if candidate_trust:
-        manifest, _inspection = _verify_candidate_metadata(
-            release_dir.resolve(strict=True), release_public_key
+    try:
+        descriptor = resolve_disk_descriptor(paths.image_reference)
+        config = fetch_seat_image_config(descriptor)
+        selection = select_seat_image(
+            descriptor.reference,
+            cache_dir=paths.image_cache_dir,
+            adopt=adopt,
+            check=check,
         )
-    else:
-        manifest = verify_release_metadata(release_dir, release_public_key)
-    return manifest.delivery.host_mcp_contract == "aptl.restricted-ssh-mcp/v1"
+    except SeatImageError as exc:
+        raise SeatLauncherError("image-unavailable", str(exc)) from exc
+    if descriptor.config_digest is None:  # pragma: no cover - fetch would raise
+        raise SeatLauncherError("image-unavailable", "seat image declares no config")
+    return ResolvedSeatImage(
+        selection=selection,
+        config=config,
+        policy_digest=_canonical_policy_digest(config.boundary),
+        config_digest=descriptor.config_digest,
+    )
+
+
+def _image_binding(
+    image: ResolvedSeatImage,
+    *,
+    boot_id: str,
+    host_observation_id: str = "pending",
+    guest_daemon_id: str = "pending-guest",
+) -> ApplianceBoundaryBinding:
+    """Project the image declaration into the boundary binding."""
+
+    return ApplianceBoundaryBinding(
+        policy_digest=image.policy_digest,
+        payload_digest=image.selection.digest,
+        raes_plan_digest=image.config.binding.raes_plan_digest,
+        raes_boundary_required=image.policy.internal_zone_isolation,
+        boundary_helper_image=image.config.binding.boundary_helper_image,
+        egress_proxy_image=image.config.binding.egress_proxy_image,
+        boot_id=boot_id,
+        guest_daemon_id=guest_daemon_id,
+        host_observation_id=host_observation_id,
+    )
+
+
+def image_requires_host_access(image_reference: str) -> bool:
+    """Read the image declaration before the full host staging admission."""
+
+    try:
+        descriptor = resolve_disk_descriptor(image_reference)
+        config = fetch_seat_image_config(descriptor)
+    except SeatImageError as exc:
+        raise SeatLauncherError("image-unavailable", str(exc)) from exc
+    return config.boundary.host_mcp_contract == "aptl.restricted-ssh-mcp/v1"
 
 
 def _seat_paths(
     seat_root: Path,
     *,
     seat_id: str,
-    release_dir: Path,
-    release_public_key: Path,
-    qualification_public_key: Path,
+    image_reference: str,
+    image_cache_dir: Path,
 ) -> SeatPaths:
     """Resolve contained seat paths for one launcher invocation."""
 
@@ -288,11 +298,11 @@ def _seat_paths(
     )
     return SeatPaths(
         seat_root=seat_root,
-        release_dir=release_dir,
-        release_public_key=release_public_key,
-        qualification_public_key=qualification_public_key,
+        image_reference=image_reference,
+        image_cache_dir=image_cache_dir,
         launch_dir=launch_dir,
         launch_descriptor=launch_dir / "appliance-launch.json",
+        boundary_policy=launch_dir / "boundary-policy.json",
         overlay_path=overlay_path,
         overlay_state_dir=contained_path(
             seat_root, f"instances/{seat_id}.state", label="overlay state"
@@ -305,47 +315,33 @@ def stage_seat(
     seat_root: Path,
     *,
     seat_id: str,
-    release_dir: Path,
-    release_public_key: Path,
-    qualification_public_key: Path,
+    image_reference: str,
+    image_cache_dir: Path,
     mappings: tuple[BoundaryEndpoint, ...] | None = None,
     generation: int = 1,
     prereq_overrides: dict[str, object] | None = None,
-    candidate_trust: bool = False,
+    adopt_image_update: bool = False,
 ) -> SeatRecord:
-    """Verify release, host prereqs, and publish a staged seat record."""
+    """Resolve the image, verify host prereqs, and publish a staged record."""
 
     paths = _seat_paths(
         seat_root,
         seat_id=seat_id,
-        release_dir=release_dir,
-        release_public_key=release_public_key,
-        qualification_public_key=qualification_public_key,
+        image_reference=image_reference,
+        image_cache_dir=image_cache_dir,
     )
-    inspection, policy, manifest, runtime_disk_bytes = _load_verified_release(
-        paths, candidate_trust=candidate_trust
-    )
+    image = _load_seat_image(paths, adopt=adopt_image_update)
     require_host_prerequisites(
-        manifest.host_prerequisites,
+        image.config.resources,
         seat_root=seat_root,
-        required_free_disk_bytes=runtime_disk_bytes,
+        required_free_disk_bytes=image.runtime_disk_bytes,
         **(prereq_overrides or {}),
     )
     boot_id = _read_host_boot_id()
-    binding = ApplianceBoundaryBinding(
-        policy_digest=manifest.boundary.policy_digest,
-        payload_digest=manifest.payload_digest,
-        raes_plan_digest=manifest.delivery.participant_routes_digest,
-        raes_boundary_required=policy.internal_zone_isolation,
-        boundary_helper_image=manifest.boundary.boundary_helper_image,
-        egress_proxy_image=manifest.boundary.egress_proxy_image,
-        boot_id=boot_id,
-        guest_daemon_id="pending-guest",
-        host_observation_id="pending",
-    )
-    planned = _validated_mappings(policy, mappings)
+    binding = _image_binding(image, boot_id=boot_id)
+    planned = _validated_mappings(image.policy, mappings)
     bundle = build_host_observation(
-        binding=binding.model_copy(update={"host_observation_id": "pending"}),
+        binding=binding,
         boot_id=boot_id,
         listeners=planned,
         # This is the expected successful host observation identity embedded in
@@ -354,38 +350,23 @@ def stage_seat(
         forbidden_reachability_passed=True,
         complete=True,
     )
-    binding = binding.model_copy(update={"host_observation_id": bundle.observation_id})
     paths.launch_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-    _stage_public_anchor(
-        paths.release_public_key, paths.launch_dir / "release-public.pem"
+    # The gate reads the policy from disk and checks it against the digest in
+    # the binding, so the launcher writes the exact bytes it digested.
+    _atomic_write(
+        paths.boundary_policy, rfc8785.dumps(image.policy.model_dump(mode="json"))
     )
-    _stage_public_anchor(
-        paths.qualification_public_key,
-        paths.launch_dir / "qualification-public.pem",
+    _write_launch_descriptor(
+        paths.launch_descriptor, image, host_observation_id=bundle.observation_id
     )
-    if candidate_trust:
-        _prepare_verified_candidate_launch_descriptor(
-            paths.release_dir,
-            paths.launch_descriptor,
-            manifest,
-            inspection,
-            host_observation_id=bundle.observation_id,
-        )
-    else:
-        _prepare_verified_launch_descriptor(
-            paths.release_dir,
-            paths.launch_descriptor,
-            manifest,
-            inspection,
-            host_observation_id=bundle.observation_id,
-        )
     digest = _launch_descriptor_digest(paths.launch_descriptor)
     record = SeatRecord(
         schema_version=SEAT_RECORD_SCHEMA,
         seat_id=seat_id,
         instance_id=secrets.token_hex(16),
         generation=generation,
-        selected_release_id=inspection.release_id,
+        image_reference=str(image.selection.reference),
+        image_digest=image.selection.digest,
         launch_descriptor_digest=digest,
         overlay_path=str(paths.overlay_path.relative_to(seat_root)),
         host_observation_id=bundle.observation_id,
@@ -393,10 +374,33 @@ def stage_seat(
         taint_state="clean",
         host_boot_id=boot_id,
         mappings=planned,
-        trust_mode="qualification-only" if candidate_trust else "production",
     )
     persist_seat_record(seat_root, record)
     return record
+
+
+def _write_launch_descriptor(
+    destination: Path, image: ResolvedSeatImage, *, host_observation_id: str
+) -> None:
+    """Write the create-once launch projection for one generation."""
+
+    if destination.exists():
+        raise SeatLauncherError(
+            "corrupt-seat-state", "launch descriptor already exists for this generation"
+        )
+    descriptor = SeatLaunchDescriptor(
+        schema_version="aptl.appliance-launch/v2",
+        image_reference=str(image.selection.reference),
+        image_digest=image.selection.digest,
+        image_config_digest=image.config_digest,
+        boundary_policy_digest=image.policy_digest,
+        boundary_helper_image=image.config.binding.boundary_helper_image,
+        egress_proxy_image=image.config.binding.egress_proxy_image,
+        participant_routes_digest=image.config.binding.raes_plan_digest,
+        host_mcp_contract=image.policy.host_mcp_contract,
+        host_observation_id=host_observation_id,
+    )
+    _atomic_write(destination, canonical_launch_bytes(descriptor))
 
 
 def _relative_to_root(root: Path, path: Path, *, label: str) -> str:
@@ -414,38 +418,15 @@ def _relative_to_root(root: Path, path: Path, *, label: str) -> str:
 
 
 def _ensure_overlay(
-    paths: SeatPaths,
-    record: SeatRecord,
-    manifest: ApplianceCandidateManifest | ApplianceReleaseManifest,
+    paths: SeatPaths, record: SeatRecord, image: ResolvedSeatImage
 ) -> None:
     """Create the disposable overlay when the seat has none yet."""
 
     if paths.overlay_path.exists():
         return
-    golden_path = next(
-        artifact.path
-        for artifact in manifest.artifacts
-        if artifact.kind == "golden-disk"
-    )
-    golden_digest = next(
-        artifact.sha256
-        for artifact in manifest.artifacts
-        if artifact.kind == "golden-disk"
-    )
-    release_rel = _relative_to_root(paths.seat_root, paths.release_dir, label="release")
-    request = OverlayCreateRequest(
-        schema_version="aptl.overlay-create/v1",
-        golden_image_path=f"{release_rel}/{golden_path}",
-        golden_image_digest=golden_digest,
-        launch_descriptor_path=_relative_to_root(
-            paths.seat_root, paths.launch_descriptor, label="launch descriptor"
-        ),
-        launch_descriptor_digest=record.launch_descriptor_digest,
-        overlay_path=_relative_to_root(
-            paths.seat_root, paths.overlay_path, label="overlay"
-        ),
-    )
-    create_disposable_overlay(paths.seat_root, request)
+    # The image is shared and content-addressed, so it lives in the user's
+    # cache rather than inside this seat root; the overlay references it there.
+    create_seat_overlay(paths.overlay_path, image_path=image.selection.path)
     initialize_overlay_state(paths.overlay_state_dir)
 
 
@@ -520,16 +501,11 @@ def _establish_host_access(
         guest_observation=guest,
     )
     publish_guest_access_request(paths.launch_dir / ACCESS_REQUEST_NAME, request)
-    access_timeout = (
-        _CANDIDATE_ACCESS_TIMEOUT_SECONDS
-        if options.candidate_trust
-        else _STANDARD_ACCESS_TIMEOUT_SECONDS
-    )
     response = wait_for_guest_access(
         access_socket,
         request,
         process_alive=lambda: read_vm_pid(seat_root) is not None,
-        timeout_seconds=min(access_timeout, options.readiness_timeout_seconds),
+        timeout_seconds=min(_ACCESS_TIMEOUT_SECONDS, options.readiness_timeout_seconds),
     )
     persist_host_access_bundle(seat_root, response)
     assert options.access_project_dir is not None
@@ -591,9 +567,8 @@ def _start_with_selected_mappings(
     *,
     seat_root: Path,
     seat_id: str,
-    release_dir: Path,
-    release_public_key: Path,
-    qualification_public_key: Path,
+    image_reference: str,
+    image_cache_dir: Path,
     options: StartSeatOptions,
 ) -> SeatRecord:
     """Retry the same start with allocator-selected outer mappings."""
@@ -601,9 +576,8 @@ def _start_with_selected_mappings(
     return start_seat(
         seat_root,
         seat_id=seat_id,
-        release_dir=release_dir,
-        release_public_key=release_public_key,
-        qualification_public_key=qualification_public_key,
+        image_reference=image_reference,
+        image_cache_dir=image_cache_dir,
         options=options.with_mappings(selected),
     )
 
@@ -645,9 +619,8 @@ def start_seat(
     seat_root: Path,
     *,
     seat_id: str,
-    release_dir: Path,
-    release_public_key: Path,
-    qualification_public_key: Path,
+    image_reference: str,
+    image_cache_dir: Path,
     options: StartSeatOptions | None = None,
 ) -> SeatRecord:
     """Create overlay when needed, start VM, and validate host exposure."""
@@ -657,35 +630,29 @@ def start_seat(
     paths = _seat_paths(
         seat_root,
         seat_id=seat_id,
-        release_dir=release_dir,
-        release_public_key=release_public_key,
-        qualification_public_key=qualification_public_key,
+        image_reference=image_reference,
+        image_cache_dir=image_cache_dir,
     )
     if _requires_automatic_mappings(record, seat_id, launch_options):
-        (
-            _inspection,
-            automatic_policy,
-            automatic_manifest,
-            automatic_runtime_disk_bytes,
-        ) = _load_verified_release(
-            paths, candidate_trust=launch_options.candidate_trust
+        automatic = _load_seat_image(
+            paths,
+            adopt=launch_options.adopt_image_update,
+            check=launch_options.check_for_image_update,
         )
-
         return launch_with_automatic_mappings(
-            _policy_publications(automatic_policy),
+            _policy_publications(automatic.policy),
             partial(
                 _start_with_selected_mappings,
                 seat_root=seat_root,
                 seat_id=seat_id,
-                release_dir=release_dir,
-                release_public_key=release_public_key,
-                qualification_public_key=qualification_public_key,
+                image_reference=image_reference,
+                image_cache_dir=image_cache_dir,
                 options=launch_options,
             ),
             resources=(
-                automatic_manifest.host_prerequisites.vcpus,
-                automatic_manifest.host_prerequisites.memory_bytes,
-                automatic_runtime_disk_bytes,
+                automatic.config.resources.vcpus,
+                automatic.config.resources.memory_bytes,
+                automatic.runtime_disk_bytes,
             ),
             seat_root=seat_root,
         )
@@ -693,12 +660,11 @@ def start_seat(
         record = stage_seat(
             seat_root,
             seat_id=seat_id,
-            release_dir=release_dir,
-            release_public_key=release_public_key,
-            qualification_public_key=qualification_public_key,
+            image_reference=image_reference,
+            image_cache_dir=image_cache_dir,
             mappings=launch_options.mappings,
             prereq_overrides=launch_options.prereq_overrides,
-            candidate_trust=launch_options.candidate_trust,
+            adopt_image_update=launch_options.adopt_image_update,
         )
     elif (
         launch_options.mappings is not None
@@ -707,16 +673,19 @@ def start_seat(
         raise SeatLauncherError(
             "invalid-mapping", "staged seat mappings cannot be changed during start"
         )
-    expected_mode = (
-        "qualification-only" if launch_options.candidate_trust else "production"
+    image = _load_seat_image(
+        paths,
+        adopt=launch_options.adopt_image_update,
+        check=launch_options.check_for_image_update,
     )
-    if record.trust_mode != expected_mode:
+    if record.image_digest != image.selection.digest:
+        # The staged generation is bound to the image it was staged from. A
+        # different image is a new generation, which reset creates.
         raise SeatLauncherError(
-            "trust-mode-mismatch", "staged seat trust mode differs from start"
+            "image-mismatch",
+            "staged seat was created from a different image; reset the seat",
         )
-    inspection, policy, manifest, runtime_disk_bytes = _load_verified_release(
-        paths, candidate_trust=launch_options.candidate_trust
-    )
+    policy = image.policy
     _require_access_options(policy, launch_options)
     if not record.mappings:
         record = record.model_copy(
@@ -729,7 +698,7 @@ def start_seat(
     starting = record.model_copy(update={"lifecycle_state": "starting"})
     persist_seat_record(seat_root, starting)
     try:
-        _ensure_overlay(paths, record, manifest)
+        _ensure_overlay(paths, record, image)
         readiness_socket = contained_path(
             paths.seat_root,
             f"runtime/{seat_id}.readiness.sock",
@@ -750,9 +719,9 @@ def start_seat(
         spec = VmLaunchSpec(
             overlay_path=paths.overlay_path,
             launch_mount=paths.launch_dir,
-            vcpus=manifest.host_prerequisites.vcpus,
-            memory_mib=manifest.host_prerequisites.memory_bytes // (1024 * 1024),
-            disk_reservation_bytes=runtime_disk_bytes,
+            vcpus=image.config.resources.vcpus,
+            memory_mib=image.config.resources.memory_bytes // (1024 * 1024),
+            disk_reservation_bytes=image.runtime_disk_bytes,
             readiness_socket=readiness_socket,
             access_socket=access_socket,
             mappings=record.mappings,
@@ -767,9 +736,9 @@ def start_seat(
                     record.mappings,
                     lambda: start_vm(spec),
                     resources=(
-                        manifest.host_prerequisites.vcpus,
-                        manifest.host_prerequisites.memory_bytes,
-                        runtime_disk_bytes,
+                        image.config.resources.vcpus,
+                        image.config.resources.memory_bytes,
+                        image.runtime_disk_bytes,
                     ),
                     seat_root=seat_root,
                     retained_disk_bytes=(
@@ -794,17 +763,8 @@ def start_seat(
             policy, observed, mappings=record.mappings
         )
         host_boot_id = _read_host_boot_id()
-        binding = ApplianceBoundaryBinding(
-            policy_digest=manifest.boundary.policy_digest,
-            payload_digest=manifest.payload_digest,
-            raes_plan_digest=manifest.delivery.participant_routes_digest,
-            raes_boundary_required=policy.internal_zone_isolation,
-            boundary_helper_image=manifest.boundary.boundary_helper_image,
-            egress_proxy_image=manifest.boundary.egress_proxy_image,
-            boot_id=host_boot_id,
-            host_boot_id=host_boot_id,
-            guest_daemon_id="pending-guest",
-            host_observation_id="pending",
+        binding = _image_binding(image, boot_id=host_boot_id).model_copy(
+            update={"host_boot_id": host_boot_id}
         )
         forbidden_passed = (
             launch_options.forbidden_reachability_probe()
@@ -828,7 +788,8 @@ def start_seat(
                 seat_id=seat_id,
                 instance_id=record.instance_id,
                 generation=record.generation,
-                selected_release_id=inspection.release_id,
+                image_reference=record.image_reference,
+                image_digest=record.image_digest,
                 launch_descriptor_digest=record.launch_descriptor_digest,
                 overlay_path=record.overlay_path,
                 host_observation_id=bundle.observation_id,
@@ -836,7 +797,6 @@ def start_seat(
                 taint_state=record.taint_state,
                 host_boot_id=binding.boot_id,
                 mappings=record.mappings,
-                trust_mode=record.trust_mode,
             )
             persist_seat_record(seat_root, failed)
             raise SeatLauncherError(findings[0], "host boundary inventory failed")
@@ -860,13 +820,8 @@ def start_seat(
                 "guest_daemon_id": guest.guest_daemon_id,
             }
         )
-        policy_path = paths.release_dir / next(
-            artifact.path
-            for artifact in manifest.artifacts
-            if artifact.kind == "boundary-policy"
-        )
         verdict = run_appliance_boundary_gate(
-            policy_path=policy_path,
+            policy_path=paths.boundary_policy,
             binding=binding,
             host_observation=bundle.observation,
             adapter=_ObservedGuestAdapter(guest),
@@ -892,7 +847,8 @@ def start_seat(
             seat_id=seat_id,
             instance_id=record.instance_id,
             generation=record.generation,
-            selected_release_id=inspection.release_id,
+            image_reference=record.image_reference,
+            image_digest=record.image_digest,
             launch_descriptor_digest=record.launch_descriptor_digest,
             overlay_path=record.overlay_path,
             host_observation_id=bundle.observation_id,
@@ -900,7 +856,6 @@ def start_seat(
             taint_state=record.taint_state,
             host_boot_id=binding.boot_id,
             mappings=record.mappings,
-            trust_mode=record.trust_mode,
         )
         persist_seat_record(seat_root, ready)
         return ready
@@ -950,9 +905,8 @@ def reset_seat(
     seat_root: Path,
     *,
     seat_id: str,
-    release_dir: Path,
-    release_public_key: Path,
-    qualification_public_key: Path,
+    image_reference: str,
+    image_cache_dir: Path,
 ) -> SeatRecord:
     """Power off, destroy overlay state, and return to staged."""
 
@@ -964,15 +918,15 @@ def reset_seat(
     paths = _seat_paths(
         seat_root,
         seat_id=seat_id,
-        release_dir=release_dir,
-        release_public_key=release_public_key,
-        qualification_public_key=qualification_public_key,
+        image_reference=image_reference,
+        image_cache_dir=image_cache_dir,
     )
     remove_overlay_artifacts(paths.overlay_path, paths.overlay_state_dir)
     updated = record.model_copy(update={"lifecycle_state": "needs-reset"})
     persist_seat_record(seat_root, updated)
     for runtime_artifact in (
         paths.launch_descriptor,
+        paths.boundary_policy,
         paths.launch_dir / "readiness-challenge.json",
         paths.launch_dir / ACCESS_REQUEST_NAME,
     ):
@@ -985,12 +939,10 @@ def reset_seat(
     return stage_seat(
         seat_root,
         seat_id=seat_id,
-        release_dir=release_dir,
-        release_public_key=release_public_key,
-        qualification_public_key=qualification_public_key,
+        image_reference=image_reference,
+        image_cache_dir=image_cache_dir,
         mappings=record.mappings,
         generation=record.generation + 1,
-        candidate_trust=record.trust_mode == "qualification-only",
     )
 
 
@@ -999,9 +951,8 @@ def recover_seat(
     seat_root: Path,
     *,
     seat_id: str,
-    release_dir: Path,
-    release_public_key: Path,
-    qualification_public_key: Path,
+    image_reference: str,
+    image_cache_dir: Path,
     options: StartSeatOptions | None = None,
 ) -> SeatRecord:
     """Instructor recovery: reset then start."""
@@ -1009,16 +960,14 @@ def recover_seat(
     reset_seat(
         seat_root,
         seat_id=seat_id,
-        release_dir=release_dir,
-        release_public_key=release_public_key,
-        qualification_public_key=qualification_public_key,
+        image_reference=image_reference,
+        image_cache_dir=image_cache_dir,
     )
     return start_seat(
         seat_root,
         seat_id=seat_id,
-        release_dir=release_dir,
-        release_public_key=release_public_key,
-        qualification_public_key=qualification_public_key,
+        image_reference=image_reference,
+        image_cache_dir=image_cache_dir,
         options=options,
     )
 
@@ -1063,7 +1012,8 @@ def status_seat(seat_root: Path) -> SeatStatusProjection:
             seat_id="unknown",
             lifecycle_state="empty",
             taint_state="clean",
-            selected_release_id="",
+            image_reference="",
+            image_digest="",
             launch_descriptor_digest="sha256:" + "0" * 64,
             host_observation_id="",
             diagnostics=("seat-not-staged",),
@@ -1075,7 +1025,8 @@ def status_seat(seat_root: Path) -> SeatStatusProjection:
         seat_id=record.seat_id,
         lifecycle_state=record.lifecycle_state,
         taint_state=record.taint_state,
-        selected_release_id=record.selected_release_id,
+        image_reference=record.image_reference,
+        image_digest=record.image_digest,
         launch_descriptor_digest=record.launch_descriptor_digest,
         host_observation_id=record.host_observation_id,
         diagnostics=tuple(diagnostics),

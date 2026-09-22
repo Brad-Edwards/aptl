@@ -236,3 +236,69 @@ def select_seat_image(
         available_size_bytes=newer[1] if newer else None,
         pulled=pulled,
     )
+
+
+@dataclass(frozen=True)
+class CachedSeatImage:
+    """One seat disk in the local cache, and what still selects it."""
+
+    digest: str
+    size_bytes: int
+    selected_by: tuple[str, ...]
+
+
+def _selected_digests(cache_dir: Path) -> dict[str, list[str]]:
+    """Map each selected digest to the references selecting it."""
+
+    selected: dict[str, list[str]] = {}
+    for path in sorted((cache_dir / "refs").glob("*.json")):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        digest = document.get("digest")
+        reference = document.get("reference")
+        if isinstance(digest, str) and isinstance(reference, str):
+            selected.setdefault(digest, []).append(reference)
+    return selected
+
+
+def list_cached_images(cache_dir: Path) -> list[CachedSeatImage]:
+    """List cached seat disks with the references that select them."""
+
+    selected = _selected_digests(cache_dir)
+    images: list[CachedSeatImage] = []
+    for entry in sorted(cache_dir.glob("*/seat-disk.qcow2")):
+        digest = "sha256:" + entry.parent.name
+        try:
+            size = entry.stat().st_size
+        except OSError:
+            continue
+        images.append(
+            CachedSeatImage(
+                digest=digest,
+                size_bytes=size,
+                selected_by=tuple(selected.get(digest, ())),
+            )
+        )
+    return images
+
+
+def prune_cached_images(cache_dir: Path) -> tuple[str, ...]:
+    """Remove cached disks no reference selects.
+
+    A selected disk is never removed, so the image a seat boots and any
+    rollback target that is still selected both survive.
+    """
+
+    removed: list[str] = []
+    for image in list_cached_images(cache_dir):
+        if image.selected_by:
+            continue
+        entry = cache_dir / image.digest.removeprefix("sha256:")
+        for path in sorted(entry.glob("*")):
+            path.chmod(0o600)
+            path.unlink()
+        entry.rmdir()
+        removed.append(image.digest)
+    return tuple(removed)

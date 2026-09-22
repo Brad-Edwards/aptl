@@ -29,7 +29,8 @@ class SeatRecord(BaseModel):
     seat_id: str = Field(min_length=1, max_length=64)
     instance_id: str = Field(default="legacy-instance", min_length=1, max_length=128)
     generation: int = Field(default=1, ge=1)
-    selected_release_id: str = Field(min_length=1, max_length=128)
+    image_reference: str = Field(min_length=1, max_length=512)
+    image_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
     launch_descriptor_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
     overlay_path: str = Field(min_length=1, max_length=160)
     host_observation_id: str = Field(min_length=1, max_length=128)
@@ -37,7 +38,6 @@ class SeatRecord(BaseModel):
     taint_state: SeatTaintState = "clean"
     host_boot_id: str = Field(min_length=1, max_length=128)
     mappings: tuple[BoundaryEndpoint, ...] = ()
-    trust_mode: Literal["production", "qualification-only"] = "production"
 
     @field_validator("overlay_path")
     @classmethod
@@ -73,7 +73,8 @@ class SeatStatusProjection(BaseModel):
     seat_id: str
     lifecycle_state: SeatLifecycleState
     taint_state: SeatTaintState
-    selected_release_id: str
+    image_reference: str
+    image_digest: str
     launch_descriptor_digest: str
     host_observation_id: str
     diagnostics: tuple[str, ...] = ()

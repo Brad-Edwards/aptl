@@ -20,31 +20,17 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from aptl.appliance.seat.prereqs import HostPrerequisites
 from aptl.core.appliance_boundary import ApplianceBoundaryPolicy, GuestPublication
 
 SEAT_IMAGE_CONFIG_MEDIA_TYPE = "application/vnd.aptl.seat.config.v1+json"
 
-# A seat is one workstation-class VM, not a cluster. These ceilings exist so a
-# published image cannot ask a host for something unreasonable.
-_MAX_VCPUS = 128
-_MAX_MEMORY_BYTES = 1024 * 1024 * 1024 * 1024
-_MAX_DISK_BYTES = 8 * 1024 * 1024 * 1024 * 1024
 _SHA256 = r"^sha256:[a-f0-9]{64}$"
 _IMAGE_DIGEST = r"^[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$"
 
 
 class SeatImageConfigError(ValueError):
     """One seat image declared a configuration that cannot be launched."""
-
-
-class SeatImageResources(BaseModel):
-    """The host resources one seat image needs to run."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
-    vcpus: int = Field(ge=1, le=_MAX_VCPUS)
-    memory_bytes: int = Field(ge=512 * 1024 * 1024, le=_MAX_MEMORY_BYTES)
-    disk_bytes: int = Field(ge=1024 * 1024 * 1024, le=_MAX_DISK_BYTES)
 
 
 class SeatImageBinding(BaseModel):
@@ -68,7 +54,7 @@ class SeatImageConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     schema_version: Literal["aptl.seat-image/v1"]
-    resources: SeatImageResources
+    resources: HostPrerequisites
     boundary: ApplianceBoundaryPolicy
     binding: SeatImageBinding
     description: str | None = Field(default=None, max_length=200)

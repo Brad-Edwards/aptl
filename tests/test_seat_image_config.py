@@ -13,9 +13,13 @@ from aptl.appliance.seat.image_config import (
 )
 
 RESOURCES = {
+    "architecture": "x86_64",
     "vcpus": 8,
     "memory_bytes": 34359738368,
     "disk_bytes": 268435456000,
+    "hardware_virtualization": True,
+    "local_adapter": "qemu-kvm",
+    "supported_hypervisors": ["qemu-kvm"],
 }
 
 

@@ -20,13 +20,13 @@ RUN set -eu; \
     python3 -m pip install --no-deps --require-hashes \
         --target /tmp/aptl-cache-deps -r /opt/aptl/runtime-requirements.txt; \
     PYTHONPATH=/tmp/aptl-cache-src:/tmp/aptl-cache-deps \
-        python3 -m aptl_techvault.build_cache /opt/aptl/npm-source /tmp/aptl-cache-pack \
+        python3 -m aptl_techvault.build_cache \
         > /opt/aptl/npm-cache-input-identity.json; \
     for project in aptl-mcp-common mcp-casemgmt mcp-indexer mcp-network \
         mcp-red mcp-reverse mcp-soar mcp-threatintel mcp-wazuh; do \
         npm --prefix "/opt/aptl/npm-source/$project" ci \
             --include=dev --ignore-scripts --no-audit --no-fund; \
     done; \
-    rm -rf /opt/aptl/npm-source /tmp/aptl-cache-src /tmp/aptl-cache-deps /tmp/aptl-cache-pack
+    rm -rf /opt/aptl/npm-source /tmp/aptl-cache-src /tmp/aptl-cache-deps /opt/aptl/npm-cache-pack
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]

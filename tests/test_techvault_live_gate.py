@@ -46,6 +46,7 @@ from aptl.validation.techvault_live_gate import (
     LiveGateState,
     validate_live_deployment,
 )
+from aptl_techvault.evidence.techvault_native import WazuhManagerAlertRead
 from tests.fixture_pack import FIXTURE_SDL, admit_fixture_pack
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -1517,14 +1518,12 @@ def test_trigger_is_redriven_on_every_poll(monkeypatch):
         # Correlates only once the trigger has been re-driven, mimicking a path
         # that becomes ready partway through the window.
         if attempts["n"] >= 2:
-            return probes.WazuhManagerAlertRead(
+            return WazuhManagerAlertRead(
                 records=({"rule": {"id": "5710"}, "data": {"dstuser": "test-marker"}},)
             )
-        return probes.WazuhManagerAlertRead(
+        return WazuhManagerAlertRead(
             records=({"rule": {"id": "1002"}, "data": {"srcip": "10.0.0.1"}},)
         )
-
-    monkeypatch.setattr(probes, "_collect_declared_wazuh_alerts", _alerts)
 
     _eve, alerts = probes._collect_until_evidence(
         probes.EvidencePollRequest(
@@ -1534,6 +1533,7 @@ def test_trigger_is_redriven_on_every_poll(monkeypatch):
             deadline_monotonic=60.0,
             poll_interval_seconds=10.0,
             alert_matches=lambda alert: "test-marker" in str(alert),
+            alert_reader=_alerts,
             sleep_fn=lambda _s: None,
             monotonic_fn=lambda: 0.0,
             regenerate=lambda: attempts.__setitem__("n", attempts["n"] + 1),
@@ -1549,13 +1549,10 @@ def test_without_redrive_a_lost_trigger_is_never_recovered(monkeypatch):
     from aptl.validation import _live_gate_probes as probes
 
     monkeypatch.setattr(probes, "collect_suricata_eve", lambda *a, **k: [])
-    monkeypatch.setattr(
-        probes,
-        "_collect_declared_wazuh_alerts",
-        lambda *a, **k: probes.WazuhManagerAlertRead(
+    def alert_reader(*_args, **_kwargs):
+        return WazuhManagerAlertRead(
             records=({"rule": {"id": "1002"}, "data": {"srcip": "10.0.0.1"}},)
-        ),
-    )
+        )
 
     _eve, alerts = probes._collect_until_evidence(
         probes.EvidencePollRequest(
@@ -1565,6 +1562,7 @@ def test_without_redrive_a_lost_trigger_is_never_recovered(monkeypatch):
             deadline_monotonic=30.0,
             poll_interval_seconds=10.0,
             alert_matches=lambda alert: "test-marker" in str(alert),
+            alert_reader=alert_reader,
             sleep_fn=lambda _s: None,
             monotonic_fn=lambda: 0.0,
         )
@@ -1587,6 +1585,7 @@ def test_poll_does_not_redrive_after_sleep_reaches_the_deadline(monkeypatch):
             deadline_monotonic=10.0,
             poll_interval_seconds=10.0,
             alert_matches=lambda _alert: False,
+            alert_reader=lambda *_args: WazuhManagerAlertRead(),
             sleep_fn=lambda _seconds: None,
             monotonic_fn=lambda: next(now),
             regenerate=lambda: attempts.append("triggered"),

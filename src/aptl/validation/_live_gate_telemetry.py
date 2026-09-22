@@ -7,6 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from aptl.core.deployment import get_backend
+from aptl.validation._live_gate_alerts import AlertReader
 from aptl.validation._live_gate_probes import (
     EvidencePollRequest,
     _collect_until_evidence,
@@ -27,6 +28,7 @@ class EvidenceCollectionRequest(object):
 
     trigger: Callable[[], None]
     alert_matches: Callable[[object], bool]
+    alert_reader: AlertReader
     deadline_monotonic: float
     poll_interval_seconds: float
     env_loader: Callable[[Path], dict[str, str]] | None = None
@@ -89,6 +91,7 @@ def collect_evidence_diagnostics(
                         deadline_monotonic=request.deadline_monotonic,
                         poll_interval_seconds=request.poll_interval_seconds,
                         alert_matches=request.alert_matches,
+                        alert_reader=request.alert_reader,
                         regenerate=request.trigger,
                         monotonic_fn=request.monotonic_fn,
                     )

@@ -32,11 +32,8 @@ from aptl.core.runstore import LocalRunStore
 from aptl.core.snapshot import capture_snapshot
 from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
+from aptl.validation._live_gate_alerts import AlertReader
 from aptl.validation.techvault_live_gate import LiveGateCheck
-from aptl_techvault.evidence.techvault_native import (
-    WazuhManagerAlertRead,
-    read_wazuh_manager_alerts,
-)
 
 if TYPE_CHECKING:
     from raes_contracts.diagnostics import Diagnostic
@@ -297,6 +294,7 @@ class EvidencePollRequest(object):
     deadline_monotonic: float
     poll_interval_seconds: float
     alert_matches: Callable[[object], bool]
+    alert_reader: AlertReader
     sleep_fn: Callable[[float], None] = time.sleep
     monotonic_fn: Callable[[], float] = time.monotonic
     regenerate: Callable[[], None] | None = None
@@ -342,7 +340,7 @@ def _collect_until_evidence(
             break
         now = _now_iso()
         eve = collect_suricata_eve(request.start_iso, now, request.backend)
-        alert_read = _collect_declared_wazuh_alerts(
+        alert_read = request.alert_reader(
             request.backend,
             request.realization,
             request.start_iso,
@@ -354,18 +352,6 @@ def _collect_until_evidence(
         if any(request.alert_matches(alert) for alert in alerts):
             break
     return eve, alerts
-
-
-def _collect_declared_wazuh_alerts(
-    backend: "DeploymentBackend",
-    realization: object,
-    start_iso: str,
-    end_iso: str,
-) -> WazuhManagerAlertRead:
-    """Delegate to the TechVault-owned declared manager-alert operation."""
-
-    return read_wazuh_manager_alerts(backend, realization, start_iso, end_iso)
-
 
 def _is_traffic_event(entry: object) -> bool:
     """Return whether a Suricata EVE entry reflects real traffic (not stats)."""

@@ -29,6 +29,8 @@ SEAT_IMAGE_CONFIG_MEDIA_TYPE = "application/vnd.aptl.seat.config.v1+json"
 _MAX_VCPUS = 128
 _MAX_MEMORY_BYTES = 1024 * 1024 * 1024 * 1024
 _MAX_DISK_BYTES = 8 * 1024 * 1024 * 1024 * 1024
+_SHA256 = r"^sha256:[a-f0-9]{64}$"
+_IMAGE_DIGEST = r"^[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$"
 
 
 class SeatImageConfigError(ValueError):
@@ -45,6 +47,21 @@ class SeatImageResources(BaseModel):
     disk_bytes: int = Field(ge=1024 * 1024 * 1024, le=_MAX_DISK_BYTES)
 
 
+class SeatImageBinding(BaseModel):
+    """Guest-side identities the boundary gate binds a launch to.
+
+    Whoever bakes the image is the only party that knows which helper and
+    proxy images it contains, so the image states them rather than a release
+    manifest built beside it.  The gate keeps enforcing them unchanged.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    boundary_helper_image: str = Field(pattern=_IMAGE_DIGEST)
+    egress_proxy_image: str = Field(pattern=_IMAGE_DIGEST)
+    raes_plan_digest: str = Field(pattern=_SHA256)
+
+
 class SeatImageConfig(BaseModel):
     """The complete self-description carried by one seat image."""
 
@@ -53,6 +70,7 @@ class SeatImageConfig(BaseModel):
     schema_version: Literal["aptl.seat-image/v1"]
     resources: SeatImageResources
     boundary: ApplianceBoundaryPolicy
+    binding: SeatImageBinding
     description: str | None = Field(default=None, max_length=200)
 
     @model_validator(mode="after")

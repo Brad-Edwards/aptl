@@ -25,11 +25,19 @@ def _boundary(**overrides: object) -> dict[str, object]:
     return document
 
 
+BINDING = {
+    "boundary_helper_image": "aptl-network-boundary-helper@sha256:" + "a" * 64,
+    "egress_proxy_image": "aptl-appliance-egress-proxy@sha256:" + "b" * 64,
+    "raes_plan_digest": "sha256:" + "c" * 64,
+}
+
+
 def _config(**overrides: object) -> bytes:
     document: dict[str, object] = {
         "schema_version": "aptl.seat-image/v1",
         "resources": dict(RESOURCES),
         "boundary": _boundary(),
+        "binding": dict(BINDING),
     }
     document.update(overrides)
     return json.dumps(document).encode()
@@ -110,3 +118,19 @@ def test_malformed_declarations_are_refused(overrides) -> None:
 def test_non_object_payloads_are_refused(payload: bytes) -> None:
     with pytest.raises(SeatImageConfigError):
         parse_seat_image_config(payload)
+
+
+@pytest.mark.parametrize(
+    ("binding", "reason"),
+    [
+        ({"boundary_helper_image": "no-digest:latest"}, "unpinned helper image"),
+        ({"egress_proxy_image": "also-unpinned"}, "unpinned proxy image"),
+        ({"raes_plan_digest": "not-a-digest"}, "malformed plan digest"),
+        ({"raes_plan_digest": "sha256:" + "A" * 64}, "uppercase digest"),
+    ],
+)
+def test_unpinned_guest_identities_are_refused(binding, reason: str) -> None:
+    # The boundary gate binds a launch to these; an unpinned one would let the
+    # guest run something other than what the image declared.
+    with pytest.raises(SeatImageConfigError):
+        parse_seat_image_config(_config(binding=dict(BINDING) | binding))

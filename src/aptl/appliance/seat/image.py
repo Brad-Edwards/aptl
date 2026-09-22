@@ -26,6 +26,12 @@ from aptl.appliance.download import (
     fetch_https_metadata,
     stage_https_artifact,
 )
+from aptl.appliance.seat.image_config import (
+    SEAT_IMAGE_CONFIG_MEDIA_TYPE,
+    SeatImageConfig,
+    SeatImageConfigError,
+    parse_seat_image_config,
+)
 
 _DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
 _REPOSITORY = re.compile(
@@ -323,6 +329,8 @@ class SeatDiskDescriptor:
     size_bytes: int
     manifest_digest: str
     token: str | None
+    config_digest: str | None = None
+    config_size_bytes: int | None = None
 
 
 def resolve_disk_descriptor(
@@ -351,13 +359,66 @@ def resolve_disk_descriptor(
         raise SeatImageError("seat image disk layer has no usable digest")
     if not isinstance(size, int) or not 0 < size <= _MAX_DISK_BYTES:
         raise SeatImageError("seat image disk layer declares no usable size")
+    config = manifest.get("config")
+    config_digest: str | None = None
+    config_size: int | None = None
+    if isinstance(config, dict) and config.get("mediaType") == (
+        SEAT_IMAGE_CONFIG_MEDIA_TYPE
+    ):
+        candidate_digest = config.get("digest")
+        candidate_size = config.get("size")
+        if not isinstance(candidate_digest, str) or not _DIGEST.fullmatch(
+            candidate_digest
+        ):
+            raise SeatImageError("seat image config descriptor has no usable digest")
+        if not isinstance(candidate_size, int) or not 0 < candidate_size <= (
+            _MAX_METADATA_BYTES
+        ):
+            raise SeatImageError("seat image config descriptor has no usable size")
+        config_digest = candidate_digest
+        config_size = candidate_size
+
     return SeatDiskDescriptor(
         reference=parsed,
         digest=digest,
         size_bytes=size,
         manifest_digest=manifest_digest,
         token=token,
+        config_digest=config_digest,
+        config_size_bytes=config_size,
     )
+
+
+def fetch_seat_image_config(descriptor: SeatDiskDescriptor) -> SeatImageConfig:
+    """Fetch and validate the self-description this image publishes.
+
+    The config blob is small and is fetched by digest, so its identity is the
+    registry's content addressing exactly as the disk's is.
+    """
+
+    if descriptor.config_digest is None:
+        raise SeatImageError(
+            f"seat image publishes no {SEAT_IMAGE_CONFIG_MEDIA_TYPE} config; "
+            "the reference does not describe a launchable seat"
+        )
+    quoted = urllib.parse.quote(descriptor.config_digest, safe=":")
+    reference = descriptor.reference
+    url = f"https://{reference.registry}/v2/{reference.repository}/blobs/{quoted}"
+    try:
+        payload = fetch_https_metadata(
+            url,
+            max_bytes=descriptor.config_size_bytes or _MAX_METADATA_BYTES,
+            headers=_registry_headers(descriptor.token, "*/*"),
+        )
+    except ApplianceDownloadError as exc:
+        raise SeatImageError(f"seat image config is unavailable: {reference}") from exc
+    actual = _sha256_of(payload)
+    if actual != descriptor.config_digest:
+        raise SeatImageError("seat image config does not match its declared digest")
+    try:
+        return parse_seat_image_config(payload)
+    except SeatImageConfigError as exc:
+        raise SeatImageError(str(exc)) from exc
 
 
 def resolve_seat_image(

@@ -156,6 +156,7 @@ nav:
     - Release Candidate Manual QA: testing/smoke-test-plan.md
     - Property-Based Parser Tests: testing/property-based-parser-tests.md
   - Reference:
+    - OpenSSF Best Practices Assessment: security/openssf-best-practices.md
     - Red Team Taxonomy: red-team-taxonomy.md
     - Guided Purple Participant Profile: reference/participant-profile.md
     - Disposable Appliance Release: reference/appliance-release.md

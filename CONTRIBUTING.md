@@ -68,30 +68,37 @@ npm install
 
 ## Verification
 
-The local hygiene check is:
+The local hygiene and secret check operates on staged files:
 
 ```shell
-pre-commit run --all-files
+git add <files-you-intend-to-commit>
+pre-commit run
 ```
 
 Local commit hooks run secret detection and fast file hygiene only. Full Python,
 MCP and web suites, dependency-lock freshness, complexity and prose checks run in
-CI/CD. Run the tests relevant to a change while developing. To reproduce the
-CI-only hook checks explicitly, use
-`pre-commit run --config .pre-commit-ci.yaml --all-files`.
+CI/CD. Run only the exact tests relevant to a change while developing. Do not
+run bare `pytest`, package-wide `npm test`, `pre-commit run --all-files`, or the
+whole-tree `.pre-commit-ci.yaml` configuration locally.
 
-Useful narrower checks:
+Examples of targeted checks:
 
 ```shell
-pytest
-pytest -m fuzz
-cd mcp/aptl-mcp-common && npm test
-cd mcp/mcp-red && npm test
-cd web && npm test
+pytest tests/test_specific_behavior.py
+pytest -m fuzz tests/test_specific_fuzz_behavior.py
+cd mcp/aptl-mcp-common && npx vitest run tests/specific.test.ts
+cd mcp/mcp-red && npx vitest run tests/specific.test.ts
+cd web && npx vitest run tests/specific.test.ts
 ```
 
-When changing files under `mcp/aptl-mcp-common`, rebuild the common package and
-run tests for dependent MCP servers because they consume the local package.
+When test files changed, `bash tools/run-targeted-tests.sh` derives those
+targets from the branch and worktree. You can instead pass explicit Python test
+paths to the script. CI/CD remains the authority for full suites, coverage,
+whole-tree lint, dependency checks, and prose/build gates.
+
+When changing files under `mcp/aptl-mcp-common`, run targeted common and
+dependent-server tests while iterating. CI/CD rebuilds and tests every dependent
+MCP because they consume the local package.
 
 CI also runs the non-Docker Python suite plus `aptl --help` and
 `aptl lab init` on Ubuntu and macOS. Windows runs the portable Python contract
@@ -102,12 +109,9 @@ on macOS or Windows, so `aptl lab start` remains a manual platform-validation
 gate.
 
 When changing `docker-compose.yml`, container Dockerfiles, or files under
-`config/`, validate the lab from a clean state:
-
-```shell
-aptl lab stop -v
-aptl lab start
-```
+`config/`, run only focused contract tests locally. CI/CD owns the clean lab
+stop/start validation so local verification does not expand into a full system
+run.
 
 ## Safety Boundaries
 

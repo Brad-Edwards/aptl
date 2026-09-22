@@ -25,7 +25,7 @@ Open these from the workstation or browser RDP:
 
 | Tool | URL | Login |
 | --- | --- | --- |
-| Wazuh Dashboard | `https://localhost` | `admin` / `SecretPassword` |
+| Wazuh Dashboard | `https://localhost` | Scenario fixture `admin` / `SecretPassword` (not an APTL login) |
 | TheHive | `https://localhost:9000` | `aptl-svc@thehive.local` / `AptlService2024!` |
 | Cortex | `http://localhost:9001` | `aptl-svc@cortex.local` / `AptlCortexService2026!` |
 | Shuffle | `https://localhost:3443` | `admin` / `ShuffleAdmin2024!` |

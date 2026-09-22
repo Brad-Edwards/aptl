@@ -73,7 +73,8 @@ aptl kill -c      # Emergency: kill MCP processes AND all lab containers
 
 ## Access
 
-**Wazuh Dashboard:** <https://localhost:443> (`admin` / your `INDEXER_PASSWORD` from `.env`)
+**Wazuh Dashboard:** <https://localhost:443> (scenario credentials from
+`INDEXER_USERNAME` / `INDEXER_PASSWORD` in `.env`; not an APTL login)
 
 **Container shells** (victim and kali publish no host SSH ports):
 

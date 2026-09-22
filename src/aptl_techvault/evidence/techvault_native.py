@@ -44,7 +44,6 @@ from aptl_techvault.evidence.techvault_wazuh_agent_readiness import (
 )
 from aptl_techvault.evidence.techvault_native_support import (
     MAX_SOURCE_BYTES,
-    bounded,
     content_identities,
     find_node,
     generated_output,
@@ -54,7 +53,7 @@ from aptl_techvault.evidence.techvault_native_support import (
     utc_iso_now,
     webapp_endpoint,
 )
-from aptl.utils.curl_safe import basic_auth_header, curl_json
+from aptl.utils.curl_safe import curl_json
 from aptl_techvault.evidence.techvault_telemetry_stimulus import (
     emit_missing_agent_events,
 )
@@ -79,6 +78,20 @@ grep -Fq 'Configuration provided was successfully loaded' "$tmp"
 sha256sum /etc/suricata/suricata.yaml /etc/suricata/rules/local.rules
 sed -nE 's/.*sid:([0-9]+).*/sid=\1/p' /etc/suricata/rules/local.rules
 """.strip()
+
+
+@dataclass(frozen=True)
+class WazuhManagerAlertRead:
+    """Typed result from the single admitted manager-alert source operation."""
+
+    records: tuple[Mapping[str, object], ...] = ()
+    loss_category: str | None = None
+
+    @property
+    def complete(self) -> bool:
+        """Return whether the declared source was read and parsed successfully."""
+
+        return self.loss_category is None
 
 
 @dataclass(frozen=True)
@@ -109,7 +122,11 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
         self._backend = backend
         self._realization = realization
         self._project_dir = project_dir
-        self._indexer_auth = indexer_auth
+        # Retained in the constructor for one compatibility release while the
+        # capture request surface stops supplying indexer credentials. Evidence
+        # never consumes them: TechVault declares the manager alert log as the
+        # Wazuh source for this registration (issue #957).
+        _ = indexer_auth
         self._thehive_api_key = thehive_api_key
         self._request_json = selected_dependencies.request_json
         self._now = selected_dependencies.now
@@ -122,7 +139,6 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
             "techvault:soc-certificate-profile/v1",
             "ca-certificate",
         )
-        self._indexer_url = published_url(realization, "wazuh-indexer", 9200, "https")
         self._connector_key = generated_output(
             realization,
             project_dir,
@@ -428,58 +444,71 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
     def query_wazuh(
         self, start_iso: str, end_iso: str
     ) -> Sequence[Mapping[str, object]] | None:
-        """Query the bounded Wazuh window for exact rule 303020 alerts."""
+        """Read exact rule 303020 alerts from the declared manager log."""
 
-        if not self._indexer_url:
+        observed = read_wazuh_manager_alerts(
+            self._backend, self._realization, start_iso, end_iso
+        )
+        if not observed.complete:
             return None
-        response = self._request_json(
-            f"{self._indexer_url}/wazuh-alerts-4.x-*/_search",
-            auth_header=basic_auth_header(*self._indexer_auth),
-            body={
-                "query": {
-                    "bool": {
-                        "filter": [
-                            {"term": {"rule.id": WAZUH_SQLI_RULE_ID}},
-                            {
-                                "range": {
-                                    _TIMESTAMP_FIELD: {"gte": start_iso, "lte": end_iso}
-                                }
-                            },
-                        ]
-                    }
-                },
-                "size": 100,
-                "sort": [{_TIMESTAMP_FIELD: "asc"}],
-            },
-            insecure=True,
+        return [
+            item
+            for item in observed.records
+            if isinstance(item.get("rule"), Mapping)
+            and str(item["rule"].get("id", "")) == WAZUH_SQLI_RULE_ID
+        ]
+
+
+def read_wazuh_manager_alerts(
+    backend: object,
+    realization: object,
+    start_iso: str,
+    end_iso: str,
+) -> WazuhManagerAlertRead:
+    """Read bounded NDJSON from the realization-declared manager source."""
+
+    manager = find_node(realization, "wazuh-manager")
+    container = getattr(manager, "container_name", None)
+    if not isinstance(container, str) or not container:
+        return WazuhManagerAlertRead(loss_category="declared-manager-unavailable")
+    try:
+        result = backend.container_exec(
+            container,
+            [
+                "tail",
+                "-c",
+                str(MAX_SOURCE_BYTES),
+                "/var/ossec/logs/alerts/alerts.json",
+            ],
             timeout=30,
         )
-        return self._normalize_wazuh_response(response)
-
-    @staticmethod
-    def _normalize_wazuh_response(
-        response: object,
-    ) -> Sequence[Mapping[str, object]] | None:
-        """Reduce a bounded indexer response to its allowlisted hit sources."""
-
-        if not isinstance(response, Mapping) or not bounded(response):
-            return None
-        hits = (
-            (response.get("hits") or {}).get("hits")
-            if isinstance(response.get("hits"), Mapping)
-            else None
-        )
-        if not isinstance(hits, list):
-            return None
-        normalized: list[Mapping[str, object]] = []
-        for hit in hits:
-            source = hit.get("_source", hit) if isinstance(hit, Mapping) else None
-            if not isinstance(source, Mapping):
+    except Exception:
+        return WazuhManagerAlertRead(loss_category="source-exec-failed")
+    raw = result.stdout.encode()
+    if result.returncode != 0:
+        return WazuhManagerAlertRead(loss_category="source-command-failed")
+    if len(raw) > MAX_SOURCE_BYTES:
+        return WazuhManagerAlertRead(loss_category="source-output-oversized")
+    normalized: list[Mapping[str, object]] = []
+    for index, line in enumerate(result.stdout.splitlines()):
+        try:
+            source = json.loads(line)
+        except json.JSONDecodeError:
+            if index == 0:
                 continue
-            item = dict(source)
-            item["timestamp"] = source.get("timestamp", source.get(_TIMESTAMP_FIELD))
+            return WazuhManagerAlertRead(loss_category="source-ndjson-malformed")
+        if not isinstance(source, Mapping):
+            return WazuhManagerAlertRead(loss_category="source-record-invalid")
+        item = dict(source)
+        item["timestamp"] = source.get("timestamp", source.get(_TIMESTAMP_FIELD))
+        if inside_window(item["timestamp"], start_iso, end_iso):
             normalized.append(item)
-        return normalized
+    return WazuhManagerAlertRead(records=tuple(normalized[:256]))
 
 
-__all__ = ("TechVaultNativeDependencies", "TechVaultNativeEvidenceOwner")
+__all__ = (
+    "TechVaultNativeDependencies",
+    "TechVaultNativeEvidenceOwner",
+    "WazuhManagerAlertRead",
+    "read_wazuh_manager_alerts",
+)

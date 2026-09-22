@@ -1764,8 +1764,6 @@ class TestOrchestrateLabStart:
             "start",
             "wait_indexer",
             "wait_indexer",
-            "wait_indexer",
-            "wait_indexer",
             "terminal_status",
             "capture_snapshot",
         ]
@@ -1870,10 +1868,8 @@ class TestOrchestrateLabStart:
 
         assert result.success is True
         assert find_placeholder_env_values(env) == []
-        assert (
-            env[_env_key("INDEXER", "PASSWORD")] == mocks["template_values"]["indexer"]
-        )
-        assert env[_env_key("API", "PASSWORD")] == mocks["template_values"]["api"]
+        assert env[_env_key("INDEXER", "PASSWORD")]
+        assert env[_env_key("API", "PASSWORD")]
         mocks["dashboard_creds"].assert_called_once()
         assert (
             mocks["dashboard_creds"].call_args.args[1]
@@ -2060,10 +2056,14 @@ class TestOrchestrateLabStart:
 
         orchestrate_lab_start(tmp_path)
 
-        # Dashboard config should be called with API password
+        from aptl.core.env import load_dotenv
+
+        env = load_dotenv(tmp_path / ".env")
+        # Dashboard config receives the admitted scenario API fixture pair.
         mocks["dashboard_creds"].assert_called_once()
         call_args = mocks["dashboard_creds"].call_args
-        assert call_args[0][1] == "apisecret"
+        assert call_args[0][1] == env["API_PASSWORD"]
+        assert call_args[0][2] == env["API_USERNAME"]
 
         # Manager config should be called with cluster key
         mocks["manager_creds"].assert_called_once()
@@ -2724,7 +2724,10 @@ class TestSyncCredentialsStep:
 
         dashboard_src = tmp_path / "config" / "wazuh_dashboard" / "wazuh.yml"
         dashboard_src.parent.mkdir(parents=True)
-        dashboard_src.write_text('      password: "TEMPLATE_PW"\n')
+        dashboard_src.write_text(
+            '      username: "__APTL_API_USERNAME__"\n'
+            '      password: "__APTL_API_PASSWORD__"\n'
+        )
         manager_src = tmp_path / "config" / "wazuh_cluster" / "wazuh_manager.conf"
         manager_src.parent.mkdir(parents=True)
         manager_src.write_text("<cluster>\n  <key>TEMPLATE_KEY</key>\n</cluster>\n")
@@ -3305,363 +3308,28 @@ class TestStartupClassificationWiring:
         assert "rate limit" not in diag.message
         assert "2" in diag.message  # number of failed images
 
-    # -- wait_for_services (fail-closed Wazuh readiness) ------------------
+    # -- wait_for_services (backend-owned Wazuh attestation) -------------
 
-    @staticmethod
-    def _wait_running_checks(mocker, *outcomes):
-        """Patch ``wait_for_service`` so each wait really polls its check.
-
-        Each outcome is ``(attempts, ready)``: the fake calls ``check_fn``
-        that many times, as the real loop would inside its budget, then
-        reports the wait's result. Classification must come from those
-        in-budget observations, never from an extra probe afterwards.
-        """
-        from aptl.core.services import ServiceResult
-
-        queue = list(outcomes)
-
-        def fake_wait(*, check_fn, timeout, **_kwargs):
-            attempts, ready = queue.pop(0)
-            for _ in range(attempts):
-                check_fn()
-            return ServiceResult(
-                ready=ready,
-                elapsed_seconds=float(timeout),
-                error="" if ready else "timed out",
-            )
-
-        return mocker.patch("aptl.core.lab.wait_for_service", side_effect=fake_wait)
-
-    def test_wait_for_services_indexer_without_http_response_fails_startup(
-        self, tmp_path, mocker
-    ):
-        """Wazuh is part of the scenario's goal: an indexer that never answers
-        fails startup with its classified reason instead of degrading (#1002)."""
+    def test_wait_for_services_does_not_reconnect_to_wazuh(self, tmp_path, mocker):
+        """The backend post-start gate is the sole Wazuh login owner."""
         from aptl.core.lab import _step_wait_for_services
 
-        from aptl.core.services import WazuhApiProbe
-
         ctx = self._ctx(tmp_path)
-        self._wait_running_checks(mocker, (3, False))
-        status = mocker.patch(
-            "aptl.core.lab.probe_indexer_api",
-            return_value=WazuhApiProbe("transport", "tls_handshake", curl_exit=35),
-        )
-        manager = mocker.patch("aptl.core.lab.probe_manager_api")
-
-        result = _step_wait_for_services(ctx)
-
-        assert result is not None
-
-        assert result.success is False
-        assert result.error == (
-            "Wazuh Indexer did not become ready within 600s: wazuh.indexer at "
-            "https://localhost:9200 transport phase failed: tls_handshake "
-            "(curl exit 35). Inspect `aptl container logs aptl-wazuh-indexer`."
-        )
-        assert status.call_count == 3  # in-budget attempts only, no extra probe
-        manager.assert_not_called()  # first failure wins
-        assert ctx.diagnostics == []
-
-    @pytest.mark.parametrize("http_status", [401, 403])
-    def test_wait_for_services_indexer_stale_credentials_fail_with_recovery(
-        self, tmp_path, mocker, http_status
-    ):
-        """The retained-volume credential mismatch from #623 is now fatal, and
-        still points the operator at the clean-state recovery path."""
-        from aptl.core.lab import _step_wait_for_services
-
-        from aptl.core.services import WazuhApiProbe
-
-        ctx = self._ctx(tmp_path)
-        self._wait_running_checks(mocker, (2, False))
-        status = mocker.patch(
-            "aptl.core.lab.probe_indexer_api",
-            side_effect=[
-                WazuhApiProbe("transport", "tls_handshake", curl_exit=35),
-                WazuhApiProbe(
-                    "authentication", "credentials_rejected", http_status=http_status
-                ),
-            ],
-        )
-
-        result = _step_wait_for_services(ctx)
-
-        assert result is not None
-
-        assert result.success is False
-        assert (
-            "authentication phase failed: credentials_rejected "
-            f"(HTTP {http_status})" in result.error
-        )
-        assert "aptl lab stop -v" in result.error
-        assert "INDEXER_PASSWORD" in result.error
-        assert ctx.env.indexer_password not in result.error
-        status.assert_called_with(
-            url="https://localhost:9200",
-            username=ctx.env.indexer_username,
-            password=ctx.env.indexer_password,
-        )
-
-    def test_wait_for_services_probes_the_resolved_indexer_port_not_9200(
-        self, tmp_path, mocker
-    ):
-        """When 9200 is already in use on the host, `_step_resolve_host_ports`
-        remaps the indexer publish; the readiness probe must follow the
-        remap or it hits whatever else is on 9200 and reports the SIEM
-        store as unready even though it is fully healthy on the remapped
-        port."""
-        from aptl.core.host_ports import ResolvedPort
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import WazuhApiProbe
-
-        ctx = self._ctx(tmp_path)
-        ctx.resolved_ports = [
-            ResolvedPort(
-                service="wazuh.indexer",
-                env_var="APTL_HP_WAZUH_INDEXER_9200",
-                default_port=9200,
-                resolved_port=20015,
-                protos=("tcp",),
-                host_ip="127.0.0.1",
-                remapped=True,
-            ),
-        ]
-        self._wait_running_checks(mocker, (1, True), (1, True))
-        status = mocker.patch(
-            "aptl.core.lab.probe_indexer_api",
-            return_value=WazuhApiProbe("ready", "ready", http_status=200),
-        )
-        mocker.patch(
-            "aptl.core.lab.probe_manager_api",
-            return_value=WazuhApiProbe("ready", "ready", http_status=200),
-        )
+        indexer = mocker.patch("aptl.core.services.probe_indexer_api")
+        manager = mocker.patch("aptl.core.services.probe_manager_api")
 
         assert _step_wait_for_services(ctx) is None
 
-        assert status.call_args.kwargs["url"] == "https://localhost:20015"
+        indexer.assert_not_called()
+        manager.assert_not_called()
+        assert ctx.diagnostics == []
 
-    def test_wait_for_services_falls_back_to_9200_when_no_remap(self, tmp_path, mocker):
-        """No entry for wazuh.indexer in `ctx.resolved_ports` (the common
-        case where 9200 was free) keeps the historical URL."""
+    def test_wait_for_services_skips_when_wazuh_not_selected(self, tmp_path):
         from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import WazuhApiProbe
 
-        ctx = self._ctx(tmp_path)
-        self._wait_running_checks(mocker, (1, True), (1, True))
-        status = mocker.patch(
-            "aptl.core.lab.probe_indexer_api",
-            return_value=WazuhApiProbe("ready", "ready", http_status=200),
-        )
-        manager = mocker.patch(
-            "aptl.core.lab.probe_manager_api",
-            return_value=WazuhApiProbe("ready", "ready", http_status=200),
-        )
+        ctx = self._ctx(tmp_path, selected_profiles={"otel"})
 
         assert _step_wait_for_services(ctx) is None
-
-        assert status.call_args.kwargs["url"] == "https://localhost:9200"
-        assert manager.call_args.kwargs["url"] == "https://localhost:55000"
-
-    def test_wait_for_services_manager_tls_failure_fails_with_last_in_budget_reason(
-        self, tmp_path, mocker
-    ):
-        """The terminal reason is the last observation inside the budget.
-
-        A probe after the deadline could answer differently and erase the
-        result the budget reached, so none is made.
-        """
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import WazuhApiProbe
-
-        ctx = self._ctx(tmp_path)
-        self._wait_running_checks(mocker, (1, True), (3, False))
-        mocker.patch(
-            "aptl.core.lab.probe_indexer_api",
-            return_value=WazuhApiProbe("ready", "ready", http_status=200),
-        )
-        manager = mocker.patch(
-            "aptl.core.lab.probe_manager_api",
-            side_effect=[
-                WazuhApiProbe("transport", "tls_handshake", curl_exit=35),
-                WazuhApiProbe(
-                    "authentication", "credentials_rejected", http_status=401
-                ),
-                WazuhApiProbe("transport", "tls_handshake", curl_exit=35),
-            ],
-        )
-
-        result = _step_wait_for_services(ctx)
-
-        assert result is not None
-
-        assert result.success is False
-        assert result.error == (
-            "Wazuh Manager API did not become ready within 120s: wazuh.manager at "
-            "https://localhost:55000 transport phase failed: tls_handshake "
-            "(curl exit 35). Inspect `aptl container logs aptl-wazuh-manager`."
-        )
-        assert manager.call_count == 3
-        manager.assert_called_with(
-            url="https://localhost:55000",
-            username=ctx.env.api_username,
-            password=ctx.env.api_password,
-        )
-        assert ctx.diagnostics == []
-
-    def test_wait_for_services_manager_credential_rejection_names_env_keys(
-        self, tmp_path, mocker
-    ):
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import WazuhApiProbe
-
-        ctx = self._ctx(tmp_path)
-        self._wait_running_checks(mocker, (1, True), (1, False))
-        mocker.patch(
-            "aptl.core.lab.probe_indexer_api",
-            return_value=WazuhApiProbe("ready", "ready", http_status=200),
-        )
-        mocker.patch(
-            "aptl.core.lab.probe_manager_api",
-            return_value=WazuhApiProbe(
-                "authentication", "credentials_rejected", http_status=401
-            ),
-        )
-
-        result = _step_wait_for_services(ctx)
-
-        assert result is not None
-
-        assert result.success is False
-        assert (
-            "authentication phase failed: credentials_rejected (HTTP 401)"
-            in result.error
-        )
-        assert "API_USERNAME/API_PASSWORD" in result.error
-        assert ctx.env.api_password not in result.error
-
-    def test_wait_for_services_failure_makes_the_start_fail(self, tmp_path, mocker):
-        """End to end through the orchestrator's contract: a fatal step result
-        is a FAILED startup, never a degraded-usable one."""
-        from aptl.core.lab import _step_wait_for_services, derive_startup_outcome
-        from aptl.core.lab_types import StartupOutcome
-
-        from aptl.core.services import WazuhApiProbe
-
-        ctx = self._ctx(tmp_path)
-        self._wait_running_checks(mocker, (1, False))
-        mocker.patch(
-            "aptl.core.lab.probe_indexer_api",
-            return_value=WazuhApiProbe("transport", "connection_refused", curl_exit=7),
-        )
-
-        result = _step_wait_for_services(ctx)
-
-        assert result is not None
-        assert (
-            derive_startup_outcome(ctx.diagnostics, fatal=True) is StartupOutcome.FAILED
-        )
-
-    def test_wait_for_services_skips_services_the_backend_already_proved(
-        self, tmp_path, mocker
-    ):
-        """One readiness authority per realized service (issue #1002).
-
-        The RAES backend's post-start gate already authenticated graph-owned
-        Wazuh APIs and failed closed if they were not ready, so this step must
-        not authenticate them a second time.
-        """
-        from aptl.core.lab import _step_wait_for_services
-
-        ctx = self._ctx(tmp_path)
-        ctx.backend.authenticated_readiness = {
-            "wazuh.indexer": True,
-            "wazuh.manager": True,
-        }
-        wait = mocker.patch("aptl.core.lab.wait_for_service")
-
-        assert _step_wait_for_services(ctx) is None
-
-        wait.assert_not_called()
-        assert ctx.diagnostics == []
-
-    def test_wait_for_services_still_waits_for_services_not_proved(
-        self, tmp_path, mocker
-    ):
-        """Only a recorded ``True`` counts; an unproved service is still probed."""
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import ServiceResult
-
-        ctx = self._ctx(tmp_path)
-        ctx.backend.authenticated_readiness = {
-            "wazuh.indexer": True,
-            "wazuh.manager": False,
-        }
-        wait = mocker.patch(
-            "aptl.core.lab.wait_for_service",
-            return_value=ServiceResult(ready=True, elapsed_seconds=3.0),
-        )
-
-        assert _step_wait_for_services(ctx) is None
-
-        assert [c.kwargs["service_name"] for c in wait.call_args_list] == [
-            "Wazuh Manager API"
-        ]
-
-    def test_wait_for_services_clean_emits_no_diagnostic(self, tmp_path, mocker):
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import ServiceResult
-
-        ctx = self._ctx(tmp_path)
-        mocker.patch(
-            "aptl.core.lab.wait_for_service",
-            return_value=ServiceResult(ready=True, elapsed_seconds=10.0),
-        )
-
-        result = _step_wait_for_services(ctx)
-        assert result is None
-
-        assert ctx.diagnostics == []
-
-    def test_wait_for_services_skipped_when_wazuh_disabled(self, tmp_path, mocker):
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import ServiceResult
-
-        ctx = self._ctx(tmp_path, config=self._make_config(wazuh=False))
-        wait_mock = mocker.patch(
-            "aptl.core.lab.wait_for_service",
-            return_value=ServiceResult(
-                ready=False, elapsed_seconds=300.0, error="timed out"
-            ),
-        )
-
-        result = _step_wait_for_services(ctx)
-        assert result is None
-
-        # Wazuh probes never ran -> no diagnostics.
-        assert ctx.diagnostics == []
-        wait_mock.assert_not_called()
-
-    def test_wait_for_services_skipped_when_wazuh_not_in_selected_profiles(
-        self, tmp_path, mocker
-    ):
-        """A bounded scenario may omit Wazuh even when the container is enabled
-        in config. The readiness wait must gate on the scenario's selected
-        profiles, not the config flag, so it does not falsely wait on (and warn
-        about) a Wazuh the scenario never started."""
-        from aptl.core.lab import _step_wait_for_services
-
-        ctx = self._ctx(
-            tmp_path,
-            config=self._make_config(wazuh=True),
-            selected_profiles={"otel"},
-        )
-        wait_mock = mocker.patch("aptl.core.lab.wait_for_service")
-
-        result = _step_wait_for_services(ctx)
-        assert result is None
-
-        wait_mock.assert_not_called()
         assert ctx.diagnostics == []
 
     # -- test_ssh (readiness) ------------------------------------------

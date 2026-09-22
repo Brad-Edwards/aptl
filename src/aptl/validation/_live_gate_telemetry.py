@@ -7,7 +7,6 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from aptl.core.deployment import get_backend
-from aptl.core.env import env_vars_from_dict, find_placeholder_env_values, load_dotenv
 from aptl.validation._live_gate_probes import (
     EvidencePollRequest,
     _collect_until_evidence,
@@ -32,33 +31,6 @@ class EvidenceCollectionRequest(object):
     poll_interval_seconds: float
     env_loader: Callable[[Path], dict[str, str]] | None = None
     monotonic_fn: Callable[[], float] = time.monotonic
-
-
-@dataclass(frozen=True)
-class _IndexerSettings(object):
-    """Validated endpoint and credentials for the core-owned Wazuh collector."""
-
-    url: str
-    auth: tuple[str, str]
-
-
-def _indexer_settings(
-    project_dir: Path,
-    env_loader: Callable[[Path], dict[str, str]] | None,
-) -> _IndexerSettings:
-    """Load and validate the project-local Wazuh indexer settings."""
-
-    raw_env = (env_loader or load_dotenv)(project_dir / ".env")
-    if find_placeholder_env_values(raw_env):
-        raise ValueError("placeholder credentials")
-    env = env_vars_from_dict(raw_env)
-    indexer_port = int(raw_env.get("APTL_HP_WAZUH_INDEXER_9200", "9200"))
-    if not 1 <= indexer_port <= 65535:
-        raise ValueError("invalid indexer port")
-    return _IndexerSettings(
-        url=f"https://localhost:{indexer_port}",
-        auth=(env.indexer_username, env.indexer_password),
-    )
 
 
 def _record_summary(
@@ -96,10 +68,8 @@ def collect_evidence_diagnostics(
 
     backend = get_backend(config, project_dir)
     diagnostics: list[str] = []
-    try:
-        settings = _indexer_settings(project_dir, request.env_loader)
-    except (OSError, ValueError):
-        diagnostics.append("Wazuh collector credentials or endpoint are unavailable.")
+    if state.deployment_spec is None:
+        diagnostics.append("declared Wazuh evidence source is unavailable")
     if not diagnostics:
         start_iso = _now_iso()
         if request.monotonic_fn() >= request.deadline_monotonic:
@@ -114,11 +84,10 @@ def collect_evidence_diagnostics(
                 eve, alerts = _collect_until_evidence(
                     EvidencePollRequest(
                         backend=backend,
+                        realization=state.deployment_spec,
                         start_iso=start_iso,
                         deadline_monotonic=request.deadline_monotonic,
                         poll_interval_seconds=request.poll_interval_seconds,
-                        indexer_url=settings.url,
-                        indexer_auth=settings.auth,
                         alert_matches=request.alert_matches,
                         regenerate=request.trigger,
                         monotonic_fn=request.monotonic_fn,

@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from aptl.core.deployment.errors import BackendTimeoutError
-from aptl.utils.curl_safe import basic_auth_header, curl_json as _curl_json
+from aptl.utils.curl_safe import curl_json as _curl_json
 from aptl.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -80,9 +80,7 @@ def _resolve_lab_ca_path(explicit: str | None) -> str:
     return resolved
 
 
-def _run_cmd(
-    cmd: list[str], timeout: int = 30
-) -> subprocess.CompletedProcess | None:
+def _run_cmd(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess | None:
     """Run a command, returning None on failure."""
     try:
         return subprocess.run(
@@ -94,78 +92,8 @@ def _run_cmd(
             timeout=timeout,
         )
     except (subprocess.TimeoutExpired, OSError) as e:
-        log.warning(
-            "Command failed: %s: %s", " ".join(cmd[:3]), type(e).__name__
-        )
+        log.warning("Command failed: %s: %s", " ".join(cmd[:3]), type(e).__name__)
         return None
-
-
-def collect_wazuh_alerts(
-    start_iso: str,
-    end_iso: str,
-    indexer_url: str = "https://localhost:9200",
-    auth: tuple[str, str] = ("admin", "SecretPassword"),
-) -> list[dict[str, Any]]:
-    """Query Wazuh Indexer for all alerts in the time window.
-
-    Uses scroll API for pagination (1000 docs/page).
-    """
-    query = {
-        "query": {
-            "range": {
-                "@timestamp": {
-                    "gte": start_iso,
-                    "lte": end_iso,
-                }
-            }
-        },
-        "size": 1000,
-        "sort": [{"@timestamp": "asc"}],
-    }
-
-    all_hits: list[dict[str, Any]] = []
-    scroll_id = None
-
-    try:
-        # Initial search with scroll
-        url = f"{indexer_url}/wazuh-alerts-4.x-*/_search?scroll=2m"
-        data = _curl_json(
-            url,
-            auth_header=basic_auth_header(*auth),
-            body=query,
-            insecure=True,
-            timeout=_COLLECTOR_HTTP_TIMEOUT,
-        )
-        if data is None:
-            log.warning("Failed to query Wazuh Indexer for alerts")
-            return []
-
-        hits = data.get("hits", {}).get("hits", [])
-        all_hits.extend(h.get("_source", h) for h in hits)
-        scroll_id = data.get("_scroll_id")
-
-        # Scroll through remaining pages
-        while scroll_id and len(hits) == 1000:
-            scroll_body = {"scroll": "2m", "scroll_id": scroll_id}
-            scroll_url = f"{indexer_url}/_search/scroll"
-            data = _curl_json(
-                scroll_url,
-                auth_header=basic_auth_header(*auth),
-                body=scroll_body,
-                insecure=True,
-                timeout=_COLLECTOR_HTTP_TIMEOUT,
-            )
-            if data is None:
-                break
-            hits = data.get("hits", {}).get("hits", [])
-            all_hits.extend(h.get("_source", h) for h in hits)
-            scroll_id = data.get("_scroll_id")
-
-    except Exception as e:
-        log.warning("Error collecting Wazuh alerts: %s", type(e).__name__)
-
-    log.info("Collected %d Wazuh alerts", len(all_hits))
-    return all_hits
 
 
 def collect_suricata_eve(
@@ -393,9 +321,7 @@ def collect_container_logs(
                 container, since=start_iso, until=end_iso, timeout=30
             )
         except (BackendTimeoutError, OSError) as e:
-            log.warning(
-                "Log collection failed for %s: %s", container, type(e).__name__
-            )
+            log.warning("Log collection failed for %s: %s", container, type(e).__name__)
             continue
         if result.returncode != 0:
             log.warning("Could not collect logs from container %s", container)

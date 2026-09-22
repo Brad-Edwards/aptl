@@ -28,6 +28,9 @@ from raes_processor.semantics.realization import (
 )
 
 from aptl.backends._runtime_concern_disclosure import _disclose
+from aptl.core.deployment._compose_stateful_readiness import (
+    declared_wazuh_facts_match,
+)
 from aptl.core.scenario_bundle import PackIdentity
 
 if TYPE_CHECKING:
@@ -307,6 +310,10 @@ def observe_techvault_attested_concerns(
         expected = _TECHVAULT_PROJECTION_DIGESTS.get((node.name, kind))
         if value in (None, [], {}) or expected is None:
             continue
+        if _requires_declared_wazuh_attestation(node, kind) and not (
+            _declared_wazuh_facts_observed(backend, node)
+        ):
+            continue
         projected = project_realization_concern(kind, value, observed=False)
         if canonical_json_digest(projected) != expected:
             continue
@@ -314,6 +321,26 @@ def observe_techvault_attested_concerns(
         if disclosed is not None:
             concerns[CONCERN_PAYLOAD_PATH[kind]] = disclosed
     return concerns
+
+
+def _declared_wazuh_facts_observed(
+    backend: DeploymentBackend, node: NodeRealization
+) -> bool:
+    """Require native API evidence before disclosing Wazuh runtime facts."""
+
+    readiness = getattr(backend, "declared_wazuh_attestation", {})
+    services = tuple(getattr(node, "backend_services", ()))
+    service = services[0] if len(services) == 1 else None
+    return declared_wazuh_facts_match(readiness, service, node)
+
+
+def _requires_declared_wazuh_attestation(node: NodeRealization, kind: str) -> bool:
+    """Identify the two Wazuh declarations backed by native API observations."""
+
+    return (node.name, kind) in {
+        ("wazuh-indexer", "runtime-datastore-services"),
+        ("wazuh-manager", "runtime-security-monitoring-managers"),
+    }
 
 
 __all__ = [

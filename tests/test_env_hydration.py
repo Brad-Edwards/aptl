@@ -18,29 +18,17 @@ def _patch_windows_default_fdopen(mocker, module_path):
     )
 
 
-def _write_wazuh_templates(project_dir):
-    """Create minimal Wazuh templates used by dotenv hydration."""
-    values = {
-        "indexer": f"indexer-{uuid4().hex}",
-        "api": f"api-{uuid4().hex}",
-    }
-    cluster_dir = project_dir / "config" / "wazuh_cluster"
-    cluster_dir.mkdir(parents=True)
-    (cluster_dir / "filebeat_wazuh_module.yml").write_text(
-        "output.elasticsearch:\n"
-        "  username: admin\n"
-        f"  password: {values['indexer']}\n"
-    )
+def _scenario_fixtures():
+    """Return test-owned pack fixture values without checked-in copies."""
 
-    dashboard_dir = project_dir / "config" / "wazuh_dashboard"
-    dashboard_dir.mkdir(parents=True)
-    (dashboard_dir / "wazuh.yml").write_text(
-        "hosts:\n"
-        "  - local:\n"
-        "      username: wazuh-wui\n"
-        f"      password: {values['api']}\n"
-    )
-    return values
+    return {
+        "INDEXER_USERNAME": _runtime_value("indexer-user"),
+        "INDEXER_PASSWORD": _runtime_value("indexer-password"),
+        "DASHBOARD_USERNAME": _runtime_value("dashboard-user"),
+        "DASHBOARD_PASSWORD": _runtime_value("dashboard-password"),
+        "API_USERNAME": _runtime_value("api-user"),
+        "API_PASSWORD": _runtime_value("api-password"),
+    }
 
 
 def _env_line(key, value):
@@ -62,21 +50,21 @@ class TestHydrateDotenv:
     """Tests for automatic lab credential hydration."""
 
     def test_creates_missing_env_with_runnable_credentials(self, tmp_path):
-        from aptl.core.env import find_placeholder_env_values, hydrate_dotenv, load_dotenv
+        from aptl.core.env import (
+            find_placeholder_env_values,
+            hydrate_dotenv,
+            load_dotenv,
+        )
 
-        template_values = _write_wazuh_templates(tmp_path)
+        fixtures = _scenario_fixtures()
         env_path = tmp_path / ".env"
 
-        result = hydrate_dotenv(env_path)
+        result = hydrate_dotenv(env_path, authoritative_values=fixtures)
         env = load_dotenv(env_path)
 
         assert result.created is True
         assert result.changed is True
-        assert env["INDEXER_USERNAME"] == "admin"
-        assert env[_secret_key("INDEXER", "PASSWORD")] == template_values["indexer"]
-        assert env["API_USERNAME"] == "wazuh-wui"
-        assert env[_secret_key("API", "PASSWORD")] == template_values["api"]
-        assert env[_secret_key("DASHBOARD", "PASSWORD")] == env["DASHBOARD_USERNAME"]
+        assert all(env[key] == value for key, value in fixtures.items())
         assert len(env[_secret_key("MISP", "API", "KEY")]) == 40
         assert len(env[_secret_key("APTL", "API", "TOKEN")]) == 64
         assert find_placeholder_env_values(env) == []
@@ -86,38 +74,45 @@ class TestHydrateDotenv:
     def test_created_env_uses_lf_when_host_default_is_crlf(self, tmp_path, mocker):
         from aptl.core.env import hydrate_dotenv
 
-        _write_wazuh_templates(tmp_path)
+        fixtures = _scenario_fixtures()
         env_path = tmp_path / ".env"
         _patch_windows_default_fdopen(mocker, "aptl.core.env")
 
-        hydrate_dotenv(env_path)
+        hydrate_dotenv(env_path, authoritative_values=fixtures)
 
         raw = env_path.read_bytes()
         assert b"\r\n" not in raw
         assert raw.endswith(b"\n")
 
     def test_replaces_placeholders_and_appends_missing_values(self, tmp_path):
-        from aptl.core.env import find_placeholder_env_values, hydrate_dotenv, load_dotenv
+        from aptl.core.env import (
+            find_placeholder_env_values,
+            hydrate_dotenv,
+            load_dotenv,
+        )
 
-        template_values = _write_wazuh_templates(tmp_path)
+        fixtures = _scenario_fixtures()
         existing_api_value = _runtime_value("api")
         env_path = tmp_path / ".env"
         env_path.write_text(
             _env_line("INDEXER_USERNAME", "admin")
-            + _env_line(_secret_key("INDEXER", "PASSWORD"), "CHANGE_ME_indexer_password")
+            + _env_line(
+                _secret_key("INDEXER", "PASSWORD"), "CHANGE_ME_indexer_password"
+            )
             + _env_line("API_USERNAME", "wazuh-wui")
             + _env_line(_secret_key("API", "PASSWORD"), existing_api_value)
             + _env_line("CUSTOM_SETTING", "keep-me")
         )
 
-        result = hydrate_dotenv(env_path)
+        result = hydrate_dotenv(env_path, authoritative_values=fixtures)
         env = load_dotenv(env_path)
 
         assert result.created is False
         assert _secret_key("INDEXER", "PASSWORD") in result.updated_keys
-        assert _secret_key("API", "PASSWORD") not in result.updated_keys
-        assert env[_secret_key("INDEXER", "PASSWORD")] == template_values["indexer"]
-        assert env[_secret_key("API", "PASSWORD")] == existing_api_value
+        assert _secret_key("API", "PASSWORD") in result.updated_keys
+        assert _secret_key("API", "PASSWORD") in result.overridden_keys
+        assert env[_secret_key("INDEXER", "PASSWORD")] == fixtures["INDEXER_PASSWORD"]
+        assert env[_secret_key("API", "PASSWORD")] == fixtures["API_PASSWORD"]
         assert env["CUSTOM_SETTING"] == "keep-me"
         assert _secret_key("MISP", "API", "KEY") in env
         assert find_placeholder_env_values(env) == []
@@ -125,30 +120,24 @@ class TestHydrateDotenv:
     def test_noops_when_existing_env_is_hydrated(self, tmp_path):
         from aptl.core.env import hydrate_dotenv
 
-        template_values = _write_wazuh_templates(tmp_path)
+        fixtures = _scenario_fixtures()
         env_path = tmp_path / ".env"
-        # The hash-pinned fixtures must already hold their required values for a
-        # true no-op: INDEXER_* mirrors the Filebeat template, DASHBOARD_* the
-        # kibanaserver demo user. Genuine secrets keep whatever is already set.
+        # Every scenario-owned fixture must already hold its declared value for
+        # a true no-op. Generic APTL-owned secrets keep existing values.
         existing_values = {
-            _secret_key("API", "PASSWORD"): _runtime_value("api"),
             _secret_key("WAZUH", "CLUSTER", "KEY"): _runtime_value("cluster"),
             _secret_key("APTL", "API", "TOKEN"): _runtime_value("token"),
             _secret_key("MISP", "API", "KEY"): _runtime_value("misp"),
             _secret_key("GRAFANA", "ADMIN", "PASSWORD"): _runtime_value("grafana"),
         }
         env_path.write_text(
-            _env_line("INDEXER_USERNAME", "admin")
-            + _env_line(_secret_key("INDEXER", "PASSWORD"), template_values["indexer"])
-            + _env_line("DASHBOARD_USERNAME", "kibanaserver")
-            + _env_line(_secret_key("DASHBOARD", "PASSWORD"), "kibanaserver")
+            "".join(_env_line(key, value) for key, value in fixtures.items())
             + "".join(_env_line(key, value) for key, value in existing_values.items())
-            + _env_line("API_USERNAME", "wazuh-wui")
             + _env_line("GRAFANA_ADMIN_USER", "admin")
         )
         before = env_path.read_text()
 
-        result = hydrate_dotenv(env_path)
+        result = hydrate_dotenv(env_path, authoritative_values=fixtures)
 
         assert result.changed is False
         assert result.overridden_keys == ()
@@ -157,7 +146,7 @@ class TestHydrateDotenv:
     def test_reconciles_divergent_indexer_password_fixture(self, tmp_path):
         from aptl.core.env import hydrate_dotenv, load_dotenv
 
-        template_values = _write_wazuh_templates(tmp_path)
+        fixtures = _scenario_fixtures()
         divergent = _runtime_value("my-own-indexer-pw")
         env_path = tmp_path / ".env"
         env_path.write_text(
@@ -165,7 +154,7 @@ class TestHydrateDotenv:
             + _env_line(_secret_key("INDEXER", "PASSWORD"), divergent)
         )
 
-        result = hydrate_dotenv(env_path)
+        result = hydrate_dotenv(env_path, authoritative_values=fixtures)
         env = load_dotenv(env_path)
 
         # A user-supplied value that cannot match the indexer's baked hash is
@@ -173,13 +162,13 @@ class TestHydrateDotenv:
         assert _secret_key("INDEXER", "PASSWORD") in result.overridden_keys
         assert _secret_key("INDEXER", "PASSWORD") in result.updated_keys
         assert result.changed is True
-        assert env[_secret_key("INDEXER", "PASSWORD")] == template_values["indexer"]
+        assert env[_secret_key("INDEXER", "PASSWORD")] == fixtures["INDEXER_PASSWORD"]
         assert env[_secret_key("INDEXER", "PASSWORD")] != divergent
 
     def test_reconciles_divergent_dashboard_password_fixture(self, tmp_path):
         from aptl.core.env import hydrate_dotenv, load_dotenv
 
-        _write_wazuh_templates(tmp_path)
+        fixtures = _scenario_fixtures()
         divergent = _runtime_value("my-own-dashboard-pw")
         env_path = tmp_path / ".env"
         env_path.write_text(
@@ -187,17 +176,19 @@ class TestHydrateDotenv:
             + _env_line(_secret_key("DASHBOARD", "PASSWORD"), divergent)
         )
 
-        result = hydrate_dotenv(env_path)
+        result = hydrate_dotenv(env_path, authoritative_values=fixtures)
         env = load_dotenv(env_path)
 
         assert _secret_key("DASHBOARD", "PASSWORD") in result.overridden_keys
-        assert env[_secret_key("DASHBOARD", "PASSWORD")] == "kibanaserver"
+        assert (
+            env[_secret_key("DASHBOARD", "PASSWORD")] == fixtures["DASHBOARD_PASSWORD"]
+        )
         assert env[_secret_key("DASHBOARD", "PASSWORD")] != divergent
 
-    def test_preserves_divergent_genuine_secret(self, tmp_path):
+    def test_reconciles_divergent_pack_fixed_api_secret(self, tmp_path):
         from aptl.core.env import hydrate_dotenv, load_dotenv
 
-        _write_wazuh_templates(tmp_path)
+        fixtures = _scenario_fixtures()
         chosen_api = _runtime_value("api")
         env_path = tmp_path / ".env"
         env_path.write_text(
@@ -205,10 +196,9 @@ class TestHydrateDotenv:
             + _env_line(_secret_key("API", "PASSWORD"), chosen_api)
         )
 
-        result = hydrate_dotenv(env_path)
+        result = hydrate_dotenv(env_path, authoritative_values=fixtures)
         env = load_dotenv(env_path)
 
-        # API_PASSWORD is a real user-selectable secret (the manager creates the
-        # API user from it), so a chosen value is kept, never reconciled.
-        assert _secret_key("API", "PASSWORD") not in result.overridden_keys
-        assert env[_secret_key("API", "PASSWORD")] == chosen_api
+        assert _secret_key("API", "PASSWORD") in result.overridden_keys
+        assert env[_secret_key("API", "PASSWORD")] == fixtures["API_PASSWORD"]
+        assert env[_secret_key("API", "PASSWORD")] != chosen_api

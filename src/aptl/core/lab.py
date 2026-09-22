@@ -63,9 +63,6 @@ from aptl.core.lifecycle_guard import (
 )
 from aptl.core.lifecycle_policy import LifecycleBusyError
 from aptl.core.services import (
-    WazuhApiProbe,
-    probe_indexer_api,
-    probe_manager_api,
     test_ssh_connection,
     wait_for_service,
 )
@@ -1245,7 +1242,16 @@ def _load_selected_start_environment(ctx: _LabStartContext) -> LabResult | None:
 
     result = None
     if needs_stack_env:
-        operation = partial(_load_stack_environment, ctx, env_path)
+        fixtures = {
+            item.name: item.value
+            for item in getattr(selection.startup, "environment_fixtures", ())
+        }
+        operation = partial(
+            _load_stack_environment,
+            ctx,
+            env_path,
+            authoritative_values=fixtures,
+        )
         if selection.bundle.source_kind is ScenarioSourceKind.ENV_PACK:
             result = run_startup_hook(
                 selection.provider_selection,
@@ -1265,11 +1271,16 @@ def _load_selected_start_environment(ctx: _LabStartContext) -> LabResult | None:
     return result
 
 
-def _load_stack_environment(ctx: _LabStartContext, env_path: Path) -> LabResult | None:
+def _load_stack_environment(
+    ctx: _LabStartContext,
+    env_path: Path,
+    *,
+    authoritative_values: dict[str, str] | None = None,
+) -> LabResult | None:
     """Hydrate and validate the project stack environment."""
 
     try:
-        hydration = hydrate_dotenv(env_path)
+        hydration = hydrate_dotenv(env_path, authoritative_values=authoritative_values)
         if hydration.changed:
             action = "created" if hydration.created else "updated"
             log.info(
@@ -1682,6 +1693,16 @@ def _bind_scenario_startup_environment(
 ) -> LabResult | None:
     """Bind only declared aliases to the generated project environment."""
 
+    fixture_updates = {item.name: item.value for item in plan.environment_fixtures}
+    if fixture_updates:
+        changed = update_dotenv_values(ctx.project_dir / ".env", fixture_updates)
+        if changed:
+            log.info(
+                "Applied %d admitted scenario environment fixture(s)", len(changed)
+            )
+        ctx.raw_env = load_dotenv(ctx.project_dir / ".env")
+        if ctx.env is not None:
+            ctx.env = env_vars_from_dict(ctx.raw_env)
     if not plan.environment_aliases:
         ctx.scenario_startup = plan
         return None
@@ -1920,6 +1941,7 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
             sync_dashboard_config,
             ctx.project_dir,
             ctx.env.api_password,
+            ctx.env.api_username,
         )
         if (
             result is None
@@ -2379,7 +2401,7 @@ def _interpret_start_outcome(
     description="env_is_loaded(ctx.env)",
 )
 def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
-    """Wait for Wazuh services; fail startup when one never becomes ready."""
+    """Accept the backend's single declared-fact readiness authority."""
     log.info("Step 9: Waiting for services...")
     # Runtime guards above.
     assert ctx.config is not None and ctx.env is not None
@@ -2388,170 +2410,27 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
     if "wazuh" not in ctx.selected_profiles:
         return None
 
-    # One readiness authority per realized service (issue #1002): the backend's
-    # post-start gate already authenticated graph-owned Wazuh APIs and failed
-    # the start closed if they were not ready, so authenticating them again
-    # here would only repeat that work. Services it did not prove (a scenario
-    # declaring no Wazuh generated artifacts) are waited on here under the same
-    # fail-closed policy: a scenario that selects Wazuh does not meet its goals
-    # without it (ADR-030 Wazuh readiness amendment). These probes use the
-    # controller's published loopback ports; that is sound because an
-    # SSH-remote backend never reaches this step (`_step_sync_credentials`
-    # refuses it before any container starts). First failure wins.
-    proved = _backend_proved_readiness(ctx)
-    result: LabResult | None = None
-    if _WAZUH_INDEXER_SERVICE not in proved:
-        result = _wait_for_indexer(ctx)
-    if result is None and _WAZUH_MANAGER_SERVICE not in proved:
-        result = _wait_for_manager_api(ctx)
-    return result
+    # The deployment backend already performed the post-start probes against
+    # the admitted realization. Reconnecting here would create a second login
+    # owner and could contradict the attestation consumed by RAES.
+    return None
 
 
 def _backend_proved_readiness(ctx: _LabStartContext) -> set[str]:
-    """Return the services the backend authenticated during this start."""
+    """Return the services whose declared facts the backend attested."""
 
-    readiness = getattr(ctx.backend, "authenticated_readiness", None)
+    readiness = getattr(ctx.backend, "declared_wazuh_attestation", None)
     if not isinstance(readiness, Mapping):
         return set()
-    return {service for service, ready in readiness.items() if ready is True}
-
-
-def _wait_for_indexer(ctx: _LabStartContext) -> LabResult | None:
-    """Wait for the indexer; return a classified failure if it never readies."""
-
-    assert ctx.env is not None
-    # Use the actual published host port for the indexer. If port 9200 was
-    # already in use on the host (Cursor / another OpenSearch / a k8s
-    # port-forward), `_step_resolve_host_ports` remapped the publish; probing
-    # the literal 9200 in that case reaches whatever else is on 9200 and
-    # falsely reports the indexer as unready. `ctx.resolved_ports` carries
-    # the post-remap answer.
-    port = next(
-        (
-            r.resolved_port
-            for r in ctx.resolved_ports
-            if getattr(r, "service", None) == _WAZUH_INDEXER_SERVICE
-        ),
-        9200,
-    )
-    return _wait_for_wazuh_api(
-        ctx,
-        _WazuhApiWait(
-            name="Wazuh Indexer",
-            service=_WAZUH_INDEXER_SERVICE,
-            url=f"https://localhost:{port}",
-            probe=probe_indexer_api,
-            username=ctx.env.indexer_username,
-            password=ctx.env.indexer_password,
-            # Generous cold-boot headroom: OpenSearch's first-boot init (cluster
-            # formation + security index) can run long when the whole SOC stack
-            # and MCP builds start at once.
-            timeout=600,
-            interval=10,
-            # #623: the retained wazuh-indexer-data volume keeps an earlier
-            # admin password, so the current .env credentials no longer match.
-            rejected_action=(
-                "The persisted wazuh-indexer-data volume likely still holds a "
-                "previous admin password. Run `aptl lab stop -v` then `aptl lab "
-                "start` to reset the indexer security state, or restore the "
-                "original INDEXER_PASSWORD in .env."
-            ),
-            logs="`aptl container logs aptl-wazuh-indexer`",
-        ),
+    from aptl.core.deployment._compose_stateful_readiness import (
+        declared_wazuh_facts_match,
     )
 
-
-def _wait_for_manager_api(ctx: _LabStartContext) -> LabResult | None:
-    """Wait for the manager API; return a classified failure if it never readies."""
-
-    assert ctx.env is not None
-    port = next(
-        (
-            r.resolved_port
-            for r in ctx.resolved_ports
-            if getattr(r, "service", None) == _WAZUH_MANAGER_SERVICE
-            and getattr(r, "container_port", None) == 55000
-        ),
-        55000,
-    )
-    logs = f"`aptl container logs {_WAZUH_MANAGER_CONTAINER}`"
-    return _wait_for_wazuh_api(
-        ctx,
-        _WazuhApiWait(
-            name="Wazuh Manager API",
-            service=_WAZUH_MANAGER_SERVICE,
-            url=f"https://localhost:{port}",
-            probe=probe_manager_api,
-            username=ctx.env.api_username,
-            password=ctx.env.api_password,
-            timeout=120,
-            interval=5,
-            rejected_action=(
-                "The manager API rejected API_USERNAME/API_PASSWORD from .env; "
-                "confirm they match the API user the manager container was "
-                f"provisioned with and inspect {logs}."
-            ),
-            logs=logs,
-        ),
-    )
-
-
-@dataclass(frozen=True)
-class _WazuhApiWait:
-    """One Wazuh API readiness wait: where to probe and how to explain failure."""
-
-    name: str
-    service: str
-    url: str
-    probe: Callable[[str, str, str], WazuhApiProbe]
-    username: str
-    password: str = field(repr=False)
-    timeout: int
-    interval: int
-    rejected_action: str
-    logs: str
-
-
-def _wait_for_wazuh_api(ctx: _LabStartContext, spec: _WazuhApiWait) -> LabResult | None:
-    """Poll one Wazuh API within its budget; fail with the last in-budget reason.
-
-    The reason is the last observation made inside the budget -- no probe runs
-    after the deadline, where a different answer could erase the result the
-    budget reached (#1002).
-    """
-
-    last_probe: list[WazuhApiProbe | None] = [None]
-
-    def api_ready() -> bool:
-        """Probe once, remember the observation, and report readiness."""
-        probe = spec.probe(url=spec.url, username=spec.username, password=spec.password)
-        last_probe[0] = probe
-        if not probe.ready:
-            # Expected while the API warms up; the deadline makes it terminal.
-            log.debug("%s not ready yet: %s", spec.name, probe.describe())
-        return probe.ready
-
-    wait = wait_for_service(
-        check_fn=api_ready,
-        timeout=spec.timeout,
-        interval=spec.interval,
-        service_name=spec.name,
-        progress=ctx.progress,
-    )
-    if wait.ready:
-        return None
-    probe = last_probe[0]
-    if probe is not None and probe.category == "credentials_rejected":
-        action = spec.rejected_action
-    else:
-        action = f"Inspect {spec.logs}."
-    detail = probe.describe() if probe is not None else "no probe completed"
-    error = (
-        f"{spec.name} did not become ready within {int(wait.elapsed_seconds)}s: "
-        f"{spec.service} at {spec.url} {detail}. {action}"
-    )
-    log.error("%s", error)
-    return LabResult(success=False, error=error)
+    return {
+        service
+        for service in readiness
+        if declared_wazuh_facts_match(readiness, service)
+    }
 
 
 @_runtime_require(

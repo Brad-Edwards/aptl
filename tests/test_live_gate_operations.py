@@ -49,6 +49,7 @@ def _container(name, *, networks=None):
 def _state(containers):
     state = LiveGateState()
     state.snapshot = {"containers": containers}
+    state.deployment_spec = object()
     return state
 
 
@@ -347,21 +348,21 @@ def _telemetry_env(_path):
 def _wire_telemetry(monkeypatch):
     monkeypatch.setattr(ops, "get_backend", lambda c, p: _Backend())
     monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
-    monkeypatch.setattr(lgt, "load_dotenv", _telemetry_env)
 
     def collect_once(request):
         request.regenerate()
         end_iso = "2026-07-17T10:00:00+00:00"
         return (
-            lgp.collect_suricata_eve(
-                request.start_iso, end_iso, request.backend
-            ),
-            lgp.collect_wazuh_alerts(
-                request.start_iso,
-                end_iso,
-                indexer_url=request.indexer_url,
-                auth=request.indexer_auth,
-            ),
+            lgp.collect_suricata_eve(request.start_iso, end_iso, request.backend),
+            [
+                dict(item)
+                for item in lgp._collect_declared_wazuh_alerts(
+                    request.backend,
+                    request.realization,
+                    request.start_iso,
+                    end_iso,
+                ).records
+            ],
         )
 
     monkeypatch.setattr(lgt, "_collect_until_evidence", collect_once)
@@ -380,6 +381,17 @@ def _collect(operations):
     )
 
 
+def test_live_validation_uses_the_shared_typed_manager_alert_read(monkeypatch):
+    expected = lgp.WazuhManagerAlertRead(loss_category="source-command-failed")
+    monkeypatch.setattr(lgp, "read_wazuh_manager_alerts", lambda *args: expected)
+
+    observed = lgp._collect_declared_wazuh_alerts(
+        object(), object(), "2026-01-01T00:00:00Z", "2026-01-01T00:01:00Z"
+    )
+
+    assert observed is expected
+
+
 def test_detection_fails_when_only_suricata_traffic_is_collected(monkeypatch):
     _wire_telemetry(monkeypatch)
     monkeypatch.setattr(
@@ -387,7 +399,11 @@ def test_detection_fails_when_only_suricata_traffic_is_collected(monkeypatch):
         "collect_suricata_eve",
         lambda s, e, b: [{"event_type": "alert"}, {"event_type": "flow"}],
     )
-    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
+    monkeypatch.setattr(
+        lgp,
+        "_collect_declared_wazuh_alerts",
+        lambda *args: lgp.WazuhManagerAlertRead(),
+    )
     state = _telemetry_state()
     result = _collect(_operations(state, LiveGateOptions(event_window_seconds=10)))
     assert not result.observed
@@ -402,17 +418,19 @@ def test_detection_passes_when_a_correlated_wazuh_alert_is_collected(monkeypatch
         lgp, "collect_suricata_eve", lambda s, e, b: [{"event_type": "flow"}]
     )
 
-    def collect_wazuh(start, end, **kwargs):
-        return [
-            {
-                "rule": {"id": "5710"},
-                "agent": {"name": "manager"},
-                "@timestamp": "2026-07-17T10:00:00+00:00",
-                "full_log": "scenario-correlation",
-            }
-        ]
+    def collect_wazuh(*_args):
+        return lgp.WazuhManagerAlertRead(
+            records=(
+                {
+                    "rule": {"id": "5710"},
+                    "agent": {"name": "manager"},
+                    "@timestamp": "2026-07-17T10:00:00+00:00",
+                    "full_log": "scenario-correlation",
+                },
+            )
+        )
 
-    monkeypatch.setattr(lgp, "collect_wazuh_alerts", collect_wazuh)
+    monkeypatch.setattr(lgp, "_collect_declared_wazuh_alerts", collect_wazuh)
     state = _telemetry_state()
     result = _collect(_operations(state, LiveGateOptions(event_window_seconds=10)))
     assert result.observed
@@ -427,10 +445,10 @@ def test_detection_rejects_an_unrelated_wazuh_alert(monkeypatch):
     monkeypatch.setattr(lgp, "collect_suricata_eve", lambda s, e, b: [])
     monkeypatch.setattr(
         lgp,
-        "collect_wazuh_alerts",
-        lambda s, e, **kwargs: [
-            {"rule": {"id": "1002"}, "full_log": "Unrelated event"}
-        ],
+        "_collect_declared_wazuh_alerts",
+        lambda *args: lgp.WazuhManagerAlertRead(
+            records=({"rule": {"id": "1002"}, "full_log": "Unrelated event"},)
+        ),
     )
     state = _telemetry_state()
     result = _collect(_operations(state, LiveGateOptions(event_window_seconds=10)))
@@ -445,7 +463,11 @@ def test_detection_fails_on_stats_only_events(monkeypatch):
         "collect_suricata_eve",
         lambda s, e, b: [{"event_type": "stats"}, {"event_type": "stats"}],
     )
-    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
+    monkeypatch.setattr(
+        lgp,
+        "_collect_declared_wazuh_alerts",
+        lambda *args: lgp.WazuhManagerAlertRead(),
+    )
     state = _telemetry_state()
     result = _collect(_operations(state, LiveGateOptions(event_window_seconds=10)))
     assert not result.observed

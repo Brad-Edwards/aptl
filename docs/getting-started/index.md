@@ -38,7 +38,7 @@ before choosing a host.
 
 | Component | Access | Credentials |
 |-----------|--------|-------------|
-| Wazuh Dashboard | <https://localhost:443> | `admin` / your `INDEXER_PASSWORD` from `.env` |
+| Wazuh Dashboard | <https://localhost:443> | Scenario credentials from `INDEXER_USERNAME` / `INDEXER_PASSWORD` in `.env`; not an APTL login |
 | Victim (target) | `aptl container shell aptl-victim` | container shell (no host SSH port) |
 | Kali (attacker) | `aptl container shell aptl-kali` | container shell (no host SSH port) |
 

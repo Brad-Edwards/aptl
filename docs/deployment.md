@@ -103,11 +103,14 @@ Wait 5-10 minutes for Wazuh indexer initialization.
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| Wazuh Dashboard | <https://localhost:443> | `INDEXER_USERNAME` / `INDEXER_PASSWORD` from `.env` |
-| Wazuh Indexer | <https://localhost:9200> | `INDEXER_USERNAME` / `INDEXER_PASSWORD` from `.env` |
-| Wazuh API | <https://localhost:55000> | `API_USERNAME` / `API_PASSWORD` from `.env` |
+| Wazuh Dashboard | <https://localhost:443> | Scenario credentials: `INDEXER_USERNAME` / `INDEXER_PASSWORD` from `.env` |
+| Wazuh Indexer | <https://localhost:9200> | Scenario credentials: `INDEXER_USERNAME` / `INDEXER_PASSWORD` from `.env` |
+| Wazuh API | <https://localhost:55000> | Scenario credentials: `API_USERNAME` / `API_PASSWORD` from `.env` |
 | Victim shell | `aptl container shell aptl-victim` | container shell (no host SSH port) |
 | Kali shell | `aptl container shell aptl-kali` | container shell (no host SSH port) |
+
+These Wazuh values are fixtures declared by the admitted scenario, not APTL
+control-plane or operator login secrets.
 
 ## Verification
 

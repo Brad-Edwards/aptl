@@ -72,7 +72,8 @@ See [MCP Integration](../components/mcp-integration.md) for configuration detail
 
 Access lab components:
 
-- Wazuh Dashboard: <https://localhost:443> (`admin` / your `INDEXER_PASSWORD` from `.env`)
+- Wazuh Dashboard: <https://localhost:443> (scenario credentials from
+  `INDEXER_USERNAME` / `INDEXER_PASSWORD` in `.env`; not an APTL login)
 - Access summary: `aptl lab info`
 - Victim shell: `aptl container shell aptl-victim`
 - Kali shell: `aptl container shell aptl-kali`

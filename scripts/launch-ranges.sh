@@ -72,7 +72,7 @@ echo "Launching $COUNT range(s) from $AMI ..."
   echo "  Allow ~8-12 minutes after launch before a seat is fully ready."
   echo
   echo "SOC tool logins (same on every seat, also on each desktop as SOC_ACCESS.md):"
-  echo "  Wazuh    https://localhost/         admin / SecretPassword"
+  echo "  Wazuh    https://localhost/         scenario fixture; see the admitted pack"
   echo "  TheHive  https://localhost:9000/    aptl-svc@thehive.local / AptlService2024!"
   echo "  MISP     https://localhost:8443/    admin@admin.test / admin"
   echo "  Shuffle  https://localhost:3443/    admin / ShuffleAdmin2024!"

@@ -83,7 +83,7 @@ Once it's up:
 
 | Surface | URL / command |
 |---|---|
-| Wazuh Dashboard | <https://localhost:443> (`admin` / your `INDEXER_PASSWORD` from `.env`) |
+| Wazuh Dashboard | <https://localhost:443> (scenario credentials: `INDEXER_USERNAME` / `INDEXER_PASSWORD` from `.env`; not an APTL login) |
 | Victim shell | `aptl container shell aptl-victim` |
 | Kali shell | `aptl container shell aptl-kali` |
 

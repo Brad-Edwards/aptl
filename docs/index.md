@@ -30,7 +30,8 @@ before running APTL on a machine with other workloads or credentials.
 
 **Access:**
 
-- Wazuh Dashboard: <https://localhost:443> (admin/SecretPassword)
+- Wazuh Dashboard: <https://localhost:443> (scenario credentials from
+  `INDEXER_USERNAME` / `INDEXER_PASSWORD` in `.env`; not an APTL login)
 - Victim shell: `aptl container shell aptl-victim`
 - Kali shell: `aptl container shell aptl-kali`
 

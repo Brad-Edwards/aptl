@@ -45,13 +45,13 @@ BACKEND_IMPLEMENTATION_PROFILES = (
                 _variable("INDEXER_URL", "https://wazuh.indexer:9200"),
                 _variable(
                     "INDEXER_USERNAME",
-                    classification="operator_secret",
-                    provenance="operator",
+                    classification="secret_fixture",
+                    provenance="runtime",
                 ),
                 _variable(
                     "INDEXER_PASSWORD",
-                    classification="operator_secret",
-                    provenance="operator",
+                    classification="secret_fixture",
+                    provenance="runtime",
                 ),
                 _variable("FILEBEAT_SSL_VERIFICATION_MODE", "full"),
                 _variable(
@@ -62,13 +62,13 @@ BACKEND_IMPLEMENTATION_PROFILES = (
                 _variable("SSL_KEY", "/etc/ssl/wazuh/wazuh.manager-key.pem"),
                 _variable(
                     "API_USERNAME",
-                    classification="operator_secret",
-                    provenance="operator",
+                    classification="secret_fixture",
+                    provenance="runtime",
                 ),
                 _variable(
                     "API_PASSWORD",
-                    classification="operator_secret",
-                    provenance="operator",
+                    classification="secret_fixture",
+                    provenance="runtime",
                 ),
             ),
             "published-ports": [
@@ -110,21 +110,35 @@ BACKEND_IMPLEMENTATION_PROFILES = (
         ),
         runtime_selections={
             "runtime-environment": _environment(
-                _variable("INDEXER_USERNAME", "admin"),
+                _variable(
+                    "INDEXER_USERNAME",
+                    classification="secret_fixture",
+                    provenance="runtime",
+                ),
                 _variable(
                     "INDEXER_PASSWORD",
-                    "SecretPassword",
                     classification="secret_fixture",
+                    provenance="runtime",
                 ),
-                _variable("DASHBOARD_USERNAME", "kibanaserver"),
+                _variable(
+                    "DASHBOARD_USERNAME",
+                    classification="secret_fixture",
+                    provenance="runtime",
+                ),
                 _variable(
                     "DASHBOARD_PASSWORD",
-                    "kibanaserver",
                     classification="secret_fixture",
+                    provenance="runtime",
                 ),
-                _variable("API_USERNAME", "wazuh-wui"),
                 _variable(
-                    "API_PASSWORD", "WazuhPass123!", classification="secret_fixture"
+                    "API_USERNAME",
+                    classification="secret_fixture",
+                    provenance="runtime",
+                ),
+                _variable(
+                    "API_PASSWORD",
+                    classification="secret_fixture",
+                    provenance="runtime",
                 ),
                 _variable("WAZUH_API_URL", "https://wazuh.manager"),
             ),

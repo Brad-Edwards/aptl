@@ -31,6 +31,7 @@ from aptl_techvault.evidence.techvault_enrollment_baseline import (
 )
 from aptl_techvault.redis_acl_observation import observe_redis_app_authorizations
 from aptl_techvault.runtime_parameters import TECHVAULT_PACK_SET_DIGEST
+from aptl_techvault.wazuh_credentials import techvault_wazuh_environment
 
 
 class TechVaultStartupProvider:
@@ -48,7 +49,7 @@ class TechVaultStartupProvider:
         return context.run_operation()
 
     @staticmethod
-    def resolve(_bundle: ScenarioBundle) -> ScenarioStartupPlan:
+    def resolve(bundle: ScenarioBundle) -> ScenarioStartupPlan:
         return ScenarioStartupPlan(
             seed_script="scripts/seed-prime.sh",
             required_profiles=(
@@ -63,6 +64,7 @@ class TechVaultStartupProvider:
             environment_aliases=(
                 EnvironmentAlias(target="ADMIN_KEY", source="MISP_API_KEY"),
             ),
+            environment_fixtures=techvault_wazuh_environment(bundle),
             container_environment=(
                 ContainerEnvironmentBinding("CORTEX_CONTAINER", "aptl-cortex"),
                 ContainerEnvironmentBinding("THEHIVE_CONTAINER", "aptl-thehive"),

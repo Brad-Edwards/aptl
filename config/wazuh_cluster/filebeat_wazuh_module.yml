@@ -18,8 +18,8 @@ setup.template.json.name: 'wazuh'
 setup.ilm.enabled: false
 output.elasticsearch:
   hosts: ['https://wazuh.indexer:9200']
-  username: 'admin'
-  password: 'SecretPassword'
+  username: '${INDEXER_USERNAME}'
+  password: '${INDEXER_PASSWORD}'
   ssl.verification_mode: 'full'
   ssl.certificate_authorities: ['/etc/ssl/wazuh/root-ca-manager.pem']
   ssl.certificate: '/etc/ssl/wazuh/wazuh.manager.pem'

@@ -78,6 +78,7 @@ def _verified_lockfiles(pack_root: Path) -> dict[str, bytes]:
 
 
 def _read_lockfile(archive: tarfile.TarFile, member: tarfile.TarInfo) -> bytes:
+    """Return one lockfile member's bytes, refusing non-files and oversized entries."""
     if not member.isfile() or member.size > 8 * 1024 * 1024:
         raise ValueError("invalid cache lockfile")
     reader = archive.extractfile(member)
@@ -87,6 +88,7 @@ def _read_lockfile(archive: tarfile.TarFile, member: tarfile.TarInfo) -> bytes:
 
 
 def _record_lockfile(files: dict[str, bytes], name: str, payload: bytes) -> None:
+    """Record a lockfile, refusing a second artifact that disagrees on its bytes."""
     if name in files and files[name] != payload:
         raise ValueError("conflicting cache lockfiles")
     files[name] = payload

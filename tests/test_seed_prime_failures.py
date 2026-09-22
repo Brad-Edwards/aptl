@@ -49,13 +49,15 @@ fi
     )
     _write_executable(
         fake_bin / "curl",
-        "#!/bin/sh\nprintf '{\"status\":\"green\"}\\n'\n",
+        '#!/bin/sh\nprintf \'{"status":"green"}\\n\'\n',
     )
     webhook_file = tmp_path / "shuffle-webhook"
     env = {
         **os.environ,
         "PATH": f"{fake_bin}:{os.environ['PATH']}",
         "APTL_SHUFFLE_WEBHOOK_FILE": str(webhook_file),
+        "INDEXER_USERNAME": "test-indexer-user",
+        "INDEXER_PASSWORD": "test-indexer-password",
     }
 
     result = subprocess.run(

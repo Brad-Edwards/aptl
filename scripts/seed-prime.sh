@@ -186,8 +186,8 @@ echo "[3/6] Waiting for Wazuh Indexer to be healthy..."
 
 INDEXER_PORT="${APTL_HP_WAZUH_INDEXER_9200:-9200}"
 INDEXER_URL="${INDEXER_URL:-https://localhost:${INDEXER_PORT}}"
-INDEXER_USER="${INDEXER_USERNAME:-admin}"
-INDEXER_PASS="${INDEXER_PASSWORD:-SecretPassword}"
+INDEXER_USER="${INDEXER_USERNAME:?admitted scenario did not provide INDEXER_USERNAME}"
+INDEXER_PASS="${INDEXER_PASSWORD:?admitted scenario did not provide INDEXER_PASSWORD}"
 
 max_wait=600
 elapsed=0

@@ -208,15 +208,17 @@ def _artifact_evidence(
             for consumer in artifact.environment_consumers
         ],
     }
-    readiness = getattr(backend, "authenticated_readiness", {})
+    readiness = getattr(backend, "declared_wazuh_attestation", {})
     if isinstance(readiness, Mapping):
         observed_readiness = {
-            consumer.service_name: bool(readiness[consumer.service_name])
+            consumer.service_name: [
+                dict(fact) for fact in readiness[consumer.service_name]
+            ]
             for consumer in artifact.consumers
             if consumer.service_name in readiness
         }
         if observed_readiness:
-            evidence["authenticated_readiness"] = observed_readiness
+            evidence["declared_wazuh_attestation"] = observed_readiness
     if artifact.generator == "rendered_config" and source.is_file():
         evidence["configuration_sha256"] = hashlib.sha256(
             source.read_bytes()

@@ -14,30 +14,21 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-import yaml
-
 from aptl.utils.logging import get_logger
 from aptl.utils.placeholders import contains_placeholder
 
 log = get_logger("env")
 
-_REQUIRED_VARS = [
-    "INDEXER_USERNAME",
-    "INDEXER_PASSWORD",
-    "API_USERNAME",
-    "API_PASSWORD",
-]
-
 
 @dataclass
 class EnvVars:
-    """Typed container for environment variables loaded from .env."""
+    """Typed optional scenario environment loaded from the project ``.env``."""
 
-    indexer_username: str
-    indexer_password: str
-    api_username: str
-    api_password: str
-    dashboard_username: str = "kibanaserver"
+    indexer_username: str = ""
+    indexer_password: str = ""
+    api_username: str = ""
+    api_password: str = ""
+    dashboard_username: str = ""
     dashboard_password: str = ""
     wazuh_cluster_key: str = ""
 
@@ -60,8 +51,6 @@ class DotenvHydrationResult:
 _ALNUM = string.ascii_letters + string.digits
 _EXPORT_PREFIX = "export "
 _ENVIRONMENT_VARIABLE_NAME = re.compile(r"[A-Za-z_]\w*", flags=re.ASCII)
-_WAZUH_FILEBEAT_TEMPLATE = Path("config/wazuh_cluster/filebeat_wazuh_module.yml")
-_WAZUH_DASHBOARD_TEMPLATE = Path("config/wazuh_dashboard/wazuh.yml")
 
 
 def _random_alnum(length: int) -> str:
@@ -74,102 +63,15 @@ def _fixed(value: str) -> Callable[[Path, dict[str, str]], str]:
     return lambda _project_dir, _values: value
 
 
-def _copy_value(source_key: str) -> Callable[[Path, dict[str, str]], str]:
-    """Return a resolver that mirrors another hydrated env value."""
-    return lambda _project_dir, values: values[source_key]
-
-
-def _read_yaml_mapping(path: Path) -> dict[str, object]:
-    """Read a YAML file that must contain a mapping at the document root."""
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ValueError(f"Expected YAML mapping in {path}")
-    return data
-
-
-def _required_template_value(path: Path, key: str, value: object) -> str:
-    """Return a template value or fail if it cannot safely hydrate .env."""
-    if not isinstance(value, str) or _needs_hydration(value):
-        raise ValueError(f"{path} does not define a usable {key}")
-    return value
-
-
-def _wazuh_indexer_template_value(
-    project_dir: Path,
-    key: str,
-) -> str:
-    """Read Wazuh indexer credentials from the checked-in Filebeat template."""
-    path = project_dir / _WAZUH_FILEBEAT_TEMPLATE
-    output = _read_yaml_mapping(path).get("output.elasticsearch")
-    if not isinstance(output, dict):
-        raise ValueError(f"{path} does not define output.elasticsearch")
-    return _required_template_value(path, key, output.get(key))
-
-
-def _wazuh_api_template_value(
-    project_dir: Path,
-    key: str,
-) -> str:
-    """Read Wazuh API credentials from the checked-in dashboard template."""
-    path = project_dir / _WAZUH_DASHBOARD_TEMPLATE
-    hosts = _read_yaml_mapping(path).get("hosts")
-    if not isinstance(hosts, list) or not hosts:
-        raise ValueError(f"{path} does not define hosts")
-    first_host = hosts[0]
-    if not isinstance(first_host, dict) or not first_host:
-        raise ValueError(f"{path} does not define a usable host")
-    host_config = next(iter(first_host.values()))
-    if not isinstance(host_config, dict):
-        raise ValueError(f"{path} does not define a usable host config")
-    return _required_template_value(path, key, host_config.get(key))
-
-
-def _indexer_template_value(key: str) -> Callable[[Path, dict[str, str]], str]:
-    """Return a resolver for a Filebeat Wazuh indexer template field."""
-    return lambda project_dir, _values: _wazuh_indexer_template_value(project_dir, key)
-
-
-def _api_template_value(key: str) -> Callable[[Path, dict[str, str]], str]:
-    """Return a resolver for a Wazuh dashboard API template field."""
-    return lambda project_dir, _values: _wazuh_api_template_value(project_dir, key)
-
-
-# The current stack still has a mix of .env-driven values and service
-# fixtures baked into checked-in templates or Compose. Hydration therefore
-# writes values that are actually accepted by the running containers today:
-# randomize values Compose consumes directly, keep fixed values where the
-# service still has a checked-in hash/default that must match.
+# Generic APTL-owned values. Scenario-fixed Wazuh credentials are deliberately
+# absent: the selected, content-identified startup adapter supplies them from
+# the admitted pack instead of core templates or defaults (issue #957).
 _HYDRATED_ENV_SPECS: tuple[tuple[str, Callable[[Path, dict[str, str]], str]], ...] = (
-    ("INDEXER_USERNAME", _indexer_template_value("username")),
-    ("INDEXER_PASSWORD", _indexer_template_value("password")),
-    ("DASHBOARD_USERNAME", _fixed("kibanaserver")),
-    ("DASHBOARD_PASSWORD", _copy_value("DASHBOARD_USERNAME")),
-    ("API_USERNAME", _api_template_value("username")),
-    ("API_PASSWORD", _api_template_value("password")),
     ("WAZUH_CLUSTER_KEY", lambda _project_dir, _values: secrets.token_hex(16)),
     ("APTL_API_TOKEN", lambda _project_dir, _values: secrets.token_hex(32)),
     ("MISP_API_KEY", lambda _project_dir, _values: _random_alnum(40)),
     ("GRAFANA_ADMIN_USER", _fixed("admin")),
     ("GRAFANA_ADMIN_PASSWORD", lambda _project_dir, _values: secrets.token_urlsafe(24)),
-)
-
-# Keys whose value must match a hash or default baked into a checked-in service
-# config — specifically the OpenSearch demo users in the indexer's
-# ``config/wazuh_indexer/internal_users.yml`` (``admin`` and ``kibanaserver``).
-# The indexer never recomputes those hashes from ``.env``, so a divergent value
-# cannot authenticate; it is a fixture, not a user-selectable secret. Hydration
-# therefore reconciles these authoritatively rather than preserving a user
-# override (which otherwise fails the authenticated-readiness gate deep in the
-# RAES handoff with a misleading contract-invalid cascade). Genuine secrets
-# (API_PASSWORD, WAZUH_CLUSTER_KEY, tokens, Grafana) keep the preserve-if-set
-# behavior below.
-_AUTHORITATIVE_FIXTURE_KEYS: frozenset[str] = frozenset(
-    {
-        "INDEXER_USERNAME",
-        "INDEXER_PASSWORD",
-        "DASHBOARD_USERNAME",
-        "DASHBOARD_PASSWORD",
-    }
 )
 
 
@@ -233,7 +135,7 @@ def _render_hydrated_dotenv(
         else:
             lines.append(line)
 
-    missing = [key for key, _ in _HYDRATED_ENV_SPECS if key not in seen]
+    missing = [key for key in values if key not in seen]
     if missing:
         if lines and lines[-1].strip():
             lines.append("")
@@ -323,47 +225,83 @@ def _render_dotenv_update_lines(original: str, updates: dict[str, str]) -> list[
     return lines
 
 
-def hydrate_dotenv(path: Path) -> DotenvHydrationResult:
+def _validated_authoritative_values(
+    authoritative_values: dict[str, str] | None,
+) -> dict[str, str]:
+    """Return safe scenario fixtures or reject the whole supplied mapping."""
+
+    fixed = dict(authoritative_values or {})
+    invalid = any(
+        _ENVIRONMENT_VARIABLE_NAME.fullmatch(key) is None
+        or not value
+        or "\n" in value
+        or "\r" in value
+        for key, value in fixed.items()
+    )
+    if invalid:
+        raise ValueError("invalid authoritative environment value")
+    return fixed
+
+
+def _reconcile_authoritative_values(
+    path: Path,
+    current: dict[str, str],
+    fixed: dict[str, str],
+) -> tuple[list[str], list[str]]:
+    """Classify missing and divergent cached scenario fixtures."""
+
+    updated: list[str] = []
+    overridden: list[str] = []
+    for key, required in fixed.items():
+        current_value = current.get(key)
+        if _needs_hydration(current_value):
+            updated.append(key)
+        elif current_value != required:
+            log.warning(
+                "%s in %s diverges from the admitted scenario fixture; "
+                "reconciling the cached value.",
+                key,
+                path,
+            )
+            updated.append(key)
+            overridden.append(key)
+    return updated, overridden
+
+
+def _hydrate_owned_values(
+    project_dir: Path,
+    current: dict[str, str],
+    values: dict[str, str],
+) -> list[str]:
+    """Hydrate missing generic APTL-owned values while preserving existing ones."""
+
+    updated: list[str] = []
+    for key, factory in _HYDRATED_ENV_SPECS:
+        if _needs_hydration(current.get(key)):
+            values[key] = factory(project_dir, values)
+            updated.append(key)
+    return updated
+
+
+def hydrate_dotenv(
+    path: Path, *, authoritative_values: dict[str, str] | None = None
+) -> DotenvHydrationResult:
     """Create or repair a project ``.env`` with runnable lab credentials.
 
     Missing, empty, or ``.env.example``-style placeholder values are populated
     with values that match the current Docker Compose/templates contract.
-    Genuine secrets that are already set are preserved. The hash-pinned
-    fixtures in :data:`_AUTHORITATIVE_FIXTURE_KEYS` are the exception: a
-    divergent user value for those cannot authenticate against the indexer's
-    checked-in security config, so hydration reconciles them to the required
-    fixture value and records each such override in ``overridden_keys``.
+    Genuine APTL-owned secrets that are already set are preserved. Values in
+    ``authoritative_values`` are scenario fixtures: a divergent cache entry is
+    reconciled and recorded in ``overridden_keys`` without logging either value.
     """
     created = not path.exists()
     original = "" if created else path.read_text(encoding="utf-8")
     current = {} if created else load_dotenv(path)
     values = {key: current.get(key, "") for key, _ in _HYDRATED_ENV_SPECS}
-    updated: list[str] = []
-    overridden: list[str] = []
-
-    for key, factory in _HYDRATED_ENV_SPECS:
-        current_value = current.get(key)
-        if key in _AUTHORITATIVE_FIXTURE_KEYS:
-            required = factory(path.parent, values)
-            values[key] = required
-            if _needs_hydration(current_value):
-                updated.append(key)
-            elif current_value != required:
-                log.warning(
-                    "%s in %s does not match the value the indexer's "
-                    "checked-in security config accepts; reconciling it to the "
-                    "required fixture. This credential is not user-selectable "
-                    "in the current stack (see "
-                    "config/wazuh_indexer/internal_users.yml).",
-                    key,
-                    path,
-                )
-                updated.append(key)
-                overridden.append(key)
-            continue
-        if _needs_hydration(current_value):
-            values[key] = factory(path.parent, values)
-            updated.append(key)
+    fixed = _validated_authoritative_values(authoritative_values)
+    values.update(fixed)
+    updated, overridden = _reconcile_authoritative_values(path, current, fixed)
+    updated.extend(_hydrate_owned_values(path.parent, current, values))
 
     if created or updated:
         _write_dotenv(path, _render_hydrated_dotenv(original, values))
@@ -463,8 +401,10 @@ def find_placeholder_env_values(env: dict[str, str]) -> list[str]:
 def env_vars_from_dict(env: dict[str, str]) -> EnvVars:
     """Build a typed EnvVars instance from a raw env dict.
 
-    Validates that all required variables are present and non-empty before
-    constructing the dataclass.
+    The generic project environment has no globally required Wazuh values.
+    An admitted scenario adapter supplies its declared fixtures, and the
+    Wazuh-native readiness owner fails closed if those values are unavailable
+    for a realization that actually declares Wazuh.
 
     Args:
         env: Dictionary of environment variables (from load_dotenv).
@@ -472,21 +412,13 @@ def env_vars_from_dict(env: dict[str, str]) -> EnvVars:
     Returns:
         Populated EnvVars instance.
 
-    Raises:
-        ValueError: If any required variable is missing or empty.
     """
-    missing = validate_required_env(env, _REQUIRED_VARS)
-    if missing:
-        raise ValueError(
-            f"Required environment variables missing or empty: {', '.join(missing)}"
-        )
-
     return EnvVars(
-        indexer_username=env["INDEXER_USERNAME"],
-        indexer_password=env["INDEXER_PASSWORD"],
-        api_username=env["API_USERNAME"],
-        api_password=env["API_PASSWORD"],
-        dashboard_username=env.get("DASHBOARD_USERNAME", "kibanaserver"),
+        indexer_username=env.get("INDEXER_USERNAME", ""),
+        indexer_password=env.get("INDEXER_PASSWORD", ""),
+        api_username=env.get("API_USERNAME", ""),
+        api_password=env.get("API_PASSWORD", ""),
+        dashboard_username=env.get("DASHBOARD_USERNAME", ""),
         dashboard_password=env.get("DASHBOARD_PASSWORD", ""),
         wazuh_cluster_key=env.get("WAZUH_CLUSTER_KEY", ""),
     )

@@ -1,5 +1,9 @@
 # Wazuh SIEM
 
+The Wazuh credentials in this page are intentionally planted scenario
+fixtures. They are not APTL control-plane or operator login secrets; the
+admitted pack projects their current values into `.env` at startup.
+
 The Wazuh SIEM stack provides security monitoring and analysis for the APTL lab environment.
 
 ## Components

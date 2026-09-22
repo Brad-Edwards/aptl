@@ -44,7 +44,6 @@ from aptl_techvault.evidence.techvault_wazuh_agent_readiness import (
 )
 from aptl_techvault.evidence.techvault_native_support import (
     MAX_SOURCE_BYTES,
-    bounded,
     content_identities,
     find_node,
     generated_output,
@@ -54,7 +53,11 @@ from aptl_techvault.evidence.techvault_native_support import (
     utc_iso_now,
     webapp_endpoint,
 )
-from aptl.utils.curl_safe import basic_auth_header, curl_json
+from aptl_techvault.evidence.techvault_manager_alerts import (
+    WazuhManagerAlertRead,
+    read_wazuh_manager_alerts,
+)
+from aptl.utils.curl_safe import curl_json
 from aptl_techvault.evidence.techvault_telemetry_stimulus import (
     emit_missing_agent_events,
 )
@@ -109,7 +112,11 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
         self._backend = backend
         self._realization = realization
         self._project_dir = project_dir
-        self._indexer_auth = indexer_auth
+        # Retained in the constructor for one compatibility release while the
+        # capture request surface stops supplying indexer credentials. Evidence
+        # never consumes them: TechVault declares the manager alert log as the
+        # Wazuh source for this registration (issue #957).
+        _ = indexer_auth
         self._thehive_api_key = thehive_api_key
         self._request_json = selected_dependencies.request_json
         self._now = selected_dependencies.now
@@ -122,7 +129,6 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
             "techvault:soc-certificate-profile/v1",
             "ca-certificate",
         )
-        self._indexer_url = published_url(realization, "wazuh-indexer", 9200, "https")
         self._connector_key = generated_output(
             realization,
             project_dir,
@@ -428,58 +434,24 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
     def query_wazuh(
         self, start_iso: str, end_iso: str
     ) -> Sequence[Mapping[str, object]] | None:
-        """Query the bounded Wazuh window for exact rule 303020 alerts."""
+        """Read exact rule 303020 alerts from the declared manager log."""
 
-        if not self._indexer_url:
-            return None
-        response = self._request_json(
-            f"{self._indexer_url}/wazuh-alerts-4.x-*/_search",
-            auth_header=basic_auth_header(*self._indexer_auth),
-            body={
-                "query": {
-                    "bool": {
-                        "filter": [
-                            {"term": {"rule.id": WAZUH_SQLI_RULE_ID}},
-                            {
-                                "range": {
-                                    _TIMESTAMP_FIELD: {"gte": start_iso, "lte": end_iso}
-                                }
-                            },
-                        ]
-                    }
-                },
-                "size": 100,
-                "sort": [{_TIMESTAMP_FIELD: "asc"}],
-            },
-            insecure=True,
-            timeout=30,
+        observed = read_wazuh_manager_alerts(
+            self._backend, self._realization, start_iso, end_iso
         )
-        return self._normalize_wazuh_response(response)
-
-    @staticmethod
-    def _normalize_wazuh_response(
-        response: object,
-    ) -> Sequence[Mapping[str, object]] | None:
-        """Reduce a bounded indexer response to its allowlisted hit sources."""
-
-        if not isinstance(response, Mapping) or not bounded(response):
+        if not observed.complete:
             return None
-        hits = (
-            (response.get("hits") or {}).get("hits")
-            if isinstance(response.get("hits"), Mapping)
-            else None
-        )
-        if not isinstance(hits, list):
-            return None
-        normalized: list[Mapping[str, object]] = []
-        for hit in hits:
-            source = hit.get("_source", hit) if isinstance(hit, Mapping) else None
-            if not isinstance(source, Mapping):
-                continue
-            item = dict(source)
-            item["timestamp"] = source.get("timestamp", source.get(_TIMESTAMP_FIELD))
-            normalized.append(item)
-        return normalized
+        return [
+            item
+            for item in observed.records
+            if isinstance(item.get("rule"), Mapping)
+            and str(item["rule"].get("id", "")) == WAZUH_SQLI_RULE_ID
+        ]
 
 
-__all__ = ("TechVaultNativeDependencies", "TechVaultNativeEvidenceOwner")
+__all__ = (
+    "TechVaultNativeDependencies",
+    "TechVaultNativeEvidenceOwner",
+    "WazuhManagerAlertRead",
+    "read_wazuh_manager_alerts",
+)

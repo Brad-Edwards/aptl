@@ -200,18 +200,18 @@ describe('parseDotEnv', () => {
     const content = [
       '# APTL Lab Credentials',
       'INDEXER_USERNAME=admin',
-      'INDEXER_PASSWORD=SecretPassword',
+      'INDEXER_PASSWORD=indexer-test-value',
       '',
       '# Wazuh API',
-      'API_USERNAME=wazuh-wui',
-      'API_PASSWORD="WazuhPass123!"',
+      'API_USERNAME=api-test-user',
+      'API_PASSWORD="api-test-value"',
     ].join('\n');
     const result = parseDotEnv(content);
     expect(result).toEqual({
       INDEXER_USERNAME: 'admin',
-      INDEXER_PASSWORD: 'SecretPassword',
-      API_USERNAME: 'wazuh-wui',
-      API_PASSWORD: 'WazuhPass123!',
+      INDEXER_PASSWORD: 'indexer-test-value',
+      API_USERNAME: 'api-test-user',
+      API_PASSWORD: 'api-test-value',
     });
   });
 });

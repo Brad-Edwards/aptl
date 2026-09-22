@@ -1,5 +1,8 @@
 # Black Hat Arsenal USA 2026 QA Checklist
 
+Any Wazuh credentials shown below are planted scenario fixtures, not APTL
+control-plane or operator login secrets.
+
 Use this to validate each seat before attendees use it. This file intentionally
 uses direct commands so a tester can prove the participant flow without relying
 on an agent.

@@ -14,7 +14,6 @@ from aptl.core.collectors import (
     collect_misp_events,
     collect_shuffle_executions,
     collect_traces,
-    collect_wazuh_alerts,
 )
 
 
@@ -26,7 +25,14 @@ class TestCollectTraces:
         mock_curl.return_value = {
             "resourceSpans": [
                 {
-                    "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "aptl-cli"}}]},
+                    "resource": {
+                        "attributes": [
+                            {
+                                "key": "service.name",
+                                "value": {"stringValue": "aptl-cli"},
+                            }
+                        ]
+                    },
                     "scopeSpans": [
                         {
                             "spans": [
@@ -69,9 +75,7 @@ class TestCollectTraces:
             "batches": [
                 {
                     "resource": {},
-                    "scopeSpans": [
-                        {"spans": [{"name": "test-span"}]}
-                    ],
+                    "scopeSpans": [{"spans": [{"name": "test-span"}]}],
                 }
             ]
         }
@@ -189,82 +193,6 @@ class TestCollectContainerLogs:
         assert logs == {}
 
 
-class TestCollectWazuhAlerts:
-    """Tests for Wazuh alert collection."""
-
-    @patch("aptl.core.collectors._curl_json")
-    def test_returns_empty_on_failure(self, mock_curl):
-        mock_curl.return_value = None
-
-        result = collect_wazuh_alerts(
-            "2025-01-01T00:00:00+00:00",
-            "2025-01-01T23:59:59+00:00",
-        )
-        assert result == []
-
-    @patch("aptl.core.collectors._curl_json")
-    def test_collects_alerts(self, mock_curl):
-        mock_curl.return_value = {
-            "hits": {
-                "hits": [
-                    {"_source": {"rule": {"id": "1"}, "@timestamp": "2025-01-01T12:00:00"}},
-                    {"_source": {"rule": {"id": "2"}, "@timestamp": "2025-01-01T12:01:00"}},
-                ]
-            },
-            "_scroll_id": None,
-        }
-
-        result = collect_wazuh_alerts(
-            "2025-01-01T00:00:00+00:00",
-            "2025-01-01T23:59:59+00:00",
-        )
-        assert len(result) == 2
-        assert result[0]["rule"]["id"] == "1"
-
-    @patch("aptl.core.collectors._curl_json")
-    def test_credentials_go_through_auth_header_not_argv(self, mock_curl):
-        """ADR-029: the indexer Basic credentials reach curl via a 0600
-        header file (``auth_header``), never the argv-visible ``auth``
-        (``-u user:pass``) path that ``curl_json`` no longer supports."""
-        mock_curl.return_value = {"hits": {"hits": []}}
-
-        collect_wazuh_alerts(
-            "2025-01-01T00:00:00+00:00",
-            "2025-01-01T23:59:59+00:00",
-            auth=("admin", "SecretPassword"),
-        )
-
-        kwargs = mock_curl.call_args[1]
-        assert "auth" not in kwargs
-        assert kwargs["auth_header"].startswith("Basic ")
-        assert "SecretPassword" not in kwargs["auth_header"]
-
-    @patch("aptl.core.collectors._curl_json")
-    def test_a_failure_logs_the_exception_type_not_its_text(self, mock_curl, caplog):
-        """This is the credentialed indexer path, so its failures stay opaque.
-
-        An exception raised anywhere under the query can carry the URL, the
-        response body, or a credential in its message. Interpolating it into a
-        log record publishes that to whatever the log goes to, and a caller-side
-        redaction after the fact is too late. The class name says what broke.
-        """
-        mock_curl.side_effect = RuntimeError(
-            "https://admin:SecretPassword@localhost:9200 refused the query"
-        )
-
-        with caplog.at_level("WARNING"):
-            result = collect_wazuh_alerts(
-                "2025-01-01T00:00:00+00:00",
-                "2025-01-01T23:59:59+00:00",
-            )
-
-        assert result == []
-        logged = " ".join(record.getMessage() for record in caplog.records)
-        assert "SecretPassword" not in logged
-        assert "localhost:9200" not in logged
-        assert "RuntimeError" in logged
-
-
 class TestCollectorFailureLogging:
     """Every collector failure path logs the exception class, never its text.
 
@@ -280,10 +208,13 @@ class TestCollectorFailureLogging:
         # `cmd[:3]` anyway. What must not leak is the exception's own text.
         from aptl.core.collectors import _run_cmd
 
-        with patch(
-            "aptl.core.collectors.subprocess.run",
-            side_effect=OSError("connect to https://admin:hunter2@host failed"),
-        ), caplog.at_level("WARNING"):
+        with (
+            patch(
+                "aptl.core.collectors.subprocess.run",
+                side_effect=OSError("connect to https://admin:hunter2@host failed"),
+            ),
+            caplog.at_level("WARNING"),
+        ):
             assert _run_cmd(["curl", "-s", "https://localhost:9200/_search"]) is None
 
         logged = " ".join(record.getMessage() for record in caplog.records)
@@ -351,8 +282,12 @@ class TestCollectSuricataEve:
     def test_filters_by_time(self):
         entries = [
             json.dumps({"timestamp": "2025-01-01T10:00:00+00:00", "event_type": "dns"}),
-            json.dumps({"timestamp": "2025-01-01T12:00:00+00:00", "event_type": "alert"}),
-            json.dumps({"timestamp": "2025-01-01T14:00:00+00:00", "event_type": "flow"}),
+            json.dumps(
+                {"timestamp": "2025-01-01T12:00:00+00:00", "event_type": "alert"}
+            ),
+            json.dumps(
+                {"timestamp": "2025-01-01T14:00:00+00:00", "event_type": "flow"}
+            ),
         ]
         backend = MagicMock()
         backend.container_exec.return_value = MagicMock(
@@ -432,9 +367,7 @@ class TestCollectTheHiveCases:
         gte_found = any(
             "_gte" in c and c["_gte"]["_value"] == start for c in and_clauses
         )
-        lte_found = any(
-            "_lte" in c and c["_lte"]["_value"] == end for c in and_clauses
-        )
+        lte_found = any("_lte" in c and c["_lte"]["_value"] == end for c in and_clauses)
         assert gte_found and lte_found
 
 
@@ -454,7 +387,9 @@ class TestCollectMISPEvents:
 
     @patch("aptl.core.collectors._curl_json")
     def test_returns_events(self, mock_curl):
-        mock_curl.return_value = {"response": [{"Event": {"id": "1", "timestamp": "1735689600"}}]}
+        mock_curl.return_value = {
+            "response": [{"Event": {"id": "1", "timestamp": "1735689600"}}]
+        }
 
         result = collect_misp_events(
             "2025-01-01T00:00:00+00:00",
@@ -640,25 +575,6 @@ class TestSocCollectorTLSPosture:
         )
         assert len(result) == 1
         assert result[0]["execution_id"] == "ex-https"
-
-    @patch("aptl.core.collectors._curl_json")
-    def test_wazuh_collector_stays_insecure_per_sec_004_scope(self, mock_curl):
-        """Regression: SEC-004's rejectUnauthorized:false allowance covers
-        Wazuh inter-component traffic. SEC-006 narrows it for the SOC
-        stack but explicitly does NOT touch the Wazuh chain. Flipping the
-        Wazuh indexer collector to verify-on here would be SEC-006 scope
-        creep."""
-        from aptl.core.collectors import collect_wazuh_alerts
-        mock_curl.return_value = {"hits": {"hits": []}}
-
-        collect_wazuh_alerts(
-            "2025-01-01T00:00:00+00:00",
-            "2025-01-01T23:59:59+00:00",
-        )
-
-        kwargs = mock_curl.call_args[1]
-        # SEC-004 territory — stays insecure=True.
-        assert kwargs.get("insecure") is True
 
     @patch("aptl.core.collectors._curl_json")
     def test_explicit_ca_cert_path_override_is_honored(self, mock_curl):

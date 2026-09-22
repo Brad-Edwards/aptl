@@ -1,6 +1,7 @@
 """Content-identified startup enrichment for the released TechVault pack."""
 
 from importlib import metadata
+from importlib.resources import files
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -43,6 +44,8 @@ def test_service_alias_rejects_linked_source(tmp_path):
     (tmp_path / "alias").symlink_to(tmp_path / "real")
     with pytest.raises(ScenarioStartupProviderError):
         _project_file(tmp_path, "alias")
+
+
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
     DeploymentNodeRealization,
@@ -53,10 +56,11 @@ from aptl_techvault.runtime_parameters import TECHVAULT_PACK_SET_DIGEST
 
 
 def _bundle(*, digest: str = TECHVAULT_PACK_SET_DIGEST) -> ScenarioBundle:
+    pack_root = Path(str(files("raes_env_packs") / "resources/packs/techvault"))
     return ScenarioBundle(
         identity="techvault",
-        root=Path("/pack"),
-        sdl_path=Path("/pack/sdl/techvault.sdl.yaml"),
+        root=pack_root,
+        sdl_path=pack_root / "sdl/techvault.sdl.yaml",
         source_kind=ScenarioSourceKind.ENV_PACK,
         pack_identity=PackIdentity("techvault", "0.1.0", digest),
     )
@@ -328,6 +332,14 @@ def test_exact_release_resolves_seed_and_runtime_bindings() -> None:
     assert [(item.target, item.source) for item in plan.environment_aliases] == [
         ("ADMIN_KEY", "MISP_API_KEY")
     ]
+    assert {item.name for item in plan.environment_fixtures} == {
+        "INDEXER_USERNAME",
+        "INDEXER_PASSWORD",
+        "DASHBOARD_USERNAME",
+        "DASHBOARD_PASSWORD",
+        "API_USERNAME",
+        "API_PASSWORD",
+    }
     assert {
         (item.variable, item.semantic_name) for item in plan.container_environment
     } >= {
@@ -511,7 +523,7 @@ def test_core_preparation_rejects_a_missing_declared_operator_alias(tmp_path) ->
     assert not failure.success
     assert "MISP_API_KEY" in failure.error
     assert ctx.scenario_startup is None
-    assert not (tmp_path / ".env").exists()
+    assert (tmp_path / ".env").exists()
 
 
 def test_seed_environment_uses_receipt_resolved_container_names(tmp_path) -> None:

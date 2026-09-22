@@ -175,6 +175,19 @@ class _Backend:
         self._mounts = mounts or {}
         self.project_dir = project_dir
         self.authenticated_readiness = authenticated_readiness or {}
+        self.declared_wazuh_attestation = {
+            service: (
+                {
+                    "fact_id": "api:authenticated",
+                    "expected": "authenticated",
+                    "observed": "authenticated",
+                    "status": "matched",
+                    "failure_category": "",
+                },
+            )
+            for service, ready in (authenticated_readiness or {}).items()
+            if ready
+        }
         self._project_owned = project_owned
         self._content_types = content_types or {}
         self._content_probe_raises = content_probe_raises
@@ -946,7 +959,17 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
     assert observed.concerns == {("spec",): spec}
     assert observed.evidence["address"] == address
     assert observed.evidence["status"] == "ready"
-    assert observed.evidence["authenticated_readiness"] == {"wazuh.indexer": True}
+    assert observed.evidence["declared_wazuh_attestation"] == {
+        "wazuh.indexer": [
+            {
+                "fact_id": "api:authenticated",
+                "expected": "authenticated",
+                "observed": "authenticated",
+                "status": "matched",
+                "failure_category": "",
+            }
+        ]
+    }
     assert observed.evidence["consumer_mounts"] == [
         {
             "target_address": "provision.node.wazuh-indexer",
@@ -955,14 +978,24 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
             "service_health": "healthy",
         }
     ]
-    backend.authenticated_readiness = {}
+    backend.declared_wazuh_attestation = {}
     assert (
         observe_realization(backend, realization, plan, scenario_root=tmp_path)[
             address
         ].realized
         is False
     )
-    backend.authenticated_readiness = {"wazuh.indexer": True}
+    backend.declared_wazuh_attestation = {
+        "wazuh.indexer": (
+            {
+                "fact_id": "api:authenticated",
+                "expected": "authenticated",
+                "observed": "authenticated",
+                "status": "matched",
+                "failure_category": "",
+            },
+        )
+    }
     certificate_evidence.return_value = None
     assert (
         observe_realization(backend, realization, plan, scenario_root=tmp_path)[

@@ -46,6 +46,7 @@ from aptl.validation.techvault_live_gate import (
     LiveGateState,
     validate_live_deployment,
 )
+from aptl_techvault.evidence.techvault_native import WazuhManagerAlertRead
 from tests.fixture_pack import FIXTURE_SDL, admit_fixture_pack
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -496,9 +497,7 @@ def test_check_raes_driven_boot_carries_declared_apparatus(monkeypatch):
             provisioner=types.SimpleNamespace(
                 operator_access=types.SimpleNamespace(
                     accesses=(
-                        types.SimpleNamespace(
-                            access_id="kali-ssh", target_node="kali"
-                        ),
+                        types.SimpleNamespace(access_id="kali-ssh", target_node="kali"),
                     )
                 )
             )
@@ -1519,20 +1518,22 @@ def test_trigger_is_redriven_on_every_poll(monkeypatch):
         # Correlates only once the trigger has been re-driven, mimicking a path
         # that becomes ready partway through the window.
         if attempts["n"] >= 2:
-            return [{"rule": {"id": "5710"}, "data": {"dstuser": "test-marker"}}]
-        return [{"rule": {"id": "1002"}, "data": {"srcip": "10.0.0.1"}}]
-
-    monkeypatch.setattr(probes, "collect_wazuh_alerts", _alerts)
+            return WazuhManagerAlertRead(
+                records=({"rule": {"id": "5710"}, "data": {"dstuser": "test-marker"}},)
+            )
+        return WazuhManagerAlertRead(
+            records=({"rule": {"id": "1002"}, "data": {"srcip": "10.0.0.1"}},)
+        )
 
     _eve, alerts = probes._collect_until_evidence(
         probes.EvidencePollRequest(
             backend=object(),
+            realization=object(),
             start_iso="2026-01-01T00:00:00+00:00",
             deadline_monotonic=60.0,
             poll_interval_seconds=10.0,
-            indexer_url="https://localhost:9200",
-            indexer_auth=("u", "p"),
             alert_matches=lambda alert: "test-marker" in str(alert),
+            alert_reader=_alerts,
             sleep_fn=lambda _s: None,
             monotonic_fn=lambda: 0.0,
             regenerate=lambda: attempts.__setitem__("n", attempts["n"] + 1),
@@ -1548,21 +1549,21 @@ def test_without_redrive_a_lost_trigger_is_never_recovered(monkeypatch):
     from aptl.validation import _live_gate_probes as probes
 
     monkeypatch.setattr(probes, "collect_suricata_eve", lambda *a, **k: [])
-    monkeypatch.setattr(
-        probes,
-        "collect_wazuh_alerts",
-        lambda *a, **k: [{"rule": {"id": "1002"}, "data": {"srcip": "10.0.0.1"}}],
-    )
+
+    def alert_reader(*_args, **_kwargs):
+        return WazuhManagerAlertRead(
+            records=({"rule": {"id": "1002"}, "data": {"srcip": "10.0.0.1"}},)
+        )
 
     _eve, alerts = probes._collect_until_evidence(
         probes.EvidencePollRequest(
             backend=object(),
+            realization=object(),
             start_iso="2026-01-01T00:00:00+00:00",
             deadline_monotonic=30.0,
             poll_interval_seconds=10.0,
-            indexer_url="https://localhost:9200",
-            indexer_auth=("u", "p"),
             alert_matches=lambda alert: "test-marker" in str(alert),
+            alert_reader=alert_reader,
             sleep_fn=lambda _s: None,
             monotonic_fn=lambda: 0.0,
         )
@@ -1580,12 +1581,12 @@ def test_poll_does_not_redrive_after_sleep_reaches_the_deadline(monkeypatch):
     _eve, alerts = probes._collect_until_evidence(
         probes.EvidencePollRequest(
             backend=object(),
+            realization=object(),
             start_iso="2026-01-01T00:00:00+00:00",
             deadline_monotonic=10.0,
             poll_interval_seconds=10.0,
-            indexer_url="https://localhost:9200",
-            indexer_auth=("u", "p"),
             alert_matches=lambda _alert: False,
+            alert_reader=lambda *_args: WazuhManagerAlertRead(),
             sleep_fn=lambda _seconds: None,
             monotonic_fn=lambda: next(now),
             regenerate=lambda: attempts.append("triggered"),
@@ -1781,9 +1782,7 @@ def test_verifier_observes_semantic_not_workspace_container_names(
     monkeypatch.setattr(svd, "verify_scenario", verify)
     state = LiveGateState()
     state.snapshot = {"containers": [_container("aptl-w123456789abc-kali")]}
-    state.semantic_container_names = {
-        "aptl-kali": "aptl-w123456789abc-kali"
-    }
+    state.semantic_container_names = {"aptl-kali": "aptl-w123456789abc-kali"}
     ctx = tlg._RunContext(
         scenario_path=fixture_bundle.sdl_path,
         bundle=fixture_bundle,

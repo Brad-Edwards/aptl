@@ -49,12 +49,7 @@ class TestLoadDotenv:
         from aptl.core.env import load_dotenv
 
         env_file = tmp_path / ".env"
-        env_file.write_text(
-            "INDEXER_USERNAME=admin\n"
-            "\n"
-            "   \n"
-            "API_USERNAME=wazuh\n"
-        )
+        env_file.write_text("INDEXER_USERNAME=admin\n\n   \nAPI_USERNAME=wazuh\n")
         result = load_dotenv(env_file)
         assert len(result) == 2
 
@@ -145,9 +140,7 @@ class TestLoadDotenv:
 
         env_file = tmp_path / ".env"
         env_file.write_text(
-            "INDEXER_USERNAME=admin\n"
-            "no_equals_here\n"
-            "API_USERNAME=wazuh\n"
+            "INDEXER_USERNAME=admin\nno_equals_here\nAPI_USERNAME=wazuh\n"
         )
         result = load_dotenv(env_file)
         assert len(result) == 2
@@ -175,7 +168,12 @@ class TestValidateRequiredEnv:
             "API_USERNAME": "wazuh",
             "API_PASSWORD": "mysecret",
         }
-        required = ["INDEXER_USERNAME", "INDEXER_PASSWORD", "API_USERNAME", "API_PASSWORD"]
+        required = [
+            "INDEXER_USERNAME",
+            "INDEXER_PASSWORD",
+            "API_USERNAME",
+            "API_PASSWORD",
+        ]
         missing = validate_required_env(env, required)
         assert missing == []
 
@@ -235,8 +233,8 @@ class TestEnvVarsFromDict:
         assert result.dashboard_password == "dashpass"
         assert result.wazuh_cluster_key == "clusterkey123"
 
-    def test_uses_defaults_for_optional_fields(self):
-        """Optional fields should use defaults when not in env dict."""
+    def test_uses_empty_defaults_for_optional_dashboard_fields(self):
+        """Core does not carry scenario-specific dashboard fixture values."""
         from aptl.core.env import env_vars_from_dict
 
         env = {
@@ -246,20 +244,22 @@ class TestEnvVarsFromDict:
             "API_PASSWORD": "mysecret",
         }
         result = env_vars_from_dict(env)
-        assert result.dashboard_username == "kibanaserver"
+        assert result.dashboard_username == ""
         assert result.dashboard_password == ""
         assert result.wazuh_cluster_key == ""
 
-    def test_raises_when_required_vars_missing(self):
-        """Should raise ValueError when required env vars are missing."""
+    def test_non_wazuh_scenario_allows_wazuh_vars_to_be_absent(self):
+        """Generic core does not require scenario-owned Wazuh fixtures."""
         from aptl.core.env import env_vars_from_dict
 
-        env = {"INDEXER_USERNAME": "admin"}  # Missing others
-        with pytest.raises(ValueError, match="INDEXER_PASSWORD"):
-            env_vars_from_dict(env)
+        result = env_vars_from_dict({})
+        assert result.indexer_username == ""
+        assert result.indexer_password == ""
+        assert result.api_username == ""
+        assert result.api_password == ""
 
-    def test_raises_when_required_var_is_empty(self):
-        """Should raise ValueError when a required var has empty value."""
+    def test_empty_scenario_values_remain_empty_until_admission(self):
+        """Empty values are not replaced by generic core defaults."""
         from aptl.core.env import env_vars_from_dict
 
         env = {
@@ -268,8 +268,8 @@ class TestEnvVarsFromDict:
             "API_USERNAME": "wazuh",
             "API_PASSWORD": "secret",
         }
-        with pytest.raises(ValueError, match="INDEXER_PASSWORD"):
-            env_vars_from_dict(env)
+        result = env_vars_from_dict(env)
+        assert result.indexer_password == ""
 
 
 class TestFindPlaceholderEnvValues:
@@ -308,9 +308,7 @@ class TestFindPlaceholderEnvValues:
         .env.example value."""
         from aptl.core.env import find_placeholder_env_values
 
-        assert find_placeholder_env_values({"MISP_API_KEY": value}) == [
-            "MISP_API_KEY"
-        ]
+        assert find_placeholder_env_values({"MISP_API_KEY": value}) == ["MISP_API_KEY"]
 
     def test_skips_absent_or_empty_values(self):
         from aptl.core.env import find_placeholder_env_values

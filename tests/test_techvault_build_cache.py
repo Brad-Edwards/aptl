@@ -52,3 +52,20 @@ def test_dependency_cache_omits_lifecycle_scripts_without_changing_pack_artifact
         source = json.load(archive.extractfile(manifest_path))
     assert source["scripts"]["prepare"]
     assert derived == {key: value for key, value in source.items() if key != "scripts"}
+
+
+def test_build_cache_cli_refuses_caller_supplied_paths(monkeypatch):
+    import runpy
+    import sys
+
+    monkeypatch.delitem(sys.modules, "aptl_techvault.build_cache", raising=False)
+    monkeypatch.setattr(sys, "argv", ["build_cache", "/elsewhere", "/staging"])
+    with pytest.raises(SystemExit, match="usage"):
+        runpy.run_module("aptl_techvault.build_cache", run_name="__main__")
+
+
+def test_build_cache_cli_writes_only_to_the_fixed_build_locations():
+    from aptl_techvault import build_cache
+
+    assert build_cache.BUILD_CACHE_DESTINATION == Path("/opt/aptl/npm-source")
+    assert build_cache.BUILD_CACHE_STAGING == Path("/opt/aptl/npm-cache-pack")

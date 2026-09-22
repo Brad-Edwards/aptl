@@ -152,7 +152,9 @@ def test_node22_image_preloads_exact_mcp_locks_for_offline_materialization() -> 
         "COPY requirements/runtime.txt /opt/aptl/runtime-requirements.txt" in dockerfile
     )
     assert "python3 -m pip install --no-deps --require-hashes" in dockerfile
-    assert "python3 -m aptl_techvault.build_cache" in dockerfile
+    assert "python3 -m aptl_techvault.build_cache \\\n" in dockerfile
+    assert "/tmp/aptl-cache-pack" not in dockerfile
+    assert "/opt/aptl/npm-cache-pack" in dockerfile
     assert "npm-cache-input-identity.json" in dockerfile
     assert "zipfile -e" not in dockerfile
     assert "npm_config_cache=/opt/aptl/npm-cache" in dockerfile

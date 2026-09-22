@@ -872,6 +872,7 @@ src/aptl/backends/_raes_stateful_values.py	backend-owned-runtime	Retain authored
 src/aptl/backends/_runtime_concern_disclosure.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_runtime_concern_excess.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/_runtime_mount_observation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/_scenario_environment.py	core-candidate	Keep scenario-independent environment contracts behind the generic startup adapter contract
 src/aptl/backends/_scenario_startup_runtime.py	core-candidate	Keep scenario-independent startup provider dispatch behind the generic startup adapter contract
 src/aptl/backends/identity.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/pack_interaction.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1101,6 +1102,7 @@ src/aptl/core/deployment/_ssh_key_bundle.py	core-candidate	Migrate only after pu
 src/aptl/core/deployment/_stateful_certificates.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_wazuh_agent_configuration.py	backend-observability	Retain declared Wazuh forwarding-agent configuration rendering
 src/aptl/core/deployment/_wazuh_agent_realization.py	backend-observability	Retain declared Wazuh forwarding-agent realization and exact native readback
+src/aptl/core/deployment/_wazuh_attestation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_wazuh_identity.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/backend.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/backend_container_ops.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1313,6 +1315,7 @@ src/aptl_techvault/evidence/_techvault_native_cortex.py	core-runtime	Retain Tech
 src/aptl_techvault/evidence/proposition_truth.py	core-runtime	Retain TechVault proposition interpretation behind its adapter
 src/aptl_techvault/evidence/techvault.py	core-runtime	Retain TechVault evidence behavior behind its adapter
 src/aptl_techvault/evidence/techvault_enrollment_baseline.py	core-runtime	Retain TechVault enrollment evidence state behind its adapter
+src/aptl_techvault/evidence/techvault_manager_alerts.py	core-runtime	Retain TechVault manager alert source behind its adapter
 src/aptl_techvault/evidence/techvault_misp_readiness.py	core-runtime	Retain TechVault MISP readiness behavior behind its adapter
 src/aptl_techvault/evidence/techvault_native.py	core-runtime	Retain TechVault native evidence owner behind its adapter
 src/aptl_techvault/evidence/techvault_native_readiness.py	core-runtime	Retain TechVault native readiness behavior behind its adapter

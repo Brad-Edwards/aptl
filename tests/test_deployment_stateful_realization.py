@@ -1224,10 +1224,10 @@ def test_manager_native_attestation_does_not_require_listener_host_publication(
                     "implementation": "wazuh",
                     "manager_kind": "siem",
                     "listeners": [
-                            {
-                                "listener_id": "agent-events",
-                                "role": "agent_event_ingestion",
-                            }
+                        {
+                            "listener_id": "agent-events",
+                            "role": "agent_event_ingestion",
+                        }
                     ],
                 }
             ]
@@ -1297,7 +1297,8 @@ def test_declared_indexer_fact_mismatch_fails_realization(
 
     result = backend._verify_stateful_authenticated_readiness(spec)
 
-    assert result is not None and not result.success
+    assert result is not None
+    assert result.success is False
     assert "declared-partition-missing-or-mismatched" in result.error
     assert backend.declared_wazuh_attestation["wazuh.indexer"][0]["status"] == "failed"
 

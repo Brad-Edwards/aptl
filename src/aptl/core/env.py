@@ -225,6 +225,64 @@ def _render_dotenv_update_lines(original: str, updates: dict[str, str]) -> list[
     return lines
 
 
+def _validated_authoritative_values(
+    authoritative_values: dict[str, str] | None,
+) -> dict[str, str]:
+    """Return safe scenario fixtures or reject the whole supplied mapping."""
+
+    fixed = dict(authoritative_values or {})
+    invalid = any(
+        _ENVIRONMENT_VARIABLE_NAME.fullmatch(key) is None
+        or not value
+        or "\n" in value
+        or "\r" in value
+        for key, value in fixed.items()
+    )
+    if invalid:
+        raise ValueError("invalid authoritative environment value")
+    return fixed
+
+
+def _reconcile_authoritative_values(
+    path: Path,
+    current: dict[str, str],
+    fixed: dict[str, str],
+) -> tuple[list[str], list[str]]:
+    """Classify missing and divergent cached scenario fixtures."""
+
+    updated: list[str] = []
+    overridden: list[str] = []
+    for key, required in fixed.items():
+        current_value = current.get(key)
+        if _needs_hydration(current_value):
+            updated.append(key)
+        elif current_value != required:
+            log.warning(
+                "%s in %s diverges from the admitted scenario fixture; "
+                "reconciling the cached value.",
+                key,
+                path,
+            )
+            updated.append(key)
+            overridden.append(key)
+    return updated, overridden
+
+
+def _hydrate_owned_values(
+    project_dir: Path,
+    current: dict[str, str],
+    values: dict[str, str],
+) -> list[str]:
+    """Hydrate missing generic APTL-owned values while preserving existing ones."""
+
+    updated: list[str] = []
+    for key, factory in _HYDRATED_ENV_SPECS:
+        if _needs_hydration(current.get(key)):
+            values[key] = factory(project_dir, values)
+            updated.append(key)
+    return updated
+
+
 def hydrate_dotenv(
     path: Path, *, authoritative_values: dict[str, str] | None = None
 ) -> DotenvHydrationResult:
@@ -240,38 +298,10 @@ def hydrate_dotenv(
     original = "" if created else path.read_text(encoding="utf-8")
     current = {} if created else load_dotenv(path)
     values = {key: current.get(key, "") for key, _ in _HYDRATED_ENV_SPECS}
-    fixed = dict(authoritative_values or {})
-    if any(
-        _ENVIRONMENT_VARIABLE_NAME.fullmatch(key) is None
-        or not value
-        or "\n" in value
-        or "\r" in value
-        for key, value in fixed.items()
-    ):
-        raise ValueError("invalid authoritative environment value")
+    fixed = _validated_authoritative_values(authoritative_values)
     values.update(fixed)
-    updated: list[str] = []
-    overridden: list[str] = []
-
-    for key, required in fixed.items():
-        current_value = current.get(key)
-        if _needs_hydration(current_value):
-            updated.append(key)
-        elif current_value != required:
-            log.warning(
-                "%s in %s diverges from the admitted scenario fixture; "
-                "reconciling the cached value.",
-                key,
-                path,
-            )
-            updated.append(key)
-            overridden.append(key)
-
-    for key, factory in _HYDRATED_ENV_SPECS:
-        current_value = current.get(key)
-        if _needs_hydration(current_value):
-            values[key] = factory(path.parent, values)
-            updated.append(key)
+    updated, overridden = _reconcile_authoritative_values(path, current, fixed)
+    updated.extend(_hydrate_owned_values(path.parent, current, values))
 
     if created or updated:
         _write_dotenv(path, _render_hydrated_dotenv(original, values))

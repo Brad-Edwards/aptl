@@ -53,6 +53,10 @@ from aptl_techvault.evidence.techvault_native_support import (
     utc_iso_now,
     webapp_endpoint,
 )
+from aptl_techvault.evidence.techvault_manager_alerts import (
+    WazuhManagerAlertRead,
+    read_wazuh_manager_alerts,
+)
 from aptl.utils.curl_safe import curl_json
 from aptl_techvault.evidence.techvault_telemetry_stimulus import (
     emit_missing_agent_events,
@@ -78,20 +82,6 @@ grep -Fq 'Configuration provided was successfully loaded' "$tmp"
 sha256sum /etc/suricata/suricata.yaml /etc/suricata/rules/local.rules
 sed -nE 's/.*sid:([0-9]+).*/sid=\1/p' /etc/suricata/rules/local.rules
 """.strip()
-
-
-@dataclass(frozen=True)
-class WazuhManagerAlertRead:
-    """Typed result from the single admitted manager-alert source operation."""
-
-    records: tuple[Mapping[str, object], ...] = ()
-    loss_category: str | None = None
-
-    @property
-    def complete(self) -> bool:
-        """Return whether the declared source was read and parsed successfully."""
-
-        return self.loss_category is None
 
 
 @dataclass(frozen=True)
@@ -457,53 +447,6 @@ class TechVaultNativeEvidenceOwner(TechVaultNativeCortexMixin):
             if isinstance(item.get("rule"), Mapping)
             and str(item["rule"].get("id", "")) == WAZUH_SQLI_RULE_ID
         ]
-
-
-def read_wazuh_manager_alerts(
-    backend: object,
-    realization: object,
-    start_iso: str,
-    end_iso: str,
-) -> WazuhManagerAlertRead:
-    """Read bounded NDJSON from the realization-declared manager source."""
-
-    manager = find_node(realization, "wazuh-manager")
-    container = getattr(manager, "container_name", None)
-    if not isinstance(container, str) or not container:
-        return WazuhManagerAlertRead(loss_category="declared-manager-unavailable")
-    try:
-        result = backend.container_exec(
-            container,
-            [
-                "tail",
-                "-c",
-                str(MAX_SOURCE_BYTES),
-                "/var/ossec/logs/alerts/alerts.json",
-            ],
-            timeout=30,
-        )
-    except Exception:
-        return WazuhManagerAlertRead(loss_category="source-exec-failed")
-    raw = result.stdout.encode()
-    if result.returncode != 0:
-        return WazuhManagerAlertRead(loss_category="source-command-failed")
-    if len(raw) > MAX_SOURCE_BYTES:
-        return WazuhManagerAlertRead(loss_category="source-output-oversized")
-    normalized: list[Mapping[str, object]] = []
-    for index, line in enumerate(result.stdout.splitlines()):
-        try:
-            source = json.loads(line)
-        except json.JSONDecodeError:
-            if index == 0:
-                continue
-            return WazuhManagerAlertRead(loss_category="source-ndjson-malformed")
-        if not isinstance(source, Mapping):
-            return WazuhManagerAlertRead(loss_category="source-record-invalid")
-        item = dict(source)
-        item["timestamp"] = source.get("timestamp", source.get(_TIMESTAMP_FIELD))
-        if inside_window(item["timestamp"], start_iso, end_iso):
-            normalized.append(item)
-    return WazuhManagerAlertRead(records=tuple(normalized[:256]))
 
 
 __all__ = (

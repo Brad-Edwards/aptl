@@ -12,6 +12,13 @@ import re
 from aptl.core.deployment.realization import valid_environment_variable_name
 from aptl.core.scenario_bundle import PackIdentity, ScenarioBundle
 from aptl.utils.logging import get_logger
+from aptl.backends._scenario_environment import (
+    EnvironmentAlias,
+    ScenarioEnvironmentFixture,
+    ScenarioStartupProviderError,
+    validated_aliases as _validated_aliases,
+    validated_environment_fixtures,
+)
 
 log = get_logger("scenario-startup")
 
@@ -20,10 +27,6 @@ EXTENSION_API_VERSION = "1"
 DOCKER_TRANSPORT_KEYS = frozenset(
     ("DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "DOCKER_SSH_IDENTITY")
 )
-
-
-class ScenarioStartupProviderError(RuntimeError):
-    """Stable fail-closed diagnostic for the scenario-startup adapter seam."""
 
 
 class StartupCapability(str, Enum):
@@ -72,22 +75,6 @@ class StartupHookContext:
         if self.operation is None:
             raise ScenarioStartupProviderError("provider-hook-operation-unavailable")
         return self.operation()
-
-
-@dataclass(frozen=True, order=True)
-class EnvironmentAlias:
-    """Copy one existing operator credential to a runtime variable name."""
-
-    target: str
-    source: str
-
-
-@dataclass(frozen=True, order=True)
-class ScenarioEnvironmentFixture:
-    """One pack-fixed value projected into the local environment cache."""
-
-    name: str
-    value: str = field(repr=False, compare=False)
 
 
 @dataclass(frozen=True, order=True)
@@ -225,46 +212,12 @@ def _safe_relative_script(value: object) -> str:
     return str(path)
 
 
-def _validated_aliases(value: object) -> tuple[EnvironmentAlias, ...]:
-    """Validate unique, well-formed operator environment aliases."""
-
-    if not isinstance(value, tuple) or any(
-        not isinstance(item, EnvironmentAlias) for item in value
-    ):
-        raise ScenarioStartupProviderError("provider-result-invalid")
-    if any(
-        not valid_environment_variable_name(item.target)
-        or not valid_environment_variable_name(item.source)
-        for item in value
-    ):
-        raise ScenarioStartupProviderError("provider-result-invalid")
-    if len({item.target for item in value}) != len(value):
-        raise ScenarioStartupProviderError("provider-result-invalid")
-    return tuple(value)
-
-
 def _validated_environment_fixtures(
     value: object,
 ) -> tuple[ScenarioEnvironmentFixture, ...]:
     """Validate fixed values without copying their bytes into diagnostics."""
 
-    if not isinstance(value, tuple) or any(
-        not isinstance(item, ScenarioEnvironmentFixture) for item in value
-    ):
-        raise ScenarioStartupProviderError("provider-result-invalid")
-    names = [item.name for item in value]
-    if (
-        len(names) != len(set(names))
-        or any(
-            not valid_environment_variable_name(name) or name in DOCKER_TRANSPORT_KEYS
-            for name in names
-        )
-        or any(
-            not item.value or "\n" in item.value or "\r" in item.value for item in value
-        )
-    ):
-        raise ScenarioStartupProviderError("provider-result-invalid")
-    return value
+    return validated_environment_fixtures(value, DOCKER_TRANSPORT_KEYS)
 
 
 def _validated_container_environment(

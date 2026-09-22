@@ -15,9 +15,8 @@ unready service becomes the terminal reason at the deadline (issue #1002).
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 
 from aptl.core.deployment._wazuh_identity import (
     WazuhClusterIdentity,
@@ -27,19 +26,25 @@ from aptl.core.deployment._compose_stateful_constants import (
     WAZUH_MANAGER_CONFIG_PROVENANCES,
 )
 from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.deployment._wazuh_attestation import (
+    AUTHENTICATED_FACT_ID,
+    declared_indexer as _declared_indexer,
+    declared_manager_components as _declared_manager_components,
+    declared_wazuh_fact_ids,
+    declared_wazuh_facts_match,
+    declares_wazuh_native_service as _declares_wazuh_native_service,
+    fact_observation as _fact_observation,
+    load_stateful_env as _load_stateful_env,
+    observe_indexer_declared_facts,
+    readiness_failure as _readiness_failure,
+)
 from aptl.core.deployment.realization import (
     DeploymentNodeRealization,
     DeploymentRealizationSpec,
 )
-from aptl.core.env import (
-    EnvVars,
-    env_vars_from_dict,
-    find_placeholder_env_values,
-    load_dotenv,
-)
+from aptl.core.env import EnvVars
 from aptl.core.lab_types import LabResult
 from aptl.core.services import probe_indexer_api, probe_manager_api
-from aptl.utils.curl_safe import basic_auth_header, curl_json
 from aptl.utils.logging import get_logger
 
 log = get_logger("stateful-readiness")
@@ -62,6 +67,18 @@ class _ServiceObservation:
     detail: str
     container_name: str | None = None
     facts: tuple[dict[str, str], ...] = ()
+
+
+def _authenticated_fact() -> dict[str, str]:
+    """Return the shared successful authenticated-API observation."""
+
+    return _fact_observation(
+        AUTHENTICATED_FACT_ID,
+        "authenticated",
+        "authenticated",
+        True,
+        "",
+    )
 
 
 @dataclass(frozen=True)
@@ -267,125 +284,91 @@ class ComposeStatefulReadinessMixin:
             )
         url = f"https://localhost:{port}"
         if service == identity.indexer_service:
-            probe = probe_indexer_api(url, env.indexer_username, env.indexer_password)
-            if probe.ready:
-                declared = _declared_indexer(node)
-                facts = observe_indexer_declared_facts(
-                    url,
-                    env.indexer_username,
-                    env.indexer_password,
-                    declared,
-                )
-                failed = [fact for fact in facts if fact["status"] != "matched"]
-                if failed:
-                    return _ServiceObservation(
-                        False,
-                        f"{service} at {url} attestation failed: "
-                        f"{failed[0]['failure_category']}",
-                        container,
-                        facts,
-                    )
-                facts = (
-                    _fact_observation(
-                        "api:authenticated", "authenticated", "authenticated", True, ""
-                    ),
-                    *facts,
-                )
-                return _ServiceObservation(
-                    True, f"{service} at {url} ready", container, facts
-                )
-        else:
-            probe = probe_manager_api(url, env.api_username, env.api_password)
-            if probe.ready:
-                expected = _declared_manager_components(node)
-                facts = (
-                    _fact_observation(
-                        "api:authenticated", "authenticated", "authenticated", True, ""
-                    ),
-                    *(
-                        _fact_observation(
-                            f"component:{component}",
-                            "running",
-                            "running"
-                            if component in probe.observed_components
-                            else "missing",
-                            component in probe.observed_components,
-                            "declared-component-not-running",
-                        )
-                        for component in sorted(expected)
-                    ),
-                )
-                failed = [fact for fact in facts if fact["status"] != "matched"]
-                if failed:
-                    return _ServiceObservation(
-                        False,
-                        f"{service} at {url} attestation failed: "
-                        "declared components not running: "
-                        + ", ".join(
-                            fact["fact_id"].split(":", 1)[1] for fact in failed
-                        ),
-                        container,
-                        facts,
-                    )
-                return _ServiceObservation(
-                    True, f"{service} at {url} ready", container, facts
-                )
-        ready = probe.ready
+            return self._indexer_service_observation(service, url, container, node, env)
+        return self._manager_service_observation(service, url, container, node, env)
+
+    @staticmethod
+    def _unready_observation(
+        service: str, url: str, container: str | None, probe: object
+    ) -> _ServiceObservation:
+        """Project one classified API probe that has not become ready yet."""
+
         detail = probe.describe()
-        if not ready:
-            # Expected while the API warms up; only the deadline makes it terminal.
-            log.debug("%s not ready yet: %s", service, detail)
-        return _ServiceObservation(ready, f"{service} at {url} {detail}", container)
+        log.debug("%s not ready yet: %s", service, detail)
+        return _ServiceObservation(False, f"{service} at {url} {detail}", container)
 
+    def _indexer_service_observation(
+        self,
+        service: str,
+        url: str,
+        container: str | None,
+        node: DeploymentNodeRealization | None,
+        env: EnvVars,
+    ) -> _ServiceObservation:
+        """Attest the declared indexer service and its native facts."""
 
-def _readiness_failure(
-    observations: Mapping[str, _ServiceObservation],
-    timeout: int,
-) -> str | None:
-    """Render the terminal reason for services still unready at the deadline."""
+        probe = probe_indexer_api(url, env.indexer_username, env.indexer_password)
+        if not probe.ready:
+            return self._unready_observation(service, url, container, probe)
+        facts = observe_indexer_declared_facts(
+            url,
+            env.indexer_username,
+            env.indexer_password,
+            _declared_indexer(node),
+        )
+        failed = [fact for fact in facts if fact["status"] != "matched"]
+        if failed:
+            return _ServiceObservation(
+                False,
+                f"{service} at {url} attestation failed: "
+                f"{failed[0]['failure_category']}",
+                container,
+                facts,
+            )
+        return _ServiceObservation(
+            True,
+            f"{service} at {url} ready",
+            container,
+            (_authenticated_fact(), *facts),
+        )
 
-    failed = [
-        observation
-        for _service, observation in sorted(observations.items())
-        if not observation.ready
-    ]
-    if not failed:
-        return None
-    reasons = "; ".join(observation.detail for observation in failed)
-    logs = " and ".join(
-        f"`aptl container logs {observation.container_name}`"
-        for observation in failed
-        if observation.container_name
-    )
-    action = f" Inspect {logs}." if logs else ""
-    return (
-        f"Authenticated Wazuh readiness validation failed after {timeout}s: "
-        f"{reasons}.{action}"
-    )
+    def _manager_service_observation(
+        self,
+        service: str,
+        url: str,
+        container: str | None,
+        node: DeploymentNodeRealization | None,
+        env: EnvVars,
+    ) -> _ServiceObservation:
+        """Attest the declared manager service and enabled components."""
 
-
-def _load_stateful_env(project_dir: Path) -> tuple[EnvVars | None, bool]:
-    """Load typed credentials and report whether placeholders caused rejection."""
-
-    env: EnvVars | None = None
-    placeholder_input = False
-    try:
-        raw_env = load_dotenv(project_dir / ".env")
-        placeholder_input = bool(find_placeholder_env_values(raw_env))
-        if not placeholder_input:
-            candidate = env_vars_from_dict(raw_env)
-            if all(
-                (
-                    candidate.indexer_username,
-                    candidate.indexer_password,
-                    candidate.api_username,
-                    candidate.api_password,
+        probe = probe_manager_api(url, env.api_username, env.api_password)
+        if not probe.ready:
+            return self._unready_observation(service, url, container, probe)
+        facts = (
+            _authenticated_fact(),
+            *(
+                _fact_observation(
+                    f"component:{component}",
+                    "running",
+                    "running" if component in probe.observed_components else "missing",
+                    component in probe.observed_components,
+                    "declared-component-not-running",
                 )
-            ):
-                env = candidate
-    except (OSError, ValueError):
-        env = None
-    return env, placeholder_input
+                for component in sorted(_declared_manager_components(node))
+            ),
+        )
+        failed = [fact for fact in facts if fact["status"] != "matched"]
+        if failed:
+            missing = ", ".join(fact["fact_id"].split(":", 1)[1] for fact in failed)
+            return _ServiceObservation(
+                False,
+                f"{service} at {url} attestation failed: "
+                f"declared components not running: {missing}",
+                container,
+                facts,
+            )
+        return _ServiceObservation(True, f"{service} at {url} ready", container, facts)
 
 
 def _stateful_services(
@@ -400,273 +383,6 @@ def _stateful_services(
         if node.service_name in identity.services
         and _declares_wazuh_native_service(node, identity)
     }
-
-
-def _declares_wazuh_native_service(
-    node: DeploymentNodeRealization, identity: WazuhClusterIdentity
-) -> bool:
-    """Return whether the admitted runtime authorizes a native Wazuh query."""
-
-    runtime = node.runtime
-    if runtime is None:
-        return False
-    if node.service_name == identity.indexer_service:
-        return _declared_indexer(node) is not None
-    if node.service_name == identity.manager_service:
-        return any(
-            str(
-                getattr(
-                    getattr(manager, "implementation", ""),
-                    "value",
-                    getattr(manager, "implementation", ""),
-                )
-            )
-            == "wazuh"
-            for manager in getattr(runtime, "security_monitoring_managers", ())
-        )
-    return False
-
-
-def _declared_indexer(node: DeploymentNodeRealization | None) -> object | None:
-    """Return the node's single declared OpenSearch datastore, if present."""
-
-    runtime = node.runtime if node is not None else None
-    stores = [
-        store
-        for store in getattr(runtime, "datastore_services", ())
-        if str(
-            getattr(getattr(store, "engine", ""), "value", getattr(store, "engine", ""))
-        )
-        in {"opensearch", "elasticsearch"}
-    ]
-    return stores[0] if len(stores) == 1 else None
-
-
-def _declared_manager_components(
-    node: DeploymentNodeRealization | None,
-) -> frozenset[str]:
-    """Return manager-owned enabled processes declared by the realization."""
-
-    runtime = node.runtime if node is not None else None
-    managers = [
-        manager
-        for manager in getattr(runtime, "security_monitoring_managers", ())
-        if str(
-            getattr(
-                getattr(manager, "implementation", ""),
-                "value",
-                getattr(manager, "implementation", ""),
-            )
-        )
-        == "wazuh"
-    ]
-    if len(managers) != 1:
-        return frozenset()
-    return frozenset(
-        str(component.name)
-        for component in getattr(managers[0], "components", ())
-        if getattr(component, "enabled", False)
-        and str(getattr(component, "name", "")).startswith("wazuh-")
-    )
-
-
-def observe_indexer_declared_facts(
-    url: str,
-    username: str,
-    password: str,
-    datastore: object | None,
-) -> tuple[dict[str, str], ...]:
-    """Compare bounded indexer readback with every declared native fact."""
-
-    if datastore is None:
-        return ()
-    partitions = tuple(getattr(datastore, "partitions", ()) or ())
-    templates = tuple(getattr(datastore, "templates", ()) or ())
-    mappings = tuple(getattr(datastore, "mappings", ()) or ())
-    # A declaration with no native subfacts still requires the authenticated
-    # service probe above, but has nothing further to compare.
-    if not any((partitions, templates, mappings)):
-        return ()
-    header = basic_auth_header(username, password)
-    base = url.rstrip("/")
-    if partitions:
-        names = ",".join(str(item.name) for item in partitions)
-        payload = curl_json(
-            f"{base}/_cluster/state/metadata/{names}",
-            auth_header=header,
-            insecure=True,
-            timeout=30,
-        )
-        indices = _index_metadata(payload)
-        partition_facts = tuple(
-            _partition_observation(item, indices.get(str(item.name)))
-            for item in partitions
-        )
-    else:
-        partition_facts = ()
-    if templates:
-        names = ",".join(str(item.name) for item in templates)
-        payload = curl_json(
-            f"{base}/_template/{names}",
-            auth_header=header,
-            insecure=True,
-            timeout=30,
-        )
-        template_facts = tuple(
-            _fact_observation(
-                f"template:{item.name}",
-                "present",
-                "present"
-                if isinstance(payload, Mapping) and str(item.name) in payload
-                else "missing",
-                isinstance(payload, Mapping) and str(item.name) in payload,
-                "declared-template-missing",
-            )
-            for item in templates
-        )
-    else:
-        template_facts = ()
-    if mappings:
-        names = ",".join(str(item.name) for item in mappings)
-        payload = curl_json(
-            f"{base}/{names}/_mapping",
-            auth_header=header,
-            insecure=True,
-            timeout=30,
-        )
-        mapping_facts = tuple(
-            _mapping_observation(
-                item,
-                payload.get(str(item.name)) if isinstance(payload, Mapping) else None,
-            )
-            for item in mappings
-        )
-    else:
-        mapping_facts = ()
-    return partition_facts + template_facts + mapping_facts
-
-
-def _fact_observation(
-    fact_id: str,
-    expected: str,
-    observed: str,
-    matched: bool,
-    failure_category: str,
-) -> dict[str, str]:
-    """Build one bounded, stable, secret-free declared-fact observation."""
-
-    return {
-        "fact_id": fact_id,
-        "expected": expected,
-        "observed": observed,
-        "status": "matched" if matched else "failed",
-        "failure_category": "" if matched else failure_category,
-    }
-
-
-def _partition_observation(declared: object, observed: object) -> dict[str, str]:
-    expected = f"shards={declared.shard_count},replicas={declared.replica_count}"
-    settings = observed.get("settings") if isinstance(observed, Mapping) else None
-    index = settings.get("index") if isinstance(settings, Mapping) else None
-    actual = (
-        f"shards={index.get('number_of_shards')},replicas={index.get('number_of_replicas')}"
-        if isinstance(index, Mapping)
-        else "missing"
-    )
-    return _fact_observation(
-        f"partition:{declared.name}",
-        expected,
-        actual,
-        _partition_matches(declared, observed),
-        "declared-partition-missing-or-mismatched",
-    )
-
-
-def _mapping_observation(declared: object, observed: object) -> dict[str, str]:
-    expected_count = getattr(declared, "top_level_field_count", None)
-    mappings = observed.get("mappings") if isinstance(observed, Mapping) else None
-    properties = mappings.get("properties") if isinstance(mappings, Mapping) else None
-    actual_count = len(properties) if isinstance(properties, Mapping) else None
-    return _fact_observation(
-        f"mapping:{declared.name}",
-        "present" if expected_count is None else f"top-level-fields={expected_count}",
-        "missing" if actual_count is None else f"top-level-fields={actual_count}",
-        _mapping_matches(declared, observed),
-        "declared-mapping-missing-or-mismatched",
-    )
-
-
-def declared_wazuh_fact_ids(node: object) -> frozenset[str]:
-    """Return the exact native facts required by one declared Wazuh node."""
-
-    name = getattr(node, "name", "")
-    if name == "wazuh-indexer":
-        store = _declared_indexer(node)
-        if store is None:
-            return frozenset()
-        return frozenset(
-            ["api:authenticated"]
-            + [f"partition:{item.name}" for item in getattr(store, "partitions", ())]
-            + [f"template:{item.name}" for item in getattr(store, "templates", ())]
-            + [f"mapping:{item.name}" for item in getattr(store, "mappings", ())]
-        )
-    if name == "wazuh-manager":
-        return frozenset(
-            ["api:authenticated"]
-            + [
-                f"component:{component}"
-                for component in _declared_manager_components(node)
-            ]
-        )
-    return frozenset()
-
-
-def declared_wazuh_facts_match(
-    attestation: object, service: str | None, node: object | None = None
-) -> bool:
-    """Require matched structured observations, optionally for an exact declaration."""
-
-    if not isinstance(attestation, Mapping) or not service:
-        return False
-    facts = attestation.get(service)
-    if not isinstance(facts, (tuple, list)) or not facts:
-        return False
-    observed = {
-        fact.get("fact_id")
-        for fact in facts
-        if isinstance(fact, Mapping) and fact.get("status") == "matched"
-    }
-    if len(observed) != len(facts):
-        return False
-    expected = declared_wazuh_fact_ids(node) if node is not None else observed
-    return bool(expected) and observed == expected
-
-
-def _index_metadata(payload: object) -> Mapping[str, object]:
-    metadata = payload.get("metadata") if isinstance(payload, Mapping) else None
-    indices = metadata.get("indices") if isinstance(metadata, Mapping) else None
-    return indices if isinstance(indices, Mapping) else {}
-
-
-def _partition_matches(declared: object, observed: object) -> bool:
-    if not isinstance(observed, Mapping):
-        return False
-    settings = observed.get("settings")
-    index = settings.get("index") if isinstance(settings, Mapping) else None
-    if not isinstance(index, Mapping):
-        return False
-    return str(index.get("number_of_shards")) == str(declared.shard_count) and str(
-        index.get("number_of_replicas")
-    ) == str(declared.replica_count)
-
-
-def _mapping_matches(declared: object, observed: object) -> bool:
-    mappings = observed.get("mappings") if isinstance(observed, Mapping) else None
-    properties = mappings.get("properties") if isinstance(mappings, Mapping) else None
-    expected = getattr(declared, "top_level_field_count", None)
-    return isinstance(properties, Mapping) and (
-        expected is None or len(properties) == expected
-    )
 
 
 def _published_host_port(

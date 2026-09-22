@@ -1549,6 +1549,7 @@ def test_without_redrive_a_lost_trigger_is_never_recovered(monkeypatch):
     from aptl.validation import _live_gate_probes as probes
 
     monkeypatch.setattr(probes, "collect_suricata_eve", lambda *a, **k: [])
+
     def alert_reader(*_args, **_kwargs):
         return WazuhManagerAlertRead(
             records=({"rule": {"id": "1002"}, "data": {"srcip": "10.0.0.1"}},)

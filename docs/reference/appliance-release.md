@@ -423,17 +423,27 @@ and rollback evidence.
 ## Public release delivery
 
 The release workflow builds the repository-owned container closure from the
-exact release tag into private
+exact release tag into
 `ghcr.io/<owner>/aptl-candidate/<image>:<tag>` staging packages. A dedicated
 builder records those immutable staging references in the offline payload and
 creates one signed qualification-only candidate. Two distinct KVM
 machines exercise that exact candidate; one boots two seats concurrently. A
 separate sealing runner aggregates their evidence and signs the unchanged
 golden and payload bytes. Only after sealing does the workflow promote those
-same digests to `ghcr.io/<owner>/aptl/<image>:<tag>`, make each destination
-package public, log out, and prove anonymous pulls. The public GitHub Release
-receives a metadata tar, both public keys, and signed chunks smaller than 2 GiB
-for both large artifacts.
+same digests to `ghcr.io/<owner>/aptl/<image>:<tag>`, log out, and prove
+anonymous pulls. The public GitHub Release receives a metadata tar, both public
+keys, and signed chunks smaller than 2 GiB for both large artifacts.
+
+Both package namespaces are public. A package published from a workflow
+inherits the visibility of the repository it runs in, and GitHub exposes no
+REST endpoint that changes package visibility afterwards, so the workflow never
+sets visibility. It proves the property it depends on instead: staging verifies
+that each pushed tag answers an unauthenticated registry pull, and promotion
+logs out of GHCR before pulling every released tag anonymously. Staging a
+candidate image publicly does not publish a release: an appliance version
+becomes selectable only through the signed manifest, the qualification
+attestation, and the sealed GitHub Release assets. Staging refuses to replace
+an existing tag, so a recorded candidate reference stays immutable.
 
 Publication is not the final gate. A no-permissions KVM job logs out of GHCR,
 anonymously pulls every image, downloads the GitHub Release assets without an

@@ -1248,6 +1248,7 @@ src/aptl/validation/_gate_no_start_backend.py	split-verification	Keep generic co
 src/aptl/validation/_gate_raes_cli.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/_live_gate_checks.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/_live_gate_models.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/_live_gate_alerts.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/_live_gate_operations.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/_live_gate_probes.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/_live_gate_readiness.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification

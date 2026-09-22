@@ -1819,3 +1819,8 @@ src/aptl/core/ephemeral_containers.py	core-candidate	Migrate only after public-i
 tests/test_ephemeral_containers.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_container_lifecycle_policy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_stranded_helper_cleanup.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+docs/architecture/issue-851-first-time-user-docs-preflight.md	architecture-history	Preserve first-time user documentation decisions and navigation guardrails
+docs/reference/cli.md	docs-follow-owner	Preserve task-oriented CLI operating guidance with the product documentation
+docs/reference/mcp.md	docs-follow-owner	Preserve task-oriented MCP access guidance with the product documentation
+docs/reference/web.md	docs-follow-owner	Preserve task-oriented web interface guidance with the product documentation
+tests/test_docs_user_journey.py	tests-follow-owner	Retain structural coverage for the first-time documentation journey

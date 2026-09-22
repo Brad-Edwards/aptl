@@ -163,6 +163,7 @@ The victim and kali containers publish no host ports; use
 - [Issue #993 Boot Realization Regressions](issue-993-boot-realization-regressions-preflight.md)
 - [Issue #970 Generic Lab Lifecycle Boundary](issue-970-generic-lab-lifecycle-preflight.md)
 - [Issue #956 SDL Runtime Materialization](issue-956-sdl-runtime-authority-materialization-preflight.md)
+- [Issue #957 Wazuh Attestation, Evidence, And Credentials](issue-957-wazuh-attestation-evidence-credentials-preflight.md)
 - [Issue #1002 Wazuh API TLS Warm-Up](issue-1002-wazuh-api-tls-warmup-preflight.md)
 - [Issue #1000 Partial Boot And Manual Release QA](issue-1000-manual-release-qa-preflight.md)
 - [Issue #992 Backend Observability Ownership](issue-992-backend-observability-ownership-preflight.md)

@@ -335,7 +335,8 @@ def emit_lab_access_summary(
         dashboard_port, caller_reported_no_ports, live_ports, active_services
     ):
         typer.echo(f"  Wazuh Dashboard: https://localhost:{dashboard_port}")
-        typer.echo("    username: admin")
+        typer.echo("    scenario credentials (not an APTL control-plane login):")
+        typer.echo("    username: see INDEXER_USERNAME in .env")
         typer.echo("    password: see INDEXER_PASSWORD in .env")
     if _published_access_port(
         grafana_port, caller_reported_no_ports, live_ports, active_services

@@ -62,7 +62,9 @@ result. A running container alone does not mean the lab is ready.
 
 The operator UI, intentionally vulnerable target applications, and SOC product
 interfaces are different surfaces. Use `aptl lab info` to discover the URLs
-that exist for the current scenario rather than relying on fixed ports.
+that exist for the current scenario rather than relying on fixed ports. Wazuh
+values reported from `.env` are scenario credentials, not APTL control-plane
+logins.
 
 ## Help And Project Policies
 

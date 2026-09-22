@@ -31,6 +31,7 @@ _DIGEST = "sha256:" + "a" * 64
 def _node(name, *, port=None, address=None, image=None, services=()):
     return SimpleNamespace(
         name=name,
+        container_name=f"aptl-{name}",
         published_ports=(
             (DeploymentPublishedPort(container_port=port, host_port=port),)
             if port is not None
@@ -88,6 +89,7 @@ def _realization(project_dir: Path):
         nodes=(
             _node("cortex", port=9001),
             _node("thehive", port=9000),
+            _node("wazuh-manager", port=55000),
             _node("wazuh-indexer", port=9200),
             _node("suricata", image=image),
             _node("kali", address="172.20.1.30"),
@@ -105,6 +107,7 @@ def _realization(project_dir: Path):
 class _Backend:
     def __init__(self):
         self.probe_payload = ""
+        self.exec_calls = []
 
     @staticmethod
     def container_inspect(_name):
@@ -129,15 +132,28 @@ class _Backend:
         assert "-f" not in cmd[1]
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
-    @staticmethod
-    def container_exec(_name, cmd, *, timeout):
-        event = {
-            "timestamp": _FINISH,
-            "src_ip": "172.20.1.30",
-            "dest_ip": "172.20.1.20",
-            "flow_id": 42,
-            "alert": {"signature_id": 1000010},
-        }
+    def container_exec(self, name, cmd, *, timeout):
+        self.exec_calls.append((name, cmd, timeout))
+        event = (
+            {
+                "timestamp": _FINISH,
+                "rule": {"id": "303020"},
+                "data": {
+                    "flow_id": "42.000000",
+                    "src_ip": "172.20.1.30",
+                    "dest_ip": "172.20.1.20",
+                    "alert": {"signature_id": 1000010},
+                },
+            }
+            if name == "aptl-wazuh-manager"
+            else {
+                "timestamp": _FINISH,
+                "src_ip": "172.20.1.30",
+                "dest_ip": "172.20.1.20",
+                "flow_id": 42,
+                "alert": {"signature_id": 1000010},
+            }
+        )
         return subprocess.CompletedProcess(cmd, 0, json.dumps(event) + "\n", "")
 
 
@@ -348,6 +364,59 @@ def test_sqli_owner_keeps_probe_body_off_argv_and_requires_flow_join(tmp_path):
     assert "UNION" in backend.probe_payload
     assert '"flow_id":"42"' in b"".join(result.chunks).decode()
     assert result.observer_effect == "one fixed POST /login containing UNION SELECT"
+
+
+def test_sqli_owner_reads_wazuh_half_from_declared_manager_log_not_indexer(tmp_path):
+    backend = _Backend()
+    requests = []
+
+    result = (
+        _owner(
+            tmp_path,
+            backend,
+            request_json=lambda *args, **kwargs: requests.append((args, kwargs)),
+        )
+        .sources()["aptl.collector.suricata-wazuh-sqli"]
+        .fetch(_START, _END)
+    )
+
+    assert result.status is CollectorStatus.OK
+    assert requests == []
+    manager_reads = [
+        call for call in backend.exec_calls if call[0] == "aptl-wazuh-manager"
+    ]
+    assert manager_reads == [
+        (
+            "aptl-wazuh-manager",
+            [
+                "tail",
+                "-c",
+                str(techvault_native.MAX_SOURCE_BYTES),
+                "/var/ossec/logs/alerts/alerts.json",
+            ],
+            30,
+        )
+    ]
+
+
+def test_wazuh_manager_log_discloses_loss_when_correlated_record_is_absent(tmp_path):
+    backend = _Backend()
+    backend.container_exec = lambda name, cmd, *, timeout: subprocess.CompletedProcess(
+        cmd,
+        0,
+        "{partial\n"
+        if name == "aptl-wazuh-manager"
+        else _Backend().container_exec(name, cmd, timeout=timeout).stdout,
+        "",
+    )
+
+    result = (
+        _owner(tmp_path, backend)
+        .sources()["aptl.collector.suricata-wazuh-sqli"]
+        .fetch(_START, _END)
+    )
+
+    assert result.status is CollectorStatus.MID_RUN_LOSS
 
 
 def test_suricata_query_reads_recent_events_from_a_large_native_log(tmp_path):

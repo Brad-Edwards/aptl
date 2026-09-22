@@ -67,7 +67,9 @@ aptl lab info
 
 `aptl lab info` reports current URLs, remapped host ports, usernames, and the
 project-local locations of credentials. Read the values from your own project;
-do not use a password or port copied from documentation.
+do not use a password or port copied from documentation. Wazuh values such as
+`INDEXER_USERNAME` and `INDEXER_PASSWORD` are scenario credentials, not APTL
+control-plane logins.
 
 Open the Wazuh Dashboard or another realized service at the URL printed by
 `aptl lab info`. For a shell in a listed container, use:

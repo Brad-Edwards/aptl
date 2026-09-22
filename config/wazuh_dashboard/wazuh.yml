@@ -2,6 +2,6 @@ hosts:
   - 1513629884013:
       url: "https://wazuh.manager"
       port: 55000
-      username: wazuh-wui
-      password: "WazuhPass123!"
+      username: "__APTL_API_USERNAME__"
+      password: "__APTL_API_PASSWORD__"
       run_as: false

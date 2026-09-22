@@ -15,9 +15,8 @@ unready service becomes the terminal reason at the deadline (issue #1002).
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 
 from aptl.core.deployment._wazuh_identity import (
     WazuhClusterIdentity,
@@ -27,16 +26,21 @@ from aptl.core.deployment._compose_stateful_constants import (
     WAZUH_MANAGER_CONFIG_PROVENANCES,
 )
 from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.deployment._wazuh_attestation import (
+    AUTHENTICATED_FACT_ID,
+    declared_indexer as _declared_indexer,
+    declared_manager_components as _declared_manager_components,
+    declares_wazuh_native_service as _declares_wazuh_native_service,
+    fact_observation as _fact_observation,
+    load_stateful_env as _load_stateful_env,
+    observe_indexer_declared_facts,
+    readiness_failure as _readiness_failure,
+)
 from aptl.core.deployment.realization import (
     DeploymentNodeRealization,
     DeploymentRealizationSpec,
 )
-from aptl.core.env import (
-    EnvVars,
-    env_vars_from_dict,
-    find_placeholder_env_values,
-    load_dotenv,
-)
+from aptl.core.env import EnvVars
 from aptl.core.lab_types import LabResult
 from aptl.core.services import probe_indexer_api, probe_manager_api
 from aptl.utils.logging import get_logger
@@ -60,6 +64,19 @@ class _ServiceObservation:
     ready: bool
     detail: str
     container_name: str | None = None
+    facts: tuple[dict[str, str], ...] = ()
+
+
+def _authenticated_fact() -> dict[str, str]:
+    """Return the shared successful authenticated-API observation."""
+
+    return _fact_observation(
+        AUTHENTICATED_FACT_ID,
+        "authenticated",
+        "authenticated",
+        True,
+        "",
+    )
 
 
 @dataclass(frozen=True)
@@ -94,9 +111,20 @@ class ComposeStatefulReadinessMixin:
 
     @property
     def authenticated_readiness(self) -> dict[str, bool]:
-        """Return non-secret authenticated readiness observed this realization."""
+        """Compatibility projection of declared Wazuh attestation outcomes."""
 
         return dict(getattr(self, "_stateful_authenticated_readiness", {}))
+
+    @property
+    def declared_wazuh_attestation(self) -> dict[str, tuple[dict[str, str], ...]]:
+        """Return structured, secret-free observations for each declared fact."""
+
+        return {
+            service: tuple(dict(fact) for fact in facts)
+            for service, facts in getattr(
+                self, "_stateful_declared_wazuh_attestation", {}
+            ).items()
+        }
 
     def _verify_stateful_authenticated_readiness(
         self,
@@ -128,6 +156,7 @@ class ComposeStatefulReadinessMixin:
         """Observe configured services and return their bounded failure reason."""
 
         self._stateful_authenticated_readiness = {}
+        self._stateful_declared_wazuh_attestation = {}
         error: str | None = None
         if services:
             env, _placeholder_input = _load_stateful_env(self._project_dir)
@@ -142,6 +171,11 @@ class ComposeStatefulReadinessMixin:
                 self._stateful_authenticated_readiness = {
                     service: observation.ready
                     for service, observation in observations.items()
+                }
+                self._stateful_declared_wazuh_attestation = {
+                    service: observation.facts
+                    for service, observation in observations.items()
+                    if observation.facts
                 }
                 error = _readiness_failure(observations, budget.timeout)
         return error
@@ -248,56 +282,91 @@ class ComposeStatefulReadinessMixin:
             )
         url = f"https://localhost:{port}"
         if service == identity.indexer_service:
-            probe = probe_indexer_api(url, env.indexer_username, env.indexer_password)
-        else:
-            probe = probe_manager_api(url, env.api_username, env.api_password)
-        ready = probe.ready
+            return self._indexer_service_observation(service, url, container, node, env)
+        return self._manager_service_observation(service, url, container, node, env)
+
+    @staticmethod
+    def _unready_observation(
+        service: str, url: str, container: str | None, probe: object
+    ) -> _ServiceObservation:
+        """Project one classified API probe that has not become ready yet."""
+
         detail = probe.describe()
-        if not ready:
-            # Expected while the API warms up; only the deadline makes it terminal.
-            log.debug("%s not ready yet: %s", service, detail)
-        return _ServiceObservation(ready, f"{service} at {url} {detail}", container)
+        log.debug("%s not ready yet: %s", service, detail)
+        return _ServiceObservation(False, f"{service} at {url} {detail}", container)
 
+    def _indexer_service_observation(
+        self,
+        service: str,
+        url: str,
+        container: str | None,
+        node: DeploymentNodeRealization | None,
+        env: EnvVars,
+    ) -> _ServiceObservation:
+        """Attest the declared indexer service and its native facts."""
 
-def _readiness_failure(
-    observations: Mapping[str, _ServiceObservation],
-    timeout: int,
-) -> str | None:
-    """Render the terminal reason for services still unready at the deadline."""
+        probe = probe_indexer_api(url, env.indexer_username, env.indexer_password)
+        if not probe.ready:
+            return self._unready_observation(service, url, container, probe)
+        facts = observe_indexer_declared_facts(
+            url,
+            env.indexer_username,
+            env.indexer_password,
+            _declared_indexer(node),
+        )
+        failed = [fact for fact in facts if fact["status"] != "matched"]
+        if failed:
+            return _ServiceObservation(
+                False,
+                f"{service} at {url} attestation failed: "
+                f"{failed[0]['failure_category']}",
+                container,
+                facts,
+            )
+        return _ServiceObservation(
+            True,
+            f"{service} at {url} ready",
+            container,
+            (_authenticated_fact(), *facts),
+        )
 
-    failed = [
-        observation
-        for _service, observation in sorted(observations.items())
-        if not observation.ready
-    ]
-    if not failed:
-        return None
-    reasons = "; ".join(observation.detail for observation in failed)
-    logs = " and ".join(
-        f"`aptl container logs {observation.container_name}`"
-        for observation in failed
-        if observation.container_name
-    )
-    action = f" Inspect {logs}." if logs else ""
-    return (
-        f"Authenticated Wazuh readiness validation failed after {timeout}s: "
-        f"{reasons}.{action}"
-    )
+    def _manager_service_observation(
+        self,
+        service: str,
+        url: str,
+        container: str | None,
+        node: DeploymentNodeRealization | None,
+        env: EnvVars,
+    ) -> _ServiceObservation:
+        """Attest the declared manager service and enabled components."""
 
-
-def _load_stateful_env(project_dir: Path) -> tuple[EnvVars | None, bool]:
-    """Load typed credentials and report whether placeholders caused rejection."""
-
-    env: EnvVars | None = None
-    placeholder_input = False
-    try:
-        raw_env = load_dotenv(project_dir / ".env")
-        placeholder_input = bool(find_placeholder_env_values(raw_env))
-        if not placeholder_input:
-            env = env_vars_from_dict(raw_env)
-    except (OSError, ValueError):
-        env = None
-    return env, placeholder_input
+        probe = probe_manager_api(url, env.api_username, env.api_password)
+        if not probe.ready:
+            return self._unready_observation(service, url, container, probe)
+        facts = (
+            _authenticated_fact(),
+            *(
+                _fact_observation(
+                    f"component:{component}",
+                    "running",
+                    "running" if component in probe.observed_components else "missing",
+                    component in probe.observed_components,
+                    "declared-component-not-running",
+                )
+                for component in sorted(_declared_manager_components(node))
+            ),
+        )
+        failed = [fact for fact in facts if fact["status"] != "matched"]
+        if failed:
+            missing = ", ".join(fact["fact_id"].split(":", 1)[1] for fact in failed)
+            return _ServiceObservation(
+                False,
+                f"{service} at {url} attestation failed: "
+                f"declared components not running: {missing}",
+                container,
+                facts,
+            )
+        return _ServiceObservation(True, f"{service} at {url} ready", container, facts)
 
 
 def _stateful_services(
@@ -307,14 +376,16 @@ def _stateful_services(
     """Return graph-owned Wazuh services requiring authenticated probes."""
 
     return {
-        consumer.service_name
-        for artifact in realization.generated_artifacts
-        for consumer in artifact.consumers
-        if consumer.service_name in identity.services
+        node.service_name
+        for node in realization.nodes
+        if node.service_name in identity.services
+        and _declares_wazuh_native_service(node, identity)
     }
 
 
-def _published_host_port(info: object, container_port: int) -> int | None:
+def _published_host_port(
+    info: object, container_port: int, protocol: str = "tcp"
+) -> int | None:
     """Read one TCP host binding from container inspect output."""
 
     port: int | None = None
@@ -326,7 +397,9 @@ def _published_host_port(info: object, container_port: int) -> int | None:
             else None
         )
         bindings = (
-            ports.get(f"{container_port}/tcp") if isinstance(ports, dict) else None
+            ports.get(f"{container_port}/{protocol}")
+            if isinstance(ports, dict)
+            else None
         )
         binding = bindings[0] if isinstance(bindings, list) and bindings else None
         value = binding.get("HostPort") if isinstance(binding, dict) else None

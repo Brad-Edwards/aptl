@@ -15,6 +15,9 @@ from aptl.core.deployment._compose_stateful_model import (
     _consumer_output_names,
     _uses_per_output_mounts,
 )
+from aptl.core.deployment._wazuh_attestation import (
+    declared_wazuh_facts_match,
+)
 from aptl.core.deployment.backend import DeploymentBackend
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import (
@@ -299,7 +302,7 @@ def authenticated_consumers_ready(
     backend: DeploymentBackend,
     consumers: tuple[DeploymentStatefulConsumer, ...],
 ) -> bool:
-    """Require authenticated readback for every Wazuh artifact consumer."""
+    """Require declared-fact attestation for every Wazuh artifact consumer."""
 
     expected = {
         consumer.service_name
@@ -308,13 +311,13 @@ def authenticated_consumers_ready(
     }
     if not expected:
         return True
-    readiness = getattr(backend, "authenticated_readiness", {})
+    readiness = getattr(backend, "declared_wazuh_attestation", {})
     ready = isinstance(readiness, Mapping) and all(
-        readiness.get(service) is True for service in expected
+        declared_wazuh_facts_match(readiness, service) for service in expected
     )
     if not ready:
         log.warning(
-            "authenticated readiness not recorded for %s (map=%s)",
+            "declared Wazuh attestation not recorded for %s (map=%s)",
             sorted(expected),
             dict(readiness) if isinstance(readiness, Mapping) else type(readiness),
         )

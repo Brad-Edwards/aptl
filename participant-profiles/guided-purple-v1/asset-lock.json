@@ -43,7 +43,7 @@
       "asset_id": "compose-model",
       "kind": "project-file",
       "source": "docker-compose.yml",
-      "sha256": "86153d400dcf006367a36aae75c972c08767812adf21158c9e0cd73951c4711c"
+      "sha256": "20ad21c0b3c7e3c74da3508f4ba4bbf427ff5e50aa622cb90b705abe9455b9f5"
     },
     {
       "asset_id": "mcp-red-build",

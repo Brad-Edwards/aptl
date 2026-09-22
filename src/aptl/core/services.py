@@ -109,6 +109,7 @@ class WazuhApiProbe:
     category: str
     curl_exit: int | None = None
     http_status: int | None = None
+    observed_components: tuple[str, ...] = ()
 
     @property
     def ready(self) -> bool:
@@ -197,8 +198,14 @@ def _manager_status_probe(base: str, token: str) -> WazuhApiProbe:
     )
     if status.http_status != 200:
         return _api_failure("manager_status", status)
-    if _manager_status_ready(status.payload):
-        return WazuhApiProbe("ready", "ready", http_status=200)
+    components = _manager_status_components(status.payload)
+    if components:
+        return WazuhApiProbe(
+            "ready",
+            "ready",
+            http_status=200,
+            observed_components=components,
+        )
     return WazuhApiProbe("manager_status", "not_ready", http_status=200)
 
 
@@ -229,11 +236,26 @@ def _manager_api_token(payload: object) -> str | None:
 def _manager_status_ready(payload: object) -> bool:
     """Return whether the manager status response contains affected items."""
 
+    return bool(_manager_status_components(payload))
+
+
+def _manager_status_components(payload: object) -> tuple[str, ...]:
+    """Return running manager component names from the bounded status result."""
+
     if not isinstance(payload, Mapping) or payload.get("error") != 0:
-        return False
+        return ()
     data = payload.get("data")
     affected = data.get("affected_items") if isinstance(data, Mapping) else None
-    return isinstance(affected, list) and bool(affected)
+    if not isinstance(affected, list):
+        return ()
+    observed: set[str] = set()
+    for item in affected:
+        if not isinstance(item, Mapping):
+            continue
+        for name, status in item.items():
+            if isinstance(name, str) and status == "running":
+                observed.add(name)
+    return tuple(sorted(observed))
 
 
 #: ssh(1) reserves this for its own failure -- no connection, no host key

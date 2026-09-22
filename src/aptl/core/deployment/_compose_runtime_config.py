@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-_OPERATOR_SECRET_CLASSIFICATION = "operator_secret"
+_ENVIRONMENT_BOUND_CLASSIFICATIONS = frozenset({"operator_secret", "secret_fixture"})
 _CONTAINER_SEQUENCE_FIELDS = ("command", "entrypoint", "dns", "group_add")
 _UNSUPPORTED_CONTAINER_FIELDS = (
     "masked_paths",
@@ -44,7 +44,11 @@ def _environment_config(runtime: object) -> dict[str, str]:
         classification = _enum_value(getattr(variable, "value_classification", ""))
         environment[name] = (
             f"${{{name}}}"
-            if classification == _OPERATOR_SECRET_CLASSIFICATION
+            if classification == "operator_secret"
+            or (
+                classification in _ENVIRONMENT_BOUND_CLASSIFICATIONS
+                and not variable.value
+            )
             else variable.value
         )
     return environment

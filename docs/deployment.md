@@ -64,7 +64,8 @@ explicit development surface.
 
 Runtime credentials and generated client bindings belong in private files such
 as `.env` and `.mcp.json`; they are not `aptl.json` fields and must not be
-committed.
+committed. Wazuh `INDEXER_*` and `API_*` values are credentials declared by the
+admitted scenario, not APTL control-plane or operator login credentials.
 
 ## Observe A Deployment
 

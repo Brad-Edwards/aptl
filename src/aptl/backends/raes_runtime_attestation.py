@@ -28,6 +28,9 @@ from raes_processor.semantics.realization import (
 )
 
 from aptl.backends._runtime_concern_disclosure import _disclose
+from aptl.core.deployment._wazuh_attestation import (
+    declared_wazuh_facts_match,
+)
 from aptl.core.scenario_bundle import PackIdentity
 
 if TYPE_CHECKING:
@@ -287,33 +290,85 @@ def observe_techvault_attested_concerns(
 ) -> dict[tuple[str, ...], object]:
     """Return only released, implementation-bound TechVault configuration."""
 
-    runtime = node.runtime
-    if (
-        runtime is None
-        or not node.container_name
-        or not _identified_release(pack_identity)
-        or not _implementation_observed(
-            backend,
-            node,
-            content_verified=content_verified,
-            observation_context=observation_context,
-        )
+    if not _node_is_attestable(
+        backend,
+        node,
+        pack_identity,
+        content_verified=content_verified,
+        observation_context=observation_context,
     ):
         return {}
 
     concerns: dict[tuple[str, ...], object] = {}
     for kind, field in _RUNTIME_FIELD_BY_KIND.items():
-        value = getattr(runtime, field, None)
-        expected = _TECHVAULT_PROJECTION_DIGESTS.get((node.name, kind))
-        if value in (None, [], {}) or expected is None:
-            continue
-        projected = project_realization_concern(kind, value, observed=False)
-        if canonical_json_digest(projected) != expected:
-            continue
-        disclosed = _disclose(kind, value)
+        disclosed = _attested_concern(backend, node, kind, field)
         if disclosed is not None:
             concerns[CONCERN_PAYLOAD_PATH[kind]] = disclosed
     return concerns
+
+
+def _node_is_attestable(
+    backend: DeploymentBackend,
+    node: NodeRealization,
+    pack_identity: PackIdentity | None,
+    *,
+    content_verified: bool,
+    observation_context: DeploymentObservationContext | None,
+) -> bool:
+    """Return whether one node is bound to an admitted released implementation."""
+
+    return bool(
+        node.runtime is not None
+        and node.container_name
+        and _identified_release(pack_identity)
+        and _implementation_observed(
+            backend,
+            node,
+            content_verified=content_verified,
+            observation_context=observation_context,
+        )
+    )
+
+
+def _attested_concern(
+    backend: DeploymentBackend,
+    node: NodeRealization,
+    kind: str,
+    field: str,
+) -> object | None:
+    """Return one digest-bound concern after its required native observation."""
+
+    value = getattr(node.runtime, field, None)
+    expected = _TECHVAULT_PROJECTION_DIGESTS.get((node.name, kind))
+    result: object | None = None
+    observation_ok = not _requires_declared_wazuh_attestation(
+        node, kind
+    ) or _declared_wazuh_facts_observed(backend, node)
+    if value not in (None, [], {}) and expected is not None and observation_ok:
+        projected = project_realization_concern(kind, value, observed=False)
+        if canonical_json_digest(projected) == expected:
+            result = _disclose(kind, value)
+    return result
+
+
+def _declared_wazuh_facts_observed(
+    backend: DeploymentBackend, node: NodeRealization
+) -> bool:
+    """Require native API evidence before disclosing Wazuh runtime facts."""
+
+    readiness = getattr(backend, "declared_wazuh_attestation", {})
+    services = tuple(getattr(node, "backend_services", ()))
+    service = services[0] if len(services) == 1 else None
+    return declared_wazuh_facts_match(readiness, service, node)
+
+
+def _requires_declared_wazuh_attestation(node: NodeRealization, kind: str) -> bool:
+    """Identify the two Wazuh declarations backed by native API observations."""
+
+    return (node.name, kind) in {
+        ("wazuh-indexer", "runtime-datastore-services"),
+        ("wazuh-manager", "runtime-security-monitoring-managers"),
+    }
 
 
 __all__ = [

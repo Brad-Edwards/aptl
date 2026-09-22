@@ -76,6 +76,7 @@ assets/images/qradar_landing_empty.png	repository-metadata	Inspect identity/cont
 assets/images/qradar_offences.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 bin/install-raes-inventory-skill.sh	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+git-env-isolation.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/+seat-image-config.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+seat-image-from-registry.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+seat-image-selection.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+techvault-live-boot-honesty.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
@@ -816,6 +817,7 @@ src/aptl/appliance/seat/context.py	optional-delivery	Keep sealed-seat boundary o
 src/aptl/appliance/seat/errors.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/exposure.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/image.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/image_config.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/image_selection.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/kiosk.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/lifecycle.py	optional-delivery	Keep sealed-seat boundary outside default install
@@ -1642,6 +1644,7 @@ tests/test_scenario_verification_seam.py	tests-follow-owner	Retain meaningful bo
 tests/test_scenarios.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_scorecard_workflow.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seat_image.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_seat_image_config.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seat_image_selection.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seed_misp_script.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seed_prime_failures.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

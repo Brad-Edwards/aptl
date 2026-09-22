@@ -15,8 +15,11 @@ Key facts encoded there today:
 
 - Ground Control project: `aptl`
 - GitHub repo: `Brad-Edwards/aptl`
-- Test / completion command: `pytest`
-- Lint / format command: `pre-commit run --all-files`
+- Local test command: `bash tools/run-targeted-tests.sh` (changed test files
+  only, or pass explicit test paths)
+- Local hygiene command: `pre-commit run` after staging the intended changes
+- Full suites, coverage, whole-tree lint, and whole-tree prose checks: CI/CD
+  only
 - SonarCloud project key: `Brad-Edwards_aptl` (org: `brad-edwards`)
 - Plan rules: `.gc/plan-rules.md`
 
@@ -97,16 +100,17 @@ end-to-end loop. Summary for agents working in this repo:
 2. **Plan.** Apply `.gc/plan-rules.md` — in particular: Python changes
    need pytest coverage in `tests/`; MCP TypeScript changes need
    vitest coverage in that server's `tests/`; web frontend changes
-   need vitest coverage in `web/tests/`; changes under
-   `mcp/aptl-mcp-common` require every dependent MCP to rebuild and
-   pass tests; changes to `docker-compose.yml`, container Dockerfiles,
-   or `config/` must be validated by a clean
-   `aptl lab stop -v && aptl lab start` on a fresh machine.
+   need vitest coverage in `web/tests/`. Local runs stay targeted. CI/CD
+   rebuilds every MCP consumer when `mcp/aptl-mcp-common` changes and performs
+   the clean lab lifecycle gate for changes to `docker-compose.yml`, container
+   Dockerfiles, or `config/`.
 3. **Implement.** Make the code change.
-4. **Verify locally.** Run `pre-commit run --all-files` (lint +
-   format and secret checks; CI runs the substantive test suites) before declaring done. Run the
-   relevant test command directly (`pytest`, `npx vitest run`, etc.)
-   when iterating.
+4. **Verify locally.** Run only tests targeted to the changed behavior. Use
+   `bash tools/run-targeted-tests.sh` when the relevant test files changed, or
+   pass explicit test paths to that script. Stage the intended changes and run
+   `pre-commit run` for rapid hygiene and secret scanning. Do not run bare
+   `pytest`, package-wide `npm test`, `pre-commit run --all-files`, or other
+   full/whole-tree gates locally; CI/CD owns those runs.
 5. **Create traceability.** Create `IMPLEMENTS` and `TESTS`
    traceability links from the requirement to the code / test
    artifacts that satisfy it.

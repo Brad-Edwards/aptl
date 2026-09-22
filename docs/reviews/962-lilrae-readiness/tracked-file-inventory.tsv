@@ -9,6 +9,7 @@ path	proposed_owner	migration_rule
 .cursor/rules/no-jumping-ahead.mdc	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 .dockerignore	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 .env.example	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.bestpractices.json	repository-metadata	Keep public OpenSSF self-assessment proposals with repository governance
 .gc/plan-rules.md	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 .gitattributes	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 .gitguardian.yaml	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
@@ -25,6 +26,7 @@ path	proposed_owner	migration_rule
 .mcp.json.example	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 .pre-commit-ci.yaml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 .pre-commit-config.yaml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+.readthedocs.yaml	build-governance	Keep the strict single-source Read the Docs mirror with documentation governance
 .release-please-manifest.json	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 .serena/.gitignore	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 .serena/project.yml	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
@@ -1828,3 +1830,6 @@ docs/reference/cli.md	docs-follow-owner	Preserve task-oriented CLI operating gui
 docs/reference/mcp.md	docs-follow-owner	Preserve task-oriented MCP access guidance with the product documentation
 docs/reference/web.md	docs-follow-owner	Preserve task-oriented web interface guidance with the product documentation
 tests/test_docs_user_journey.py	tests-follow-owner	Retain structural coverage for the first-time documentation journey
+docs/security/openssf-best-practices.md	docs-follow-owner	Keep the public badge assessment and evidence links with project documentation
+tests/test_docs_publishing.py	tests-follow-owner	Retain structural coverage for badge evidence and dual documentation publishing
+tools/run-targeted-tests.sh	build-governance	Keep local verification targeted while CI owns whole-tree gates

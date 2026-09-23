@@ -1,6 +1,7 @@
 """Image replacement must not destroy a backing file used by another seat."""
 
 import subprocess
+import sys
 from pathlib import Path
 
 from aptl.appliance.seat.overlay import create_seat_overlay
@@ -101,6 +102,7 @@ def test_failed_update_admission_preserves_selection_and_overlay(tmp_path, monke
     assert overlay.read_bytes() == b"existing state"
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux seat lifecycle")
 def test_updating_one_seat_retains_another_seats_offline_image(tmp_path, monkeypatch):
     import hashlib
     from aptl.appliance.seat import image, image_trust, lifecycle, image_update

@@ -79,6 +79,7 @@ bin/install-raes-inventory-skill.sh	repository-metadata	Inspect identity/content
 changelog.d/+fix-stale-integration-fixtures.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+ghcr-candidate-package-visibility.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+git-env-isolation.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/+mcp-packaging-helpers.changed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+remove-golden-pipeline.removed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+seat-boots-a-registry-image.changed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+seat-image-bake.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
@@ -1227,6 +1228,7 @@ src/aptl/utils/_pathsafe_read.py	core-candidate	Migrate only after public-import
 src/aptl/utils/curl_safe.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/utils/deterministic_archive.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/utils/logging.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/utils/mcp_packaging.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/utils/pathsafe.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/utils/placeholders.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/utils/redaction.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1510,6 +1512,7 @@ tests/test_mcp_dispatch.py	backend-owned-runtime	Constrain the temporary plannin
 tests/test_mcp_guest_binding.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/test_mcp_guest_management.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/test_mcp_native_ingress.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
+tests/test_mcp_payload_processes.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_mcp_protocol.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_mcp_relay.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/test_mcp_result_redaction.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback

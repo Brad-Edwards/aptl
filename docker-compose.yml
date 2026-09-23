@@ -918,6 +918,8 @@ services:
     profiles: ["web"]
     image: aptl-web-api:1
     container_name: aptl-web-api
+    labels:
+      aptl.web.control-plane: "true"
     build:
       context: .
       dockerfile: web/Dockerfile.api

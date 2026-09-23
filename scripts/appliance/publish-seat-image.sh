@@ -65,15 +65,10 @@ if test -n "$release_digest" && test "$release_digest" != "$key_digest"; then
   echo "release tag ${RELEASE_TAG} already identifies another seat image" >&2
   exit 1
 fi
-oras tag "${namespace}:${key_tag}" "$RELEASE_TAG" latest
 
-oras logout ghcr.io
-trap - EXIT
-unset GHCR_TOKEN
-
-# Prove the published tag is anonymously pullable, the same property the
-# launcher depends on. A package that is not readable without credentials is a
-# failed publication, not a published image nobody can use.
+# Verify the immutable candidate before moving latest. GHCR creates new
+# packages private by default; a failed visibility check must leave an
+# existing working latest tag alone.
 accept='application/vnd.oci.image.manifest.v1+json'
 accept+=',application/vnd.oci.image.index.v1+json'
 token=$(curl --silent --location --max-time 60 \
@@ -83,22 +78,30 @@ test -n "$token" || {
   echo "seat image has no anonymous pull token: ${namespace}" >&2
   exit 1
 }
-status=000
-for attempt in $(seq 1 20); do
-  status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
-    --max-time 60 --header "Authorization: Bearer ${token}" \
-    --header "Accept: ${accept}" \
-    "https://ghcr.io/v2/${repository}/manifests/latest")
-  if test "$status" = 200; then
-    break
-  fi
-  if test "$attempt" -lt 20; then
-    sleep 15
-  fi
-done
-test "$status" = 200 || {
-  echo "seat image is not anonymously pullable (HTTP ${status})" >&2
-  exit 1
+verify_anonymous_manifest() {
+  local target=$1 status=000 attempt
+  for attempt in $(seq 1 20); do
+    status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+      --max-time 60 --header "Authorization: Bearer ${token}" \
+      --header "Accept: ${accept}" \
+      "https://ghcr.io/v2/${repository}/manifests/${target}")
+    if test "$status" = 200; then
+      return 0
+    fi
+    if test "$attempt" -lt 20; then
+      sleep 15
+    fi
+  done
+  echo "seat image ${target} is not anonymously pullable (HTTP ${status})" >&2
+  return 1
 }
+
+verify_anonymous_manifest "$key_tag"
+oras tag "${namespace}:${key_tag}" "$RELEASE_TAG" latest
+verify_anonymous_manifest latest
+
+oras logout ghcr.io
+trap - EXIT
+unset GHCR_TOKEN
 
 echo "${namespace}:latest"

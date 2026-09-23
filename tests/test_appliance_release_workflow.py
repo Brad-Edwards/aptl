@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -10,6 +12,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/release-please.yml"
 RETRY_WORKFLOW = ROOT / ".github/workflows/publish-seat-image.yml"
+PUBLISHER = ROOT / "scripts/appliance/publish-seat-image.sh"
 
 
 def _jobs() -> dict[str, dict]:
@@ -65,3 +68,55 @@ def test_existing_release_can_retry_after_package_visibility_changes() -> None:
     assert "build-seat-image.sh" in steps["Bake the seat image"]["run"]
     assert "qualify-seat-image.sh" in steps["Boot and qualify the baked seat"]["run"]
     assert "publish-seat-image.sh" in steps["Publish and verify anonymous pull"]["run"]
+
+
+def test_private_candidate_does_not_move_latest(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "seat-disk.qcow2").write_bytes(b"disk")
+    (out / "seat-image-config.json").write_bytes(b"{}")
+    binary = tmp_path / "bin"
+    binary.mkdir()
+    stubs = {
+        "oras": """#!/bin/sh
+case "$1" in
+  login) cat >/dev/null ;;
+  resolve)
+    case "$2" in *:v5.6.0) exit 1 ;; esac
+    printf 'sha256:candidate\\n' ;;
+  tag) printf 'tag\\n' >> "$APTL_TEST_ORAS_LOG" ;;
+esac
+""",
+        "curl": """#!/bin/sh
+case "${*}" in
+  *'/token?'*) printf '{"token":"anonymous"}\\n' ;;
+  *) printf '401' ;;
+esac
+""",
+        "jq": "#!/bin/sh\ncat >/dev/null\nprintf 'anonymous\\n'\n",
+        "sleep": "#!/bin/sh\nexit 0\n",
+    }
+    for name, body in stubs.items():
+        path = binary / name
+        path.write_text(body)
+        path.chmod(0o755)
+    log = tmp_path / "oras.log"
+    result = subprocess.run(
+        ["bash", str(PUBLISHER), str(out)],
+        env={
+            "PATH": f"{binary}:{os.environ['PATH']}",
+            "RELEASE_TAG": "v5.6.0",
+            "REPOSITORY_OWNER": "Brad-Edwards",
+            "GHCR_TOKEN": "test-token",
+            "GITHUB_ACTOR": "test-actor",
+            "APTL_TEST_ORAS_LOG": str(log),
+        },
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "key-" in result.stderr and "not anonymously pullable" in result.stderr
+    assert not log.exists()

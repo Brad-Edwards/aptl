@@ -205,6 +205,13 @@ def test_seat_start_needs_no_arguments_at_all(tmp_path: Path) -> None:
     )
 
 
+def test_seat_start_cannot_adopt_an_image_update() -> None:
+    result = runner.invoke(app, ["seat", "start", "--update"])
+
+    assert result.exit_code == 2
+    assert "No such option: --update" in result.output
+
+
 def test_seat_start_accepts_another_image_source(tmp_path: Path) -> None:
     with (
         patch("aptl.cli.seat.image_requires_host_access", return_value=False),

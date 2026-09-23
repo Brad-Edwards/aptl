@@ -29,7 +29,6 @@ class StartSeatOptions:
     access_identity_file: Path | None = None
     access_project_dir: Path | None = None
     access_clients: tuple[str, ...] = ()
-    adopt_image_update: bool = False
     check_for_image_update: bool = True
 
     def with_mappings(self, mappings: tuple[BoundaryEndpoint, ...]) -> Self:
@@ -48,7 +47,6 @@ class StartSeatOptions:
             access_identity_file=self.access_identity_file,
             access_project_dir=self.access_project_dir,
             access_clients=self.access_clients,
-            adopt_image_update=self.adopt_image_update,
             check_for_image_update=self.check_for_image_update,
         )
 

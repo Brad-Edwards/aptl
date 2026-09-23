@@ -143,7 +143,6 @@ def start(
     access_profile: str = typer.Option("red", "--access-profile"),
     access_client: list[str] | None = typer.Option(None, "--access-client"),
     access_hours: int = typer.Option(8, "--access-hours", min=1, max=24),
-    update: bool = typer.Option(False, "--update"),
     no_check: bool = typer.Option(False, "--no-check"),
 ) -> None:
     """Start the seat VM and validate host exposure."""
@@ -212,7 +211,6 @@ def start(
                 access_identity_file=access_identity_file,
                 access_project_dir=access_project_dir,
                 access_clients=clients,
-                adopt_image_update=update,
                 check_for_image_update=not no_check,
             ),
         )

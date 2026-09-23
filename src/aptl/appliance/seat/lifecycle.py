@@ -222,7 +222,6 @@ def _canonical_policy_digest(policy: ApplianceBoundaryPolicy) -> str:
 def _load_seat_image(
     paths: SeatPaths,
     *,
-    adopt: bool = False,
     check: bool = True,
 ) -> ResolvedSeatImage:
     """Resolve the seat image and the declaration a launch is bound to."""
@@ -231,7 +230,6 @@ def _load_seat_image(
         selection = select_seat_image(
             paths.image_reference,
             cache_dir=paths.image_cache_dir,
-            adopt=adopt,
             check=check,
         )
         cached = cached_seat_image_config(
@@ -344,7 +342,6 @@ def stage_seat(
     mappings: tuple[BoundaryEndpoint, ...] | None = None,
     generation: int = 1,
     prereq_overrides: dict[str, object] | None = None,
-    adopt_image_update: bool = False,
 ) -> SeatRecord:
     """Resolve the image, verify host prereqs, and publish a staged record."""
 
@@ -354,7 +351,7 @@ def stage_seat(
         image_reference=image_reference,
         image_cache_dir=image_cache_dir,
     )
-    image = _load_seat_image(paths, adopt=adopt_image_update)
+    image = _load_seat_image(paths)
     require_host_prerequisites(
         image.config.resources,
         seat_root=seat_root,
@@ -658,7 +655,6 @@ def start_seat(
     if _requires_automatic_mappings(record, seat_id, launch_options):
         automatic = _load_seat_image(
             paths,
-            adopt=launch_options.adopt_image_update,
             check=launch_options.check_for_image_update,
         )
         return launch_with_automatic_mappings(
@@ -686,7 +682,6 @@ def start_seat(
             image_cache_dir=image_cache_dir,
             mappings=launch_options.mappings,
             prereq_overrides=launch_options.prereq_overrides,
-            adopt_image_update=launch_options.adopt_image_update,
         )
     elif (
         launch_options.mappings is not None
@@ -697,7 +692,6 @@ def start_seat(
         )
     image = _load_seat_image(
         paths,
-        adopt=launch_options.adopt_image_update,
         check=launch_options.check_for_image_update,
     )
     if record.image_digest != image.selection.digest:

@@ -18,6 +18,9 @@ APTL shall assemble and verify a signed, versioned appliance release envelope th
 ## Rationale
 
 For current VM-only seats, ADR-060 defines the signed containment policy.
+Issue #1162 replaces the bespoke release transport with the owner-approved
+GHCR/Cosign delivery in ADR-060. Traceability below names the replacement
+artifacts; ACTIVE status does not assert complete multi-machine qualification.
 APP-1 internal-zone implementation is deferred to #1127; the release must name
 its actual containment contract and must not claim internal-isolation evidence.
 
@@ -27,19 +30,11 @@ Issue #823 supplies the release artifact consumed by the host launcher in issue 
 
 - IMPLEMENTS → GITHUB_ISSUE `1022` (VM-only seat delivery and qualification)
 - IMPLEMENTS → CODE_FILE `src/aptl/appliance/policy.py` (Explicit signed VM-only containment policy)
-- IMPLEMENTS → CODE_FILE `src/aptl/appliance/candidate.py` (Signed candidate policy validation)
-- IMPLEMENTS → CODE_FILE `src/aptl/appliance/distribution.py` (Authenticated chunked release transport)
-- IMPLEMENTS → CODE_FILE `src/aptl/appliance/public_install.py` (Anonymous download, reconstruction, and staging)
-- IMPLEMENTS → CODE_FILE `src/aptl/appliance/qualification.py` (Machine-bound qualification evidence)
 - IMPLEMENTS → CODE_FILE `src/aptl/appliance/seat/lifecycle.py` (Generation-bound VM seat lifecycle and admission)
 - IMPLEMENTS → CODE_FILE `src/aptl/appliance/seat/prereqs.py` (Host capacity and runtime resource admission)
 - IMPLEMENTS → CODE_FILE `src/aptl/appliance/access_service.py` (Authenticated seat-scoped host access)
-- IMPLEMENTS → CONFIG `.github/workflows/release-please.yml` (Qualified release and public GHCR delivery)
+- IMPLEMENTS → CONFIG `.github/workflows/release-please.yml` (Package publication independent of image cuts)
 - TESTS → TEST `tests/test_appliance_vm_containment.py` (Containment distinction and retained identity/host checks)
-- TESTS → TEST `tests/test_appliance_candidate.py` (Signed candidate and tamper rejection)
-- TESTS → TEST `tests/test_appliance_distribution.py` (Transport identity, chunk, and signature enforcement)
-- TESTS → TEST `tests/test_appliance_public_install.py` (Anonymous acquisition and safe cache behavior)
-- TESTS → TEST `tests/test_appliance_qualification.py` (Qualification identity and multi-machine gates)
 - TESTS → TEST `tests/test_appliance_seat_lifecycle.py` (VM start, readiness, recovery, and revocation)
 - TESTS → TEST `tests/test_appliance_seat_prereqs.py` (Capacity and free-space admission boundaries)
 - TESTS → TEST `tests/test_appliance_seat_portability.py` (Portable CLI imports and fail-closed POSIX locking)
@@ -49,21 +44,19 @@ Issue #823 supplies the release artifact consumed by the host launcher in issue 
 - DOCUMENTS → DOCUMENTATION `docs/reference/appliance-seat-launcher.md` (Operator security boundary and residual risk)
 
 - IMPLEMENTS → GITHUB_ISSUE `823` (Issue 823: signed disposable appliance release envelope)
-- IMPLEMENTS → CODE_FILE `src/aptl/appliance/manifest.py` (Signed appliance release manifest)
-- IMPLEMENTS → CODE_FILE `src/aptl/appliance/build.py` (Appliance release builder)
-- IMPLEMENTS → CODE_FILE `src/aptl/appliance/offline.py` (Offline appliance payload staging)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/lab.py` (Lab appliance lifecycle integration)
-- IMPLEMENTS → CODE_FILE `src/aptl/appliance/launch.py` (Disposable appliance launcher)
-- TESTS → TEST `tests/test_appliance_build.py` (Appliance builder tests)
-- TESTS → TEST `tests/test_appliance_release_manifest.py` (Appliance release manifest tests)
-- IMPLEMENTS → DOCUMENTATION `docs/reference/appliance-release.md` (Appliance release operator reference)
-- TESTS → TEST `tests/test_appliance_offline_payload.py` (Offline payload tests)
-- TESTS → TEST `tests/test_appliance_offline_start.py` (Offline start tests)
 - IMPLEMENTS → CODE_FILE `appliance/guest/provision-offline.sh` (Offline appliance guest provisioning)
-- TESTS → TEST `tests/test_appliance_guest_assets.py` (Appliance guest asset tests)
-- TESTS → TEST `tests/test_appliance_cli.py` (Appliance CLI tests)
-- IMPLEMENTS → CODE_FILE `src/aptl/appliance/payload_content.py` (Packaged payload completeness and hash validation)
 - IMPLEMENTS → CODE_FILE `src/aptl/appliance/input_images.py` (Required OCI configuration and layer identities)
-- TESTS → TEST `tests/test_payload_content.py` (Missing and altered offline input rejection)
 - TESTS → TEST `tests/test_mcp_appliance_admission.py` (Signed launch and fresh boundary binding admission)
-- TESTS → TEST `tests/test_canonical_input_roundtrip.py` (Closed input staging and immutable packaged-byte tamper rejection)
+
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/seat/image.py` (Immutable OCI disk/config resolution)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/seat/image_trust.py` (Cosign publisher authentication and offline admission receipts)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/seat/retained_image.py` (Per-generation image/config/trust retention for offline restart)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/seat/image_update.py` (Confirmed stopped-seat replacement)
+- IMPLEMENTS → CODE_FILE `scripts/appliance/build-seat-image.sh` (Local offline guest assembly and sanitization)
+- IMPLEMENTS → CODE_FILE `scripts/appliance/publish-seat-image.sh` (Signed GHCR publication independent of package releases)
+- TESTS → TEST `tests/test_seat_image_trust.py` (Wrong-signature, digest and trust-rotation rejection)
+- TESTS → TEST `tests/test_seat_image_update.py` (Failed admission preservation and independent offline restart across updates)
+- TESTS → TEST `tests/test_seat_image_consent.py` (Consent before acquisition and no fallback)
+- TESTS → TEST `tests/test_seat_image_build.py` (Offline assembly and guest boot contracts)
+- TESTS → TEST `tests/test_seat_local_release.py` (Local cut identity and package release independence)

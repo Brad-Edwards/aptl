@@ -30,16 +30,42 @@ from tests.helpers import realized_container_name
 pytestmark = pytest.mark.integration
 
 
+def _materialized_project(tmp_path):
+    """Give a test the container assets the generic base images build from.
+
+    Those images build from Dockerfiles under the project directory, which a
+    real project has because `aptl lab init` materializes them. A bare
+    tmp_path has none, so the build fails on a missing context rather than on
+    anything the test is about. Only the container tree is copied: writing a
+    whole project would also install a Compose model the spec under test does
+    not describe.
+    """
+    import shutil
+
+    from aptl.core.assets import resolve_asset_source
+
+    source, _ = resolve_asset_source()
+    # The generic base Dockerfiles copy from these two trees; the build
+    # context is the project root, so both have to be present.
+    for tree in ("containers", "requirements"):
+        shutil.copytree(source / tree, tmp_path / tree, dirs_exist_ok=True)
+    return tmp_path
+
+
 def _docker_available() -> bool:
     if shutil.which("docker") is None:
         return False
-    return subprocess.run(["docker", "info"], capture_output=True, text=True).returncode == 0
+    return (
+        subprocess.run(["docker", "info"], capture_output=True, text=True).returncode
+        == 0
+    )
 
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
 def test_realize_node_through_backend_on_real_docker(tmp_path):
     container = "aptl-e2e-node"
 
+    _materialized_project(tmp_path)
     backend = DockerComposeBackend(project_dir=tmp_path, project_name="aptl-itest-e2e")
     # A non-service node: packages + identity, so the minimal base (no systemd)
     # is enough. All detail is declared, not coded.
@@ -58,7 +84,11 @@ def test_realize_node_through_backend_on_real_docker(tmp_path):
             packages=[RuntimePackage(manager="apt", name="curl", version="*")],
             local_identity=RuntimeLocalIdentityInventory(
                 groups=[RuntimeLocalGroup(name="techvault", gid=1600)],
-                users=[RuntimeLocalUser(username="analyst", supplemental_groups=["techvault"])],
+                users=[
+                    RuntimeLocalUser(
+                        username="analyst", supplemental_groups=["techvault"]
+                    )
+                ],
             ),
         ),
     )
@@ -68,11 +98,21 @@ def test_realize_node_through_backend_on_real_docker(tmp_path):
         assert result is None, getattr(result, "error", None)
 
         # Independently confirm real container state.
-        assert "curl" in backend.container_exec(
-            container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
-        ).stdout
-        assert backend.container_exec(container, ["id", "-u", "analyst"]).returncode == 0
-        assert backend.container_exec(container, ["getent", "group", "techvault"]).returncode == 0
+        assert (
+            "curl"
+            in backend.container_exec(
+                container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
+            ).stdout
+        )
+        assert (
+            backend.container_exec(container, ["id", "-u", "analyst"]).returncode == 0
+        )
+        assert (
+            backend.container_exec(
+                container, ["getent", "group", "techvault"]
+            ).returncode
+            == 0
+        )
     finally:
         subprocess.run(
             ["docker", "rm", "-f", realized_container_name(backend, container)],
@@ -153,9 +193,12 @@ def test_dynamic_composition_node_starts_immutably_from_config_id(tmp_path):
         assert _bare(config_image) == _bare(config_id)
 
         # The declared runtime still materialized onto that immutable substrate.
-        assert "curl" in backend.container_exec(
-            container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
-        ).stdout
+        assert (
+            "curl"
+            in backend.container_exec(
+                container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
+            ).stdout
+        )
     finally:
         subprocess.run(
             ["docker", "rm", "-f", realized_container_name(backend, container)],
@@ -173,7 +216,10 @@ def test_realize_routes_image_free_spec_through_materializer(tmp_path):
     )
 
     container = "aptl-e2e-realize"
-    backend = DockerComposeBackend(project_dir=tmp_path, project_name="aptl-itest-realize")
+    _materialized_project(tmp_path)
+    backend = DockerComposeBackend(
+        project_dir=tmp_path, project_name="aptl-itest-realize"
+    )
 
     node = DeploymentNodeRealization(
         address="itest.e2e-realize",
@@ -197,9 +243,12 @@ def test_realize_routes_image_free_spec_through_materializer(tmp_path):
     try:
         result = backend.realize(spec, scenario_root=tmp_path)
         assert result.success, result.error
-        assert "curl" in backend.container_exec(
-            container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
-        ).stdout
+        assert (
+            "curl"
+            in backend.container_exec(
+                container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
+            ).stdout
+        )
     finally:
         subprocess.run(
             ["docker", "rm", "-f", realized_container_name(backend, container)],

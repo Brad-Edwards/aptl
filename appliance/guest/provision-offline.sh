@@ -48,6 +48,7 @@ with tarfile.open(sys.argv[1], 'r:') as archive:
 PYTHON
 
 test -d "$payload_dir/wheelhouse"
+test -f "$payload_dir/aptl-wheel-requirements.txt"
 test -f "$payload_dir/project.tar"
 test -f "$payload_dir/oci-images.tar"
 test -f "$payload_dir/appliance-release.env"
@@ -60,6 +61,7 @@ test -f "$payload_dir/system-packages.sha256"
 set -- "$payload_dir"/wheelhouse/pip-*.whl
 test "$#" -eq 1
 test -f "$1"
+pip_wheel=$1
 install -d -m 0755 /opt/aptl /opt/aptl/python /usr/local/bin
 PYTHONPATH="$1" python3 -m pip install --no-index --only-binary=:all: \
     --target /opt/aptl/python \
@@ -68,24 +70,34 @@ PYTHONPATH="$1" python3 -m pip install --no-index --only-binary=:all: \
     --find-links "$payload_dir/wheelhouse" \
     -r "$payload_dir/requirements.txt"
 
+# Keep the application wheel separate from the dependency closure. pip's
+# --target install does not merge an existing bin directory, so installing the
+# wheel into the dependency target would silently omit its aptl entrypoint.
+set -- "$payload_dir"/wheelhouse/aptl_labs-*.whl
+test "$#" -eq 1
+test -f "$1"
+PYTHONPATH="$pip_wheel" python3 -m pip install \
+    --no-index --no-deps --ignore-installed --target /opt/aptl/app \
+    --require-hashes --find-links "$payload_dir/wheelhouse" \
+    -r "$payload_dir/aptl-wheel-requirements.txt"
+
 # The Ubuntu base marks its system Python as externally managed and does not
 # ship ensurepip. Keep the authenticated application closure isolated under
 # /opt and expose only fixed launchers through the system PATH.
 cat > /usr/local/bin/aptl <<'EOF'
 #!/bin/sh
-PYTHONPATH=/opt/aptl/python exec /usr/bin/python3 /opt/aptl/python/bin/aptl "$@"
+PYTHONPATH=/opt/aptl/app:/opt/aptl/python exec /usr/bin/python3 /opt/aptl/app/bin/aptl "$@"
 EOF
 cat > /usr/local/bin/raes <<'EOF'
 #!/bin/sh
-PYTHONPATH=/opt/aptl/python exec /usr/bin/python3 /opt/aptl/python/bin/raes "$@"
+PYTHONPATH=/opt/aptl/app:/opt/aptl/python exec /usr/bin/python3 /opt/aptl/python/bin/raes "$@"
 EOF
 cat > /usr/local/bin/aptl-misp-suricata-sync <<'EOF'
 #!/bin/sh
-PYTHONPATH=/opt/aptl/python exec /usr/bin/python3 /opt/aptl/python/bin/aptl-misp-suricata-sync "$@"
+PYTHONPATH=/opt/aptl/app:/opt/aptl/python exec /usr/bin/python3 /opt/aptl/app/bin/aptl-misp-suricata-sync "$@"
 EOF
 chmod 0755 /usr/local/bin/aptl /usr/local/bin/raes \
     /usr/local/bin/aptl-misp-suricata-sync
-/usr/local/bin/aptl appliance validate-inputs --staging-dir "$payload_dir"
 
 # Install the content-locked guest runtime without granting the build guest
 # network access. Suppress maintainer-script service starts until first boot.
@@ -107,9 +119,8 @@ tar --extract --file "$payload_dir/project.tar" \
     --directory /opt/aptl/project --no-same-owner
 # Only immutable, scanned release inputs exist here. Runtime credentials and
 # evidence are created later under the first-boot service's private umask.
-chmod -R a+rX /opt/aptl/python /opt/aptl/project
+chmod -R a+rX /opt/aptl/app /opt/aptl/python /opt/aptl/project
 install -d -m 0755 /opt/aptl/offline
-install -m 0444 "$payload_dir/inputs.json" /opt/aptl/offline/inputs.json
 install -m 0444 "$payload_dir/oci-images.tar" \
     /opt/aptl/offline/oci-images.tar
 

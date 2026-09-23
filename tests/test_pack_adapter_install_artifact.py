@@ -400,8 +400,12 @@ def test_second_installed_pack_starts_captures_plans_and_verifies(
                     stdout='ID=debian\\nVERSION_ID="12"\\n',
                 )
             if command and command[0] == "dpkg-query":
+                # dpkg-query is asked for five fields: status, package,
+                # version, architecture and provides. A three-field row parses
+                # to nothing, which reads downstream as a backend that
+                # returned no corroboration for the packages it declared.
                 return SimpleNamespace(
-                    returncode=0, stdout="curl\\t1.0\\tamd64\\n"
+                    returncode=0, stdout="ii \\tcurl\\t1.0\\tamd64\\t\\n"
                 )
             return SimpleNamespace(returncode=1, stdout="")
         backend.container_exec.side_effect = container_exec

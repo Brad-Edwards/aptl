@@ -1478,8 +1478,6 @@ def _configure_verified_appliance_launch(
         )
     if (
         not ctx.offline_staged
-        or ctx.appliance_release_public_key is None
-        or ctx.appliance_qualification_public_key is None
         or ctx.backend is None
     ):
         result = LabResult(
@@ -1487,25 +1485,11 @@ def _configure_verified_appliance_launch(
             error="Appliance launch inputs are incomplete.",
         )
     else:
-        from aptl.appliance.launch import verify_launch_descriptor
+        from aptl.appliance.seat.launch_descriptor import verify_seat_launch
         from aptl.core.appliance_boundary import ApplianceBoundaryBinding
 
         try:
-            if ctx.appliance_candidate_trust:
-                from aptl.appliance.candidate import (
-                    verify_candidate_launch_descriptor,
-                )
-
-                launch = verify_candidate_launch_descriptor(
-                    descriptor_path,
-                    ctx.appliance_release_public_key,
-                )
-            else:
-                launch = verify_launch_descriptor(
-                    descriptor_path,
-                    ctx.appliance_release_public_key,
-                    ctx.appliance_qualification_public_key,
-                )
+            descriptor, boundary_policy = verify_seat_launch(descriptor_path)
             if not _attest_private_appliance_daemon(descriptor_path):
                 raise ValueError("appliance launch is not in an isolated guest")
             boot_id = _read_appliance_boot_id()
@@ -1515,12 +1499,11 @@ def _configure_verified_appliance_launch(
             daemon = ctx.backend.daemon_identity()
             if not boot_id or not isinstance(daemon, str) or not daemon:
                 raise ValueError("runtime identity is unavailable")
-            descriptor = launch.descriptor
             binding = ApplianceBoundaryBinding(
                 policy_digest=descriptor.boundary_policy_digest,
-                payload_digest=descriptor.payload_digest,
+                payload_digest=descriptor.image_digest,
                 raes_plan_digest=descriptor.participant_routes_digest,
-                raes_boundary_required=launch.boundary_policy.internal_zone_isolation,
+                raes_boundary_required=boundary_policy.internal_zone_isolation,
                 boundary_helper_image=descriptor.boundary_helper_image,
                 egress_proxy_image=descriptor.egress_proxy_image,
                 boot_id=boot_id,
@@ -1528,7 +1511,7 @@ def _configure_verified_appliance_launch(
                 host_observation_id=descriptor.host_observation_id,
             )
             ctx.backend.configure_appliance_boundary(
-                launch.boundary_policy,
+                boundary_policy,
                 binding,
                 isolated_daemon=True,
             )
@@ -4099,6 +4082,9 @@ def _publish_appliance_guest_readiness(
     if realization is None or not callable(observe):
         return LabResult(success=False, error="Appliance readiness is unavailable.")
     try:
+        from aptl.appliance.guest_web import start_guest_web
+
+        start_guest_web(ctx.backend, ctx.project_dir)
         deployment = realization.deployment_spec(sorted(ctx.selected_profiles))
         observation = observe(deployment)
         from aptl.appliance.seat.readiness import publish_guest_readiness
@@ -4113,8 +4099,6 @@ def _publish_appliance_guest_readiness(
             if (
                 not all(access_values)
                 or ctx.appliance_launch_descriptor is None
-                or ctx.appliance_release_public_key is None
-                or ctx.appliance_qualification_public_key is None
                 or ctx.run_id is None
             ):
                 raise ValueError("appliance access channel is incomplete")
@@ -4123,14 +4107,11 @@ def _publish_appliance_guest_readiness(
             serve_appliance_access(
                 request_path=cast(Path, ctx.appliance_access_request),
                 descriptor_path=ctx.appliance_launch_descriptor,
-                release_public_key=ctx.appliance_release_public_key,
-                qualification_public_key=ctx.appliance_qualification_public_key,
                 device_path=cast(Path, ctx.appliance_access_device),
                 output_dir=cast(Path, ctx.appliance_access_output_dir),
                 run_id=ctx.run_id,
                 project_dir=ctx.project_dir,
                 observe_boundary=lambda: observe(deployment),
-                candidate_trust=ctx.appliance_candidate_trust,
             )
     except Exception:
         log.exception("Appliance guest readiness publication failed")

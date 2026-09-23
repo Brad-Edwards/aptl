@@ -27,6 +27,10 @@ from aptl.core.deployment.realization import (
     DeploymentAclRealization,
     DeploymentRealizationSpec,
 )
+from aptl.core.deployment._compose_runtime_observation_helpers import (
+    inspect_has_endpoint_override,
+    inspect_has_socket_route,
+)
 from aptl.core.ephemeral_containers import (
     EphemeralContainer,
     remove_container_command,
@@ -511,6 +515,7 @@ def _authority_holders(
 
     nodes = {item.address: item for item in realization.nodes}
     holders = []
+    admitted_identities: set[str] = set()
     for admission in realization.docker_authority_admissions:
         node = nodes.get(admission.node_address)
         identity = (node.container_name or node.service_name) if node else None
@@ -521,34 +526,50 @@ def _authority_holders(
         )
         if container is None:
             continue
-        inspection = container.inspection
-        config = inspection.get("Config", {})
-        labels = config.get("Labels", {}) if isinstance(config, Mapping) else {}
-        selector = next(
-            (
-                value
-                for value in policy.docker_authority.allowed_holder_labels
-                if isinstance(labels, Mapping)
-                and labels.get(value.split("=", 1)[0]) == value.split("=", 1)[1]
-            ),
-            "org.aptl.unapproved=holder",
-        )
-        host = inspection.get("HostConfig", {})
-        host = host if isinstance(host, Mapping) else {}
-        devices = host.get("Devices", [])
-        holders.append(
-            DockerAuthorityHolder(
-                identity=container.identity,
-                label_selector=selector,
-                daemon_id=daemon_id,
-                access="socket",
-                privileged=host.get("Privileged") is True,
-                host_pid_namespace=host.get("PidMode") == "host",
-                host_network_namespace=host.get("NetworkMode") == "host",
-                device_count=len(devices) if isinstance(devices, list) else 0,
-            )
-        )
+        admitted_identities.add(container.identity)
+        holders.append(_observed_authority_holder(container, policy, daemon_id))
+    for container in containers:
+        if container.identity in admitted_identities:
+            continue
+        if inspect_has_socket_route(container.inspection) or inspect_has_endpoint_override(
+            container.inspection
+        ):
+            holders.append(_observed_authority_holder(container, policy, daemon_id))
     return tuple(holders)
+
+
+def _observed_authority_holder(
+    container: _LiveContainer,
+    policy: ApplianceBoundaryPolicy,
+    daemon_id: str,
+) -> DockerAuthorityHolder:
+    """Attribute one live Docker control route to its actual container labels."""
+
+    inspection = container.inspection
+    config = inspection.get("Config", {})
+    labels = config.get("Labels", {}) if isinstance(config, Mapping) else {}
+    selector = next(
+        (
+            value
+            for value in policy.docker_authority.allowed_holder_labels
+            if isinstance(labels, Mapping)
+            and labels.get(value.split("=", 1)[0]) == value.split("=", 1)[1]
+        ),
+        "org.aptl.unapproved=holder",
+    )
+    host = inspection.get("HostConfig", {})
+    host = host if isinstance(host, Mapping) else {}
+    devices = host.get("Devices", [])
+    return DockerAuthorityHolder(
+        identity=container.identity,
+        label_selector=selector,
+        daemon_id=daemon_id,
+        access="socket" if inspect_has_socket_route(inspection) else "api",
+        privileged=host.get("Privileged") is True,
+        host_pid_namespace=host.get("PidMode") == "host",
+        host_network_namespace=host.get("NetworkMode") == "host",
+        device_count=len(devices) if isinstance(devices, list) else 0,
+    )
 
 
 def collect_guest_observation(

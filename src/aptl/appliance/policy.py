@@ -43,7 +43,8 @@ def full_techvault_boundary_policy() -> ApplianceBoundaryPolicy:
             "host_mcp_contract": "aptl.restricted-ssh-mcp/v1",
             "docker_authority": {
                 "allowed_holder_labels": [
-                    "aptl.node.address=provision.node.shuffle-orborus"
+                    "aptl.node.address=provision.node.shuffle-orborus",
+                    "aptl.web.control-plane=true",
                 ],
                 "require_guest_daemon": True,
             },

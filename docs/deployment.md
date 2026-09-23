@@ -39,9 +39,9 @@ the project directory; do not run `aptl lab init` over it.
 ## Disposable Appliance
 
 The appliance path puts rootful Docker and the complete lab inside a disposable
-KVM guest. See the [appliance seat launcher](reference/appliance-seat-launcher.md)
-for operator use and the [appliance release reference](reference/appliance-release.md)
-for signed payload creation, staging, qualification, and rollback.
+KVM guest booted from a published image. See the
+[appliance seat launcher](reference/appliance-seat-launcher.md) for operator
+use, including how updates are adopted and rolled back.
 
 Offline appliance startup accepts only the staged wheels, project assets, and
 OCI images bound by its launch descriptor and trust anchors. Missing inputs

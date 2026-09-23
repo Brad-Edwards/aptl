@@ -1,229 +1,95 @@
-"""Structural gates for exact-source appliance publication and acceptance."""
+"""Structural gates for the release workflow's container publication."""
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/release-please.yml"
+RETRY_WORKFLOW = ROOT / ".github/workflows/publish-seat-image.yml"
+PUBLISHER = ROOT / "scripts/appliance/publish-seat-image.sh"
 
 
-def _jobs() -> dict[str, object]:
+def _jobs() -> dict[str, dict]:
     return yaml.safe_load(WORKFLOW.read_text())["jobs"]
 
 
-def test_release_requires_two_distinct_kvm_qualifiers_and_separate_sealing() -> None:
+def test_package_release_only_publishes_python_artifacts() -> None:
     jobs = _jobs()
-    machine_a = jobs["qualify-appliance-a"]
-    machine_b = jobs["qualify-appliance-b"]
-    assert machine_a["runs-on"] != machine_b["runs-on"]
-    assert "aptl-appliance-a" in machine_a["runs-on"]
-    assert "aptl-appliance-b" in machine_b["runs-on"]
-    assert machine_a["steps"][2]["env"]["APTL_QUALIFICATION_SEATS"] == "2"
-    assert machine_b["steps"][2]["env"]["APTL_QUALIFICATION_SEATS"] == "1"
-    assert set(jobs["seal-appliance"]["needs"]) >= {
-        "build-appliance-candidate",
-        "qualify-appliance-a",
-        "qualify-appliance-b",
-    }
+    assert set(jobs) == {"release-please", "publish", "backmerge"}
+    assert set(jobs["backmerge"]["needs"]) == {"release-please", "publish"}
 
 
-def test_public_acceptance_has_no_repository_or_package_permission() -> None:
-    job = _jobs()["accept-public-appliance"]
-    assert job["permissions"] == {}
-    assert set(job["needs"]) == {
-        "release-please",
-        "publish-appliance",
-        "publish-public-appliance-images",
-    }
-    assert "kvm" in job["runs-on"]
-    script = (ROOT / "scripts/appliance/accept-public-release.sh").read_text()
-    assert "docker logout ghcr.io" in script
-    assert "unset GH_TOKEN GITHUB_TOKEN" in script
-    assert "appliance fetch-distribution" in script
-    assert "probe-native-client.py" in script
-    assert "THIRD-PARTY-NOTICES.md" in script
-    assert "APTL_RELEASE_PUBLIC_KEY_PEM" in job["steps"][1]["env"]
-    assert "APTL_QUALIFICATION_PUBLIC_KEY_PEM" in job["steps"][1]["env"]
-
-
-def test_public_images_and_release_assets_are_both_mandatory() -> None:
-    jobs = _jobs()
-    assert jobs["build-appliance-candidate"]["needs"] == [
-        "release-please",
-        "publish-appliance-images",
-    ]
-    assert jobs["publish-appliance"]["needs"] == ["release-please", "seal-appliance"]
-    assert jobs["publish-public-appliance-images"]["needs"] == [
-        "release-please",
-        "seal-appliance",
-    ]
-    assert "accept-public-appliance" in jobs["backmerge"]["needs"]
-    image_verifier = (ROOT / "scripts/appliance/verify-public-images.sh").read_text()
-    image_publisher = (ROOT / "scripts/appliance/publish-images.sh").read_text()
-    assert "aptl-candidate" in image_verifier
-    assert "docker tag" in image_verifier
-    assert "docker logout ghcr.io" in image_verifier
-    assert "aptl-candidate" in image_publisher
-    assert "refusing to replace existing GHCR tag" in image_publisher
-    # Both namespaces inherit this public repository's visibility at creation
-    # and GitHub exposes no endpoint that reads or writes it for a user-owned
-    # package, so each script proves publication with an unauthenticated pull
-    # and neither may gate on a visibility field.
-    assert "require_anonymous_pull" in image_publisher
-    assert "ghcr.io/token?service=ghcr.io" in image_publisher
-    assert "--jq .visibility" not in image_publisher
-    assert "--jq .visibility" not in image_verifier
-    assert "--method PATCH" not in image_verifier
-    candidate_env = jobs["build-appliance-candidate"]["steps"][3]["env"]
-    assert candidate_env["APTL_IMAGE_NAMESPACE"].endswith("/aptl-candidate")
-
-
-def test_sealing_requires_exact_redistribution_review_and_publishes_notices() -> None:
-    seal = _jobs()["seal-appliance"]
-    env = seal["steps"][2]["env"]
-    assert "APTL_REDISTRIBUTION_REVIEW_JSON" in env
-    script = (ROOT / "scripts/appliance/seal-release.sh").read_text()
-    assert "verify-redistribution-review" in script
-    assert "THIRD-PARTY-NOTICES.md" in script
-
-
-def test_staged_build_public_promotion_and_candidate_acquisition_sets_match() -> None:
+def test_every_project_owned_image_is_still_published() -> None:
+    # The seat image is what a participant boots, but the lab's own container
+    # images are still published; deleting the golden pipeline must not have
+    # taken them with it.
     publisher = (ROOT / "scripts/appliance/publish-images.sh").read_text()
-    builder = (ROOT / "scripts/appliance/build-candidate.sh").read_text()
-    local_builder = (ROOT / "scripts/appliance/build-local-images.sh").read_text()
-    promoter = (ROOT / "scripts/appliance/verify-public-images.sh").read_text()
-    acceptance = (ROOT / "scripts/appliance/accept-public-release.sh").read_text()
     published = set(re.findall(r"^build_image ([a-z0-9-]+) ", publisher, re.MULTILINE))
-    acquired = set(re.findall(r"^  '([a-z0-9-]+) [^']+'$", builder, re.MULTILINE))
-    image_block = promoter.split("images=(", 1)[1].split(")", 1)[0]
-    promoted = set(re.findall(r"^  ([a-z0-9-]+)$", image_block, re.MULTILINE))
-    acceptance_block = acceptance.split("images=(", 1)[1].split(")", 1)[0]
-    anonymously_pulled = set(
-        re.findall(r"^    ([a-z0-9-]+)$", acceptance_block, re.MULTILINE)
-    )
-    assert published == acquired == promoted == anonymously_pulled
     assert len(published) == 13
-    local_images = set(
-        re.findall(r"^build_image ([^ ]+) ", local_builder, re.MULTILINE)
-    )
-    assert len(local_images) == 13
     assert "docker build --provenance=false" in publisher
-    assert "docker build --provenance=false" in local_builder
 
 
-def test_local_candidate_path_uses_exact_commit_and_no_registry_dependency() -> None:
-    wrapper = (ROOT / "scripts/appliance/build-local-candidate.sh").read_text()
-    builder = (ROOT / "scripts/appliance/build-candidate.sh").read_text()
-    assert "git status --porcelain --untracked-files=no" in wrapper
-    assert "APTL_CANDIDATE_MODE=local" in wrapper
-    assert "scripts/appliance/build-local-images.sh" in wrapper
-    assert "scripts/appliance/build-candidate.sh" in wrapper
-    assert "source_revision" in builder
-    assert '"$target_python" -m venv "$root/venv"' in builder
-    assert "\npython -m venv " not in builder
-    assert "pip download --require-hashes -r requirements/web.txt" in builder
-    assert "acquire-guest-system-packages.sh" in builder
-    assert "--system-packages system-packages" in builder
-    assert "--system-packages-lock" in builder
-    assert "--local-image-lock" in builder
-    assert "APTL_LOCAL_IMAGE_LOCK_FILE" in wrapper
-    assert "APTL_LOCAL_IMAGE_TAG_SUFFIX" in wrapper
-    assert "APTL_IMAGE_NAMESPACE" not in wrapper
-
-
-def test_local_image_builds_pin_unique_tags_and_exact_parent_images() -> None:
-    builder = (ROOT / "scripts/appliance/build-local-images.sh").read_text()
-    assert '"${canonical%:*}" "$APTL_LOCAL_IMAGE_TAG_SUFFIX"' in builder
-    assert "docker image inspect --format '{{.Id}}' \"$output_ref\"" in builder
-    assert 'build+=(--build-arg "APTL_PARENT_IMAGE=$parent_image")' in builder
-    for name in (
-        "generic-samba-ad-wazuh-agent-base",
-        "generic-systemd-wazuh-agent-base",
-        "generic-systemd-wazuh-agent-base-debian",
-    ):
-        dockerfile = (ROOT / "containers" / name / "Dockerfile").read_text()
-        assert "ARG APTL_PARENT_IMAGE=" in dockerfile
-        assert "FROM ${APTL_PARENT_IMAGE}" in dockerfile
-
-
-def test_node22_image_preloads_exact_mcp_locks_for_offline_materialization() -> None:
-    dockerfile = (
-        ROOT / "containers/generic-systemd-node22-base/Dockerfile"
-    ).read_text()
-    assert (
-        "COPY requirements/runtime.txt /opt/aptl/runtime-requirements.txt" in dockerfile
+def test_private_candidate_does_not_move_latest(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "seat-disk.qcow2").write_bytes(b"disk")
+    (out / "seat-image-config.json").write_bytes(b"{}")
+    subprocess.run([sys.executable, str(ROOT / "scripts/appliance/seat-build-record.py"),
+                    "write", str(out), "--commit", "a" * 40, "--dirty", "0"], check=True)
+    binary = tmp_path / "bin"
+    binary.mkdir()
+    stubs = {
+        "oras": """#!/bin/sh
+case "$1" in
+  login) cat >/dev/null ;;
+  resolve)
+    case "$2" in *:v5.6.0) exit 1 ;; esac
+    printf 'sha256:candidate\\n' ;;
+  tag) printf 'tag\\n' >> "$APTL_TEST_ORAS_LOG" ;;
+esac
+""",
+        "curl": """#!/bin/sh
+printf 'request\\n' >> "$APTL_TEST_CURL_LOG"
+case "${*}" in
+  *'/token?'*) printf '{"token":"anonymous"}\\n' ;;
+  *) printf '401' ;;
+esac
+""",
+        "jq": "#!/bin/sh\ncat >/dev/null\nprintf 'anonymous\\n'\n",
+        "sha256sum": "#!/bin/sh\nif test \"$#\" -eq 0; then cat >/dev/null; fi\nprintf '%064d  -\\n' 0\n",
+        "sleep": "#!/bin/sh\nexit 0\n",
+    }
+    for name, body in stubs.items():
+        path = binary / name
+        path.write_text(body)
+        path.chmod(0o755)
+    log = tmp_path / "oras.log"
+    result = subprocess.run(
+        ["bash", str(PUBLISHER), str(out)],
+        env={
+            "PATH": f"{binary}:{os.environ['PATH']}",
+            "APTL_SEAT_SIGNING_KEY": str(tmp_path / "fixture.key"),
+            "REPOSITORY_OWNER": "Brad-Edwards",
+            "GHCR_TOKEN": "test-token",
+            "GITHUB_ACTOR": "test-actor",
+            "APTL_TEST_ORAS_LOG": str(log),
+            "APTL_TEST_CURL_LOG": str(tmp_path / "curl.log"),
+        },
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
     )
-    assert "python3 -m pip install --no-deps --require-hashes" in dockerfile
-    assert "python3 -m aptl_techvault.build_cache \\\n" in dockerfile
-    assert "/tmp/aptl-cache-pack" not in dockerfile
-    assert "/opt/aptl/npm-cache-pack" in dockerfile
-    assert "npm-cache-input-identity.json" in dockerfile
-    assert "zipfile -e" not in dockerfile
-    assert "npm_config_cache=/opt/aptl/npm-cache" in dockerfile
-    assert "aptl-mcp-common mcp-casemgmt mcp-indexer mcp-network" in dockerfile
-    assert "mcp-red mcp-reverse mcp-soar mcp-threatintel mcp-wazuh" in dockerfile
-    assert "--ignore-scripts --no-audit --no-fund" in dockerfile
-    assert "**/node_modules" in (ROOT / ".dockerignore").read_text()
 
-
-def test_qualification_venv_installs_the_locked_runtime_closure() -> None:
-    qualifier = (ROOT / "scripts/appliance/qualify-candidate.sh").read_text()
-
-    ci_install = 'pip" install --require-hashes -r requirements/ci.txt'
-    runtime_install = 'pip" install --require-hashes -r requirements/runtime.txt'
-    local_install = 'pip" install --no-deps .'
-    assert qualifier.index(ci_install) < qualifier.index(runtime_install)
-    assert qualifier.index(runtime_install) < qualifier.index(local_install)
-    assert 'release_dir="$seat_root/launch/release"' in qualifier
-    assert '"$seat_root/release"' not in qualifier
-    assert '"$work/seat-1/release"' not in qualifier
-
-
-def test_resource_sampler_handles_seats_before_their_pid_files_exist() -> None:
-    sampler = (ROOT / "scripts/appliance/sample-seat-resources.py").read_text()
-
-    assert "max((item[1] for item in samples), default=0)" in sampler
-    assert "max((_disk(root) for root in args.seat_root), default=0)" in sampler
-
-
-def test_two_seat_qualification_uses_a_distinct_client_identity_per_seat() -> None:
-    qualifier = (ROOT / "scripts/appliance/qualify-candidate.sh").read_text()
-
-    seat_loop = (
-        qualifier.split("cold_started=$(date +%s)", 1)[1]
-        .split('for index in $(seq 1 "$APTL_QUALIFICATION_SEATS"); do', 1)[1]
-        .split("done", 1)[0]
-    )
-    assert 'identity="$work/client-key-$index"' in seat_loop
-    assert "ssh-keygen -q -t ed25519 -N '' -f \"$identity\"" in seat_loop
-    assert '--access-public-key "$identity.pub"' in seat_loop
-    assert '--access-identity-file "$identity"' in seat_loop
-    assert "ssh-keygen -q -t ed25519 -N '' -f \"$work/client-key\"" not in qualifier
-
-
-def test_image_publisher_needs_no_github_api_credential():
-    step = next(
-        step
-        for step in _jobs()["publish-appliance-images"]["steps"]
-        if step.get("run") == "scripts/appliance/publish-images.sh"
-    )
-    # Publication is proven against the registry, not the packages API, so the
-    # step carries no GitHub API token to hold. Registry credentials stay in
-    # the separate docker login step.
-    assert "GH_TOKEN" not in step["env"]
-    publisher = (ROOT / "scripts/appliance/publish-images.sh").read_text()
-    assert "gh api" not in publisher
-
-
-def test_checkout_free_release_upload_has_explicit_repository():
-    step = next(
-        step
-        for step in _jobs()["publish-appliance"]["steps"]
-        if "gh release upload" in step.get("run", "")
-    )
-    assert step["env"]["GH_REPO"] == "${{ github.repository }}"
+    assert result.returncode != 0
+    assert "key-" in result.stderr
+    assert "not anonymously pullable" in result.stderr
+    assert not log.exists()
+    assert len((tmp_path / "curl.log").read_text().splitlines()) <= 4

@@ -5,21 +5,34 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import click
+import pytest
 from typer.testing import CliRunner
 
 from aptl.appliance.seat.models import SeatRecord
 from aptl.appliance.seat.persistence import persist_seat_record
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.cli.main import app
+from aptl.cli.seat import DEFAULT_SEAT_IMAGE
 
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def acquired_image(monkeypatch):
+    """These lifecycle projection tests start after acquisition; consent has its own tests."""
+    monkeypatch.setattr(
+        "aptl.cli.seat._prepare_seat_image",
+        lambda image, *args, **kwargs: image or DEFAULT_SEAT_IMAGE,
+    )
 
 
 def _seat_record() -> SeatRecord:
     return SeatRecord(
         schema_version="aptl.seat-record/v1",
         seat_id="seat-01",
-        selected_release_id="aptl-v1",
+        image_reference="ghcr.io/brad-edwards/aptl-seat:latest",
+        image_digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         launch_descriptor_digest="sha256:" + "a" * 64,
         overlay_path="instances/seat-01.qcow2",
         host_observation_id="host-1",
@@ -33,12 +46,10 @@ def _common_seat_args() -> list[str]:
     return [
         "--seat-root",
         "/tmp/seat",
-        "--release-dir",
-        "/tmp/release",
-        "--release-public-key",
-        "/tmp/release.pem",
-        "--qualification-public-key",
-        "/tmp/qualification.pem",
+        "--image",
+        "ghcr.io/brad-edwards/aptl-seat:latest",
+        "--image-cache",
+        "/tmp/image-cache",
     ]
 
 
@@ -50,48 +61,10 @@ def test_seat_help_lists_supported_commands() -> None:
     assert "reset" in result.stdout
     assert "recover" in result.stdout
     assert "open-kiosk" in result.stdout
-    assert "install" in result.stdout
-
-
-def test_seat_install_targets_private_default_layout(tmp_path: Path) -> None:
-    state_home = tmp_path / "state"
-    cache_home = tmp_path / "cache"
-    release_key = tmp_path / "release.pem"
-    qualification_key = tmp_path / "qualification.pem"
-    release_key.write_text("release")
-    qualification_key.write_text("qualification")
-    installed = __import__(
-        "aptl.appliance.public_install", fromlist=["PublicReleaseInstallResult"]
-    ).PublicReleaseInstallResult(
-        release_id="aptl-v5.5.0-x86_64",
-        release_dir=state_home / "aptl" / "seat" / "launch" / "release",
-        reused=False,
-    )
-    with patch(
-        "aptl.cli.seat.install_public_release", return_value=installed
-    ) as install:
-        result = runner.invoke(
-            app,
-            [
-                "seat",
-                "install",
-                "--tag",
-                "v5.5.0",
-                "--release-public-key",
-                str(release_key),
-                "--qualification-public-key",
-                str(qualification_key),
-            ],
-            env={
-                "XDG_STATE_HOME": str(state_home),
-                "XDG_CACHE_HOME": str(cache_home),
-            },
-        )
-
-    assert result.exit_code == 0, result.output
-    assert install.call_args.kwargs["seat_root"] == state_home / "aptl" / "seat"
-    assert install.call_args.kwargs["cache_dir"] == cache_home / "aptl" / "appliance"
-    assert install.call_args.kwargs["selection"].release_id == "aptl-v5.5.0-x86_64"
+    assert "update" in result.stdout
+    assert "images" in result.stdout
+    # There is nothing to install: a start pulls what it needs.
+    assert "install" not in result.stdout
 
 
 def test_seat_status_emits_bounded_json(tmp_path: Path) -> None:
@@ -111,7 +84,8 @@ def test_seat_status_uses_owner_state_directory_by_default(tmp_path: Path) -> No
             seat_id="",
             lifecycle_state="empty",
             taint_state="clean",
-            selected_release_id="",
+            image_reference="",
+            image_digest="",
             launch_descriptor_digest="",
             host_observation_id="",
         )
@@ -205,7 +179,7 @@ def test_seat_stage_rejects_invalid_outer_mapping() -> None:
 
 def test_seat_start_success_emits_json() -> None:
     with (
-        patch("aptl.cli.seat.release_requires_host_access", return_value=False),
+        patch("aptl.cli.seat.image_requires_host_access", return_value=False),
         patch("aptl.cli.seat.start_seat", return_value=_seat_record()),
     ):
         result = runner.invoke(app, ["seat", "start", *_common_seat_args()])
@@ -214,31 +188,55 @@ def test_seat_start_success_emits_json() -> None:
     assert '"started":true' in result.stdout.replace(" ", "")
 
 
-def test_seat_start_uses_installed_release_and_owner_state_by_default(
-    tmp_path: Path,
-) -> None:
+def test_seat_start_needs_no_arguments_at_all(tmp_path: Path) -> None:
+    # The whole point: a bare `aptl seat start` pulls the published image into
+    # the current user's private cache and runs it. No release directory, no
+    # trust anchors, no install step.
     state_home = tmp_path / "state"
+    cache_home = tmp_path / "cache"
     seat_root = state_home / "aptl" / "seat"
     with (
-        patch("aptl.cli.seat.release_requires_host_access", return_value=False),
+        patch("aptl.cli.seat.image_requires_host_access", return_value=False),
         patch("aptl.cli.seat.start_seat", return_value=_seat_record()) as start,
     ):
         result = runner.invoke(
             app,
             ["seat", "start"],
-            env={"XDG_STATE_HOME": str(state_home)},
+            env={
+                "XDG_STATE_HOME": str(state_home),
+                "XDG_CACHE_HOME": str(cache_home),
+            },
         )
 
     assert result.exit_code == 0, result.output
     assert start.call_args.args == (seat_root,)
-    assert start.call_args.kwargs["release_dir"] == seat_root / "launch" / "release"
+    assert start.call_args.kwargs["image_reference"] == DEFAULT_SEAT_IMAGE
     assert (
-        start.call_args.kwargs["release_public_key"]
-        == seat_root / "launch" / "release-public.pem"
+        start.call_args.kwargs["image_cache_dir"] == cache_home / "aptl" / "appliance"
     )
+
+
+def test_seat_start_cannot_adopt_an_image_update() -> None:
+    result = runner.invoke(app, ["seat", "start", "--update"])
+
+    assert result.exit_code == 2
+    assert "No such option: --update" in click.unstyle(result.output)
+
+
+def test_seat_start_accepts_another_image_source(tmp_path: Path) -> None:
+    with (
+        patch("aptl.cli.seat.image_requires_host_access", return_value=False),
+        patch("aptl.cli.seat.start_seat", return_value=_seat_record()) as start,
+    ):
+        result = runner.invoke(
+            app,
+            ["seat", "start", "--image", "registry.example/mine/seat:pinned"],
+            env={"XDG_STATE_HOME": str(tmp_path / "state")},
+        )
+
+    assert result.exit_code == 0, result.output
     assert (
-        start.call_args.kwargs["qualification_public_key"]
-        == seat_root / "launch" / "qualification-public.pem"
+        start.call_args.kwargs["image_reference"] == "registry.example/mine/seat:pinned"
     )
 
 
@@ -255,7 +253,7 @@ def test_seat_start_auto_enrolls_current_user_for_required_host_access(
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGZhY2lsaXRhdG9yLXRlc3Qta2V5"
     )
     with (
-        patch("aptl.cli.seat.release_requires_host_access", return_value=True),
+        patch("aptl.cli.seat.image_requires_host_access", return_value=True),
         patch(
             "aptl.cli.seat.ensure_transport_identity",
             return_value=(private, public),
@@ -287,7 +285,7 @@ def test_seat_start_resolves_explicit_host_client_paths(
     identity.write_text("private")
     project.mkdir()
     with (
-        patch("aptl.cli.seat.release_requires_host_access", return_value=True),
+        patch("aptl.cli.seat.image_requires_host_access", return_value=True),
         patch("aptl.cli.seat.start_seat", return_value=_seat_record()) as start,
     ):
         result = runner.invoke(
@@ -315,7 +313,7 @@ def test_seat_start_resolves_explicit_host_client_paths(
 
 def test_seat_start_error_is_bounded() -> None:
     with (
-        patch("aptl.cli.seat.release_requires_host_access", return_value=False),
+        patch("aptl.cli.seat.image_requires_host_access", return_value=False),
         patch(
             "aptl.cli.seat.start_seat",
             side_effect=__import__(
@@ -346,7 +344,10 @@ def test_seat_reset_and_recover_success_emit_json() -> None:
     staged = _seat_record().model_copy(update={"lifecycle_state": "staged"})
     with patch("aptl.cli.seat.reset_seat", return_value=staged):
         reset = runner.invoke(app, ["seat", "reset", *_common_seat_args()])
-    with patch("aptl.cli.seat.recover_seat", return_value=_seat_record()):
+    with (
+        patch("aptl.cli.seat.recover_seat", return_value=_seat_record()),
+        patch("aptl.cli.seat.image_requires_host_access", return_value=False),
+    ):
         recover = runner.invoke(app, ["seat", "recover", *_common_seat_args()])
 
     assert reset.exit_code == 0
@@ -412,6 +413,9 @@ def test_open_kiosk_uses_persisted_participant_mapping(tmp_path: Path) -> None:
         }
     )
     persist_seat_record(tmp_path, record)
+    token_root = tmp_path / "access" / f"generation-{record.generation}"
+    token_root.mkdir(parents=True)
+    (token_root / "web-launch-token").write_text("t" * 43 + "\n")
 
     result = runner.invoke(
         app,
@@ -420,3 +424,25 @@ def test_open_kiosk_uses_persisted_participant_mapping(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert "http://127.0.0.1:10443/" in result.stdout
+    assert "token=" not in result.stdout
+    assert "t" * 43 not in result.stdout
+    assert not (tmp_path / "runtime/kiosk/login.html").exists()
+
+
+def test_recover_enrolls_host_access_like_start(tmp_path):
+    identity = tmp_path / "identity"
+    public = tmp_path / "identity.pub"
+    identity.write_text("private fixture")
+    from tests.test_appliance_seat_access import _public_key
+    public.write_text(_public_key())
+    with (
+        patch("aptl.cli.seat.image_requires_host_access", return_value=True),
+        patch("aptl.cli.seat.ensure_transport_identity", return_value=(identity, public)),
+        patch("aptl.cli.seat.recover_seat", return_value=_seat_record()) as recover,
+    ):
+        result = runner.invoke(app, ["seat", "recover", *_common_seat_args()])
+    assert result.exit_code == 0, result.output
+    options = recover.call_args.kwargs["options"]
+    assert options.access_enrollment is not None
+    assert options.access_identity_file == identity
+    assert options.access_clients == ("claude", "codex")

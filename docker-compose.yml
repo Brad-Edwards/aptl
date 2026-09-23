@@ -916,20 +916,24 @@ services:
 
   aptl-web-api:
     profiles: ["web"]
+    image: aptl-web-api:1
     container_name: aptl-web-api
+    labels:
+      aptl.web.control-plane: "true"
     build:
       context: .
       dockerfile: web/Dockerfile.api
     restart: unless-stopped
     ports:
       # Loopback-only: only the operator's machine can reach this port (ADR-039).
-      - "127.0.0.1:${APTL_HP_APTL_WEB_API_8400:-8400}:8400"
+      - "${APTL_WEB_BIND_ADDRESS:-127.0.0.1}:${APTL_HP_APTL_WEB_API_8400:-8400}:8400"
     environment:
       - APTL_PROJECT_DIR=/project
       # Validated by the API at runtime. Do not use `${VAR:?}` here: Compose
       # expands inactive-profile services too, which would make the default lab
       # start require the optional web control-plane token.
       - APTL_API_TOKEN=${APTL_API_TOKEN:-}
+      - APTL_WEB_LAUNCH_TOKEN=${APTL_WEB_LAUNCH_TOKEN:-}
       # The browser reaches the GUI on the aptl-web-ui (Caddy) origin, not this
       # API bind address. Print the one-time login URL for that origin so the
       # session header token is stored for the origin the SPA actually runs on.
@@ -938,8 +942,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/project:ro
     networks:
-      aptl-security:
-        ipv4_address: 172.20.0.40
+      - aptl-security
     deploy:
       resources:
         limits:
@@ -947,6 +950,7 @@ services:
 
   aptl-web-ui:
     profiles: ["web"]
+    image: aptl-web-ui:1
     container_name: aptl-web-ui
     build:
       context: web
@@ -954,7 +958,7 @@ services:
     restart: unless-stopped
     ports:
       # Loopback-only: only the operator's machine can reach the UI (ADR-039).
-      - "127.0.0.1:${APTL_HP_APTL_WEB_UI_3000:-3000}:3000"
+      - "${APTL_WEB_BIND_ADDRESS:-127.0.0.1}:${APTL_HP_APTL_WEB_UI_3000:-3000}:3000"
     # UI-008a: serves the built static SPA and reverse-proxies /api/* (incl. the
     # terminal WebSocket) to aptl-web-api, which owns the entire auth/CSRF
     # boundary (the FastAPI BFF). The control-plane token is NOT present in this
@@ -963,8 +967,7 @@ services:
     depends_on:
       - aptl-web-api
     networks:
-      aptl-security:
-        ipv4_address: 172.20.0.41
+      - aptl-security
     deploy:
       resources:
         limits:

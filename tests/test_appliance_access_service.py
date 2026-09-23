@@ -138,55 +138,6 @@ def test_dispatch_home_gets_private_lab_identity_without_opening_supervisor_home
         access_service._prepare_dispatch_home(home, uid=uid, gid=gid)
 
 
-def test_dispatch_metadata_preserves_production_qualification_verification(tmp_path):
-    from aptl.appliance.launch import (
-        prepare_launch_descriptor,
-        verify_launch_descriptor,
-    )
-    from tests.test_appliance_release_manifest import _write_signed_release
-
-    release = tmp_path / "release"
-    manifest, public = _write_signed_release(release)
-    public_path = tmp_path / "release-public.pem"
-    public_path.write_bytes(public)
-    qualification_public = tmp_path / "qualification-public.pem"
-    descriptor = tmp_path / "appliance-launch.json"
-    prepare_launch_descriptor(
-        release,
-        public_path,
-        qualification_public,
-        descriptor,
-        host_observation_id="sha256:" + "9" * 64,
-    )
-    launch = verify_launch_descriptor(descriptor, public_path, qualification_public)
-    paths = ApplianceAccessPaths(
-        launch_descriptor=descriptor,
-        release_public_key=public_path,
-        qualification_public_key=qualification_public,
-        runtime_observation=tmp_path / "observation.json",
-    )
-    staged = access_service._stage_dispatch_metadata(
-        launch, paths, tmp_path / "dispatch-trust", gid=os.getgid()
-    )
-    assert not staged.candidate_trust
-    copied = verify_launch_descriptor(
-        staged.launch_descriptor,
-        staged.release_public_key,
-        staged.qualification_public_key,
-    )
-    assert copied.descriptor == launch.descriptor
-    qualification = next(
-        a for a in manifest.artifacts if a.kind == "participant-qualification"
-    )
-    (copied.release_root / qualification.path).write_text("{}")
-    with pytest.raises(ValueError, match="qualification artifact differs"):
-        verify_launch_descriptor(
-            staged.launch_descriptor,
-            staged.release_public_key,
-            staged.qualification_public_key,
-        )
-
-
 def test_dispatcher_ca_access_preserves_private_signing_keys(tmp_path):
     ca = tmp_path / "config" / "soc_certs"
     ca.mkdir(mode=0o700, parents=True)
@@ -349,17 +300,16 @@ def test_validate_request_accepts_the_signed_endpoint() -> None:
         port=request.guest_endpoint.port,
         protocol=request.guest_endpoint.protocol,
     )
-    launch = SimpleNamespace(
-        descriptor=descriptor,
-        boundary_policy=SimpleNamespace(guest_publications=(publication,)),
-    )
+    # verify_seat_launch hands back the descriptor and the policy it was
+    # bound to, as a pair.
+    launch = (descriptor, SimpleNamespace(guest_publications=(publication,)))
     with (
         patch(
             "aptl.appliance.access_service._descriptor_digest",
             return_value=request.launch_descriptor_digest,
         ),
         patch(
-            "aptl.appliance.access_service.verify_launch_descriptor",
+            "aptl.appliance.access_service.verify_seat_launch",
             return_value=launch,
         ),
         patch(
@@ -368,21 +318,12 @@ def test_validate_request_accepts_the_signed_endpoint() -> None:
         ),
     ):
         assert (
-            access_service._validate_request(
-                request,
-                descriptor_path,
-                Path("release.pem"),
-                Path("qualification.pem"),
-                candidate_trust=False,
-            )
-            is launch
+            access_service._validate_request(request, descriptor_path) == launch
         )
 
 
-@pytest.mark.parametrize("candidate_trust", [False, True])
 def test_access_supervisor_publishes_then_revokes_stopped_listener(
     tmp_path: Path,
-    candidate_trust: bool,
 ) -> None:
     request = _request()
     request_path = tmp_path / "request.json"
@@ -424,7 +365,6 @@ def test_access_supervisor_publishes_then_revokes_stopped_listener(
 
     def prepare(_configuration: object, target: Path) -> SimpleNamespace:
         call_order.append("prepare")
-        assert _configuration.appliance.candidate_trust == candidate_trust
         target.mkdir(parents=True)
         (target / "sshd_config").write_text("fixture")
         return binding
@@ -437,7 +377,7 @@ def test_access_supervisor_publishes_then_revokes_stopped_listener(
     account = SimpleNamespace(
         pw_uid=os.getuid(), pw_gid=os.getgid(), pw_dir=str(tmp_path / "home")
     )
-    launch = SimpleNamespace(boundary_policy=object())
+    launch = (SimpleNamespace(), SimpleNamespace())
     with (
         patch(
             "aptl.appliance.access_service.read_guest_access_request",
@@ -478,15 +418,12 @@ def test_access_supervisor_publishes_then_revokes_stopped_listener(
         access_service.serve_appliance_access(
             request_path=request_path,
             descriptor_path=tmp_path / "descriptor.json",
-            release_public_key=tmp_path / "release.pem",
-            qualification_public_key=tmp_path / "qualification.pem",
             device_path=tmp_path / "device.sock",
             output_dir=output_dir,
             run_id=bundle.runtime_evidence.run_id,
             project_dir=project,
             state_dir=state_dir,
             observe_boundary=lambda: request.guest_observation,
-            candidate_trust=candidate_trust,
         )
 
     published = publish.call_args.args[1]

@@ -26,7 +26,7 @@ fi
 # mutable third-party tags. The two published blobs determine its key.
 key=$(sha256sum "$disk" "$config" | awk '{print $1}' | sha256sum | cut -d' ' -f1)
 
-owner=${REPOSITORY_OWNER,,}
+owner=$(printf '%s' "$REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
 repository="${owner}/aptl-seat"
 namespace="ghcr.io/${repository}"
 
@@ -80,7 +80,7 @@ test -n "$token" || {
 }
 verify_anonymous_manifest() {
   local target=$1 status=000 attempt
-  for attempt in $(seq 1 20); do
+  for ((attempt = 1; attempt <= 20; attempt++)); do
     status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
       --max-time 60 --header "Authorization: Bearer ${token}" \
       --header "Accept: ${accept}" \

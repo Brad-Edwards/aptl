@@ -94,6 +94,7 @@ case "${*}" in
 esac
 """,
         "jq": "#!/bin/sh\ncat >/dev/null\nprintf 'anonymous\\n'\n",
+        "sha256sum": "#!/bin/sh\nif test \"$#\" -eq 0; then cat >/dev/null; fi\nprintf '%064d  -\\n' 0\n",
         "sleep": "#!/bin/sh\nexit 0\n",
     }
     for name, body in stubs.items():

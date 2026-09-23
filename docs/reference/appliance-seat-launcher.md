@@ -241,16 +241,18 @@ actual baked disk and requires a working Docker daemon, an offline container
 run, the full lab start, and semantic MCP checks.
 
 `scripts/appliance/publish-seat-image.sh` pushes the disk and its config blob
-to `ghcr.io/<owner>/aptl-seat` as an OCI artifact, tags it with a key computed
-from both blobs, and moves the release tag and `latest` onto it. Publication is proven by
-pulling the result without credentials.
+to `ghcr.io/<owner>/aptl-seat` as an OCI artifact and tags it with a key
+computed from both blobs. It checks that this immutable candidate is
+anonymously pullable before moving the release tag and `latest`, then checks
+`latest` anonymously as well.
 
 GitHub [creates a new container package as private](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#pushing-container-images),
 even when a workflow links it to a public repository. On the first
 `aptl-seat` publication, the anonymous-pull check therefore fails after the
-package has been created. A package owner must set `aptl-seat` visibility to
-**Public** in GitHub's package settings, then run **Publish seat image for an
-existing release** with that release tag and a `source_ref` containing the
+package has been created, leaving `latest` untouched. A package owner must
+set `aptl-seat` visibility to **Public** in GitHub's package settings, then run
+the **Publish seat image for an existing release** workflow with that release
+tag and a `source_ref` containing the
 corrected bake at the same package version. The manual workflow verifies that
 version, rebakes the selected source, and verifies the anonymous pull. It also
 provides a retry path for a failed image publication without creating a

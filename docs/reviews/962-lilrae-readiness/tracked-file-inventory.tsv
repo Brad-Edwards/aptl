@@ -46,6 +46,7 @@ appliance/guest/aptl-appliance-first-boot	optional-delivery	Keep sealed-seat bou
 appliance/guest/aptl-appliance-first-boot.service	optional-delivery	Keep sealed-seat boundary outside default install
 appliance/guest/aptl-launch.mount	optional-delivery	Keep sealed-seat boundary outside default install
 appliance/guest/provision-offline.sh	optional-delivery	Keep sealed-seat boundary outside default install
+appliance/guest/provision-seat.sh	optional-delivery	Keep sealed-seat boundary outside default install
 appliance/guest/scan-golden.sh	optional-delivery	Keep sealed-seat boundary outside default install
 appliance/guest/system-packages.sha256	optional-delivery	Keep exact guest system package closure with delivery owner
 aptl.json	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
@@ -79,6 +80,7 @@ changelog.d/+ghcr-candidate-package-visibility.fixed.md	repository-metadata	Insp
 changelog.d/+git-env-isolation.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+remove-golden-pipeline.removed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+seat-boots-a-registry-image.changed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/+seat-image-bake.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+seat-image-config.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+seat-image-from-registry.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+seat-image-selection.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
@@ -732,8 +734,12 @@ scenarios/techvault-attacker-target.sdl.yaml	split-pack-delivery	Inventory exact
 scenarios/techvault-defensive-min.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scenarios/techvault-enterprise-web.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/appliance/build-local-images.sh	optional-delivery	Keep local appliance image build path with delivery owner
+scripts/appliance/build-seat-image.sh	optional-delivery	Keep local appliance image build path with delivery owner
 scripts/appliance/publish-images.sh	optional-delivery	Keep public GHCR publication automation with delivery owner
+scripts/appliance/publish-seat-image.sh	optional-delivery	Keep local appliance image build path with delivery owner
 scripts/appliance/seat-image-key.sh	optional-delivery	Keep local appliance image build path with delivery owner
+scripts/appliance/seat-image-third-party.py	optional-delivery	Keep local appliance image build path with delivery owner
+scripts/appliance/write-seat-image-config.py	optional-delivery	Keep local appliance image build path with delivery owner
 scripts/aptl-env.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/aptl-range.service	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/ci/assert_boot_realization.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
@@ -1602,6 +1608,7 @@ tests/test_scenario_verification_seam.py	tests-follow-owner	Retain meaningful bo
 tests/test_scenarios.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_scorecard_workflow.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seat_image.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_seat_image_build.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seat_image_config.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seat_image_selection.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seed_misp_script.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

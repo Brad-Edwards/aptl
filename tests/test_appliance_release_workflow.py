@@ -30,7 +30,14 @@ def test_release_publishes_images_and_back_merges_behind_them() -> None:
         "release-please",
         "publish",
         "publish-appliance-images",
+        "publish-seat-image",
     }
+    # The seat image is what a participant boots, so a release that did not
+    # publish one must not be back-merged as complete.
+    assert jobs["publish-seat-image"]["needs"] == [
+        "release-please",
+        "publish-appliance-images",
+    ]
 
 
 def test_every_project_owned_image_is_still_published() -> None:

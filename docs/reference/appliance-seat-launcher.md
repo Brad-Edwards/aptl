@@ -220,6 +220,40 @@ When reconciliation reports `host-reboot-detected` or `vm-not-running`, run
   refs/<reference>.json      # which digest each reference selects
 ```
 
+## Building the image
+
+The published image is baked by the release workflow on an ordinary hosted
+runner. `scripts/appliance/build-seat-image.sh` fetches the pinned Ubuntu base
+by digest, builds this project's container images from the exact source,
+exports them alongside the pinned third-party TechVault images derived from
+`docker-compose.yml`, and installs the whole set into the guest with
+`appliance/guest/provision-seat.sh`. The result holds Docker, the APTL runtime
+and every container image the lab starts, so a participant's first boot
+resolves nothing and pulls nothing.
+
+`scripts/appliance/publish-seat-image.sh` pushes the disk and its config blob
+to `ghcr.io/<owner>/aptl-seat` as an OCI artifact, tags it with the content
+key, and moves the release tag and `latest` onto it. Publication is proven by
+pulling the result without credentials.
+
+A release only bakes when the image would differ.
+`scripts/appliance/seat-image-key.sh` digests the guest assets, container
+definitions, locked Python closure, participant profile and pinned base; if an
+image already exists under that key the workflow skips the bake and just moves
+the tags. Editing a Dockerfile changes the key. Editing documentation does
+not.
+
+To bake locally:
+
+```bash
+export APTL_BASE_IMAGE_URL=... APTL_BASE_IMAGE_SHA256=sha256:...
+export APTL_GUEST_PYTHON_VERSION=3.14
+scripts/appliance/build-seat-image.sh
+```
+
+It needs `libguestfs-tools`, `qemu-utils`, Docker, and enough free disk for
+the image archive and the baked disk at once.
+
 ## Diagnostics
 
 CLI failures emit bounded JSON with stable codes such as `no-kvm`, `low-disk`,

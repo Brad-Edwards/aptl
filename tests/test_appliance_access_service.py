@@ -362,8 +362,22 @@ def test_access_supervisor_publishes_then_revokes_stopped_listener(
 
     listener = Listener()
     call_order: list[str] = []
+    owned: list[Path] = []
+    (project / ".aptl").mkdir()
+    (project / ".mcp.json").write_text("{}")
+    (project / "aptl.json").write_text('{"run_storage":{"local_path":"runs"}}')
+    (project / "runs").mkdir(mode=0o700)
+    census = project / "runs" / binding.run_id / "mcp-side" / "sessions"
+
+    def qualify(*_args: object, **_kwargs: object) -> GuestRuntimeEvidence:
+        call_order.append("qualify")
+        census.mkdir(parents=True, mode=0o700)
+        (census / "qualification.jsonl").write_text("")
+        return bundle.runtime_evidence
 
     def prepare(_configuration: object, target: Path) -> SimpleNamespace:
+        # The listener's account must own census state created by qualification.
+        assert {census, census / "qualification.jsonl"} <= set(owned)
         call_order.append("prepare")
         target.mkdir(parents=True)
         (target / "sshd_config").write_text("fixture")
@@ -386,7 +400,6 @@ def test_access_supervisor_publishes_then_revokes_stopped_listener(
         patch("aptl.appliance.access_service._validate_request", return_value=launch),
         patch("aptl.appliance.access_service._access_account", return_value=account),
         patch("aptl.appliance.access_service._ensure_host_key", side_effect=ensure_key),
-        patch("aptl.appliance.access_service._assign_management_state"),
         patch("aptl.appliance.access_service._prepare_dispatch_home"),
         patch("aptl.appliance.access_service._prepare_dispatch_ca"),
         patch(
@@ -396,14 +409,15 @@ def test_access_supervisor_publishes_then_revokes_stopped_listener(
         patch(
             "aptl.appliance.access_service.prepare_guest_transport", side_effect=prepare
         ),
-        patch("aptl.appliance.access_service.os.chown"),
+        patch(
+            "aptl.appliance.access_service.os.chown",
+            side_effect=lambda path, *_args, **_kwargs: owned.append(Path(path)),
+        ),
         patch("aptl.appliance.access_service._write_runtime_observation"),
         patch("aptl.appliance.access_service.subprocess.Popen", return_value=listener),
         patch(
             "aptl.appliance.access_service._load_runtime_evidence",
-            side_effect=lambda *_args, **_kwargs: (
-                call_order.append("qualify") or bundle.runtime_evidence
-            ),
+            side_effect=qualify,
         ),
         patch("aptl.appliance.access_service.publish_guest_access") as publish,
         patch("aptl.appliance.access_service.observe_guest", return_value=object()),

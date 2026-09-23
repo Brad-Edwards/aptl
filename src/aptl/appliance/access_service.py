@@ -231,7 +231,6 @@ def serve_appliance_access(
     account = _access_account(username)
     host_key = state_dir / "ssh" / "ssh_host_ed25519_key"
     _ensure_host_key(host_key)
-    _assign_management_state(project_dir, uid=account.pw_uid, gid=account.pw_gid)
     _prepare_dispatch_home(Path(account.pw_dir), uid=account.pw_uid, gid=account.pw_gid)
     _prepare_dispatch_ca(project_dir, gid=account.pw_gid)
     if output_dir.is_symlink():
@@ -285,6 +284,10 @@ def serve_appliance_access(
     # observing and timestamping generation-scoped discovery so the bundle is
     # still current when the host enforces its short freshness window.
     runtime_evidence = _load_runtime_evidence(project_dir, configuration.run_id)
+    # Qualification creates private session-census directories as the supervisor.
+    # Transfer them after qualification so the dispatcher can register later
+    # participant sessions in the same census used by transcript finalization.
+    _assign_management_state(project_dir, uid=account.pw_uid, gid=account.pw_gid)
     binding = prepare_guest_transport(configuration, output_dir)
     for path in output_dir.iterdir():
         os.chown(path, account.pw_uid, account.pw_gid)

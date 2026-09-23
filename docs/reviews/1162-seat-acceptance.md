@@ -77,8 +77,18 @@ candidate base or its overlay to repair startup.
 - Declining update, sending EOF at its prompt and declining cache pruning each
   left the seat record unchanged.
 
-Clean lifecycle, offline reuse, stopped-seat replacement and default-channel
-acquisition are still pending. This draft is not a completed acceptance record.
+Offline reuse passed with registry access blocked and no Cosign invocation.
+The range reached ready and the host MCP command succeeded again.
+
+Cleanup then exposed a guest ownership defect: startup qualification created
+root-owned private census directories after the dispatcher ownership transfer.
+The broker accepted the host command, but the dispatcher could not record it
+in that census, so transcript finalization correctly rejected the mismatch.
+The transfer now runs after qualification and before opening the listener.
+A regression test checks ownership of the newly created census files.
+The candidate above is not approved for the default channel; a new clean image
+cut and manual lifecycle proof are required. Stopped-seat replacement and
+default-channel acquisition also remain pending.
 
 ## Evidence Retention
 

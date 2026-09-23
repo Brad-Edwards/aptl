@@ -48,6 +48,7 @@ with tarfile.open(sys.argv[1], 'r:') as archive:
 PYTHON
 
 test -d "$payload_dir/wheelhouse"
+test -f "$payload_dir/aptl-wheel-requirements.txt"
 test -f "$payload_dir/project.tar"
 test -f "$payload_dir/oci-images.tar"
 test -f "$payload_dir/appliance-release.env"
@@ -76,7 +77,9 @@ set -- "$payload_dir"/wheelhouse/aptl_labs-*.whl
 test "$#" -eq 1
 test -f "$1"
 PYTHONPATH="$pip_wheel" python3 -m pip install \
-    --no-index --no-deps --ignore-installed --target /opt/aptl/app "$1"
+    --no-index --no-deps --ignore-installed --target /opt/aptl/app \
+    --require-hashes --find-links "$payload_dir/wheelhouse" \
+    -r "$payload_dir/aptl-wheel-requirements.txt"
 
 # The Ubuntu base marks its system Python as externally managed and does not
 # ship ensurepip. Keep the authenticated application closure isolated under

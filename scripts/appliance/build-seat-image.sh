@@ -84,6 +84,23 @@ install -d -m 0700 "$payload/wheelhouse"
 cp "$source_root/requirements/runtime.txt" "$payload/requirements.txt"
 python3 -m build --wheel --no-isolation --outdir "$payload/wheelhouse" \
   "$source_root"
+python3 - "$source_root/pyproject.toml" "$payload/wheelhouse" \
+  "$payload/aptl-wheel-requirements.txt" <<'PYTHON'
+import hashlib
+import pathlib
+import sys
+import tomllib
+
+project = tomllib.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+version = project["project"]["version"]
+wheels = list(pathlib.Path(sys.argv[2]).glob(f"aptl_labs-{version}-*.whl"))
+if len(wheels) != 1:
+    raise SystemExit("bake must produce exactly one APTL application wheel")
+digest = hashlib.sha256(wheels[0].read_bytes()).hexdigest()
+pathlib.Path(sys.argv[3]).write_text(
+    f"aptl-labs=={version} --hash=sha256:{digest}\n", encoding="utf-8"
+)
+PYTHON
 
 # Build the shipped client code from the lockfiles. A clean release checkout
 # has neither node_modules nor MCP/web build output; copying the source alone

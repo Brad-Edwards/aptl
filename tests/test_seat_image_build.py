@@ -153,6 +153,9 @@ def test_bake_uses_the_proven_offline_guest_provisioning() -> None:
     assert "policy-rc.d" in provision
     assert "systemctl enable docker.service" in provision
     assert "aptl_labs-*.whl" in provision
+    assert "aptl-wheel-requirements.txt" in bake
+    assert "aptl-wheel-requirements.txt" in provision
+    assert "--require-hashes --find-links" in provision
     assert "npm ci --no-audit --no-fund && npm run build" in bake
     assert "aptl appliance" not in first_boot
     # The real Compose web services own these policy ports. A placeholder

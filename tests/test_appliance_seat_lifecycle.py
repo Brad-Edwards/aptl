@@ -316,7 +316,7 @@ def test_overlay_creation_is_bound_to_image_and_launch_digests(
         ),
         patch("aptl.appliance.seat.lifecycle.initialize_overlay_state") as initialize,
     ):
-        _ensure_overlay(paths, record, _resolved_image(tmp_path))
+        _ensure_overlay(paths, _resolved_image(tmp_path))
 
     assert len(captured) == 1
     overlay, image_path = captured[0]

@@ -135,10 +135,24 @@ def parse_seat_image_reference(reference: str) -> SeatImageReference:
 
 
 def _cache_entry(cache_dir: Path, digest: str) -> Path:
-    return cache_dir / digest.removeprefix("sha256:") / "seat-disk.qcow2"
+    """Return the cache path for one digest, refusing anything else.
+
+    The digest reaches here from a registry manifest, so it is remote input
+    that becomes a filesystem path. Validating it at every path construction
+    is what keeps it from being one.
+    """
+
+    if not _DIGEST.fullmatch(digest):
+        raise SeatImageError("seat image digest is not a lowercase sha256 digest")
+    entry = cache_dir / digest.removeprefix("sha256:") / "seat-disk.qcow2"
+    if not entry.is_relative_to(cache_dir):
+        raise SeatImageError("seat image cache entry escapes the cache")
+    return entry
 
 
 def _stamp_path(disk: Path) -> Path:
+    """Return the verification stamp beside one cached disk."""
+
     return disk.with_suffix(".verified.json")
 
 
@@ -229,6 +243,8 @@ def _anonymous_token(reference: SeatImageReference) -> str | None:
 
 
 def _registry_headers(token: str | None, accept: str) -> dict[str, str]:
+    """Build the pull headers for one registry request."""
+
     headers = {"Accept": accept}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -264,6 +280,8 @@ def _fetch_manifest(
 
 
 def _sha256_of(payload: bytes) -> str:
+    """Return the sha256 digest of one fetched document."""
+
     import hashlib
 
     return "sha256:" + hashlib.sha256(payload).hexdigest()

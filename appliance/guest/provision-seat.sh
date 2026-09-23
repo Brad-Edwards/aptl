@@ -8,69 +8,60 @@
 set -eu
 umask 022
 
+# virt-customize runs with a minimal PATH that need not include
+# /usr/local/bin, which is where the staged Docker lands.
+PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
 stage=/opt/aptl-stage
 test "$(id -u)" -eq 0
 test -d "$stage"
 
 # --- Docker ------------------------------------------------------------
-# The stock cloud base does not ship Docker, so the bake installs it. This is
-# the one step that reaches a package repository, and it happens here during
-# the build rather than on a participant's machine: what must be offline is
-# the first boot of a published image, not its construction.
-if ! command -v dockerd >/dev/null; then
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update
-    apt-get install --yes --no-install-recommends docker.io
-    apt-get clean
-    rm -rf /var/lib/apt/lists/*
-fi
-command -v dockerd >/dev/null || {
+# The cloud base ships no Docker and the guest reaches no package repository
+# during the bake, so the engine arrives as Docker's own static build, staged
+# and digest-verified on the host. It carries dockerd, containerd, runc and
+# the shim, so nothing is resolved here. Extracting straight into place keeps
+# the payload from leaving a copy behind in the image.
+tar --extract --file "$stage/docker-static.tgz" --directory /usr/local/bin \
+    --strip-components=1 --no-same-owner
+chmod 0755 /usr/local/bin/dockerd /usr/local/bin/docker /usr/local/bin/containerd \
+    /usr/local/bin/runc /usr/local/bin/containerd-shim-runc-v2 \
+    /usr/local/bin/docker-proxy /usr/local/bin/docker-init /usr/local/bin/ctr
+install -m 0644 "$stage/docker.service" /etc/systemd/system/docker.service
+getent group docker >/dev/null || groupadd --system docker
+test -x /usr/local/bin/dockerd || {
     echo 'seat image bake could not install Docker' >&2
     exit 1
 }
 systemctl enable docker.service
 
 # --- APTL runtime ------------------------------------------------------
-python3 -m venv /opt/aptl/venv
-# --no-index keeps the bake offline: everything resolves from the staged
+# The cloud base ships no ensurepip, and the guest has no network, so the
+# environment is created without pip and pip is bootstrapped from its own
+# staged wheel -- a wheel is a zip, and pip inside one is importable.
+python3 -m venv --without-pip /opt/aptl/venv
+pip_wheel=$(ls "$stage"/wheelhouse/pip-*.whl)
+# --no-index keeps this offline: everything resolves from the staged
 # wheelhouse, which was built from the hash-locked runtime closure.
-/opt/aptl/venv/bin/pip install --no-index --find-links "$stage/wheelhouse" \
-    "$stage"/wheelhouse/aptl_labs-*.whl
+/opt/aptl/venv/bin/python "$pip_wheel/pip" install --no-index \
+    --find-links "$stage/wheelhouse" "$pip_wheel"
+/opt/aptl/venv/bin/python -m pip install --no-index \
+    --find-links "$stage/wheelhouse" "$stage"/wheelhouse/aptl_labs-*.whl
 ln -sf /opt/aptl/venv/bin/aptl /usr/local/bin/aptl
 /opt/aptl/venv/bin/aptl --version >/dev/null
 
 # --- container images --------------------------------------------------
-# Load every image into the guest daemon now. This is the whole point of the
-# bake: a participant's first boot must not pull thirty images over whatever
-# network the venue has.
-dockerd --data-root /var/lib/docker >/tmp/dockerd-bake.log 2>&1 &
-daemon=$!
-attempts=0
-until docker info >/dev/null 2>&1; do
-    attempts=$((attempts + 1))
-    # A daemon that will not come up inside the bake is a build failure, not
-    # something to wait on indefinitely.
-    if test "$attempts" -gt 120; then
-        echo 'Docker daemon did not start during the seat image bake' >&2
-        cat /tmp/dockerd-bake.log >&2
-        exit 1
-    fi
-    sleep 1
-done
-
-docker load --input "$stage/images.tar"
-loaded=$(docker image ls --format '{{.Repository}}:{{.Tag}}' | grep -cv '^<none>')
-test "$loaded" -ge 25 || {
-    echo "seat image loaded only $loaded container images" >&2
+# The store was built on the host by this same Docker version, because the
+# build appliance cannot run a daemon. Restoring it whole is what makes first
+# boot pull-free: every image is already in the local store.
+install -d -m 0711 /var/lib/docker
+tar --extract --file "$stage/guest-docker.tar" --directory /var/lib/docker \
+    --no-same-owner --same-permissions
+test -d /var/lib/docker/image || {
+    echo 'seat image has no restored Docker image store' >&2
     exit 1
 }
-
-docker image ls --format '{{.Repository}}:{{.Tag}}\t{{.ID}}' \
-    | sort >/opt/aptl/preloaded-images.txt
-
-kill "$daemon"
-wait "$daemon" 2>/dev/null || true
-rm -f /tmp/dockerd-bake.log
 
 # --- first boot --------------------------------------------------------
 install -m 0755 "$stage/aptl-appliance-first-boot" /usr/local/sbin/

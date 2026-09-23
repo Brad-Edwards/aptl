@@ -417,9 +417,7 @@ def _relative_to_root(root: Path, path: Path, *, label: str) -> str:
         ) from exc
 
 
-def _ensure_overlay(
-    paths: SeatPaths, record: SeatRecord, image: ResolvedSeatImage
-) -> None:
+def _ensure_overlay(paths: SeatPaths, image: ResolvedSeatImage) -> None:
     """Create the disposable overlay when the seat has none yet."""
 
     if paths.overlay_path.exists():
@@ -698,7 +696,7 @@ def start_seat(
     starting = record.model_copy(update={"lifecycle_state": "starting"})
     persist_seat_record(seat_root, starting)
     try:
-        _ensure_overlay(paths, record, image)
+        _ensure_overlay(paths, image)
         readiness_socket = contained_path(
             paths.seat_root,
             f"runtime/{seat_id}.readiness.sock",

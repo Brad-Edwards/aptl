@@ -36,6 +36,8 @@ _EXTERNAL_FIELDS = (
 
 
 def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run one bounded qemu-img invocation for the overlay."""
+
     try:
         return subprocess.run(
             argv,

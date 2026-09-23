@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +28,8 @@ from aptl.appliance.seat.image import (
 )
 
 SELECTION_SCHEMA = "aptl.seat-image-selection/v1"
+
+_HEX_KEY = re.compile(r"^[a-f0-9]{32}$")
 
 # A warm start must not depend on the registry, so the update check is
 # rate-limited rather than run on every launch.
@@ -47,14 +50,28 @@ class SeatImageSelection:
 
     @property
     def update_available(self) -> bool:
+        """Return whether a newer digest has been seen but not adopted."""
+
         return (
             self.available_digest is not None and self.available_digest != self.digest
         )
 
 
 def _selection_path(cache_dir: Path, reference: SeatImageReference) -> Path:
+    """Return the selection record for one reference.
+
+    The reference is operator input that would otherwise become a filename, so
+    the record is named by a digest of it rather than by the reference itself,
+    and the result is confirmed to stay inside the cache.
+    """
+
     key = hashlib.sha256(str(reference).encode()).hexdigest()[:32]
-    return cache_dir / "refs" / f"{key}.json"
+    if not _HEX_KEY.fullmatch(key):  # pragma: no cover - hexdigest is hex
+        raise SeatImageError("seat image selection key is not a digest")
+    path = cache_dir / "refs" / f"{key}.json"
+    if not path.is_relative_to(cache_dir):
+        raise SeatImageError("seat image selection record escapes the cache")
+    return path
 
 
 def load_selection(cache_dir: Path, reference: SeatImageReference) -> dict[str, object]:

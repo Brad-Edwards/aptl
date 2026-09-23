@@ -15,6 +15,13 @@ set -euo pipefail
 : "${APTL_BASE_IMAGE_SHA256:?base image digest is required}"
 : "${APTL_GUEST_PYTHON_VERSION:?guest Python target is required}"
 
+# Docker's own static build. The cloud base ships no Docker and the guest
+# reaches no package repository during the bake, so the engine is staged here
+# by digest and installed offline. The static tarball carries dockerd,
+# containerd, runc and the shim, so nothing is resolved inside the guest.
+APTL_DOCKER_VERSION=${APTL_DOCKER_VERSION:-29.8.1}
+APTL_DOCKER_SHA256=${APTL_DOCKER_SHA256:-d8db66739d2e28d4933786d73e918d9be643a67fbd835db1bf740d650a259e70}
+
 source_root=$PWD
 build_root=${APTL_SEAT_BUILD_ROOT:-$PWD/build/seat-image}
 disk_gib=${APTL_SEAT_DISK_GIB:-250}
@@ -68,10 +75,61 @@ done
 docker save --output "$build_root/input/images.tar" \
   "${canonical_refs[@]}" "${third_party[@]}"
 
-# --- guest payload -----------------------------------------------------
+# --- guest image store -------------------------------------------------
+# dockerd cannot run inside the libguestfs appliance -- it has no cgroup
+# mounts -- so the guest's image store is built here instead, by the same
+# pinned static daemon the guest will run, and copied in whole. The guest
+# therefore boots with every image already in its local store and loads
+# nothing.
 payload=$build_root/input/payload
 install -d -m 0700 "$payload"
-mv "$build_root/input/images.tar" "$payload/images.tar"
+
+docker_archive=$payload/docker-static.tgz
+curl --fail --silent --show-error --location --max-time 900 \
+  --output "$docker_archive" \
+  "https://download.docker.com/linux/static/stable/x86_64/docker-${APTL_DOCKER_VERSION}.tgz"
+docker_actual=$(sha256sum "$docker_archive" | cut -d' ' -f1)
+test "$docker_actual" = "$APTL_DOCKER_SHA256" || {
+  echo 'staged Docker archive digest does not match the pin' >&2
+  exit 1
+}
+static_root=$build_root/docker-static
+install -d -m 0755 "$static_root"
+tar --extract --file "$docker_archive" --directory "$static_root" \
+  --strip-components=1
+
+guest_store=$build_root/guest-docker
+staging_socket=$build_root/staging-docker.sock
+install -d -m 0711 "$guest_store"
+# The log is owned by this user; sudo would not affect the redirect anyway.
+: >"$build_root/staging-docker.log"
+sudo "$static_root/dockerd" --data-root "$guest_store" \
+  --host "unix://$staging_socket" --pidfile "$build_root/staging-docker.pid" \
+  --iptables=false --bridge=none 2>&1 |
+  tee -a "$build_root/staging-docker.log" >/dev/null &
+staging_attempts=0
+until sudo "$static_root/docker" --host "unix://$staging_socket" info >/dev/null 2>&1; do
+  staging_attempts=$((staging_attempts + 1))
+  if test "$staging_attempts" -gt 120; then
+    echo 'staging Docker daemon did not start' >&2
+    cat "$build_root/staging-docker.log" >&2
+    exit 1
+  fi
+  sleep 1
+done
+sudo "$static_root/docker" --host "unix://$staging_socket" load \
+  --input "$build_root/input/images.tar"
+staged_images=$(sudo "$static_root/docker" --host "unix://$staging_socket" \
+  image ls --format '{{.Repository}}:{{.Tag}}' | grep -cv '^<none>')
+sudo kill "$(sudo cat "$build_root/staging-docker.pid")"
+while test -S "$staging_socket"; do sleep 1; done
+test "$staged_images" -ge 25 || {
+  echo "guest image store holds only $staged_images images" >&2
+  exit 1
+}
+sudo tar --create --file "$payload/guest-docker.tar" --directory "$guest_store" .
+sudo chown "$(id -u):$(id -g)" "$payload/guest-docker.tar"
+unlink "$build_root/input/images.tar"
 
 target_python=$(command -v "python${APTL_GUEST_PYTHON_VERSION}" || true)
 if test -z "$target_python" && command -v uv >/dev/null 2>&1; then
@@ -85,6 +143,7 @@ install -d -m 0700 "$payload/wheelhouse"
 python3 -m build --wheel --no-isolation --outdir "$payload/wheelhouse" \
   "$source_root"
 
+cp "$source_root/appliance/guest/docker.service" "$payload/"
 cp "$source_root/appliance/guest/aptl-appliance-first-boot" "$payload/"
 cp "$source_root/appliance/guest/aptl-appliance-first-boot.service" "$payload/"
 cp "$source_root/appliance/guest/aptl-launch.mount" "$payload/"
@@ -99,7 +158,6 @@ qemu-img create -f qcow2 "$disk" "${disk_gib}G" >/dev/null
 virt-resize --expand /dev/sda1 "$base" "$disk"
 
 virt-customize --add "$disk" \
-  --network \
   --copy-in "$build_root/input/payload.tar:/opt" \
   --run-command 'mkdir -m 0700 -p /opt/aptl-stage' \
   --run-command 'tar --extract --file /opt/payload.tar --directory /opt/aptl-stage' \

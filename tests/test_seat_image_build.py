@@ -25,7 +25,8 @@ def _script(name: str):
 
     path = ROOT / "scripts/appliance" / name
     spec = importlib.util.spec_from_file_location(path.stem.replace("-", "_"), path)
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -49,8 +50,11 @@ def _key(**overrides: str) -> str:
 
 
 def test_content_key_is_deterministic() -> None:
-    assert _key() == _key()
-    assert len(_key()) == 64
+    first = _key()
+    second = _key()
+
+    assert first == second
+    assert len(first) == 64
 
 
 def test_content_key_follows_the_pinned_base_image() -> None:
@@ -137,12 +141,18 @@ def test_generated_config_validates_against_the_launcher_contract() -> None:
 
 def test_bake_preloads_images_and_leaves_no_payload_behind() -> None:
     provision = PROVISION.read_text()
-    # The whole point of baking: the guest holds the images already.
-    assert "docker load --input" in provision
+    bake = BAKE.read_text()
+    # The whole point of baking: the guest holds the images already. The store
+    # is built on the host, because a build appliance has no cgroups to run a
+    # daemon, and restored whole in the guest.
+    assert "guest-docker.tar" in bake
+    assert "guest-docker.tar" in provision
+    assert "/var/lib/docker" in provision
     assert "--no-index" in provision
     assert 'rm -rf "$stage"' in provision
-    # A guest that silently loaded nothing would look fine until first boot.
-    assert "loaded only" in provision
+    # A guest that silently restored nothing would look fine until first boot.
+    assert "no restored Docker image store" in provision
+    assert "guest image store holds only" in bake
 
 
 def test_bake_pins_its_base_image_by_digest() -> None:

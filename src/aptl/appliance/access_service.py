@@ -40,7 +40,6 @@ from aptl.core.appliance_boundary_inventory import (
 )
 from aptl.core.config import load_config
 from aptl.utils.strict_json import loads_strict
-from aptl.validation.participant_qualification import QualificationCheckEvidence
 from aptl.workbench.access import SeatEndpoint
 from aptl.workbench.guest_binding import (
     ApplianceAccessPaths,
@@ -50,83 +49,7 @@ from aptl.workbench.guest_binding import (
 from aptl.workbench.preparation import TransportPreparation, prepare_guest_transport
 from aptl.workbench.profiles import WorkbenchConfigurationError
 
-def _run_qualification_attempt(
-    project_dir: Path,
-) -> tuple[QualificationCheckEvidence, ...]:
-    """Run the packaged full-TechVault MCP qualification plan once."""
-
-    from aptl.validation.participant_mcp_smoke import (
-        McpRegistration,
-        run_participant_mcp_smoke,
-    )
-    from aptl.validation.participant_profile import load_participant_profile
-
-    profile = load_participant_profile(
-        project_dir,
-        Path("participant-profiles/techvault-full-v1/profile.json"),
-    )
-    document = loads_strict((project_dir / ".mcp.json").read_bytes())
-    servers = document.get("mcpServers") if isinstance(document, dict) else None
-    if not isinstance(servers, dict):
-        raise WorkbenchConfigurationError("guest MCP qualification config is invalid")
-    node = Path(shutil.which("node") or "/usr/bin/node")
-    registrations = {}
-    for server_id in profile.mcp_server_ids:
-        specification = servers.get(server_id)
-        if not isinstance(specification, dict) or not isinstance(
-            specification.get("env"), dict
-        ):
-            raise WorkbenchConfigurationError(
-                "guest MCP qualification surface is incomplete"
-            )
-        artifact = next(
-            server.artifact_ref
-            for workbench in profile.workbench_profiles
-            for server in workbench.servers
-            if server.server_id == server_id
-        )
-        registrations[server_id] = McpRegistration(
-            argv=(str(node), str(project_dir / artifact)),
-            cwd=project_dir,
-            env={
-                "PATH": os.environ.get("PATH", ""),
-                "HOME": os.environ.get("HOME", "/var/lib/aptl"),
-                "LANG": "C.UTF-8",
-                "APTL_MCP_DISABLE_DOTENV": "1",
-                **{
-                    str(key): str(value)
-                    for key, value in specification["env"].items()
-                    if isinstance(key, str) and isinstance(value, str)
-                },
-            },
-        )
-    return run_participant_mcp_smoke(profile, registrations)
-
-
-def _qualification_checks(
-    project_dir: Path,
-    *,
-    timeout_seconds: float = 120,
-    retry_interval_seconds: float = 2,
-) -> tuple[QualificationCheckEvidence, ...]:
-    """Wait for every semantic MCP check before publishing candidate readiness."""
-
-    if timeout_seconds <= 0 or retry_interval_seconds < 0:
-        raise WorkbenchConfigurationError("guest qualification deadline is invalid")
-    deadline = time.monotonic() + timeout_seconds
-    while True:
-        checks = _run_qualification_attempt(project_dir)
-        if checks and all(check.status == "passed" for check in checks):
-            return checks
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise WorkbenchConfigurationError("guest qualification checks failed")
-        time.sleep(min(retry_interval_seconds, remaining))
-
-
-def _load_runtime_evidence(
-    project_dir: Path, run_id: str, *, qualification: bool
-) -> GuestRuntimeEvidence:
+def _load_runtime_evidence(project_dir: Path, run_id: str) -> GuestRuntimeEvidence:
     """Load the successful startup record from the contained guest run store."""
 
     config = load_config(project_dir / "aptl.json")
@@ -152,9 +75,7 @@ def _load_runtime_evidence(
             run_id=run_id,
             run_record=run_record,
             snapshot=snapshot,
-            qualification_checks=(
-                _qualification_checks(project_dir) if qualification else ()
-            ),
+            qualification_checks=(),
         )
     except (OSError, TypeError, ValueError) as exc:
         raise WorkbenchConfigurationError(

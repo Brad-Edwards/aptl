@@ -29,7 +29,12 @@ docker run --rm \
     find /output/lock -delete
   '
 
-expected=$(sed -n 's/^[0-9a-f]\{64\}  //p' "$lock")
-actual=$(find "$output" -maxdepth 1 -type f -name '*.deb' -printf '%f\n' | sort)
+# Both sides sort under C collation. Locale-dependent ordering silently
+# disagrees on names carrying '+' and '~' -- a Debian version separator, so
+# every package this stages is a candidate -- and the lock was written on
+# whatever locale generated it.
+expected=$(sed -n 's/^[0-9a-f]\{64\}  //p' "$lock" | LC_ALL=C sort)
+actual=$(find "$output" -maxdepth 1 -type f -name '*.deb' -printf '%f\n' |
+  LC_ALL=C sort)
 test "$actual" = "$expected"
 (cd "$output" && sha256sum --check --strict "$lock")

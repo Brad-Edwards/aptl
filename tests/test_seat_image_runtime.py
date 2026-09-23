@@ -101,6 +101,7 @@ def test_guest_services_use_verified_launch_policy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from aptl.appliance import guest_services
+    from aptl.appliance.seat.vm import DEFAULT_QEMU_GUEST_ADDRESS
 
     policy = full_techvault_boundary_policy()
     policy_bytes = rfc8785.dumps(policy.model_dump(mode="json"))
@@ -129,6 +130,9 @@ def test_guest_services_use_verified_launch_policy(
     monkeypatch.setattr(guest_services, "_LAUNCH_DESCRIPTOR", path)
     guest_services.main()
     assert {binding.listen_port for binding in observed} == {3000, 8400, 2222}
+    assert {binding.listen_address for binding in observed} == {
+        DEFAULT_QEMU_GUEST_ADDRESS
+    }
 
 
 def test_readiness_calls_the_current_guest_access_contract(

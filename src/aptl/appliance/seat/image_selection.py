@@ -70,7 +70,7 @@ def _selection_path(cache_dir: Path, reference: SeatImageReference) -> Path:
 
     key = hashlib.sha256(str(reference).encode()).hexdigest()[:32]
     # hexdigest always produces hexadecimal; retain the explicit path guard.
-    if not _HEX_KEY.fullmatch(key):  # pragma: no cover
+    if not _HEX_KEY.fullmatch(key):
         raise SeatImageError("seat image selection key is not a digest")
     path = cache_dir / "refs" / f"{key}.json"
     if not path.is_relative_to(cache_dir):

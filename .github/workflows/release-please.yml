@@ -124,7 +124,6 @@ jobs:
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
       - name: Build and publish exact-source images
         env:
-          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: scripts/appliance/publish-images.sh

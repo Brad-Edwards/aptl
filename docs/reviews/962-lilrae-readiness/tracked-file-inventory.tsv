@@ -75,6 +75,7 @@ assets/images/li_test/cline_red_team_test_9.png	repository-metadata	Inspect iden
 assets/images/qradar_landing_empty.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 assets/images/qradar_offences.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 bin/install-raes-inventory-skill.sh	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/+ghcr-candidate-package-visibility.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+git-env-isolation.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+remove-golden-pipeline.removed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+seat-boots-a-registry-image.changed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
@@ -732,6 +733,7 @@ scenarios/techvault-defensive-min.sdl.yaml	split-pack-delivery	Inventory exact c
 scenarios/techvault-enterprise-web.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/appliance/build-local-images.sh	optional-delivery	Keep local appliance image build path with delivery owner
 scripts/appliance/publish-images.sh	optional-delivery	Keep public GHCR publication automation with delivery owner
+scripts/appliance/seat-image-key.sh	optional-delivery	Keep local appliance image build path with delivery owner
 scripts/aptl-env.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/aptl-range.service	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/ci/assert_boot_realization.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity

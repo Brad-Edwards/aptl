@@ -12,12 +12,6 @@ import typer
 from pydantic import ValidationError
 
 from aptl.appliance.seat.context import StartSeatOptions
-from aptl.appliance.public_install import (
-    AppliancePublicInstallError,
-    PublicReleaseSelection,
-    install_public_release,
-)
-from aptl.appliance.manifest import ApplianceManifestError
 from aptl.appliance.seat.access import SeatAccessEnrollment, ensure_transport_identity
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.appliance.seat.kiosk import open_participant_kiosk
@@ -222,8 +216,6 @@ def start(
                 check_for_image_update=not no_check,
             ),
         )
-    except ApplianceManifestError as exc:
-        _fail(SeatLauncherError("invalid-release", str(exc)))
     except WorkbenchConfigurationError as exc:
         _fail(SeatLauncherError("invalid-host-access", str(exc)))
     except (OSError, ValidationError) as exc:

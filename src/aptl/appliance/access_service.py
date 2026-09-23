@@ -9,7 +9,6 @@ import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from aptl.appliance.access_service_support import (
     _access_account,
@@ -21,7 +20,11 @@ from aptl.appliance.access_service_support import (
     _stage_dispatch_metadata,
     _write_runtime_observation,
 )
-from aptl.appliance.launch import VerifiedApplianceLaunch, verify_launch_descriptor
+from aptl.appliance.seat.launch_descriptor import (
+    SeatLaunchDescriptor,
+    verify_seat_launch,
+)
+from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
 from aptl.appliance.seat.access import (
     MAX_ACCESS_MESSAGE_BYTES,
     GuestAccessBundle,
@@ -46,10 +49,6 @@ from aptl.workbench.guest_binding import (
 )
 from aptl.workbench.preparation import TransportPreparation, prepare_guest_transport
 from aptl.workbench.profiles import WorkbenchConfigurationError
-
-if TYPE_CHECKING:
-    from aptl.appliance.candidate import VerifiedCandidateLaunch
-
 
 def _run_qualification_attempt(
     project_dir: Path,
@@ -166,22 +165,10 @@ def _load_runtime_evidence(
 def _validate_request(
     request: GuestAccessRequest,
     descriptor_path: Path,
-    release_key: Path,
-    qualification_key: Path,
-    *,
-    candidate_trust: bool,
-) -> VerifiedApplianceLaunch | VerifiedCandidateLaunch:
-    """Authenticate the request against the selected signed trust path."""
+) -> tuple[SeatLaunchDescriptor, ApplianceBoundaryPolicy]:
+    """Authenticate the request against the launch the host bound."""
 
-    if candidate_trust:
-        from aptl.appliance.candidate import verify_candidate_launch_descriptor
-
-        launch = verify_candidate_launch_descriptor(descriptor_path, release_key)
-    else:
-        launch = verify_launch_descriptor(
-            descriptor_path, release_key, qualification_key
-        )
-    descriptor = launch.descriptor
+    descriptor, boundary_policy = verify_seat_launch(descriptor_path)
     if (
         descriptor.host_mcp_contract != "aptl.restricted-ssh-mcp/v1"
         or request.launch_descriptor_digest != _descriptor_digest(descriptor_path)
@@ -190,7 +177,7 @@ def _validate_request(
         raise WorkbenchConfigurationError("guest access is not release-authorized")
     publications = [
         item
-        for item in launch.boundary_policy.guest_publications
+        for item in boundary_policy.guest_publications
         if item.audience == "host-mcp"
     ]
     endpoint = request.guest_endpoint
@@ -201,7 +188,7 @@ def _validate_request(
     ) != (endpoint.address, endpoint.port, endpoint.protocol):
         raise WorkbenchConfigurationError("guest access endpoint is not signed")
     verdict = qualify_appliance_boundary(
-        launch.boundary_policy,
+        boundary_policy,
         request.binding,
         request.host_observation,
         request.guest_observation,
@@ -209,15 +196,13 @@ def _validate_request(
     )
     if not verdict.passed:
         raise WorkbenchConfigurationError("guest access boundary admission failed")
-    return launch
+    return descriptor, boundary_policy
 
 
 def serve_appliance_access(
     *,
     request_path: Path,
     descriptor_path: Path,
-    release_public_key: Path,
-    qualification_public_key: Path,
     device_path: Path,
     output_dir: Path,
     run_id: str,
@@ -225,7 +210,6 @@ def serve_appliance_access(
     state_dir: Path = Path("/var/lib/aptl/overlay"),
     username: str = "aptl-mcp",
     observe_boundary: Callable[[], GuestBoundaryObservation] | None = None,
-    candidate_trust: bool = False,
 ) -> None:
     """Prepare, publish, and supervise one restricted guest SSH listener."""
 
@@ -235,13 +219,8 @@ def serve_appliance_access(
             raise WorkbenchConfigurationError("guest access request deadline expired")
         time.sleep(0.1)
     request = read_guest_access_request(request_path)
-    launch = _validate_request(
-        request,
-        descriptor_path,
-        release_public_key,
-        qualification_public_key,
-        candidate_trust=candidate_trust,
-    )
+    launch = _validate_request(request, descriptor_path)
+    _descriptor, boundary_policy = launch
     account = _access_account(username)
     host_key = state_dir / "ssh" / "ssh_host_ed25519_key"
     _ensure_host_key(host_key)
@@ -265,10 +244,7 @@ def serve_appliance_access(
         launch,
         ApplianceAccessPaths(
             launch_descriptor=descriptor_path,
-            release_public_key=release_public_key,
-            qualification_public_key=qualification_public_key,
             runtime_observation=runtime_observation,
-            candidate_trust=candidate_trust,
         ),
         Path(tempfile.mkdtemp(prefix="mcp-trust-", dir=output_dir.parent)),
         gid=account.pw_gid,
@@ -298,12 +274,10 @@ def serve_appliance_access(
         delivery="appliance",
         appliance=metadata,
     )
-    # Candidate qualification can take several minutes. Complete it before
+    # A full guest start can take several minutes. Complete it before
     # observing and timestamping generation-scoped discovery so the bundle is
     # still current when the host enforces its short freshness window.
-    runtime_evidence = _load_runtime_evidence(
-        project_dir, configuration.run_id, qualification=candidate_trust
-    )
+    runtime_evidence = _load_runtime_evidence(project_dir, configuration.run_id)
     binding = prepare_guest_transport(configuration, output_dir)
     for path in output_dir.iterdir():
         os.chown(path, account.pw_uid, account.pw_gid)
@@ -349,7 +323,7 @@ def serve_appliance_access(
                 )
             current_guest = observe_boundary()
             verdict = qualify_appliance_boundary(
-                launch.boundary_policy,
+                boundary_policy,
                 request.binding,
                 request.host_observation,
                 current_guest,

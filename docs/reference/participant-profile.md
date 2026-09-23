@@ -22,8 +22,7 @@ offline checks, plus separate `client-transport` checks for Claude Code and
 Codex. Input validation does not satisfy signed machine qualification or
 prove an offline VM boot; those remain downstream release requirements.
 
-See [canonical input assembly](appliance-release.md) and
-[host MCP access](host-mcp-access.md) for the delivery contracts.
+See [host MCP access](host-mcp-access.md) for the delivery contracts.
 
 ## Guided Purple fixture
 

@@ -1,4 +1,4 @@
-"""Idempotent per-overlay identity and bootstrap credential creation."""
+"""Idempotent per-overlay guest identity for one disposable seat."""
 
 from __future__ import annotations
 

@@ -36,10 +36,7 @@ class ApplianceAccessPaths(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     launch_descriptor: Path
-    release_public_key: Path
-    qualification_public_key: Path
     runtime_observation: Path
-    candidate_trust: bool = False
 
 
 class ApplianceAccessObservation(BaseModel):
@@ -233,21 +230,11 @@ class GuestAdmission:
         self.server = self._server(self.binding)
         self.verified_launch = None
         if self.binding.appliance is not None:
-            from aptl.appliance.launch import verify_launch_descriptor
+            from aptl.appliance.seat.launch_descriptor import verify_seat_launch
 
-            paths = self.binding.appliance
-            if paths.candidate_trust:
-                from aptl.appliance.candidate import verify_candidate_launch_descriptor
-
-                self.verified_launch = verify_candidate_launch_descriptor(
-                    paths.launch_descriptor, paths.release_public_key
-                )
-            else:
-                self.verified_launch = verify_launch_descriptor(
-                    paths.launch_descriptor,
-                    paths.release_public_key,
-                    paths.qualification_public_key,
-                )
+            self.verified_launch = verify_seat_launch(
+                self.binding.appliance.launch_descriptor
+            )
             if (
                 self.verified_launch.descriptor.host_mcp_contract
                 != "aptl.restricted-ssh-mcp/v1"

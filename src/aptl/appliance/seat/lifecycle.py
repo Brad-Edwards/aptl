@@ -11,7 +11,7 @@ from pathlib import Path
 
 import rfc8785
 
-from aptl.appliance.bootstrap import initialize_overlay_state
+from aptl.appliance.seat.overlay_identity import initialize_overlay_state
 from aptl.appliance.seat.access import (
     GuestAccessRequest,
     invalidate_host_access,

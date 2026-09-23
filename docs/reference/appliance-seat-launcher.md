@@ -1,22 +1,16 @@
 # Appliance seat launcher
 
-Current seats use [VM-only containment](../adrs/adr-060-vm-only-seat-containment.md):
-one disposable VM per user running the ordinary full TechVault lab. Signing,
-authenticated access and physical-host/cross-seat isolation remain required.
+A seat is one disposable VM per user running the ordinary full TechVault lab,
+using [VM-only containment](../adrs/adr-060-vm-only-seat-containment.md).
+Authenticated access and physical-host/cross-seat isolation remain required.
 Additional isolation and controlled egress between workloads inside a guest are
-not promised; that work is tracked in #1127. The signed V2 boundary policy and
-runtime inventory identify this contract explicitly.
+not promised; that work is tracked in #1127. The V2 boundary policy the image
+carries identifies this contract explicitly.
 
 The launcher uses restricted QEMU user networking: the guest cannot initiate
 connections to the physical host, another seat, or the external network. Only
-the declared host-to-guest port forwards remain available. The complete lab
-runs from its bundled offline inputs; this restriction does not separate
-workloads inside the VM.
-
-Issue #824 adds the host-side lifecycle adapter for one disposable appliance
-seat. It consumes the signed release, overlay, and launch contracts from
-[Disposable Appliance Release](appliance-release.md) without introducing a
-host-resident APTL runtime.
+the declared host-to-guest port forwards remain available. That restriction
+does not separate workloads inside the VM.
 
 ## Security boundary
 
@@ -25,10 +19,10 @@ multiple users share a physical host. Direct `aptl lab start` places the
 intentionally vulnerable workloads, MCP tooling, and Docker-authorized control
 components on the selected host Docker engine. A seat instead places that
 rootful Docker daemon and the entire range inside a dedicated disposable VM;
-only signed loopback port mappings and the restricted authenticated MCP
-transport cross the VM boundary. Compromise of an ordinary lab container is
-therefore contained by an additional KVM/QEMU boundary before it reaches the
-physical host or another seat.
+only loopback port mappings and the restricted authenticated MCP transport
+cross the VM boundary. Compromise of an ordinary lab container is therefore
+contained by an additional KVM/QEMU boundary before it reaches the physical
+host or another seat.
 
 That boundary is risk reduction, not a claim that VM escape is impossible. An
 advanced model with tool access can research, adapt, and attempt exploit chains
@@ -46,19 +40,13 @@ known-compromised physical host back into a trusted one.
 
 ## Prerequisites
 
-The physical host must satisfy the signed release `host_prerequisites` block:
+The physical host must satisfy the resources the seat image declares:
 
 - Linux with hardware virtualization (`/dev/kvm`)
 - `qemu-img`, `qemu-system-x86_64`, and read-only OVMF UEFI firmware
-- available CPU/RAM at or above the manifest minimums, host disk capacity at
-  or above the signed minimum, and free disk at or above the signed peak-runtime
-  ceiling
+- available CPU/RAM at or above the image's minimums, and free disk at or
+  above its declared runtime reservation
 - No dependency on host Docker for seat operations
-
-Trust anchors:
-
-- `--release-public-key`: release manifest Ed25519 anchor
-- `--qualification-public-key`: participant qualification attestation anchor
 
 Each user who launches a seat needs read/write access to `/dev/kvm`. On the
 usual Linux packaging this means membership in the `kvm` group followed by a
@@ -70,75 +58,90 @@ On Debian/Ubuntu hosts, install the complete host dependency set once with:
 sudo apt-get install qemu-system-x86 qemu-utils ovmf
 ```
 
-No shared `seat-state` directory is required. Each user's default seat state
-is created privately below that user's own `$XDG_STATE_HOME` or home directory.
+No shared `seat-state` directory is required. Each user's seat state is
+created privately below that user's own `$XDG_STATE_HOME` or home directory.
 
-## Install and start
-
-Install a selected qualified public release using independently provisioned
-trust anchors:
+## Start a seat
 
 ```bash
-aptl seat install \
-  --tag v5.5.0 \
-  --release-public-key /etc/aptl/trust/release-public.pem \
-  --qualification-public-key /etc/aptl/trust/qualification-public.pem
 aptl seat start
 ```
 
-`seat install` anonymously downloads the signed metadata and transport chunks,
-authenticates the metadata before downloading the large artifacts, resumes and
-reuses verified cache entries, reconstructs both canonical artifacts, verifies
-the complete release, and only then publishes it to the launcher's state.
-Downloaded keys are never trusted merely because they appear beside a release;
-the two key arguments are the independently provisioned trust anchors.
+That is the whole first run. The launcher resolves the published seat image,
+pulls it if this host does not already have it, creates a disposable overlay
+over it, and boots. There is no install step, no release directory, and no
+trust anchors to provision.
 
-`seat start` automatically selects distinct outer ports. When the signed
-release requires host MCP access, it creates an owner-only Ed25519 transport
-identity, enrolls the current user for that seat generation, and safely updates
-the Claude and Codex project configurations in the current directory. Provider
-authentication remains entirely user-owned and is neither read nor copied.
+The image is pulled over plain HTTPS from the registry, so a seat host needs
+QEMU and no Docker daemon. Integrity is the registry's content addressing:
+every blob is fetched by digest and rejected unless its bytes hash to that
+digest.
 
-All lifecycle commands default to the current user's private seat root:
-`$XDG_STATE_HOME/aptl/seat`, or `~/.local/state/aptl/seat` when
-`XDG_STATE_HOME` is unset. The download cache similarly defaults to
-`$XDG_CACHE_HOME/aptl/appliance`, or `~/.cache/aptl/appliance`. `--seat-root`
-and the explicit release/key options remain available for managed deployments
-and qualification runs.
+To run a different image, such as your own build or a pinned digest, point
+`--image` at it:
 
-## Directory layout
-
-```text
-~/.local/state/aptl/seat/
-  seat-state.json
-  vm.pid                    # PID + procfs start/executable identity
-  launch/
-    release/                 # verified release directory
-    appliance-launch.json    # create-once launch projection
-    release-public.pem       # public release anchor
-    qualification-public.pem # public qualification anchor
-  instances/
-    seat-01.qcow2            # disposable overlay
-    seat-01.state/           # guest-only overlay identity (host tracks path only)
+```bash
+aptl seat start --image ghcr.io/your-org/your-seat:latest
+aptl seat start --image ghcr.io/your-org/your-seat@sha256:<digest>
 ```
 
-## Supported operator flow
+`seat start` selects distinct outer ports automatically. When the image's
+boundary policy requires host MCP access, it creates an owner-only Ed25519
+transport identity, enrols the current user for that seat generation, and
+safely updates the Claude and Codex project configurations in the current
+directory. Provider authentication remains entirely user-owned and is neither
+read nor copied.
 
-After `seat install`, the simplest path is `aptl seat start` without `--mapping`
-and without a pre-existing staged record. The launcher selects distinct
-loopback ports while holding a host-wide lock through QEMU's bind and
-live-listener readback, then persists those mappings for restart.
+State defaults to the current user's private roots: `$XDG_STATE_HOME/aptl/seat`
+for the seat and `$XDG_CACHE_HOME/aptl/appliance` for the image cache, or the
+`~/.local/state` and `~/.cache` equivalents. `--seat-root` and `--image-cache`
+remain available for managed deployments.
 
-To reserve operator-selected ports instead, stage a verified release with one
-repeated typed mapping for every signed guest publication:
+## Updates are never forced
+
+The digest an image reference first resolves to is sticky. A seat keeps
+booting that digest until you adopt another, so publishing a new `:latest`
+never changes what a running fleet boots.
+
+Checking for a newer image is separate from adopting one. The check is
+rate-limited rather than run on every start, never gates the boot path, and
+fails open, so a registry outage or an offline host cannot delay or prevent a
+seat starting. When a newer image exists, the launcher says so and keeps
+booting what it had:
+
+```text
+a newer seat image is available: sha256:be21… — adopt with `aptl seat update`
+```
+
+Adopting takes effect on the next start; a running seat is untouched:
+
+```bash
+aptl seat update                      # adopt what the reference resolves to now
+aptl seat update --to sha256:<digest> # roll back to an image already cached
+```
+
+Adoption keeps the previous disk, which is what makes rollback possible. A
+digest-pinned reference is never checked and never prompts.
+
+Cached images are large. List them, with the references that select them, and
+remove the ones nothing selects:
+
+```bash
+aptl seat images
+aptl seat images --prune
+```
+
+Pruning never removes an image a reference currently selects, so a rollback
+target survives while it is still selected somewhere.
+
+## Reserving operator-selected ports
+
+Stage a seat with one repeated typed mapping for every endpoint the image
+publishes:
 
 ```bash
 aptl seat stage \
-  --seat-root /srv/aptl-seat \
   --seat-id seat-01 \
-  --release-dir /srv/aptl-seat/launch/release \
-  --release-public-key /etc/aptl/trust/release-public.pem \
-  --qualification-public-key /etc/aptl/trust/qualification-public.pem \
   --mapping participant,tcp,127.0.0.1,10443,127.0.0.1,443 \
   --mapping recovery,tcp,127.0.0.1,11443,127.0.0.1,9443
 ```
@@ -147,33 +150,21 @@ The six mapping fields are audience, protocol, outer address, outer port,
 guest address, and fixed guest port.
 
 Duplicate outer endpoints, incomplete mappings, and destinations absent from
-the signed publication policy fail closed. A staged mapping cannot be changed
+the image's publication policy fail closed. A staged mapping cannot be changed
 during start; reset creates a new generation.
 
 Automatic selection, explicit endpoint handoff, and capacity admission are
-serialized across launcher processes. Each QEMU seat publishes its signed CPU,
-RAM, and disk reservation in
-a fixed `fw_cfg` argument. Before launch, the allocator sums every visible APTL
-QEMU reservation and rejects the new seat if the concurrent total would exceed
-host capacity. This makes the two-seat path an admitted resource allocation,
-not two independent minimum checks racing each other. The available-memory
-check also preserves host headroom of at least 8 GiB or 10% of physical RAM,
-whichever is greater. A seat is refused before QEMU launches if it would
-consume that reserve; this protects the host SSH service and other workloads.
+serialized across launcher processes. Each QEMU seat publishes its CPU, RAM,
+and disk reservation in a fixed `fw_cfg` argument. Before launch, the allocator
+sums every visible APTL QEMU reservation and rejects the new seat if the
+concurrent total would exceed host capacity. The available-memory check also
+preserves host headroom of at least 8 GiB or 10% of physical RAM, whichever is
+greater. A seat is refused before QEMU launches if it would consume that
+reserve; this protects the host SSH service and other workloads.
 
-Start the seat VM and validate host exposure. Readiness is not inferred from a
-live PID or listener: the tracked QEMU instance, real forbidden-reachability
-probe, guest boot/daemon observation, and complete appliance boundary gate must
-all agree for the current generation:
-
-```bash
-aptl seat start \
-  --seat-id seat-01 \
-  --release-dir /srv/aptl-seat/launch/release \
-  --release-public-key /etc/aptl/trust/release-public.pem \
-  --qualification-public-key /etc/aptl/trust/qualification-public.pem \
-  --seat-root /srv/aptl-seat
-```
+Readiness is not inferred from a live PID or listener: the tracked QEMU
+instance, real forbidden-reachability probe, guest boot/daemon observation, and
+complete appliance boundary gate must all agree for the current generation.
 
 Open the participant kiosk browser (presentation only):
 
@@ -189,27 +180,17 @@ aptl seat status
 
 ## Reset and recovery
 
-Security reset destroys the overlay and recreates a fresh overlay from the
-verified golden. It is not a reboot, logout, or in-guest repair.
+Security reset destroys the overlay and recreates a fresh one over the same
+image. It is not a reboot, logout, or in-guest repair.
 
 ```bash
-aptl seat reset \
-  --seat-root /srv/aptl-seat \
-  --seat-id seat-01 \
-  --release-dir /srv/aptl-seat/launch/release \
-  --release-public-key /etc/aptl/trust/release-public.pem \
-  --qualification-public-key /etc/aptl/trust/qualification-public.pem
+aptl seat reset --seat-id seat-01
 ```
 
 Instructor recovery performs reset then start:
 
 ```bash
-aptl seat recover \
-  --seat-root /srv/aptl-seat \
-  --seat-id seat-01 \
-  --release-dir /srv/aptl-seat/launch/release \
-  --release-public-key /etc/aptl/trust/release-public.pem \
-  --qualification-public-key /etc/aptl/trust/qualification-public.pem
+aptl seat recover --seat-id seat-01
 ```
 
 After a physical-host reboot, reconcile persisted seat metadata before reuse:
@@ -221,35 +202,33 @@ aptl seat reconcile
 When reconciliation reports `host-reboot-detected` or `vm-not-running`, run
 `recover` before returning the seat to a participant.
 
+## Directory layout
+
+```text
+~/.local/state/aptl/seat/
+  seat-state.json
+  vm.pid                     # PID + procfs start/executable identity
+  launch/
+    appliance-launch.json    # create-once launch projection
+    boundary-policy.json     # the exact policy bytes the gate is bound to
+  instances/
+    seat-01.qcow2            # disposable overlay
+    seat-01.state/           # guest-only overlay identity
+
+~/.cache/aptl/appliance/
+  <digest>/seat-disk.qcow2   # shared, read-only, content-addressed
+  refs/<reference>.json      # which digest each reference selects
+```
+
 ## Diagnostics
 
 CLI failures emit bounded JSON with stable codes such as `no-kvm`, `low-disk`,
-`corrupt-overlay`, `failed-readiness`, and boundary inventory codes. Raw
-QEMU/libvirt stderr, guest logs, and credentials are never returned.
+`corrupt-overlay`, `image-unavailable`, `failed-readiness`, and boundary
+inventory codes. Raw QEMU/libvirt stderr, guest logs, and credentials are
+never returned.
 
 ## Related documents
 
-- [ADR-049](../adrs/adr-049-sealed-disposable-lab-appliance.md)
-- [Appliance boundary](../components/appliance-boundary.md)
-- [Issue #824 preflight](../architecture/issue-824-kiosk-launcher-reset-recovery-preflight.md)
-
-## Full-TechVault host access contract
-
-Issue #868 supplies the canonical software inputs and
-[restricted host MCP interface](host-mcp-access.md). The real VM integration in
-#1022 must allocate separate guest and outer ports, observe their explicit
-mapping, and refresh private access records only after live guest identity and
-capture checks. Existing browser-only seat APIs do not infer a host-MCP mapping
-from equal port numbers. A host-MCP-enabled signed policy without an explicit
-observed mapping fails admission.
-
-Claude Code and Codex run on the participant host with user-owned provider
-authentication. They receive a dedicated transport key and role-scoped project
-config; MCP and Docker authority stay inside the guest. Reset revokes all old
-grants and changes the instance generation/host pin before publishing replacement
-access. A kiosk is an optional presentation surface, not a local APTL dependency.
-The #1022 release qualification invokes an actual read-only `kali_info` MCP call
-through each installed native client and its generated configuration, recording
-only the response digest and client version. It then invokes the clients against
-the revoked surface and independently proves the stale transport itself fails.
-Service credentials and provider state never leave the guest.
+- [VM-only seat containment](../adrs/adr-060-vm-only-seat-containment.md)
+- [Appliance network boundary](../components/appliance-boundary.md)
+- [Host MCP access](host-mcp-access.md)

@@ -10,7 +10,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from aptl.appliance.launch import VerifiedApplianceLaunch
+from aptl.appliance.seat.launch_descriptor import SeatLaunchDescriptor
+from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
 from aptl.core._soc_ca_io import _atomic_write
 from aptl.core.appliance_boundary_inventory import GuestBoundaryObservation
 from aptl.core.config import load_config
@@ -21,7 +22,6 @@ from aptl.workbench.guest_binding import (
 from aptl.workbench.profiles import WorkbenchConfigurationError
 
 if TYPE_CHECKING:
-    from aptl.appliance.candidate import VerifiedCandidateLaunch
     from aptl.appliance.seat.access import GuestAccessRequest
 
 
@@ -170,41 +170,30 @@ def _prepare_dispatch_ca(project: Path, *, gid: int) -> None:
 
 
 def _stage_dispatch_metadata(
-    launch: VerifiedApplianceLaunch | VerifiedCandidateLaunch,
+    launch: tuple[SeatLaunchDescriptor, ApplianceBoundaryPolicy],
     paths: ApplianceAccessPaths,
     destination: Path,
     *,
     gid: int,
 ) -> ApplianceAccessPaths:
-    """Project only signed metadata into root-owned, dispatcher-readable state."""
-    from aptl.appliance.manifest import verify_release_metadata
-    from aptl.appliance.release_validation import read_release_artifact
+    """Project only the verified launch into dispatcher-readable state.
+
+    The launch is two small documents the host wrote and the guest already
+    authenticated, so this copies exactly those rather than re-deriving a
+    release tree.
+    """
     from aptl.utils.pathsafe import read_contained_nofollow
 
+    del launch
     destination.mkdir(mode=0o700, parents=True, exist_ok=True)
-    release = destination / launch.descriptor.release_dir
-    release.mkdir(mode=0o700, parents=True)
-    names = [launch.descriptor.boundary_policy_path]
-    if paths.candidate_trust:
-        names.extend(("candidate-manifest.json", "candidate-manifest.sig.json"))
-    else:
-        manifest = verify_release_metadata(
-            launch.release_root, paths.release_public_key
-        )
-        names.extend(("manifest.json", "manifest.sig.json"))
-        names.extend(
-            artifact.path
-            for artifact in manifest.artifacts
-            if artifact.kind == "participant-qualification"
-        )
-    payloads = {
-        release / name: read_release_artifact(launch.release_root, name)
-        for name in names
-    }
     copies = {
         "launch_descriptor": destination / "appliance-launch.json",
-        "release_public_key": destination / "release-public.pem",
-        "qualification_public_key": destination / "qualification-public.pem",
+    }
+    payloads = {
+        destination
+        / "boundary-policy.json": read_contained_nofollow(
+            paths.launch_descriptor.parent, "boundary-policy.json"
+        )
     }
     for field, target in copies.items():
         source = getattr(paths, field)

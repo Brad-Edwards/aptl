@@ -49,37 +49,3 @@ def test_mcp_publication_requires_supported_policy_and_bound_port_mapping():
     assert "boundary.host-listener-unapproved" in host_boundary_findings(
         policy, _binding(observed.observation_id), tampered
     )
-
-
-def test_release_extension_requires_signed_inputs_and_retains_all_existing_artifacts():
-    from aptl.appliance.models import ApplianceReleaseManifest
-    from tests.test_appliance_release_manifest import _artifact, _manifest
-
-    document = _manifest().model_dump(mode="json")
-    document["delivery"].update(
-        canonical_inputs_digest="sha256:" + "a" * 64,
-        host_mcp_contract="aptl.restricted-ssh-mcp/v1",
-    )
-    prepared_input_1 = json.dumps(document)
-    with pytest.raises(ValidationError):
-        ApplianceReleaseManifest.model_validate_json(prepared_input_1)
-    document["artifacts"].append(
-        _artifact(
-            "canonical-inputs", "canonical-inputs", "artifacts/inputs.json"
-        ).model_dump(mode="json")
-    )
-    document["artifacts"].append(
-        _artifact(
-            "redistribution-review",
-            "redistribution-review",
-            "evidence/redistribution-review.json",
-        ).model_dump(mode="json")
-    )
-    admitted = ApplianceReleaseManifest.model_validate_json(json.dumps(document))
-    assert admitted.delivery.host_mcp_contract == "aptl.restricted-ssh-mcp/v1"
-    document["artifacts"] = [
-        item for item in document["artifacts"] if item["kind"] != "machine-drill"
-    ]
-    prepared_input_2 = json.dumps(document)
-    with pytest.raises(ValidationError):
-        ApplianceReleaseManifest.model_validate_json(prepared_input_2)

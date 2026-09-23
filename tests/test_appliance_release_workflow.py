@@ -119,5 +119,6 @@ esac
     )
 
     assert result.returncode != 0
-    assert "key-" in result.stderr and "not anonymously pullable" in result.stderr
+    assert "key-" in result.stderr
+    assert "not anonymously pullable" in result.stderr
     assert not log.exists()

@@ -64,8 +64,9 @@ def test_declares_resources_and_carries_the_boundary_policy() -> None:
 
 
 def test_a_seat_that_publishes_nothing_is_refused() -> None:
+    payload = _config(boundary=_boundary(guest_publications=[]))
     with pytest.raises(SeatImageConfigError):
-        parse_seat_image_config(_config(boundary=_boundary(guest_publications=[])))
+        parse_seat_image_config(payload)
 
 
 def test_a_seat_without_a_participant_endpoint_is_refused() -> None:
@@ -75,20 +76,18 @@ def test_a_seat_without_a_participant_endpoint_is_refused() -> None:
         if item["audience"] != "participant"
     ]
 
+    payload = _config(boundary=_boundary(guest_publications=reachable))
     with pytest.raises(SeatImageConfigError, match="participant"):
-        parse_seat_image_config(
-            _config(boundary=_boundary(guest_publications=reachable))
-        )
+        parse_seat_image_config(payload)
 
 
 def test_a_routable_publication_is_refused_by_the_boundary_model() -> None:
     publications = _boundary()["guest_publications"]  # type: ignore[index]
     publications[0]["address"] = "10.0.0.1"  # type: ignore[index]
 
+    payload = _config(boundary=_boundary(guest_publications=publications))
     with pytest.raises(SeatImageConfigError):
-        parse_seat_image_config(
-            _config(boundary=_boundary(guest_publications=publications))
-        )
+        parse_seat_image_config(payload)
 
 
 @pytest.mark.parametrize(
@@ -101,8 +100,9 @@ def test_a_routable_publication_is_refused_by_the_boundary_model() -> None:
     ],
 )
 def test_unlaunchable_resource_requests_are_refused(resources, reason: str) -> None:
+    payload = _config(resources=dict(RESOURCES) | resources)
     with pytest.raises(SeatImageConfigError):
-        parse_seat_image_config(_config(resources=dict(RESOURCES) | resources))
+        parse_seat_image_config(payload)
 
 
 @pytest.mark.parametrize(
@@ -114,8 +114,9 @@ def test_unlaunchable_resource_requests_are_refused(resources, reason: str) -> N
     ],
 )
 def test_malformed_declarations_are_refused(overrides) -> None:
+    payload = _config(**overrides)
     with pytest.raises(SeatImageConfigError):
-        parse_seat_image_config(_config(**overrides))
+        parse_seat_image_config(payload)
 
 
 @pytest.mark.parametrize("payload", [b"", b"not json", b"[]", b"null", b'"text"'])
@@ -136,5 +137,6 @@ def test_non_object_payloads_are_refused(payload: bytes) -> None:
 def test_unpinned_guest_identities_are_refused(binding, reason: str) -> None:
     # The boundary gate binds a launch to these; an unpinned one would let the
     # guest run something other than what the image declared.
+    payload = _config(binding=dict(BINDING) | binding)
     with pytest.raises(SeatImageConfigError):
-        parse_seat_image_config(_config(binding=dict(BINDING) | binding))
+        parse_seat_image_config(payload)

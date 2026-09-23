@@ -805,6 +805,7 @@ src/aptl/appliance/seat/errors.py	optional-delivery	Keep sealed-seat boundary ou
 src/aptl/appliance/seat/exposure.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/image.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/image_config.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/image_disk_cache.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/image_selection.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/kiosk.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/launch_descriptor.py	optional-delivery	Keep sealed-seat boundary outside default install

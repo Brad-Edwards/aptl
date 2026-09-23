@@ -2,9 +2,8 @@
 
 The seat boundary is a VM; the disk that VM boots is ordinary published
 content, not a bespoke release artifact.  This module turns a registry
-reference into a local, digest-verified qcow2 that
-:func:`aptl.appliance.build.create_disposable_overlay` can back an overlay
-with.
+reference into a local, digest-verified qcow2 that the seat launcher uses as
+the backing disk for a disposable overlay.
 
 The pull is plain HTTPS against the registry API so that a seat host needs
 QEMU and nothing else; there is no host Docker dependency.  Integrity is the
@@ -18,7 +17,6 @@ import json
 import os
 import re
 import secrets
-import stat
 import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,13 +32,21 @@ from aptl.appliance.seat.image_config import (
     SeatImageConfigError,
     parse_seat_image_config,
 )
-
-_DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
-_REPOSITORY = re.compile(
-    r"^[a-z0-9]+(?:(?:[._-]|__)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._-]|__)[a-z0-9]+)*)*$"
+from aptl.appliance.seat.image_disk_cache import (
+    DISK_FILENAME,
+    SeatImageError,
+    _DIGEST,
+    _cache_entry,
+    _sha256_of,
+    cached_seat_image_config,
+    verified_cached_disk,
+    write_verification_stamp,
 )
-_TAG = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$")
-_REGISTRY = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{1,5})?$")
+
+_REPOSITORY_COMPONENT = r"[a-z0-9]+(?:(?:[._-]|__)[a-z0-9]+)*"
+_REPOSITORY = re.compile(rf"^{_REPOSITORY_COMPONENT}(?:/{_REPOSITORY_COMPONENT})*$")
+_TAG = re.compile(r"^\w[\w.-]{0,127}$", re.ASCII)
+_REGISTRY = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(?::\d{1,5})?$", re.ASCII)
 
 # One seat disk is a single blob in an OCI artifact. Accepting the index as
 # well lets a published reference point at a multi-architecture entry.
@@ -60,10 +66,6 @@ DISK_MEDIA_TYPE = "application/vnd.aptl.seat.disk.v1+qcow2"
 # fetch keeps an unexpected response from being read into memory at all.
 _MAX_METADATA_BYTES = 256 * 1024
 _MAX_DISK_BYTES = 512 * 1024 * 1024 * 1024
-
-
-class SeatImageError(RuntimeError):
-    """One seat VM disk could not be resolved from its registry reference."""
 
 
 @dataclass(frozen=True)
@@ -136,122 +138,6 @@ def parse_seat_image_reference(reference: str) -> SeatImageReference:
     )
 
 
-def _cache_entry(cache_dir: Path, digest: str) -> Path:
-    """Return the cache path for one digest, refusing anything else.
-
-    The digest reaches here from a registry manifest, so it is remote input
-    that becomes a filesystem path. Validating it at every path construction
-    is what keeps it from being one.
-    """
-
-    if not _DIGEST.fullmatch(digest):
-        raise SeatImageError("seat image digest is not a lowercase sha256 digest")
-    entry = cache_dir / digest.removeprefix("sha256:") / "seat-disk.qcow2"
-    if not entry.is_relative_to(cache_dir):
-        raise SeatImageError("seat image cache entry escapes the cache")
-    return entry
-
-
-def _stamp_path(disk: Path) -> Path:
-    """Return the verification stamp beside one cached disk."""
-
-    return disk.with_suffix(".verified.json")
-
-
-def write_verification_stamp(disk: Path, *, digest: str, size_bytes: int) -> None:
-    """Record the identity a full hash verification just established.
-
-    Hashing a multi-gigabyte disk is affordable once, when it is downloaded.
-    Repeating it on every seat start is not, so the result is recorded and
-    later starts re-check only what is cheap.
-    """
-
-    if disk.name != "seat-disk.qcow2" or not re.fullmatch(
-        r"[a-f0-9]{64}", disk.parent.name
-    ):
-        raise SeatImageError("seat disk verification path is invalid")
-    status = disk.stat(follow_symlinks=False)
-    if not stat.S_ISREG(status.st_mode):
-        raise SeatImageError("seat disk verification requires a regular file")
-    payload = json.dumps(
-        {
-            "schema_version": "aptl.seat-disk-verification/v1",
-            "digest": digest,
-            "size_bytes": size_bytes,
-            "inode": status.st_ino,
-            "mtime_ns": status.st_mtime_ns,
-            "mode": status.st_mode & 0o7777,
-        },
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode()
-    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC
-    file_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        directory_flags |= os.O_NOFOLLOW
-        file_flags |= os.O_NOFOLLOW
-    directory_fd = os.open(disk.parent, directory_flags)
-    temporary_name = f".seat-disk.verified.{secrets.token_hex(8)}"
-    try:
-        temporary_fd = os.open(
-            temporary_name, file_flags, 0o600, dir_fd=directory_fd
-        )
-        with os.fdopen(temporary_fd, "wb") as handle:
-            handle.write(payload)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(
-            temporary_name,
-            "seat-disk.verified.json",
-            src_dir_fd=directory_fd,
-            dst_dir_fd=directory_fd,
-        )
-    finally:
-        try:
-            os.unlink(temporary_name, dir_fd=directory_fd)
-        except FileNotFoundError:
-            pass
-        os.close(directory_fd)
-
-
-def verified_cached_disk(
-    cache_dir: Path, *, digest: str, size_bytes: int | None = None
-) -> Path | None:
-    """Return the cached disk for ``digest`` when it is cheaply provable.
-
-    The disk is a read-only qcow2 backing file that the VM never writes, so
-    these checks are looking for tampering or corruption, not for ordinary
-    mutation.  Anything that disagrees returns ``None`` and the caller falls
-    back to the full hash.
-    """
-
-    disk = _cache_entry(cache_dir, digest)
-    try:
-        status = disk.stat(follow_symlinks=False)
-    except OSError:
-        return None
-    if not stat.S_ISREG(status.st_mode):
-        return None
-    try:
-        stamp = json.loads(_stamp_path(disk).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    if not isinstance(stamp, dict):
-        return None
-    expected = {
-        "digest": digest,
-        "inode": status.st_ino,
-        "mtime_ns": status.st_mtime_ns,
-        "mode": status.st_mode & 0o7777,
-        "size_bytes": status.st_size,
-    }
-    if any(stamp.get(key) != value for key, value in expected.items()):
-        return None
-    if size_bytes is not None and status.st_size != size_bytes:
-        return None
-    return disk
-
-
 def _anonymous_token(reference: SeatImageReference) -> str | None:
     """Obtain a pull token, returning ``None`` when the registry needs none."""
 
@@ -309,14 +195,6 @@ def _fetch_manifest(
     if not isinstance(document, dict):
         raise SeatImageError("seat image manifest is not a JSON object")
     return document, _sha256_of(payload)
-
-
-def _sha256_of(payload: bytes) -> str:
-    """Return the sha256 digest of one fetched document."""
-
-    import hashlib
-
-    return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
 def _select_disk_layer(manifest: dict[str, object]) -> dict[str, object]:
@@ -383,6 +261,23 @@ class SeatDiskDescriptor:
     config_size_bytes: int | None = None
 
 
+def _config_descriptor(manifest: dict[str, object]) -> tuple[str | None, int | None]:
+    """Validate the optional seat config blob advertised by one manifest."""
+
+    config = manifest.get("config")
+    if not isinstance(config, dict) or config.get("mediaType") != (
+        SEAT_IMAGE_CONFIG_MEDIA_TYPE
+    ):
+        return None, None
+    digest = config.get("digest")
+    size = config.get("size")
+    if not isinstance(digest, str) or not _DIGEST.fullmatch(digest):
+        raise SeatImageError("seat image config descriptor has no usable digest")
+    if not isinstance(size, int) or not 0 < size <= _MAX_METADATA_BYTES:
+        raise SeatImageError("seat image config descriptor has no usable size")
+    return digest, size
+
+
 def resolve_disk_descriptor(
     reference: str | SeatImageReference,
 ) -> SeatDiskDescriptor:
@@ -409,24 +304,7 @@ def resolve_disk_descriptor(
         raise SeatImageError("seat image disk layer has no usable digest")
     if not isinstance(size, int) or not 0 < size <= _MAX_DISK_BYTES:
         raise SeatImageError("seat image disk layer declares no usable size")
-    config = manifest.get("config")
-    config_digest: str | None = None
-    config_size: int | None = None
-    if isinstance(config, dict) and config.get("mediaType") == (
-        SEAT_IMAGE_CONFIG_MEDIA_TYPE
-    ):
-        candidate_digest = config.get("digest")
-        candidate_size = config.get("size")
-        if not isinstance(candidate_digest, str) or not _DIGEST.fullmatch(
-            candidate_digest
-        ):
-            raise SeatImageError("seat image config descriptor has no usable digest")
-        if not isinstance(candidate_size, int) or not 0 < candidate_size <= (
-            _MAX_METADATA_BYTES
-        ):
-            raise SeatImageError("seat image config descriptor has no usable size")
-        config_digest = candidate_digest
-        config_size = candidate_size
+    config_digest, config_size = _config_descriptor(manifest)
 
     return SeatDiskDescriptor(
         reference=parsed,
@@ -469,30 +347,6 @@ def fetch_seat_image_config(descriptor: SeatDiskDescriptor) -> SeatImageConfig:
         return parse_seat_image_config(payload)
     except SeatImageConfigError as exc:
         raise SeatImageError(str(exc)) from exc
-
-
-def cached_seat_image_config(
-    cache_dir: Path, *, disk_digest: str
-) -> tuple[SeatImageConfig, str] | None:
-    """Read the config previously bound to this selected disk, without a registry call."""
-
-    entry = _cache_entry(cache_dir, disk_digest).parent
-    try:
-        binding = json.loads((entry / "seat-config-binding.json").read_bytes())
-        payload = (entry / "seat-config.json").read_bytes()
-        config_digest = binding["config_digest"]
-        if (
-            binding["disk_digest"] != disk_digest
-            or not isinstance(config_digest, str)
-            or not _DIGEST.fullmatch(config_digest)
-            or _sha256_of(payload) != config_digest
-        ):
-            raise SeatImageError("cached seat image config does not match its disk")
-        return parse_seat_image_config(payload), config_digest
-    except FileNotFoundError:
-        return None
-    except (OSError, ValueError, KeyError, TypeError) as exc:
-        raise SeatImageError("cached seat image config is invalid") from exc
 
 
 def cache_seat_image_config(
@@ -612,7 +466,7 @@ def fetch_seat_disk(
         staged = stage_https_artifact(
             url=blob_url,
             cache_dir=cache_dir,
-            filename="seat-disk.qcow2",
+            filename=DISK_FILENAME,
             sha256=digest,
             size_bytes=size_bytes,
             headers=_registry_headers(

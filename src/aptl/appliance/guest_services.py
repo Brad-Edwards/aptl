@@ -9,10 +9,11 @@ from aptl.appliance.loopback_proxy import build_proxy_bindings, serve_proxy_bind
 from aptl.appliance.seat.launch_descriptor import verify_seat_launch
 
 _LAUNCH_DESCRIPTOR = Path("/run/aptl-launch/appliance-launch.json")
-_ADAPTER_ADDRESS = "10.0.2.15"
+_ADAPTER_ADDRESS = "10.0.2.15"  # NOSONAR: fixed QEMU user-net DHCP address
 
 
 def main() -> None:
+    """Publish the verified seat endpoints on the fixed guest adapter."""
     parser = argparse.ArgumentParser()
     parser.add_argument("service", choices=("proxy",))
     parser.parse_args()

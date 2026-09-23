@@ -276,7 +276,8 @@ def test_verification_stamp_replaces_a_symlink_without_writing_its_target(
     write_verification_stamp(disk, digest=OLD, size_bytes=disk.stat().st_size)
 
     assert outside.read_text() == "sentinel"
-    assert stamp.is_file() and not stamp.is_symlink()
+    assert stamp.is_file()
+    assert not stamp.is_symlink()
 
 
 def test_selection_write_does_not_follow_a_precreated_partial_symlink(
@@ -302,8 +303,7 @@ def test_selection_refuses_a_linked_reference_directory(tmp_path: Path) -> None:
     cache.mkdir()
     (cache / "refs").symlink_to(outside, target_is_directory=True)
 
+    reference = parse_seat_image_reference(REFERENCE)
     with pytest.raises(SeatImageError, match="selection directory is unsafe"):
-        save_selection(
-            cache, parse_seat_image_reference(REFERENCE), digest=OLD, size_bytes=8
-        )
+        save_selection(cache, reference, digest=OLD, size_bytes=8)
     assert not list(outside.iterdir())

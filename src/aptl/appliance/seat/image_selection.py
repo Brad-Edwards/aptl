@@ -69,7 +69,8 @@ def _selection_path(cache_dir: Path, reference: SeatImageReference) -> Path:
     """
 
     key = hashlib.sha256(str(reference).encode()).hexdigest()[:32]
-    if not _HEX_KEY.fullmatch(key):  # pragma: no cover - hexdigest is hex
+    # hexdigest always produces hexadecimal; retain the explicit path guard.
+    if not _HEX_KEY.fullmatch(key):  # pragma: no cover
         raise SeatImageError("seat image selection key is not a digest")
     path = cache_dir / "refs" / f"{key}.json"
     if not path.is_relative_to(cache_dir):
@@ -149,6 +150,43 @@ def save_selection(
         os.close(directory_fd)
 
 
+def _recorded_offer(recorded: dict[str, object]) -> tuple[str, int] | None:
+    """Return a previously observed update without contacting the registry."""
+
+    available = recorded.get("available_digest")
+    size = recorded.get("available_size_bytes")
+    if isinstance(available, str) and isinstance(size, int):
+        return available, size
+    return None
+
+
+def _refresh_offer(
+    cache_dir: Path,
+    reference: SeatImageReference,
+    recorded: dict[str, object],
+    *,
+    selected_digest: str,
+    now: float | None,
+) -> tuple[str, int] | None:
+    """Check the registry and record an offer without adopting it."""
+
+    try:
+        remote = resolve_disk_descriptor(reference)
+    except SeatImageError:
+        return None
+    available = None if remote.digest == selected_digest else remote.digest
+    save_selection(
+        cache_dir,
+        reference,
+        digest=selected_digest,
+        size_bytes=int(recorded.get("size_bytes") or remote.size_bytes),
+        available_digest=available,
+        available_size_bytes=remote.size_bytes if available else None,
+        last_checked=now if now is not None else time.time(),
+    )
+    return (remote.digest, remote.size_bytes) if available else None
+
+
 def check_for_update(
     cache_dir: Path,
     reference: SeatImageReference,
@@ -169,33 +207,98 @@ def check_for_update(
         return None
     recorded = load_selection(cache_dir, reference)
     last_checked = recorded.get("last_checked")
+    current_time = now if now is not None else time.time()
     if (
         not force
         and isinstance(last_checked, int | float)
-        and (now or time.time()) - last_checked < interval_seconds
+        and current_time - last_checked < interval_seconds
     ):
-        available = recorded.get("available_digest")
-        size = recorded.get("available_size_bytes")
-        if isinstance(available, str) and isinstance(size, int):
-            return (available, size)
-        return None
+        return _recorded_offer(recorded)
+    return _refresh_offer(
+        cache_dir, reference, recorded, selected_digest=selected_digest, now=now
+    )
 
-    try:
-        remote = resolve_disk_descriptor(reference)
-    except SeatImageError:
-        return None
 
-    available = None if remote.digest == selected_digest else remote.digest
+def _select_cached_digest(
+    cache_dir: Path,
+    reference: SeatImageReference,
+    digest: str,
+    *,
+    now: float | None,
+) -> SeatImageSelection:
+    """Re-select a verified local disk for an explicit rollback."""
+
+    disk = verified_cached_disk(cache_dir, digest=digest)
+    if disk is None:
+        raise SeatImageError(
+            f"seat image {digest} is not in the local cache; "
+            "pull it before selecting it"
+        )
+    if cached_seat_image_config(cache_dir, disk_digest=digest) is None:
+        raise SeatImageError(
+            f"seat image {digest} has no cached launch config; "
+            "it cannot be selected for rollback"
+        )
+    size = disk.stat().st_size
+    save_selection(cache_dir, reference, digest=digest, size_bytes=size, last_checked=now)
+    return SeatImageSelection(
+        reference=reference, digest=digest, size_bytes=size, path=disk
+    )
+
+
+def _select_current_reference(
+    cache_dir: Path, reference: SeatImageReference, *, now: float | None
+) -> SeatImageSelection:
+    """Resolve and explicitly select the reference's current registry digest."""
+
+    staged = resolve_seat_image(reference, cache_dir=cache_dir, require_config=True)
     save_selection(
         cache_dir,
         reference,
-        digest=selected_digest,
-        size_bytes=int(recorded.get("size_bytes") or remote.size_bytes),
-        available_digest=available,
-        available_size_bytes=remote.size_bytes if available else None,
-        last_checked=now or time.time(),
+        digest=staged.digest,
+        size_bytes=staged.size_bytes,
+        last_checked=now if now is not None else time.time(),
     )
-    return (remote.digest, remote.size_bytes) if available else None
+    return SeatImageSelection(
+        reference=reference,
+        digest=staged.digest,
+        size_bytes=staged.size_bytes,
+        path=staged.path,
+        pulled=not staged.reused,
+    )
+
+
+def _select_previous_digest(
+    cache_dir: Path,
+    reference: SeatImageReference,
+    *,
+    digest: str,
+    size_bytes: int,
+    check: bool,
+    now: float | None,
+) -> SeatImageSelection:
+    """Boot the sticky selection, restoring only its exact digest if needed."""
+
+    disk = verified_cached_disk(cache_dir, digest=digest, size_bytes=size_bytes)
+    pulled = disk is None
+    if disk is None:
+        disk = fetch_seat_disk(
+            reference, digest=digest, size_bytes=size_bytes, cache_dir=cache_dir
+        )
+    newer = (
+        check_for_update(cache_dir, reference, selected_digest=digest, now=now)
+        if check
+        else None
+    )
+    return SeatImageSelection(
+        reference=reference,
+        digest=digest,
+        size_bytes=size_bytes,
+        path=disk,
+        available_digest=newer[0] if newer else None,
+        available_size_bytes=newer[1] if newer else None,
+        pulled=pulled,
+    )
 
 
 def select_seat_image(
@@ -207,12 +310,10 @@ def select_seat_image(
     check: bool = True,
     now: float | None = None,
 ) -> SeatImageSelection:
-    """Resolve which disk this seat boots, pulling only when it must.
+    """Select an image only on first use or an explicit update command.
 
-    ``adopt`` moves the selection to whatever the reference resolves to now;
-    ``adopt_digest`` moves it to a specific already-known digest, which is how
-    a rollback re-selects a previous image.  Neither happens on an ordinary
-    start.
+    ``adopt_digest`` re-selects a verified local disk for rollback. Ordinary
+    starts retain the selected digest even when a mutable registry tag moves.
     """
 
     parsed = (
@@ -223,71 +324,17 @@ def select_seat_image(
     recorded = load_selection(cache_dir, parsed)
     selected = recorded.get("digest")
     selected_size = recorded.get("size_bytes")
-
     if adopt_digest is not None:
-        disk = verified_cached_disk(cache_dir, digest=adopt_digest)
-        if disk is None:
-            raise SeatImageError(
-                f"seat image {adopt_digest} is not in the local cache; "
-                "pull it before selecting it"
-            )
-        if cached_seat_image_config(cache_dir, disk_digest=adopt_digest) is None:
-            raise SeatImageError(
-                f"seat image {adopt_digest} has no cached launch config; "
-                "it cannot be selected for rollback"
-            )
-        size = disk.stat().st_size
-        save_selection(
-            cache_dir, parsed, digest=adopt_digest, size_bytes=size, last_checked=now
-        )
-        return SeatImageSelection(
-            reference=parsed, digest=adopt_digest, size_bytes=size, path=disk
-        )
-
-    # A pinned reference, a first use, or an explicit adoption all resolve
-    # against the registry. Everything else boots what is already selected.
+        return _select_cached_digest(cache_dir, parsed, adopt_digest, now=now)
     if adopt or not isinstance(selected, str) or not isinstance(selected_size, int):
-        staged = resolve_seat_image(
-            parsed, cache_dir=cache_dir, require_config=True
-        )
-        save_selection(
-            cache_dir,
-            parsed,
-            digest=staged.digest,
-            size_bytes=staged.size_bytes,
-            last_checked=now or time.time(),
-        )
-        return SeatImageSelection(
-            reference=parsed,
-            digest=staged.digest,
-            size_bytes=staged.size_bytes,
-            path=staged.path,
-            pulled=not staged.reused,
-        )
-
-    disk = verified_cached_disk(cache_dir, digest=selected, size_bytes=selected_size)
-    pulled = False
-    if disk is None:
-        # The selection survives a cleared cache: re-fetch that exact digest
-        # rather than silently moving to whatever the tag points at now.
-        disk = fetch_seat_disk(
-            parsed, digest=selected, size_bytes=selected_size, cache_dir=cache_dir
-        )
-        pulled = True
-
-    newer = (
-        check_for_update(cache_dir, parsed, selected_digest=selected, now=now)
-        if check
-        else None
-    )
-    return SeatImageSelection(
-        reference=parsed,
+        return _select_current_reference(cache_dir, parsed, now=now)
+    return _select_previous_digest(
+        cache_dir,
+        parsed,
         digest=selected,
         size_bytes=selected_size,
-        path=disk,
-        available_digest=newer[0] if newer else None,
-        available_size_bytes=newer[1] if newer else None,
-        pulled=pulled,
+        check=check,
+        now=now,
     )
 
 

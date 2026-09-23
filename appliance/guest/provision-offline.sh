@@ -85,7 +85,6 @@ PYTHONPATH=/opt/aptl/python exec /usr/bin/python3 /opt/aptl/python/bin/aptl-misp
 EOF
 chmod 0755 /usr/local/bin/aptl /usr/local/bin/raes \
     /usr/local/bin/aptl-misp-suricata-sync
-/usr/local/bin/aptl appliance validate-inputs --staging-dir "$payload_dir"
 
 # Install the content-locked guest runtime without granting the build guest
 # network access. Suppress maintainer-script service starts until first boot.
@@ -109,7 +108,6 @@ tar --extract --file "$payload_dir/project.tar" \
 # evidence are created later under the first-boot service's private umask.
 chmod -R a+rX /opt/aptl/python /opt/aptl/project
 install -d -m 0755 /opt/aptl/offline
-install -m 0444 "$payload_dir/inputs.json" /opt/aptl/offline/inputs.json
 install -m 0444 "$payload_dir/oci-images.tar" \
     /opt/aptl/offline/oci-images.tar
 

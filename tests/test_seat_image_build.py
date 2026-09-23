@@ -15,7 +15,7 @@ WORKFLOW = ROOT / ".github/workflows/release-please.yml"
 KEY_SCRIPT = ROOT / "scripts/appliance/seat-image-key.sh"
 BAKE = ROOT / "scripts/appliance/build-seat-image.sh"
 PUBLISH = ROOT / "scripts/appliance/publish-seat-image.sh"
-PROVISION = ROOT / "appliance/guest/provision-seat.sh"
+PROVISION = ROOT / "appliance/guest/provision-offline.sh"
 
 
 def _script(name: str):
@@ -139,20 +139,32 @@ def test_generated_config_validates_against_the_launcher_contract() -> None:
     assert config.participant.port == 3000
 
 
-def test_bake_preloads_images_and_leaves_no_payload_behind() -> None:
-    provision = PROVISION.read_text()
+def test_bake_uses_the_proven_offline_guest_provisioning() -> None:
     bake = BAKE.read_text()
-    # The whole point of baking: the guest holds the images already. The store
-    # is built on the host, because a build appliance has no cgroups to run a
-    # daemon, and restored whole in the guest.
-    assert "guest-docker.tar" in bake
-    assert "guest-docker.tar" in provision
-    assert "/var/lib/docker" in provision
-    assert "--no-index" in provision
-    assert 'rm -rf "$stage"' in provision
-    # A guest that silently restored nothing would look fine until first boot.
-    assert "no restored Docker image store" in provision
-    assert "guest image store holds only" in bake
+    provision = PROVISION.read_text()
+    first_boot = (ROOT / "appliance/guest/aptl-appliance-first-boot").read_text()
+    stage_cleanup = 'rm -rf "$stage"'
+
+    # This is the provisioning that built the seats run in the field. Docker
+    # arrives as digest-locked .deb files staged on the host, because the guest
+    # reaches no package repository; maintainer-script service starts are
+    # suppressed during the offline install and enabled for first boot.
+    assert "provision-offline.sh" in bake
+    assert "acquire-guest-system-packages.sh" in bake
+    assert "system-packages.sha256" in provision
+    assert "policy-rc.d" in provision
+    assert "systemctl enable docker.service" in provision
+
+    # The image archive ships on disk and first boot loads it once per
+    # overlay, so a participant's seat pulls nothing. Loading at bake time is
+    # not an option: a build appliance has no cgroups to run a daemon.
+    assert "oci-images.tar" in bake
+    assert "/opt/aptl/offline/oci-images.tar" in provision
+    assert "docker load --input /opt/aptl/offline/oci-images.tar" in first_boot
+    assert "images_loaded" in first_boot
+
+    # Nothing staged may remain in the published image.
+    assert stage_cleanup in provision
 
 
 def test_bake_pins_its_base_image_by_digest() -> None:

@@ -1,0 +1,14 @@
+[Unit]
+Description=Disposable seat Docker and lab qualification
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/seat-qualification-smoke.sh
+Environment=HOME=/var/lib/aptl
+UMask=0077
+TimeoutStartSec=1900
+
+[Install]
+WantedBy=multi-user.target

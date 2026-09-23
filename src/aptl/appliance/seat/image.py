@@ -15,7 +15,9 @@ staged file is rejected unless its bytes hash to that digest.
 from __future__ import annotations
 
 import json
+import os
 import re
+import secrets
 import stat
 import urllib.parse
 from dataclasses import dataclass
@@ -439,8 +441,88 @@ def fetch_seat_image_config(descriptor: SeatDiskDescriptor) -> SeatImageConfig:
         raise SeatImageError(str(exc)) from exc
 
 
+def cached_seat_image_config(
+    cache_dir: Path, *, disk_digest: str
+) -> tuple[SeatImageConfig, str] | None:
+    """Read the config previously bound to this selected disk, without a registry call."""
+
+    entry = _cache_entry(cache_dir, disk_digest).parent
+    try:
+        binding = json.loads((entry / "seat-config-binding.json").read_bytes())
+        payload = (entry / "seat-config.json").read_bytes()
+        config_digest = binding["config_digest"]
+        if (
+            binding["disk_digest"] != disk_digest
+            or not isinstance(config_digest, str)
+            or not _DIGEST.fullmatch(config_digest)
+            or _sha256_of(payload) != config_digest
+        ):
+            raise SeatImageError("cached seat image config does not match its disk")
+        return parse_seat_image_config(payload), config_digest
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise SeatImageError("cached seat image config is invalid") from exc
+
+
+def cache_seat_image_config(
+    descriptor: SeatDiskDescriptor, cache_dir: Path
+) -> tuple[SeatImageConfig, str]:
+    """Fetch a config and keep its exact bytes bound to the selected disk."""
+
+    if descriptor.config_digest is None:
+        raise SeatImageError("seat image has no launch config")
+    reference = descriptor.reference
+    quoted = urllib.parse.quote(descriptor.config_digest, safe=":")
+    url = f"https://{reference.registry}/v2/{reference.repository}/blobs/{quoted}"
+    try:
+        payload = fetch_https_metadata(
+            url,
+            max_bytes=descriptor.config_size_bytes or _MAX_METADATA_BYTES,
+            headers=_registry_headers(descriptor.token, "*/*"),
+        )
+    except ApplianceDownloadError as exc:
+        raise SeatImageError(f"seat image config is unavailable: {reference}") from exc
+    if _sha256_of(payload) != descriptor.config_digest:
+        raise SeatImageError("seat image config does not match its declared digest")
+    try:
+        config = parse_seat_image_config(payload)
+    except SeatImageConfigError as exc:
+        raise SeatImageError(str(exc)) from exc
+    existing = cached_seat_image_config(cache_dir, disk_digest=descriptor.digest)
+    if existing is not None and existing[1] != descriptor.config_digest:
+        raise SeatImageError("one seat disk cannot be rebound to a different config")
+    entry = _cache_entry(cache_dir, descriptor.digest).parent
+    entry.mkdir(parents=True, exist_ok=True, mode=0o700)
+    binding = json.dumps(
+        {
+            "schema_version": "aptl.seat-config-binding/v1",
+            "disk_digest": descriptor.digest,
+            "manifest_digest": descriptor.manifest_digest,
+            "config_digest": descriptor.config_digest,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    for name, contents in (
+        ("seat-config.json", payload),
+        ("seat-config-binding.json", binding),
+    ):
+        target = entry / name
+        temporary = entry / f".{name}.{secrets.token_hex(8)}"
+        try:
+            with temporary.open("xb") as handle:
+                handle.write(contents)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
+    return config, descriptor.config_digest
+
+
 def resolve_seat_image(
-    reference: str | SeatImageReference, *, cache_dir: Path
+    reference: str | SeatImageReference, *, cache_dir: Path, require_config: bool = False
 ) -> StagedSeatImage:
     """Pull, verify and cache the VM disk one seat reference names.
 
@@ -449,6 +531,10 @@ def resolve_seat_image(
     """
 
     descriptor = resolve_disk_descriptor(reference)
+    if require_config:
+        # A tag can move between requests. Bind the launch declaration to the
+        # same manifest as the disk before recording either as selected.
+        cache_seat_image_config(descriptor, cache_dir)
     reused = (
         verified_cached_disk(
             cache_dir, digest=descriptor.digest, size_bytes=descriptor.size_bytes

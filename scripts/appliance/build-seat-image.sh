@@ -12,19 +12,21 @@
 # it; `aptl seat start` pulls both from a registry and overlays the disk.
 set -euo pipefail
 
-: "${APTL_BASE_IMAGE_URL:?base image URL is required}"
-: "${APTL_BASE_IMAGE_SHA256:?base image digest is required}"
-: "${APTL_GUEST_PYTHON_VERSION:?guest Python target is required}"
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/seat-base-image.env"
 
 source_root=$PWD
 build_root=${APTL_SEAT_BUILD_ROOT:-$PWD/build/seat-image}
 disk_gib=${APTL_SEAT_DISK_GIB:-250}
 
-test ! -e "$build_root"
+test ! -e "$build_root" || {
+  echo "seat image build root already exists: $build_root" >&2
+  exit 1
+}
 install -d -m 0700 "$build_root" "$build_root/input" "$build_root/cache" \
   "$build_root/out"
 
-for tool in qemu-img virt-customize virt-sysprep docker python3; do
+for tool in qemu-img virt-customize virt-sysprep virt-sparsify docker python3 npm; do
   command -v "$tool" >/dev/null || {
     echo "seat image build requires $tool" >&2
     exit 2
@@ -43,10 +45,9 @@ test "$actual" = "$expected" || {
 }
 
 # --- container images --------------------------------------------------
-# This project's images are built from the exact source and exported, so the
-# guest holds the same bytes this commit produces. The third-party set comes
-# from the Compose definition, which is the only statement of what the lab
-# actually starts.
+# This project's images are built from the exact source. The realized scenario
+# supplies the full service and helper image closure; Compose adds services
+# that sit outside that scenario matrix.
 payload=$build_root/input/payload
 install -d -m 0700 "$payload"
 
@@ -56,21 +57,9 @@ commit=$(git rev-parse --short=12 HEAD)
 export APTL_LOCAL_IMAGE_TAG_SUFFIX="seat-${commit}-$$"
 "$source_root/scripts/appliance/build-local-images.sh"
 
-canonical_refs=()
 while read -r canonical built _id; do
   docker tag "$built" "$canonical"
-  canonical_refs+=("$canonical")
 done <"$APTL_LOCAL_IMAGE_LOCK_FILE"
-
-readarray -t third_party < <(
-  python3 "$source_root/scripts/appliance/seat-image-third-party.py"
-)
-for reference in "${third_party[@]}"; do
-  docker pull --quiet "$reference"
-done
-
-docker save --output "$payload/oci-images.tar" \
-  "${canonical_refs[@]}" "${third_party[@]}"
 
 # --- guest system packages ---------------------------------------------
 # Docker and its companions arrive as digest-locked .deb files, downloaded
@@ -84,7 +73,10 @@ target_python=$(command -v "python${APTL_GUEST_PYTHON_VERSION}" || true)
 if test -z "$target_python" && command -v uv >/dev/null 2>&1; then
   target_python=$(uv python find "$APTL_GUEST_PYTHON_VERSION")
 fi
-test -n "$target_python"
+test -n "$target_python" || {
+  echo "no python${APTL_GUEST_PYTHON_VERSION} available for the guest closure" >&2
+  exit 1
+}
 
 install -d -m 0700 "$payload/wheelhouse"
 "$target_python" -m pip download --require-hashes \
@@ -93,17 +85,53 @@ cp "$source_root/requirements/runtime.txt" "$payload/requirements.txt"
 python3 -m build --wheel --no-isolation --outdir "$payload/wheelhouse" \
   "$source_root"
 
-# The guest's project tree, with runtime identity and credentials excluded.
-python3 - "$source_root" "$payload/project.tar" <<'PYTHON'
+# Build the shipped client code from the lockfiles. A clean release checkout
+# has neither node_modules nor MCP/web build output; copying the source alone
+# would leave the guest with nonfunctional MCP entrypoints.
+for package in "$source_root/mcp/aptl-mcp-common" "$source_root"/mcp/mcp-*; do
+  (cd "$package" && npm ci --no-audit --no-fund && npm run build)
+done
+(cd "$source_root/web" && npm ci --no-audit --no-fund && npm run build)
+
+# Build a clean project tree first, then write the image-bound participant
+# profile into that tree. The checkout itself is never modified by the bake.
+python3 - "$source_root" "$build_root/input/source-project.tar" <<'PYTHON'
 import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(sys.argv[1]) / "src"))
-from aptl.utils.mcp_packaging import archive_project, flatten_common_dependencies
+from aptl.utils.mcp_packaging import archive_project
 
 root = pathlib.Path(sys.argv[1])
-flatten_common_dependencies(root)
 archive_project(root, pathlib.Path(sys.argv[2]))
+PYTHON
+install -d -m 0700 "$build_root/input/project"
+tar -xf "$build_root/input/source-project.tar" -C "$build_root/input/project"
+PYTHONPATH="$source_root/src" python3 \
+  "$source_root/scripts/appliance/assemble-seat-inputs.py" \
+  --project "$build_root/input/project" --work "$build_root/input" \
+  --local-image-lock "$APTL_LOCAL_IMAGE_LOCK_FILE" \
+  --roles-output "$build_root/input/image-roles.json" \
+  --tags-output "$build_root/input/image-tags.txt" \
+  --tag-ids-output "$build_root/input/image-tag-ids.json"
+readarray -t image_tags <"$build_root/input/image-tags.txt"
+docker save --output "$payload/oci-images.tar" "${image_tags[@]}"
+PYTHONPATH="$source_root/src" python3 \
+  "$source_root/scripts/appliance/assemble-seat-inputs.py" \
+  --project "$build_root/input/project" --work "$build_root/input" \
+  --local-image-lock "$APTL_LOCAL_IMAGE_LOCK_FILE" \
+  --roles-output "$build_root/input/image-roles.json" \
+  --tags-output "$build_root/input/image-tags.txt" \
+  --tag-ids-output "$build_root/input/image-tag-ids.json" \
+  --verify-archive "$payload/oci-images.tar"
+python3 - "$source_root" "$build_root/input/project" "$payload/project.tar" <<'PYTHON'
+import pathlib
+import sys
+
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]) / "src"))
+from aptl.utils.mcp_packaging import archive_project
+
+archive_project(pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]))
 PYTHON
 
 printf 'APTL_SEAT_COMMIT=%s\n' "$commit" >"$payload/appliance-release.env"
@@ -111,8 +139,12 @@ cp "$source_root/appliance/guest/aptl-appliance-first-boot" "$payload/"
 cp "$source_root/appliance/guest/aptl-appliance-first-boot.service" "$payload/"
 cp "$source_root/appliance/guest/aptl-launch.mount" "$payload/"
 
-tar --create --file "$build_root/input/offline-payload.tar" \
-  --directory "$payload" .
+(
+  cd "$payload"
+  find . -mindepth 1 -printf '%P\0' |
+    tar --null --no-recursion --create \
+      --file "$build_root/input/offline-payload.tar" --files-from -
+)
 
 # --- bake --------------------------------------------------------------
 disk=$build_root/out/seat-disk.qcow2
@@ -126,8 +158,23 @@ virt-customize --add "$disk" \
   --run-command 'chmod 0500 /opt/aptl-stage/provision-offline.sh' \
   --run-command '/opt/aptl-stage/provision-offline.sh'
 
-virt-sysprep --add "$disk" \
-  --operations defaults,-ssh-userdir,-ssh-hostkeys
+virt-sysprep --add "$disk" --operations defaults
+# Provisioning temporarily copied and extracted the offline payload inside the
+# guest. Discard those now-free ext4 blocks before qcow2 compression, otherwise
+# the registry layer still carries the deleted multi-gigabyte staging data.
+virt-sparsify --in-place "$disk"
+
+# Inspect the actual finalized guest. This catches missing Docker, Python
+# entrypoints, an unexpanded root filesystem, and leaked build state before
+# anything can be published.
+virt-customize --add "$disk" \
+  --copy-in "$source_root/appliance/guest/scan-golden.sh:/tmp" \
+  --run-command 'chmod 0500 /tmp/scan-golden.sh && /tmp/scan-golden.sh && rm /tmp/scan-golden.sh && truncate -s 0 /etc/machine-id'
+
+test "$(virt-cat -a "$disk" /etc/machine-id | wc -c)" -eq 0 || {
+  echo 'final seat disk still contains a machine identity' >&2
+  exit 1
+}
 
 qemu-img convert -O qcow2 -c "$disk" "$disk.compact"
 mv "$disk.compact" "$disk"

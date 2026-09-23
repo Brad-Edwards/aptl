@@ -58,9 +58,21 @@ def main() -> int:
     parser.add_argument("--description", default="APTL TechVault seat")
     arguments = parser.parse_args()
 
+    # The configured build size may differ from the release default. The
+    # launcher's capacity gate must reserve the virtual size of this disk,
+    # not a constant that can understate what the guest is allowed to write.
+    disk_info = json.loads(
+        subprocess.check_output(
+            ["qemu-img", "info", "--output=json", str(arguments.disk)], text=True
+        )
+    )
+    virtual_size = disk_info.get("virtual-size")
+    if not isinstance(virtual_size, int) or virtual_size <= 0:
+        raise SystemExit("seat disk has no usable virtual size")
+
     config = {
         "schema_version": "aptl.seat-image/v1",
-        "resources": RESOURCES,
+        "resources": {**RESOURCES, "disk_bytes": virtual_size},
         "boundary": full_techvault_boundary_policy().model_dump(mode="json"),
         "binding": {
             "boundary_helper_image": image_digest("aptl-network-boundary-helper:5"),

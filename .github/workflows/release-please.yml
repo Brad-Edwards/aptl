@@ -106,7 +106,7 @@ jobs:
     name: Build exact-source appliance images
     needs: [release-please]
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, aptl-seat-image]
     permissions:
       contents: read
       packages: write
@@ -132,11 +132,10 @@ jobs:
     name: Bake and publish the seat VM image
     needs: [release-please, publish-appliance-images]
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
-    # Standard hosted runner. The bake writes a sparse disk and loads the
-    # whole TechVault image set into it, which does not fit on the small root
-    # volume, so the build root goes on the larger scratch mount and the
-    # preinstalled toolchains are removed first.
-    runs-on: ubuntu-latest
+    # A dedicated runner needs enough disk for Docker images, an archive,
+    # the offline payload, and the VM disk at the same time. Standard hosted
+    # Ubuntu runners have only 14 GB and cannot perform this bake.
+    runs-on: [self-hosted, linux, x64, aptl-seat-image]
     timeout-minutes: 360
     permissions:
       contents: read
@@ -148,55 +147,28 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.12"
-      - name: Resolve the seat image content key
-        id: key
-        env:
-          APTL_BASE_IMAGE_SHA256: ${{ vars.APTL_BASE_IMAGE_SHA256 }}
-          APTL_GUEST_PYTHON_VERSION: "3.14"
+          python-version: "3.14"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: "22"
+      - name: Check bake workspace capacity
         run: |
           set -euo pipefail
-          key=$(scripts/appliance/seat-image-key.sh)
-          printf 'key=%s\n' "$key" >>"$GITHUB_OUTPUT"
-      - name: Skip the bake when this exact image is already published
-        id: existing
-        env:
-          GH_TOKEN: ${{ github.token }}
-          OWNER: ${{ github.repository_owner }}
-          KEY: ${{ steps.key.outputs.key }}
-        run: |
-          set -euo pipefail
-          repository="${OWNER,,}/aptl-seat"
-          token=$(curl --silent --location --max-time 60 \
-            "https://ghcr.io/token?service=ghcr.io&scope=repository:${repository}:pull" \
-            | jq -r '.token // empty')
-          status=000
-          if test -n "$token"; then
-            status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
-              --max-time 60 --header "Authorization: Bearer ${token}" \
-              --header 'Accept: application/vnd.oci.image.manifest.v1+json' \
-              "https://ghcr.io/v2/${repository}/manifests/key-${KEY}")
+          available=$(df -PB1 "$RUNNER_TEMP" | awk 'NR == 2 { print $4 }')
+          if test "$available" -lt $((120 * 1024 * 1024 * 1024)); then
+            echo 'seat image bake requires at least 120 GiB free on the runner' >&2
+            exit 1
           fi
-          printf 'published=%s\n' "$([ "$status" = 200 ] && echo true || echo false)" \
-            >>"$GITHUB_OUTPUT"
-      - name: Reclaim runner disk for the bake
-        if: ${{ steps.existing.outputs.published != 'true' }}
-        run: |
-          set -euo pipefail
-          # The preinstalled Android, .NET, Haskell and CodeQL toolchains are
-          # tens of gigabytes this job never uses.
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
-            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
-          sudo docker image prune --all --force
-          df -h / /mnt
+          memory=$(awk '/MemTotal:/ { printf "%.0f", $2 * 1024 }' /proc/meminfo)
+          if test "$memory" -lt $((48 * 1024 * 1024 * 1024)); then
+            echo 'seat image qualification requires at least 48 GiB RAM' >&2
+            exit 1
+          fi
       - name: Install the bake toolchain
-        if: ${{ steps.existing.outputs.published != 'true' }}
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes libguestfs-tools qemu-utils
-          # libguestfs needs a readable kernel; the hosted image ships it 0600.
-          sudo chmod 0644 /boot/vmlinuz-* || true
+          sudo apt-get install --yes curl jq libguestfs-tools qemu-utils
       - uses: oras-project/setup-oras@8d34698a59f5ffe24821f0600ecd270f15f0289b # v1.2.3
         with:
           version: "1.2.0"
@@ -207,28 +179,30 @@ jobs:
           set -euo pipefail
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
       - name: Bake the seat image
-        if: ${{ steps.existing.outputs.published != 'true' }}
         env:
           APTL_BASE_IMAGE_URL: ${{ vars.APTL_BASE_IMAGE_URL }}
           APTL_BASE_IMAGE_SHA256: ${{ vars.APTL_BASE_IMAGE_SHA256 }}
           APTL_GUEST_PYTHON_VERSION: "3.14"
           LIBGUESTFS_BACKEND: direct
-          # /mnt is the runner's large scratch volume; / is too small to hold
-          # the image archive and the baked disk at the same time.
-          APTL_SEAT_BUILD_ROOT: /mnt/seat-image
+          APTL_SEAT_BUILD_ROOT: ${{ runner.temp }}/seat-image-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
           pip install --require-hashes -r requirements/ci.txt
           pip install --require-hashes -r requirements/runtime.txt
           pip install -e . --no-deps --no-build-isolation
           scripts/appliance/build-seat-image.sh
+      - name: Boot and qualify the baked seat
+        env:
+          LIBGUESTFS_BACKEND: direct
+          APTL_SEAT_BUILD_ROOT: ${{ runner.temp }}/seat-image-${{ github.run_id }}-${{ github.run_attempt }}
+        run: scripts/appliance/qualify-seat-image.sh "$APTL_SEAT_BUILD_ROOT/out/seat-disk.qcow2"
       - name: Publish the seat image
         env:
+          APTL_SEAT_BUILD_ROOT: ${{ runner.temp }}/seat-image-${{ github.run_id }}-${{ github.run_attempt }}
           RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
-          APTL_SEAT_IMAGE_KEY: ${{ steps.key.outputs.key }}
           GHCR_TOKEN: ${{ github.token }}
-        run: scripts/appliance/publish-seat-image.sh /mnt/seat-image/out
+        run: scripts/appliance/publish-seat-image.sh "$APTL_SEAT_BUILD_ROOT/out"
 
   backmerge:
     name: Back-merge release into dev

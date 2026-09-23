@@ -1478,8 +1478,6 @@ def _configure_verified_appliance_launch(
         )
     if (
         not ctx.offline_staged
-        or ctx.appliance_release_public_key is None
-        or ctx.appliance_qualification_public_key is None
         or ctx.backend is None
     ):
         result = LabResult(
@@ -4098,8 +4096,6 @@ def _publish_appliance_guest_readiness(
             if (
                 not all(access_values)
                 or ctx.appliance_launch_descriptor is None
-                or ctx.appliance_release_public_key is None
-                or ctx.appliance_qualification_public_key is None
                 or ctx.run_id is None
             ):
                 raise ValueError("appliance access channel is incomplete")
@@ -4108,14 +4104,11 @@ def _publish_appliance_guest_readiness(
             serve_appliance_access(
                 request_path=cast(Path, ctx.appliance_access_request),
                 descriptor_path=ctx.appliance_launch_descriptor,
-                release_public_key=ctx.appliance_release_public_key,
-                qualification_public_key=ctx.appliance_qualification_public_key,
                 device_path=cast(Path, ctx.appliance_access_device),
                 output_dir=cast(Path, ctx.appliance_access_output_dir),
                 run_id=ctx.run_id,
                 project_dir=ctx.project_dir,
                 observe_boundary=lambda: observe(deployment),
-                candidate_trust=ctx.appliance_candidate_trust,
             )
     except Exception:
         log.exception("Appliance guest readiness publication failed")

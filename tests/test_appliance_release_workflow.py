@@ -9,18 +9,24 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/release-please.yml"
+RETRY_WORKFLOW = ROOT / ".github/workflows/publish-seat-image.yml"
 
 
 def _jobs() -> dict[str, dict]:
     return yaml.safe_load(WORKFLOW.read_text())["jobs"]
 
 
-def test_release_needs_no_self_hosted_runner() -> None:
-    # Baking, qualifying and sealing a golden disk were the only reasons this
-    # workflow needed dedicated machines. A seat now boots a published image,
-    # so a release must complete on ordinary hosted runners.
-    for name, job in _jobs().items():
-        assert "self-hosted" not in str(job.get("runs-on")), name
+def test_large_image_jobs_use_a_dedicated_runner() -> None:
+    # Docker images, the offline payload, and the VM disk do not fit on a
+    # standard hosted Ubuntu runner's 14 GB volume.
+    jobs = _jobs()
+    for name in ("publish-appliance-images", "publish-seat-image"):
+        assert jobs[name]["runs-on"] == [
+            "self-hosted", "linux", "x64", "aptl-seat-image"
+        ]
+    for name, job in jobs.items():
+        if name not in {"publish-appliance-images", "publish-seat-image"}:
+            assert "self-hosted" not in str(job.get("runs-on")), name
 
 
 def test_release_publishes_images_and_back_merges_behind_them() -> None:
@@ -48,3 +54,14 @@ def test_every_project_owned_image_is_still_published() -> None:
     published = set(re.findall(r"^build_image ([a-z0-9-]+) ", publisher, re.MULTILINE))
     assert len(published) == 13
     assert "docker build --provenance=false" in publisher
+
+
+def test_existing_release_can_retry_after_package_visibility_changes() -> None:
+    document = yaml.safe_load(RETRY_WORKFLOW.read_text())
+    job = document["jobs"]["publish-seat-image"]
+    assert job["runs-on"] == ["self-hosted", "linux", "x64", "aptl-seat-image"]
+    steps = {step.get("name"): step for step in job["steps"] if step.get("name")}
+    assert "/releases/tags/${RELEASE_TAG}" in steps["Verify the existing release"]["run"]
+    assert "build-seat-image.sh" in steps["Bake the seat image"]["run"]
+    assert "qualify-seat-image.sh" in steps["Boot and qualify the baked seat"]["run"]
+    assert "publish-seat-image.sh" in steps["Publish and verify anonymous pull"]["run"]

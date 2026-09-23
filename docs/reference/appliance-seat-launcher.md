@@ -222,37 +222,57 @@ When reconciliation reports `host-reboot-detected` or `vm-not-running`, run
 
 ## Building the image
 
-The published image is baked by the release workflow on an ordinary hosted
-runner. `scripts/appliance/build-seat-image.sh` fetches the pinned Ubuntu base
+The published image is baked by the release workflow on a dedicated
+`aptl-seat-image` runner with KVM access, at least 48 GiB RAM, and at least
+120 GiB free. GitHub's standard
+Ubuntu runner has 14 GB of storage and cannot hold the Docker images,
+offline payload, and VM disk together. `scripts/appliance/build-seat-image.sh`
+fetches the pinned Ubuntu base
 by digest, builds this project's container images from the exact source,
-exports them alongside the pinned third-party TechVault images derived from
-`docker-compose.yml`, and installs the whole set into the guest with
-`appliance/guest/provision-seat.sh`. The result holds Docker, the APTL runtime
+resolves the full TechVault service and helper image inventory from the RAES
+scenario, and includes additional Compose services. It writes the full
+participant profile against the saved image IDs and built MCP artifacts, then
+installs the whole set into the guest with
+`appliance/guest/provision-offline.sh`. The result holds Docker, the APTL runtime
 and every container image the lab starts, so a participant's first boot
-resolves nothing and pulls nothing.
+resolves nothing and pulls nothing. Before publication,
+`scripts/appliance/qualify-seat-image.sh` boots a disposable overlay from the
+actual baked disk and requires a working Docker daemon, an offline container
+run, the full lab start, and semantic MCP checks.
 
 `scripts/appliance/publish-seat-image.sh` pushes the disk and its config blob
-to `ghcr.io/<owner>/aptl-seat` as an OCI artifact, tags it with the content
-key, and moves the release tag and `latest` onto it. Publication is proven by
+to `ghcr.io/<owner>/aptl-seat` as an OCI artifact, tags it with a key computed
+from both blobs, and moves the release tag and `latest` onto it. Publication is proven by
 pulling the result without credentials.
 
-A release only bakes when the image would differ.
-`scripts/appliance/seat-image-key.sh` digests the guest assets, container
-definitions, locked Python closure, participant profile and pinned base; if an
-image already exists under that key the workflow skips the bake and just moves
-the tags. Editing a Dockerfile changes the key. Editing documentation does
-not.
+GitHub [creates a new container package as private](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#pushing-container-images),
+even when a workflow links it to a public repository. On the first
+`aptl-seat` publication, the anonymous-pull check therefore fails after the
+package has been created. A package owner must set `aptl-seat` visibility to
+**Public** in GitHub's package settings, then run **Publish seat image for an
+existing release** with that release tag and a `source_ref` containing the
+corrected bake at the same package version. The manual workflow verifies that
+version, rebakes the selected source, and verifies the anonymous pull. It also
+provides a retry path for a failed image publication without creating a
+different release. GitHub warns that a
+public package cannot subsequently be made private.
+
+A release bakes the image before deciding its content key. Several upstream
+Compose images use mutable tags, so source files alone cannot establish
+whether the guest bytes would be identical. A release tag cannot be moved to
+different image bytes after publication.
 
 To bake locally:
 
 ```bash
-export APTL_BASE_IMAGE_URL=... APTL_BASE_IMAGE_SHA256=sha256:...
-export APTL_GUEST_PYTHON_VERSION=3.14
 scripts/appliance/build-seat-image.sh
 ```
 
-It needs `libguestfs-tools`, `qemu-utils`, Docker, and enough free disk for
-the image archive and the baked disk at once.
+It needs `libguestfs-tools`, `qemu-utils`, Docker, Node 22, Python 3.14,
+and enough free disk for the image archive and the baked disk at once.
+The default base is an immutable Ubuntu 26.04 release image pinned in
+`scripts/appliance/seat-base-image.env`. To use another base, set both
+`APTL_BASE_IMAGE_URL` and `APTL_BASE_IMAGE_SHA256`.
 
 ## Diagnostics
 

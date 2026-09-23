@@ -64,7 +64,7 @@ def registry(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setattr(image_selection, "resolve_disk_descriptor", fake_descriptor)
     monkeypatch.setattr(image_selection, "fetch_seat_disk", fake_fetch)
 
-    def fake_resolve(reference, *, cache_dir):
+    def fake_resolve(reference, *, cache_dir, require_config=False):
         descriptor = fake_descriptor(reference)
         path = fake_fetch(
             descriptor.reference,
@@ -82,6 +82,11 @@ def registry(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         return _Staged
 
     monkeypatch.setattr(image_selection, "resolve_seat_image", fake_resolve)
+    monkeypatch.setattr(
+        image_selection,
+        "cached_seat_image_config",
+        lambda cache_dir, *, disk_digest: (object(), _digest(b"config")),
+    )
     return state
 
 

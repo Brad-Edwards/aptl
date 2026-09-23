@@ -9,7 +9,6 @@ set -euo pipefail
 
 : "${RELEASE_TAG:?release tag is required}"
 : "${REPOSITORY_OWNER:?repository owner is required}"
-: "${APTL_SEAT_IMAGE_KEY:?seat image content key is required}"
 : "${GHCR_TOKEN:?registry token is required}"
 
 out=${1:?baked image directory is required}
@@ -17,6 +16,15 @@ disk=$out/seat-disk.qcow2
 config=$out/seat-image-config.json
 test -f "$disk"
 test -f "$config"
+size=$(stat -c %s "$disk")
+if test "$size" -ge 10000000000; then
+  echo 'seat disk exceeds the GHCR 10 GB layer limit' >&2
+  exit 1
+fi
+
+# A source-only key cannot identify this artifact while Compose contains
+# mutable third-party tags. The two published blobs determine its key.
+key=$(sha256sum "$disk" "$config" | awk '{print $1}' | sha256sum | cut -d' ' -f1)
 
 owner=${REPOSITORY_OWNER,,}
 repository="${owner}/aptl-seat"
@@ -32,12 +40,13 @@ command -v oras >/dev/null || {
 
 printf '%s' "$GHCR_TOKEN" | oras login ghcr.io --username "${GITHUB_ACTOR}" \
   --password-stdin
+trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
 
 # The content key is the immutable tag. :latest is a moving pointer at it, and
 # a seat that has already selected a digest is unaffected by moving it.
-key_tag="key-${APTL_SEAT_IMAGE_KEY}"
+key_tag="key-${key}"
 
-if oras manifest fetch "${namespace}:${key_tag}" >/dev/null 2>&1; then
+if oras resolve "${namespace}:${key_tag}" >/dev/null 2>&1; then
   echo "seat image ${key_tag} is already published; retagging latest" >&2
 else
   # Annotations are metadata only; the disk layer and config blob are what the
@@ -50,9 +59,16 @@ else
     "${disk}:${DISK_MEDIA_TYPE}"
 fi
 
+key_digest=$(oras resolve "${namespace}:${key_tag}")
+release_digest=$(oras resolve "${namespace}:${RELEASE_TAG}" 2>/dev/null || true)
+if test -n "$release_digest" && test "$release_digest" != "$key_digest"; then
+  echo "release tag ${RELEASE_TAG} already identifies another seat image" >&2
+  exit 1
+fi
 oras tag "${namespace}:${key_tag}" "$RELEASE_TAG" latest
 
 oras logout ghcr.io
+trap - EXIT
 unset GHCR_TOKEN
 
 # Prove the published tag is anonymously pullable, the same property the
@@ -67,10 +83,19 @@ test -n "$token" || {
   echo "seat image has no anonymous pull token: ${namespace}" >&2
   exit 1
 }
-status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
-  --max-time 60 --header "Authorization: Bearer ${token}" \
-  --header "Accept: ${accept}" \
-  "https://ghcr.io/v2/${repository}/manifests/latest")
+status=000
+for attempt in $(seq 1 20); do
+  status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+    --max-time 60 --header "Authorization: Bearer ${token}" \
+    --header "Accept: ${accept}" \
+    "https://ghcr.io/v2/${repository}/manifests/latest")
+  if test "$status" = 200; then
+    break
+  fi
+  if test "$attempt" -lt 20; then
+    sleep 15
+  fi
+done
 test "$status" = 200 || {
   echo "seat image is not anonymously pullable (HTTP ${status})" >&2
   exit 1

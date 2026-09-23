@@ -30,6 +30,8 @@ from aptl.appliance.seat.exposure import require_host_exposure
 from aptl.appliance.seat.image import (
     SeatImageError,
     fetch_seat_image_config,
+    cached_seat_image_config,
+    cache_seat_image_config,
     resolve_disk_descriptor,
 )
 from aptl.appliance.seat.image_config import SeatImageConfig
@@ -229,23 +231,33 @@ def _load_seat_image(
     """Resolve the seat image and the declaration a launch is bound to."""
 
     try:
-        descriptor = resolve_disk_descriptor(paths.image_reference)
-        config = fetch_seat_image_config(descriptor)
         selection = select_seat_image(
-            descriptor.reference,
+            paths.image_reference,
             cache_dir=paths.image_cache_dir,
             adopt=adopt,
             check=check,
         )
+        cached = cached_seat_image_config(
+            paths.image_cache_dir, disk_digest=selection.digest
+        )
+        if cached is None:
+            descriptor = resolve_disk_descriptor(paths.image_reference)
+            if descriptor.digest != selection.digest:
+                raise SeatImageError(
+                    "selected disk config is unavailable after the tag moved"
+                )
+            config, config_digest = cache_seat_image_config(
+                descriptor, paths.image_cache_dir
+            )
+        else:
+            config, config_digest = cached
     except SeatImageError as exc:
         raise SeatLauncherError("image-unavailable", str(exc)) from exc
-    if descriptor.config_digest is None:  # pragma: no cover - fetch would raise
-        raise SeatLauncherError("image-unavailable", "seat image declares no config")
     return ResolvedSeatImage(
         selection=selection,
         config=config,
         policy_digest=_canonical_policy_digest(config.boundary),
-        config_digest=descriptor.config_digest,
+        config_digest=config_digest,
     )
 
 
@@ -271,12 +283,27 @@ def _image_binding(
     )
 
 
-def image_requires_host_access(image_reference: str) -> bool:
+def image_requires_host_access(
+    image_reference: str, *, cache_dir: Path | None = None
+) -> bool:
     """Read the image declaration before the full host staging admission."""
 
     try:
-        descriptor = resolve_disk_descriptor(image_reference)
-        config = fetch_seat_image_config(descriptor)
+        if cache_dir is None:
+            descriptor = resolve_disk_descriptor(image_reference)
+            config = fetch_seat_image_config(descriptor)
+        else:
+            selection = select_seat_image(image_reference, cache_dir=cache_dir)
+            cached = cached_seat_image_config(cache_dir, disk_digest=selection.digest)
+            if cached is None:
+                descriptor = resolve_disk_descriptor(image_reference)
+                if descriptor.digest != selection.digest:
+                    raise SeatImageError(
+                        "selected disk config is unavailable after the tag moved"
+                    )
+                config, _digest = cache_seat_image_config(descriptor, cache_dir)
+            else:
+                config, _digest = cached
     except SeatImageError as exc:
         raise SeatLauncherError("image-unavailable", str(exc)) from exc
     return config.boundary.host_mcp_contract == "aptl.restricted-ssh-mcp/v1"

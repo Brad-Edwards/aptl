@@ -20,6 +20,7 @@ from pathlib import Path
 from aptl.appliance.seat.image import (
     SeatImageError,
     SeatImageReference,
+    cached_seat_image_config,
     fetch_seat_disk,
     parse_seat_image_reference,
     resolve_disk_descriptor,
@@ -202,6 +203,11 @@ def select_seat_image(
                 f"seat image {adopt_digest} is not in the local cache; "
                 "pull it before selecting it"
             )
+        if cached_seat_image_config(cache_dir, disk_digest=adopt_digest) is None:
+            raise SeatImageError(
+                f"seat image {adopt_digest} has no cached launch config; "
+                "it cannot be selected for rollback"
+            )
         size = disk.stat().st_size
         save_selection(
             cache_dir, parsed, digest=adopt_digest, size_bytes=size, last_checked=now
@@ -213,7 +219,9 @@ def select_seat_image(
     # A pinned reference, a first use, or an explicit adoption all resolve
     # against the registry. Everything else boots what is already selected.
     if adopt or not isinstance(selected, str) or not isinstance(selected_size, int):
-        staged = resolve_seat_image(parsed, cache_dir=cache_dir)
+        staged = resolve_seat_image(
+            parsed, cache_dir=cache_dir, require_config=True
+        )
         save_selection(
             cache_dir,
             parsed,

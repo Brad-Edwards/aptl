@@ -1,13 +1,16 @@
 #!/bin/sh
-# Idempotent guest start: identity is create-once per overlay; lab start reuses it.
+# Start the already-provisioned seat inside its disposable overlay.
 set -eu
 umask 077
 
+# shellcheck disable=SC1091
 . /etc/aptl/appliance-release.env
-: "${APTL_APPLIANCE_SCENARIO:?missing staged appliance scenario identity}"
-test "$APTL_APPLIANCE_SCENARIO" = techvault
+: "${APTL_SEAT_COMMIT:?missing baked seat identity}"
+test -r /run/aptl-launch/appliance-launch.json
+test -r /run/aptl-launch/boundary-policy.json
+test -r /opt/aptl/offline/oci-images.tar
 
-/usr/local/bin/aptl appliance bootstrap-overlay --state-dir /var/lib/aptl/overlay
+install -d -m 0700 /var/lib/aptl/overlay
 images_loaded=/var/lib/aptl/overlay/images-loaded
 if test ! -f "$images_loaded"; then
     docker load --input /opt/aptl/offline/oci-images.tar
@@ -16,83 +19,28 @@ if test ! -f "$images_loaded"; then
     chmod 0600 "$marker"
     mv "$marker" "$images_loaded"
 else
-    # A seat power-off is intentionally host-controlled and does not run an
-    # in-guest Compose shutdown. Reconcile those stale resources without
-    # deleting volumes before the admitted plan creates a fresh runtime.
     /usr/local/bin/aptl kill --containers --project-dir /opt/aptl/project
 fi
-candidate_trust=false
-if python3 - /run/aptl-launch/appliance-launch.json <<'PYTHON'
-import json
-import pathlib
-import sys
 
-descriptor = pathlib.Path(sys.argv[1])
-with descriptor.open('rb') as handle:
-    document = json.load(handle)
-candidate = (descriptor.parent / document['release_dir'] / 'candidate-manifest.json').resolve()
-raise SystemExit(not candidate.is_file())
-PYTHON
-then
-    candidate_trust=true
-fi
-
-set -- /usr/local/bin/aptl appliance proxy-loopback \
-    --launch-descriptor /run/aptl-launch/appliance-launch.json \
-    --release-public-key /run/aptl-launch/release-public.pem \
-    --qualification-public-key /run/aptl-launch/qualification-public.pem \
-    --adapter-address 10.0.2.15
-if test "$candidate_trust" = true; then
-    set -- "$@" --candidate-trust
-fi
-"$@" &
+guest_python=/usr/bin/python3
+guest_path=/opt/aptl/app:/opt/aptl/python
+PYTHONPATH="$guest_path" "$guest_python" -m aptl.appliance.guest_services proxy \
+    --descriptor /run/aptl-launch/appliance-launch.json \
+    --adapter-address 10.0.2.15 &
 proxy_pid=$!
-
-set -- /usr/local/bin/aptl appliance serve-seat-surfaces \
-    --launch-descriptor /run/aptl-launch/appliance-launch.json \
-    --release-public-key /run/aptl-launch/release-public.pem \
-    --qualification-public-key /run/aptl-launch/qualification-public.pem
-if test "$candidate_trust" = true; then
-    set -- "$@" --candidate-trust
-fi
-"$@" &
-surfaces_pid=$!
 cleanup() {
     kill "$proxy_pid" 2>/dev/null || true
-    kill "$surfaces_pid" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-set -- /usr/local/bin/aptl lab start \
+/usr/local/bin/aptl lab start \
     --project-dir /opt/aptl/project \
     --offline-staged \
     --appliance-launch-descriptor /run/aptl-launch/appliance-launch.json \
-    --appliance-release-public-key /run/aptl-launch/release-public.pem \
-    --appliance-qualification-public-key \
-    /run/aptl-launch/qualification-public.pem \
-    --appliance-readiness-challenge \
-    /run/aptl-launch/readiness-challenge.json \
-    --appliance-readiness-device \
-    /dev/virtio-ports/org.aptl.readiness
-if test "$candidate_trust" = true; then
-    set -- "$@" --appliance-candidate-trust
-fi
-
-if python3 - /run/aptl-launch/appliance-launch.json <<'PYTHON'
-import json
-import sys
-
-with open(sys.argv[1], 'rb') as handle:
-    document = json.load(handle)
-raise SystemExit(document.get('host_mcp_contract') != 'aptl.restricted-ssh-mcp/v1')
-PYTHON
-then
-    set -- "$@" \
-        --appliance-access-request /run/aptl-launch/access-request.json \
-        --appliance-access-device /dev/virtio-ports/org.aptl.access \
-        --appliance-access-output-dir /var/lib/aptl/mcp-transport
-fi
-
-"$@"
+    --appliance-readiness-challenge /run/aptl-launch/readiness-challenge.json \
+    --appliance-readiness-device /dev/virtio-ports/org.aptl.readiness \
+    --appliance-access-request /run/aptl-launch/access-request.json \
+    --appliance-access-device /dev/virtio-ports/org.aptl.access \
+    --appliance-access-output-dir /var/lib/aptl/mcp-transport
 
 wait "$proxy_pid"

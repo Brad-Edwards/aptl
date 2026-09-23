@@ -12,7 +12,9 @@ credentials or generated state sitting beside it in a working project.
 
 from __future__ import annotations
 
+import os
 import shutil
+import subprocess
 import tarfile
 from pathlib import Path
 
@@ -37,6 +39,33 @@ _EXCLUDED_PARTS = frozenset(
 
 # Build residue that is either machine-specific or reproducible on demand.
 _EXCLUDED_DIRECTORY_PARTS = frozenset({".bin", "node_gyp_bins", "__pycache__"})
+_EXCLUDED_ROOT_DIRECTORIES = frozenset(
+    {".git", ".venv", ".pytest_cache", ".mypy_cache", ".ruff_cache", "build", "dist"}
+)
+_PACKAGE_DIRECTORIES = frozenset(
+    {
+        "assets",
+        "config",
+        "containers",
+        "examples",
+        "mcp",
+        "participant-profiles",
+        "plugins",
+        "scenarios",
+        "scripts",
+        "web",
+    }
+)
+_PACKAGE_FILES = frozenset(
+    {
+        ".mcp.json.example",
+        "aptl.json",
+        "docker-compose.yml",
+        "docker-compose.capture.yml",
+        "docker-compose.observability.yml",
+        "generate-indexer-certs.yml",
+    }
+)
 
 
 def flatten_common_dependencies(project: Path) -> None:
@@ -63,6 +92,7 @@ def admit_packaged_path(name: str) -> None:
     parts = Path(name).parts
     if (
         any(part in _EXCLUDED_PARTS for part in parts)
+        or any(part.startswith(".env") for part in parts)
         or name == ".mcp.json"
         or name.startswith("keys/")
     ):
@@ -72,24 +102,112 @@ def admit_packaged_path(name: str) -> None:
 def archive_project(project: Path, output: Path) -> dict[str, str]:
     """Archive a built project deterministically, returning each file's digest."""
 
+    project = project.resolve(strict=True)
+    tracked = _tracked_project_files(project)
     files: dict[str, str] = {}
     with tarfile.open(output, "w", format=tarfile.PAX_FORMAT) as archive:
-        for path in sorted(project.rglob("*")):
-            if path.is_dir() or _EXCLUDED_DIRECTORY_PARTS.intersection(path.parts):
+        for relative, path in _project_files(project):
+            name = relative.as_posix()
+            if tracked is not None and name not in tracked and not _generated_asset(relative):
                 continue
+            admit_packaged_path(name)
             resolved = path.resolve(strict=True)
             if not resolved.is_relative_to(project) or not resolved.is_file():
                 raise ValueError("build output escapes the packaged project")
-            relative = path.relative_to(project).as_posix()
-            admit_packaged_path(relative)
             digest, size = hash_file_nofollow(resolved)
             info = deterministic_tarinfo(
-                relative,
+                name,
                 is_dir=False,
                 size=size,
-                mode=0o755 if path.stat().st_mode & 0o111 else 0o644,
+                mode=0o755 if resolved.stat().st_mode & 0o111 else 0o644,
             )
             with open_nofollow(resolved) as handle:
                 archive.addfile(info, handle)
-            files[relative] = digest
+            files[name] = digest
     return files
+
+
+def _tracked_project_files(project: Path) -> set[str] | None:
+    """Use the checkout index to exclude local, untracked runtime data."""
+
+    if not (project / ".git").exists():
+        return None
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--", *_PACKAGE_DIRECTORIES, *_PACKAGE_FILES],
+        cwd=project,
+        capture_output=True,
+        check=True,
+    )
+    return {name for name in result.stdout.decode().split("\0") if name}
+
+
+def _generated_asset(relative: Path) -> bool:
+    """Admit only the build output needed from an otherwise clean checkout."""
+
+    parts = relative.parts
+    return (
+        len(parts) >= 4
+        and parts[0] == "mcp"
+        and parts[2] in {"build", "node_modules"}
+    ) or (len(parts) >= 3 and parts[:2] == ("web", "build"))
+
+
+def _project_files(project: Path):
+    """Walk package files without visiting local state or changing npm links."""
+
+    for root, directories, filenames in os.walk(project, followlinks=False):
+        directory = Path(root)
+        relative_root = directory.relative_to(project)
+        kept = []
+        for name in sorted(directories):
+            path = directory / name
+            if (
+                (relative_root == Path(".") and name not in _PACKAGE_DIRECTORIES)
+                or name.startswith(".env")
+                or name in _EXCLUDED_PARTS
+                or name in _EXCLUDED_DIRECTORY_PARTS
+                or name == ".secrets"
+                or (relative_root == Path(".") and name in _EXCLUDED_ROOT_DIRECTORIES)
+            ):
+                continue
+            if path.is_symlink():
+                if (
+                    name != "aptl-mcp-common"
+                    or relative_root.parts[:1] != ("mcp",)
+                    or relative_root.parts[-1:] != ("node_modules",)
+                    or path.resolve(strict=True) != project / "mcp/aptl-mcp-common"
+                ):
+                    raise ValueError("linked package directory escapes the project")
+                for linked_root, linked_dirs, linked_files in os.walk(
+                    path.resolve(strict=True), followlinks=False
+                ):
+                    linked_dirs[:] = sorted(
+                        item
+                        for item in linked_dirs
+                        if item not in _EXCLUDED_DIRECTORY_PARTS
+                        and item not in _EXCLUDED_PARTS
+                        and item != ".secrets"
+                        and not item.startswith(".env")
+                    )
+                    for linked_file in sorted(linked_files):
+                        if linked_file in _EXCLUDED_PARTS or linked_file.startswith(
+                            ".env"
+                        ):
+                            continue
+                        linked_path = Path(linked_root) / linked_file
+                        yield (
+                            relative_root / name / linked_path.relative_to(path.resolve(strict=True)),
+                            linked_path,
+                        )
+                continue
+            kept.append(name)
+        directories[:] = kept
+        for name in sorted(filenames):
+            if (
+                (relative_root == Path(".") and name not in _PACKAGE_FILES)
+                or name in _EXCLUDED_PARTS
+                or name.startswith(".env")
+                or name == ".secrets"
+            ):
+                continue
+            yield relative_root / name, directory / name

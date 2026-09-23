@@ -159,7 +159,7 @@ def start(
             access_project_dir,
         )
         if not any(value is not None for value in access_values) and (
-            image_requires_host_access(image)
+            image_requires_host_access(image, cache_dir=image_cache)
         ):
             access_identity_file, access_public_key = ensure_transport_identity(
                 seat_root

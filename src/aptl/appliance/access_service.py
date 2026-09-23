@@ -318,6 +318,7 @@ def serve_appliance_access(
             grant=binding.grants[0],
             host_public_key=configuration.host_public_key.read_text(encoding="utf-8"),
             runtime_evidence=runtime_evidence,
+            web_launch_token=os.environ.get("APTL_WEB_LAUNCH_TOKEN"),
         )
         publish_guest_access(device_path, bundle)
         while listener.poll() is None:

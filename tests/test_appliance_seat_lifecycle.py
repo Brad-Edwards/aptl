@@ -875,7 +875,7 @@ def test_start_marks_recoverable_failure_when_boundary_fails(tmp_path: Path) -> 
             side_effect=(None, 4242),
         ),
         patch(
-            "aptl.appliance.seat.lifecycle.collect_loopback_listeners",
+            "aptl.appliance.seat.observation.collect_loopback_listeners",
             return_value=(),
         ),
         patch(
@@ -884,7 +884,9 @@ def test_start_marks_recoverable_failure_when_boundary_fails(tmp_path: Path) -> 
         ),
     ):
         start_vm.return_value.pid = 4242
-        options = StartSeatOptions(reserve_outer_mappings=False)
+        options = StartSeatOptions(
+            reserve_outer_mappings=False, listener_timeout_seconds=0
+        )
         with pytest.raises(SeatLauncherError) as exc:
             start_seat(
                 seat_root,

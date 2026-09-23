@@ -161,6 +161,13 @@ def test_bake_uses_the_proven_offline_guest_provisioning() -> None:
     # The real Compose web services own these policy ports. A placeholder
     # listener would take the loopback sockets before Docker could publish.
     assert "guest_services surfaces" not in first_boot
+    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
+    local_images = (ROOT / "scripts/appliance/build-local-images.sh").read_text()
+    for name in ("aptl-web-api", "aptl-web-ui"):
+        assert compose["services"][name]["image"] == f"{name}:1"
+        assert f"build_image {name}:1" in local_images
+    assert "up --detach --no-build --pull never aptl-web-api aptl-web-ui" in first_boot
+    assert "APTL_WEB_LAUNCH_TOKEN" in first_boot
 
     # The image archive ships on disk and first boot loads it once per
     # overlay, so a participant's seat pulls nothing. Loading at bake time is

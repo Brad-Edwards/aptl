@@ -49,10 +49,11 @@ from aptl.appliance.seat.overlay import create_seat_overlay
 from aptl.appliance.seat.observation import (
     HostObservationBundle,
     build_host_observation,
-    collect_loopback_listeners,
     host_boundary_findings,
     map_publications_to_listeners,
     probe_forbidden_host_reachability,
+    wait_for_loopback_listeners,
+    wait_for_web_publications,
 )
 from aptl.appliance.seat.overlay_cleanup import remove_overlay_artifacts
 from aptl.appliance.seat.paths import contained_path, validate_seat_id
@@ -771,9 +772,12 @@ def start_seat(
             raise SeatLauncherError(
                 "failed-launch", "tracked VM exited before listener observation"
             )
-        observed = collect_loopback_listeners(
+        observed = wait_for_loopback_listeners(
+            record.mappings,
             probe=launch_options.listener_probe,
             owner_pid=tracked_pid,
+            process_alive=lambda: read_vm_pid(seat_root) == tracked_pid,
+            timeout_seconds=launch_options.listener_timeout_seconds,
         )
         listeners = map_publications_to_listeners(
             policy, observed, mappings=record.mappings
@@ -858,6 +862,11 @@ def start_seat(
             access_socket=access_socket,
             options=launch_options,
         )
+        if launch_options.guest_readiness_probe is None:
+            wait_for_web_publications(
+                record.mappings,
+                process_alive=lambda: read_vm_pid(seat_root) == tracked_pid,
+            )
         ready = SeatRecord(
             schema_version=SEAT_RECORD_SCHEMA,
             seat_id=seat_id,

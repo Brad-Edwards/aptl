@@ -24,6 +24,7 @@ class StartSeatOptions:
     forbidden_reachability_probe: Callable[[], bool] | None = None
     guest_readiness_probe: Callable[[], GuestBoundaryObservation] | None = None
     readiness_timeout_seconds: float = 1800
+    listener_timeout_seconds: float = 10
     reserve_outer_mappings: bool = True
     access_enrollment: SeatAccessEnrollment | None = None
     access_identity_file: Path | None = None
@@ -42,6 +43,7 @@ class StartSeatOptions:
             forbidden_reachability_probe=self.forbidden_reachability_probe,
             guest_readiness_probe=self.guest_readiness_probe,
             readiness_timeout_seconds=self.readiness_timeout_seconds,
+            listener_timeout_seconds=self.listener_timeout_seconds,
             reserve_outer_mappings=False,
             access_enrollment=self.access_enrollment,
             access_identity_file=self.access_identity_file,

@@ -916,6 +916,7 @@ services:
 
   aptl-web-api:
     profiles: ["web"]
+    image: aptl-web-api:1
     container_name: aptl-web-api
     build:
       context: .
@@ -930,6 +931,7 @@ services:
       # expands inactive-profile services too, which would make the default lab
       # start require the optional web control-plane token.
       - APTL_API_TOKEN=${APTL_API_TOKEN:-}
+      - APTL_WEB_LAUNCH_TOKEN=${APTL_WEB_LAUNCH_TOKEN:-}
       # The browser reaches the GUI on the aptl-web-ui (Caddy) origin, not this
       # API bind address. Print the one-time login URL for that origin so the
       # session header token is stored for the origin the SPA actually runs on.
@@ -947,6 +949,7 @@ services:
 
   aptl-web-ui:
     profiles: ["web"]
+    image: aptl-web-ui:1
     container_name: aptl-web-ui
     build:
       context: web

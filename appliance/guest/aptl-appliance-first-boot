@@ -22,6 +22,15 @@ else
     /usr/local/bin/aptl kill --containers --project-dir /opt/aptl/project
 fi
 
+# Each disposable overlay receives fresh control-plane credentials.  Compose
+# receives only these process-local values; the image contains no browser token.
+APTL_API_TOKEN=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
+APTL_WEB_LAUNCH_TOKEN=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+export APTL_API_TOKEN APTL_WEB_LAUNCH_TOKEN
+docker compose --project-directory /opt/aptl/project \
+    --file /opt/aptl/project/docker-compose.yml --profile web \
+    up --detach --no-build --pull never aptl-web-api aptl-web-ui
+
 guest_python=/usr/bin/python3
 guest_path=/opt/aptl/app:/opt/aptl/python
 PYTHONPATH="$guest_path" "$guest_python" -m aptl.appliance.guest_services proxy &

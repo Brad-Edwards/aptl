@@ -313,6 +313,7 @@ def open_kiosk(
     try:
         resolved_root = _resolved_seat_root(seat_root)
         record = load_seat_record(resolved_root)
+        launch_token = None
         if record is not None:
             participants = tuple(
                 mapping
@@ -331,12 +332,23 @@ def open_kiosk(
                     "invalid-mapping", "participant port differs from staged mapping"
                 )
             participant_port = participants[0].port
+            if record.lifecycle_state == "ready":
+                token_path = (
+                    resolved_root / "access" / f"generation-{record.generation}"
+                    / "web-launch-token"
+                )
+                if token_path.is_symlink() or not token_path.is_file():
+                    raise SeatLauncherError(
+                        "missing-web-login", "seat browser login is unavailable"
+                    )
+                launch_token = token_path.read_text(encoding="utf-8").strip()
     except SeatLauncherError as exc:
         _fail(exc)
     plan = open_participant_kiosk(
         participant_port=participant_port or 443,
         browser_command=browser_command,
         dry_run=dry_run,
+        launch_token=launch_token,
     )
     _emit({"kiosk": True, "argv": list(plan.argv), "url": plan.url})
 

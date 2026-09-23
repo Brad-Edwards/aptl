@@ -400,6 +400,9 @@ def test_open_kiosk_uses_persisted_participant_mapping(tmp_path: Path) -> None:
         }
     )
     persist_seat_record(tmp_path, record)
+    token_root = tmp_path / "access" / f"generation-{record.generation}"
+    token_root.mkdir(parents=True)
+    (token_root / "web-launch-token").write_text("t" * 43 + "\n")
 
     result = runner.invoke(
         app,
@@ -407,4 +410,4 @@ def test_open_kiosk_uses_persisted_participant_mapping(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0
-    assert "http://127.0.0.1:10443/" in result.stdout
+    assert "http://127.0.0.1:10443/api/auth/login?token=" in result.stdout

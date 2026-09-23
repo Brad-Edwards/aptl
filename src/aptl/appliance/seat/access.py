@@ -224,7 +224,7 @@ class GuestRuntimeEvidence(_StrictModel):
 
 
 class GuestAccessBundle(_StrictModel):
-    """Guest-to-host secret-free material returned on the VM-owned channel."""
+    """Guest-to-host generation material returned on the VM-owned channel."""
 
     schema_version: Literal["aptl.guest-access-bundle/v1"]
     nonce: str = Field(pattern=r"^[a-f0-9]{64}$")
@@ -235,6 +235,7 @@ class GuestAccessBundle(_StrictModel):
     grant: CallerGrant
     host_public_key: str = Field(min_length=32, max_length=16 * 1024)
     runtime_evidence: GuestRuntimeEvidence
+    web_launch_token: str | None = Field(default=None, min_length=32, max_length=128)
 
     @model_validator(mode="after")
     def matching_identity(self) -> "GuestAccessBundle":
@@ -397,7 +398,7 @@ def wait_for_guest_access(
 
 
 def persist_host_access_bundle(seat_root: Path, bundle: GuestAccessBundle) -> Path:
-    """Publish private generation-scoped host discovery without credentials."""
+    """Publish private generation-scoped host discovery and browser bootstrap."""
 
     access_root = seat_root / "access"
     _ensure_private_access_root(access_root)
@@ -411,6 +412,10 @@ def persist_host_access_bundle(seat_root: Path, bundle: GuestAccessBundle) -> Pa
         "runtime-evidence.json": bundle.runtime_evidence.model_dump_json() + "\n",
     }.items():
         _atomic_write(root / name, payload.encode(), mode=0o600)
+    if bundle.web_launch_token is not None:
+        _atomic_write(
+            root / "web-launch-token", (bundle.web_launch_token + "\n").encode(), mode=0o600
+        )
     return root
 
 
@@ -436,4 +441,5 @@ def invalidate_host_access(seat_root: Path, *, reason: str) -> None:
             except (OSError, ValueError):
                 access_path.unlink(missing_ok=True)
         (generation / "grant.json").unlink(missing_ok=True)
+        (generation / "web-launch-token").unlink(missing_ok=True)
         _atomic_write(generation / "invalidated", (reason + "\n").encode(), mode=0o600)

@@ -65,13 +65,20 @@ def test_public_images_and_release_assets_are_both_mandatory() -> None:
     assert "accept-public-appliance" in jobs["backmerge"]["needs"]
     image_verifier = (ROOT / "scripts/appliance/verify-public-images.sh").read_text()
     image_publisher = (ROOT / "scripts/appliance/publish-images.sh").read_text()
-    assert "visibility=public" in image_verifier
     assert "aptl-candidate" in image_verifier
     assert "docker tag" in image_verifier
     assert "docker logout ghcr.io" in image_verifier
     assert "aptl-candidate" in image_publisher
-    assert "visibility) != private" in image_publisher
     assert "refusing to replace existing GHCR tag" in image_publisher
+    # Both namespaces inherit this public repository's visibility at creation
+    # and GitHub exposes no endpoint that reads or writes it for a user-owned
+    # package, so each script proves publication with an unauthenticated pull
+    # and neither may gate on a visibility field.
+    assert "require_anonymous_pull" in image_publisher
+    assert "ghcr.io/token?service=ghcr.io" in image_publisher
+    assert "--jq .visibility" not in image_publisher
+    assert "--jq .visibility" not in image_verifier
+    assert "--method PATCH" not in image_verifier
     candidate_env = jobs["build-appliance-candidate"]["steps"][3]["env"]
     assert candidate_env["APTL_IMAGE_NAMESPACE"].endswith("/aptl-candidate")
 
@@ -85,7 +92,7 @@ def test_sealing_requires_exact_redistribution_review_and_publishes_notices() ->
     assert "THIRD-PARTY-NOTICES.md" in script
 
 
-def test_private_build_public_promotion_and_candidate_acquisition_sets_match() -> None:
+def test_staged_build_public_promotion_and_candidate_acquisition_sets_match() -> None:
     publisher = (ROOT / "scripts/appliance/publish-images.sh").read_text()
     builder = (ROOT / "scripts/appliance/build-candidate.sh").read_text()
     local_builder = (ROOT / "scripts/appliance/build-local-images.sh").read_text()
@@ -199,13 +206,18 @@ def test_two_seat_qualification_uses_a_distinct_client_identity_per_seat() -> No
     assert "ssh-keygen -q -t ed25519 -N '' -f \"$work/client-key\"" not in qualifier
 
 
-def test_image_publisher_has_github_api_authentication():
+def test_image_publisher_needs_no_github_api_credential():
     step = next(
         step
         for step in _jobs()["publish-appliance-images"]["steps"]
         if step.get("run") == "scripts/appliance/publish-images.sh"
     )
-    assert step["env"]["GH_TOKEN"] == "${{ github.token }}"
+    # Publication is proven against the registry, not the packages API, so the
+    # step carries no GitHub API token to hold. Registry credentials stay in
+    # the separate docker login step.
+    assert "GH_TOKEN" not in step["env"]
+    publisher = (ROOT / "scripts/appliance/publish-images.sh").read_text()
+    assert "gh api" not in publisher
 
 
 def test_checkout_free_release_upload_has_explicit_repository():

@@ -25,21 +25,7 @@ images=(
 )
 
 printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
-account_type=$(gh api "/users/${owner}" --jq .type)
 for image in "${images[@]}"; do
-  candidate_package=$(printf 'aptl-candidate/%s' "$image" | jq -sRr @uri)
-  package=$(printf 'aptl/%s' "$image" | jq -sRr @uri)
-  if [[ "$account_type" == Organization ]]; then
-    candidate_endpoint="/orgs/${owner}/packages/container/${candidate_package}"
-    endpoint="/orgs/${owner}/packages/container/${package}"
-  else
-    candidate_endpoint="/user/packages/container/${candidate_package}"
-    endpoint="/user/packages/container/${package}"
-  fi
-  if [[ $(gh api "$candidate_endpoint" --jq .visibility) != private ]]; then
-    echo "candidate package is not private: ${image}" >&2
-    exit 1
-  fi
   source="${candidate_namespace}/${image}:${RELEASE_TAG}"
   target="${namespace}/${image}:${RELEASE_TAG}"
   if docker manifest inspect "$target" >/dev/null 2>&1; then
@@ -61,9 +47,11 @@ for image in "${images[@]}"; do
     echo "public image digest differs from qualified candidate: ${image}" >&2
     exit 1
   fi
-  gh api --method PATCH "$endpoint" -f visibility=public >/dev/null
 done
 
+# Both namespaces inherit this public repository's visibility at creation and
+# GitHub exposes no endpoint that changes it, so publication is proven by an
+# unauthenticated pull of every promoted tag rather than by setting a flag.
 docker logout ghcr.io
 unset GH_TOKEN
 for image in "${images[@]}"; do

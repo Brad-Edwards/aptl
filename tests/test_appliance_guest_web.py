@@ -59,6 +59,8 @@ def test_guest_web_recovers_after_transient_compose_failure(
         ]
         start_guest_web(Path("/opt/aptl/project"), "aptl-w123")
     assert run.call_count == 2
+    assert "--force-recreate" not in run.call_args_list[0].args[0]
+    assert "--force-recreate" in run.call_args_list[1].args[0]
 
 
 def test_guest_web_redacts_boot_credentials_from_failure(

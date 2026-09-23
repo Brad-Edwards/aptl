@@ -25,8 +25,15 @@ def start_guest_web(project_dir: Path, project_name: str) -> None:
     failure = "unknown Compose failure"
     for attempt in range(3):
         try:
+            # A failed network attachment can leave a created container with a
+            # stale endpoint. Recreate it before retrying the same service.
+            retry_command = (
+                command[: -2] + ["--force-recreate"] + command[-2:]
+                if attempt
+                else command
+            )
             result = subprocess.run(
-                command,
+                retry_command,
                 cwd=project_dir,
                 capture_output=True,
                 text=True,

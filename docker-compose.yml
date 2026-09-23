@@ -942,8 +942,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/project:ro
     networks:
-      aptl-security:
-        ipv4_address: 172.20.0.40
+      - aptl-security
     deploy:
       resources:
         limits:
@@ -968,8 +967,7 @@ services:
     depends_on:
       - aptl-web-api
     networks:
-      aptl-security:
-        ipv4_address: 172.20.0.41
+      - aptl-security
     deploy:
       resources:
         limits:

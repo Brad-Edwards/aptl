@@ -37,6 +37,9 @@ def registry(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """A registry whose tag can be moved, recording every resolution."""
 
     state: dict[str, object] = {"digest": OLD, "size": 8, "resolutions": 0, "pulls": []}
+    # The registry fixture represents artifacts admitted by Cosign. Signature
+    # enforcement is exercised through the real resolver in test_seat_image_trust.
+    monkeypatch.setattr(image_selection, "verify_cached_image", lambda *args: None)
 
     def fake_descriptor(reference):
         state["resolutions"] = int(state["resolutions"]) + 1
@@ -307,3 +310,16 @@ def test_selection_refuses_a_linked_reference_directory(tmp_path: Path) -> None:
     with pytest.raises(SeatImageError, match="selection directory is unsafe"):
         save_selection(cache, reference, digest=OLD, size_bytes=8)
     assert not list(outside.iterdir())
+
+
+def test_selection_symlink_is_not_followed(tmp_path):
+    from aptl.appliance.seat.image_selection import _selection_path
+    reference = parse_seat_image_reference("ghcr.io/owner/seat:latest")
+    target = tmp_path / "outside.json"
+    target.write_text('{"schema_version":"aptl.seat-image-selection/v1","reference":"ghcr.io/owner/seat:latest"}')
+    cache = tmp_path / "cache"
+    path = _selection_path(cache, reference)
+    path.parent.mkdir(parents=True)
+    path.symlink_to(target)
+    with pytest.raises(SeatImageError):
+        load_selection(cache, reference)

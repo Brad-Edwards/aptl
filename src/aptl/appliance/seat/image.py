@@ -150,11 +150,10 @@ def _anonymous_token(reference: SeatImageReference) -> str | None:
     url = f"https://{reference.registry}/token?{query}"
     try:
         payload = fetch_https_metadata(url, max_bytes=_MAX_METADATA_BYTES)
-    except ApplianceDownloadError:
-        return None
-    try:
         document = json.loads(payload)
-    except ValueError:
+    except (ApplianceDownloadError, ValueError):
+        return None
+    if not isinstance(document, dict):
         return None
     token = document.get("token") or document.get("access_token")
     return token if isinstance(token, str) and token else None
@@ -194,7 +193,10 @@ def _fetch_manifest(
         raise SeatImageError("seat image manifest is not valid JSON") from exc
     if not isinstance(document, dict):
         raise SeatImageError("seat image manifest is not a JSON object")
-    return document, _sha256_of(payload)
+    digest = _sha256_of(payload)
+    if target.startswith("sha256:") and digest != target:
+        raise SeatImageError("seat image manifest does not match the requested digest")
+    return document, digest
 
 
 def _select_disk_layer(manifest: dict[str, object]) -> dict[str, object]:
@@ -294,6 +296,8 @@ def resolve_disk_descriptor(
     )
     token = _anonymous_token(parsed)
     manifest, manifest_digest = _fetch_manifest(parsed, parsed.target, token)
+    if parsed.digest is not None and manifest_digest != parsed.digest:
+        raise SeatImageError("seat image manifest does not match the pinned digest")
     if manifest.get("mediaType") in _INDEX_TYPES or "manifests" in manifest:
         manifest, manifest_digest = _resolve_index(parsed, manifest, token)
 
@@ -415,6 +419,12 @@ def resolve_seat_image(
     """
 
     descriptor = resolve_disk_descriptor(reference)
+    from aptl.appliance.seat.image_trust import verify_remote_image, publish_verified_image
+
+    receipt = verify_remote_image(
+        cache_dir, str(descriptor.reference), descriptor.manifest_digest,
+        descriptor.digest, descriptor.config_digest,
+    )
     if require_config:
         # A tag can move between requests. Bind the launch declaration to the
         # same manifest as the disk before recording either as selected.
@@ -425,14 +435,16 @@ def resolve_seat_image(
         )
         is not None
     )
+    disk_path = fetch_seat_disk(
+        descriptor.reference,
+        digest=descriptor.digest,
+        size_bytes=descriptor.size_bytes,
+        cache_dir=cache_dir,
+        token=descriptor.token,
+    )
+    publish_verified_image(cache_dir, receipt)
     return StagedSeatImage(
-        path=fetch_seat_disk(
-            descriptor.reference,
-            digest=descriptor.digest,
-            size_bytes=descriptor.size_bytes,
-            cache_dir=cache_dir,
-            token=descriptor.token,
-        ),
+        path=disk_path,
         digest=descriptor.digest,
         size_bytes=descriptor.size_bytes,
         reference=descriptor.reference,

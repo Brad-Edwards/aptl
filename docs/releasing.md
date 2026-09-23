@@ -94,3 +94,11 @@ pypi.org → Account → Publishing → add pending publisher: project `aptl-lab
 `Brad-Edwards`, repo `aptl`, workflow `release-please.yml`, environment `pypi`.
 `raes` must be on PyPI first (aptl depends on it). The distribution is named
 `aptl-labs` because `aptl` is reserved on PyPI; the import package and CLI stay `aptl`.
+
+## Seat image cuts
+
+VM images are built, qualified, signed with Cosign and published locally to GHCR.
+They are independent of Python package releases: Release Please does not build,
+qualify or publish seats, and its back-merge does not depend on a seat tag.
+Follow the [seat image procedure](reference/appliance-seat-launcher.md#building-the-image)
+and preserve actual manual VM evidence for each cut.

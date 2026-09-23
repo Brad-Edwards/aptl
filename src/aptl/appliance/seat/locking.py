@@ -7,7 +7,7 @@ import os
 import stat
 import threading
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from functools import wraps
 from pathlib import Path
 from typing import ParamSpec, TypeVar, cast
@@ -106,6 +106,24 @@ def serialized_seat_mutation(
         if not isinstance(seat_root, Path):
             raise TypeError("seat_root must be a pathlib.Path")
         with seat_mutation_lock(seat_root):
+            cache = kwargs.get("image_cache_dir")
+            with seat_mutation_lock(cache) if isinstance(cache, Path) else nullcontext():
+                return function(*args, **kwargs)
+
+    return wrapped
+
+
+def serialized_image_cache(function: Callable[P, R]) -> Callable[P, R]:
+    """Use the same reentrant lock for cache selection, acquisition and retirement."""
+
+    @wraps(function)
+    def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
+        """Invoke the cache mutation while holding its reentrant lock."""
+
+        cache = kwargs.get("cache_dir", args[0] if args else None)
+        if not isinstance(cache, Path):
+            raise TypeError("cache_dir must be a pathlib.Path")
+        with seat_mutation_lock(cache):
             return function(*args, **kwargs)
 
     return wrapped

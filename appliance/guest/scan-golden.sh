@@ -47,9 +47,15 @@ case "$(node --version)" in
     v22.*) ;;
     *) exit 1 ;;
 esac
-# The planned 250-GiB disk must include an expanded root filesystem; merely
-# enlarging the qcow2 container is not sufficient.
-test "$(df -B1 --output=size / | tail -n 1)" -ge 214748364800
+# Allow five percent for EFI/boot partitions and filesystem metadata.
+# Compare the root filesystem to the requested virtual size, not a fixed cut.
+expected_disk_gib=${APTL_SEAT_DISK_GIB:-250}
+case "$expected_disk_gib" in
+    ''|*[!0-9]*) echo 'invalid expected disk size' >&2; exit 1 ;;
+esac
+test "$expected_disk_gib" -ge 64 && test "$expected_disk_gib" -le 4096
+minimum_root_bytes=$(( expected_disk_gib * 1024 * 1024 * 1024 * 19 / 20 ))
+test "$(df -B1 --output=size / | tail -n 1)" -ge "$minimum_root_bytes"
 
 for clean_path in \
     /var/lib/cloud/instance \

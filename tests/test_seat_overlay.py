@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import struct
 import subprocess
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from aptl.appliance.seat.overlay import create_seat_overlay, require_standalone_
 
 def _image(tmp_path: Path, *, mode: int = 0o444) -> Path:
     path = tmp_path / "seat-disk.qcow2"
-    path.write_bytes(b"qcow2")
+    path.write_bytes(struct.pack(">II", 0x514649FB, 3) + bytes(96))
     path.chmod(mode)
     return path
 
@@ -45,9 +46,11 @@ def test_creates_an_overlay_backed_by_the_cached_image(tmp_path, monkeypatch) ->
 
     assert created == overlay
     create = next(argv for argv in calls if argv[1] == "create")
-    # The cached image is the backing file; the overlay never rewrites it.
+    # A seat retains the immutable inode independently of cache retirement.
     assert "-b" in create
-    assert create[create.index("-b") + 1] == str(image)
+    backing = Path(create[create.index("-b") + 1])
+    assert backing == overlay.with_suffix(".base.qcow2")
+    assert backing.stat().st_ino == image.stat().st_ino
     assert overlay.stat().st_mode & 0o777 == 0o600
 
 
@@ -143,3 +146,26 @@ def test_a_failing_qemu_leaves_no_partial_overlay(tmp_path, monkeypatch) -> None
 
     assert not overlay.exists()
     assert not list(tmp_path.glob("overlay.qcow2.candidate-*"))
+
+
+def test_external_data_header_is_rejected_before_qemu(tmp_path, monkeypatch):
+    image = _image(tmp_path)
+    image.chmod(0o600)
+    header = bytearray(image.read_bytes())
+    header[72:80] = struct.pack(">Q", 1 << 2)
+    image.write_bytes(header)
+    image.chmod(0o444)
+    calls = _info(monkeypatch, {"format": "qcow2"})
+    with pytest.raises(SeatLauncherError, match="external file"):
+        require_standalone_image(image)
+    assert not calls
+
+
+@pytest.mark.parametrize("specific", [
+    {"data": {"data-file": "/external.raw"}}, {"data": []}, [],
+])
+def test_nested_external_file_and_invalid_metadata_are_rejected(tmp_path, monkeypatch, specific):
+    image = _image(tmp_path)
+    _info(monkeypatch, {"format": "qcow2", "format-specific": specific})
+    with pytest.raises(SeatLauncherError):
+        require_standalone_image(image)

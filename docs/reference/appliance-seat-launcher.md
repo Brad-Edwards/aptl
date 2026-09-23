@@ -46,6 +46,7 @@ The physical host must satisfy the resources the seat image declares:
 - `qemu-img`, `qemu-system-x86_64`, and read-only OVMF UEFI firmware
 - available CPU/RAM at or above the image's minimums, and free disk at or
   above its declared runtime reservation
+- [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) for first acquisition and updates
 - No dependency on host Docker for seat operations
 
 Each user who launches a seat needs read/write access to `/dev/kvm`. On the
@@ -67,23 +68,28 @@ created privately below that user's own `$XDG_STATE_HOME` or home directory.
 aptl seat start
 ```
 
-That is the whole first run. The launcher resolves the published seat image,
-pulls it if this host does not already have it, creates a disposable overlay
-over it, and boots. There is no install step, no release directory, and no
-trust anchors to provision.
+The first run asks before any registry lookup or download. Declining, pressing
+Enter, or providing no stdin leaves the image and seat untouched. `--yes` (or
+`-y`) explicitly approves acquisition in automation.
 
-The image is pulled over plain HTTPS from the registry, so a seat host needs
-QEMU and no Docker daemon. Integrity is the registry's content addressing:
-every blob is fetched by digest and rejected unless its bytes hash to that
-digest.
+The launcher verifies the immutable OCI manifest with Cosign and the publisher
+public key bundled in the CLI, then checks the config and disk against their
+signed digests. Registry login and Docker are unnecessary. A missing Cosign
+binary, invalid signature, missing trusted key, or corrupt selected image fails
+closed. Cosign's transparency-log checks remain enabled.
 
-To run a different image, such as your own build or a pinned digest, point
-`--image` at it:
+To select an alternate image, provide its independently obtained public key:
 
 ```bash
-aptl seat start --image ghcr.io/your-org/your-seat:latest
-aptl seat start --image ghcr.io/your-org/your-seat@sha256:<digest>
+aptl seat start --image ghcr.io/your-org/your-seat:stable --public-key publisher.pub
+aptl seat start --image ghcr.io/your-org/your-seat@sha256:<digest> --public-key publisher.pub --yes
 ```
+
+Selection precedence is `--image` / `APTL_SEAT_IMAGE`, `seat.image` in
+`aptl.json`, the existing seat's source, then the default GHCR channel.
+`seat.public_key` configures an alternate trust key. An alternate source never
+falls back to the default. Public keys are scoped to the selected repository;
+credentials or keys embedded inside downloaded images do not establish trust.
 
 `seat start` selects distinct outer ports automatically. When the image's
 boundary policy requires host MCP access, it creates an owner-only Ed25519
@@ -103,36 +109,37 @@ The digest an image reference first resolves to is sticky. A seat keeps
 booting that digest until you adopt another, so publishing a new `:latest`
 never changes what a running fleet boots.
 
-Checking for a newer image is separate from adopting one. The check is
-rate-limited rather than run on every start, never gates the boot path, and
-fails open, so a registry outage or an offline host cannot delay or prevent a
-seat starting. When a newer image exists, the launcher says so and keeps
-booting what it had:
-
-```text
-a newer seat image is available: sha256:be21… — adopt with `aptl seat update`
-```
-
-Adopting takes effect on the next start; a running seat is untouched:
+Warm starts use the verified selected image without contacting the registry.
+A missing or corrupt selection reports an error; it does not silently download
+another image. Explicit updates ask for permission to download, reset the
+stopped seat and revoke its access, and remove the superseded cached image:
 
 ```bash
-aptl seat update                      # adopt what the reference resolves to now
-aptl seat update --to sha256:<digest> # roll back to an image already cached
+aptl seat stop
+aptl seat update
+aptl seat start
+# Automated replacement, with the same verification and admission checks:
+aptl seat update --yes
 ```
 
-Adoption keeps the previous disk, which is what makes rollback possible. A
-digest-pinned reference is never checked and never prompts.
+A running VM refuses replacement. Download, signature or host-admission failure
+preserves the prior selection and overlay. Successful replacement resets the
+seat to a new generation. Other seats retain their own immutable disks, launch configs, and publisher
+verification records, so they can restart offline after shared cache retirement.
+Interrupted reset is a recoverable failure: stop the seat and repeat reset
+before use. A pinned reference remains pinned until explicitly changed.
 
-Cached images are large. List them, with the references that select them, and
-remove the ones nothing selects:
+List cached images or confirm removal of entries no reference selects:
 
 ```bash
 aptl seat images
 aptl seat images --prune
 ```
 
-Pruning never removes an image a reference currently selects, so a rollback
-target survives while it is still selected somewhere.
+`seat update --to sha256:<disk-digest>` selects a previously verified disk only
+while it remains cached under the same repository and trust key. Superseded
+images are normally deleted; rollback therefore requires a retained selection
+or acquiring the desired immutable image reference again.
 
 ## Reserving operator-selected ports
 
@@ -166,7 +173,9 @@ Readiness is not inferred from a live PID or listener: the tracked QEMU
 instance, real forbidden-reachability probe, guest boot/daemon observation, and
 complete appliance boundary gate must all agree for the current generation.
 
-Open the participant kiosk browser (presentation only):
+Open the participant kiosk browser. Login uses an owner-private bootstrap file;
+the token is absent from browser process arguments and printed plans. The file
+is replaced on the next launch and removed on reset:
 
 ```bash
 aptl seat open-kiosk
@@ -211,8 +220,11 @@ When reconciliation reports `host-reboot-detected` or `vm-not-running`, run
   launch/
     appliance-launch.json    # create-once launch projection
     boundary-policy.json     # the exact policy bytes the gate is bound to
+  image/                     # this generation's retained disk/config/trust
+  runtime/kiosk/login.html   # owner-private browser bootstrap; removed on reset
   instances/
     seat-01.qcow2            # disposable overlay
+    seat-01.base.qcow2       # retained immutable backing file
     seat-01.state/           # guest-only overlay identity
 
 ~/.cache/aptl/appliance/
@@ -222,59 +234,59 @@ When reconciliation reports `host-reboot-detected` or `vm-not-running`, run
 
 ## Building the image
 
-The published image is baked by the release workflow on a dedicated
-`aptl-seat-image` runner with KVM access, at least 48 GiB RAM, and at least
-120 GiB free. GitHub's standard
-Ubuntu runner has 14 GB of storage and cannot hold the Docker images,
-offline payload, and VM disk together. `scripts/appliance/build-seat-image.sh`
-fetches the pinned Ubuntu base
-by digest, builds this project's container images from the exact source,
-resolves the full TechVault service and helper image inventory from the RAES
-scenario, and includes additional Compose services. It writes the full
-participant profile against the saved image IDs and built MCP artifacts, then
-installs the whole set into the guest with
-`appliance/guest/provision-offline.sh`. The result holds Docker, the APTL runtime
-and every container image the lab starts, so a participant's first boot
-resolves nothing and pulls nothing. Before publication,
-`scripts/appliance/qualify-seat-image.sh` boots a disposable overlay from the
-actual baked disk and requires a working Docker daemon, an offline container
-run, the full lab start, and semantic MCP checks.
-
-`scripts/appliance/publish-seat-image.sh` pushes the disk and its config blob
-to `ghcr.io/<owner>/aptl-seat` as an OCI artifact and tags it with a key
-computed from both blobs. It checks that this immutable candidate is
-anonymously pullable before moving the release tag and `latest`, then checks
-`latest` anonymously as well.
-
-GitHub [creates a new container package as private](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#pushing-container-images),
-even when a workflow links it to a public repository. On the first
-`aptl-seat` publication, the anonymous-pull check therefore fails after the
-package has been created, leaving `latest` untouched. A package owner must
-set `aptl-seat` visibility to **Public** in GitHub's package settings, then run
-the **Publish seat image for an existing release** workflow with that release
-tag and a `source_ref` containing the
-corrected bake at the same package version. The manual workflow verifies that
-version, rebakes the selected source, and verifies the anonymous pull. It also
-provides a retry path for a failed image publication without creating a
-different release. GitHub warns that a
-public package cannot subsequently be made private.
-
-A release bakes the image before deciding its content key. Several upstream
-Compose images use mutable tags, so source files alone cannot establish
-whether the guest bytes would be identical. A release tag cannot be moved to
-different image bytes after publication.
-
-To bake locally:
+Image cuts are local operations, independent of Release Please and PyPI. Use a
+clean checkout of the intended source commit. The build needs KVM,
+`libguestfs-tools`, QEMU, Docker, Node 22, Python 3.14, and enough disk for the
+source, image archive, expanded guest and compressed output together.
+The build refuses to proceed without read/write access to `/dev/kvm`; join the
+`kvm` group and start a new login session if necessary.
+Capacity admission uses the disk's declared virtual size, not its compressed
+size. The default is 250 GiB; `APTL_SEAT_DISK_GIB` selects another capacity.
 
 ```bash
-scripts/appliance/build-seat-image.sh
+APTL_SEAT_BUILD_ROOT="$PWD/build/seat-cut" scripts/appliance/build-seat-image.sh
+scripts/appliance/qualify-seat-image.sh build/seat-cut/out/seat-disk.qcow2
 ```
 
-It needs `libguestfs-tools`, `qemu-utils`, Docker, Node 22, Python 3.14,
-and enough free disk for the image archive and the baked disk at once.
-The default base is an immutable Ubuntu 26.04 release image pinned in
-`scripts/appliance/seat-base-image.env`. To use another base, set both
-`APTL_BASE_IMAGE_URL` and `APTL_BASE_IMAGE_SHA256`.
+The build downloads a digest-pinned Ubuntu base, builds project containers and
+MCP/web assets, stages the complete TechVault closure, installs the hash-locked
+runtime offline, sanitizes and scans the guest, and writes its launch config.
+`scripts/appliance/seat-base-image.env` holds the base pin. Every participant
+boot loads local image bytes and starts the normal admitted lab without pulling
+containers. The qualification script exercises real Docker, range and semantic
+MCP operations in a disposable VM; also exercise the actual `aptl seat` path,
+participant web, cleanup, clean-range startup, stop and reset before publishing.
+Record source, disk and config hashes with the observed results. The build
+writes `seat-build.json` binding those bytes to the source commit. Dirty builds
+are diagnostic artifacts and cannot be published; changed output bytes also
+fail publication. This local build record is not a SLSA provenance attestation.
+
+The publisher requires ORAS, Cosign, a GHCR write token, and the private signing
+key corresponding to the CLI's public anchor. Keep signing material outside the
+checkout's tracked files and guest payload. Supply credentials through the
+process environment or a key-provider mechanism; do not put them in shell
+history. Encrypted file keys use Cosign's `COSIGN_PASSWORD` environment variable.
+
+```bash
+# REPOSITORY_OWNER, GHCR_TOKEN and APTL_SEAT_SIGNING_KEY already supplied securely
+scripts/appliance/publish-seat-image.sh build/seat-cut/out
+```
+
+The script pushes the disk/config by content key, checks anonymous access, signs
+the immutable manifest and verifies its signature. Its output is the immutable
+reference. `APTL_SEAT_IMAGE_TAG` optionally adds an immutable human-readable tag.
+Test the immutable reference with a fresh CLI and empty private cache before
+promoting: rerun with `APTL_SEAT_PUBLISH_LATEST=1`. The script reuses existing
+content. Anonymous checks try at most three times and stop immediately on HTTP
+401/403. A registry failure requires diagnosis; repeatedly rebuilding an image
+cannot repair package permissions or a broken tag.
+
+New GHCR packages default to private. The package owner must make the VM package
+public before anonymous acquisition can succeed. The publisher isolates its
+registry login from the operator's existing Docker configuration. Neither its
+authentication token nor the signing key is copied into the image. A signature
+proves publisher authorization; the separate manual record proves the range
+operations actually observed.
 
 ## Diagnostics
 

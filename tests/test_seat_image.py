@@ -39,6 +39,9 @@ def _disk_layer(size: int = len(DISK_BYTES)) -> dict[str, object]:
 def registry(monkeypatch: pytest.MonkeyPatch):
     """Serve canned registry documents and record what was requested."""
 
+    # Transport fixtures have passed signature admission, covered separately.
+    monkeypatch.setattr("aptl.appliance.seat.image_trust.verify_remote_image", lambda *a: None)
+    monkeypatch.setattr("aptl.appliance.seat.image_trust.publish_verified_image", lambda *a: None)
     state: dict[str, object] = {"documents": {}, "requests": [], "staged": []}
 
     def fake_metadata(url: str, *, max_bytes: int, headers=None, **_: object) -> bytes:

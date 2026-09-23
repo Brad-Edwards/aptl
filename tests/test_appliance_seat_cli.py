@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import click
+import pytest
 from typer.testing import CliRunner
 
 from aptl.appliance.seat.models import SeatRecord
@@ -15,6 +16,15 @@ from aptl.cli.main import app
 from aptl.cli.seat import DEFAULT_SEAT_IMAGE
 
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def acquired_image(monkeypatch):
+    """These lifecycle projection tests start after acquisition; consent has its own tests."""
+    monkeypatch.setattr(
+        "aptl.cli.seat._prepare_seat_image",
+        lambda image, *args, **kwargs: image or DEFAULT_SEAT_IMAGE,
+    )
 
 
 def _seat_record() -> SeatRecord:
@@ -334,7 +344,10 @@ def test_seat_reset_and_recover_success_emit_json() -> None:
     staged = _seat_record().model_copy(update={"lifecycle_state": "staged"})
     with patch("aptl.cli.seat.reset_seat", return_value=staged):
         reset = runner.invoke(app, ["seat", "reset", *_common_seat_args()])
-    with patch("aptl.cli.seat.recover_seat", return_value=_seat_record()):
+    with (
+        patch("aptl.cli.seat.recover_seat", return_value=_seat_record()),
+        patch("aptl.cli.seat.image_requires_host_access", return_value=False),
+    ):
         recover = runner.invoke(app, ["seat", "recover", *_common_seat_args()])
 
     assert reset.exit_code == 0
@@ -410,4 +423,26 @@ def test_open_kiosk_uses_persisted_participant_mapping(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0
-    assert "http://127.0.0.1:10443/api/auth/login?token=" in result.stdout
+    assert "http://127.0.0.1:10443/" in result.stdout
+    assert "token=" not in result.stdout
+    assert "t" * 43 not in result.stdout
+    assert not (tmp_path / "runtime/kiosk/login.html").exists()
+
+
+def test_recover_enrolls_host_access_like_start(tmp_path):
+    identity = tmp_path / "identity"
+    public = tmp_path / "identity.pub"
+    identity.write_text("private fixture")
+    from tests.test_appliance_seat_access import _public_key
+    public.write_text(_public_key())
+    with (
+        patch("aptl.cli.seat.image_requires_host_access", return_value=True),
+        patch("aptl.cli.seat.ensure_transport_identity", return_value=(identity, public)),
+        patch("aptl.cli.seat.recover_seat", return_value=_seat_record()) as recover,
+    ):
+        result = runner.invoke(app, ["seat", "recover", *_common_seat_args()])
+    assert result.exit_code == 0, result.output
+    options = recover.call_args.kwargs["options"]
+    assert options.access_enrollment is not None
+    assert options.access_identity_file == identity
+    assert options.access_clients == ("claude", "codex")

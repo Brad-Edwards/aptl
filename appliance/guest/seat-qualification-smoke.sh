@@ -85,9 +85,26 @@ else
     mcp_status=1
 fi
 echo "seat-qualification: mcp=$mcp_status"
-printf 'docker=%s compose=%s load=%s run=%s\nlab=%s\nmcp=%s\n' \
+cleanup_status=1
+clean_start_status=1
+clean_stop_status=1
+if test "$mcp_status" -eq 0; then
+    /usr/local/bin/aptl lab stop --volumes --yes --project-dir /opt/aptl/project
+    cleanup_status=$?
+fi
+if test "$cleanup_status" -eq 0; then
+    timeout 1800 /usr/local/bin/aptl lab start \
+        --project-dir /opt/aptl/project --offline-staged
+    clean_start_status=$?
+fi
+if test "$clean_start_status" -eq 0; then
+    /usr/local/bin/aptl lab stop --project-dir /opt/aptl/project
+    clean_stop_status=$?
+fi
+printf 'docker=%s compose=%s load=%s run=%s\nlab=%s\nmcp=%s\ncleanup=%s clean_start=%s clean_stop=%s\n' \
     "$docker_status" "$compose_status" "$load_status" "$run_status" \
     "$lab_status" "$mcp_status" \
+    "$cleanup_status" "$clean_start_status" "$clean_stop_status" \
     >/var/log/aptl-seat-qualification.result
 sync
 systemctl poweroff --force

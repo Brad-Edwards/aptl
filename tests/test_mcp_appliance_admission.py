@@ -2,7 +2,9 @@
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from types import SimpleNamespace
+import hashlib
+
+import rfc8785
 
 import pytest
 
@@ -10,7 +12,10 @@ from aptl.appliance.seat.observation import build_host_observation
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.workbench.guest_binding import ApplianceAccessObservation, GuestAdmission
 from tests.test_appliance_boundary_inventory import _binding, _guest, _policy
-from tests.test_mcp_access import access_record
+from tests.test_mcp_access import access_record, grant
+from aptl.workbench.dispatch import DispatchSelector
+from aptl.workbench.guest_binding import GuestDispatchBinding, ApplianceAccessPaths
+from aptl.appliance.seat.launch_descriptor import SeatLaunchDescriptor
 
 
 @pytest.mark.parametrize("vm_only", [False, True])
@@ -32,6 +37,7 @@ def test_appliance_transport_checks_freshness_identity_mapping_and_live_probes(
     policy = type(_policy()).model_validate(policy_data)
     binding = _binding().model_copy(
         update={
+            "policy_digest": "sha256:" + hashlib.sha256(rfc8785.dumps(policy.model_dump(mode="json"))).hexdigest(),
             "boot_id": "host-boot-42",
             "host_boot_id": "host-boot-42",
             "guest_boot_id": "boot-42",
@@ -54,6 +60,11 @@ def test_appliance_transport_checks_freshness_identity_mapping_and_live_probes(
     )
     binding = binding.model_copy(update={"host_observation_id": host.observation_id})
     guest = _guest()
+    guest = guest.model_copy(update={
+        "policy_digest": binding.policy_digest,
+        "enforcements": tuple(item.model_copy(update={"source_digest": binding.policy_digest})
+                              for item in guest.enforcements),
+    })
     guest = guest.model_copy(
         update={
             "enforcements": (
@@ -91,23 +102,40 @@ def test_appliance_transport_checks_freshness_identity_mapping_and_live_probes(
     path = tmp_path / "boundary.json"
     path.write_text(observed.model_dump_json())
     path.chmod(0o600)
-    # This unit test starts after signature verification. It exercises the real
-    # boundary verifier; synthetic observations are never release evidence.
-    admission = object.__new__(GuestAdmission)
-    admission.binding = SimpleNamespace(
-        access=access_record(guest_boot_id="boot-42", guest_daemon_id="daemon-42"),
-        appliance=SimpleNamespace(runtime_observation=path),
+    # Construct admission through the real launch verifier and its tuple API.
+    launch_path = tmp_path / "appliance-launch.json"
+    descriptor = SeatLaunchDescriptor(
+        schema_version="aptl.appliance-launch/v2",
+        image_reference="ghcr.io/brad-edwards/aptl-seat:fixture",
+        image_digest=binding.payload_digest,
+        image_config_digest="sha256:" + "f" * 64,
+        boundary_policy_digest=binding.policy_digest,
+        participant_routes_digest=binding.raes_plan_digest,
+        boundary_helper_image=binding.boundary_helper_image,
+        egress_proxy_image=binding.egress_proxy_image,
+        host_observation_id=binding.host_observation_id,
+        host_mcp_contract="aptl.restricted-ssh-mcp/v1",
     )
-    admission.verified_launch = SimpleNamespace(
-        boundary_policy=policy,
-        descriptor=SimpleNamespace(
-            boundary_policy_digest=binding.policy_digest,
-            payload_digest=binding.payload_digest,
-            participant_routes_digest=binding.raes_plan_digest,
-            boundary_helper_image=binding.boundary_helper_image,
-            egress_proxy_image=binding.egress_proxy_image,
-            host_observation_id=binding.host_observation_id,
+    launch_path.write_text(descriptor.model_dump_json())
+    (tmp_path / "boundary-policy.json").write_bytes(
+        rfc8785.dumps(policy.model_dump(mode="json"))
+    )
+    caller = grant(profile="red")
+    access = access_record(guest_boot_id="boot-42", guest_daemon_id="daemon-42")
+    dispatch = GuestDispatchBinding(
+        schema_version="aptl.mcp-dispatch/v1", access=access, grants=(caller,),
+        project_dir=tmp_path, management_home=tmp_path,
+        node_executable=Path("/usr/bin/node"), run_id="c" * 32,
+        delivery="appliance", appliance=ApplianceAccessPaths(
+            launch_descriptor=launch_path, runtime_observation=path,
         ),
+    )
+    dispatch_path = tmp_path / "dispatch.json"
+    dispatch_path.write_text(dispatch.model_dump_json())
+    dispatch_path.chmod(0o600)
+    admission = GuestAdmission(
+        dispatch_path, caller.grant_id, caller.public_key_fingerprint,
+        DispatchSelector(access.instance_id, access.generation, "aptl-red"),
     )
     admission._verify_appliance_observation()
     # The supervisor's complete Docker and boundary observation cycle takes

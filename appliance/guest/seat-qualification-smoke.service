@@ -8,7 +8,7 @@ Type=oneshot
 ExecStart=/usr/local/libexec/seat-qualification-smoke.sh
 Environment=HOME=/var/lib/aptl
 UMask=0077
-TimeoutStartSec=1900
+TimeoutStartSec=3900
 
 [Install]
 WantedBy=multi-user.target

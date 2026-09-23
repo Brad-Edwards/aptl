@@ -19,7 +19,6 @@ path	proposed_owner	migration_rule
 .github/workflows/checks.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 .github/workflows/docs-deploy.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 .github/workflows/pr-title-lint.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
-.github/workflows/publish-seat-image.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 .github/workflows/release-please.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 .github/workflows/scorecard.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 .gitignore	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
@@ -78,16 +77,8 @@ assets/images/li_test/cline_red_team_test_9.png	repository-metadata	Inspect iden
 assets/images/qradar_landing_empty.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 assets/images/qradar_offences.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 bin/install-raes-inventory-skill.sh	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
-changelog.d/+fix-stale-integration-fixtures.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+ghcr-candidate-package-visibility.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+git-env-isolation.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
-changelog.d/+mcp-packaging-helpers.changed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
-changelog.d/+remove-golden-pipeline.removed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
-changelog.d/+seat-boots-a-registry-image.changed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
-changelog.d/+seat-image-bake.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
-changelog.d/+seat-image-config.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
-changelog.d/+seat-image-from-registry.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
-changelog.d/+seat-image-selection.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+techvault-live-boot-honesty.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/1021.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/1034.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
@@ -789,7 +780,6 @@ src/aptl/appliance/download.py	optional-delivery	Keep sealed-seat boundary outsi
 src/aptl/appliance/errors.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/guest_observation.py	optional-delivery	Keep authenticated guest observation with delivery owner
 src/aptl/appliance/guest_services.py	optional-delivery	Keep authenticated guest service launch with delivery owner
-src/aptl/appliance/guest_web.py	optional-delivery	Keep offline guest web startup with delivery owner
 src/aptl/appliance/guest_surfaces.py	optional-delivery	Keep authenticated guest-surface validation with delivery owner
 src/aptl/appliance/input_images.py	optional-delivery	Keep realized seat image inventory with delivery owner
 src/aptl/appliance/input_profile.py	optional-delivery	Keep full participant profile assembly with delivery owner
@@ -1363,7 +1353,6 @@ tests/test_appliance_boundary_policy.py	tests-follow-owner	Retain meaningful bou
 tests/test_appliance_download.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_egress_proxy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_guest_observation.py	tests-follow-owner	Retain guest observation tests with migrated owner
-tests/test_appliance_guest_web.py	tests-follow-owner	Retain offline guest web startup coverage
 tests/test_appliance_guest_surfaces.py	tests-follow-owner	Retain authenticated guest-surface regression coverage
 tests/test_appliance_loopback_proxy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_policy.py	tests-follow-owner	Retain appliance policy tests with migrated owner
@@ -1824,3 +1813,16 @@ tests/test_docs_user_journey.py	tests-follow-owner	Retain structural coverage fo
 docs/security/openssf-best-practices.md	docs-follow-owner	Keep the public badge assessment and evidence links with project documentation
 tests/test_docs_publishing.py	tests-follow-owner	Retain structural coverage for badge evidence and dual documentation publishing
 tools/run-targeted-tests.sh	build-governance	Keep local verification targeted while CI owns whole-tree gates
+docs/architecture/issue-1162-nested-virt-seat-preflight.md	build-governance	Keep source and artifact evidence with delivery governance
+scripts/appliance/seat-build-record.py	optional-delivery	Keep seat image trust and local delivery with the delivery owner
+src/aptl/appliance/guest_web.py	optional-delivery	Keep seat image trust and local delivery with the delivery owner
+src/aptl/appliance/seat/aptl-seat.pub	optional-delivery	Keep seat image trust and local delivery with the delivery owner
+src/aptl/appliance/seat/image_trust.py	optional-delivery	Keep seat image trust and local delivery with the delivery owner
+src/aptl/appliance/seat/image_update.py	optional-delivery	Keep seat image trust and local delivery with the delivery owner
+tests/test_appliance_guest_web.py	test-governance	Migrate regression coverage with the behavior it verifies
+tests/test_seat_image_consent.py	test-governance	Migrate regression coverage with the behavior it verifies
+tests/test_seat_image_trust.py	test-governance	Migrate regression coverage with the behavior it verifies
+tests/test_seat_image_update.py	test-governance	Migrate regression coverage with the behavior it verifies
+tests/test_seat_local_release.py	test-governance	Migrate regression coverage with the behavior it verifies
+src/aptl/appliance/seat/retained_image.py	optional-delivery	Retain per-seat verified image identity for independent offline restart
+docs/reviews/1162-seat-acceptance.md	docs-follow-owner	Preserve immutable image identities and observed manual acceptance evidence

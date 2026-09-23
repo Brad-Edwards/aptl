@@ -167,8 +167,18 @@ def test_bake_uses_the_proven_offline_guest_provisioning() -> None:
         assert compose["services"][name]["image"] == f"{name}:1"
         assert f"build_image {name}:1" in local_images
     assert "APTL_WEB_LAUNCH_TOKEN" in first_boot
+    assert "APTL_WEB_BIND_ADDRESS=127.0.0.1" in first_boot
+    from aptl.appliance.loopback_proxy import build_proxy_bindings
+    from aptl.appliance.policy import full_techvault_boundary_policy
+    from aptl.appliance.seat.vm import DEFAULT_QEMU_GUEST_ADDRESS
+    bindings = build_proxy_bindings(
+        full_techvault_boundary_policy(), adapter_address=DEFAULT_QEMU_GUEST_ADDRESS
+    )
+    assert all(item.listen_address == "10.0.2.15" for item in bindings)
+    assert all(item.target_address == "127.0.0.1" for item in bindings)
     web_start = (ROOT / "src/aptl/appliance/guest_web.py").read_text()
-    assert '"--no-build"' in web_start and '"never"' in web_start
+    assert "build=False" in web_start
+    assert "backend.start(" in web_start
     assert '"aptl-web-api", "aptl-web-ui"' in web_start
 
     # The image archive ships on disk and first boot loads it once per
@@ -201,16 +211,17 @@ def test_publication_proves_an_anonymous_pull() -> None:
     assert "oras tag" in publish
 
 
-def test_release_bakes_before_every_publication() -> None:
-    job = yaml.safe_load(WORKFLOW.read_text())["jobs"]["publish-seat-image"]
-    assert job["runs-on"] == ["self-hosted", "linux", "x64", "aptl-seat-image"]
-    steps = {step.get("name"): step for step in job["steps"] if step.get("name")}
-    # Compose still contains mutable third-party tags. The digest of the
-    # resulting disk and config can only be known after the bake.
-    assert "if" not in steps["Bake the seat image"]
-    assert "if" not in steps["Publish the seat image"]
-    names = [step.get("name") for step in job["steps"]]
-    assert names.index("Bake the seat image") < names.index(
-        "Boot and qualify the baked seat"
-    ) < names.index("Publish the seat image")
-    assert "qualify-seat-image.sh" in steps["Boot and qualify the baked seat"]["run"]
+def test_seat_bake_is_not_part_of_package_release() -> None:
+    jobs = yaml.safe_load(WORKFLOW.read_text())["jobs"]
+    assert "publish-seat-image" not in jobs
+    assert "publish-appliance-images" not in jobs
+
+
+def test_bake_uses_checkout_config_writer_and_configured_disk_scan() -> None:
+    bake = BAKE.read_text()
+    assert ('PYTHONPATH="$source_root/src" python3 ' + chr(92) + chr(10)
+            + '  "$source_root/scripts/appliance/write-seat-image-config.py"') in bake
+    assert 'APTL_SEAT_DISK_GIB=$disk_gib /tmp/scan-golden.sh' in bake
+    scan = (ROOT / "appliance/guest/scan-golden.sh").read_text()
+    assert 'expected_disk_gib=${APTL_SEAT_DISK_GIB:-250}' in scan
+    assert 'expected_disk_gib * 1024 * 1024 * 1024 * 19 / 20' in scan

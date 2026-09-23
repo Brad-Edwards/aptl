@@ -19,6 +19,10 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from aptl.appliance.seat.image_trust import verify_cached_image
+from aptl.appliance.seat.locking import serialized_image_cache
+from aptl.utils.pathsafe import open_contained_nofollow, PathContainmentError
+
 from aptl.appliance.seat.image import (
     SeatImageError,
     SeatImageReference,
@@ -81,17 +85,49 @@ def _selection_path(cache_dir: Path, reference: SeatImageReference) -> Path:
 def load_selection(cache_dir: Path, reference: SeatImageReference) -> dict[str, object]:
     """Read the recorded selection for one reference, tolerating absence."""
 
-    try:
-        document = json.loads(
-            _selection_path(cache_dir, reference).read_text(encoding="utf-8")
-        )
-    except (OSError, ValueError):
+    path = _selection_path(cache_dir, reference)
+    if cache_dir.is_symlink() or path.parent.is_symlink():
+        raise SeatImageError("seat image selection directory is unsafe")
+    if not path.exists() and not path.is_symlink():
         return {}
+    try:
+        with open_contained_nofollow(cache_dir, path.relative_to(cache_dir)) as handle:
+            payload = handle.read(65537)
+        if len(payload) > 65536:
+            raise ValueError("oversized selection")
+        document = json.loads(payload)
+    except (OSError, ValueError, PathContainmentError) as exc:
+        raise SeatImageError("seat image selection is unreadable or invalid") from exc
     if not isinstance(document, dict) or document.get("schema_version") != (
         SELECTION_SCHEMA
     ):
-        return {}
+        raise SeatImageError("seat image selection has an invalid schema")
+    if document.get("reference") != str(reference):
+        raise SeatImageError("seat image selection names a different source")
     return document
+
+
+@serialized_image_cache
+def cached_selection(
+    reference: str, *, cache_dir: Path
+) -> SeatImageSelection | None:
+    """Inspect the selected image locally, never treating corruption as absence."""
+
+    parsed = parse_seat_image_reference(reference)
+    recorded = load_selection(cache_dir, parsed)
+    if not recorded:
+        return None
+    digest, size = recorded.get("digest"), recorded.get("size_bytes")
+    if not isinstance(digest, str) or type(size) is not int or size <= 0:
+        raise SeatImageError("seat image selection has invalid disk metadata")
+    disk = verified_cached_disk(cache_dir, digest=digest, size_bytes=size)
+    if disk is None:
+        raise SeatImageError("selected seat image is missing or corrupt; use seat update")
+    config = cached_seat_image_config(cache_dir, disk_digest=digest)
+    if config is None:
+        raise SeatImageError("selected seat image has no verified launch config")
+    verify_cached_image(cache_dir, reference, digest, config[1])
+    return SeatImageSelection(parsed, digest, size, disk)
 
 
 def save_selection(
@@ -234,11 +270,13 @@ def _select_cached_digest(
             f"seat image {digest} is not in the local cache; "
             "pull it before selecting it"
         )
-    if cached_seat_image_config(cache_dir, disk_digest=digest) is None:
+    config = cached_seat_image_config(cache_dir, disk_digest=digest)
+    if config is None:
         raise SeatImageError(
             f"seat image {digest} has no cached launch config; "
             "it cannot be selected for rollback"
         )
+    verify_cached_image(cache_dir, str(reference), digest, config[1])
     size = disk.stat().st_size
     save_selection(cache_dir, reference, digest=digest, size_bytes=size, last_checked=now)
     return SeatImageSelection(
@@ -280,6 +318,10 @@ def _select_previous_digest(
     """Boot the sticky selection, restoring only its exact digest if needed."""
 
     disk = verified_cached_disk(cache_dir, digest=digest, size_bytes=size_bytes)
+    config = cached_seat_image_config(cache_dir, disk_digest=digest)
+    if config is None:
+        raise SeatImageError("selected seat image has no verified launch config")
+    verify_cached_image(cache_dir, str(reference), digest, config[1])
     pulled = disk is None
     if disk is None:
         disk = fetch_seat_disk(
@@ -301,6 +343,7 @@ def _select_previous_digest(
     )
 
 
+@serialized_image_cache
 def select_seat_image(
     reference: str | SeatImageReference,
     *,
@@ -384,6 +427,7 @@ def list_cached_images(cache_dir: Path) -> list[CachedSeatImage]:
     return images
 
 
+@serialized_image_cache
 def prune_cached_images(cache_dir: Path) -> tuple[str, ...]:
     """Remove cached disks no reference selects.
 
@@ -395,10 +439,28 @@ def prune_cached_images(cache_dir: Path) -> tuple[str, ...]:
     for image in list_cached_images(cache_dir):
         if image.selected_by:
             continue
-        entry = cache_dir / image.digest.removeprefix("sha256:")
-        for path in sorted(entry.glob("*")):
-            path.chmod(0o600)
-            path.unlink()
-        entry.rmdir()
-        removed.append(image.digest)
+        if retire_cached_image(cache_dir, image.digest):
+            removed.append(image.digest)
     return tuple(removed)
+
+
+@serialized_image_cache
+def retire_cached_image(cache_dir: Path, digest: str) -> bool:
+    """Remove only an unselected, owned cache entry, without changing base modes."""
+
+    from aptl.appliance.seat.image_disk_cache import _cache_entry
+
+    if digest in _selected_digests(cache_dir):
+        return False
+    entry = _cache_entry(cache_dir, digest).parent
+    if entry.is_symlink() or entry.resolve().parent != cache_dir.resolve():
+        raise SeatImageError("seat image cache entry is unsafe")
+    if not entry.exists():
+        return False
+    for path in sorted(entry.iterdir()):
+        if not path.is_symlink() and path.is_dir():
+            raise SeatImageError("seat image cache entry contains an unexpected directory")
+    for path in sorted(entry.iterdir()):
+        path.unlink()
+    entry.rmdir()
+    return True

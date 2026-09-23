@@ -126,6 +126,43 @@ def test_project_publication_refuses_symlinked_client_file(tmp_path):
     assert elsewhere.read_text() == "{}"
 
 
+@pytest.mark.parametrize("client", ["claude", "codex"])
+def test_replacement_instance_refreshes_owned_client_only_in_newer_generation(
+    tmp_path, client,
+):
+    from aptl.workbench.client_files import publish_client_config
+
+    first = access_record()
+    entries = {"aptl-seat-1-red": {"command": "ssh", "args": ["first"]}}
+    target = publish_client_config(tmp_path, client, first, entries)
+    replacement = access_record(instance_id="replacement", generation=2)
+    entries["aptl-seat-1-red"]["args"] = ["replacement"]
+    publish_client_config(tmp_path, client, replacement, entries)
+    state = json.loads((tmp_path / f".aptl/{client}-mcp-owned.json").read_text())
+    assert state["identity"]["instance_id"] == "replacement"
+    assert state["identity"]["generation"] == 2
+    content = target.read_bytes()
+    for rejected in (
+        first,
+        access_record(instance_id="other", generation=2),
+        access_record(owner_id="other-owner", generation=3),
+        access_record(seat_id="other-seat", generation=3),
+    ):
+        with pytest.raises(ValueError, match="identity|generation"):
+            publish_client_config(tmp_path, client, rejected, entries)
+        assert target.read_bytes() == content
+
+
+def test_empty_owned_toml_block_can_be_refreshed_without_losing_manual_settings():
+    entries = {"aptl-seat-1-red": {"command": "ssh", "args": ["first"]}}
+    populated = render_codex('model="mine"\n', entries)
+    empty = render_codex(populated, {}, previous=entries)
+    refreshed = render_codex(empty, entries, previous={})
+    parsed = tomllib.loads(refreshed)
+    assert parsed["model"] == "mine"
+    assert parsed["mcp_servers"]["aptl-seat-1-red"]["args"] == ["first"]
+
+
 def test_same_generation_cannot_silently_move_endpoint_or_workload(tmp_path):
     from aptl.workbench.client_files import publish_client_config
 

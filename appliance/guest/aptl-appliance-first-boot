@@ -28,9 +28,9 @@ APTL_API_TOKEN=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
 APTL_WEB_LAUNCH_TOKEN=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
 export APTL_API_TOKEN APTL_WEB_LAUNCH_TOKEN
 # QEMU forwards loopback-only host ports to the guest's private virtio adapter.
-# Docker must accept those packets on the guest adapter, while the outer host
-# publication remains restricted to 127.0.0.1.
-APTL_WEB_BIND_ADDRESS=0.0.0.0
+# The proxy forwards from that adapter to Docker's loopback publications.
+# Docker owns loopback; the guest proxy owns the adapter listeners.
+APTL_WEB_BIND_ADDRESS=127.0.0.1
 export APTL_WEB_BIND_ADDRESS
 
 guest_python=/usr/bin/python3

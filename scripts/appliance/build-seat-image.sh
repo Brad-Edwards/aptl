@@ -12,12 +12,30 @@
 # it; `aptl seat start` pulls both from a registry and overlays the disk.
 set -euo pipefail
 
+# Refuse an accidental multi-hour software-emulated bake.
+export LIBGUESTFS_BACKEND=${LIBGUESTFS_BACKEND:-direct}
+export LIBGUESTFS_BACKEND_SETTINGS=force_kvm
+
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/seat-base-image.env"
 
 source_root=$PWD
+source_commit=$(git rev-parse HEAD)
+source_dirty=0
+if test -n "$(git status --porcelain --untracked-files=normal)"; then
+  source_dirty=1
+  echo 'diagnostic build from dirty source; publication will be refused' >&2
+fi
 build_root=${APTL_SEAT_BUILD_ROOT:-$PWD/build/seat-image}
 disk_gib=${APTL_SEAT_DISK_GIB:-250}
+if ! [[ "$disk_gib" =~ ^[1-9][0-9]{1,3}$ ]] || ((disk_gib < 64 || disk_gib > 4096)); then
+  echo 'APTL_SEAT_DISK_GIB must be between 64 and 4096' >&2
+  exit 2
+fi
+if ! test -r /dev/kvm || ! test -w /dev/kvm; then
+  echo 'seat image build requires access to /dev/kvm (join the kvm group)' >&2
+  exit 2
+fi
 
 test ! -e "$build_root" || {
   echo "seat image build root already exists: $build_root" >&2
@@ -186,7 +204,7 @@ virt-sparsify --in-place "$disk"
 # anything can be published.
 virt-customize --add "$disk" \
   --copy-in "$source_root/appliance/guest/scan-golden.sh:/tmp" \
-  --run-command 'chmod 0500 /tmp/scan-golden.sh && /tmp/scan-golden.sh && rm /tmp/scan-golden.sh && truncate -s 0 /etc/machine-id'
+  --run-command "chmod 0500 /tmp/scan-golden.sh && APTL_SEAT_DISK_GIB=$disk_gib /tmp/scan-golden.sh && rm /tmp/scan-golden.sh && truncate -s 0 /etc/machine-id"
 
 test "$(virt-cat -a "$disk" /etc/machine-id | wc -c)" -eq 0 || {
   echo 'final seat disk still contains a machine identity' >&2
@@ -198,9 +216,18 @@ mv "$disk.compact" "$disk"
 chmod 0444 "$disk"
 
 # --- self-description --------------------------------------------------
-"$source_root/scripts/appliance/write-seat-image-config.py" \
+PYTHONPATH="$source_root/src" python3 \
+  "$source_root/scripts/appliance/write-seat-image-config.py" \
   --output "$build_root/out/seat-image-config.json" \
   --disk "$disk"
+
+if test "$(git rev-parse HEAD)" != "${source_commit:-$commit}" || \
+  test -n "$(git status --porcelain --untracked-files=normal)"; then
+  source_dirty=1
+fi
+python3 "$source_root/scripts/appliance/seat-build-record.py" write \
+  "$build_root/out" --commit "${source_commit:-$(git rev-parse "$commit")}" \
+  --dirty "${source_dirty:-1}"
 
 unlink "$APTL_LOCAL_IMAGE_LOCK_FILE"
 rmdir "$lock_dir"

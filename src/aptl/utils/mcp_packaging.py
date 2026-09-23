@@ -12,6 +12,7 @@ credentials or generated state sitting beside it in a working project.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -21,9 +22,9 @@ from pathlib import Path
 
 from aptl.utils.deterministic_archive import (
     deterministic_tarinfo,
-    hash_file_nofollow,
-    open_nofollow,
 )
+
+from aptl.utils.pathsafe import open_contained_nofollow
 
 # Runtime identity and credentials that live in a working project and must not
 # travel with a packaged one.
@@ -82,10 +83,15 @@ def flatten_common_dependencies(project: Path) -> None:
         linked = directory / "node_modules/aptl-mcp-common"
         if linked.is_symlink():
             target = linked.resolve(strict=True)
-            if not target.is_relative_to(project / "mcp"):
+            if target != project / "mcp/aptl-mcp-common":
                 raise ValueError("MCP dependency link escapes package")
+            # Validate the whole closure before replacing npm's one allowed link.
+            list(_common_files(target))
             linked.unlink()
-            shutil.copytree(target, linked, ignore=shutil.ignore_patterns(".bin"))
+            shutil.copytree(
+                target, linked, ignore=_ignore_common_state,
+                copy_function=lambda source, dest, root=target: _copy_common_file(root, source, dest),
+            )
 
 
 def admit_packaged_path(name: str) -> None:
@@ -113,19 +119,18 @@ def archive_project(project: Path, output: Path) -> dict[str, str]:
             if tracked is not None and name not in tracked and not _generated_asset(relative):
                 continue
             admit_packaged_path(name)
-            resolved = path.resolve(strict=True)
-            if not resolved.is_relative_to(project) or not resolved.is_file():
-                raise ValueError("build output escapes the packaged project")
-            digest, size = hash_file_nofollow(resolved)
-            info = deterministic_tarinfo(
-                name,
-                is_dir=False,
-                size=size,
-                mode=0o755 if resolved.stat().st_mode & 0o111 else 0o644,
-            )
-            with open_nofollow(resolved) as handle:
+            # Keep the lexical path: resolving before no-follow would disguise
+            # a credential symlink as an ordinary, innocuously named asset.
+            with open_contained_nofollow(project, path.relative_to(project)) as handle:
+                digest = hashlib.file_digest(handle, "sha256").hexdigest()
+                status = os.fstat(handle.fileno())
+                handle.seek(0)
+                info = deterministic_tarinfo(
+                    name, is_dir=False, size=status.st_size,
+                    mode=0o755 if status.st_mode & 0o111 else 0o644,
+                )
                 archive.addfile(info, handle)
-            files[name] = digest
+            files[name] = "sha256:" + digest
     return files
 
 
@@ -193,19 +198,45 @@ def _linked_common_files(
         or target != project / "mcp/aptl-mcp-common"
     ):
         raise ValueError("linked package directory escapes the project")
-    for linked_root, linked_dirs, linked_files in os.walk(target, followlinks=False):
-        linked_dirs[:] = sorted(
-            name
-            for name in linked_dirs
-            if _package_directory_allowed(Path("mcp"), name)
+    for linked_path in _common_files(target):
+        yield relative_root / path.name / linked_path.relative_to(target), linked_path
+
+
+def _common_files(target: Path) -> Iterator[Path]:
+    """Reject nested links, including directory links, in the common closure."""
+
+    for root, directories, files in os.walk(target, followlinks=False):
+        directories[:] = sorted(
+            name for name in directories if _package_directory_allowed(Path("mcp"), name)
         )
-        for name in sorted(linked_files):
+        for name in directories:
+            if (Path(root) / name).is_symlink():
+                raise ValueError("nested MCP dependency symlink is forbidden")
+        for name in sorted(files):
             if _package_file_allowed(Path("mcp"), name):
-                linked_path = Path(linked_root) / name
-                yield (
-                    relative_root / path.name / linked_path.relative_to(target),
-                    linked_path,
-                )
+                path = Path(root) / name
+                with open_contained_nofollow(target, path.relative_to(target)):
+                    yield path
+
+
+def _ignore_common_state(directory: str, names: list[str]) -> list[str]:
+    """Apply the archive exclusions while materializing npm's dependency."""
+
+    return [name for name in names if not (
+        _package_directory_allowed(Path("mcp"), name)
+        if (Path(directory) / name).is_dir()
+        else _package_file_allowed(Path("mcp"), name)
+    )]
+
+
+def _copy_common_file(target: Path, source: str, destination: str) -> str:
+    """Copy through the same containment boundary as the archive reader."""
+
+    with open_contained_nofollow(target, Path(source).relative_to(target)) as handle:
+        with open(destination, "xb") as output:
+            shutil.copyfileobj(handle, output)
+            os.fchmod(output.fileno(), os.fstat(handle.fileno()).st_mode & 0o777)
+    return destination
 
 
 def _project_files(project: Path) -> Iterator[tuple[Path, Path]]:

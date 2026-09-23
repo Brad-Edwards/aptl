@@ -30,7 +30,7 @@ class StartSeatOptions:
     access_identity_file: Path | None = None
     access_project_dir: Path | None = None
     access_clients: tuple[str, ...] = ()
-    check_for_image_update: bool = True
+    check_for_image_update: bool = False
 
     def with_mappings(self, mappings: tuple[BoundaryEndpoint, ...]) -> Self:
         """Clone options with allocator-selected mappings and reservation disabled."""

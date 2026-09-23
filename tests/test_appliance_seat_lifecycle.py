@@ -342,6 +342,7 @@ def test_stage_persists_seat_record(tmp_path: Path) -> None:
             "aptl.appliance.seat.lifecycle.require_host_prerequisites",
             return_value=object(),
         ) as prerequisites,
+        patch("aptl.appliance.seat.lifecycle.retain_image"),
         patch(
             "aptl.appliance.seat.lifecycle._load_seat_image",
             return_value=_resolved_image(tmp_path),
@@ -405,6 +406,7 @@ def test_stage_persists_explicit_outer_mapping(tmp_path: Path) -> None:
             "aptl.appliance.seat.lifecycle.require_host_prerequisites",
             return_value=object(),
         ),
+        patch("aptl.appliance.seat.lifecycle.retain_image"),
         patch(
             "aptl.appliance.seat.lifecycle._load_seat_image",
             return_value=_resolved_image(tmp_path),
@@ -440,6 +442,7 @@ def test_start_marks_ready_when_boundary_passes(tmp_path: Path) -> None:
             "aptl.appliance.seat.lifecycle.require_host_prerequisites",
             return_value=object(),
         ),
+        patch("aptl.appliance.seat.lifecycle.retain_image"),
         patch(
             "aptl.appliance.seat.lifecycle._load_seat_image",
             return_value=_resolved_image(tmp_path),
@@ -494,6 +497,7 @@ def test_start_fails_closed_without_real_boundary_probes(tmp_path: Path) -> None
             "aptl.appliance.seat.lifecycle.require_host_prerequisites",
             return_value=object(),
         ),
+        patch("aptl.appliance.seat.lifecycle.retain_image"),
         patch(
             "aptl.appliance.seat.lifecycle._load_seat_image",
             return_value=_resolved_image(tmp_path),
@@ -552,6 +556,7 @@ def test_start_stops_vm_on_host_access_failure(
             "aptl.appliance.seat.lifecycle.require_host_prerequisites",
             return_value=object(),
         ),
+        patch("aptl.appliance.seat.lifecycle.retain_image"),
         patch(
             "aptl.appliance.seat.lifecycle._load_seat_image",
             return_value=_resolved_image(tmp_path),
@@ -862,6 +867,7 @@ def test_start_marks_recoverable_failure_when_boundary_fails(tmp_path: Path) -> 
             "aptl.appliance.seat.lifecycle.require_host_prerequisites",
             return_value=object(),
         ),
+        patch("aptl.appliance.seat.lifecycle.retain_image"),
         patch(
             "aptl.appliance.seat.lifecycle._load_seat_image",
             return_value=_resolved_image(tmp_path),

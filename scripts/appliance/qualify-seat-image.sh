@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Boot the baked disk in a disposable overlay and prove Docker, the lab and MCP.
 set -euo pipefail
+export LIBGUESTFS_BACKEND=${LIBGUESTFS_BACKEND:-direct}
+export LIBGUESTFS_BACKEND_SETTINGS=force_kvm
 
 source_root=$PWD
 disk=${1:?baked seat disk is required}
@@ -34,7 +36,7 @@ virt-customize --add "$overlay" \
   --run-command 'chmod 0755 /usr/local/libexec/seat-qualification-smoke.sh && systemctl disable aptl-appliance-first-boot.service && systemctl enable seat-qualification-smoke.service'
 
 vm_status=0
-timeout --signal=TERM --kill-after=30s 2400 \
+timeout --signal=TERM --kill-after=30s 4200 \
   qemu-system-x86_64 \
     -enable-kvm -cpu host -smp 8 -m 32768 -no-reboot \
     -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd \
@@ -54,7 +56,8 @@ cat "$result"
 if test "$vm_status" -ne 0 || \
   ! grep -qx 'docker=0 compose=0 load=0 run=0' "$result" || \
   ! grep -qx 'lab=0' "$result" || \
-  ! grep -qx 'mcp=0' "$result"; then
+  ! grep -qx 'mcp=0' "$result" || \
+  ! grep -qx 'cleanup=0 clean_start=0 clean_stop=0' "$result"; then
   echo "seat qualification failed (VM exit ${vm_status})" >&2
   exit 1
 fi

@@ -41,6 +41,7 @@ def test_first_selection_requires_the_manifest_launch_config(
         manifest_digest=_digest(b"manifest"),
         token=None,
     )
+    monkeypatch.setattr("aptl.appliance.seat.image_trust.verify_remote_image", lambda *a: None)
     monkeypatch.setattr(seat_image, "resolve_disk_descriptor", lambda _ref: descriptor)
     monkeypatch.setattr(
         seat_image,
@@ -143,10 +144,7 @@ def test_readiness_calls_the_current_guest_access_contract(
     from aptl.core.lab import _publish_appliance_guest_readiness
 
     observed: list[object] = []
-    backend = SimpleNamespace(
-        project_name="aptl-test",
-        observe_appliance_boundary=lambda deployment: deployment,
-    )
+    backend = SimpleNamespace(observe_appliance_boundary=lambda deployment: deployment)
     context = SimpleNamespace(
         appliance_readiness_challenge=tmp_path / "challenge.json",
         appliance_readiness_device=tmp_path / "readiness",
@@ -163,7 +161,7 @@ def test_readiness_calls_the_current_guest_access_contract(
         backend=backend,
     )
     monkeypatch.setattr(readiness, "publish_guest_readiness", lambda *_a: None)
-    monkeypatch.setattr("aptl.appliance.guest_web.start_guest_web", lambda *_a: None)
+    monkeypatch.setattr("aptl.appliance.guest_web.start_guest_web", lambda *a: None)
 
     def access(
         *, request_path, descriptor_path, device_path, output_dir,
@@ -233,3 +231,45 @@ def test_release_smoke_uses_the_same_home_as_first_boot() -> None:
     release_smoke = (guest / "seat-qualification-smoke.service").read_text()
     assert "Environment=HOME=/var/lib/aptl" in first_boot.splitlines()
     assert "Environment=HOME=/var/lib/aptl" in release_smoke.splitlines()
+
+
+def test_archive_rejects_tracked_credential_alias(tmp_path):
+    from aptl.utils.pathsafe import PathContainmentError
+    project = tmp_path / "project"
+    (project / "assets").mkdir(parents=True)
+    (project / ".env").write_text("fixture-credential")
+    (project / "assets/export.txt").symlink_to("../.env")
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    subprocess.run(["git", "-C", str(project), "add", "assets/export.txt"], check=True)
+    with pytest.raises(PathContainmentError):
+        archive_project(project, tmp_path / "project.tar")
+    assert b"fixture-credential" not in (tmp_path / "project.tar").read_bytes()
+
+
+@pytest.mark.parametrize("directory", [False, True])
+@pytest.mark.parametrize("flatten", [False, True])
+def test_common_package_rejects_nested_links(tmp_path, directory, flatten):
+    from functools import partial
+    from aptl.utils.mcp_packaging import flatten_common_dependencies
+    project = tmp_path / "project"
+    common = project / "mcp/aptl-mcp-common"
+    common.mkdir(parents=True)
+    dependency = project / "mcp/mcp-red/node_modules/aptl-mcp-common"
+    dependency.parent.mkdir(parents=True)
+    dependency.symlink_to("../../aptl-mcp-common")
+    target = project / ".env"
+    if directory:
+        target.mkdir()
+        (target / "credential").write_text("fixture-secret")
+    else:
+        target.write_text("fixture-secret")
+    (common / "innocent").symlink_to(target, target_is_directory=directory)
+    from aptl.utils.pathsafe import PathContainmentError
+    archive = tmp_path / "project.tar"
+    operation = (
+        partial(flatten_common_dependencies, project) if flatten
+        else partial(archive_project, project, archive)
+    )
+    with pytest.raises((ValueError, PathContainmentError)):
+        operation()
+    assert dependency.is_symlink()

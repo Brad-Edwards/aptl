@@ -46,6 +46,7 @@ from aptl.appliance.seat.launch_descriptor import (
 from aptl.appliance.seat.locking import serialized_seat_mutation
 from aptl.appliance.seat.models import SeatRecord, SeatStatusProjection
 from aptl.appliance.seat.overlay import create_seat_overlay
+from aptl.appliance.seat.retained_image import cache_for_seat, retain_image
 from aptl.appliance.seat.observation import (
     HostObservationBundle,
     build_host_observation,
@@ -223,18 +224,21 @@ def _canonical_policy_digest(policy: ApplianceBoundaryPolicy) -> str:
 def _load_seat_image(
     paths: SeatPaths,
     *,
-    check: bool = True,
+    check: bool = False,
+    use_retained: bool = True,
 ) -> ResolvedSeatImage:
     """Resolve the seat image and the declaration a launch is bound to."""
 
     try:
+        cache = (cache_for_seat(paths.seat_root, paths.image_reference, paths.image_cache_dir)
+                 if use_retained else paths.image_cache_dir)
         selection = select_seat_image(
             paths.image_reference,
-            cache_dir=paths.image_cache_dir,
+            cache_dir=cache,
             check=check,
         )
         cached = cached_seat_image_config(
-            paths.image_cache_dir, disk_digest=selection.digest
+            cache, disk_digest=selection.digest
         )
         if cached is None:
             descriptor = resolve_disk_descriptor(paths.image_reference)
@@ -243,7 +247,7 @@ def _load_seat_image(
                     "selected disk config is unavailable after the tag moved"
                 )
             config, config_digest = cache_seat_image_config(
-                descriptor, paths.image_cache_dir
+                descriptor, cache
             )
         else:
             config, config_digest = cached
@@ -289,7 +293,7 @@ def image_requires_host_access(
             descriptor = resolve_disk_descriptor(image_reference)
             config = fetch_seat_image_config(descriptor)
         else:
-            selection = select_seat_image(image_reference, cache_dir=cache_dir)
+            selection = select_seat_image(image_reference, cache_dir=cache_dir, check=False)
             cached = cached_seat_image_config(cache_dir, disk_digest=selection.digest)
             if cached is None:
                 descriptor = resolve_disk_descriptor(image_reference)
@@ -342,6 +346,7 @@ def stage_seat(
     image_cache_dir: Path,
     mappings: tuple[BoundaryEndpoint, ...] | None = None,
     generation: int = 1,
+    replace_image: bool = False,
     prereq_overrides: dict[str, object] | None = None,
 ) -> SeatRecord:
     """Resolve the image, verify host prereqs, and publish a staged record."""
@@ -352,7 +357,7 @@ def stage_seat(
         image_reference=image_reference,
         image_cache_dir=image_cache_dir,
     )
-    image = _load_seat_image(paths)
+    image = _load_seat_image(paths, use_retained=not replace_image)
     require_host_prerequisites(
         image.config.resources,
         seat_root=seat_root,
@@ -372,6 +377,10 @@ def stage_seat(
         forbidden_reachability_passed=True,
         complete=True,
     )
+    source_cache = (paths.image_cache_dir if replace_image else cache_for_seat(
+        seat_root, image_reference, paths.image_cache_dir
+    ))
+    retain_image(seat_root, source_cache, image.selection)
     paths.launch_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     # The gate reads the policy from disk and checks it against the digest in
     # the binding, so the launcher writes the exact bytes it digested.
@@ -634,42 +643,24 @@ def _fail_closed_start(seat_root: Path, paths: SeatPaths, starting: SeatRecord) 
     )
 
 
-def _start_tracked_vm(
-    seat_root: Path,
-    paths: SeatPaths,
-    record: SeatRecord,
-    image: ResolvedSeatImage,
-    options: StartSeatOptions,
-    spec: VmLaunchSpec,
-) -> int:
-    """Start one VM if needed and return its live tracked process ID."""
+def _require_guest_web(
+    seat_root: Path, record: SeatRecord, options: StartSeatOptions, tracked_pid: int,
+) -> None:
+    """Require the generation login and real web endpoints before readiness."""
 
-    if read_vm_pid(seat_root) is None:
-        if options.reserve_outer_mappings:
-            vm = launch_with_reserved_mappings(
-                record.mappings,
-                lambda: start_vm(spec),
-                resources=(
-                    image.config.resources.vcpus,
-                    image.config.resources.memory_bytes,
-                    image.runtime_disk_bytes,
-                ),
-                seat_root=seat_root,
-                retained_disk_bytes=(
-                    paths.overlay_path.stat().st_blocks * 512
-                    if paths.overlay_path.exists()
-                    else 0
-                ),
-            )
-        else:
-            vm = start_vm(spec)
-        write_vm_pid(seat_root, vm.pid)
-    tracked_pid = read_vm_pid(seat_root)
-    if tracked_pid is None:
-        raise SeatLauncherError(
-            "failed-launch", "tracked VM exited before listener observation"
+    if options.guest_readiness_probe is None:
+        token_file = (
+            seat_root / "access" / f"generation-{record.generation}"
+            / "web-launch-token"
         )
-    return tracked_pid
+        if not token_file.is_file() or token_file.is_symlink():
+            raise SeatLauncherError(
+                "missing-web-login", "guest browser login was not delivered"
+            )
+        wait_for_web_publications(
+            record.mappings,
+            process_alive=lambda: read_vm_pid(seat_root) == tracked_pid,
+        )
 
 
 @serialized_seat_mutation
@@ -785,9 +776,31 @@ def start_seat(
         require_host_exposure(
             vm_argv=argv, docker_daemon_running=launch_options.docker_daemon_running
         )
-        tracked_pid = _start_tracked_vm(
-            seat_root, paths, record, image, launch_options, spec
-        )
+        if read_vm_pid(seat_root) is None:
+            if launch_options.reserve_outer_mappings:
+                vm = launch_with_reserved_mappings(
+                    record.mappings,
+                    lambda: start_vm(spec),
+                    resources=(
+                        image.config.resources.vcpus,
+                        image.config.resources.memory_bytes,
+                        image.runtime_disk_bytes,
+                    ),
+                    seat_root=seat_root,
+                    retained_disk_bytes=(
+                        paths.overlay_path.stat().st_blocks * 512
+                        if paths.overlay_path.exists()
+                        else 0
+                    ),
+                )
+            else:
+                vm = start_vm(spec)
+            write_vm_pid(seat_root, vm.pid)
+        tracked_pid = read_vm_pid(seat_root)
+        if tracked_pid is None:
+            raise SeatLauncherError(
+                "failed-launch", "tracked VM exited before listener observation"
+            )
         observed = wait_for_loopback_listeners(
             record.mappings,
             probe=launch_options.listener_probe,
@@ -878,19 +891,7 @@ def start_seat(
             access_socket=access_socket,
             options=launch_options,
         )
-        if launch_options.guest_readiness_probe is None:
-            token_file = (
-                seat_root / "access" / f"generation-{record.generation}"
-                / "web-launch-token"
-            )
-            if not token_file.is_file() or token_file.is_symlink():
-                raise SeatLauncherError(
-                    "missing-web-login", "guest browser login was not delivered"
-                )
-            wait_for_web_publications(
-                record.mappings,
-                process_alive=lambda: read_vm_pid(seat_root) == tracked_pid,
-            )
+        _require_guest_web(seat_root, record, launch_options, tracked_pid)
         ready = SeatRecord(
             schema_version=SEAT_RECORD_SCHEMA,
             seat_id=seat_id,
@@ -955,6 +956,7 @@ def reset_seat(
     seat_id: str,
     image_reference: str,
     image_cache_dir: Path,
+    replace_image: bool = False,
 ) -> SeatRecord:
     """Power off, destroy overlay state, and return to staged."""
 
@@ -969,7 +971,11 @@ def reset_seat(
         image_reference=image_reference,
         image_cache_dir=image_cache_dir,
     )
-    remove_overlay_artifacts(paths.overlay_path, paths.overlay_state_dir)
+    remove_overlay_artifacts(
+        seat_root / "runtime/kiosk",
+        paths.overlay_path, paths.overlay_state_dir,
+        paths.overlay_path.with_suffix(".base.qcow2"),
+    )
     updated = record.model_copy(update={"lifecycle_state": "needs-reset"})
     persist_seat_record(seat_root, updated)
     for runtime_artifact in (
@@ -991,6 +997,7 @@ def reset_seat(
         image_cache_dir=image_cache_dir,
         mappings=record.mappings,
         generation=record.generation + 1,
+        replace_image=replace_image,
     )
 
 

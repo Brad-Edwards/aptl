@@ -79,11 +79,12 @@ def wait_for_loopback_listeners(
         observed = collect_loopback_listeners(probe=probe, owner_pid=owner_pid)
         actual = {(item.address, item.port, item.protocol) for item in observed}
         if expected <= actual:
-            return observed
+            break
         remaining = deadline - time.monotonic()
         if remaining <= 0 or (process_alive is not None and not process_alive()):
-            return observed
+            break
         time.sleep(min(0.05, remaining))
+    return observed
 
 
 def wait_for_web_publications(

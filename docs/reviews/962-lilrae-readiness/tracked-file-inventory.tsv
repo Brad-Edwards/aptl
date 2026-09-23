@@ -1624,6 +1624,7 @@ tests/test_seat_image_config.py	tests-follow-owner	Retain meaningful boundary an
 tests/test_seat_image_selection.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seat_image_runtime.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seat_overlay.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_seat_overlay_identity.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seed_misp_script.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seed_prime_failures.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seed_script_env.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

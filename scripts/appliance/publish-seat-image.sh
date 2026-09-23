@@ -16,7 +16,7 @@ disk=$out/seat-disk.qcow2
 config=$out/seat-image-config.json
 test -f "$disk"
 test -f "$config"
-size=$(stat -c %s "$disk")
+size=$(wc -c < "$disk" | tr -d '[:space:]')
 if test "$size" -ge 10000000000; then
   echo 'seat disk exceeds the GHCR 10 GB layer limit' >&2
   exit 1

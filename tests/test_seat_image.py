@@ -51,7 +51,7 @@ def registry(monkeypatch: pytest.MonkeyPatch):
 
     def fake_stage(*, url, cache_dir, filename, sha256, size_bytes, headers=None):
         state["staged"].append((url, sha256, size_bytes, dict(headers or {})))
-        path = Path(cache_dir) / filename
+        path = Path(cache_dir) / sha256.removeprefix("sha256:") / filename
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(DISK_BYTES)
         return StagedDownload(path, sha256, size_bytes, reused=False)

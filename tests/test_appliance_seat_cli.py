@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import click
 from typer.testing import CliRunner
 
 from aptl.appliance.seat.models import SeatRecord
@@ -209,7 +210,7 @@ def test_seat_start_cannot_adopt_an_image_update() -> None:
     result = runner.invoke(app, ["seat", "start", "--update"])
 
     assert result.exit_code == 2
-    assert "No such option: --update" in result.output
+    assert "No such option: --update" in click.unstyle(result.output)
 
 
 def test_seat_start_accepts_another_image_source(tmp_path: Path) -> None:

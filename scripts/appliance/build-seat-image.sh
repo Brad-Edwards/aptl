@@ -99,6 +99,7 @@ qemu-img create -f qcow2 "$disk" "${disk_gib}G" >/dev/null
 virt-resize --expand /dev/sda1 "$base" "$disk"
 
 virt-customize --add "$disk" \
+  --network \
   --copy-in "$build_root/input/payload.tar:/opt" \
   --run-command 'mkdir -m 0700 -p /opt/aptl-stage' \
   --run-command 'tar --extract --file /opt/payload.tar --directory /opt/aptl-stage' \

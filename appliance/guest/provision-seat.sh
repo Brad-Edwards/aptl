@@ -13,11 +13,19 @@ test "$(id -u)" -eq 0
 test -d "$stage"
 
 # --- Docker ------------------------------------------------------------
-# The base image ships Docker; this only guarantees the daemon is enabled for
-# the guest's own use and refuses to continue if it is absent, rather than
-# reaching out to a package repository during an offline bake.
+# The stock cloud base does not ship Docker, so the bake installs it. This is
+# the one step that reaches a package repository, and it happens here during
+# the build rather than on a participant's machine: what must be offline is
+# the first boot of a published image, not its construction.
+if ! command -v dockerd >/dev/null; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install --yes --no-install-recommends docker.io
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+fi
 command -v dockerd >/dev/null || {
-    echo 'seat image base must provide Docker' >&2
+    echo 'seat image bake could not install Docker' >&2
     exit 1
 }
 systemctl enable docker.service

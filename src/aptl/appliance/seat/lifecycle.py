@@ -863,6 +863,14 @@ def start_seat(
             options=launch_options,
         )
         if launch_options.guest_readiness_probe is None:
+            token_file = (
+                seat_root / "access" / f"generation-{record.generation}"
+                / "web-launch-token"
+            )
+            if not token_file.is_file() or token_file.is_symlink():
+                raise SeatLauncherError(
+                    "missing-web-login", "guest browser login was not delivered"
+                )
             wait_for_web_publications(
                 record.mappings,
                 process_alive=lambda: read_vm_pid(seat_root) == tracked_pid,

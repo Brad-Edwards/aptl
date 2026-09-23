@@ -166,8 +166,10 @@ def test_bake_uses_the_proven_offline_guest_provisioning() -> None:
     for name in ("aptl-web-api", "aptl-web-ui"):
         assert compose["services"][name]["image"] == f"{name}:1"
         assert f"build_image {name}:1" in local_images
-    assert "up --detach --no-build --pull never aptl-web-api aptl-web-ui" in first_boot
     assert "APTL_WEB_LAUNCH_TOKEN" in first_boot
+    web_start = (ROOT / "src/aptl/appliance/guest_web.py").read_text()
+    assert '"--no-build"' in web_start and '"never"' in web_start
+    assert '"aptl-web-api", "aptl-web-ui"' in web_start
 
     # The image archive ships on disk and first boot loads it once per
     # overlay, so a participant's seat pulls nothing. Loading at bake time is

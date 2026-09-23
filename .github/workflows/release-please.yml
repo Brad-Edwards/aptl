@@ -220,7 +220,7 @@ jobs:
           set -euo pipefail
           pip install --require-hashes -r requirements/ci.txt
           pip install --require-hashes -r requirements/runtime.txt
-          pip install --no-deps .
+          pip install -e . --no-deps --no-build-isolation
           scripts/appliance/build-seat-image.sh
       - name: Publish the seat image
         env:

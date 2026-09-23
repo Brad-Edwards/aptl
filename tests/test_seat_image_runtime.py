@@ -143,7 +143,10 @@ def test_readiness_calls_the_current_guest_access_contract(
     from aptl.core.lab import _publish_appliance_guest_readiness
 
     observed: list[object] = []
-    backend = SimpleNamespace(observe_appliance_boundary=lambda deployment: deployment)
+    backend = SimpleNamespace(
+        project_name="aptl-test",
+        observe_appliance_boundary=lambda deployment: deployment,
+    )
     context = SimpleNamespace(
         appliance_readiness_challenge=tmp_path / "challenge.json",
         appliance_readiness_device=tmp_path / "readiness",
@@ -160,6 +163,7 @@ def test_readiness_calls_the_current_guest_access_contract(
         backend=backend,
     )
     monkeypatch.setattr(readiness, "publish_guest_readiness", lambda *_a: None)
+    monkeypatch.setattr("aptl.appliance.guest_web.start_guest_web", lambda *_a: None)
 
     def access(
         *, request_path, descriptor_path, device_path, output_dir,

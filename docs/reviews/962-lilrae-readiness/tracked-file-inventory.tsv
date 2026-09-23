@@ -789,6 +789,7 @@ src/aptl/appliance/download.py	optional-delivery	Keep sealed-seat boundary outsi
 src/aptl/appliance/errors.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/guest_observation.py	optional-delivery	Keep authenticated guest observation with delivery owner
 src/aptl/appliance/guest_services.py	optional-delivery	Keep authenticated guest service launch with delivery owner
+src/aptl/appliance/guest_web.py	optional-delivery	Keep offline guest web startup with delivery owner
 src/aptl/appliance/guest_surfaces.py	optional-delivery	Keep authenticated guest-surface validation with delivery owner
 src/aptl/appliance/input_images.py	optional-delivery	Keep realized seat image inventory with delivery owner
 src/aptl/appliance/input_profile.py	optional-delivery	Keep full participant profile assembly with delivery owner
@@ -1362,6 +1363,7 @@ tests/test_appliance_boundary_policy.py	tests-follow-owner	Retain meaningful bou
 tests/test_appliance_download.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_egress_proxy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_guest_observation.py	tests-follow-owner	Retain guest observation tests with migrated owner
+tests/test_appliance_guest_web.py	tests-follow-owner	Retain offline guest web startup coverage
 tests/test_appliance_guest_surfaces.py	tests-follow-owner	Retain authenticated guest-surface regression coverage
 tests/test_appliance_loopback_proxy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_policy.py	tests-follow-owner	Retain appliance policy tests with migrated owner

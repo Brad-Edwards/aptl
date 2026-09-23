@@ -634,6 +634,44 @@ def _fail_closed_start(seat_root: Path, paths: SeatPaths, starting: SeatRecord) 
     )
 
 
+def _start_tracked_vm(
+    seat_root: Path,
+    paths: SeatPaths,
+    record: SeatRecord,
+    image: ResolvedSeatImage,
+    options: StartSeatOptions,
+    spec: VmLaunchSpec,
+) -> int:
+    """Start one VM if needed and return its live tracked process ID."""
+
+    if read_vm_pid(seat_root) is None:
+        if options.reserve_outer_mappings:
+            vm = launch_with_reserved_mappings(
+                record.mappings,
+                lambda: start_vm(spec),
+                resources=(
+                    image.config.resources.vcpus,
+                    image.config.resources.memory_bytes,
+                    image.runtime_disk_bytes,
+                ),
+                seat_root=seat_root,
+                retained_disk_bytes=(
+                    paths.overlay_path.stat().st_blocks * 512
+                    if paths.overlay_path.exists()
+                    else 0
+                ),
+            )
+        else:
+            vm = start_vm(spec)
+        write_vm_pid(seat_root, vm.pid)
+    tracked_pid = read_vm_pid(seat_root)
+    if tracked_pid is None:
+        raise SeatLauncherError(
+            "failed-launch", "tracked VM exited before listener observation"
+        )
+    return tracked_pid
+
+
 @serialized_seat_mutation
 def start_seat(
     seat_root: Path,
@@ -747,31 +785,9 @@ def start_seat(
         require_host_exposure(
             vm_argv=argv, docker_daemon_running=launch_options.docker_daemon_running
         )
-        if read_vm_pid(seat_root) is None:
-            if launch_options.reserve_outer_mappings:
-                vm = launch_with_reserved_mappings(
-                    record.mappings,
-                    lambda: start_vm(spec),
-                    resources=(
-                        image.config.resources.vcpus,
-                        image.config.resources.memory_bytes,
-                        image.runtime_disk_bytes,
-                    ),
-                    seat_root=seat_root,
-                    retained_disk_bytes=(
-                        paths.overlay_path.stat().st_blocks * 512
-                        if paths.overlay_path.exists()
-                        else 0
-                    ),
-                )
-            else:
-                vm = start_vm(spec)
-            write_vm_pid(seat_root, vm.pid)
-        tracked_pid = read_vm_pid(seat_root)
-        if tracked_pid is None:
-            raise SeatLauncherError(
-                "failed-launch", "tracked VM exited before listener observation"
-            )
+        tracked_pid = _start_tracked_vm(
+            seat_root, paths, record, image, launch_options, spec
+        )
         observed = wait_for_loopback_listeners(
             record.mappings,
             probe=launch_options.listener_probe,

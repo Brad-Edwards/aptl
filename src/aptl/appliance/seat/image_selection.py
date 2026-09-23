@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import secrets
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -114,11 +116,37 @@ def save_selection(
         "available_size_bytes": available_size_bytes,
         "last_checked": last_checked,
     }
-    temporary = path.with_suffix(".partial")
-    temporary.write_text(
-        json.dumps(document, separators=(",", ":"), sort_keys=True), encoding="utf-8"
-    )
-    temporary.replace(path)
+    payload = json.dumps(document, separators=(",", ":"), sort_keys=True).encode()
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC
+    file_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        directory_flags |= os.O_NOFOLLOW
+        file_flags |= os.O_NOFOLLOW
+    try:
+        directory_fd = os.open(path.parent, directory_flags)
+    except OSError as exc:
+        raise SeatImageError("seat image selection directory is unsafe") from exc
+    temporary_name = f".{secrets.token_hex(8)}.partial"
+    try:
+        temporary_fd = os.open(
+            temporary_name, file_flags, 0o600, dir_fd=directory_fd
+        )
+        with os.fdopen(temporary_fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(
+            temporary_name,
+            path.name,
+            src_dir_fd=directory_fd,
+            dst_dir_fd=directory_fd,
+        )
+    finally:
+        try:
+            os.unlink(temporary_name, dir_fd=directory_fd)
+        except FileNotFoundError:
+            pass
+        os.close(directory_fd)
 
 
 def check_for_update(

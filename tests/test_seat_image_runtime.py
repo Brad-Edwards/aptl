@@ -124,8 +124,9 @@ def test_guest_services_use_verified_launch_policy(
         guest_services, "serve_proxy_bindings", lambda bindings: observed.extend(bindings)
     )
     monkeypatch.setattr(
-        sys, "argv", ["guest-services", "proxy", "--descriptor", str(path)]
+        sys, "argv", ["guest-services", "proxy"]
     )
+    monkeypatch.setattr(guest_services, "_LAUNCH_DESCRIPTOR", path)
     guest_services.main()
     assert {binding.listen_port for binding in observed} == {3000, 8400, 2222}
 

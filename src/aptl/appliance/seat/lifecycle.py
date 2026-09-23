@@ -73,15 +73,12 @@ from aptl.appliance.seat.vm import (
 from aptl.core.appliance_boundary import (
     ApplianceBoundaryBinding,
     ApplianceBoundaryPolicy,
-    load_boundary_policy,
 )
 from aptl.core.appliance_boundary_gate import BoundaryPhase, run_appliance_boundary_gate
 from aptl.core.appliance_boundary_inventory import (
     BoundaryEndpoint,
     GuestBoundaryObservation,
 )
-from aptl.utils.strict_json import model_validate_json_strict
-from aptl.validation.participant_profile_models import ParticipantProfileManifest
 
 SEAT_RECORD_SCHEMA = "aptl.seat-record/v2"
 SEAT_NOT_STAGED = "seat is not staged"
@@ -888,7 +885,6 @@ def start_seat(
         _fail_closed_start(seat_root, paths, starting)
         raise
     except (
-        ApplianceManifestError,
         OSError,
         ValueError,
     ) as exc:

@@ -24,9 +24,7 @@ fi
 
 guest_python=/usr/bin/python3
 guest_path=/opt/aptl/app:/opt/aptl/python
-PYTHONPATH="$guest_path" "$guest_python" -m aptl.appliance.guest_services proxy \
-    --descriptor /run/aptl-launch/appliance-launch.json \
-    --adapter-address 10.0.2.15 &
+PYTHONPATH="$guest_path" "$guest_python" -m aptl.appliance.guest_services proxy &
 proxy_pid=$!
 cleanup() {
     kill "$proxy_pid" 2>/dev/null || true

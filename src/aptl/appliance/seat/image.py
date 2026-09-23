@@ -166,22 +166,52 @@ def write_verification_stamp(disk: Path, *, digest: str, size_bytes: int) -> Non
     later starts re-check only what is cheap.
     """
 
+    if disk.name != "seat-disk.qcow2" or not re.fullmatch(
+        r"[a-f0-9]{64}", disk.parent.name
+    ):
+        raise SeatImageError("seat disk verification path is invalid")
     status = disk.stat(follow_symlinks=False)
-    _stamp_path(disk).write_text(
-        json.dumps(
-            {
-                "schema_version": "aptl.seat-disk-verification/v1",
-                "digest": digest,
-                "size_bytes": size_bytes,
-                "inode": status.st_ino,
-                "mtime_ns": status.st_mtime_ns,
-                "mode": status.st_mode & 0o7777,
-            },
-            separators=(",", ":"),
-            sort_keys=True,
-        ),
-        encoding="utf-8",
-    )
+    if not stat.S_ISREG(status.st_mode):
+        raise SeatImageError("seat disk verification requires a regular file")
+    payload = json.dumps(
+        {
+            "schema_version": "aptl.seat-disk-verification/v1",
+            "digest": digest,
+            "size_bytes": size_bytes,
+            "inode": status.st_ino,
+            "mtime_ns": status.st_mtime_ns,
+            "mode": status.st_mode & 0o7777,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC
+    file_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        directory_flags |= os.O_NOFOLLOW
+        file_flags |= os.O_NOFOLLOW
+    directory_fd = os.open(disk.parent, directory_flags)
+    temporary_name = f".seat-disk.verified.{secrets.token_hex(8)}"
+    try:
+        temporary_fd = os.open(
+            temporary_name, file_flags, 0o600, dir_fd=directory_fd
+        )
+        with os.fdopen(temporary_fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(
+            temporary_name,
+            "seat-disk.verified.json",
+            src_dir_fd=directory_fd,
+            dst_dir_fd=directory_fd,
+        )
+    finally:
+        try:
+            os.unlink(temporary_name, dir_fd=directory_fd)
+        except FileNotFoundError:
+            pass
+        os.close(directory_fd)
 
 
 def verified_cached_disk(

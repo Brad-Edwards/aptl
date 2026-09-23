@@ -528,7 +528,16 @@ def test_start_fails_closed_without_real_boundary_probes(tmp_path: Path) -> None
     stop.assert_called_once_with(seat_root)
 
 
-def test_start_stops_vm_and_preserves_host_access_failure(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("failure", "expected_code"),
+    [
+        (WorkbenchConfigurationError("transport paths must be absolute"), "invalid-host-access"),
+        (OSError("transport disappeared"), "failed-readiness"),
+    ],
+)
+def test_start_stops_vm_on_host_access_failure(
+    tmp_path: Path, failure: Exception, expected_code: str
+) -> None:
     seat_root = tmp_path / "seat"
     seat_root.mkdir()
     release = seat_root / "launch" / "release"
@@ -556,7 +565,7 @@ def test_start_stops_vm_and_preserves_host_access_failure(tmp_path: Path) -> Non
         patch("aptl.appliance.seat.lifecycle.run_appliance_boundary_gate") as gate,
         patch(
             "aptl.appliance.seat.lifecycle._establish_host_access",
-            side_effect=WorkbenchConfigurationError("transport paths must be absolute"),
+            side_effect=failure,
         ),
         patch(
             "aptl.appliance.seat.lifecycle._launch_descriptor_digest",
@@ -580,7 +589,7 @@ def test_start_stops_vm_and_preserves_host_access_failure(tmp_path: Path) -> Non
                 options=options,
             )
 
-    assert exc.value.code == "invalid-host-access"
+    assert exc.value.code == expected_code
     stop.assert_called_once_with(seat_root)
 
 

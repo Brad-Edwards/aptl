@@ -17,6 +17,7 @@ from aptl.appliance.seat.image import (
 from aptl.appliance.seat.image_selection import (
     check_for_update,
     load_selection,
+    save_selection,
     select_seat_image,
 )
 
@@ -259,3 +260,50 @@ def test_check_for_update_reports_nothing_when_current(registry, tmp_path) -> No
         )
         is None
     )
+
+
+def test_verification_stamp_replaces_a_symlink_without_writing_its_target(
+    tmp_path: Path,
+) -> None:
+    disk = tmp_path / OLD.removeprefix("sha256:") / "seat-disk.qcow2"
+    disk.parent.mkdir()
+    disk.write_bytes(b"old-disk")
+    outside = tmp_path / "outside.json"
+    outside.write_text("sentinel")
+    stamp = disk.with_suffix(".verified.json")
+    stamp.symlink_to(outside)
+
+    write_verification_stamp(disk, digest=OLD, size_bytes=disk.stat().st_size)
+
+    assert outside.read_text() == "sentinel"
+    assert stamp.is_file() and not stamp.is_symlink()
+
+
+def test_selection_write_does_not_follow_a_precreated_partial_symlink(
+    tmp_path: Path,
+) -> None:
+    reference = parse_seat_image_reference(REFERENCE)
+    selection = image_selection._selection_path(tmp_path, reference)
+    selection.parent.mkdir(parents=True)
+    outside = tmp_path / "outside.json"
+    outside.write_text("sentinel")
+    selection.with_suffix(".partial").symlink_to(outside)
+
+    save_selection(tmp_path, reference, digest=OLD, size_bytes=8)
+
+    assert outside.read_text() == "sentinel"
+    assert load_selection(tmp_path, reference)["digest"] == OLD
+
+
+def test_selection_refuses_a_linked_reference_directory(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "refs").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(SeatImageError, match="selection directory is unsafe"):
+        save_selection(
+            cache, parse_seat_image_reference(REFERENCE), digest=OLD, size_bytes=8
+        )
+    assert not list(outside.iterdir())

@@ -15,7 +15,7 @@ from aptl.appliance.seat.context import StartSeatOptions
 from aptl.appliance.seat.access import SeatAccessEnrollment, ensure_transport_identity
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.appliance.seat.retained_image import cache_for_seat
-from aptl.appliance.seat.kiosk import open_participant_kiosk
+from aptl.appliance.seat.kiosk import open_participant_kiosk, resolve_kiosk_access
 from aptl.appliance.seat.image import SeatImageError, parse_seat_image_reference
 from aptl.appliance.seat.image_trust import configure_trust
 from aptl.appliance.seat.image_update import update_seat_image
@@ -398,36 +398,7 @@ def open_kiosk(
 
     try:
         resolved_root = _resolved_seat_root(seat_root)
-        record = load_seat_record(resolved_root)
-        launch_token = None
-        if record is not None:
-            participants = tuple(
-                mapping
-                for mapping in record.mappings
-                if mapping.audience == "participant" and mapping.protocol == "tcp"
-            )
-            if len(participants) != 1:
-                raise SeatLauncherError(
-                    "invalid-mapping", "seat requires one participant mapping"
-                )
-            if (
-                participant_port is not None
-                and participant_port != participants[0].port
-            ):
-                raise SeatLauncherError(
-                    "invalid-mapping", "participant port differs from staged mapping"
-                )
-            participant_port = participants[0].port
-            if record.lifecycle_state == "ready":
-                token_path = (
-                    resolved_root / "access" / f"generation-{record.generation}"
-                    / "web-launch-token"
-                )
-                if token_path.is_symlink() or not token_path.is_file():
-                    raise SeatLauncherError(
-                        "missing-web-login", "seat browser login is unavailable"
-                    )
-                launch_token = token_path.read_text(encoding="utf-8").strip()
+        participant_port, launch_token = resolve_kiosk_access(resolved_root, participant_port)
     except SeatLauncherError as exc:
         _fail(exc)
     plan = open_participant_kiosk(

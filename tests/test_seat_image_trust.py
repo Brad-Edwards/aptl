@@ -25,11 +25,11 @@ def public_key(tmp_path: Path, name: str = "publisher.pub") -> Path:
     return path
 
 
-def claims(digest: str = MANIFEST) -> bytes:
+def claims(digest: str = MANIFEST, *, modern: bool = False) -> bytes:
     return json.dumps([{"critical": {
-        "identity": {"docker-reference": "ghcr.io/example/seat"},
+        "identity": {"docker-reference": "ghcr.io/example/seat" + (f"@{digest}" if modern else "")},
         "image": {"docker-manifest-digest": digest},
-        "type": "cosign container image signature",
+        "type": "https://sigstore.dev/cosign/sign/v1" if modern else "cosign container image signature",
     }}]).encode()
 
 
@@ -53,14 +53,15 @@ def test_signature_for_another_manifest_is_rejected(tmp_path, monkeypatch, paylo
         image_trust.verify_remote_image(cache, REFERENCE, MANIFEST, DISK, CONFIG)
 
 
-def test_verified_cache_is_offline_and_rejects_trust_rotation(tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize("modern", [False, True], ids=["cosign-2", "cosign-3"])
+def test_verified_cache_is_offline_and_rejects_trust_rotation(tmp_path, monkeypatch, modern) -> None:
     from aptl.appliance.seat import image_trust
     cache = tmp_path / "cache"
     image_trust.configure_trust(cache, REFERENCE, public_key(tmp_path))
     calls = []
     def verify(argv, **kwargs):
         calls.append(argv)
-        return subprocess.CompletedProcess(argv, 0, claims(), b"")
+        return subprocess.CompletedProcess(argv, 0, claims(modern=modern), b"")
     monkeypatch.setattr(image_trust.subprocess, "run", verify)
     receipt = image_trust.verify_remote_image(cache, REFERENCE, MANIFEST, DISK, CONFIG)
     image_trust.publish_verified_image(cache, receipt)
@@ -71,6 +72,27 @@ def test_verified_cache_is_offline_and_rejects_trust_rotation(tmp_path, monkeypa
     image_trust.configure_trust(cache, REFERENCE, public_key(tmp_path, "rotated.pub"))
     with pytest.raises(SeatImageError, match="trust"):
         image_trust.verify_cached_image(cache, REFERENCE, DISK, CONFIG)
+
+
+@pytest.mark.parametrize("reference", [
+    "ghcr.io/other/seat@" + MANIFEST,
+    "ghcr.io/example/seat@sha256:" + "d" * 64,
+    "ghcr.io/example/seat:stable",
+])
+def test_cosign_three_claim_rejects_wrong_signed_identity(reference) -> None:
+    from aptl.appliance.seat import image_trust
+
+    payload = json.loads(claims(modern=True))
+    payload[0]["critical"]["identity"]["docker-reference"] = reference
+    assert not image_trust._claims_match(json.dumps(payload).encode(), "ghcr.io/example/seat", MANIFEST)
+
+
+def test_unknown_signed_statement_type_is_rejected() -> None:
+    from aptl.appliance.seat import image_trust
+
+    payload = json.loads(claims(modern=True))
+    payload[0]["critical"]["type"] = "https://slsa.dev/provenance/v1"
+    assert not image_trust._claims_match(json.dumps(payload).encode(), "ghcr.io/example/seat", MANIFEST)
 
 
 def test_alternate_registry_requires_independent_trust(tmp_path) -> None:
@@ -109,8 +131,9 @@ def test_index_child_must_match_advertised_digest(monkeypatch) -> None:
     from aptl.appliance.seat import image
     manifest = {"manifests": [{"digest": MANIFEST}]}
     monkeypatch.setattr(image, "fetch_https_metadata", lambda *a, **kw: b'{}')
+    reference = image.parse_seat_image_reference(REFERENCE)
     with pytest.raises(SeatImageError, match="digest"):
-        image._resolve_index(image.parse_seat_image_reference(REFERENCE), manifest, None)
+        image._resolve_index(reference, manifest, None)
 
 
 def test_rejected_config_preserves_prior_offline_trust(tmp_path, monkeypatch):

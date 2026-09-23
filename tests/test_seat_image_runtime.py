@@ -249,6 +249,7 @@ def test_archive_rejects_tracked_credential_alias(tmp_path):
 @pytest.mark.parametrize("directory", [False, True])
 @pytest.mark.parametrize("flatten", [False, True])
 def test_common_package_rejects_nested_links(tmp_path, directory, flatten):
+    from functools import partial
     from aptl.utils.mcp_packaging import flatten_common_dependencies
     project = tmp_path / "project"
     common = project / "mcp/aptl-mcp-common"
@@ -264,9 +265,11 @@ def test_common_package_rejects_nested_links(tmp_path, directory, flatten):
         target.write_text("fixture-secret")
     (common / "innocent").symlink_to(target, target_is_directory=directory)
     from aptl.utils.pathsafe import PathContainmentError
+    archive = tmp_path / "project.tar"
+    operation = (
+        partial(flatten_common_dependencies, project) if flatten
+        else partial(archive_project, project, archive)
+    )
     with pytest.raises((ValueError, PathContainmentError)):
-        if flatten:
-            flatten_common_dependencies(project)
-        else:
-            archive_project(project, tmp_path / "project.tar")
+        operation()
     assert dependency.is_symlink()

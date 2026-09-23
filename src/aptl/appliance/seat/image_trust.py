@@ -27,6 +27,8 @@ _MAX_BYTES = 256 * 1024
 
 
 def _repository(reference: str) -> str:
+    """Normalize the repository identity without its mutable tag or digest."""
+
     from aptl.appliance.seat.image import parse_seat_image_reference
 
     parsed = parse_seat_image_reference(reference)
@@ -34,6 +36,8 @@ def _repository(reference: str) -> str:
 
 
 def _key_path(cache: Path, reference: str) -> Path:
+    """Select the repository-scoped override or the bundled publisher anchor."""
+
     repository = _repository(reference)
     key = hashlib.sha256(repository.encode()).hexdigest()
     configured = cache / "trust" / f"{key}.pub"
@@ -45,6 +49,8 @@ def _key_path(cache: Path, reference: str) -> Path:
 
 
 def _read_regular(path: Path, maximum: int = _MAX_BYTES) -> bytes:
+    """Read a bounded regular trust file without following a final symlink."""
+
     try:
         flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW
         with os.fdopen(os.open(path, flags), "rb") as handle:
@@ -59,6 +65,8 @@ def _read_regular(path: Path, maximum: int = _MAX_BYTES) -> bytes:
 
 
 def _write_private(path: Path, payload: bytes) -> None:
+    """Atomically publish trust metadata in the owner's private cache."""
+
     from aptl.appliance.seat.persistence import _ensure_seat_root
 
     _ensure_seat_root(path.parent)
@@ -87,12 +95,19 @@ def configure_trust(cache: Path, reference: str, public_key: Path) -> None:
 
 
 def _claims_match(payload: bytes, repository: str, manifest: str) -> bool:
+    """Bind supported verified Cosign claims to the exact repository and digest."""
+
     try:
         claims = json.loads(payload)
         return isinstance(claims, list) and any(
-            claim["critical"]["type"] == "cosign container image signature"
+            claim["critical"]["type"] in {
+                "cosign container image signature",
+                "https://sigstore.dev/cosign/sign/v1",
+            }
             and claim["critical"]["image"]["docker-manifest-digest"] == manifest
-            and claim["critical"]["identity"]["docker-reference"] == repository
+            and claim["critical"]["identity"]["docker-reference"] in {
+                repository, f"{repository}@{manifest}",
+            }
             for claim in claims
         )
     except (ValueError, TypeError, KeyError):

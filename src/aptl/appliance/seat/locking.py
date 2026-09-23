@@ -118,6 +118,8 @@ def serialized_image_cache(function: Callable[P, R]) -> Callable[P, R]:
 
     @wraps(function)
     def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
+        """Invoke the cache mutation while holding its reentrant lock."""
+
         cache = kwargs.get("cache_dir", args[0] if args else None)
         if not isinstance(cache, Path):
             raise TypeError("cache_dir must be a pathlib.Path")

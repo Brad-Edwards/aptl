@@ -1825,3 +1825,4 @@ tests/test_seat_image_trust.py	test-governance	Migrate regression coverage with 
 tests/test_seat_image_update.py	test-governance	Migrate regression coverage with the behavior it verifies
 tests/test_seat_local_release.py	test-governance	Migrate regression coverage with the behavior it verifies
 src/aptl/appliance/seat/retained_image.py	optional-delivery	Retain per-seat verified image identity for independent offline restart
+docs/reviews/1162-seat-acceptance.md	docs-follow-owner	Preserve immutable image identities and observed manual acceptance evidence

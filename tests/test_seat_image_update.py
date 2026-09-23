@@ -64,8 +64,9 @@ def test_cache_prune_cannot_race_another_operation(tmp_path) -> None:
 
     cache = tmp_path / "cache"
     with seat_mutation_lock(cache), ThreadPoolExecutor(max_workers=1) as pool:
+        pending = pool.submit(prune_cached_images, cache)
         with pytest.raises(SeatLauncherError, match="another"):
-            pool.submit(prune_cached_images, cache).result(timeout=5)
+            pending.result(timeout=5)
 
 
 def test_failed_update_admission_preserves_selection_and_overlay(tmp_path, monkeypatch) -> None:

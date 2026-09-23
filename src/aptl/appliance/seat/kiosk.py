@@ -11,6 +11,41 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlencode
 
+from aptl.appliance.seat.errors import SeatLauncherError
+from aptl.appliance.seat.models import SeatRecord
+from aptl.appliance.seat.persistence import load_seat_record
+
+
+def _kiosk_login_token(seat_root: Path, record: SeatRecord) -> str | None:
+    """Read the current generation's token only when the seat is ready."""
+
+    if record.lifecycle_state != "ready":
+        return None
+    token_path = seat_root / "access" / f"generation-{record.generation}" / "web-launch-token"
+    if token_path.is_symlink() or not token_path.is_file():
+        raise SeatLauncherError("missing-web-login", "seat browser login is unavailable")
+    return token_path.read_text(encoding="utf-8").strip()
+
+
+def resolve_kiosk_access(
+    seat_root: Path, participant_port: int | None,
+) -> tuple[int, str | None]:
+    """Resolve the staged participant endpoint and current private login token."""
+
+    record = load_seat_record(seat_root)
+    if record is None:
+        return participant_port or 443, None
+    participants = tuple(
+        mapping for mapping in record.mappings
+        if mapping.audience == "participant" and mapping.protocol == "tcp"
+    )
+    if len(participants) != 1:
+        raise SeatLauncherError("invalid-mapping", "seat requires one participant mapping")
+    port = participants[0].port
+    if participant_port is not None and participant_port != port:
+        raise SeatLauncherError("invalid-mapping", "participant port differs from staged mapping")
+    return port, _kiosk_login_token(seat_root, record)
+
 
 @dataclass(frozen=True)
 class KioskLaunchPlan:

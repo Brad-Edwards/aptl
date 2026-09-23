@@ -150,11 +150,8 @@ def _anonymous_token(reference: SeatImageReference) -> str | None:
     url = f"https://{reference.registry}/token?{query}"
     try:
         payload = fetch_https_metadata(url, max_bytes=_MAX_METADATA_BYTES)
-    except ApplianceDownloadError:
-        return None
-    try:
         document = json.loads(payload)
-    except ValueError:
+    except (ApplianceDownloadError, ValueError):
         return None
     if not isinstance(document, dict):
         return None

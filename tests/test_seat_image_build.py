@@ -177,7 +177,8 @@ def test_bake_uses_the_proven_offline_guest_provisioning() -> None:
     assert all(item.listen_address == "10.0.2.15" for item in bindings)
     assert all(item.target_address == "127.0.0.1" for item in bindings)
     web_start = (ROOT / "src/aptl/appliance/guest_web.py").read_text()
-    assert "build=False" in web_start and "backend.start(" in web_start
+    assert "build=False" in web_start
+    assert "backend.start(" in web_start
     assert '"aptl-web-api", "aptl-web-ui"' in web_start
 
     # The image archive ships on disk and first boot loads it once per

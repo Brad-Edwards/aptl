@@ -14,8 +14,10 @@ from aptl.core.lab_types import LabResult
 def test_guest_web_requires_boot_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("APTL_API_TOKEN", raising=False)
     monkeypatch.delenv("APTL_WEB_LAUNCH_TOKEN", raising=False)
+    backend = Mock()
+    project = Path("/opt/aptl/project")
     with pytest.raises(ValueError, match="credentials"):
-        start_guest_web(Mock(), Path("/opt/aptl/project"))
+        start_guest_web(backend, project)
 
 
 def test_guest_web_uses_owned_backend_without_building(

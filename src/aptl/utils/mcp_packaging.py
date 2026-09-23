@@ -90,7 +90,7 @@ def flatten_common_dependencies(project: Path) -> None:
             linked.unlink()
             shutil.copytree(
                 target, linked, ignore=_ignore_common_state,
-                copy_function=lambda source, dest: _copy_common_file(target, source, dest),
+                copy_function=lambda source, dest, root=target: _copy_common_file(root, source, dest),
             )
 
 
@@ -216,8 +216,7 @@ def _common_files(target: Path) -> Iterator[Path]:
             if _package_file_allowed(Path("mcp"), name):
                 path = Path(root) / name
                 with open_contained_nofollow(target, path.relative_to(target)):
-                    pass
-                yield path
+                    yield path
 
 
 def _ignore_common_state(directory: str, names: list[str]) -> list[str]:

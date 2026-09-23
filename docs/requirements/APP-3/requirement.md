@@ -60,3 +60,4 @@ Issue #823 supplies the release artifact consumed by the host launcher in issue 
 - TESTS → TEST `tests/test_seat_image_consent.py` (Consent before acquisition and no fallback)
 - TESTS → TEST `tests/test_seat_image_build.py` (Offline assembly and guest boot contracts)
 - TESTS → TEST `tests/test_seat_local_release.py` (Local cut identity and package release independence)
+- DOCUMENTS → DOCUMENTATION `docs/reviews/1162-seat-acceptance.md` (Signed image identities and manual single-host lifecycle proof)

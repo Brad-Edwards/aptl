@@ -68,16 +68,19 @@ def _digest(text: str | None) -> str:
 
 
 def _validate_identity(previous: dict[str, Any], record: SeatAccessRecord) -> None:
-    """Reject stale generations and changes to the managed seat identity."""
+    """Keep owner/seat stable and admit replacement instances only in newer generations."""
     old = previous["identity"]
     if (
         any(
             old[field] != getattr(record, field)
-            for field in ("owner_id", "seat_id", "instance_id")
+            for field in ("owner_id", "seat_id")
         )
         or record.generation < old["generation"]
     ):
         raise WorkbenchConfigurationError("stale or mismatched client identity")
+    # Reset and image replacement create a new instance under the same managed
+    # seat. A strictly newer generation revokes the previous transport binding;
+    # an instance change within the current generation remains forbidden.
     if record.generation == old["generation"] and old != _record_identity(record):
         raise WorkbenchConfigurationError(
             "transport identity changed without a new generation"

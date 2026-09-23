@@ -19,9 +19,7 @@ CORTEX_ANALYZER_DIR = PROJECT_ROOT / "config" / "cortex" / "analyzers"
 CORTEX_ANALYZER_DESCRIPTOR = (
     CORTEX_ANALYZER_DIR / "APTLObservable" / "APTL_Observable.json"
 )
-CORTEX_ANALYZER_SCRIPT = (
-    CORTEX_ANALYZER_DIR / "APTLObservable" / "aptl_observable.py"
-)
+CORTEX_ANALYZER_SCRIPT = CORTEX_ANALYZER_DIR / "APTLObservable" / "aptl_observable.py"
 
 
 def _compose():
@@ -32,10 +30,10 @@ def _compose():
 def test_cortex_uses_supported_elasticsearch_uri_setting():
     text = CORTEX_CONF_PATH.read_text(encoding="utf-8")
 
-    assert "uri = \"http://thehive-es:9200\"" in text
+    assert 'uri = "http://thehive-es:9200"' in text
     assert 'auth.provider = ["local", "key"]' in text
     assert "search.host" not in text
-    assert "host = [\"http://thehive-es:9200\"]" not in text
+    assert 'host = ["http://thehive-es:9200"]' not in text
 
 
 def test_cortex_declares_the_bundled_analyzer_catalog():
@@ -74,7 +72,9 @@ def test_cortex_bundles_an_executable_offline_observable_analyzer(tmp_path):
     )
 
     subprocess.run([CORTEX_ANALYZER_SCRIPT, job_dir], check=True)
-    output = json.loads((job_dir / "output" / "output.json").read_text(encoding="utf-8"))
+    output = json.loads(
+        (job_dir / "output" / "output.json").read_text(encoding="utf-8")
+    )
 
     assert output["success"] is True
     assert output["summary"]["taxonomies"] == [
@@ -121,25 +121,34 @@ def test_cortex_compose_precreates_key_auth_index_mapping():
 
     assert index_init["image"] == services["thehive-es"]["image"]
     assert index_init["restart"] == "no"
-    assert index_init["entrypoint"] == ["/bin/sh", "/usr/local/bin/cortex-index-init.sh"]
-    assert "./scripts/cortex-index-init.sh:/usr/local/bin/cortex-index-init.sh:ro" in index_init["volumes"]
+    assert index_init["entrypoint"] == [
+        "/bin/sh",
+        "/usr/local/bin/cortex-index-init.sh",
+    ]
+    assert (
+        "./scripts/cortex-index-init.sh:/usr/local/bin/cortex-index-init.sh:ro"
+        in index_init["volumes"]
+    )
     assert (
         "./config/cortex/index-mapping.json:/usr/local/share/aptl/cortex-index-mapping.json:ro"
         in index_init["volumes"]
     )
     assert index_init["depends_on"]["thehive-es"]["condition"] == "service_healthy"
-    assert cortex["depends_on"]["cortex-index-init"]["condition"] == "service_completed_successfully"
+    assert (
+        cortex["depends_on"]["cortex-index-init"]["condition"]
+        == "service_completed_successfully"
+    )
 
     text = CORTEX_INDEX_INIT_SCRIPT.read_text(encoding="utf-8")
     mapping = json.loads(CORTEX_INDEX_MAPPING.read_text(encoding="utf-8"))
     assert 'INDEX="${CORTEX_INDEX:-cortex_6}"' in text
-    assert 'CORTEX_MAPPING_FILE:-/usr/local/share/aptl/cortex-index-mapping.json' in text
+    assert (
+        "CORTEX_MAPPING_FILE:-/usr/local/share/aptl/cortex-index-mapping.json" in text
+    )
     assert mapping["mappings"]["properties"]["relations"]["type"] == "join"
     assert mapping["mappings"]["properties"]["status"] == {"type": "keyword"}
     assert mapping["mappings"]["properties"]["key"] == {"type": "keyword"}
-    assert mapping["mappings"]["properties"]["organization"] == {
-        "type": "keyword"
-    }
+    assert mapping["mappings"]["properties"]["organization"] == {"type": "keyword"}
     assert '"count":' in text
     assert "lacks the required Cortex mapping" in text
 
@@ -154,8 +163,11 @@ def test_cortex_seed_script_uses_the_realized_thehive_connector_key():
     assert '"roles": ["read", "analyze"]' in text
     assert '"roles": ["read", "analyze", "orgadmin"]' in text
     # The env-pack host-publishes no Cortex port, so the seed reaches the API
-    # through the container rather than a host localhost:9001 binding.
-    assert 'docker exec "$CORTEX_CONTAINER" curl' in text
+    # through the container rather than a host localhost:9001 binding. The
+    # client is driven by a piped curl config so credentials never appear in
+    # argv, which is why this does not pin the exact invocation.
+    assert 'docker exec -i "$CORTEX_CONTAINER"' in text
+    assert "curl --config -" in text
     # The released pack leaves Cortex's native schema under Cortex ownership.
     # Initialization must use Cortex's API rather than mutate Elasticsearch.
     assert "cortex-index-init.sh" not in text

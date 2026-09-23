@@ -143,5 +143,10 @@ class ComposeGenericBaseImageMixin(object):
             timeout=600,
         )
         if built.returncode != 0:
-            return [f"failed to build generic base image {image_ref}"]
+            # Without the builder's own words this reads as "the image did not
+            # build", which is true of a missing Dockerfile, an unreachable
+            # base and a failing RUN alike.
+            detail = (built.stderr or built.stdout or "").strip().splitlines()
+            reason = detail[-1] if detail else "no builder output"
+            return [f"failed to build generic base image {image_ref}: {reason}"]
         return []

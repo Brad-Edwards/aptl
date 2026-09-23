@@ -4084,10 +4084,7 @@ def _publish_appliance_guest_readiness(
     try:
         from aptl.appliance.guest_web import start_guest_web
 
-        project_name = getattr(ctx.backend, "project_name", None)
-        if not isinstance(project_name, str):
-            raise ValueError("appliance web requires a local Compose project")
-        start_guest_web(ctx.project_dir, project_name)
+        start_guest_web(ctx.backend, ctx.project_dir)
         deployment = realization.deployment_spec(sorted(ctx.selected_profiles))
         observation = observe(deployment)
         from aptl.appliance.seat.readiness import publish_guest_readiness

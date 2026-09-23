@@ -1,56 +1,42 @@
-"""Start the offline web profile after the scenario owns its networks."""
+"""Start the offline web profile through the lab's owned Compose backend."""
 
 from __future__ import annotations
 
 import os
-import subprocess
-import time
 from pathlib import Path
+from typing import Protocol
+
+from aptl.core.lab_types import LabResult
 
 
-def start_guest_web(project_dir: Path, project_name: str) -> None:
-    """Bring up the two baked web services in the realized Compose project."""
+class GuestWebBackend(Protocol):
+    """The receipt-backed Compose operation needed by the seat web profile."""
 
-    if not os.environ.get("APTL_API_TOKEN") or not os.environ.get(
-        "APTL_WEB_LAUNCH_TOKEN"
-    ):
+    def start(
+        self,
+        profiles: list[str],
+        *,
+        build: bool,
+        only_services: tuple[str, ...],
+        scenario_root: Path,
+    ) -> LabResult: ...
+
+
+def start_guest_web(backend: GuestWebBackend, project_dir: Path) -> None:
+    """Bring up and receipt both web services in the realized Compose project."""
+
+    api_token = os.environ.get("APTL_API_TOKEN")
+    launch_token = os.environ.get("APTL_WEB_LAUNCH_TOKEN")
+    if not api_token or not launch_token:
         raise ValueError("appliance web credentials are unavailable")
-    command = [
-        "docker", "compose", "--project-name", project_name,
-        "--project-directory", str(project_dir),
-        "--file", str(project_dir / "docker-compose.yml"),
-        "--profile", "web", "up", "--detach", "--no-build",
-        "--pull", "never", "aptl-web-api", "aptl-web-ui",
-    ]
-    failure = "unknown Compose failure"
-    for attempt in range(3):
-        try:
-            # A failed network attachment can leave a created container with a
-            # stale endpoint. Recreate it before retrying the same service.
-            retry_command = (
-                command[: -2] + ["--force-recreate"] + command[-2:]
-                if attempt
-                else command
-            )
-            result = subprocess.run(
-                retry_command,
-                cwd=project_dir,
-                capture_output=True,
-                text=True,
-                timeout=120,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            failure = "Compose startup timed out"
-        else:
-            if result.returncode == 0:
-                return
-            failure = (result.stderr or result.stdout).strip()[-2000:]
-            for secret in (
-                os.environ["APTL_API_TOKEN"],
-                os.environ["APTL_WEB_LAUNCH_TOKEN"],
-            ):
-                failure = failure.replace(secret, "[redacted]")
-        if attempt < 2:
-            time.sleep(3)
-    raise RuntimeError(f"offline appliance web services failed to start: {failure}")
+    result = backend.start(
+        ["web"],
+        build=False,
+        only_services=("aptl-web-api", "aptl-web-ui"),
+        scenario_root=project_dir,
+    )
+    if not result.success:
+        failure = (result.error or "Compose startup failed")[-2000:]
+        for secret in (api_token, launch_token):
+            failure = failure.replace(secret, "[redacted]")
+        raise RuntimeError(f"offline appliance web services failed to start: {failure}")

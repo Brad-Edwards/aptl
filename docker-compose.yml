@@ -926,7 +926,7 @@ services:
     restart: unless-stopped
     ports:
       # Loopback-only: only the operator's machine can reach this port (ADR-039).
-      - "127.0.0.1:${APTL_HP_APTL_WEB_API_8400:-8400}:8400"
+      - "${APTL_WEB_BIND_ADDRESS:-127.0.0.1}:${APTL_HP_APTL_WEB_API_8400:-8400}:8400"
     environment:
       - APTL_PROJECT_DIR=/project
       # Validated by the API at runtime. Do not use `${VAR:?}` here: Compose
@@ -958,7 +958,7 @@ services:
     restart: unless-stopped
     ports:
       # Loopback-only: only the operator's machine can reach the UI (ADR-039).
-      - "127.0.0.1:${APTL_HP_APTL_WEB_UI_3000:-3000}:3000"
+      - "${APTL_WEB_BIND_ADDRESS:-127.0.0.1}:${APTL_HP_APTL_WEB_UI_3000:-3000}:3000"
     # UI-008a: serves the built static SPA and reverse-proxies /api/* (incl. the
     # terminal WebSocket) to aptl-web-api, which owns the entire auth/CSRF
     # boundary (the FastAPI BFF). The control-plane token is NOT present in this

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from aptl.core.appliance_boundary import ApplianceBoundaryBinding
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.appliance.seat.observation import (
@@ -13,7 +15,10 @@ from aptl.appliance.seat.observation import (
     map_publications_to_listeners,
     observation_id_for,
     probe_forbidden_host_reachability,
+    wait_for_loopback_listeners,
+    wait_for_web_publications,
 )
+from aptl.appliance.seat.errors import SeatLauncherError
 from tests.test_appliance_boundary_inventory import _policy
 
 
@@ -124,6 +129,29 @@ def test_collect_loopback_listeners_uses_probe_when_provided() -> None:
     assert observed == expected
 
 
+def test_wait_for_loopback_listeners_retries_until_qemu_owns_every_port() -> None:
+    mappings = (
+        BoundaryEndpoint(
+            audience="participant",
+            address="127.0.0.1",
+            port=10443,
+            protocol="tcp",
+            guest_address="127.0.0.1",
+            guest_port=443,
+        ),
+    )
+    attempts = iter(((), mappings))
+
+    observed = wait_for_loopback_listeners(
+        mappings,
+        owner_pid=42,
+        probe=lambda: next(attempts),
+        timeout_seconds=1,
+    )
+
+    assert observed == mappings
+
+
 def test_collect_loopback_listeners_parses_ss_output() -> None:
     ss_output = "LISTEN 0 128 127.0.0.1:443 0.0.0.0:*\nLISTEN 0 128 [::1]:9443 [::]:*\n"
     completed = type("Completed", (), {"returncode": 0, "stdout": ss_output})()
@@ -229,3 +257,38 @@ def test_host_boundary_findings_detect_identity_mismatches() -> None:
 
     assert "boundary.host-observation-identity-mismatch" in findings
     assert "boundary.host-observation-incomplete" in findings
+
+
+def test_web_publications_require_both_actual_http_services() -> None:
+    mappings = tuple(
+        BoundaryEndpoint(
+            audience=audience,
+            address="127.0.0.1",
+            port=port,
+            protocol="tcp",
+            guest_address="127.0.0.1",
+            guest_port=port,
+        )
+        for audience, port in (("participant", 3000), ("recovery", 8400))
+    )
+
+    class Connection:
+        def __init__(self, _host: str, port: int, *, timeout: int) -> None:
+            self.port = port
+
+        def request(self, method: str, path: str) -> None:
+            assert method == "GET"
+            assert path == ("/" if self.port == 3000 else "/api/health")
+
+        def getresponse(self) -> object:
+            return type("Response", (), {"status": 200 if self.port == 3000 else 401})()
+
+        def close(self) -> None:
+            pass
+
+    with patch("aptl.appliance.seat.observation.http.client.HTTPConnection", Connection):
+        wait_for_web_publications(mappings, process_alive=lambda: True)
+
+    with patch("aptl.appliance.seat.observation.http.client.HTTPConnection", side_effect=OSError):
+        with pytest.raises(SeatLauncherError, match="guest web publications"):
+            wait_for_web_publications(mappings, process_alive=lambda: False)

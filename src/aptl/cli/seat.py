@@ -12,20 +12,25 @@ import typer
 from pydantic import ValidationError
 
 from aptl.appliance.seat.context import StartSeatOptions
-from aptl.appliance.public_install import (
-    AppliancePublicInstallError,
-    PublicReleaseSelection,
-    install_public_release,
-)
-from aptl.appliance.manifest import ApplianceManifestError
 from aptl.appliance.seat.access import SeatAccessEnrollment, ensure_transport_identity
 from aptl.appliance.seat.errors import SeatLauncherError
-from aptl.appliance.seat.kiosk import open_participant_kiosk
+from aptl.appliance.seat.retained_image import cache_for_seat
+from aptl.appliance.seat.kiosk import open_participant_kiosk, resolve_kiosk_access
+from aptl.appliance.seat.image import SeatImageError, parse_seat_image_reference
+from aptl.appliance.seat.image_trust import configure_trust
+from aptl.appliance.seat.image_update import update_seat_image
+from aptl.appliance.seat.image_selection import (
+    cached_selection,
+    load_selection,
+    list_cached_images,
+    prune_cached_images,
+    select_seat_image,
+)
 from aptl.appliance.seat.lifecycle import (
     reconcile_seat_after_reboot,
     recover_seat,
     reset_seat,
-    release_requires_host_access,
+    image_requires_host_access,
     stage_seat,
     start_seat,
     status_seat,
@@ -35,8 +40,13 @@ from aptl.appliance.seat.persistence import load_seat_record
 from aptl.appliance.seat.paths import default_seat_root
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.workbench.profiles import WorkbenchConfigurationError
+from aptl.cli._common import resolve_optional_config_for_cli
 
 app = typer.Typer(help="Operate one disposable appliance seat on a physical host.")
+
+# The published seat image. A user who does not want it points --image
+# somewhere else; nothing else about the seat changes.
+DEFAULT_SEAT_IMAGE = "ghcr.io/brad-edwards/aptl-seat:latest"
 
 
 def _emit(payload: dict[str, object]) -> None:
@@ -88,22 +98,6 @@ def _resolved_seat_root(seat_root: Path | None) -> Path:
     return (seat_root if seat_root is not None else default_seat_root()).resolve()
 
 
-def _resolved_release_inputs(
-    seat_root: Path,
-    release_dir: Path | None,
-    release_public_key: Path | None,
-    qualification_public_key: Path | None,
-) -> tuple[Path, Path, Path]:
-    """Resolve the release installed in the seat's private launch directory."""
-
-    launch_dir = seat_root / "launch"
-    return (
-        release_dir or launch_dir / "release",
-        release_public_key or launch_dir / "release-public.pem",
-        qualification_public_key or launch_dir / "qualification-public.pem",
-    )
-
-
 def _default_appliance_cache() -> Path:
     """Return the current user's XDG-compatible appliance cache."""
 
@@ -115,71 +109,73 @@ def _default_appliance_cache() -> Path:
     return Path.home() / ".cache" / "aptl" / "appliance"
 
 
-@app.command("install")
-def install(
-    tag: str = typer.Option(..., "--tag"),
-    release_public_key: Path = typer.Option(..., "--release-public-key"),
-    qualification_public_key: Path = typer.Option(..., "--qualification-public-key"),
-    repository: str = typer.Option("Brad-Edwards/aptl", "--repository"),
-    release_id: str | None = typer.Option(None, "--release-id"),
-    seat_root: Path | None = typer.Option(None, "--seat-root"),
-    cache_dir: Path | None = typer.Option(None, "--cache-dir"),
-) -> None:
-    """Install and verify a public appliance release for this user."""
+def _selected_source(image: str | None, seat_root: Path) -> str:
+    """Honor explicit/configured sources and the existing seat before defaults."""
 
-    selected_release_id = release_id or f"aptl-{tag}-x86_64"
+    config = resolve_optional_config_for_cli(Path.cwd())
+    if image is not None:
+        return image
+    if config.seat.image is not None:
+        return config.seat.image
+    record = load_seat_record(seat_root)
+    return record.image_reference if record is not None else DEFAULT_SEAT_IMAGE
+
+
+def _confirm(message: str, *, yes: bool) -> None:
+    """Keep default-no consent on stderr, including non-interactive refusal."""
+
+    if not yes:
+        typer.confirm(message, default=False, abort=True, err=True)
+
+
+def _prepare_seat_image(
+    image: str | None, seat_root: Path, cache: Path, *, yes: bool,
+    public_key: Path | None = None,
+) -> str:
+    """Ask before any cold acquisition; verified warm starts remain offline."""
+
+    reference = _selected_source(image, seat_root)
     try:
-        result = install_public_release(
-            selection=PublicReleaseSelection(
-                repository=repository, tag=tag, release_id=selected_release_id
-            ),
-            release_public_key=release_public_key,
-            qualification_public_key=qualification_public_key,
-            seat_root=_resolved_seat_root(seat_root),
-            cache_dir=cache_dir or _default_appliance_cache(),
-        )
-    except AppliancePublicInstallError as exc:
-        _fail(SeatLauncherError("public-install-failed", str(exc)))
-    _emit(
-        {
-            "installed": True,
-            "release_id": result.release_id,
-            "release_dir": str(result.release_dir),
-            "reused": result.reused,
-        }
-    )
+        cache = cache_for_seat(seat_root, reference, cache)
+        cold = not load_selection(cache, parse_seat_image_reference(reference))
+        if cold:
+            _confirm(f"Download and verify seat image {reference}?", yes=yes)
+        configured_key = resolve_optional_config_for_cli(Path.cwd()).seat.public_key
+        if public_key is not None or configured_key is not None:
+            configure_trust(cache, reference, public_key or Path(configured_key))
+        if cold:
+            select_seat_image(reference, cache_dir=cache, check=False)
+        else:
+            cached_selection(reference, cache_dir=cache)
+    except SeatImageError as exc:
+        _fail(SeatLauncherError("image-unavailable", str(exc)))
+    return reference
 
 
 @app.command("stage")
 def stage(
     seat_root: Path | None = typer.Option(None, "--seat-root"),
     seat_id: str = typer.Option("seat-01", "--seat-id"),
-    release_dir: Path | None = typer.Option(None, "--release-dir"),
-    release_public_key: Path | None = typer.Option(None, "--release-public-key"),
-    qualification_public_key: Path | None = typer.Option(
-        None, "--qualification-public-key"
-    ),
+    image: str | None = typer.Option(None, "--image", envvar="APTL_SEAT_IMAGE"),
+    public_key: Path | None = typer.Option(None, "--public-key"),
+    image_cache: Path | None = typer.Option(None, "--image-cache"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
     mapping: list[str] | None = typer.Option(None, "--mapping"),
 ) -> None:
-    """Verify release admission and persist a staged seat record."""
+    """Resolve the seat image and persist a staged seat record."""
 
     try:
         seat_root = _resolved_seat_root(seat_root)
-        release_dir, release_public_key, qualification_public_key = (
-            _resolved_release_inputs(
-                seat_root,
-                release_dir,
-                release_public_key,
-                qualification_public_key,
-            )
-        )
+        image_cache = image_cache or _default_appliance_cache()
         mappings = _parse_mappings(mapping)
+        image = _prepare_seat_image(
+            image, seat_root, image_cache, yes=yes, public_key=public_key
+        )
         record = stage_seat(
             seat_root,
             seat_id=seat_id,
-            release_dir=release_dir,
-            release_public_key=release_public_key,
-            qualification_public_key=qualification_public_key,
+            image_reference=image,
+            image_cache_dir=image_cache,
             mappings=mappings,
         )
     except SeatLauncherError as exc:
@@ -187,15 +183,80 @@ def stage(
     _emit({"staged": True, "seat": record.model_dump(mode="json")})
 
 
+def _access_options(
+    seat_root: Path, seat_id: str, image: str, image_cache: Path, *,
+    mappings: tuple[BoundaryEndpoint, ...] | None = None,
+    access_owner: str | None = None, access_public_key: Path | None = None,
+    access_identity_file: Path | None = None, access_project_dir: Path | None = None,
+    access_profile: str = "red", access_client: list[str] | None = None,
+    access_hours: int = 8,
+) -> StartSeatOptions:
+    """Enroll the same automatic or explicit caller for start and recovery."""
+
+    access_values = (
+        access_owner,
+        access_public_key,
+        access_identity_file,
+        access_project_dir,
+    )
+    if not any(value is not None for value in access_values) and (
+        image_requires_host_access(image, cache_dir=cache_for_seat(seat_root, image, image_cache))
+    ):
+        access_identity_file, access_public_key = ensure_transport_identity(
+            seat_root
+        )
+        access_owner = getpass.getuser().lower()
+        access_project_dir = Path.cwd()
+        access_client = ["claude", "codex"]
+        access_values = (
+            access_owner,
+            access_public_key,
+            access_identity_file,
+            access_project_dir,
+        )
+    if any(value is not None for value in access_values) and not all(
+        value is not None for value in access_values
+    ):
+        raise SeatLauncherError(
+            "invalid-host-access", "all host access options must be supplied"
+        )
+    if access_owner is not None:
+        assert access_public_key is not None
+        assert access_identity_file is not None
+        assert access_project_dir is not None
+        access_public_key = access_public_key.resolve(strict=True)
+        access_identity_file = access_identity_file.resolve(strict=True)
+        access_project_dir = access_project_dir.resolve(strict=True)
+    enrollment = None
+    clients: tuple[str, ...] = ()
+    if access_owner is not None:
+        if access_profile not in {"red", "blue"}:
+            raise SeatLauncherError(
+                "invalid-host-access", "access profile must be red or blue"
+            )
+        enrollment = SeatAccessEnrollment(
+            owner_id=access_owner,
+            grant_id=f"{seat_id}-{access_profile}",
+            public_key=access_public_key.read_text(encoding="utf-8"),
+            profile=access_profile,
+            expires_at=datetime.now(UTC) + timedelta(hours=access_hours),
+        )
+        clients = tuple(access_client or ("claude", "codex"))
+    return StartSeatOptions(
+        mappings=mappings, access_enrollment=enrollment,
+        access_identity_file=access_identity_file, access_project_dir=access_project_dir,
+        access_clients=clients, check_for_image_update=False,
+    )
+
+
 @app.command("start")
 def start(
     seat_root: Path | None = typer.Option(None, "--seat-root"),
     seat_id: str = typer.Option("seat-01", "--seat-id"),
-    release_dir: Path | None = typer.Option(None, "--release-dir"),
-    release_public_key: Path | None = typer.Option(None, "--release-public-key"),
-    qualification_public_key: Path | None = typer.Option(
-        None, "--qualification-public-key"
-    ),
+    image: str | None = typer.Option(None, "--image", envvar="APTL_SEAT_IMAGE"),
+    public_key: Path | None = typer.Option(None, "--public-key"),
+    image_cache: Path | None = typer.Option(None, "--image-cache"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
     mapping: list[str] | None = typer.Option(None, "--mapping"),
     access_owner: str | None = typer.Option(None, "--access-owner"),
     access_public_key: Path | None = typer.Option(None, "--access-public-key"),
@@ -204,94 +265,30 @@ def start(
     access_profile: str = typer.Option("red", "--access-profile"),
     access_client: list[str] | None = typer.Option(None, "--access-client"),
     access_hours: int = typer.Option(8, "--access-hours", min=1, max=24),
-    qualification_candidate: bool = typer.Option(
-        False, "--qualification-candidate", hidden=True
-    ),
+    no_check: bool = typer.Option(False, "--no-check"),
 ) -> None:
     """Start the seat VM and validate host exposure."""
 
     try:
         seat_root = _resolved_seat_root(seat_root)
-        release_dir, release_public_key, qualification_public_key = (
-            _resolved_release_inputs(
-                seat_root,
-                release_dir,
-                release_public_key,
-                qualification_public_key,
-            )
-        )
+        image_cache = image_cache or _default_appliance_cache()
         mappings = _parse_mappings(mapping)
-        access_values = (
-            access_owner,
-            access_public_key,
-            access_identity_file,
-            access_project_dir,
+        image = _prepare_seat_image(
+            image, seat_root, image_cache, yes=yes, public_key=public_key
         )
-        if not any(value is not None for value in access_values) and (
-            release_requires_host_access(
-                release_dir=release_dir,
-                release_public_key=release_public_key,
-                qualification_public_key=qualification_public_key,
-                candidate_trust=qualification_candidate,
-            )
-        ):
-            access_identity_file, access_public_key = ensure_transport_identity(
-                seat_root
-            )
-            access_owner = getpass.getuser().lower()
-            access_project_dir = Path.cwd()
-            access_client = ["claude", "codex"]
-            access_values = (
-                access_owner,
-                access_public_key,
-                access_identity_file,
-                access_project_dir,
-            )
-        if any(value is not None for value in access_values) and not all(
-            value is not None for value in access_values
-        ):
-            raise SeatLauncherError(
-                "invalid-host-access", "all host access options must be supplied"
-            )
-        if access_owner is not None:
-            assert access_public_key is not None
-            assert access_identity_file is not None
-            assert access_project_dir is not None
-            access_public_key = access_public_key.resolve(strict=True)
-            access_identity_file = access_identity_file.resolve(strict=True)
-            access_project_dir = access_project_dir.resolve(strict=True)
-        enrollment = None
-        clients: tuple[str, ...] = ()
-        if access_owner is not None:
-            if access_profile not in {"red", "blue"}:
-                raise SeatLauncherError(
-                    "invalid-host-access", "access profile must be red or blue"
-                )
-            enrollment = SeatAccessEnrollment(
-                owner_id=access_owner,
-                grant_id=f"{seat_id}-{access_profile}",
-                public_key=access_public_key.read_text(encoding="utf-8"),
-                profile=access_profile,
-                expires_at=datetime.now(UTC) + timedelta(hours=access_hours),
-            )
-            clients = tuple(access_client or ("claude", "codex"))
         record = start_seat(
             seat_root,
             seat_id=seat_id,
-            release_dir=release_dir,
-            release_public_key=release_public_key,
-            qualification_public_key=qualification_public_key,
-            options=StartSeatOptions(
-                mappings=mappings,
-                access_enrollment=enrollment,
+            image_reference=image,
+            image_cache_dir=image_cache,
+            options=_access_options(
+                seat_root, seat_id, image, image_cache, mappings=mappings,
+                access_owner=access_owner, access_public_key=access_public_key,
                 access_identity_file=access_identity_file,
-                access_project_dir=access_project_dir,
-                access_clients=clients,
-                candidate_trust=qualification_candidate,
+                access_project_dir=access_project_dir, access_profile=access_profile,
+                access_client=access_client, access_hours=access_hours,
             ),
         )
-    except ApplianceManifestError as exc:
-        _fail(SeatLauncherError("invalid-release", str(exc)))
     except WorkbenchConfigurationError as exc:
         _fail(SeatLauncherError("invalid-host-access", str(exc)))
     except (OSError, ValidationError) as exc:
@@ -317,30 +314,24 @@ def stop(seat_root: Path | None = typer.Option(None, "--seat-root")) -> None:
 def reset(
     seat_root: Path | None = typer.Option(None, "--seat-root"),
     seat_id: str = typer.Option("seat-01", "--seat-id"),
-    release_dir: Path | None = typer.Option(None, "--release-dir"),
-    release_public_key: Path | None = typer.Option(None, "--release-public-key"),
-    qualification_public_key: Path | None = typer.Option(
-        None, "--qualification-public-key"
-    ),
+    image: str | None = typer.Option(None, "--image", envvar="APTL_SEAT_IMAGE"),
+    public_key: Path | None = typer.Option(None, "--public-key"),
+    image_cache: Path | None = typer.Option(None, "--image-cache"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Destroy overlay state and restage the seat."""
 
     try:
         seat_root = _resolved_seat_root(seat_root)
-        release_dir, release_public_key, qualification_public_key = (
-            _resolved_release_inputs(
-                seat_root,
-                release_dir,
-                release_public_key,
-                qualification_public_key,
-            )
+        image_cache = image_cache or _default_appliance_cache()
+        image = _prepare_seat_image(
+            image, seat_root, image_cache, yes=yes, public_key=public_key
         )
         record = reset_seat(
             seat_root,
             seat_id=seat_id,
-            release_dir=release_dir,
-            release_public_key=release_public_key,
-            qualification_public_key=qualification_public_key,
+            image_reference=image,
+            image_cache_dir=image_cache,
         )
     except SeatLauncherError as exc:
         _fail(exc)
@@ -351,30 +342,25 @@ def reset(
 def recover(
     seat_root: Path | None = typer.Option(None, "--seat-root"),
     seat_id: str = typer.Option("seat-01", "--seat-id"),
-    release_dir: Path | None = typer.Option(None, "--release-dir"),
-    release_public_key: Path | None = typer.Option(None, "--release-public-key"),
-    qualification_public_key: Path | None = typer.Option(
-        None, "--qualification-public-key"
-    ),
+    image: str | None = typer.Option(None, "--image", envvar="APTL_SEAT_IMAGE"),
+    public_key: Path | None = typer.Option(None, "--public-key"),
+    image_cache: Path | None = typer.Option(None, "--image-cache"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Instructor recovery: reset and start the seat."""
 
     try:
         seat_root = _resolved_seat_root(seat_root)
-        release_dir, release_public_key, qualification_public_key = (
-            _resolved_release_inputs(
-                seat_root,
-                release_dir,
-                release_public_key,
-                qualification_public_key,
-            )
+        image_cache = image_cache or _default_appliance_cache()
+        image = _prepare_seat_image(
+            image, seat_root, image_cache, yes=yes, public_key=public_key
         )
         record = recover_seat(
             seat_root,
             seat_id=seat_id,
-            release_dir=release_dir,
-            release_public_key=release_public_key,
-            qualification_public_key=qualification_public_key,
+            image_reference=image,
+            image_cache_dir=image_cache,
+            options=_access_options(seat_root, seat_id, image, image_cache),
         )
     except SeatLauncherError as exc:
         _fail(exc)
@@ -412,30 +398,91 @@ def open_kiosk(
 
     try:
         resolved_root = _resolved_seat_root(seat_root)
-        record = load_seat_record(resolved_root)
-        if record is not None:
-            participants = tuple(
-                mapping
-                for mapping in record.mappings
-                if mapping.audience == "participant" and mapping.protocol == "tcp"
-            )
-            if len(participants) != 1:
-                raise SeatLauncherError(
-                    "invalid-mapping", "seat requires one participant mapping"
-                )
-            if (
-                participant_port is not None
-                and participant_port != participants[0].port
-            ):
-                raise SeatLauncherError(
-                    "invalid-mapping", "participant port differs from staged mapping"
-                )
-            participant_port = participants[0].port
+        participant_port, launch_token = resolve_kiosk_access(resolved_root, participant_port)
     except SeatLauncherError as exc:
         _fail(exc)
     plan = open_participant_kiosk(
         participant_port=participant_port or 443,
         browser_command=browser_command,
         dry_run=dry_run,
+        launch_token=launch_token,
+        bootstrap_directory=resolved_root / "runtime/kiosk",
     )
     _emit({"kiosk": True, "argv": list(plan.argv), "url": plan.url})
+
+
+@app.command("update")
+def update_image(
+    seat_root: Path | None = typer.Option(None, "--seat-root"),
+    image: str | None = typer.Option(None, "--image", envvar="APTL_SEAT_IMAGE"),
+    public_key: Path | None = typer.Option(None, "--public-key"),
+    image_cache: Path | None = typer.Option(None, "--image-cache"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+    to: str | None = typer.Option(None, "--to"),
+) -> None:
+    """Verify a replacement, reset the stopped seat, and retire its old image."""
+
+    try:
+        seat_root = _resolved_seat_root(seat_root)
+        image_cache = image_cache or _default_appliance_cache()
+        image = _selected_source(image, seat_root)
+        _confirm(
+            f"Download/verify {image}, reset this stopped seat and its access, "
+            "and delete the superseded cached image?", yes=yes,
+        )
+        configured_key = resolve_optional_config_for_cli(Path.cwd()).seat.public_key
+        if public_key is not None or configured_key is not None:
+            configure_trust(image_cache, image, public_key or Path(configured_key))
+        selection, removed = update_seat_image(
+            seat_root, image_reference=image, image_cache_dir=image_cache,
+            to_digest=to,
+        )
+    except SeatImageError as exc:
+        _fail(SeatLauncherError("image-unavailable", str(exc)))
+    except SeatLauncherError as exc:
+        _fail(exc)
+    _emit(
+        {
+            "selected": True,
+            "reference": str(selection.reference),
+            "digest": selection.digest,
+            "size_bytes": selection.size_bytes,
+            "pulled": selection.pulled,
+            "removed": list(removed),
+        }
+    )
+
+
+@app.command("images")
+def images(
+    image_cache: Path | None = typer.Option(None, "--image-cache"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+    prune: bool = typer.Option(False, "--prune"),
+) -> None:
+    """List cached seat images, optionally removing unselected ones.
+
+    Pruning never removes an image a reference currently selects, so a
+    rollback target only disappears when it is no longer selected anywhere.
+    """
+
+    cache_dir = image_cache or _default_appliance_cache()
+    try:
+        cached = list_cached_images(cache_dir)
+        if prune:
+            _confirm("Delete unselected cached seat images?", yes=yes)
+        removed = prune_cached_images(cache_dir) if prune else ()
+    except OSError as exc:
+        _fail(SeatLauncherError("image-cache-unreadable", str(exc)))
+    _emit(
+        {
+            "images": [
+                {
+                    "digest": item.digest,
+                    "size_bytes": item.size_bytes,
+                    "selected_by": list(item.selected_by),
+                }
+                for item in cached
+            ],
+            "removed": list(removed),
+        }
+    )

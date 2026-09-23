@@ -7,7 +7,6 @@ from pathlib import Path
 
 import yaml
 
-from aptl.appliance.payload_content import registry_image_id
 from aptl.backends.raes_base_substrate import NodePlanningOptions, base_container_spec
 from aptl.backends.raes_realization_model import AptlRealization
 from aptl.core.config import AptlConfig
@@ -184,41 +183,3 @@ def canonical_image_references(project: Path, bundle: ScenarioBundle) -> dict[st
         }
     )
     return {role: _pin_third_party(reference) for role, reference in references.items()}
-
-
-def validate_image_sources(
-    project: Path,
-    bundle: ScenarioBundle,
-    images: dict[str, tuple[str, ...]],
-    roles: dict[str, str],
-    image_archive: Path,
-    image_files: dict[str, str],
-    *,
-    architecture: str | None = None,
-) -> None:
-    """Bind each canonical tag or manifest reference to its locked config bytes."""
-    references = canonical_image_references(project, bundle)
-    for role, reference in references.items():
-        identity = roles.get(role)
-        if _DIGEST_SEPARATOR in reference:
-            expected = registry_image_id(
-                image_archive,
-                image_files,
-                reference,
-                architecture=architecture,
-            )
-            valid = identity == expected and runtime_image_tag(reference) in images.get(
-                identity, ()
-            )
-        else:
-            valid = reference in images.get(identity, ())
-        if not valid:
-            raise ValueError("canonical image reference differs from role " + role)
-    for tag, reference in compose_runtime_image_aliases(project, references).items():
-        identity = registry_image_id(
-            image_archive, image_files, reference, architecture=architecture
-        )
-        if tag not in images.get(identity, ()):
-            raise ValueError(
-                "canonical Compose runtime tag differs from pinned image " + tag
-            )

@@ -10,7 +10,7 @@ import tarfile
 
 import pytest
 
-from aptl.appliance.inputs import _archive_project, _flatten_common_dependencies
+from aptl.utils.mcp_packaging import archive_project, flatten_common_dependencies
 from tests.test_mcp_transport_processes import initialize, request
 
 pytestmark = [
@@ -97,9 +97,9 @@ def test_extracted_mcp_initializes_without_original_build_tree(tmp_path, server)
                 )
             else:
                 _copy_readonly(path, destination / name)
-    _flatten_common_dependencies(project)
+    flatten_common_dependencies(project)
     archive = tmp_path / "project.tar"
-    _archive_project(project, archive)
+    archive_project(project, archive)
     shutil.rmtree(project)
     extracted = tmp_path / "extracted"
     with tarfile.open(archive) as payload:

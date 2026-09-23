@@ -36,6 +36,29 @@ from tests.helpers import realized_container_name, realized_project_name
 
 pytestmark = pytest.mark.integration
 
+
+def _materialized_project(tmp_path):
+    """Give a test the container assets the generic base images build from.
+
+    Those images build from Dockerfiles under the project directory, which a
+    real project has because `aptl lab init` materializes them. A bare
+    tmp_path has none, so the build fails on a missing context rather than on
+    anything the test is about. Only the container tree is copied: writing a
+    whole project would also install a Compose model the spec under test does
+    not describe.
+    """
+    import shutil
+
+    from aptl.core.assets import resolve_asset_source
+
+    source, _ = resolve_asset_source()
+    # The generic base Dockerfiles copy from these two trees; the build
+    # context is the project root, so both have to be present.
+    for tree in ("containers", "requirements"):
+        shutil.copytree(source / tree, tmp_path / tree, dirs_exist_ok=True)
+    return tmp_path
+
+
 _COMPOSE = """\
 services:
   image-box:
@@ -66,6 +89,7 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
     free_container = "aptl-free-box"
     image_container = "aptl-image-box"
 
+    _materialized_project(tmp_path)
     backend = DockerComposeBackend(project_dir=tmp_path, project_name="aptl-mixed-test")
 
     free_node = DeploymentNodeRealization(

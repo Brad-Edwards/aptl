@@ -9,7 +9,7 @@ import shutil
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from email.message import Message
 from pathlib import Path
@@ -140,6 +140,7 @@ def fetch_https_metadata(
     url: str,
     *,
     max_bytes: int,
+    headers: Mapping[str, str] | None = None,
     open_request: OpenRequest = _open_request,
 ) -> bytes:
     """Fetch one bounded HTTPS metadata document before authenticating it.
@@ -160,7 +161,7 @@ def fetch_https_metadata(
         or parsed.fragment
     ):
         raise ApplianceDownloadError("metadata download request is invalid")
-    request = urllib.request.Request(url, method="GET")
+    request = urllib.request.Request(url, headers=dict(headers or {}), method="GET")
     try:
         with open_request(request) as response:
             final_url = urllib.parse.urlparse(response.geturl())
@@ -190,6 +191,7 @@ def stage_https_artifact(
     filename: str,
     sha256: str,
     size_bytes: int,
+    headers: Mapping[str, str] | None = None,
     open_request: OpenRequest = _open_request,
 ) -> StagedDownload:
     """Resume, verify, and atomically publish one immutable cache entry."""
@@ -228,11 +230,10 @@ def stage_https_artifact(
         required = size_bytes - offset
         if shutil.disk_usage(destination_dir).free < required:
             raise ApplianceDownloadError("insufficient disk space for artifact")
-        request = urllib.request.Request(
-            url,
-            headers={"Range": f"bytes={offset}-"} if offset else {},
-            method="GET",
-        )
+        request_headers = dict(headers or {})
+        if offset:
+            request_headers["Range"] = f"bytes={offset}-"
+        request = urllib.request.Request(url, headers=request_headers, method="GET")
         output_flags = os.O_WRONLY | os.O_CLOEXEC
         output_flags |= os.O_APPEND if offset else os.O_CREAT | os.O_EXCL
         if hasattr(os, "O_NOFOLLOW"):

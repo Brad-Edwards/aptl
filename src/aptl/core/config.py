@@ -383,6 +383,15 @@ class ExperimentSettings(BaseModel):
     )
 
 
+class SeatSettings(BaseModel):
+    """Operator-selected VM source and independent signing trust."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    image: str | None = Field(default=None, min_length=1, max_length=512)
+    public_key: str | None = Field(default=None, min_length=1, max_length=4096)
+
+
 class AptlConfig(BaseModel):
     """Top-level APTL configuration.
 
@@ -401,6 +410,7 @@ class AptlConfig(BaseModel):
     run_storage: RunStorageConfig = RunStorageConfig()
     lifecycle_policy: LabLifecyclePolicyConfig | None = None
     experiment: ExperimentSettings = ExperimentSettings()
+    seat: SeatSettings = SeatSettings()
 
 
 def load_config(path: Path) -> AptlConfig:

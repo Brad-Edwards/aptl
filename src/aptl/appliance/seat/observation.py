@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import ipaddress
 import json
 import socket
 import subprocess
+import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 import rfc8785
 
+from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.core.appliance_boundary import (
     ApplianceBoundaryBinding,
     ApplianceBoundaryPolicy,
@@ -58,6 +61,69 @@ def collect_loopback_listeners(
     if probe is not None:
         return probe()
     return _collect_listeners_via_ss(owner_pid=owner_pid)
+
+
+def wait_for_loopback_listeners(
+    mappings: tuple[BoundaryEndpoint, ...],
+    *,
+    owner_pid: int,
+    probe: ListenerProbe | None = None,
+    process_alive: Callable[[], bool] | None = None,
+    timeout_seconds: float = 10,
+) -> tuple[BoundaryEndpoint, ...]:
+    """Wait briefly for QEMU to bind every selected outer endpoint."""
+
+    expected = {(item.address, item.port, item.protocol) for item in mappings}
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        observed = collect_loopback_listeners(probe=probe, owner_pid=owner_pid)
+        actual = {(item.address, item.port, item.protocol) for item in observed}
+        if expected <= actual:
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or (process_alive is not None and not process_alive()):
+            break
+        time.sleep(min(0.05, remaining))
+    return observed
+
+
+def wait_for_web_publications(
+    mappings: tuple[BoundaryEndpoint, ...],
+    *,
+    process_alive: Callable[[], bool],
+    timeout_seconds: float = 30,
+) -> None:
+    """Require the guest UI and API to answer through their actual host mappings."""
+
+    endpoints = {item.audience: item for item in mappings}
+    if "participant" not in endpoints or "recovery" not in endpoints:
+        raise ValueError("seat web publications are incomplete")
+    deadline = time.monotonic() + timeout_seconds
+    pending = {"participant", "recovery"}
+    while pending:
+        for audience in tuple(pending):
+            endpoint = endpoints[audience]
+            connection = None
+            try:
+                connection = http.client.HTTPConnection(endpoint.address, endpoint.port, timeout=2)
+                connection.request("GET", "/" if audience == "participant" else "/api/health")
+                response = connection.getresponse()
+                if (audience == "participant" and response.status == 200) or (
+                    audience == "recovery" and response.status == 401
+                ):
+                    pending.remove(audience)
+            except (OSError, http.client.HTTPException):
+                pass
+            finally:
+                if connection is not None:
+                    connection.close()
+        remaining = deadline - time.monotonic()
+        if pending and (remaining <= 0 or not process_alive()):
+            raise SeatLauncherError(
+                "guest.web-unavailable", "guest web publications did not become ready"
+            )
+        if pending:
+            time.sleep(min(1, remaining))
 
 
 def _collect_listeners_via_ss(

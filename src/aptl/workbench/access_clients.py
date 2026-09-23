@@ -149,7 +149,7 @@ def _toml_block(entries: dict[str, Any]) -> str:
                 "",
             ]
         )
-    return "\n".join(lines) + _END
+    return "\n".join(lines).rstrip("\n") + "\n" + _END
 
 
 def render_codex(
@@ -166,7 +166,7 @@ def render_codex(
         for name, value in owned.items()
     }
     _check_ownership(servers, entries, normalized)
-    if owned:
+    if previous is not None:
         block = _toml_block(owned)
         if not existing.endswith(block) or existing.count(_BEGIN) != 1:
             raise WorkbenchConfigurationError(MANAGED_CONFLICT)

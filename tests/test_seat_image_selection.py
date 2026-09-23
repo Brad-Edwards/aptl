@@ -1,0 +1,325 @@
+"""Which seat VM disk boots, and when a newer one is only offered."""
+
+from __future__ import annotations
+
+import hashlib
+from pathlib import Path
+
+import pytest
+
+from aptl.appliance.seat import image_selection
+from aptl.appliance.seat.image import (
+    SeatDiskDescriptor,
+    SeatImageError,
+    parse_seat_image_reference,
+    write_verification_stamp,
+)
+from aptl.appliance.seat.image_selection import (
+    check_for_update,
+    load_selection,
+    save_selection,
+    select_seat_image,
+)
+
+REFERENCE = "ghcr.io/owner/seat:latest"
+
+
+def _digest(payload: bytes) -> str:
+    return "sha256:" + hashlib.sha256(payload).hexdigest()
+
+
+OLD = _digest(b"old-disk")
+NEW = _digest(b"new-disk")
+
+
+@pytest.fixture
+def registry(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """A registry whose tag can be moved, recording every resolution."""
+
+    state: dict[str, object] = {"digest": OLD, "size": 8, "resolutions": 0, "pulls": []}
+    # The registry fixture represents artifacts admitted by Cosign. Signature
+    # enforcement is exercised through the real resolver in test_seat_image_trust.
+    monkeypatch.setattr(image_selection, "verify_cached_image", lambda *args: None)
+
+    def fake_descriptor(reference):
+        state["resolutions"] = int(state["resolutions"]) + 1
+        parsed = (
+            reference
+            if not isinstance(reference, str)
+            else parse_seat_image_reference(reference)
+        )
+        return SeatDiskDescriptor(
+            reference=parsed,
+            digest=str(state["digest"]),
+            size_bytes=int(state["size"]),
+            manifest_digest=_digest(b"manifest"),
+            token="pull-token",
+        )
+
+    def fake_fetch(reference, *, digest, size_bytes, cache_dir, token=None):
+        state["pulls"].append(digest)  # type: ignore[union-attr]
+        disk = Path(cache_dir) / digest.removeprefix("sha256:") / "seat-disk.qcow2"
+        disk.parent.mkdir(parents=True, exist_ok=True)
+        disk.write_bytes(b"x" * size_bytes)
+        disk.chmod(0o444)
+        write_verification_stamp(disk, digest=digest, size_bytes=size_bytes)
+        return disk
+
+    monkeypatch.setattr(image_selection, "resolve_disk_descriptor", fake_descriptor)
+    monkeypatch.setattr(image_selection, "fetch_seat_disk", fake_fetch)
+
+    def fake_resolve(reference, *, cache_dir, require_config=False):
+        descriptor = fake_descriptor(reference)
+        path = fake_fetch(
+            descriptor.reference,
+            digest=descriptor.digest,
+            size_bytes=descriptor.size_bytes,
+            cache_dir=cache_dir,
+        )
+
+        class _Staged:
+            digest = descriptor.digest
+            size_bytes = descriptor.size_bytes
+            reused = False
+
+        _Staged.path = path
+        return _Staged
+
+    monkeypatch.setattr(image_selection, "resolve_seat_image", fake_resolve)
+    monkeypatch.setattr(
+        image_selection,
+        "cached_seat_image_config",
+        lambda cache_dir, *, disk_digest: (object(), _digest(b"config")),
+    )
+    return state
+
+
+def test_first_use_pulls_and_records_the_selection(registry, tmp_path) -> None:
+    selection = select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0)
+
+    assert selection.digest == OLD
+    assert selection.pulled is True
+    recorded = load_selection(tmp_path, parse_seat_image_reference(REFERENCE))
+    assert recorded["digest"] == OLD
+
+
+def test_warm_start_does_not_contact_the_registry(registry, tmp_path) -> None:
+    select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0)
+    resolutions = registry["resolutions"]
+
+    selection = select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0)
+
+    # Within the check interval a warm start is a pure cache hit: no manifest
+    # resolution and no download.
+    assert selection.digest == OLD
+    assert selection.pulled is False
+    assert registry["resolutions"] == resolutions
+    assert registry["pulls"] == [OLD]
+
+
+def test_a_moved_tag_does_not_change_what_boots(registry, tmp_path) -> None:
+    select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0)
+    registry["digest"] = NEW
+
+    later = select_seat_image(REFERENCE, cache_dir=tmp_path, now=1_000_000.0)
+
+    # The whole point: :latest moved, and the seat still boots what it had.
+    assert later.digest == OLD
+    assert later.path.exists()
+    assert NEW not in registry["pulls"]
+
+
+def test_a_moved_tag_is_reported_as_available(registry, tmp_path) -> None:
+    select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0)
+    registry["digest"] = NEW
+
+    later = select_seat_image(REFERENCE, cache_dir=tmp_path, now=1_000_000.0)
+
+    assert later.update_available is True
+    assert later.available_digest == NEW
+
+
+def test_adopting_moves_the_selection_and_keeps_the_old_disk(
+    registry, tmp_path
+) -> None:
+    select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0)
+    registry["digest"] = NEW
+
+    adopted = select_seat_image(
+        REFERENCE, cache_dir=tmp_path, adopt=True, now=1_000_000.0
+    )
+
+    assert adopted.digest == NEW
+    # Rollback is only possible because adoption does not delete the old disk.
+    assert (tmp_path / OLD.removeprefix("sha256:") / "seat-disk.qcow2").exists()
+
+
+def test_rollback_reselects_a_cached_digest(registry, tmp_path) -> None:
+    select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0)
+    registry["digest"] = NEW
+    select_seat_image(REFERENCE, cache_dir=tmp_path, adopt=True, now=1_000_000.0)
+
+    rolled_back = select_seat_image(
+        REFERENCE, cache_dir=tmp_path, adopt_digest=OLD, now=1_000_001.0
+    )
+
+    assert rolled_back.digest == OLD
+    assert select_seat_image(REFERENCE, cache_dir=tmp_path, now=1_000_002.0).digest == (
+        OLD
+    )
+
+
+def test_rollback_to_an_uncached_digest_is_refused(registry, tmp_path) -> None:
+    select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0)
+
+    with pytest.raises(SeatImageError, match="not in the local cache"):
+        select_seat_image(REFERENCE, cache_dir=tmp_path, adopt_digest=NEW)
+
+
+def test_cleared_cache_refetches_the_selected_digest_not_the_tag(
+    registry, tmp_path
+) -> None:
+    select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0)
+    disk = tmp_path / OLD.removeprefix("sha256:") / "seat-disk.qcow2"
+    disk.chmod(0o644)
+    disk.unlink()
+    registry["digest"] = NEW
+
+    restored = select_seat_image(REFERENCE, cache_dir=tmp_path, now=1_000_000.0)
+
+    # Losing the cache must not silently upgrade the operator.
+    assert restored.digest == OLD
+    assert registry["pulls"] == [OLD, OLD]
+
+
+def test_registry_failure_never_blocks_a_warm_start(
+    registry, tmp_path, monkeypatch
+) -> None:
+    select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0)
+
+    def unreachable(reference):
+        raise SeatImageError("registry unreachable")
+
+    monkeypatch.setattr(image_selection, "resolve_disk_descriptor", unreachable)
+
+    selection = select_seat_image(REFERENCE, cache_dir=tmp_path, now=1_000_000.0)
+
+    assert selection.digest == OLD
+    assert selection.update_available is False
+
+
+def test_update_check_is_rate_limited(registry, tmp_path) -> None:
+    select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0)
+    resolutions = registry["resolutions"]
+
+    select_seat_image(REFERENCE, cache_dir=tmp_path, now=1500.0)
+    assert registry["resolutions"] == resolutions
+
+    select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0 + 90_000)
+    assert registry["resolutions"] == resolutions + 1
+
+
+def test_check_can_be_disabled_entirely(registry, tmp_path) -> None:
+    select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0)
+    resolutions = registry["resolutions"]
+
+    select_seat_image(REFERENCE, cache_dir=tmp_path, check=False, now=1_000_000.0)
+
+    assert registry["resolutions"] == resolutions
+
+
+def test_digest_pinned_reference_is_never_checked(registry, tmp_path) -> None:
+    pinned = f"ghcr.io/owner/seat@{OLD}"
+    select_seat_image(pinned, cache_dir=tmp_path, now=1000.0)
+    resolutions = registry["resolutions"]
+
+    selection = select_seat_image(pinned, cache_dir=tmp_path, now=1_000_000.0)
+
+    assert selection.update_available is False
+    assert registry["resolutions"] == resolutions
+
+
+def test_distinct_references_keep_distinct_selections(registry, tmp_path) -> None:
+    select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0)
+    registry["digest"] = NEW
+
+    other = select_seat_image(
+        "ghcr.io/owner/other:latest", cache_dir=tmp_path, now=1000.0
+    )
+
+    assert other.digest == NEW
+    assert select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0).digest == OLD
+
+
+def test_check_for_update_reports_nothing_when_current(registry, tmp_path) -> None:
+    select_seat_image(REFERENCE, cache_dir=tmp_path, now=1000.0)
+
+    assert (
+        check_for_update(
+            tmp_path,
+            parse_seat_image_reference(REFERENCE),
+            selected_digest=OLD,
+            force=True,
+        )
+        is None
+    )
+
+
+def test_verification_stamp_replaces_a_symlink_without_writing_its_target(
+    tmp_path: Path,
+) -> None:
+    disk = tmp_path / OLD.removeprefix("sha256:") / "seat-disk.qcow2"
+    disk.parent.mkdir()
+    disk.write_bytes(b"old-disk")
+    outside = tmp_path / "outside.json"
+    outside.write_text("sentinel")
+    stamp = disk.with_suffix(".verified.json")
+    stamp.symlink_to(outside)
+
+    write_verification_stamp(disk, digest=OLD, size_bytes=disk.stat().st_size)
+
+    assert outside.read_text() == "sentinel"
+    assert stamp.is_file()
+    assert not stamp.is_symlink()
+
+
+def test_selection_write_does_not_follow_a_precreated_partial_symlink(
+    tmp_path: Path,
+) -> None:
+    reference = parse_seat_image_reference(REFERENCE)
+    selection = image_selection._selection_path(tmp_path, reference)
+    selection.parent.mkdir(parents=True)
+    outside = tmp_path / "outside.json"
+    outside.write_text("sentinel")
+    selection.with_suffix(".partial").symlink_to(outside)
+
+    save_selection(tmp_path, reference, digest=OLD, size_bytes=8)
+
+    assert outside.read_text() == "sentinel"
+    assert load_selection(tmp_path, reference)["digest"] == OLD
+
+
+def test_selection_refuses_a_linked_reference_directory(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "refs").symlink_to(outside, target_is_directory=True)
+
+    reference = parse_seat_image_reference(REFERENCE)
+    with pytest.raises(SeatImageError, match="selection directory is unsafe"):
+        save_selection(cache, reference, digest=OLD, size_bytes=8)
+    assert not list(outside.iterdir())
+
+
+def test_selection_symlink_is_not_followed(tmp_path):
+    from aptl.appliance.seat.image_selection import _selection_path
+    reference = parse_seat_image_reference("ghcr.io/owner/seat:latest")
+    target = tmp_path / "outside.json"
+    target.write_text('{"schema_version":"aptl.seat-image-selection/v1","reference":"ghcr.io/owner/seat:latest"}')
+    cache = tmp_path / "cache"
+    path = _selection_path(cache, reference)
+    path.parent.mkdir(parents=True)
+    path.symlink_to(target)
+    with pytest.raises(SeatImageError):
+        load_selection(cache, reference)

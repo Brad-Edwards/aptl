@@ -9,6 +9,41 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [5.6.0](https://github.com/Brad-Edwards/aptl/compare/v5.5.0...v5.6.0) (2026-09-22)
+
+
+### Features
+
+* add installed scenario pack adapter seams ([#1141](https://github.com/Brad-Edwards/aptl/issues/1141)) ([9b86286](https://github.com/Brad-Edwards/aptl/commit/9b86286c5cd69066182393f31088a784270daa39))
+* **appliance:** deliver qualified KVM seats and public artifacts ([#1107](https://github.com/Brad-Edwards/aptl/issues/1107)) ([35ebb3b](https://github.com/Brad-Edwards/aptl/commit/35ebb3bead57f340c50e4b299dc0b34e6323d0db))
+* integrate full TechVault delivery and host MCP access ([#1102](https://github.com/Brad-Edwards/aptl/issues/1102)) ([ffecaf0](https://github.com/Brad-Edwards/aptl/commit/ffecaf079038277dca6ac6bee272cbb8324237e6))
+* scope backend resource ownership ([#1054](https://github.com/Brad-Edwards/aptl/issues/1054)) ([d9dfbb6](https://github.com/Brad-Edwards/aptl/commit/d9dfbb6e34170c8607fa125f5ec73ace30222438))
+
+
+### Bug Fixes
+
+* address backend resources by their workspace-scoped names in integration tests ([#1104](https://github.com/Brad-Edwards/aptl/issues/1104)) ([1448f16](https://github.com/Brad-Edwards/aptl/commit/1448f16299f3a146bf04cf50c005ac8541ef2ec5))
+* **detection,mcp:** fire custom Suricata rules (303020) and repair MISP add_indicator ([#1036](https://github.com/Brad-Edwards/aptl/issues/1036)) ([ba41876](https://github.com/Brad-Edwards/aptl/commit/ba418763a87eb250f7631de09afdc5f708cdf451))
+* **detection,mcp:** fire custom Suricata rules and repair MISP add_indicator ([ba41876](https://github.com/Brad-Edwards/aptl/commit/ba418763a87eb250f7631de09afdc5f708cdf451)), closes [#1034](https://github.com/Brad-Edwards/aptl/issues/1034)
+* ground Wazuh evidence and scenario credentials ([#1152](https://github.com/Brad-Edwards/aptl/issues/1152)) ([d1871df](https://github.com/Brad-Edwards/aptl/commit/d1871df37dc7180da664c4128075c203f68aa7df))
+* make issue 956 lab startup and QA reliable ([#1110](https://github.com/Brad-Edwards/aptl/issues/1110)) ([5a2a9b1](https://github.com/Brad-Edwards/aptl/commit/5a2a9b1e47fa64095f7429b1e61f6346ad61eec6))
+* realize authored spawn-template images as written ([#1131](https://github.com/Brad-Edwards/aptl/issues/1131)) ([3ce89ad](https://github.com/Brad-Edwards/aptl/commit/3ce89ad5d65251d646b78589e5d9a82a420a7132)), closes [#974](https://github.com/Brad-Edwards/aptl/issues/974)
+* realize SDL runtime authority as authored ([#1108](https://github.com/Brad-Edwards/aptl/issues/1108)) ([18dcc70](https://github.com/Brad-Edwards/aptl/commit/18dcc7026f7cfb6922a689861123e255b99b0fa4))
+* realize unfixed host publications and persist workflow history ([#1142](https://github.com/Brad-Edwards/aptl/issues/1142)) ([faf39e3](https://github.com/Brad-Edwards/aptl/commit/faf39e3c1b1f9ca387f4efe29e07dd0583f99755))
+* remove helpers stranded by a killed aptl process on stop ([#1147](https://github.com/Brad-Edwards/aptl/issues/1147)) ([a810dac](https://github.com/Brad-Edwards/aptl/commit/a810daca81974674e586dbee1631afe6cccc797f))
+* retire MISP and Redis post-realization mutation ([#1109](https://github.com/Brad-Edwards/aptl/issues/1109)) ([e6bef3c](https://github.com/Brad-Edwards/aptl/commit/e6bef3c6f61d368a560f373fca28e123ed193065))
+* **security:** drop privileges to install the operator key and keep credentials off argv ([#1106](https://github.com/Brad-Edwards/aptl/issues/1106)) ([0b2e0d2](https://github.com/Brad-Edwards/aptl/commit/0b2e0d293ab35418a7f72d1c62aec2b0bdf95e7a))
+* stop helper containers and anonymous volumes outliving teardown ([#1145](https://github.com/Brad-Edwards/aptl/issues/1145)) ([5d3ab1f](https://github.com/Brad-Edwards/aptl/commit/5d3ab1f4c0e3527b23482183011b265acdc933c5))
+* stop the TechVault build cache accepting caller-supplied paths ([#1154](https://github.com/Brad-Edwards/aptl/issues/1154)) ([dd9145b](https://github.com/Brad-Edwards/aptl/commit/dd9145bcfec61533b328672a71ac5d38e10f52c2))
+
+
+### Documentation
+
+* improve first-time lab guidance ([#1150](https://github.com/Brad-Edwards/aptl/issues/1150)) ([8bb1529](https://github.com/Brad-Edwards/aptl/commit/8bb1529048237f7e82fd49b04fb17dccdc016a18))
+* prepare badge and dual docs publishing ([5b57bbc](https://github.com/Brad-Edwards/aptl/commit/5b57bbc03552dca66a3b7419a1963c396aa90db2))
+* prepare OpenSSF badge and dual docs publishing ([#1153](https://github.com/Brad-Edwards/aptl/issues/1153)) ([5b57bbc](https://github.com/Brad-Edwards/aptl/commit/5b57bbc03552dca66a3b7419a1963c396aa90db2))
+* record issue 956 candidate manual QA ([#1111](https://github.com/Brad-Edwards/aptl/issues/1111)) ([4d55a94](https://github.com/Brad-Edwards/aptl/commit/4d55a9498192ba9e3803f04e864ccd08508a1b93))
+
 ## [5.5.0](https://github.com/Brad-Edwards/aptl/compare/v5.4.0...v5.5.0) (2026-09-17)
 
 

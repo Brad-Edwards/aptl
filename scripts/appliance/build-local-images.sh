@@ -74,3 +74,5 @@ build_image aptl-appliance-egress-proxy:1 . \
   containers/appliance-egress-proxy/Dockerfile
 build_image aptl/operator-access-proxy:latest . \
   containers/operator-access-proxy/Dockerfile
+build_image aptl-web-api:1 . web/Dockerfile.api
+build_image aptl-web-ui:1 web web/Dockerfile

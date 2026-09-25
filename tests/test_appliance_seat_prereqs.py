@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from aptl.appliance.models import HostPrerequisites
+from aptl.appliance.seat.prereqs import HostPrerequisites
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.appliance.seat.prereqs import (
     check_host_prerequisites,

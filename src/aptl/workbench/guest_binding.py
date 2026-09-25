@@ -36,10 +36,7 @@ class ApplianceAccessPaths(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     launch_descriptor: Path
-    release_public_key: Path
-    qualification_public_key: Path
     runtime_observation: Path
-    candidate_trust: bool = False
 
 
 class ApplianceAccessObservation(BaseModel):
@@ -233,27 +230,17 @@ class GuestAdmission:
         self.server = self._server(self.binding)
         self.verified_launch = None
         if self.binding.appliance is not None:
-            from aptl.appliance.launch import verify_launch_descriptor
+            from aptl.appliance.seat.launch_descriptor import verify_seat_launch
 
-            paths = self.binding.appliance
-            if paths.candidate_trust:
-                from aptl.appliance.candidate import verify_candidate_launch_descriptor
-
-                self.verified_launch = verify_candidate_launch_descriptor(
-                    paths.launch_descriptor, paths.release_public_key
-                )
-            else:
-                self.verified_launch = verify_launch_descriptor(
-                    paths.launch_descriptor,
-                    paths.release_public_key,
-                    paths.qualification_public_key,
-                )
+            self.verified_launch = verify_seat_launch(
+                self.binding.appliance.launch_descriptor
+            )
             if (
-                self.verified_launch.descriptor.host_mcp_contract
+                self.verified_launch[0].host_mcp_contract
                 != "aptl.restricted-ssh-mcp/v1"
             ):
                 raise WorkbenchConfigurationError(
-                    "signed release does not permit host MCP access"
+                    "seat image does not permit host MCP access"
                 )
 
     def _server(self, binding: GuestDispatchBinding) -> ServerProfile:
@@ -311,24 +298,24 @@ class GuestAdmission:
             <= _MAX_APPLIANCE_OBSERVATION_AGE_SECONDS
         ):
             raise WorkbenchConfigurationError("appliance boundary observation is stale")
-        descriptor = self.verified_launch.descriptor
+        descriptor, policy = self.verified_launch
         expected = {
             "policy_digest": descriptor.boundary_policy_digest,
-            "payload_digest": descriptor.payload_digest,
+            "payload_digest": descriptor.image_digest,
             "raes_plan_digest": descriptor.participant_routes_digest,
             "boundary_helper_image": descriptor.boundary_helper_image,
             "egress_proxy_image": descriptor.egress_proxy_image,
             "host_observation_id": descriptor.host_observation_id,
             "guest_boot_id": self.binding.access.guest_boot_id,
             "guest_daemon_id": self.binding.access.guest_daemon_id,
-            "raes_boundary_required": self.verified_launch.boundary_policy.internal_zone_isolation,
+            "raes_boundary_required": policy.internal_zone_isolation,
         }
         if any(
             getattr(observed.binding, key) != value for key, value in expected.items()
         ):
             raise WorkbenchConfigurationError("appliance access binding mismatch")
         verdict = qualify_appliance_boundary(
-            self.verified_launch.boundary_policy,
+            policy,
             observed.binding,
             observed.host,
             observed.guest,

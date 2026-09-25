@@ -7,11 +7,51 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
-from aptl.appliance.models import HostPrerequisites
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.appliance.seat.vm import OVMF_CODE_PATH
 from aptl.core import hostenv
+
+
+class HostPrerequisites(BaseModel):
+    """Minimum physical-host resources one seat image needs to run.
+
+    A seat image declares this; the launcher refuses to start when the host
+    cannot meet it.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    architecture: Literal["x86_64", "aarch64"]
+    # A seat is one workstation-class VM, not a cluster. The upper bounds are
+    # sanity ceilings on a declaration that arrives from a remote registry, so
+    # a malformed image fails here with a clear error rather than as a
+    # confusing host-capacity finding.
+    vcpus: int = Field(ge=8, le=128)
+    memory_bytes: int = Field(ge=16 * 1024**3, le=1024 * 1024**3)
+    disk_bytes: int = Field(ge=100 * 1024**3, le=8192 * 1024**3)
+    hardware_virtualization: Literal[True]
+    local_adapter: Literal["qemu-kvm"]
+    supported_hypervisors: tuple[str, ...] = Field(min_length=1)
+
+    @field_validator("supported_hypervisors", mode="before")
+    @classmethod
+    def coerce_hypervisors(cls, value: object) -> object:
+        # This model is parsed straight from an image's JSON config, where a
+        # sequence is always a list; strict mode would otherwise reject it.
+        return tuple(value) if isinstance(value, list) else value
+
+    @field_validator("supported_hypervisors")
+    @classmethod
+    def validate_hypervisors(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        if len(values) != len(set(values)) or any(
+            not value.strip() for value in values
+        ):
+            raise ValueError("supported hypervisors must be non-empty and unique")
+        return values
 
 
 @dataclass(frozen=True)

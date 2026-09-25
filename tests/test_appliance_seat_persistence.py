@@ -17,7 +17,8 @@ def _record() -> SeatRecord:
     return SeatRecord(
         schema_version="aptl.seat-record/v1",
         seat_id="seat-01",
-        selected_release_id="aptl-v1",
+        image_reference="ghcr.io/brad-edwards/aptl-seat:latest",
+        image_digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         launch_descriptor_digest="sha256:" + "a" * 64,
         overlay_path="instances/seat-01.qcow2",
         host_observation_id="host-1",

@@ -47,6 +47,8 @@ appliance/guest/aptl-appliance-first-boot.service	optional-delivery	Keep sealed-
 appliance/guest/aptl-launch.mount	optional-delivery	Keep sealed-seat boundary outside default install
 appliance/guest/provision-offline.sh	optional-delivery	Keep sealed-seat boundary outside default install
 appliance/guest/scan-golden.sh	optional-delivery	Keep sealed-seat boundary outside default install
+appliance/guest/seat-qualification-smoke.service	optional-delivery	Keep live seat qualification with delivery owner
+appliance/guest/seat-qualification-smoke.sh	optional-delivery	Keep live seat qualification with delivery owner
 appliance/guest/system-packages.sha256	optional-delivery	Keep exact guest system package closure with delivery owner
 aptl.json	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 assets/docs/ai_red_team_test.pdf	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
@@ -75,6 +77,7 @@ assets/images/li_test/cline_red_team_test_9.png	repository-metadata	Inspect iden
 assets/images/qradar_landing_empty.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 assets/images/qradar_offences.png	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 bin/install-raes-inventory-skill.sh	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/+ghcr-candidate-package-visibility.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+git-env-isolation.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/+techvault-live-boot-honesty.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 changelog.d/1021.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
@@ -350,7 +353,6 @@ docs/raes/techvault-live-validation-preflight.md	docs-follow-owner	Separate curr
 docs/raes/techvault-static-validation-gate.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/raes/techvault-static-validation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/red-team-taxonomy.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
-docs/reference/appliance-release.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/reference/appliance-seat-launcher.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/reference/evidence-bundle-export.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/reference/experiment-runs.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
@@ -726,21 +728,15 @@ scenarios/paper-agent-loop.sdl.yaml	split-pack-delivery	Inventory exact content 
 scenarios/techvault-attacker-target.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scenarios/techvault-defensive-min.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scenarios/techvault-enterprise-web.sdl.yaml	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
-scripts/appliance/accept-public-release.sh	optional-delivery	Keep public appliance acceptance automation with delivery owner
-scripts/appliance/acquire-guest-system-packages.sh	optional-delivery	Keep content-locked guest package acquisition with delivery owner
-scripts/appliance/build-candidate.sh	optional-delivery	Keep exact-source candidate build automation with delivery owner
-scripts/appliance/build-local-candidate.sh	optional-delivery	Keep exact-commit local candidate build path with delivery owner
+scripts/appliance/acquire-guest-system-packages.sh	optional-delivery	Keep exact guest system package closure with delivery owner
+scripts/appliance/assemble-seat-inputs.py	optional-delivery	Keep realized seat image and profile assembly with delivery owner
 scripts/appliance/build-local-images.sh	optional-delivery	Keep local appliance image build path with delivery owner
-scripts/appliance/measure-offline-assets.py	optional-delivery	Keep measured qualification evidence with delivery owner
-scripts/appliance/probe-native-client.py	optional-delivery	Keep native client qualification probe with delivery owner
-scripts/appliance/probe-participant-browser.py	optional-delivery	Keep browser surface qualification probe with delivery owner
+scripts/appliance/build-seat-image.sh	optional-delivery	Keep local appliance image build path with delivery owner
 scripts/appliance/publish-images.sh	optional-delivery	Keep public GHCR publication automation with delivery owner
-scripts/appliance/qualify-candidate.sh	optional-delivery	Keep real-KVM qualification automation with delivery owner
-scripts/appliance/sample-seat-resources.py	optional-delivery	Keep measured KVM resource sampling with delivery owner
-scripts/appliance/seal-release.sh	optional-delivery	Keep production release sealing automation with delivery owner
-scripts/appliance/verify-public-images.sh	optional-delivery	Keep anonymous GHCR verification with delivery owner
-scripts/appliance/write-failed-candidate-proof.py	optional-delivery	Keep failed-update continuity evidence with delivery owner
-scripts/appliance/write-qualification-measurements.py	optional-delivery	Keep strict qualification measurement receipt with delivery owner
+scripts/appliance/publish-seat-image.sh	optional-delivery	Keep local appliance image build path with delivery owner
+scripts/appliance/qualify-seat-image.sh	optional-delivery	Keep live seat qualification before publication with delivery owner
+scripts/appliance/seat-base-image.env	optional-delivery	Keep pinned guest base image with delivery owner
+scripts/appliance/write-seat-image-config.py	optional-delivery	Keep local appliance image build path with delivery owner
 scripts/aptl-env.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/aptl-range.service	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 scripts/ci/assert_boot_realization.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
@@ -780,30 +776,15 @@ src/aptl/api/session.py	core-candidate	Migrate only after public-import, history
 src/aptl/appliance/__init__.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/access_service.py	optional-delivery	Keep guest-restricted MCP transport with delivery owner
 src/aptl/appliance/access_service_support.py	optional-delivery	Keep guest access filesystem and account preparation with delivery owner
-src/aptl/appliance/bootstrap.py	optional-delivery	Keep sealed-seat boundary outside default install
-src/aptl/appliance/build.py	optional-delivery	Keep sealed-seat boundary outside default install
-src/aptl/appliance/build_host.py	optional-delivery	Keep sealed-seat boundary outside default install
-src/aptl/appliance/candidate.py	optional-delivery	Keep qualification-only candidate trust path with delivery owner
-src/aptl/appliance/distribution.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/download.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/errors.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/guest_observation.py	optional-delivery	Keep authenticated guest observation with delivery owner
+src/aptl/appliance/guest_services.py	optional-delivery	Keep authenticated guest service launch with delivery owner
 src/aptl/appliance/guest_surfaces.py	optional-delivery	Keep authenticated guest-surface validation with delivery owner
-src/aptl/appliance/input_images.py	optional-delivery	Keep sealed-seat boundary outside default install
-src/aptl/appliance/input_profile.py	optional-delivery	Keep sealed-seat boundary outside default install
-src/aptl/appliance/inputs.py	optional-delivery	Keep sealed-seat boundary outside default install
-src/aptl/appliance/launch.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/input_images.py	optional-delivery	Keep realized seat image inventory with delivery owner
+src/aptl/appliance/input_profile.py	optional-delivery	Keep full participant profile assembly with delivery owner
 src/aptl/appliance/loopback_proxy.py	optional-delivery	Keep sealed-seat boundary outside default install
-src/aptl/appliance/manifest.py	optional-delivery	Keep sealed-seat boundary outside default install
-src/aptl/appliance/models.py	optional-delivery	Keep sealed-seat boundary outside default install
-src/aptl/appliance/offline.py	optional-delivery	Keep sealed-seat boundary outside default install
-src/aptl/appliance/payload_content.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/policy.py	optional-delivery	Keep full-TechVault appliance policy with delivery owner
-src/aptl/appliance/public_install.py	optional-delivery	Keep signed public seat installation with delivery owner
-src/aptl/appliance/qualification.py	optional-delivery	Keep machine-derived qualification evidence with delivery owner
-src/aptl/appliance/redistribution.py	optional-delivery	Keep exact-closure redistribution gate with delivery owner
-src/aptl/appliance/release_models.py	optional-delivery	Keep sealed-seat boundary outside default install
-src/aptl/appliance/release_validation.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/__init__.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/_device.py	optional-delivery	Keep no-follow seat device access with delivery owner
 src/aptl/appliance/seat/access.py	optional-delivery	Keep generation-scoped host access with delivery owner
@@ -813,12 +794,19 @@ src/aptl/appliance/seat/allocation.py	optional-delivery	Keep sealed-seat boundar
 src/aptl/appliance/seat/context.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/errors.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/exposure.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/image.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/image_config.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/image_disk_cache.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/image_selection.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/kiosk.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/launch_descriptor.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/lifecycle.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/locking.py	optional-delivery	Keep owner-scoped lifecycle serialization with delivery owner
 src/aptl/appliance/seat/models.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/observation.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/overlay.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/overlay_cleanup.py	optional-delivery	Keep sealed-seat boundary outside default install
+src/aptl/appliance/seat/overlay_identity.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/paths.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/persistence.py	optional-delivery	Keep sealed-seat boundary outside default install
 src/aptl/appliance/seat/prereqs.py	optional-delivery	Keep sealed-seat boundary outside default install
@@ -961,7 +949,6 @@ src/aptl/backends/scenario_startup.py	core-candidate	Generic content-identified 
 src/aptl/backends/scenario_startup_policy.py	core-candidate	Generic content-identified startup readiness policy; retain behind scenario-independent contract
 src/aptl/cli/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/_common.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
-src/aptl/cli/appliance.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/config.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/container.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/continuity.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1240,6 +1227,7 @@ src/aptl/utils/_pathsafe_read.py	core-candidate	Migrate only after public-import
 src/aptl/utils/curl_safe.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/utils/deterministic_archive.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/utils/logging.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/utils/mcp_packaging.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/utils/pathsafe.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/utils/placeholders.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/utils/redaction.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1362,24 +1350,12 @@ tests/test_appliance_boundary_gate.py	tests-follow-owner	Retain meaningful bound
 tests/test_appliance_boundary_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_boundary_inventory.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_boundary_policy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
-tests/test_appliance_build.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
-tests/test_appliance_candidate.py	tests-follow-owner	Retain candidate trust and tamper tests with migrated owner
-tests/test_appliance_cli.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
-tests/test_appliance_distribution.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_download.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_egress_proxy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
-tests/test_appliance_guest_assets.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_guest_observation.py	tests-follow-owner	Retain guest observation tests with migrated owner
 tests/test_appliance_guest_surfaces.py	tests-follow-owner	Retain authenticated guest-surface regression coverage
 tests/test_appliance_loopback_proxy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
-tests/test_appliance_native_client_probe.py	tests-follow-owner	Retain actual native client event proof with migrated owner
-tests/test_appliance_offline_payload.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
-tests/test_appliance_offline_start.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_policy.py	tests-follow-owner	Retain appliance policy tests with migrated owner
-tests/test_appliance_public_install.py	tests-follow-owner	Retain public seat installation and tamper tests with migrated owner
-tests/test_appliance_qualification.py	tests-follow-owner	Retain candidate qualification evidence tests with migrated owner
-tests/test_appliance_redistribution.py	tests-follow-owner	Retain redistribution review coverage with migrated owner
-tests/test_appliance_release_manifest.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_appliance_release_workflow.py	tests-follow-owner	Retain public release workflow gates with migrated owner
 tests/test_appliance_seat_access.py	tests-follow-owner	Retain seat access and revocation tests with migrated owner
 tests/test_appliance_seat_allocation.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1413,7 +1389,6 @@ tests/test_boundary_compiler.py	tests-follow-owner	Retain meaningful boundary an
 tests/test_bounded_participant_agency_scenario.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_bounded_participant_runtime.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_browser_gateway.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
-tests/test_canonical_input_roundtrip.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/test_capture_apparatus.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_capture_registry.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_certs.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1495,7 +1470,6 @@ tests/test_experiment_spec_loading.py	tests-follow-owner	Retain meaningful bound
 tests/test_experiment_trial_plan.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_exporter.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_flag_signing_keys.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
-tests/test_full_techvault_inputs.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/test_ground_control_config.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_guest_transport_preparation.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/test_hashed_requirements.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1537,7 +1511,7 @@ tests/test_mcp_dispatch.py	backend-owned-runtime	Constrain the temporary plannin
 tests/test_mcp_guest_binding.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/test_mcp_guest_management.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/test_mcp_native_ingress.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
-tests/test_mcp_payload_processes.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
+tests/test_mcp_payload_processes.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_mcp_protocol.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_mcp_relay.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/test_mcp_result_redaction.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
@@ -1565,7 +1539,6 @@ tests/test_participant_qualification.py	tests-follow-owner	Retain meaningful bou
 tests/test_participant_workbench.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_participant_workbench_adapter.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_pathsafe.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
-tests/test_payload_content.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
 tests/test_platform_ci_gates.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_plugin_pack_compatibility.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_pr_title_guard.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1637,6 +1610,13 @@ tests/test_scenario_verification_artifacts.py	tests-follow-owner	Retain meaningf
 tests/test_scenario_verification_seam.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_scenarios.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_scorecard_workflow.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_seat_image.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_seat_image_build.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_seat_image_config.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_seat_image_selection.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_seat_image_runtime.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_seat_overlay.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_seat_overlay_identity.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seed_misp_script.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seed_prime_failures.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_seed_script_env.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1833,3 +1813,16 @@ tests/test_docs_user_journey.py	tests-follow-owner	Retain structural coverage fo
 docs/security/openssf-best-practices.md	docs-follow-owner	Keep the public badge assessment and evidence links with project documentation
 tests/test_docs_publishing.py	tests-follow-owner	Retain structural coverage for badge evidence and dual documentation publishing
 tools/run-targeted-tests.sh	build-governance	Keep local verification targeted while CI owns whole-tree gates
+docs/architecture/issue-1162-nested-virt-seat-preflight.md	build-governance	Keep source and artifact evidence with delivery governance
+scripts/appliance/seat-build-record.py	optional-delivery	Keep seat image trust and local delivery with the delivery owner
+src/aptl/appliance/guest_web.py	optional-delivery	Keep seat image trust and local delivery with the delivery owner
+src/aptl/appliance/seat/aptl-seat.pub	optional-delivery	Keep seat image trust and local delivery with the delivery owner
+src/aptl/appliance/seat/image_trust.py	optional-delivery	Keep seat image trust and local delivery with the delivery owner
+src/aptl/appliance/seat/image_update.py	optional-delivery	Keep seat image trust and local delivery with the delivery owner
+tests/test_appliance_guest_web.py	test-governance	Migrate regression coverage with the behavior it verifies
+tests/test_seat_image_consent.py	test-governance	Migrate regression coverage with the behavior it verifies
+tests/test_seat_image_trust.py	test-governance	Migrate regression coverage with the behavior it verifies
+tests/test_seat_image_update.py	test-governance	Migrate regression coverage with the behavior it verifies
+tests/test_seat_local_release.py	test-governance	Migrate regression coverage with the behavior it verifies
+src/aptl/appliance/seat/retained_image.py	optional-delivery	Retain per-seat verified image identity for independent offline restart
+docs/reviews/1162-seat-acceptance.md	docs-follow-owner	Preserve immutable image identities and observed manual acceptance evidence

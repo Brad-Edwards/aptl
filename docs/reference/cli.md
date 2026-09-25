@@ -23,8 +23,7 @@ aptl <command> <subcommand> --help
 | `aptl web` | Serve the local operator UI and API through the supported single-origin boundary. |
 | `aptl kill` | Emergency process and container termination; not normal teardown. |
 | `aptl experiment` | Admit experiment inputs and persist an immutable trial plan without executing it. |
-| `aptl appliance` | Build, qualify, stage, and inspect disposable appliance releases. |
-| `aptl seat` | Create and manage isolated local appliance seats on supported KVM hosts. |
+| `aptl seat` | Run one disposable appliance seat from a published VM image. |
 | `aptl mcp-access` | Materialize authorized MCP client access for a participant or appliance seat. |
 
 `aptl --version` prints the installed CLI version. Hidden implementation flags

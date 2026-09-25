@@ -8,7 +8,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from aptl.appliance.payload_content import hash_file_nofollow
+from aptl.utils.deterministic_archive import hash_file_nofollow as _hash_file
 from aptl.core.scenario_bundle import ScenarioBundle
 from aptl.validation.curated_live_proof import ExpectedMatrix
 from aptl.validation.participant_mcp_smoke import resolve_participant_mcp_smoke_plan
@@ -17,6 +17,12 @@ from aptl.validation.participant_profile_models import (
     ParticipantAssetLock,
 )
 from aptl.workbench.profiles import profile_for
+
+
+def hash_file_nofollow(path: Path) -> tuple[str, int]:
+    """Return the bare digest expected by participant profile references."""
+    digest, size = _hash_file(path)
+    return digest.removeprefix("sha256:"), size
 
 
 def _entry(

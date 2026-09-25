@@ -371,6 +371,40 @@ def test_docker_authority_holders_are_bound_to_admitted_live_container() -> None
     assert holders[0].device_count == 1
 
 
+def test_unmodeled_docker_socket_holder_is_observed_and_requires_policy_label() -> None:
+    policy = _policy()
+    container = _LiveContainer(
+        "web-id", "aptl-web-api", ("172.20.0.40",),
+        {
+            "Config": {"Labels": {"aptl.web.control-plane": "true"}},
+            "HostConfig": {"Devices": [], "Privileged": False},
+            "Mounts": [{
+                "Type": "bind", "Source": "/var/run/docker.sock",
+                "Destination": "/var/run/docker.sock", "RW": True,
+            }],
+        },
+    )
+    realization = SimpleNamespace(nodes=(), docker_authority_admissions=())
+
+    unapproved = _authority_holders(
+        realization=realization, policy=policy,
+        containers=(container,), daemon_id="daemon-42",
+    )
+    assert len(unapproved) == 1
+    assert unapproved[0].label_selector == "org.aptl.unapproved=holder"
+
+    approved_policy = policy.model_copy(update={
+        "docker_authority": policy.docker_authority.model_copy(update={
+            "allowed_holder_labels": ("aptl.web.control-plane=true",),
+        }),
+    })
+    approved = _authority_holders(
+        realization=realization, policy=approved_policy,
+        containers=(container,), daemon_id="daemon-42",
+    )
+    assert approved[0].label_selector == "aptl.web.control-plane=true"
+
+
 class _ListenerBackend:
     """Records commands; the start either times out or reports a failure."""
 

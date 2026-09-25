@@ -182,29 +182,28 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=2)
 
-    launch_values = (
-        appliance_launch_descriptor,
-        appliance_release_public_key,
-        appliance_qualification_public_key,
-    )
+    launch_values = (appliance_launch_descriptor,)
     readiness_values = (
         appliance_readiness_challenge,
         appliance_readiness_device,
     )
-    if any(launch_values) and (not all(launch_values) or not offline_staged):
+    if any(launch_values) and not offline_staged:
         typer.echo(
-            "error: appliance launch requires both trust anchors and --offline-staged",
+            "error: appliance launch requires --offline-staged",
             err=True,
         )
         raise typer.Exit(code=2)
-    if appliance_candidate_trust and (not all(launch_values) or not offline_staged):
+    if appliance_candidate_trust:
         typer.echo(
-            "error: candidate trust requires a complete verified offline launch",
+            "error: candidate trust is unavailable for seat images",
             err=True,
         )
+        raise typer.Exit(code=2)
+    if (appliance_release_public_key or appliance_qualification_public_key) and not appliance_launch_descriptor:
+        typer.echo("error: appliance trust anchors require a launch descriptor", err=True)
         raise typer.Exit(code=2)
     if any(readiness_values) and (
-        not all(readiness_values) or not all(launch_values) or not offline_staged
+        not all(readiness_values) or not appliance_launch_descriptor or not offline_staged
     ):
         typer.echo(
             "error: appliance readiness requires a verified offline launch",

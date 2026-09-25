@@ -2,7 +2,9 @@
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from types import SimpleNamespace
+import hashlib
+
+import rfc8785
 
 import pytest
 
@@ -10,96 +12,10 @@ from aptl.appliance.seat.observation import build_host_observation
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.workbench.guest_binding import ApplianceAccessObservation, GuestAdmission
 from tests.test_appliance_boundary_inventory import _binding, _guest, _policy
-from tests.test_mcp_access import access_record
-
-
-def test_candidate_admission_requires_explicit_supervisor_trust(tmp_path, monkeypatch):
-    from aptl.appliance.candidate import (
-        prepare_candidate_launch_descriptor,
-        prepare_candidate_manifest,
-        seal_candidate,
-    )
-    from aptl.workbench.dispatch import DispatchSelector
-    from aptl.workbench.guest_binding import ApplianceAccessPaths, GuestDispatchBinding
-    from tests.test_appliance_candidate import _candidate
-    from tests.test_mcp_access import grant
-
-    monkeypatch.setattr(
-        "aptl.appliance.candidate.validate_canonical_payload", lambda *_: None
-    )
-    candidate, template, private, public = _candidate(tmp_path)
-    prepare_candidate_manifest(candidate, template)
-    seal_candidate(candidate, private)
-    descriptor = candidate.parent / "appliance-launch.json"
-    prepare_candidate_launch_descriptor(
-        candidate, public, descriptor, host_observation_id="sha256:" + "d" * 64
-    )
-    caller = grant()
-    paths = ApplianceAccessPaths(
-        launch_descriptor=descriptor,
-        release_public_key=public,
-        qualification_public_key=public,
-        runtime_observation=tmp_path / "observation.json",
-    )
-    binding = GuestDispatchBinding(
-        schema_version="aptl.mcp-dispatch/v1",
-        access=access_record(),
-        grants=(caller,),
-        project_dir=tmp_path,
-        node_executable=Path("/usr/bin/node"),
-        management_home=tmp_path,
-        run_id="c" * 32,
-        delivery="appliance",
-        appliance=paths,
-    )
-    path = tmp_path / "binding.json"
-    path.write_text(binding.model_dump_json())
-    path.chmod(0o600)
-    args = (
-        path,
-        caller.grant_id,
-        caller.public_key_fingerprint,
-        DispatchSelector("instance-1", 1, "aptl-red"),
-    )
-    # Mere presence of candidate metadata must never downgrade production trust.
-    with pytest.raises(ValueError):
-        GuestAdmission(*args)
-    candidate_paths = paths.model_copy(update={"candidate_trust": True})
-    path.write_text(
-        binding.model_copy(update={"appliance": candidate_paths}).model_dump_json()
-    )
-    original_launch = GuestAdmission(*args).verified_launch
-    assert original_launch.release_root == candidate
-    from aptl.appliance.access_service import _stage_dispatch_metadata
-    import os
-
-    snapshot = _stage_dispatch_metadata(
-        GuestAdmission(*args).verified_launch,
-        candidate_paths,
-        tmp_path / "private-dispatch-trust",
-        gid=os.getgid(),
-    )
-    assert snapshot.candidate_trust is True
-    assert snapshot.launch_descriptor.read_bytes() == descriptor.read_bytes()
-    assert not list(snapshot.launch_descriptor.parent.rglob("*.qcow2"))
-    assert not list(snapshot.launch_descriptor.parent.rglob("offline-payload.tar"))
-    path.write_text(
-        binding.model_copy(update={"appliance": snapshot}).model_dump_json()
-    )
-    assert (
-        GuestAdmission(*args).verified_launch.descriptor == original_launch.descriptor
-    )
-    for copied in snapshot.launch_descriptor.parent.rglob("*"):
-        assert copied.stat().st_mode & 0o027 == 0  # no group write or other access
-    # Admission no longer depends on the host-owned read-only share.
-    descriptor.unlink()
-    assert GuestAdmission(*args).verified_launch.release_root != candidate
-    # The candidate branch still verifies signatures and consumed policy bytes.
-    launch = GuestAdmission(*args).verified_launch
-    policy = launch.release_root / launch.descriptor.boundary_policy_path
-    policy.write_text("{}")
-    with pytest.raises(ValueError):
-        GuestAdmission(*args)
+from tests.test_mcp_access import access_record, grant
+from aptl.workbench.dispatch import DispatchSelector
+from aptl.workbench.guest_binding import GuestDispatchBinding, ApplianceAccessPaths
+from aptl.appliance.seat.launch_descriptor import SeatLaunchDescriptor
 
 
 @pytest.mark.parametrize("vm_only", [False, True])
@@ -121,6 +37,7 @@ def test_appliance_transport_checks_freshness_identity_mapping_and_live_probes(
     policy = type(_policy()).model_validate(policy_data)
     binding = _binding().model_copy(
         update={
+            "policy_digest": "sha256:" + hashlib.sha256(rfc8785.dumps(policy.model_dump(mode="json"))).hexdigest(),
             "boot_id": "host-boot-42",
             "host_boot_id": "host-boot-42",
             "guest_boot_id": "boot-42",
@@ -143,6 +60,11 @@ def test_appliance_transport_checks_freshness_identity_mapping_and_live_probes(
     )
     binding = binding.model_copy(update={"host_observation_id": host.observation_id})
     guest = _guest()
+    guest = guest.model_copy(update={
+        "policy_digest": binding.policy_digest,
+        "enforcements": tuple(item.model_copy(update={"source_digest": binding.policy_digest})
+                              for item in guest.enforcements),
+    })
     guest = guest.model_copy(
         update={
             "enforcements": (
@@ -180,23 +102,40 @@ def test_appliance_transport_checks_freshness_identity_mapping_and_live_probes(
     path = tmp_path / "boundary.json"
     path.write_text(observed.model_dump_json())
     path.chmod(0o600)
-    # This unit test starts after signature verification. It exercises the real
-    # boundary verifier; synthetic observations are never release evidence.
-    admission = object.__new__(GuestAdmission)
-    admission.binding = SimpleNamespace(
-        access=access_record(guest_boot_id="boot-42", guest_daemon_id="daemon-42"),
-        appliance=SimpleNamespace(runtime_observation=path),
+    # Construct admission through the real launch verifier and its tuple API.
+    launch_path = tmp_path / "appliance-launch.json"
+    descriptor = SeatLaunchDescriptor(
+        schema_version="aptl.appliance-launch/v2",
+        image_reference="ghcr.io/brad-edwards/aptl-seat:fixture",
+        image_digest=binding.payload_digest,
+        image_config_digest="sha256:" + "f" * 64,
+        boundary_policy_digest=binding.policy_digest,
+        participant_routes_digest=binding.raes_plan_digest,
+        boundary_helper_image=binding.boundary_helper_image,
+        egress_proxy_image=binding.egress_proxy_image,
+        host_observation_id=binding.host_observation_id,
+        host_mcp_contract="aptl.restricted-ssh-mcp/v1",
     )
-    admission.verified_launch = SimpleNamespace(
-        boundary_policy=policy,
-        descriptor=SimpleNamespace(
-            boundary_policy_digest=binding.policy_digest,
-            payload_digest=binding.payload_digest,
-            participant_routes_digest=binding.raes_plan_digest,
-            boundary_helper_image=binding.boundary_helper_image,
-            egress_proxy_image=binding.egress_proxy_image,
-            host_observation_id=binding.host_observation_id,
+    launch_path.write_text(descriptor.model_dump_json())
+    (tmp_path / "boundary-policy.json").write_bytes(
+        rfc8785.dumps(policy.model_dump(mode="json"))
+    )
+    caller = grant(profile="red")
+    access = access_record(guest_boot_id="boot-42", guest_daemon_id="daemon-42")
+    dispatch = GuestDispatchBinding(
+        schema_version="aptl.mcp-dispatch/v1", access=access, grants=(caller,),
+        project_dir=tmp_path, management_home=tmp_path,
+        node_executable=Path("/usr/bin/node"), run_id="c" * 32,
+        delivery="appliance", appliance=ApplianceAccessPaths(
+            launch_descriptor=launch_path, runtime_observation=path,
         ),
+    )
+    dispatch_path = tmp_path / "dispatch.json"
+    dispatch_path.write_text(dispatch.model_dump_json())
+    dispatch_path.chmod(0o600)
+    admission = GuestAdmission(
+        dispatch_path, caller.grant_id, caller.public_key_fingerprint,
+        DispatchSelector(access.instance_id, access.generation, "aptl-red"),
     )
     admission._verify_appliance_observation()
     # The supervisor's complete Docker and boundary observation cycle takes

@@ -133,15 +133,19 @@ def test_access_request_is_create_once_and_strict(tmp_path: Path) -> None:
 
 
 def test_access_bundle_is_private_and_invalidated_on_stop(tmp_path: Path) -> None:
-    bundle = _bundle(_public_key())
+    bundle = _bundle(_public_key()).model_copy(
+        update={"web_launch_token": "t" * 43}
+    )
     output = persist_host_access_bundle(tmp_path, bundle)
 
     assert (output / "access.json").stat().st_mode & 0o777 == 0o600
     assert (output / "grant.json").exists()
+    assert (output / "web-launch-token").stat().st_mode & 0o777 == 0o600
 
     invalidate_host_access(tmp_path, reason="seat-stopped")
 
     assert not (output / "grant.json").exists()
+    assert not (output / "web-launch-token").exists()
     assert (output / "invalidated").read_text() == "seat-stopped\n"
     assert '"lifecycle_state":"needs-reset"' in (output / "access.json").read_text()
 

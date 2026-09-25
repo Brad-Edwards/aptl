@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Every check here reports why it failed. A bake that exits silently costs
+# more to diagnose than it ever saves in brevity.
 set -euo pipefail
 
 if test "$#" -ne 1; then
@@ -11,7 +13,10 @@ source_root=$(git rev-parse --show-toplevel)
 lock="$source_root/appliance/guest/system-packages.sha256"
 image='ubuntu:26.04@sha256:da6fc2be547864451aa253836dd926da33623312df4a9a243e35dc877c378a78'
 
-test ! -e "$output"
+test ! -e "$output" || {
+  echo "staging directory already exists: $output" >&2
+  exit 1
+}
 install -d -m 0700 "$output"
 docker run --rm \
   --volume "$output:/output" \
@@ -29,7 +34,16 @@ docker run --rm \
     find /output/lock -delete
   '
 
-expected=$(sed -n 's/^[0-9a-f]\{64\}  //p' "$lock")
-actual=$(find "$output" -maxdepth 1 -type f -name '*.deb' -printf '%f\n' | sort)
-test "$actual" = "$expected"
+# Both sides sort under C collation. Locale-dependent ordering silently
+# disagrees on names carrying '+' and '~' -- a Debian version separator, so
+# every package this stages is a candidate -- and the lock was written on
+# whatever locale generated it.
+expected=$(sed -n 's/^[0-9a-f]\{64\}  //p' "$lock" | LC_ALL=C sort)
+actual=$(find "$output" -maxdepth 1 -type f -name '*.deb' -printf '%f\n' |
+  LC_ALL=C sort)
+if test "$actual" != "$expected"; then
+  echo 'staged guest packages do not match the lock' >&2
+  diff <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") >&2 || true
+  exit 1
+fi
 (cd "$output" && sha256sum --check --strict "$lock")

@@ -9,6 +9,25 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [6.0.0](https://github.com/Brad-Edwards/aptl/compare/v5.6.0...v6.0.0) (2026-09-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* boot seats from qualified GHCR VM images ([#1161](https://github.com/Brad-Edwards/aptl/issues/1161))
+
+### Features
+
+* boot seats from qualified GHCR VM images ([#1161](https://github.com/Brad-Edwards/aptl/issues/1161)) ([e145281](https://github.com/Brad-Edwards/aptl/commit/e1452814729eb4c50872201eb113c94bbf80876d))
+
+
+### Bug Fixes
+
+* prove appliance image publication by pull, not package visibility ([#1160](https://github.com/Brad-Edwards/aptl/issues/1160)) ([7d4412b](https://github.com/Brad-Edwards/aptl/commit/7d4412b38222face33e777a79c915233c688e85c))
+* **release:** bump uv.lock with release-please ([#1166](https://github.com/Brad-Edwards/aptl/issues/1166)) ([cb3f54c](https://github.com/Brad-Edwards/aptl/commit/cb3f54cdddfebec6ba845e6d7ce2129fb1f755f0))
+* **seat:** restore nested VM delivery with signed GHCR images ([#1163](https://github.com/Brad-Edwards/aptl/issues/1163)) ([0ae2499](https://github.com/Brad-Edwards/aptl/commit/0ae249947abb8b83e955081fb09bc5cf5cdcc45f))
+* sync uv.lock to v5.6.0 ([#1167](https://github.com/Brad-Edwards/aptl/issues/1167)) ([3908a9b](https://github.com/Brad-Edwards/aptl/commit/3908a9b626fc052001281fa00d2a08b3b302cfdd))
+
 ## [5.6.0](https://github.com/Brad-Edwards/aptl/compare/v5.5.0...v5.6.0) (2026-09-22)
 
 

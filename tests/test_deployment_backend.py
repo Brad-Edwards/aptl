@@ -529,14 +529,37 @@ services:
         ] in commands
         assert all("unmanaged" not in command for command in commands)
 
-    def test_realize_disconnects_implicit_default_bridge(self, tmp_path):
+    @pytest.mark.parametrize(
+        ("published_ports", "expect_disconnect"),
+        [
+            ((), True),
+            (
+                (
+                    DeploymentPublishedPort(
+                        container_port=2023,
+                        host_port=2023,
+                    ),
+                ),
+                False,
+            ),
+        ],
+    )
+    def test_realize_disconnects_implicit_default_bridge(
+        self,
+        tmp_path,
+        published_ports,
+        expect_disconnect,
+    ):
         """A generic-materializer node (ADR-048) is `docker run` with no
         `--network`, so Docker implicitly attaches the default "bridge"
         network at creation; reconciliation must detach it once the node's
         declared networks are connected, or it leaks onto the default bridge
         forever (issue #581 - this is what let kali "reach" a target only
         through a spurious shared bridge attachment, not its real declared
-        network, corrupting the live gate's kali_reachability check).
+        network, corrupting the live gate's kali_reachability check). A node
+        with a host-published port retains that attachment because Docker's
+        publication depends on the network used when the container was
+        created.
         "bridge" is never itself an "unmanaged" network APTL must leave
         alone (per the sibling test above): it is Docker's own fixed
         default, not something a user attached on purpose.
@@ -551,12 +574,7 @@ services:
                     service_name="kali",
                     container_name="aptl-kali",
                     networks=("redteam-net",),
-                    published_ports=(
-                        DeploymentPublishedPort(
-                            container_port=2023,
-                            host_port=2023,
-                        ),
-                    ),
+                    published_ports=published_ports,
                 ),
             ),
             networks=(DeploymentNetworkRealization(name="redteam-net"),),
@@ -596,13 +614,14 @@ services:
 
         assert result.success is True
         commands = [call.args[0] for call in mock_run.call_args_list]
-        assert [
+        disconnect = [
             "docker",
             "network",
             "disconnect",
             "bridge",
             "aptl-kali",
-        ] in commands
+        ]
+        assert (disconnect in commands) is expect_disconnect
 
     def test_realize_leaves_bridge_alone_when_no_bridge_attachment(self, tmp_path):
         """A Compose-started node never picks up the default bridge (Compose

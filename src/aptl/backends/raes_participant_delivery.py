@@ -659,6 +659,18 @@ def build_participant_delivery_plan(
             )
         )
 
+    ordered = _ordered_participant_turns(turns)
+    return ParticipantDeliveryPlan(
+        ordered,
+        behavior_specifications=dict(runtime_model.behavior_specifications),
+    )
+
+
+def _ordered_participant_turns(
+    turns: list[ParticipantInjectTurn],
+) -> tuple[ParticipantInjectTurn, ...]:
+    """Return the closed delivery sequence after validating its global order."""
+
     ordered = tuple(sorted(turns, key=lambda turn: (turn.tick, turn.control_effective_order)))
     if len({turn.tick for turn in ordered}) != len(ordered):
         raise ValueError("participant delivery ticks must be unique")
@@ -667,10 +679,7 @@ def build_participant_delivery_plan(
         for current, following in zip(ordered, ordered[1:], strict=False)
     ):
         raise ValueError("participant delivery control order must be strictly increasing")
-    return ParticipantDeliveryPlan(
-        ordered,
-        behavior_specifications=dict(runtime_model.behavior_specifications),
-    )
+    return ordered
 
 
 def bind_participant_delivery_capture(

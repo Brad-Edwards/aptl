@@ -237,6 +237,7 @@ class ComposeRealizationNetworkMixin:
                     node.container_name,
                     info,
                     desired,
+                    keep_for_published_port=bool(node.published_ports),
                 )
             )
         return failures
@@ -246,6 +247,8 @@ class ComposeRealizationNetworkMixin:
         container_name: str,
         info: dict[str, Any],
         desired: dict[str, DeploymentNetworkAttachment],
+        *,
+        keep_for_published_port: bool = False,
     ) -> list[str]:
         """Detach a node's implicit default-bridge attachment, if any.
 
@@ -256,7 +259,8 @@ class ComposeRealizationNetworkMixin:
         """
 
         if (
-            _DEFAULT_BRIDGE_NETWORK not in _container_networks(info)
+            keep_for_published_port
+            or _DEFAULT_BRIDGE_NETWORK not in _container_networks(info)
             or _DEFAULT_BRIDGE_NETWORK in desired
         ):
             return []

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -444,7 +445,7 @@ def test_host_adapter_uses_authenticated_cli_and_strict_profile_tools(
     work.mkdir()
     runner = _Runner()
     adapter = ClaudeCodeHostParticipantAdapter(
-        Path("/bin/true"),
+        Path(sys.executable),
         work,
         runner=runner,
     )
@@ -509,7 +510,7 @@ def test_host_adapter_rejects_non_success_result_envelopes(
 
     with pytest.raises(AgentExecutionError, match="invalid result"):
         ClaudeCodeHostParticipantAdapter(
-            Path("/bin/true"), work, runner=ErrorRunner()
+            Path(sys.executable), work, runner=ErrorRunner()
         ).deliver(
             instruction="authored instruction",
             model="claude-test-model",
@@ -548,7 +549,7 @@ def test_runtime_profile_rejects_unadmitted_mcp_environment(tmp_path: Path) -> N
             project_dir=project,
             source_config=source,
             output_dir=tmp_path,
-            node_executable=Path("/bin/true"),
+            node_executable=Path(sys.executable),
         )
 
 
@@ -606,7 +607,7 @@ def test_execute_plan_coordinates_time_profiles_sessions_control_and_evidence(
     )
     monkeypatch.setattr(
         "aptl.backends.raes_participant_delivery._which_executable",
-        lambda _name: Path("/bin/true"),
+        lambda _name: Path(sys.executable),
     )
 
     final_snapshot = execute_participant_delivery_plan(

@@ -3582,19 +3582,22 @@ def _step_execute_participant_injects(ctx: _LabStartContext) -> LabResult | None
         )
     try:
         from aptl.backends.raes_participant_delivery import (
+            ParticipantDeliveryExecutionContext,
             execute_participant_delivery_plan,
         )
 
         model = ctx.config.experiment.participant_models.model_for("claude")
         ctx.raes_outcome.final_snapshot = execute_participant_delivery_plan(
             plan,
-            project_dir=ctx.project_dir,
-            model=model,
-            run_store=ctx.run_store,
-            run_id=ctx.run_id,
-            target=admitted.target,
-            runtime_manager=ctx.raes_outcome.runtime_manager,
-            initial_snapshot=ctx.raes_outcome.final_snapshot,
+            context=ParticipantDeliveryExecutionContext(
+                project_dir=ctx.project_dir,
+                model=model,
+                run_store=ctx.run_store,
+                run_id=ctx.run_id,
+                target=admitted.target,
+                runtime_manager=ctx.raes_outcome.runtime_manager,
+                initial_snapshot=ctx.raes_outcome.final_snapshot,
+            ),
         )
     except Exception:
         log.exception("Participant inject delivery failed")

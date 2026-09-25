@@ -24,8 +24,6 @@ behavior-history contracts. It does not declare the deprecated SDL scoring chain
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 from raes_backend_protocols.capabilities import (
     BackendManifest,
     EvaluatorCapabilities,
@@ -33,8 +31,6 @@ from raes_backend_protocols.capabilities import (
     ParticipantFeatureSupport,
     ParticipantRuntimeCapabilities,
     ProvisionerCapabilities,
-    TIME_CAPABILITY_REQUIRED_CONTRACTS,
-    TimeCapabilities,
 )
 from raes_backend_protocols.manifest import backend_manifest_v2_model
 from raes_contracts.apparatus import (
@@ -68,6 +64,9 @@ from raes_contracts.vocabulary import (
 
 from raes_contracts.manifest_authority import BACKEND_SUPPORTED_CONTRACT_IDS
 
+from aptl.backends._raes_participant_manifest import (
+    participant_delivery_manifest_options,
+)
 from aptl.backends.raes_participant_runtime import PARTICIPANT_ACTION_ADDRESS
 from aptl.core.experiment.capture_registry import (
     CollectorRegistry,
@@ -137,9 +136,8 @@ _CURRENT_PARTICIPANT_CONTRACT_VERSIONS = frozenset(
     }
 )
 
-_SUPPORTED_CONTRACT_VERSIONS = (
-    _BASE_SUPPORTED_CONTRACT_VERSIONS
-    | (_CURRENT_PARTICIPANT_CONTRACT_VERSIONS & frozenset(BACKEND_SUPPORTED_CONTRACT_IDS))
+_SUPPORTED_CONTRACT_VERSIONS = _BASE_SUPPORTED_CONTRACT_VERSIONS | (
+    _CURRENT_PARTICIPANT_CONTRACT_VERSIONS & frozenset(BACKEND_SUPPORTED_CONTRACT_IDS)
 )
 
 # Orchestrator capability declaration. APTL's RTE-001 runtime engine drives
@@ -221,26 +219,6 @@ _PARTICIPANT_RUNTIME = ParticipantRuntimeCapabilities(
     constraints={
         "default_participant_action_address": PARTICIPANT_ACTION_ADDRESS,
         "backend_boundary": "DeploymentBackend.container_exec",
-    },
-)
-
-_TIME = TimeCapabilities(
-    name="aptl-logical-participant-sequence-time",
-    supported_contract_versions=TIME_CAPABILITY_REQUIRED_CONTRACTS,
-    supported_domain_kinds=frozenset({"logical"}),
-    supported_authority_kinds=frozenset({"runtime"}),
-    supported_advancement_modes=frozenset({"event_driven"}),
-    supported_synchronization_modes=frozenset({"barrier"}),
-    supported_mapping_kinds=frozenset(),
-    supported_constraint_kinds=frozenset({"window"}),
-    supported_reset_behaviors=frozenset({"unsupported"}),
-    supported_replay_behaviors=frozenset({"unsupported"}),
-    max_time_domains=1,
-    max_clocks=1,
-    supports_append_only_history=True,
-    supports_run_provenance=True,
-    constraints={
-        "execution_scope": "sdl-authored-participant-inject-delivery-sequence",
     },
 )
 
@@ -455,48 +433,13 @@ def create_aptl_manifest(
     """
     selected_registry = registry if registry is not None else DEFAULT_COLLECTOR_REGISTRY
     observation = selected_registry.observation_projection()
-    supported_contract_versions = _SUPPORTED_CONTRACT_VERSIONS
-    capability_options: dict[str, object] = {}
-    participant_runtime = _PARTICIPANT_RUNTIME
-    if participant_inject_delivery:
-        supported_contract_versions = (
-            supported_contract_versions | TIME_CAPABILITY_REQUIRED_CONTRACTS
-        )
-        participant_runtime = replace(
+    supported_contract_versions, participant_runtime, capability_options = (
+        participant_delivery_manifest_options(
+            _SUPPORTED_CONTRACT_VERSIONS,
             _PARTICIPANT_RUNTIME,
-            supported_behavior_features=(
-                _PARTICIPANT_RUNTIME.supported_behavior_features
-                | {
-                    "participant_directed_inject_delivery",
-                    "participant_ingress_admission",
-                }
-            ),
-            feature_support=(
-                *_PARTICIPANT_RUNTIME.feature_support,
-                ParticipantFeatureSupport(
-                    feature="participant_ingress_admission",
-                    support_level=ParticipantFeatureSupportLevel.EXACT,
-                    constraint_refs=(
-                        "constraint:participant-ingress:sdl-authored-delivery-policy",
-                    ),
-                    evidence_refs=(
-                        "evidence:participant-ingress:api-423-crossing-occurrence",
-                    ),
-                ),
-                ParticipantFeatureSupport(
-                    feature="participant_directed_inject_delivery",
-                    support_level=ParticipantFeatureSupportLevel.EXACT,
-                    constraint_refs=(
-                        "constraint:participant-inject-delivery:sdl-authored-ordered-sequence",
-                        "constraint:participant-inject-delivery:claude-code-host-session",
-                    ),
-                    evidence_refs=(
-                        "evidence:participant-inject-delivery:run-archive-occurrence",
-                    ),
-                ),
-            ),
+            enabled=participant_inject_delivery,
         )
-        capability_options["time"] = _TIME
+    )
     if observation is not None:
         supported_contract_versions = (
             supported_contract_versions | OBSERVATION_EVIDENCE_CONTRACTS

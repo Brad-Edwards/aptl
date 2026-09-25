@@ -1819,3 +1819,14 @@ src/aptl/backends/raes_participant_delivery.py	core-candidate	Keep generic SDL p
 src/aptl_techvault/study.py	scenario-integration	Keep TechVault-specific participant tool bindings behind the installed adapter seam
 tests/test_raes_participant_delivery.py	tests-follow-owner	Retain generic SDL participant-delivery regression coverage with the RAES runtime integration
 tests/test_techvault_study_adapter.py	tests-follow-owner	Retain TechVault participant adapter regression coverage with its scenario owner
+src/aptl/backends/_raes_evidence_refresh_policy.py	core-candidate	Keep evaluator-only participant crossing rejection with native evidence refresh
+src/aptl/backends/_raes_participant_crossing.py	core-candidate	Keep generic authored participant crossing policy realization with RAES integration
+src/aptl/backends/_raes_participant_evidence.py	core-candidate	Keep generic participant delivery evidence collection and indexing with RAES integration
+src/aptl/backends/_raes_participant_execution.py	core-candidate	Keep generic governed participant delivery execution with RAES integration
+src/aptl/backends/_raes_participant_manifest.py	core-candidate	Keep optional generic participant delivery capability declarations with RAES integration
+src/aptl/backends/_raes_participant_models.py	core-candidate	Keep generic participant delivery contracts with RAES integration
+src/aptl/backends/_raes_participant_planning.py	core-candidate	Keep generic SDL participant delivery planning with RAES integration
+src/aptl/backends/_raes_participant_snapshot.py	core-candidate	Keep governed participant snapshot handoff with RAES runtime integration
+src/aptl/backends/_raes_participant_transport.py	core-candidate	Keep generic authenticated host transport and role scoped MCP rendering with RAES integration
+src/aptl/core/deployment/_compose_image_free_network_reconciliation.py	backend-substrate	Retain declared image-free network reconciliation with Compose realization
+src/aptl_techvault/study_capture_registrations.py	scenario-integration	Keep participant study capture declarations with the TechVault scenario adapter

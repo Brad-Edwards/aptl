@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
 
 _LAB_HTTP_PORT = 8080
+_LAB_HTTP_SCHEME = "http"
 _LOGIN_ENDPOINT = "/login"
 _BENIGN_ACCOUNT_ACTIVE = "benign-customer|active"
 _PROFILE_CONTACT_EMAIL = "profile.contact_email"
@@ -282,13 +283,15 @@ def _http_status(
         "--max-redirs",
         "0",
         "--proto",
-        "=http",
+        f"={_LAB_HTTP_SCHEME}",
     ]
     if method == "HEAD":
         command.append("--head")
     else:
         command.extend(("-X", method))
-    command.append(f"http://{context.container('webapp')}:{_LAB_HTTP_PORT}{endpoint}")
+    command.append(
+        f"{_LAB_HTTP_SCHEME}://{context.container('webapp')}:{_LAB_HTTP_PORT}{endpoint}"
+    )
     return _checked_exec(
         context.backend,
         context.container(source_node),
@@ -316,13 +319,15 @@ def _http_response_metadata(
         "--max-redirs",
         "0",
         "--proto",
-        "=http",
+        f"={_LAB_HTTP_SCHEME}",
     ]
     if method == "HEAD":
         command.append("--head")
     else:
         command.extend(("-X", method))
-    command.append(f"http://{context.container('webapp')}:{_LAB_HTTP_PORT}{endpoint}")
+    command.append(
+        f"{_LAB_HTTP_SCHEME}://{context.container('webapp')}:{_LAB_HTTP_PORT}{endpoint}"
+    )
     observed = _checked_exec(
         context.backend,
         context.container(source_node),

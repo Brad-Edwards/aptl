@@ -63,10 +63,7 @@ from aptl.backends.raes_participant_actions import (
     participant_action_specs_from_runtime_model,
 )
 from aptl.backends.raes_participant_driver import ParticipantPlanAuthority
-from aptl.backends.raes_participant_delivery import (
-    bind_participant_delivery_capture,
-    build_participant_delivery_plan,
-)
+from aptl.backends import raes_participant_delivery as participant_delivery
 from aptl.backends.raes_participant_runtime import AptlParticipantRuntime
 from aptl.backends.raes_provisioner import AptlProvisioner
 from aptl.backends.raes_start_model import (
@@ -223,15 +220,6 @@ def start_raes_scenario(
         return _start_failure_outcome(exc, resolved_scenario)
 
 
-def _has_participant_inject_deliveries(scenario: object) -> bool:
-    """Return whether the authored scenario requests the delivery capability."""
-
-    return any(
-        bool(getattr(specification, "participant_inject_deliveries", {}))
-        for specification in getattr(scenario, "behavior_specifications", {}).values()
-    )
-
-
 def admit_raes_scenario(
     project_dir: Path,
     config: AptlConfig,
@@ -291,7 +279,9 @@ def admit_raes_scenario(
             operator_access=operator_access_decision(scenario),
             startup_selection=startup_selection,
             capture_selection=capture_selection,
-            participant_inject_delivery=_has_participant_inject_deliveries(scenario),
+            participant_inject_delivery=(
+                participant_delivery.has_participant_inject_deliveries(scenario)
+            ),
         ),
     )
     runtime_manager = RuntimeManager(target)
@@ -334,8 +324,8 @@ def admit_raes_scenario(
             execution_plan,
             bundle.sdl_path,
         )
-    participant_delivery_plan = bind_participant_delivery_capture(
-        build_participant_delivery_plan(
+    participant_delivery_plan = participant_delivery.bind_participant_delivery_capture(
+        participant_delivery.build_participant_delivery_plan(
             scenario,
             execution_plan.model,
         ),

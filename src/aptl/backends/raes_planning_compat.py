@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from raes_runtime.registry import RuntimeTarget
 
 from aptl.core.scenario_bundle import ScenarioBundle
+from aptl.backends import _raes_participant_snapshot as participant_snapshot
 from aptl.backends.identity import (
     APTL_RAES_TARGET_NAME,
     APTL_RAES_TARGET_PROFILE,
@@ -401,19 +402,7 @@ class AptlRuntimeManager(_RaesRuntimeManager):
     ) -> RuntimeSnapshot:
         """Resume manager-owned time from a governed participant delivery cut."""
 
-        baseline = replace(
-            snapshot,
-            participant_control_history=self.snapshot.participant_control_history,
-            participant_crossing_history=(
-                self.snapshot.participant_crossing_history
-            ),
-        )
-        if baseline != self.snapshot:
-            raise ValueError(
-                "participant delivery snapshot handoff changed state outside governed history"
-            )
-        self._snapshot = snapshot
-        return self.snapshot
+        return participant_snapshot.adopt_participant_delivery_snapshot(self, snapshot)
 
     def plan(
         self,

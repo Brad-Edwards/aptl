@@ -49,6 +49,10 @@ from raes_contracts.runtime_state import (
 )
 from raes_runtime.control_plane import RuntimeControlPlane
 
+from aptl.backends._raes_evidence_refresh_policy import (
+    EvidenceRefreshCrossingPolicyResolver,
+    without_evaluation_state,
+)
 from aptl.backends._raes_evaluator_engine import (
     EVALUATION_ADDRESS,
     OBSERVABLE_RESOURCE_TYPES,
@@ -96,35 +100,6 @@ class EvidenceTruthRefresh(object):
     status: OperationState
     snapshot: RuntimeSnapshot
     diagnostics: tuple[Diagnostic, ...] = ()
-
-
-class _EvidenceRefreshCrossingPolicyResolver:
-    """Fail closed if an evaluator-only refresh attempts a participant crossing.
-
-    RAES requires a crossing-policy authority whenever the target advertises a
-    participant policy capability. Native-evidence refresh submits only the
-    immutable evaluation phase, but it still reconstructs a control plane for
-    the complete admitted target. Supplying an explicit rejecting authority
-    satisfies that construction rule without granting the refresh any new
-    participant effect.
-    """
-
-    @staticmethod
-    def _reject() -> None:
-        raise RuntimeError(
-            "participant crossings are unavailable during native-evidence refresh"
-        )
-
-    def resolve(self, *_args: object, **_kwargs: object) -> object:
-        self._reject()
-
-    def validation_context(self, *_args: object, **_kwargs: object) -> object:
-        self._reject()
-
-    def resolve_flow_sink_decision(
-        self, *_args: object, **_kwargs: object
-    ) -> object:
-        self._reject()
 
 
 def _registration_for_snapshot(snapshot: RuntimeSnapshot) -> _EvaluationRegistration:
@@ -435,11 +410,11 @@ def refresh_evidence_truth(
     # an invalid create-over-existing transition in RAES 5. Rebuild only the
     # evaluation domain from the same observed provisioning snapshot; the new
     # control plane then remains the sole writer of the refreshed truth.
-    refresh_snapshot = _without_evaluation_state(snapshot)
+    refresh_snapshot = without_evaluation_state(snapshot)
     control_plane = RuntimeControlPlane(
         target,
         initial_snapshot=refresh_snapshot,
-        crossing_policy_resolver=_EvidenceRefreshCrossingPolicyResolver(),
+        crossing_policy_resolver=EvidenceRefreshCrossingPolicyResolver(),
     )
     try:
         return _run_evidence_refresh(
@@ -450,22 +425,6 @@ def refresh_evidence_truth(
         )
     finally:
         control_plane.close()
-
-
-def _without_evaluation_state(snapshot: RuntimeSnapshot) -> RuntimeSnapshot:
-    """Retain realized runtime state while clearing the phase being replayed."""
-
-    entries = {
-        address: entry
-        for address, entry in snapshot.entries.items()
-        if entry.domain != RuntimeDomain.EVALUATION
-    }
-    return snapshot.with_entries(
-        entries,
-        evaluation_results={},
-        evaluation_history={},
-        proposition_truth_results={},
-    )
 
 
 def _run_evidence_refresh(

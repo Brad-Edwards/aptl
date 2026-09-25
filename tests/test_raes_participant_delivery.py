@@ -21,6 +21,7 @@ from raes_processor.models import (
 from aptl.backends.raes_participant_delivery import (
     CLAUDE_CODE_REALIZATION_PROFILE,
     ClaudeCodeHostParticipantAdapter,
+    ParticipantDeliveryExecutionContext,
     ParticipantTurnResult,
     _delivery_record,
     _render_runtime_profile_config,
@@ -56,9 +57,7 @@ def _compiled_delivery(role: str, phase: str, tick: int) -> SimpleNamespace:
     address = f"participant.behavior-specification.{spec}.inject-delivery.{phase}"
     return SimpleNamespace(
         address=address,
-        behavior_specification_address=(
-            f"participant.behavior-specification.{spec}"
-        ),
+        behavior_specification_address=(f"participant.behavior-specification.{spec}"),
         participant_address=f"participant.behavior.{role}-operator",
         inject_address=f"orchestration.inject.{role}-{phase}",
         event_address=f"orchestration.event.{role}-{phase}",
@@ -178,13 +177,17 @@ def _scenario_and_model() -> tuple[object, object]:
         )
         state_addresses = {state.name: state.address for state in states}
         transitions = []
-        for phase, proposal_order, direction_order, expected_revision, proposal_revision in (
+        for (
+            phase,
+            proposal_order,
+            direction_order,
+            expected_revision,
+            proposal_revision,
+        ) in (
             ("start", offset, offset + 1, 0, 1),
             ("stop", offset + 2, offset + 3, 2, 3),
         ):
-            proposal_address = (
-                f"{spec_address}.control-transition.propose-{phase}"
-            )
+            proposal_address = f"{spec_address}.control-transition.propose-{phase}"
             transitions.extend(
                 (
                     MixedControlTransitionRuntime(
@@ -238,9 +241,7 @@ def _scenario_and_model() -> tuple[object, object]:
             lifecycle_state="active",
             participant_addresses=(f"participant.behavior.{role}-operator",),
             behavior_mode="mixed-control",
-            mixed_control_participant_address=(
-                f"participant.behavior.{role}-operator"
-            ),
+            mixed_control_participant_address=(f"participant.behavior.{role}-operator"),
             mixed_control_policy_revision="1.0.0",
             mixed_control_order_strategy="total-effective-order",
             mixed_control_initial_state_address=state_addresses["awaiting-start"],
@@ -437,7 +438,8 @@ class _Runner:
 
 
 def test_host_adapter_uses_authenticated_cli_and_strict_profile_tools(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     host_home = tmp_path / "host-home"
     host_home.mkdir()
@@ -514,10 +516,11 @@ def test_host_adapter_rejects_non_success_result_envelopes(
     work = tmp_path / "work"
     work.mkdir()
 
+    adapter = ClaudeCodeHostParticipantAdapter(
+        _admitted_fixture_executable(tmp_path), work, runner=ErrorRunner()
+    )
     with pytest.raises(AgentExecutionError, match="invalid result"):
-        ClaudeCodeHostParticipantAdapter(
-            _admitted_fixture_executable(tmp_path), work, runner=ErrorRunner()
-        ).deliver(
+        adapter.deliver(
             instruction="authored instruction",
             model="claude-test-model",
             config_path=config,
@@ -549,13 +552,14 @@ def test_runtime_profile_rejects_unadmitted_mcp_environment(tmp_path: Path) -> N
         encoding="utf-8",
     )
 
+    node_executable = _admitted_fixture_executable(tmp_path)
     with pytest.raises(AgentExecutionError, match="environment is not admitted"):
         _render_runtime_profile_config(
             profile=ProfileId.RED,
             project_dir=project,
             source_config=source,
             output_dir=tmp_path,
-            node_executable=_admitted_fixture_executable(tmp_path),
+            node_executable=node_executable,
         )
 
 
@@ -608,27 +612,29 @@ def test_execute_plan_coordinates_time_profiles_sessions_control_and_evidence(
         return path, (f"mcp__aptl-{profile.value}__tool",)
 
     monkeypatch.setattr(
-        "aptl.backends.raes_participant_delivery._render_runtime_profile_config",
+        "aptl.backends._raes_participant_execution._render_runtime_profile_config",
         render,
     )
     monkeypatch.setattr(
-        "aptl.backends.raes_participant_delivery._which_executable",
+        "aptl.backends._raes_participant_execution._which_executable",
         lambda _name: _admitted_fixture_executable(tmp_path),
     )
 
     final_snapshot = execute_participant_delivery_plan(
         plan,
-        project_dir=project,
-        model="claude-sonnet-5",
-        run_store=store,
-        run_id="run-coordinator",
-        target=replace(
-            create_stub_target(),
-            manifest=create_aptl_manifest(participant_inject_delivery=True),
+        context=ParticipantDeliveryExecutionContext(
+            project_dir=project,
+            model="claude-sonnet-5",
+            run_store=store,
+            run_id="run-coordinator",
+            target=replace(
+                create_stub_target(),
+                manifest=create_aptl_manifest(participant_inject_delivery=True),
+            ),
+            runtime_manager=manager,
+            initial_snapshot=manager.snapshot,
+            runner=runner,
         ),
-        runtime_manager=manager,
-        initial_snapshot=manager.snapshot,
-        runner=runner,
     )
 
     assert manager.advances == [
@@ -646,12 +652,20 @@ def test_execute_plan_coordinates_time_profiles_sessions_control_and_evidence(
     assert UUID(blue_session)
     assert blue_session != red_session
     assert runner.calls[3][runner.calls[3].index("--resume") + 1] == blue_session
-    assert sum(
-        len(events) for events in final_snapshot.participant_control_history.values()
-    ) == 8
-    assert sum(
-        len(events) for events in final_snapshot.participant_crossing_history.values()
-    ) == 16
+    assert (
+        sum(
+            len(events)
+            for events in final_snapshot.participant_control_history.values()
+        )
+        == 8
+    )
+    assert (
+        sum(
+            len(events)
+            for events in final_snapshot.participant_crossing_history.values()
+        )
+        == 16
+    )
     rows = [
         json.loads(line)
         for line in (
@@ -662,4 +676,9 @@ def test_execute_plan_coordinates_time_profiles_sessions_control_and_evidence(
         .splitlines()
     ]
     assert [row["sequence"] for row in rows] == [1, 2, 3, 4]
-    assert len(list((store.get_run_path("run-coordinator") / "evidence/records").iterdir())) == 4
+    assert (
+        len(
+            list((store.get_run_path("run-coordinator") / "evidence/records").iterdir())
+        )
+        == 4
+    )

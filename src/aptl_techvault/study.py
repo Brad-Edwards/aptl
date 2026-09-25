@@ -7,8 +7,8 @@ from aptl.backends.scenario_capture import (
 
 from aptl.validation.scenario_verification import QualifiedTarget, ScenarioIdentity
 from aptl_techvault.capture import TechVaultCaptureProvider
-from aptl_techvault.capture_registrations import (
-    BUILTIN_REGISTRATIONS,
+from aptl_techvault.capture_registrations import BUILTIN_REGISTRATIONS
+from aptl_techvault.study_capture_registrations import (
     participant_delivery_registrations,
 )
 from aptl_techvault.planning_compatibility import TechVaultPlanningCompatibilityProvider
@@ -25,34 +25,46 @@ PACK_VERSION = "0.1.0"
 
 
 class StudyRuntimeParameters(TechVaultRuntimeParameterProvider):
+    """Bind the study pack to the proven TechVault runtime parameters."""
+
     supported_pack_id = PACK_ID
     supported_pack_set_digests = (STUDY_PACK_SET_DIGEST,)
 
 
 class StudyStartup(TechVaultStartupProvider):
+    """Bind the study pack to the proven TechVault startup adapter."""
+
     supported_pack_id = PACK_ID
     supported_pack_set_digests = (STUDY_PACK_SET_DIGEST,)
 
 
 class StudyServing(TechVaultPackInteraction):
+    """Bind the study pack to the proven TechVault serving adapter."""
+
     provider_id = "techvault-study-aptl-serving"
     supported_pack_id = PACK_ID
     supported_pack_set_digests = (STUDY_PACK_SET_DIGEST,)
 
 
 class StudyPlanningCompatibility(TechVaultPlanningCompatibilityProvider):
+    """Bind the study pack to TechVault planning compatibility."""
+
     provider_id = "techvault-study-aptl-planning-compatibility"
     supported_pack_id = PACK_ID
     supported_pack_set_digests = (STUDY_PACK_SET_DIGEST,)
 
 
 class StudyCapture(TechVaultCaptureProvider):
+    """Add four participant delivery captures to TechVault evidence."""
+
     provider_id = "techvault-study-aptl-capture"
     supported_pack_id = PACK_ID
     supported_pack_set_digests = (STUDY_PACK_SET_DIGEST,)
 
     @staticmethod
     def resolve(context: ScenarioCaptureContext) -> ScenarioCaptureContribution:
+        """Return TechVault captures plus four participant deliveries."""
+
         base = TechVaultCaptureProvider.resolve(context)
         return ScenarioCaptureContribution(
             registrations=(
@@ -68,6 +80,8 @@ class StudyCapture(TechVaultCaptureProvider):
 
 
 class StudyVerifier(TechVaultVerifier):
+    """Qualify the exact study pack identity on supported transports."""
+
     plugin_id = PACK_ID
     qualified_targets = tuple(
         QualifiedTarget(

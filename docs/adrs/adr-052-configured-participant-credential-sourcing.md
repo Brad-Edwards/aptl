@@ -1,6 +1,6 @@
 # ADR-052: Configured Participant Credential Sourcing
 
-> Historical scope: issue #601 removed the checkout-only `aptl lab participant-readiness` command and its dedicated qualification runner. For the TechVault participant study, use the acquired pack, `aptl lab start`, and host MCP access with the participant’s own CLI login.
+> Historical scope: issue #601 removed the checkout-only `aptl lab participant-readiness` command and its dedicated qualification runner. The TechVault participant study now authors its participant deliveries in SDL; normal `aptl lab start` executes them through the participant's authenticated host CLI.
 
 ## Status
 

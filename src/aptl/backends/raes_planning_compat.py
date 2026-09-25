@@ -395,6 +395,26 @@ class AptlRuntimeManager(_RaesRuntimeManager):
         with _runtime_value_limits(getattr(self, "_aptl_planning_compatibility", None)):
             return super().apply(execution_plan)
 
+    def adopt_participant_delivery_snapshot(
+        self,
+        snapshot: RuntimeSnapshot,
+    ) -> RuntimeSnapshot:
+        """Resume manager-owned time from a governed participant delivery cut."""
+
+        baseline = replace(
+            snapshot,
+            participant_control_history=self.snapshot.participant_control_history,
+            participant_crossing_history=(
+                self.snapshot.participant_crossing_history
+            ),
+        )
+        if baseline != self.snapshot:
+            raise ValueError(
+                "participant delivery snapshot handoff changed state outside governed history"
+            )
+        self._snapshot = snapshot
+        return self.snapshot
+
     def plan(
         self,
         scenario: object,

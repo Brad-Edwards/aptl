@@ -28,3 +28,4 @@ class RuntimeTargetOptions:
     operator_access: OperatorAccessDecision | None = None
     startup_selection: ScenarioStartupSelection | None = None
     capture_selection: ResolvedScenarioCapture | None = None
+    participant_inject_delivery: bool = False

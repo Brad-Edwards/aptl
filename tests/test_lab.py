@@ -3214,6 +3214,9 @@ class TestStartupClassificationWiring:
             "_step_attest_project_containers"
         )
         assert names.index("_step_sync_mcp_config") < names.index(
+            "_step_execute_participant_injects"
+        )
+        assert names.index("_step_execute_participant_injects") < names.index(
             "_step_attest_project_containers"
         )
         assert names.index("_step_attest_project_containers") < names.index(

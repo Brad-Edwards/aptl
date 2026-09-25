@@ -622,6 +622,30 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
         {"green", "red", "blue"}
     )
     assert payload["capabilities"]["participant_runtime"] is not None
+    assert manifest.has_time is False
+    assert manifest.orchestrator is not None
+    assert {"injects", "events", "scripts", "stories"} <= set(
+        manifest.orchestrator.supported_sections
+    )
+    participant_delivery_manifest = create_aptl_manifest(
+        participant_inject_delivery=True
+    )
+    assert participant_delivery_manifest.has_time is True
+    assert participant_delivery_manifest.time is not None
+    assert participant_delivery_manifest.time.supported_domain_kinds == frozenset(
+        {"logical"}
+    )
+    assert participant_delivery_manifest.participant_runtime is not None
+    assert any(
+        support.feature == "participant_ingress_admission"
+        and support.support_level.value == "exact"
+        for support in participant_delivery_manifest.participant_runtime.feature_support
+    )
+    assert any(
+        support.feature == "participant_directed_inject_delivery"
+        and support.support_level.value == "exact"
+        for support in participant_delivery_manifest.participant_runtime.feature_support
+    )
 
 
 def test_manifest_provisioner_declares_only_realized_capabilities():
@@ -2826,7 +2850,9 @@ def test_apply_failure_reattaches_backend_diagnostics_after_gate_flood(
     target = MagicMock()
     target.provisioner.last_failure_diagnostics = (backend_diag,)
 
-    failure, _snapshot, retryable = raes._apply_execution_plan(target, MagicMock())
+    failure, _snapshot, retryable, _manager = raes._apply_execution_plan(
+        target, MagicMock()
+    )
 
     assert failure is not None
     assert failure.success is False

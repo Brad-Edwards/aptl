@@ -20,7 +20,10 @@ _COMPOSE_PROJECT_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
 _PARTICIPANT_MODEL_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$")
 _CREDENTIAL_SOURCE_VARIABLE_PATTERN = re.compile(r"^[A-Z_][A-Z0-9_]{0,127}$")
 _IMMUTABLE_PARTICIPANT_MODEL_PATTERNS = {
-    "claude": re.compile(r"^claude-[a-z0-9-]+-\d{8}$", flags=re.ASCII),
+    "claude": re.compile(
+        r"^claude-(?:[a-z0-9-]+-\d{8}|(?:sonnet|opus|haiku)-[1-9]\d*)$",
+        flags=re.ASCII,
+    ),
     "codex": re.compile(
         r"^(?:codex-[a-z0-9._-]+|gpt-[a-z0-9._-]+|o\d[a-z0-9._-]*)"
         r"-\d{4}-\d{2}-\d{2}$",

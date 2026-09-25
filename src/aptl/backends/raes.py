@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from raes_contracts.runtime_state import RuntimeSnapshot
-from raes_runtime.registry import RuntimeTarget
+from raes_runtime.registry import ReferenceTimeRuntime, RuntimeTarget
 from raes import SDLError, SDLInstantiationError, parse_sdl_file
 from aptl.backends.raes_operator_access import (
     OperatorAccessDecision,
@@ -63,6 +63,10 @@ from aptl.backends.raes_participant_actions import (
     participant_action_specs_from_runtime_model,
 )
 from aptl.backends.raes_participant_driver import ParticipantPlanAuthority
+from aptl.backends.raes_participant_delivery import (
+    bind_participant_delivery_capture,
+    build_participant_delivery_plan,
+)
 from aptl.backends.raes_participant_runtime import AptlParticipantRuntime
 from aptl.backends.raes_provisioner import AptlProvisioner
 from aptl.backends.raes_start_model import (
@@ -144,7 +148,10 @@ def create_aptl_runtime_target(
     )
     return RuntimeTarget(
         name=APTL_RAES_TARGET_NAME,
-        manifest=create_aptl_manifest(capture_registry),
+        manifest=create_aptl_manifest(
+            capture_registry,
+            participant_inject_delivery=selected.participant_inject_delivery,
+        ),
         provisioner=provisioner,  # type: ignore[arg-type]
         orchestrator=orchestrator,  # type: ignore[arg-type]
         evaluator=AptlEvaluator(
@@ -155,6 +162,9 @@ def create_aptl_runtime_target(
             )
         ),  # type: ignore[arg-type]
         participant_runtime=participant_runtime,  # type: ignore[arg-type]
+        time_runtime=(
+            ReferenceTimeRuntime() if selected.participant_inject_delivery else None
+        ),
     )
 
 
@@ -211,6 +221,15 @@ def start_raes_scenario(
         ValueError,
     ) as exc:
         return _start_failure_outcome(exc, resolved_scenario)
+
+
+def _has_participant_inject_deliveries(scenario: object) -> bool:
+    """Return whether the authored scenario requests the delivery capability."""
+
+    return any(
+        bool(getattr(specification, "participant_inject_deliveries", {}))
+        for specification in getattr(scenario, "behavior_specifications", {}).values()
+    )
 
 
 def admit_raes_scenario(
@@ -272,6 +291,7 @@ def admit_raes_scenario(
             operator_access=operator_access_decision(scenario),
             startup_selection=startup_selection,
             capture_selection=capture_selection,
+            participant_inject_delivery=_has_participant_inject_deliveries(scenario),
         ),
     )
     runtime_manager = RuntimeManager(target)
@@ -314,6 +334,13 @@ def admit_raes_scenario(
             execution_plan,
             bundle.sdl_path,
         )
+    participant_delivery_plan = bind_participant_delivery_capture(
+        build_participant_delivery_plan(
+            scenario,
+            execution_plan.model,
+        ),
+        capture_plan,
+    )
     return AdmittedScenarioStart(
         bundle=bundle,
         target=target,
@@ -323,6 +350,8 @@ def admit_raes_scenario(
         runtime_materialization_failure=materialization_failure,
         startup_selection=startup_selection,
         capture_selection=capture_selection,
+        scenario=scenario,
+        participant_delivery_plan=participant_delivery_plan,
     )
 
 
@@ -397,7 +426,7 @@ def _run_execution_plan(
                 run_store=run_store,
                 run_id=run_id,
             )
-    failure, snapshot, retryable = _apply_execution_plan(
+    failure, snapshot, retryable, runtime_manager = _apply_execution_plan(
         target,
         execution_plan,
         run_store=run_store,
@@ -412,6 +441,7 @@ def _run_execution_plan(
             scenario_path=scenario_path,
             pack_interaction_evidence=pack_interaction_evidence,
             retryable=retryable,
+            runtime_manager=runtime_manager,
         )
     return AcesStartOutcome(
         lab_result=LabResult(
@@ -423,6 +453,7 @@ def _run_execution_plan(
         selected_profiles=selected_profiles,
         scenario_path=scenario_path,
         pack_interaction_evidence=pack_interaction_evidence,
+        runtime_manager=runtime_manager,
     )
 
 
@@ -432,7 +463,7 @@ def _apply_execution_plan(
     *,
     run_store: RunStorageBackend | None = None,
     run_id: str | None = None,
-) -> tuple[LabResult | None, RuntimeSnapshot, bool]:
+) -> tuple[LabResult | None, RuntimeSnapshot, bool, RuntimeManager]:
     """Apply the plan through RAES's own runtime manager, then drive workflows.
 
     ``RuntimeManager.apply`` is the only path that threads the compiled
@@ -442,7 +473,7 @@ def _apply_execution_plan(
     replaces the parallel disclosure/write-back pass APTL once hand-rolled around
     ``RuntimeControlPlane`` (issue #578, ADR-046).
 
-    Returns ``(failure | None, snapshot, retryable)``. Only the existing
+    Returns ``(failure | None, snapshot, retryable, manager)``. Only the existing
     deployment-backend start diagnostic is retryable; deterministic admission,
     planning, provider-policy, and workflow failures are not.
     """
@@ -466,6 +497,7 @@ def _apply_execution_plan(
                 diagnostic.code in _RETRYABLE_APPLY_DIAGNOSTIC_CODES
                 for diagnostic in diagnostics
             ),
+            manager,
         )
     evaluation_results = collect_evaluation_results(target, execution_plan)
     failure = _drive_orchestrator_workflows(
@@ -474,4 +506,4 @@ def _apply_execution_plan(
         run_store=run_store,
         run_id=run_id,
     )
-    return failure, snapshot, False
+    return failure, snapshot, False, manager

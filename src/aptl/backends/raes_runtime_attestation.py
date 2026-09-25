@@ -43,7 +43,7 @@ TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST = (
     "sha256:db98a9daa62a092a0c6b001217027d7f4ad489889e95d01050e77f148e8ef29b"
 )
 TECHVAULT_STUDY_RUNTIME_ATTESTATION_SET_DIGEST = (
-    "sha256:65040b16d53a525861116a779c14cc8b58c1bfc6c30257e4d8940d552a755934"
+    "sha256:94dc0236f3e2d4c62db782040acd73b1739ba0bf12adec580289a916fbfcce5a"
 )
 
 # These are configuration descriptions whose realized implementation is bound

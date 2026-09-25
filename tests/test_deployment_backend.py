@@ -30,6 +30,7 @@ from aptl.core.deployment._compose_realization import (
     _network_name_candidates,
     _resolve_realization_networks,
 )
+from aptl.core.deployment.realization import DeploymentPublishedPort
 from aptl.core.deployment._compose_queries import _select_shell
 from aptl.core.deployment._compose_resource_ownership import (
     ResourceReceipt,
@@ -550,6 +551,12 @@ services:
                     service_name="kali",
                     container_name="aptl-kali",
                     networks=("redteam-net",),
+                    published_ports=(
+                        DeploymentPublishedPort(
+                            container_port=2023,
+                            host_port=2023,
+                        ),
+                    ),
                 ),
             ),
             networks=(DeploymentNetworkRealization(name="redteam-net"),),

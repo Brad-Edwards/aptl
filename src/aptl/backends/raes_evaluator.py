@@ -98,6 +98,35 @@ class EvidenceTruthRefresh(object):
     diagnostics: tuple[Diagnostic, ...] = ()
 
 
+class _EvidenceRefreshCrossingPolicyResolver:
+    """Fail closed if an evaluator-only refresh attempts a participant crossing.
+
+    RAES requires a crossing-policy authority whenever the target advertises a
+    participant policy capability. Native-evidence refresh submits only the
+    immutable evaluation phase, but it still reconstructs a control plane for
+    the complete admitted target. Supplying an explicit rejecting authority
+    satisfies that construction rule without granting the refresh any new
+    participant effect.
+    """
+
+    @staticmethod
+    def _reject() -> None:
+        raise RuntimeError(
+            "participant crossings are unavailable during native-evidence refresh"
+        )
+
+    def resolve(self, *_args: object, **_kwargs: object) -> object:
+        self._reject()
+
+    def validation_context(self, *_args: object, **_kwargs: object) -> object:
+        self._reject()
+
+    def resolve_flow_sink_decision(
+        self, *_args: object, **_kwargs: object
+    ) -> object:
+        self._reject()
+
+
 def _registration_for_snapshot(snapshot: RuntimeSnapshot) -> _EvaluationRegistration:
     """Build mutable evaluator registration state from the current snapshot."""
     return _EvaluationRegistration(
@@ -407,7 +436,11 @@ def refresh_evidence_truth(
     # evaluation domain from the same observed provisioning snapshot; the new
     # control plane then remains the sole writer of the refreshed truth.
     refresh_snapshot = _without_evaluation_state(snapshot)
-    control_plane = RuntimeControlPlane(target, initial_snapshot=refresh_snapshot)
+    control_plane = RuntimeControlPlane(
+        target,
+        initial_snapshot=refresh_snapshot,
+        crossing_policy_resolver=_EvidenceRefreshCrossingPolicyResolver(),
+    )
     try:
         return _run_evidence_refresh(
             control_plane,

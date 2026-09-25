@@ -8,8 +8,10 @@ from types import SimpleNamespace
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 
 from aptl.backends.raes_runtime_attestation import (
+    TECHVAULT_STUDY_RUNTIME_ATTESTATION_SET_DIGEST,
     observe_techvault_attested_concerns,
 )
+from aptl.core.scenario_bundle import PackIdentity
 from aptl.core.deployment._wazuh_attestation import declared_wazuh_fact_ids
 from aptl.validation._gate_checks import check_parse
 from tests.helpers import techvault_scenario_bundle
@@ -87,6 +89,29 @@ def test_known_pack_projection_and_realized_image_are_attested(tmp_path: Path):
 
     assert CONCERN_PAYLOAD_PATH["runtime-applications"] in concerns
     assert CONCERN_PAYLOAD_PATH["runtime-platform-applications"] in concerns
+
+
+def test_study_copy_uses_same_projection_only_at_its_exact_digest(tmp_path: Path):
+    bundle, node = _misp_node(tmp_path)
+    backend = _Backend(node.image.image_ref.rsplit("@", 1)[1])
+    study = PackIdentity(
+        "techvault-participant-study",
+        "0.1.0",
+        TECHVAULT_STUDY_RUNTIME_ATTESTATION_SET_DIGEST,
+    )
+
+    attested = observe_techvault_attested_concerns(
+        backend, node, study, content_verified=True
+    )
+    changed = observe_techvault_attested_concerns(
+        backend,
+        node,
+        PackIdentity(study.pack_id, study.pack_version, "sha256:" + "0" * 64),
+        content_verified=True,
+    )
+
+    assert CONCERN_PAYLOAD_PATH["runtime-applications"] in attested
+    assert changed == {}
 
 
 def test_changed_semantic_projection_is_not_attested(tmp_path: Path):

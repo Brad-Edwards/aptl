@@ -1,5 +1,7 @@
 # Issue #557 Participant Implementation Binding Preflight
 
+> Historical scope: issue #601 removed the checkout-only `aptl lab participant-readiness` command and its dedicated qualification runner. For the TechVault participant study, use the acquired pack, `aptl lab start`, and host MCP access with the participant’s own CLI login.
+
 This note fixes the architecture guardrails for driving a governed RAES
 participant through an installed coding-agent implementation. It is design
 guidance, not an implementation plan. No new ADR is needed:

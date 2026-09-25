@@ -333,6 +333,16 @@ class ComposeRealizationMixin(
                 if node_result is not None and not node_result.success
                 else None
             )
+        if failure is None and realization.networks:
+            # Image-free graphs have no Compose start phase, so they do not
+            # enter the mixed path's post-start network reconciliation. Bind
+            # their declared topology after package materialization, when a
+            # temporary default bridge may still be needed for installation.
+            network_failures = self._reconcile_realization_networks(realization)
+            if network_failures:
+                failure = LabResult(
+                    success=False, error="; ".join(network_failures[:5])
+                )
         if failure is None:
             failure = self._realize_platform_boundary()
         return failure or node_result or LabResult(success=True)

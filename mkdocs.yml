@@ -148,7 +148,6 @@ nav:
     - TechVault Live Validation Gate: raes/techvault-live-validation-gate.md
     - TechVault Curated Live Validation Preflight: raes/techvault-curated-live-validation-preflight.md
     - TechVault Curated Live Validation Gate: raes/techvault-curated-live-validation-gate.md
-    - Bounded Participant Agency Readiness: raes/bounded-participant-agency-readiness.md
   - Testing:
     - Platform Pull-Request Gates: testing/platform-pr-gates.md
     - Boot Realization Coverage: testing/boot-realization-coverage.md

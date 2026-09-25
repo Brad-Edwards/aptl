@@ -147,7 +147,7 @@ def _observe_stable_guest(binding: GuestDispatchBinding) -> dict[str, Any]:
     if (
         config.deployment.provider != "docker-compose"
         or config.scenario.source != "env-pack"
-        or config.scenario.identity != "techvault"
+        or config.scenario.identity != binding.access.scenario_pack.pack_id
     ):
         raise WorkbenchConfigurationError("guest deployment mismatch")
     backend = DockerComposeBackend(

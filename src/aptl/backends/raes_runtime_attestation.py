@@ -42,6 +42,9 @@ if TYPE_CHECKING:
 TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST = (
     "sha256:db98a9daa62a092a0c6b001217027d7f4ad489889e95d01050e77f148e8ef29b"
 )
+TECHVAULT_STUDY_RUNTIME_ATTESTATION_SET_DIGEST = (
+    "sha256:65040b16d53a525861116a779c14cc8b58c1bfc6c30257e4d8940d552a755934"
+)
 
 # These are configuration descriptions whose realized implementation is bound
 # to a released immutable image and/or exact pack content.  Dynamic state fields
@@ -221,9 +224,19 @@ def _identified_release(identity: PackIdentity | None) -> bool:
 
     return bool(
         identity is not None
-        and identity.pack_id == "techvault"
-        and identity.pack_version == "0.1.0"
-        and identity.set_digest == TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST
+        and (
+            identity.pack_id,
+            identity.pack_version,
+            identity.set_digest,
+        )
+        in {
+            ("techvault", "0.1.0", TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST),
+            (
+                "techvault-participant-study",
+                "0.1.0",
+                TECHVAULT_STUDY_RUNTIME_ATTESTATION_SET_DIGEST,
+            ),
+        }
     )
 
 

@@ -1,5 +1,7 @@
 # Issue #858 Bounded Participant Choice Transport Preflight
 
+> Historical scope: issue #601 removed the checkout-only `aptl lab participant-readiness` command and its dedicated qualification runner. For the TechVault participant study, use the acquired pack, `aptl lab start`, and host MCP access with the participant’s own CLI login.
+
 This note fixes the design boundaries for bounding installed-participant choice
 transport without changing delivered RAES candidate semantics. It is
 architecture guidance, not an implementation plan. No new ADR is needed:

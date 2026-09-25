@@ -23,11 +23,16 @@ from aptl.backends.raes_participant_delivery import (
     ClaudeCodeHostParticipantAdapter,
     ParticipantDeliveryExecutionContext,
     ParticipantTurnResult,
-    _delivery_record,
-    _render_runtime_profile_config,
     bind_participant_delivery_capture,
     build_participant_delivery_plan,
     execute_participant_delivery_plan,
+)
+from aptl.backends._raes_participant_evidence import (
+    _ParticipantDeliveryCollector,
+    _delivery_record,
+)
+from aptl.backends._raes_participant_transport import (
+    _render_runtime_profile_config,
 )
 from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.backends.raes_planning_compat import AptlRuntimeManager
@@ -361,8 +366,6 @@ def test_study_capture_declares_all_four_delivery_collectors() -> None:
 def test_delivery_collector_uses_public_coordinator_for_content_addressed_evidence(
     tmp_path: Path,
 ) -> None:
-    from aptl.backends.raes_participant_delivery import _ParticipantDeliveryCollector
-
     scenario, model = _scenario_and_model()
     turn = build_participant_delivery_plan(scenario, model).turns[0]
     turn = replace(turn, capture_binding=_binding("red", "start"))

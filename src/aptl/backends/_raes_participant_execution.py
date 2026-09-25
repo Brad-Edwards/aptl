@@ -44,6 +44,7 @@ from aptl.core.evidence.protocol import RunScope
 from aptl.core.runstore import RunStorageBackend
 from aptl.utils.logging import get_logger
 from aptl.workbench.process import AgentExecutionError, ProcessRunner
+from aptl.workbench.profiles import ProfileId
 
 _EVIDENCE_PATH = "participant/inject-deliveries.jsonl"
 log = get_logger("raes-participant-delivery")
@@ -294,10 +295,11 @@ class _ParticipantDeliveryExecutor:
         )
         if complete:
             return acquisition, controlled_snapshot
-        if trial.failure is not None:
+        failure = trial.failure
+        if failure is not None:
             raise AgentExecutionError(
                 "participant delivery attempt failed"
-            ) from trial.failure
+            ) from failure
         raise AgentExecutionError(
             "participant delivery evidence acquisition did not complete"
         )

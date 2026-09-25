@@ -295,11 +295,8 @@ class _ParticipantDeliveryExecutor:
         )
         if complete:
             return acquisition, controlled_snapshot
-        failure = trial.failure
-        if failure is not None:
-            raise AgentExecutionError(
-                "participant delivery attempt failed"
-            ) from failure
+        if trial.failure is not None:
+            raise AgentExecutionError("participant delivery attempt failed")
         raise AgentExecutionError(
             "participant delivery evidence acquisition did not complete"
         )

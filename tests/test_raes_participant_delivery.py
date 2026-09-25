@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import sys
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -43,6 +42,13 @@ from aptl.core.runstore import LocalRunStore
 from aptl_techvault.study import StudyCapture
 from aptl.workbench.process import AgentExecutionError, ProcessResult
 from aptl.workbench.profiles import ProfileId
+
+
+def _admitted_fixture_executable(tmp_path: Path) -> Path:
+    executable = tmp_path / "fixture-agent"
+    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    executable.chmod(0o700)
+    return executable
 
 
 def _compiled_delivery(role: str, phase: str, tick: int) -> SimpleNamespace:
@@ -445,7 +451,7 @@ def test_host_adapter_uses_authenticated_cli_and_strict_profile_tools(
     work.mkdir()
     runner = _Runner()
     adapter = ClaudeCodeHostParticipantAdapter(
-        Path(sys.executable),
+        _admitted_fixture_executable(tmp_path),
         work,
         runner=runner,
     )
@@ -510,7 +516,7 @@ def test_host_adapter_rejects_non_success_result_envelopes(
 
     with pytest.raises(AgentExecutionError, match="invalid result"):
         ClaudeCodeHostParticipantAdapter(
-            Path(sys.executable), work, runner=ErrorRunner()
+            _admitted_fixture_executable(tmp_path), work, runner=ErrorRunner()
         ).deliver(
             instruction="authored instruction",
             model="claude-test-model",
@@ -549,7 +555,7 @@ def test_runtime_profile_rejects_unadmitted_mcp_environment(tmp_path: Path) -> N
             project_dir=project,
             source_config=source,
             output_dir=tmp_path,
-            node_executable=Path(sys.executable),
+            node_executable=_admitted_fixture_executable(tmp_path),
         )
 
 
@@ -607,7 +613,7 @@ def test_execute_plan_coordinates_time_profiles_sessions_control_and_evidence(
     )
     monkeypatch.setattr(
         "aptl.backends.raes_participant_delivery._which_executable",
-        lambda _name: Path(sys.executable),
+        lambda _name: _admitted_fixture_executable(tmp_path),
     )
 
     final_snapshot = execute_participant_delivery_plan(

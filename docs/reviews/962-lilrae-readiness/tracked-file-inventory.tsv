@@ -18,6 +18,7 @@ path	proposed_owner	migration_rule
 .github/dependabot.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 .github/workflows/checks.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 .github/workflows/docs-deploy.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+.github/workflows/ground-control-phase-e.yml	build-governance	Keep merged-delivery finalization with repository workflow governance
 .github/workflows/pr-title-lint.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 .github/workflows/release-please.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 .github/workflows/scorecard.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact

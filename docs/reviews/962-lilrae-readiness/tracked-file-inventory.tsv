@@ -326,7 +326,6 @@ docs/getting-started/prerequisites.md	docs-follow-owner	Separate current user gu
 docs/getting-started/quick-start.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/index.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/raes/app-1-appliance-boundary-materialization-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
-docs/raes/bounded-participant-agency-readiness.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/raes/dsl-003-runtime-substitution-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/raes/dsl-005-assertion-evaluation-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/raes/dsl-008-realization-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
@@ -961,7 +960,6 @@ src/aptl/cli/lifecycle.py	core-candidate	Migrate only after public-import, histo
 src/aptl/cli/main.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/mcp_access.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/participant_profile.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
-src/aptl/cli/participant_readiness.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/runs.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/seat.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/web.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1250,24 +1248,13 @@ src/aptl/validation/_scenario_verification_contract.py	split-verification	Keep g
 src/aptl/validation/curated_live_proof.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/imagefree_gate.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/mcp_protocol.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
-src/aptl/validation/participant_agency_qualification.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
-src/aptl/validation/participant_agency_readiness.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/participant_live_proof.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/participant_mcp_smoke.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/participant_profile.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/participant_profile_models.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/participant_proof_redaction.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/participant_qualification.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
-src/aptl/validation/participant_qualification_boundaries.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
-src/aptl/validation/participant_qualification_boundary_environment.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
-src/aptl/validation/participant_qualification_challenge_support.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/participant_qualification_evidence.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
-src/aptl/validation/participant_qualification_models.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
-src/aptl/validation/participant_readiness_materialization.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
-src/aptl/validation/participant_readiness_models.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
-src/aptl/validation/participant_readiness_outcomes.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
-src/aptl/validation/participant_readiness_provider.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
-src/aptl/validation/participant_readiness_reports.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/range_snapshot_summary.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/research_scenario_catalog.py	research-policy	Retain explicit checkout-only research fixture selection
 src/aptl/validation/scenario_verification.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
@@ -1826,3 +1813,20 @@ tests/test_seat_image_update.py	test-governance	Migrate regression coverage with
 tests/test_seat_local_release.py	test-governance	Migrate regression coverage with the behavior it verifies
 src/aptl/appliance/seat/retained_image.py	optional-delivery	Retain per-seat verified image identity for independent offline restart
 docs/reviews/1162-seat-acceptance.md	docs-follow-owner	Preserve immutable image identities and observed manual acceptance evidence
+docs/architecture/issue-601-participant-demonstration-preflight.md	architecture-history	Preserve participant-delivery ownership decisions and issue 601 validation guardrails
+docs/raes/issue-601-participant-demonstration.md	docs-follow-owner	Retain the issue 601 operator procedure and scientific evidence summary with product documentation
+src/aptl/backends/raes_participant_delivery.py	core-candidate	Keep generic SDL participant delivery, governed time, control, crossing, and evidence orchestration with RAES runtime integration
+src/aptl_techvault/study.py	scenario-integration	Keep TechVault-specific participant tool bindings behind the installed adapter seam
+tests/test_raes_participant_delivery.py	tests-follow-owner	Retain generic SDL participant-delivery regression coverage with the RAES runtime integration
+tests/test_techvault_study_adapter.py	tests-follow-owner	Retain TechVault participant adapter regression coverage with its scenario owner
+src/aptl/backends/_raes_evidence_refresh_policy.py	core-candidate	Keep evaluator-only participant crossing rejection with native evidence refresh
+src/aptl/backends/_raes_participant_crossing.py	core-candidate	Keep generic authored participant crossing policy realization with RAES integration
+src/aptl/backends/_raes_participant_evidence.py	core-candidate	Keep generic participant delivery evidence collection and indexing with RAES integration
+src/aptl/backends/_raes_participant_execution.py	core-candidate	Keep generic governed participant delivery execution with RAES integration
+src/aptl/backends/_raes_participant_manifest.py	core-candidate	Keep optional generic participant delivery capability declarations with RAES integration
+src/aptl/backends/_raes_participant_models.py	core-candidate	Keep generic participant delivery contracts with RAES integration
+src/aptl/backends/_raes_participant_planning.py	core-candidate	Keep generic SDL participant delivery planning with RAES integration
+src/aptl/backends/_raes_participant_snapshot.py	core-candidate	Keep governed participant snapshot handoff with RAES runtime integration
+src/aptl/backends/_raes_participant_transport.py	core-candidate	Keep generic authenticated host transport and role scoped MCP rendering with RAES integration
+src/aptl/core/deployment/_compose_image_free_network_reconciliation.py	backend-substrate	Retain declared image-free network reconciliation with Compose realization
+src/aptl_techvault/study_capture_registrations.py	scenario-integration	Keep participant study capture declarations with the TechVault scenario adapter

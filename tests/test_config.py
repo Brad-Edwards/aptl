@@ -149,6 +149,12 @@ class TestExperimentSettings:
             "claude-sonnet-4-5-20250929"
         )
         assert settings.participant_models.model_for("codex") == "gpt-5-nano-2025-08-07"
+        assert (
+            ExperimentSettings(
+                participant_models={"claude": "claude-sonnet-5"}
+            ).participant_models.model_for("claude")
+            == "claude-sonnet-5"
+        )
         default_models = ExperimentSettings().participant_models
         with pytest.raises(ValueError, match="not configured"):
             default_models.model_for("codex")

@@ -14,7 +14,9 @@ from aptl.core.experiment.capture_plan import CapturePlan, empty_capture_plan
 if TYPE_CHECKING:
     from raes_processor.models import ExecutionPlan
     from raes_runtime.registry import RuntimeTarget
+    from raes_runtime.manager import RuntimeManager
 
+    from aptl.backends.raes_participant_delivery import ParticipantDeliveryPlan
     from aptl.backends.raes_realization_model import AptlRealization
     from aptl.backends.scenario_startup import ScenarioStartupSelection
     from aptl.backends.scenario_capture import ResolvedScenarioCapture
@@ -41,6 +43,8 @@ class AdmittedScenarioStart:
     runtime_materialization_failure: LabResult | None = None
     startup_selection: ScenarioStartupSelection | None = None
     capture_selection: ResolvedScenarioCapture | None = None
+    scenario: object | None = None
+    participant_delivery_plan: ParticipantDeliveryPlan | None = None
 
 
 @dataclass(frozen=True)
@@ -64,3 +68,4 @@ class AcesStartOutcome:
     pack_interaction_evidence: dict[str, Any] = field(default_factory=dict)
     retryable: bool = False
     capture_plan: CapturePlan | None = None
+    runtime_manager: RuntimeManager | None = None

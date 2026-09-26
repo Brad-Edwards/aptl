@@ -599,10 +599,12 @@ def test_the_techvault_adapter_is_its_own_package_in_the_one_distribution():
 
     assert core["project"]["name"] == "aptl-labs"
     assert entry_points[ENTRY_POINT_GROUP] == {
-        "techvault.aptl": "aptl_techvault.verification:verifier"
+        "techvault.aptl": "aptl_techvault.verification:verifier",
+        "techvault-participant-study.aptl": "aptl_techvault.study:verifier",
     }
     assert entry_points["aptl.pack_backend_interactions"] == {
-        "techvault.aptl": "aptl_techvault.serving:provider"
+        "techvault.aptl": "aptl_techvault.serving:provider",
+        "techvault-participant-study.aptl": "aptl_techvault.study:serving",
     }
     assert entry_points["aptl.participant_mcp_smoke_plans"] == {
         "guided-purple.techvault-attacker-target": (

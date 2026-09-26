@@ -32,6 +32,7 @@ from aptl.backends._raes_proposition_truth import (
     project_proposition_truth_results as _project_proposition_truth_results,
 )
 from aptl.backends.raes_evaluator import AptlEvaluator, refresh_evidence_truth
+from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl_techvault.capture import TechVaultPropositionInterpreter
 
 _INTERPRETER = TechVaultPropositionInterpreter()
@@ -268,6 +269,38 @@ def test_native_evidence_refresh_is_committed_through_the_runtime_control_plane(
         base_snapshot=RuntimeSnapshot(),
         scenario_name="native-evidence-refresh",
         model=RuntimeModel(scenario_name="native-evidence-refresh"),
+        provisioning=ProvisioningPlan(),
+        orchestration=OrchestrationPlan(),
+        evaluation=_plan(),
+        observation_owner=RuntimeDomain.PROVISIONING,
+    )
+
+    refresh = refresh_evidence_truth(
+        target=target,
+        execution_plan=execution_plan,
+        snapshot=RuntimeSnapshot(),
+        evidence_records=(_record("suricata-local-rule-readiness"),),
+    )
+
+    assert refresh.status is OperationState.SUCCEEDED
+    assert sorted(refresh.snapshot.proposition_truth_results) == [
+        "evaluation.assertion.suricata-local-rules-ready"
+    ]
+
+
+def test_native_evidence_refresh_accepts_participant_delivery_target():
+    evaluator = AptlEvaluator(proposition_interpreter=_INTERPRETER)
+    target = replace(
+        create_reference_backend_target(),
+        manifest=create_aptl_manifest(participant_inject_delivery=True),
+        evaluator=evaluator,
+    )
+    execution_plan = ExecutionPlan(
+        target_name=target.name,
+        manifest=target.manifest,
+        base_snapshot=RuntimeSnapshot(),
+        scenario_name="participant-native-evidence-refresh",
+        model=RuntimeModel(scenario_name="participant-native-evidence-refresh"),
         provisioning=ProvisioningPlan(),
         orchestration=OrchestrationPlan(),
         evaluation=_plan(),

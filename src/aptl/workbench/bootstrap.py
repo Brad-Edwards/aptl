@@ -259,7 +259,9 @@ def _attach_browser_surfaces(
     from aptl.workbench.browser_gateway import BrowserGateway
     from aptl.workbench.browser_mcp import attach_browser_mcp
 
-    pack = env_pack_bundle(state / "workbench" / "packs")
+    pack = env_pack_bundle(
+        state / "workbench" / "packs", binding.access.scenario_pack.pack_id
+    )
     if pack.pack_identity != binding.access.scenario_pack:
         raise WorkbenchConfigurationError("workbench package identity changed")
     if not 0 < browser.port <= 65535:

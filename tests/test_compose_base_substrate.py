@@ -515,6 +515,65 @@ def test_base_container_records_native_id_and_uses_scoped_external_name(tmp_path
     assert receipt[0].external_name == external
 
 
+@pytest.mark.parametrize("network_failures", [[], ["declared network was absent"]])
+def test_image_free_realization_reconciles_networks_after_materialization(
+    tmp_path, network_failures: list[str]
+) -> None:
+    backend = _backend(tmp_path)
+    realization = MagicMock(
+        nodes=(MagicMock(address="provision.node.webapp"),),
+        networks=(MagicMock(name="dmz-net"),),
+        content=(),
+        persistent_volumes=(),
+    )
+    backend._realize_networks_and_boundaries = MagicMock(return_value=None)
+    backend._image_free_generated_artifact_ops = MagicMock(return_value=(None, {}))
+    backend._reconcile_realization_networks = MagicMock(
+        return_value=network_failures
+    )
+    backend._realize_platform_boundary = MagicMock(return_value=None)
+
+    with patch(
+        "aptl.core.deployment._compose_realization._realize_node_subset",
+        return_value=LabResult(success=True),
+    ) as materialize:
+        result = backend._realize_without_compose(realization, tmp_path)
+
+    materialize.assert_called_once()
+    backend._reconcile_realization_networks.assert_called_once_with(realization)
+    assert result.success == (not network_failures)
+    if network_failures:
+        backend._realize_platform_boundary.assert_not_called()
+        assert "declared network was absent" in (result.error or "")
+    else:
+        backend._realize_platform_boundary.assert_called_once()
+
+
+def test_image_free_realization_without_declared_networks_skips_reconciliation(
+    tmp_path,
+) -> None:
+    backend = _backend(tmp_path)
+    realization = MagicMock(
+        nodes=(MagicMock(address="provision.node.unbound"),),
+        networks=(),
+        content=(),
+        persistent_volumes=(),
+    )
+    backend._realize_networks_and_boundaries = MagicMock(return_value=None)
+    backend._image_free_generated_artifact_ops = MagicMock(return_value=(None, {}))
+    backend._reconcile_realization_networks = MagicMock()
+    backend._realize_platform_boundary = MagicMock(return_value=None)
+
+    with patch(
+        "aptl.core.deployment._compose_realization._realize_node_subset",
+        return_value=LabResult(success=True),
+    ):
+        result = backend._realize_without_compose(realization, tmp_path)
+
+    assert result.success
+    backend._reconcile_realization_networks.assert_not_called()
+
+
 def test_appliance_image_free_node_without_network_fails_before_create(
     tmp_path,
 ) -> None:

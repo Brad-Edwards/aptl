@@ -27,10 +27,41 @@ def _observation(record, run_id):
     )
 
 
+def test_guest_rejects_pack_switch_after_study_enrollment(tmp_path, monkeypatch):
+    record = access_record(
+        scenario_pack={
+            "pack_id": "techvault-participant-study",
+            "pack_version": "0.1.0",
+            "set_digest": "b" * 64,
+        }
+    )
+    binding = GuestDispatchBinding(
+        schema_version="aptl.mcp-dispatch/v1",
+        access=record,
+        grants=(grant(),),
+        project_dir=tmp_path,
+        node_executable=Path("/usr/bin/node"),
+        management_home=tmp_path,
+        run_id="c" * 32,
+        delivery="rootful-integration",
+    )
+    monkeypatch.setattr(guest_binding, "load_config", lambda _: AptlConfig())
+    with pytest.raises(ValueError, match="deployment mismatch"):
+        guest_binding._observe_stable_guest(binding)
+
+
+@pytest.mark.parametrize("pack_id", ["techvault", "techvault-participant-study"])
 def test_guest_enrollment_publishes_private_forced_keys_and_rejects_bad_inventory(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, pack_id
 ):
-    record = access_record(container_ids={"aptl-kali": "a" * 64})
+    record = access_record(
+        container_ids={"aptl-kali": "a" * 64},
+        scenario_pack={
+            "pack_id": pack_id,
+            "pack_version": "0.1.0",
+            "set_digest": "b" * 64,
+        },
+    )
     original_read_text = Path.read_text
 
     def read_text(path, *args, **kwargs):
@@ -55,15 +86,19 @@ def test_guest_enrollment_publishes_private_forced_keys_and_rejects_bad_inventor
     )
     # This seam cannot reach a daemon, including the host's default Docker socket.
     monkeypatch.setattr(preparation, "DockerComposeBackend", lambda *a, **k: backend)
-    monkeypatch.setattr(preparation, "load_config", lambda _: AptlConfig())
+    monkeypatch.setattr(
+        preparation,
+        "load_config",
+        lambda _: AptlConfig(scenario={"identity": pack_id, "source": "env-pack"}),
+    )
     monkeypatch.setattr(
         preparation, "observe_guest_containers", lambda _: record.container_ids
     )
-    monkeypatch.setattr(
-        preparation,
-        "env_pack_bundle",
-        lambda _: SimpleNamespace(pack_identity=record.scenario_pack),
-    )
+    def staged_pack(_root, identity):
+        assert identity == pack_id
+        return SimpleNamespace(pack_identity=record.scenario_pack)
+
+    monkeypatch.setattr(preparation, "env_pack_bundle", staged_pack)
     monkeypatch.setattr(
         preparation,
         "expected_bundle_matrix",

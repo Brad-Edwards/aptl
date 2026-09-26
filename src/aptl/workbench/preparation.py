@@ -92,11 +92,10 @@ def prepare_guest_transport(
     config = load_config(project / "aptl.json")
     if (
         config.scenario.source != "env-pack"
-        or config.scenario.identity != "techvault"
         or config.deployment.provider != "docker-compose"
     ):
         raise WorkbenchConfigurationError(
-            "host MCP requires canonical local full TechVault"
+            "host MCP requires an acquired local full lab"
         )
     backend = DockerComposeBackend(
         project,
@@ -106,7 +105,9 @@ def prepare_guest_transport(
     if not backend.bind_local_docker_socket().success:
         raise WorkbenchConfigurationError("guest Docker binding failed")
     containers = observe_guest_containers(backend)
-    bundle = env_pack_bundle(project / ".aptl" / "transport-pack")
+    bundle = env_pack_bundle(
+        project / ".aptl" / "transport-pack", config.scenario.identity
+    )
     verify_full_inventory(expected_bundle_matrix(project, config, bundle), containers)
     authorities = tuple(
         authority

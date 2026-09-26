@@ -64,6 +64,9 @@ from raes_contracts.vocabulary import (
 
 from raes_contracts.manifest_authority import BACKEND_SUPPORTED_CONTRACT_IDS
 
+from aptl.backends._raes_participant_manifest import (
+    participant_delivery_manifest_options,
+)
 from aptl.backends.raes_participant_runtime import PARTICIPANT_ACTION_ADDRESS
 from aptl.core.experiment.capture_registry import (
     CollectorRegistry,
@@ -147,7 +150,9 @@ _SUPPORTED_CONTRACT_VERSIONS = _BASE_SUPPORTED_CONTRACT_VERSIONS | (
 # does not drive (scenarios using those get an explicit planner diagnostic).
 _ORCHESTRATOR = OrchestratorCapabilities(
     name="aptl-rte-orchestrator",
-    supported_sections=frozenset({"workflows"}),
+    supported_sections=frozenset(
+        {"events", "injects", "scripts", "stories", "workflows"}
+    ),
     supports_workflows=True,
     supported_workflow_features=frozenset(
         {
@@ -410,6 +415,8 @@ _CONCEPT_BINDINGS = (
 
 def create_aptl_manifest(
     registry: CollectorRegistry | None = None,
+    *,
+    participant_inject_delivery: bool = False,
 ) -> BackendManifest:
     """Return APTL's canonical full remote-control-plane backend manifest.
 
@@ -426,8 +433,13 @@ def create_aptl_manifest(
     """
     selected_registry = registry if registry is not None else DEFAULT_COLLECTOR_REGISTRY
     observation = selected_registry.observation_projection()
-    supported_contract_versions = _SUPPORTED_CONTRACT_VERSIONS
-    capability_options: dict[str, object] = {}
+    supported_contract_versions, participant_runtime, capability_options = (
+        participant_delivery_manifest_options(
+            _SUPPORTED_CONTRACT_VERSIONS,
+            _PARTICIPANT_RUNTIME,
+            enabled=participant_inject_delivery,
+        )
+    )
     if observation is not None:
         supported_contract_versions = (
             supported_contract_versions | OBSERVATION_EVIDENCE_CONTRACTS
@@ -444,7 +456,7 @@ def create_aptl_manifest(
         provisioner=_PROVISIONER,
         orchestrator=_ORCHESTRATOR,
         evaluator=_EVALUATOR,
-        participant_runtime=_PARTICIPANT_RUNTIME,
+        participant_runtime=participant_runtime,
         **capability_options,
     )
 

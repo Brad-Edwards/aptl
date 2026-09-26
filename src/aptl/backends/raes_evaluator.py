@@ -49,6 +49,10 @@ from raes_contracts.runtime_state import (
 )
 from raes_runtime.control_plane import RuntimeControlPlane
 
+from aptl.backends._raes_evidence_refresh_policy import (
+    EvidenceRefreshCrossingPolicyResolver,
+    without_evaluation_state,
+)
 from aptl.backends._raes_evaluator_engine import (
     EVALUATION_ADDRESS,
     OBSERVABLE_RESOURCE_TYPES,
@@ -406,8 +410,12 @@ def refresh_evidence_truth(
     # an invalid create-over-existing transition in RAES 5. Rebuild only the
     # evaluation domain from the same observed provisioning snapshot; the new
     # control plane then remains the sole writer of the refreshed truth.
-    refresh_snapshot = _without_evaluation_state(snapshot)
-    control_plane = RuntimeControlPlane(target, initial_snapshot=refresh_snapshot)
+    refresh_snapshot = without_evaluation_state(snapshot)
+    control_plane = RuntimeControlPlane(
+        target,
+        initial_snapshot=refresh_snapshot,
+        crossing_policy_resolver=EvidenceRefreshCrossingPolicyResolver(),
+    )
     try:
         return _run_evidence_refresh(
             control_plane,
@@ -417,22 +425,6 @@ def refresh_evidence_truth(
         )
     finally:
         control_plane.close()
-
-
-def _without_evaluation_state(snapshot: RuntimeSnapshot) -> RuntimeSnapshot:
-    """Retain realized runtime state while clearing the phase being replayed."""
-
-    entries = {
-        address: entry
-        for address, entry in snapshot.entries.items()
-        if entry.domain != RuntimeDomain.EVALUATION
-    }
-    return snapshot.with_entries(
-        entries,
-        evaluation_results={},
-        evaluation_history={},
-        proposition_truth_results={},
-    )
 
 
 def _run_evidence_refresh(

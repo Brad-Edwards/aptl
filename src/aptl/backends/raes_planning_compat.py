@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from raes_runtime.registry import RuntimeTarget
 
 from aptl.core.scenario_bundle import ScenarioBundle
+from aptl.backends import _raes_participant_snapshot as participant_snapshot
 from aptl.backends.identity import (
     APTL_RAES_TARGET_NAME,
     APTL_RAES_TARGET_PROFILE,
@@ -394,6 +395,14 @@ class AptlRuntimeManager(_RaesRuntimeManager):
 
         with _runtime_value_limits(getattr(self, "_aptl_planning_compatibility", None)):
             return super().apply(execution_plan)
+
+    def adopt_participant_delivery_snapshot(
+        self,
+        snapshot: RuntimeSnapshot,
+    ) -> RuntimeSnapshot:
+        """Resume manager-owned time from a governed participant delivery cut."""
+
+        return participant_snapshot.adopt_participant_delivery_snapshot(self, snapshot)
 
     def plan(
         self,

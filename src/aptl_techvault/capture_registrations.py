@@ -396,6 +396,7 @@ _WAZUH_AGENT_READINESS = _techvault_registration(
     limits=_TECHVAULT_LIMITS["wazuh-agent-readiness"],
 )
 
+
 #: The trusted built-in fleet — one per source owner, covering the acceptance
 #: criterion's synchronized red / container / network / defensive evidence.
 BUILTIN_REGISTRATIONS: tuple[CollectorRegistration, ...] = (

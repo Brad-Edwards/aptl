@@ -3563,6 +3563,48 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
     return None
 
 
+def _step_execute_participant_injects(ctx: _LabStartContext) -> LabResult | None:
+    """Deliver the admitted SDL participant sequence through its backend profile."""
+
+    admitted = ctx.admitted_start
+    plan = getattr(admitted, "participant_delivery_plan", None)
+    if plan is None or not getattr(plan, "turns", ()):
+        return None
+    if (
+        ctx.config is None
+        or ctx.run_store is None
+        or ctx.run_id is None
+        or ctx.raes_outcome is None
+    ):
+        return LabResult(
+            success=False,
+            error="Participant inject delivery context is unavailable.",
+        )
+    try:
+        from aptl.backends.raes_participant_delivery import (
+            ParticipantDeliveryExecutionContext,
+            execute_participant_delivery_plan,
+        )
+
+        model = ctx.config.experiment.participant_models.model_for("claude")
+        ctx.raes_outcome.final_snapshot = execute_participant_delivery_plan(
+            plan,
+            context=ParticipantDeliveryExecutionContext(
+                project_dir=ctx.project_dir,
+                model=model,
+                run_store=ctx.run_store,
+                run_id=ctx.run_id,
+                target=admitted.target,
+                runtime_manager=ctx.raes_outcome.runtime_manager,
+                initial_snapshot=ctx.raes_outcome.final_snapshot,
+            ),
+        )
+    except Exception:
+        log.exception("Participant inject delivery failed")
+        return LabResult(success=False, error="Participant inject delivery failed.")
+    return None
+
+
 def _mcp_startup_policy(ctx: _LabStartContext) -> dict[str, tuple[str, ...]]:
     """Select client credential targets from the exact startup adapter."""
 
@@ -3740,6 +3782,7 @@ _LAB_START_STEPS = (
     _step_seed_soc,
     _step_acquire_required_native_evidence,
     _step_sync_mcp_config,
+    _step_execute_participant_injects,
     _step_attest_project_containers,
     _step_capture_snapshot,
     _step_write_run_record,
@@ -3836,6 +3879,9 @@ _LAB_START_PROGRESS_MESSAGES = {
         "Collecting required native scenario evidence."
     ),
     "_step_sync_mcp_config": "Refreshing MCP client configuration.",
+    "_step_execute_participant_injects": (
+        "Delivering the SDL-authored participant sequence."
+    ),
     "_step_attest_project_containers": "Verifying terminal container state.",
     "_step_capture_snapshot": "Capturing the terminal range snapshot.",
     "_step_write_run_record": "Writing the terminal run reproducibility record.",

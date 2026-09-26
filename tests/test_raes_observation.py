@@ -72,6 +72,7 @@ def test_techvault_order_alignment_uses_declared_operation_not_typed_resource():
     from aptl.backends._raes_observation_helpers import ObservedResource
     from aptl.backends.raes_runtime_attestation import (
         TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST,
+        TECHVAULT_STUDY_RUNTIME_ATTESTATION_SET_DIGEST,
     )
     from aptl.core.scenario_bundle import PackIdentity
 
@@ -112,23 +113,23 @@ def test_techvault_order_alignment_uses_declared_operation_not_typed_resource():
         realization_authority=(authority,),
     )
 
-    result = observation_ordering.align_techvault_identity_collection_observations(
-        plan=plan,
-        observations={
-            address: ObservedResource(
-                realized=True,
-                concerns={path: normalized},
-            )
-        },
-        pack_identity=PackIdentity(
-            pack_id="techvault",
-            pack_version="0.1.0",
-            set_digest=TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST,
-        ),
-    )
+    for pack_id, digest in (
+        ("techvault", TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST),
+        ("techvault-participant-study", TECHVAULT_STUDY_RUNTIME_ATTESTATION_SET_DIGEST),
+    ):
+        result = observation_ordering.align_techvault_identity_collection_observations(
+            plan=plan,
+            observations={
+                address: ObservedResource(
+                    realized=True,
+                    concerns={path: normalized},
+                )
+            },
+            pack_identity=PackIdentity(pack_id, "0.1.0", digest),
+        )
 
-    observed = result[address].concerns[path]
-    assert [item["path"] for item in observed] == ["/first", "/second"]
+        observed = result[address].concerns[path]
+        assert [item["path"] for item in observed] == ["/first", "/second"]
 
 
 class _Backend:

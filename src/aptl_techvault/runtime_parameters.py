@@ -6,12 +6,16 @@ import secrets
 from collections.abc import Mapping
 
 from aptl.backends.scenario_runtime_parameters import EXTENSION_API_VERSION
+from aptl.backends.raes_runtime_attestation import (
+    TECHVAULT_STUDY_RUNTIME_ATTESTATION_SET_DIGEST,
+)
 from aptl.core.scenario_bundle import ScenarioBundle
 
 TECHVAULT_PACK_SET_DIGEST = (
     "sha256:db98a9daa62a092a0c6b001217027d7f4ad489889e95d01050e77f148e8ef29b"
 )
 _TECHVAULT_PACK_VERSION = "0.1.0"
+STUDY_PACK_SET_DIGEST = TECHVAULT_STUDY_RUNTIME_ATTESTATION_SET_DIGEST
 _FLAG_HOSTS = ("victim", "workstation", "webapp", "fileshare", "ad")
 
 
@@ -37,7 +41,10 @@ def runtime_parameters_for_bundle(
         identity.pack_id,
         identity.pack_version,
         identity.set_digest,
-    ) != ("techvault", _TECHVAULT_PACK_VERSION, TECHVAULT_PACK_SET_DIGEST):
+    ) not in (
+        ("techvault", _TECHVAULT_PACK_VERSION, TECHVAULT_PACK_SET_DIGEST),
+        ("techvault-participant-study", _TECHVAULT_PACK_VERSION, STUDY_PACK_SET_DIGEST),
+    ):
         return None
     return {
         f"flag_{host}_{level}": _flag(host, level)

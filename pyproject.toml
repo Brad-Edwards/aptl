@@ -123,21 +123,27 @@ build = [
 # core owns only the generic request-scoped contracts and execution machinery.
 [project.entry-points."aptl.pack_backend_interactions"]
 "techvault.aptl" = "aptl_techvault.serving:provider"
+"techvault-participant-study.aptl" = "aptl_techvault.study:serving"
 
 [project.entry-points."aptl.scenario_capture"]
 "techvault.aptl" = "aptl_techvault.capture:provider"
+"techvault-participant-study.aptl" = "aptl_techvault.study:capture"
 
 [project.entry-points."aptl.scenario_planning_compatibility"]
 "techvault.aptl" = "aptl_techvault.planning_compatibility:provider"
+"techvault-participant-study.aptl" = "aptl_techvault.study:planning_compatibility"
 
 [project.entry-points."aptl.scenario_runtime_parameters"]
 "techvault" = "aptl_techvault.runtime_parameters:provider"
+"techvault-participant-study" = "aptl_techvault.study:runtime_parameters"
 
 [project.entry-points."aptl.scenario_startup"]
 "techvault" = "aptl_techvault.startup:provider"
+"techvault-participant-study" = "aptl_techvault.study:startup"
 
 [project.entry-points."aptl.scenario_verifiers"]
 "techvault.aptl" = "aptl_techvault.verification:verifier"
+"techvault-participant-study.aptl" = "aptl_techvault.study:verifier"
 
 [project.entry-points."aptl.participant_mcp_smoke_plans"]
 "techvault-full.techvault" = "aptl_techvault.participant_smoke:FULL_TECHVAULT_SMOKE_OPERATIONS"

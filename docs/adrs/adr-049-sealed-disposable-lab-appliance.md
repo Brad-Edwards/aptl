@@ -4,7 +4,9 @@
 
 accepted
 
-**Current scope clarification (2026-09-26):** Ordinary `aptl lab start` is a
+## Current scope clarification
+
+**As of 2026-09-26:** Ordinary `aptl lab start` is a
 supported local operator path that uses the selected Docker daemon; it does not
 create or attest a disposable seat. The optional `aptl seat` path supplies a
 separate VM boundary when its exact image, host, and runtime profile passes

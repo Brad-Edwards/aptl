@@ -12,6 +12,51 @@ from raes.module_registry import LOCKFILE_NAME
 
 from aptl.backends.raes_repro import RunRecordInputs, build_reproducibility_record
 
+
+def test_runtime_snapshot_record_projection_scrubs_account_credentials() -> None:
+    from raes_contracts.runtime_state import (
+        RuntimeDomain,
+        RuntimeSnapshot,
+        SnapshotEntry,
+    )
+
+    from aptl.backends.raes_repro import runtime_snapshot_record_payload
+
+    entry = SnapshotEntry(
+        address="provision.account.operator",
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="account-placement",
+        payload={
+            "spec": {
+                "credential_bindings": [
+                    {
+                        "credential_id": "operator-password",
+                        "purpose": "login",
+                        "auth_method": "password",
+                        "material": {
+                            "classification": "secret_fixture",
+                            "value": "credential-canary",
+                        },
+                    }
+                ]
+            }
+        },
+    )
+    payload = runtime_snapshot_record_payload(
+        RuntimeSnapshot(entries={entry.address: entry})
+    )
+
+    assert payload["schema_version"] == "runtime-snapshot/v1"
+    encoded = payload["entries"][entry.address]
+    assert encoded["domain"] == "provisioning"
+    assert encoded["ordering_dependencies"] == []
+    assert encoded["refresh_dependencies"] == []
+    assert encoded["payload"]["spec"]["credential_bindings"][0]["material"] == {
+        "classification": "secret_fixture",
+        "value_present": True,
+    }
+    assert "credential-canary" not in str(payload)
+
 _DEFAULTS: dict = dict(
     run_id="run_20260101T000000Z",
     backend_name="aptl",
@@ -141,6 +186,47 @@ class TestReproRecord:
 
         assert record["backend_evidence"]["pack_interaction"] == evidence
         assert "pack_interaction" not in record["raes"]["realization"]
+
+    def test_acquired_pack_record_uses_bounded_locator_not_staging_path(self, tmp_path):
+        staged = tmp_path / ".aptl" / "staged-packs" / "random" / "techvault"
+        scenario = staged / "sdl" / "techvault.sdl.yaml"
+        evidence = {
+            "pack": {
+                "pack_id": "techvault",
+                "pack_version": "0.1.0",
+                "set_digest": "sha256:" + "a" * 64,
+            }
+        }
+
+        record = _dummy_record(
+            scenario_path=scenario,
+            scenario_display_name=scenario.name,
+            pack_interaction_evidence=evidence,
+        )
+
+        scenario_record = record["raes"]["scenario"]
+        assert scenario_record["sdl_path"] == (
+            "env-pack://techvault@0.1.0/sdl/techvault.sdl.yaml"
+        )
+        assert str(tmp_path) not in json.dumps(record)
+
+    def test_invalid_pack_evidence_does_not_claim_an_acquired_locator(self, tmp_path):
+        scenario = tmp_path / "explicit.sdl.yaml"
+        evidence = {
+            "pack": {
+                "pack_id": "techvault",
+                "pack_version": "0.1.0",
+                "set_digest": "sha256:not-a-digest",
+            }
+        }
+
+        record = _dummy_record(
+            scenario_path=scenario,
+            pack_interaction_evidence=evidence,
+        )
+
+        assert record["raes"]["scenario"]["sdl_path"] is None
+        assert str(tmp_path) not in json.dumps(record)
 
     def test_schema_version(self):
         record = _dummy_record()

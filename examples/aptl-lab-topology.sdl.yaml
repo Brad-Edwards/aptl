@@ -82,7 +82,7 @@ nodes:
       dashboard-health: dashboard-svc
     roles:
       dashboard-svc:
-        username: kibanaserver
+        username: dashboard-service
 
   # --- SOC tools ---
   suricata:

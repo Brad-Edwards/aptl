@@ -35,3 +35,28 @@ aptl_load_env_key() {
     printf -v "$key" '%s' "$value"
     export "$key"
 }
+
+# Serialize a fixed curl invocation through stdin. Shell functions and printf
+# are builtins: header, credential and body values never become process argv.
+# Callers pipe this into host curl or `docker exec -i ... curl --config -`.
+aptl_curl_config() {
+    printf '%s\0' "$@" | python3 -c '
+import json, sys
+arguments = iter(sys.stdin.buffer.read().decode().rstrip("\0").split("\0"))
+values = {"-H": "header", "-d": "data", "-u": "user", "-X": "request",
+          "-b": "cookie", "-c": "cookie-jar", "--cacert": "cacert",
+          "--max-time": "max-time"}
+flags = {"s": "silent", "S": "show-error", "f": "fail", "k": "insecure"}
+for argument in arguments:
+    if argument in values:
+        value = next(arguments)
+        print(values[argument] + " = " + json.dumps(value))
+    elif argument.startswith("-") and all(c in flags for c in argument[1:]):
+        for flag in argument[1:]:
+            print(flags[flag])
+    elif argument.startswith("-"):
+        raise SystemExit("unsupported curl option")
+    else:
+        print("url = " + json.dumps(argument))
+'
+}

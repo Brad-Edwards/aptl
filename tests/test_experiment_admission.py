@@ -87,12 +87,24 @@ def _resolved(data: bytes, locator: str, media_type: str) -> ResolvedArtifact:
 
 
 def _read_corpus_task_payload() -> dict:
-    path = CORPUS_ROOT / "experiment-core" / "experiment-task-v1" / "valid" / "reference.json"
+    path = (
+        CORPUS_ROOT
+        / "experiment-core"
+        / "experiment-task-v1"
+        / "valid"
+        / "reference.json"
+    )
     return json.loads(path.read_text())
 
 
 def _read_corpus_capture_spec_payload() -> dict:
-    path = CORPUS_ROOT / "experiment-core" / "experiment-capture-spec-v1" / "valid" / "reference.json"
+    path = (
+        CORPUS_ROOT
+        / "experiment-core"
+        / "experiment-capture-spec-v1"
+        / "valid"
+        / "reference.json"
+    )
     return json.loads(path.read_text())
 
 
@@ -138,7 +150,9 @@ def _synthetic_manifests() -> tuple[BackendManifest, ProcessorManifest]:
     return test_backend, test_processor
 
 
-def _capability_only_task_payload(*, declared_capability: str, extra_notes: list[str] | None = None) -> dict:
+def _capability_only_task_payload(
+    *, declared_capability: str, extra_notes: list[str] | None = None
+) -> dict:
     payload = _read_corpus_task_payload()
     payload["task_id"] = "task-minimal"
     payload["task_version"] = "1.0.0"
@@ -157,9 +171,15 @@ def _pinned_identity_task_payload() -> dict:
     payload["scenario_ref"] = {"ref_kind": "scenario", "ref_id": "canonical-minimal"}
     payload["apparatus_constraints"] = {
         "allowed_processor_refs": [
-            {"ref_kind": "processor", "ref_id": "raes-reference-processor", "ref_version": "2.0.0"}
+            {
+                "ref_kind": "processor",
+                "ref_id": "raes-reference-processor",
+                "ref_version": "2.0.0",
+            }
         ],
-        "allowed_backend_refs": [{"ref_kind": "backend", "ref_id": "aptl", "ref_version": "0.1.0"}],
+        "allowed_backend_refs": [
+            {"ref_kind": "backend", "ref_id": "aptl", "ref_version": "0.1.0"}
+        ],
         "required_manifest_refs": [
             {
                 "ref_kind": "manifest",
@@ -175,7 +195,11 @@ def _pinned_identity_task_payload() -> dict:
                 "ref_kind": "manifest",
                 "ref_id": "aptl",
                 "ref_version": "backend-manifest/v2",
-                "subject_ref": {"ref_kind": "backend", "ref_id": "aptl", "ref_version": "0.1.0"},
+                "subject_ref": {
+                    "ref_kind": "backend",
+                    "ref_id": "aptl",
+                    "ref_version": "0.1.0",
+                },
             },
         ],
         "required_capabilities": [],
@@ -196,9 +220,15 @@ def _flat_spec_payload(
         "spec_version": "1.0.0",
         "title": "Minimal flat spec",
         "description": "Minimal flat allocation admission fixture.",
-        "task_ref": {"ref_kind": "task", "ref_id": "task-minimal", "ref_version": "1.0.0"},
+        "task_ref": {
+            "ref_kind": "task",
+            "ref_id": "task-minimal",
+            "ref_version": "1.0.0",
+        },
         "run_plan": {
-            "stochastic_controls": [{"control_id": "seed-a", "role": "seed", "value": 1}],
+            "stochastic_controls": [
+                {"control_id": "seed-a", "role": "seed", "value": 1}
+            ],
             "episode_control": {
                 "turn_order": "sequential",
                 "max_steps": 10,
@@ -217,15 +247,27 @@ class _Bundle:
     capture-spec) bytes plus a :class:`MappingArtifactSource` binding them
     by reference identity."""
 
-    def __init__(self, *, task_payload: dict, spec_payload: dict, capture_spec_payload: dict | None = None):
+    def __init__(
+        self,
+        *,
+        task_payload: dict,
+        spec_payload: dict,
+        capture_spec_payload: dict | None = None,
+    ):
         self.task_bytes = json.dumps(task_payload).encode("utf-8")
         self.scenario_bytes = _minimal_scenario_bytes()
         self.root_bytes = yaml.safe_dump(spec_payload).encode("utf-8")
-        self.experiment_root = _resolved(self.root_bytes, "experiment.yaml", "application/x-yaml")
+        self.experiment_root = _resolved(
+            self.root_bytes, "experiment.yaml", "application/x-yaml"
+        )
 
         artifacts = {
-            task_payload["task_id"]: _resolved(self.task_bytes, "task.json", "application/json"),
-            "canonical-minimal": _resolved(self.scenario_bytes, "scenario.sdl.yaml", "application/x-yaml"),
+            task_payload["task_id"]: _resolved(
+                self.task_bytes, "task.json", "application/json"
+            ),
+            "canonical-minimal": _resolved(
+                self.scenario_bytes, "scenario.sdl.yaml", "application/x-yaml"
+            ),
         }
         if capture_spec_payload is not None:
             capture_bytes = json.dumps(capture_spec_payload).encode("utf-8")
@@ -236,18 +278,33 @@ class _Bundle:
 
 
 def _capability_only_bundle(
-    *, spec_id: str = "spec-minimal-v1", target_run_count: int = 3, extra_notes: list[str] | None = None
+    *,
+    spec_id: str = "spec-minimal-v1",
+    target_run_count: int = 3,
+    extra_notes: list[str] | None = None,
 ) -> tuple[_Bundle, BackendManifest, ProcessorManifest]:
     backend, processor = _synthetic_manifests()
     declared = sorted(backend.supported_contract_versions)[0]
-    task_payload = _capability_only_task_payload(declared_capability=declared, extra_notes=extra_notes)
-    spec_payload = _flat_spec_payload(spec_id=spec_id, target_run_count=target_run_count)
-    return _Bundle(task_payload=task_payload, spec_payload=spec_payload), backend, processor
+    task_payload = _capability_only_task_payload(
+        declared_capability=declared, extra_notes=extra_notes
+    )
+    spec_payload = _flat_spec_payload(
+        spec_id=spec_id, target_run_count=target_run_count
+    )
+    return (
+        _Bundle(task_payload=task_payload, spec_payload=spec_payload),
+        backend,
+        processor,
+    )
 
 
-def _pinned_identity_bundle(*, spec_id: str = "spec-pinned-v1", target_run_count: int = 3) -> _Bundle:
+def _pinned_identity_bundle(
+    *, spec_id: str = "spec-pinned-v1", target_run_count: int = 3
+) -> _Bundle:
     task_payload = _pinned_identity_task_payload()
-    spec_payload = _flat_spec_payload(spec_id=spec_id, target_run_count=target_run_count)
+    spec_payload = _flat_spec_payload(
+        spec_id=spec_id, target_run_count=target_run_count
+    )
     return _Bundle(task_payload=task_payload, spec_payload=spec_payload)
 
 
@@ -318,7 +375,9 @@ def _install_mutation_spies(monkeypatch) -> None:
     import aptl.core.ssh as ssh_module
 
     def _boom(*args, **kwargs):
-        raise AssertionError("range-mutating entry point must never be called by rejected admission")
+        raise AssertionError(
+            "range-mutating entry point must never be called by rejected admission"
+        )
 
     monkeypatch.setattr(lab_module, "start_lab", _boom)
     monkeypatch.setattr(lab_module, "stop_lab", _boom)
@@ -343,7 +402,9 @@ class TestAdmissionResult:
     def test_rejected_never_carries_a_plan(self):
         from raes_contracts.diagnostics import Diagnostic
 
-        d = Diagnostic(code="c", domain="experiment-admission", address="a", message="m")
+        d = Diagnostic(
+            code="c", domain="experiment-admission", address="a", message="m"
+        )
         result = AdmissionResult.rejected((d,))
 
         assert result.admitted is False
@@ -358,7 +419,9 @@ class TestAdmissionResult:
 
     def test_plain_constructor_rejects_a_rejected_shape_carrying_a_plan(self):
         with pytest.raises(ValueError, match="must never carry a plan"):
-            AdmissionResult(admitted=False, diagnostics=(), plan_digest="sha256:" + "0" * 64)
+            AdmissionResult(
+                admitted=False, diagnostics=(), plan_digest="sha256:" + "0" * 64
+            )
 
     def test_plain_constructor_rejects_an_admitted_shape_missing_a_plan(self):
         with pytest.raises(ValueError, match="must carry plan"):
@@ -410,7 +473,10 @@ class TestAdmitExperimentHappyPathCapabilityOnly:
         assert result.persisted_path.exists()
         assert result.persisted_path.read_bytes() == result.plan.canonical_bytes
         assert result.plan_digest == result.plan.plan_digest
-        assert result.persisted_path == tmp_path / "store" / "experiment-plans" / f"{result.plan.plan_id}.json"
+        assert (
+            result.persisted_path
+            == tmp_path / "store" / "experiment-plans" / f"{result.plan.plan_id}.json"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -436,7 +502,9 @@ class TestAdmitExperimentHappyPathPinnedIdentity:
     def test_admitted_with_the_debug_override_and_exactly_one_warning(self, tmp_path):
         bundle = _pinned_identity_bundle()
         store = LocalRunStore(tmp_path / "store")
-        policy = dataclasses.replace(default_admission_policy(), allow_uncertified_apparatus=True)
+        policy = dataclasses.replace(
+            default_admission_policy(), allow_uncertified_apparatus=True
+        )
 
         result = admit_experiment(
             experiment_root=bundle.experiment_root,
@@ -489,8 +557,14 @@ def _condition_allocation_task_payload() -> dict:
     payload = _read_corpus_task_payload()
     payload["task_id"] = "task-condition-admission"
     payload["task_version"] = "1.0.0"
-    payload["scenario_ref"] = {"ref_kind": "scenario", "ref_id": "scenario-condition-admission"}
-    payload["apparatus_constraints"] = {"required_capabilities": [], "notes": ["unrestricted apparatus"]}
+    payload["scenario_ref"] = {
+        "ref_kind": "scenario",
+        "ref_id": "scenario-condition-admission",
+    }
+    payload["apparatus_constraints"] = {
+        "required_capabilities": [],
+        "notes": ["unrestricted apparatus"],
+    }
     return payload
 
 
@@ -512,9 +586,15 @@ def _condition_allocation_spec_payload_one_infeasible() -> dict:
         "spec_version": "1.0.0",
         "title": "One infeasible condition",
         "description": "Proves per-condition all-or-nothing admission (Finding 3).",
-        "task_ref": {"ref_kind": "task", "ref_id": "task-condition-admission", "ref_version": "1.0.0"},
+        "task_ref": {
+            "ref_kind": "task",
+            "ref_id": "task-condition-admission",
+            "ref_version": "1.0.0",
+        },
         "run_plan": {
-            "stochastic_controls": [{"control_id": "seed-a", "role": "seed", "value": 1}],
+            "stochastic_controls": [
+                {"control_id": "seed-a", "role": "seed", "value": 1}
+            ],
             "episode_control": {
                 "turn_order": "sequential",
                 "max_steps": 10,
@@ -529,7 +609,11 @@ def _condition_allocation_spec_payload_one_infeasible() -> dict:
                         "condition_id": "cond-feasible",
                         "factor_levels": {"danger": "high"},
                         "required_parameters": [
-                            {"name": "danger_level", "value": "high", "value_kind": "configuration"}
+                            {
+                                "name": "danger_level",
+                                "value": "high",
+                                "value_kind": "configuration",
+                            }
                         ],
                     },
                     "cond-infeasible": {
@@ -552,7 +636,9 @@ def _condition_allocation_spec_payload_one_infeasible() -> dict:
     }
 
 
-def _explicit_binding_spec_payload(*, scenario_target: str = "variables.danger_level") -> dict:
+def _explicit_binding_spec_payload(
+    *, scenario_target: str = "variables.danger_level"
+) -> dict:
     return {
         "schema_version": "experiment-authoring-input/v1",
         "spec_id": "spec-explicit-binding-v1",
@@ -663,7 +749,9 @@ def _explicit_binding_bundle(*, scenario_target: str = "variables.danger_level")
 
 
 class TestAdmitExperimentConditionAllocationAllOrNothing:
-    def test_one_infeasible_condition_rejects_the_whole_admission_with_no_partial_plan_or_write(self, tmp_path):
+    def test_one_infeasible_condition_rejects_the_whole_admission_with_no_partial_plan_or_write(
+        self, tmp_path
+    ):
         task_payload = _condition_allocation_task_payload()
         task_bytes = json.dumps(task_payload).encode("utf-8")
         scenario_bytes = _CONDITION_ALLOCATION_SCENARIO_TEXT.encode("utf-8")
@@ -673,7 +761,9 @@ class TestAdmitExperimentConditionAllocationAllOrNothing:
 
         artifact_source = MappingArtifactSource(
             artifacts={
-                "task-condition-admission": _resolved(task_bytes, "task.json", "application/json"),
+                "task-condition-admission": _resolved(
+                    task_bytes, "task.json", "application/json"
+                ),
                 "scenario-condition-admission": _resolved(
                     scenario_bytes, "scenario.sdl.yaml", "application/x-yaml"
                 ),
@@ -682,7 +772,9 @@ class TestAdmitExperimentConditionAllocationAllOrNothing:
         store = _SpyRunStore(tmp_path / "store")
 
         result = admit_experiment(
-            experiment_root=_resolved(root_bytes, "experiment.yaml", "application/x-yaml"),
+            experiment_root=_resolved(
+                root_bytes, "experiment.yaml", "application/x-yaml"
+            ),
             artifact_source=artifact_source,
             run_store=store,
             policy=default_admission_policy(),
@@ -741,9 +833,7 @@ class TestAdmitExperimentConditionAllocationAllOrNothing:
         }
 
     def test_unknown_explicit_target_rejects_without_a_store_write(self, tmp_path):
-        bundle = _explicit_binding_bundle(
-            scenario_target="variables.unknown_target"
-        )
+        bundle = _explicit_binding_bundle(scenario_target="variables.unknown_target")
         bundle.scenario_bytes = _EXPLICIT_BINDING_SCENARIO_TEXT.encode("utf-8")
         bundle.artifact_source = MappingArtifactSource(
             artifacts={
@@ -779,7 +869,9 @@ class TestAdmitExperimentConditionAllocationAllOrNothing:
 
 
 class TestAdmitExperimentDeterminism:
-    def test_admitting_the_same_inputs_twice_yields_the_same_digest_and_is_idempotent(self, tmp_path):
+    def test_admitting_the_same_inputs_twice_yields_the_same_digest_and_is_idempotent(
+        self, tmp_path
+    ):
         bundle, backend, processor = _capability_only_bundle()
         store = LocalRunStore(tmp_path / "store")
 
@@ -852,7 +944,9 @@ class TestFuzzAdmitExperimentDeterminism:
 
     @given(target_run_count=st.integers(min_value=1, max_value=30))
     @settings(max_examples=20, deadline=None)
-    def test_repeated_admission_is_deterministic_across_random_flat_counts(self, target_run_count):
+    def test_repeated_admission_is_deterministic_across_random_flat_counts(
+        self, target_run_count
+    ):
         bundle, backend, processor = _capability_only_bundle(
             spec_id=f"spec-fuzz-{target_run_count}", target_run_count=target_run_count
         )
@@ -896,7 +990,9 @@ class TestFuzzAdmitExperimentDeterminism:
 
 
 class TestMutationSpyRejectedAdmissionMakesNoMutatingCalls:
-    def test_apparatus_fatal_rejection_makes_no_mutating_or_write_calls(self, tmp_path, monkeypatch):
+    def test_apparatus_fatal_rejection_makes_no_mutating_or_write_calls(
+        self, tmp_path, monkeypatch
+    ):
         _install_mutation_spies(monkeypatch)
         bundle = _pinned_identity_bundle()
         store = _SpyRunStore(tmp_path / "store")
@@ -923,9 +1019,13 @@ class TestMutationSpyRejectedAdmissionMakesNoMutatingCalls:
         bad_source = MappingArtifactSource(
             artifacts={
                 "task-minimal": _resolved(
-                    json.dumps(bad_task_payload).encode("utf-8"), "task.json", "application/json"
+                    json.dumps(bad_task_payload).encode("utf-8"),
+                    "task.json",
+                    "application/json",
                 ),
-                "canonical-minimal": _resolved(bundle.scenario_bytes, "scenario.sdl.yaml", "application/x-yaml"),
+                "canonical-minimal": _resolved(
+                    bundle.scenario_bytes, "scenario.sdl.yaml", "application/x-yaml"
+                ),
             }
         )
         store = _SpyRunStore(tmp_path / "store")
@@ -945,7 +1045,9 @@ class TestMutationSpyRejectedAdmissionMakesNoMutatingCalls:
         assert any("identity-mismatch" in d.code for d in result.diagnostics)
         assert store.calls == {}
 
-    def test_oversize_root_rejection_makes_no_mutating_or_write_calls(self, tmp_path, monkeypatch):
+    def test_oversize_root_rejection_makes_no_mutating_or_write_calls(
+        self, tmp_path, monkeypatch
+    ):
         _install_mutation_spies(monkeypatch)
         bundle, backend, processor = _capability_only_bundle()
         tiny_policy = dataclasses.replace(default_admission_policy(), max_root_bytes=1)
@@ -976,14 +1078,26 @@ class TestMutationSpyRejectedAdmissionMakesNoMutatingCalls:
         capture_payload["capture_spec_id"] = "capture-minimal"
         capture_payload["spec_version"] = "1.0.0"
         capture_payload["scope_refs"] = [
-            {"ref_kind": "task", "ref_id": task_payload["task_id"], "ref_version": task_payload["task_version"]}
+            {
+                "ref_kind": "task",
+                "ref_id": task_payload["task_id"],
+                "ref_version": task_payload["task_version"],
+            }
         ]
         spec_payload = _flat_spec_payload(
             capture_spec_refs=[
-                {"ref_kind": "capture-spec", "ref_id": "capture-minimal", "ref_version": "1.0.0"}
+                {
+                    "ref_kind": "capture-spec",
+                    "ref_id": "capture-minimal",
+                    "ref_version": "1.0.0",
+                }
             ]
         )
-        bundle = _Bundle(task_payload=task_payload, spec_payload=spec_payload, capture_spec_payload=capture_payload)
+        bundle = _Bundle(
+            task_payload=task_payload,
+            spec_payload=spec_payload,
+            capture_spec_payload=capture_payload,
+        )
         store = _SpyRunStore(tmp_path / "store")
 
         result = admit_experiment(
@@ -998,7 +1112,9 @@ class TestMutationSpyRejectedAdmissionMakesNoMutatingCalls:
         )
 
         assert result.admitted is False
-        assert any("capture-requirement-unsupported" in d.code for d in result.diagnostics)
+        assert any(
+            "capture-requirement-unsupported" in d.code for d in result.diagnostics
+        )
         assert store.calls == {}
 
 
@@ -1035,9 +1151,13 @@ class TestAdmitExperimentRejectionPaths:
         bad_source = MappingArtifactSource(
             artifacts={
                 "task-minimal": _resolved(
-                    json.dumps(bad_task_payload).encode("utf-8"), "task.json", "application/json"
+                    json.dumps(bad_task_payload).encode("utf-8"),
+                    "task.json",
+                    "application/json",
                 ),
-                "canonical-minimal": _resolved(bundle.scenario_bytes, "scenario.sdl.yaml", "application/x-yaml"),
+                "canonical-minimal": _resolved(
+                    bundle.scenario_bytes, "scenario.sdl.yaml", "application/x-yaml"
+                ),
             }
         )
         store = LocalRunStore(tmp_path / "store")
@@ -1064,14 +1184,26 @@ class TestAdmitExperimentRejectionPaths:
         capture_payload["capture_spec_id"] = "capture-minimal"
         capture_payload["spec_version"] = "1.0.0"
         capture_payload["scope_refs"] = [
-            {"ref_kind": "task", "ref_id": task_payload["task_id"], "ref_version": task_payload["task_version"]}
+            {
+                "ref_kind": "task",
+                "ref_id": task_payload["task_id"],
+                "ref_version": task_payload["task_version"],
+            }
         ]
         spec_payload = _flat_spec_payload(
             capture_spec_refs=[
-                {"ref_kind": "capture-spec", "ref_id": "capture-minimal", "ref_version": "1.0.0"}
+                {
+                    "ref_kind": "capture-spec",
+                    "ref_id": "capture-minimal",
+                    "ref_version": "1.0.0",
+                }
             ]
         )
-        bundle = _Bundle(task_payload=task_payload, spec_payload=spec_payload, capture_spec_payload=capture_payload)
+        bundle = _Bundle(
+            task_payload=task_payload,
+            spec_payload=spec_payload,
+            capture_spec_payload=capture_payload,
+        )
         store = LocalRunStore(tmp_path / "store")
 
         result = admit_experiment(
@@ -1086,11 +1218,15 @@ class TestAdmitExperimentRejectionPaths:
         )
 
         assert result.admitted is False
-        assert any("capture-requirement-unsupported" in d.code for d in result.diagnostics)
+        assert any(
+            "capture-requirement-unsupported" in d.code for d in result.diagnostics
+        )
 
     def test_apparatus_fatal_independent_of_mutual_compat_is_rejected(self, tmp_path):
         backend, processor = _synthetic_manifests()
-        task_payload = _capability_only_task_payload(declared_capability="totally-made-up-capability")
+        task_payload = _capability_only_task_payload(
+            declared_capability="totally-made-up-capability"
+        )
         spec_payload = _flat_spec_payload()
         bundle = _Bundle(task_payload=task_payload, spec_payload=spec_payload)
         store = LocalRunStore(tmp_path / "store")
@@ -1171,7 +1307,9 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
         spec_payload = _flat_spec_payload()
         spec_payload["task_ref"]["ref_version"] = "9.9.9"
         bad_root = _resolved(
-            yaml.safe_dump(spec_payload).encode("utf-8"), "experiment.yaml", "application/x-yaml"
+            yaml.safe_dump(spec_payload).encode("utf-8"),
+            "experiment.yaml",
+            "application/x-yaml",
         )
         store = LocalRunStore(tmp_path / "store")
 
@@ -1188,19 +1326,27 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
 
         assert result.admitted is False
         assert any(
-            d.code == "aptl.experiment-admission.reference-identity-mismatch" and d.address == "task_ref.ref_version"
+            d.code == "aptl.experiment-admission.reference-identity-mismatch"
+            and d.address == "task_ref.ref_version"
             for d in result.diagnostics
         )
 
-    def test_intended_scenario_ref_disagreement_with_task_scenario_ref_is_rejected(self, tmp_path):
+    def test_intended_scenario_ref_disagreement_with_task_scenario_ref_is_rejected(
+        self, tmp_path
+    ):
         # spec.intended_scenario_ref names a DIFFERENT ref_id than
         # task.scenario_ref ("canonical-minimal") -- _effective_scenario_ref's
         # task/scenario agreement gate.
         bundle, backend, processor = _capability_only_bundle()
         spec_payload = _flat_spec_payload()
-        spec_payload["intended_scenario_ref"] = {"ref_kind": "scenario", "ref_id": "some-other-scenario-id"}
+        spec_payload["intended_scenario_ref"] = {
+            "ref_kind": "scenario",
+            "ref_id": "some-other-scenario-id",
+        }
         bad_root = _resolved(
-            yaml.safe_dump(spec_payload).encode("utf-8"), "experiment.yaml", "application/x-yaml"
+            yaml.safe_dump(spec_payload).encode("utf-8"),
+            "experiment.yaml",
+            "application/x-yaml",
         )
         store = LocalRunStore(tmp_path / "store")
 
@@ -1238,7 +1384,9 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
             "ref_version": "9.9.9",
         }
         bad_root = _resolved(
-            yaml.safe_dump(spec_payload).encode("utf-8"), "experiment.yaml", "application/x-yaml"
+            yaml.safe_dump(spec_payload).encode("utf-8"),
+            "experiment.yaml",
+            "application/x-yaml",
         )
         store = LocalRunStore(tmp_path / "store")
 
@@ -1274,7 +1422,9 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
             "ref_digest": "sha256:" + "0" * 64,
         }
         bad_root = _resolved(
-            yaml.safe_dump(spec_payload).encode("utf-8"), "experiment.yaml", "application/x-yaml"
+            yaml.safe_dump(spec_payload).encode("utf-8"),
+            "experiment.yaml",
+            "application/x-yaml",
         )
         store = LocalRunStore(tmp_path / "store")
 
@@ -1303,12 +1453,22 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
         bundle, backend, processor = _capability_only_bundle()
         spec_payload = _flat_spec_payload(
             capture_spec_refs=[
-                {"ref_kind": "capture-spec", "ref_id": "capture-minimal", "ref_version": "1.0.0"},
-                {"ref_kind": "capture-spec", "ref_id": "capture-minimal", "ref_version": "1.0.0"},
+                {
+                    "ref_kind": "capture-spec",
+                    "ref_id": "capture-minimal",
+                    "ref_version": "1.0.0",
+                },
+                {
+                    "ref_kind": "capture-spec",
+                    "ref_id": "capture-minimal",
+                    "ref_version": "1.0.0",
+                },
             ]
         )
         bad_root = _resolved(
-            yaml.safe_dump(spec_payload).encode("utf-8"), "experiment.yaml", "application/x-yaml"
+            yaml.safe_dump(spec_payload).encode("utf-8"),
+            "experiment.yaml",
+            "application/x-yaml",
         )
         store = LocalRunStore(tmp_path / "store")
 
@@ -1325,7 +1485,8 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
 
         assert result.admitted is False
         assert any(
-            d.code == "aptl.experiment-admission.capture-spec-ref-duplicate" for d in result.diagnostics
+            d.code == "aptl.experiment-admission.capture-spec-ref-duplicate"
+            for d in result.diagnostics
         )
 
 
@@ -1365,7 +1526,9 @@ class _RaisingRunStore:
 
 
 class TestPersistPlanDiagnostics:
-    def test_a_persisted_bytes_mismatch_is_rejected_with_the_specific_diagnostic(self, tmp_path):
+    def test_a_persisted_bytes_mismatch_is_rejected_with_the_specific_diagnostic(
+        self, tmp_path
+    ):
         bundle, backend, processor = _capability_only_bundle()
         store = _MismatchedReadBackRunStore(tmp_path / "store")
 
@@ -1383,10 +1546,13 @@ class TestPersistPlanDiagnostics:
         assert result.admitted is False
         assert result.plan is None
         assert any(
-            d.code == "aptl.experiment-admission.persisted-plan-digest-mismatch" for d in result.diagnostics
+            d.code == "aptl.experiment-admission.persisted-plan-digest-mismatch"
+            for d in result.diagnostics
         )
 
-    def test_a_persistence_failure_surfaces_as_a_rejection_not_an_unhandled_exception(self, tmp_path):
+    def test_a_persistence_failure_surfaces_as_a_rejection_not_an_unhandled_exception(
+        self, tmp_path
+    ):
         bundle, backend, processor = _capability_only_bundle()
         store = _RaisingRunStore()
 
@@ -1408,7 +1574,10 @@ class TestPersistPlanDiagnostics:
 
         assert result.admitted is False
         assert result.plan is None
-        assert any(d.code == "aptl.experiment-admission.plan-persistence-failed" for d in result.diagnostics)
+        assert any(
+            d.code == "aptl.experiment-admission.plan-persistence-failed"
+            for d in result.diagnostics
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1416,7 +1585,14 @@ class TestPersistPlanDiagnostics:
 # ---------------------------------------------------------------------------
 
 
-def _write_associated_artifact_bundle(base_dir, *, spec_id: str, task_bytes: bytes, scenario_bytes: bytes, corrupt_checksum: bool = False):
+def _write_associated_artifact_bundle(
+    base_dir,
+    *,
+    spec_id: str,
+    task_bytes: bytes,
+    scenario_bytes: bytes,
+    corrupt_checksum: bool = False,
+):
     (base_dir / "task.json").write_bytes(task_bytes)
     (base_dir / "scenario.sdl.yaml").write_bytes(scenario_bytes)
 
@@ -1437,10 +1613,19 @@ def _write_associated_artifact_bundle(base_dir, *, spec_id: str, task_bytes: byt
 
     artifacts = {
         "task-minimal": artifact_ref(
-            "task-minimal", "task.json", task_bytes, "application/json", "other", bad_checksum=corrupt_checksum
+            "task-minimal",
+            "task.json",
+            task_bytes,
+            "application/json",
+            "other",
+            bad_checksum=corrupt_checksum,
         ),
         "canonical-minimal": artifact_ref(
-            "canonical-minimal", "scenario.sdl.yaml", scenario_bytes, "application/x-yaml", "scenario-snapshot"
+            "canonical-minimal",
+            "scenario.sdl.yaml",
+            scenario_bytes,
+            "application/x-yaml",
+            "scenario-snapshot",
         ),
     }
     manifest_dict = {
@@ -1449,7 +1634,11 @@ def _write_associated_artifact_bundle(base_dir, *, spec_id: str, task_bytes: byt
         "manifest_version": "1.0.0",
         "canonicalization_profile": "associated-artifact-set/v1",
         "scope": "experiment",
-        "parent_ref": {"ref_kind": "authoring-input", "ref_id": spec_id, "ref_version": "1.0.0"},
+        "parent_ref": {
+            "ref_kind": "authoring-input",
+            "ref_id": spec_id,
+            "ref_version": "1.0.0",
+        },
         "artifacts": artifacts,
         "set_digest": "sha256:" + "0" * 64,
     }
@@ -1469,14 +1658,21 @@ class TestBuildAssociatedArtifactSource:
         scenario_bytes = _minimal_scenario_bytes()
         spec_payload = _flat_spec_payload(spec_id="spec-associated-v1")
         _write_associated_artifact_bundle(
-            tmp_path, spec_id="spec-associated-v1", task_bytes=task_bytes, scenario_bytes=scenario_bytes
+            tmp_path,
+            spec_id="spec-associated-v1",
+            task_bytes=task_bytes,
+            scenario_bytes=scenario_bytes,
         )
         spec = load_experiment_root(
-            yaml.safe_dump(spec_payload).encode("utf-8"), policy=default_admission_policy()
+            yaml.safe_dump(spec_payload).encode("utf-8"),
+            policy=default_admission_policy(),
         )
 
         source = build_associated_artifact_source(
-            tmp_path, "associated-artifact-manifest.json", spec, default_admission_policy()
+            tmp_path,
+            "associated-artifact-manifest.json",
+            spec,
+            default_admission_policy(),
         )
 
         task_artifact = source.artifact_for(spec.task_ref)
@@ -1497,10 +1693,14 @@ class TestBuildAssociatedArtifactSource:
             corrupt_checksum=True,
         )
         policy = default_admission_policy()
-        spec = load_experiment_root(yaml.safe_dump(spec_payload).encode("utf-8"), policy=policy)
+        spec = load_experiment_root(
+            yaml.safe_dump(spec_payload).encode("utf-8"), policy=policy
+        )
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            build_associated_artifact_source(tmp_path, "associated-artifact-manifest.json", spec, policy)
+            build_associated_artifact_source(
+                tmp_path, "associated-artifact-manifest.json", spec, policy
+            )
 
         assert excinfo.value.diagnostics
 
@@ -1577,9 +1777,15 @@ def _covering_registration() -> CollectorRegistration:
         sealing_modes=frozenset({"digest"}),
         supports_chain_of_custody=False,
         supports_retention=True,
+        redaction_policies=frozenset({"redact_secrets"}),
+        retention_policies=frozenset(
+            {"Retain raw evidence for the experiment review window."}
+        ),
         supports_loss_disclosure=True,
         visibility_class=CaptureVisibility.EVALUATOR_ONLY,
-        limits=CaptureLimits(max_bytes=1_048_576, max_artifact_count=100, max_duration_s=300),
+        limits=CaptureLimits(
+            max_bytes=1_048_576, max_artifact_count=100, max_duration_s=300
+        ),
     )
 
 
@@ -1592,12 +1798,26 @@ def _capture_bearing_bundle():
     capture_payload["capture_spec_id"] = "capture-minimal"
     capture_payload["spec_version"] = "1.0.0"
     capture_payload["scope_refs"] = [
-        {"ref_kind": "task", "ref_id": task_payload["task_id"], "ref_version": task_payload["task_version"]}
+        {
+            "ref_kind": "task",
+            "ref_id": task_payload["task_id"],
+            "ref_version": task_payload["task_version"],
+        }
     ]
     spec_payload = _flat_spec_payload(
-        capture_spec_refs=[{"ref_kind": "capture-spec", "ref_id": "capture-minimal", "ref_version": "1.0.0"}]
+        capture_spec_refs=[
+            {
+                "ref_kind": "capture-spec",
+                "ref_id": "capture-minimal",
+                "ref_version": "1.0.0",
+            }
+        ]
     )
-    bundle = _Bundle(task_payload=task_payload, spec_payload=spec_payload, capture_spec_payload=capture_payload)
+    bundle = _Bundle(
+        task_payload=task_payload,
+        spec_payload=spec_payload,
+        capture_spec_payload=capture_payload,
+    )
     return bundle, backend, processor
 
 
@@ -1628,7 +1848,9 @@ class TestAdmitExperimentWithCoveringRegistry:
         # The binding travelled into the persisted canonical bytes.
         assert b"aptl.collector.network-trace" in result.plan.canonical_bytes
 
-    def test_the_same_registry_missing_the_capability_still_fails_closed(self, tmp_path):
+    def test_the_same_registry_missing_the_capability_still_fails_closed(
+        self, tmp_path
+    ):
         bundle, backend, processor = _capture_bearing_bundle()
         store = LocalRunStore(tmp_path / "store")
 
@@ -1645,4 +1867,6 @@ class TestAdmitExperimentWithCoveringRegistry:
         )
 
         assert result.admitted is False
-        assert any("capture-requirement-unsupported" in d.code for d in result.diagnostics)
+        assert any(
+            "capture-requirement-unsupported" in d.code for d in result.diagnostics
+        )

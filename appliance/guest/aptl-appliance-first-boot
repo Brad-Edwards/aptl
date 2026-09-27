@@ -1,12 +1,16 @@
 #!/bin/sh
-# Idempotent guest start: identity is create-once per overlay; lab start reuses it.
+# Start the already-provisioned seat inside its disposable overlay.
 set -eu
 umask 077
 
+# shellcheck disable=SC1091
 . /etc/aptl/appliance-release.env
-: "${APTL_APPLIANCE_SCENARIO:?missing staged appliance scenario identity}"
+: "${APTL_SEAT_COMMIT:?missing baked seat identity}"
+test -r /run/aptl-launch/appliance-launch.json
+test -r /run/aptl-launch/boundary-policy.json
+test -r /opt/aptl/offline/oci-images.tar
 
-aptl appliance bootstrap-overlay --state-dir /var/lib/aptl/overlay
+install -d -m 0700 /var/lib/aptl/overlay
 images_loaded=/var/lib/aptl/overlay/images-loaded
 if test ! -f "$images_loaded"; then
     docker load --input /opt/aptl/offline/oci-images.tar
@@ -14,12 +18,38 @@ if test ! -f "$images_loaded"; then
     sha256sum /opt/aptl/offline/oci-images.tar >"$marker"
     chmod 0600 "$marker"
     mv "$marker" "$images_loaded"
+else
+    /usr/local/bin/aptl kill --containers --project-dir /opt/aptl/project
 fi
-exec aptl lab start \
+
+# Each disposable overlay receives fresh control-plane credentials.  Compose
+# receives only these process-local values; the image contains no browser token.
+APTL_API_TOKEN=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
+APTL_WEB_LAUNCH_TOKEN=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+export APTL_API_TOKEN APTL_WEB_LAUNCH_TOKEN
+# QEMU forwards loopback-only host ports to the guest's private virtio adapter.
+# The proxy forwards from that adapter to Docker's loopback publications.
+# Docker owns loopback; the guest proxy owns the adapter listeners.
+APTL_WEB_BIND_ADDRESS=127.0.0.1
+export APTL_WEB_BIND_ADDRESS
+
+guest_python=/usr/bin/python3
+guest_path=/opt/aptl/app:/opt/aptl/python
+PYTHONPATH="$guest_path" "$guest_python" -m aptl.appliance.guest_services proxy &
+proxy_pid=$!
+cleanup() {
+    kill "$proxy_pid" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+/usr/local/bin/aptl lab start \
     --project-dir /opt/aptl/project \
-    --scenario "$APTL_APPLIANCE_SCENARIO" \
     --offline-staged \
     --appliance-launch-descriptor /run/aptl-launch/appliance-launch.json \
-    --appliance-release-public-key /run/aptl-launch/release-public.pem \
-    --appliance-qualification-public-key \
-    /run/aptl-launch/qualification-public.pem
+    --appliance-readiness-challenge /run/aptl-launch/readiness-challenge.json \
+    --appliance-readiness-device /dev/virtio-ports/org.aptl.readiness \
+    --appliance-access-request /run/aptl-launch/access-request.json \
+    --appliance-access-device /dev/virtio-ports/org.aptl.access \
+    --appliance-access-output-dir /var/lib/aptl/mcp-transport
+
+wait "$proxy_pid"

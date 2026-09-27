@@ -18,7 +18,7 @@
       "container_ip": "localhost",
       "ssh_key": "~/.ssh/aptl_lab_key",
       "ssh_user": "labadmin",
-      "ssh_port": 2027,
+      "ssh_port": "${APTL_HP_REVERSE_22}",
       "enabled": true
     }
   }

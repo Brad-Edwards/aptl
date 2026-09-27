@@ -70,7 +70,6 @@ def test_guided_profile_resolves_existing_content_derived_surface() -> None:
         "kali",
         "victim",
         "wazuh",
-        "otel",
     }
     assert "wazuh.manager" in profile.expected_matrix.expected_services
     assert "kali" in profile.expected_matrix.expected_services
@@ -91,9 +90,6 @@ def test_guided_profile_resolves_existing_content_derived_surface() -> None:
         "image-wazuh-manager",
         "image-wazuh-indexer",
         "image-wazuh-dashboard",
-        "image-otel-collector",
-        "image-tempo",
-        "image-grafana",
     } <= locked_ids
     assert {
         service
@@ -159,7 +155,8 @@ def test_required_narrative_operations_have_readiness_checks() -> None:
     } == set(profile.browser_refs)
 
 
-def test_participant_profiles_are_packaged_lab_assets() -> None:
+def test_only_the_full_acquired_profile_is_a_packaged_lab_asset() -> None:
     from aptl._asset_manifest import ASSET_ROOTS
 
-    assert "participant-profiles" in ASSET_ROOTS
+    assert "participant-profiles/techvault-full-v1" in ASSET_ROOTS
+    assert "participant-profiles" not in ASSET_ROOTS

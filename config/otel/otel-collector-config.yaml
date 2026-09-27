@@ -20,8 +20,6 @@ exporters:
     endpoint: aptl-tempo:4317
     tls:
       insecure: true
-  debug:
-    verbosity: basic
 
 service:
   extensions: [health_check]
@@ -29,4 +27,4 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp/tempo, debug]
+      exporters: [otlp/tempo]

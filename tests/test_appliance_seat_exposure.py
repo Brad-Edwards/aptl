@@ -29,8 +29,28 @@ def test_audit_host_process_inventory_probes_docker_by_default() -> None:
         report = audit_host_process_inventory()
 
     probe.assert_called_once()
-    assert report.passed is False
-    assert "host.exposure.docker-daemon-present" in report.findings
+    assert report.passed is True
+    assert report.findings == ()
+
+
+def test_require_host_exposure_allows_unrelated_host_docker(tmp_path: Path) -> None:
+    launch_mount = tmp_path / "launch"
+    launch_mount.mkdir()
+    overlay = tmp_path / "overlay.qcow2"
+    overlay.write_bytes(b"overlay")
+    argv = build_qemu_argv(
+        VmLaunchSpec(
+            overlay_path=overlay,
+            launch_mount=launch_mount,
+            vcpus=2,
+            memory_mib=512,
+        )
+    )
+
+    report = require_host_exposure(vm_argv=argv, docker_daemon_running=True)
+
+    assert report.passed is True
+    assert report.findings == ()
 
 
 def test_audit_vm_argv_allows_writable_overlay_drive(tmp_path: Path) -> None:
@@ -50,7 +70,13 @@ def test_audit_vm_argv_allows_writable_overlay_drive(tmp_path: Path) -> None:
     report = audit_vm_argv(argv)
 
     assert report.passed is True
-    assert "readonly=off" in argv[argv.index("-drive") + 1]
+    drives = tuple(
+        argv[index + 1]
+        for index, argument in enumerate(argv[:-1])
+        if argument == "-drive"
+    )
+    assert any("readonly=off" in drive for drive in drives)
+    assert any("if=pflash" in drive and "readonly=on" in drive for drive in drives)
     require_host_exposure(vm_argv=argv, docker_daemon_running=False)
 
 
@@ -74,3 +100,34 @@ def test_audit_vm_argv_rejects_forbidden_usb_flag() -> None:
 
     assert report.passed is False
     assert "host.exposure.forbidden-vm-flag:-usb" in report.findings
+
+
+@pytest.mark.parametrize(
+    "network_arguments",
+    [
+        (),
+        ("-netdev", "user,id=participant"),
+        ("-netdev", "user,id=participant,restrict=off"),
+        ("-netdev", "user,id=participant,restrict=on,restrict=off"),
+        ("-netdev", "tap,id=participant,restrict=on"),
+        ("-netdev", "user,id=participant,restrict=on", "-netdev", "user,id=extra"),
+        (
+            "-netdev",
+            "user,id=participant,restrict=on",
+            "-netdev",
+            "user,id=extra,restrict=on",
+        ),
+        ("-nic", "user"),
+        ("-net", "user"),
+    ],
+)
+def test_launch_boundary_rejects_guest_access_to_physical_host(
+    network_arguments: tuple[str, ...],
+) -> None:
+    from aptl.appliance.seat.errors import SeatLauncherError
+
+    with pytest.raises(SeatLauncherError, match="host exposure inventory failed"):
+        require_host_exposure(
+            vm_argv=("qemu-system-x86_64", *network_arguments),
+            docker_daemon_running=False,
+        )

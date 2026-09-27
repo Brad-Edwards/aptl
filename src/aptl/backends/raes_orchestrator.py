@@ -297,9 +297,13 @@ def _persist_workflow_run(
         f"orchestration/{safe_address}/result.json",
         record.result,
     )
-    for event in record.history:
+    if record.history:
+        # ``append_jsonl`` takes the whole batch of records and redacts each
+        # one. Passing a single event mapping iterated that mapping instead,
+        # persisting one JSON string per key — a history file that existed and
+        # parsed but held no event (issue #993).
         run_store.append_jsonl(
             run_id,
             f"orchestration/{safe_address}/history.jsonl",
-            event,
+            list(record.history),
         )

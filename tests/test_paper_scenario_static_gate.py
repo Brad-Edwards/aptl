@@ -70,28 +70,24 @@ def _paper_plan():
     return scenario, model, RuntimeManager(target).plan(scenario), config
 
 
-def _assert_paper_scoring_chain_admitted_not_projected(plan) -> None:
-    # ADR-069 §3 assigns the backend evaluator the job of projecting
-    # objective/proposition/terminal-condition facts, so APTL declares the
-    # `propositions`/`assertions` sections (issue #889 supersedes the #749
-    # narrowing, which was an under-declaration: APTL already evaluates
-    # objectives, which are composed of these). The paper's boolean observed-
-    # state scoring chain is therefore admitted with no evaluator diagnostics.
-    #
-    # But APTL projects a proposition-truth result only for an assertion it can
-    # genuinely corroborate: the ADR-088 service-materialization readback on the
-    # `api_response` channel. The paper's propositions are evidenced on the
-    # participant/`log` channels APTL does not yet project from, so APTL
-    # fabricates no truth for them -- their truth stays unresolved. (RAES's
-    # plan-time admission does not yet check a proposition's evidence channels
-    # against the evaluator's supported set; that granularity gap is filed
-    # upstream, and is why admission alone cannot bound this.)
+def _assert_paper_capture_rejected_and_truth_unresolved(plan) -> None:
+    # RAES 4.1 now checks the exact evidence axes during planning. APTL has no
+    # offers for these historical paper-only Wazuh, boundary, and objective
+    # contracts, so the plan must fail admission rather than treating an
+    # evaluator section claim as evidence support.
     from raes_contracts.runtime_state import RuntimeSnapshot
 
     from aptl.backends._raes_proposition_truth import project_proposition_truth_results
 
+    assert plan.is_valid is False
     diagnostics = {(d.code, d.address) for d in plan.diagnostics}
-    assert diagnostics == set()
+    assert diagnostics
+    assert all(code.startswith("capture.") for code, _address in diagnostics)
+    assert {address for _code, address in diagnostics} == {
+        "evidence_requirements.wazuh-evidence",
+        "evidence_requirements.boundary-check-evidence",
+        "evidence_requirements.objective-truth-evidence",
+    }
     assert project_proposition_truth_results(plan.evaluation, RuntimeSnapshot()) == {}
 
 
@@ -133,7 +129,7 @@ def test_paper_scenario_compiles_with_participant_runtime_artifacts():
         "participant.observation-boundary.paper-agent-view"
         in model.observation_boundaries
     )
-    _assert_paper_scoring_chain_admitted_not_projected(plan)
+    _assert_paper_capture_rejected_and_truth_unresolved(plan)
     assert not (
         PROJECT_ROOT / "src/aptl/backends/raes_paper_participant_actions.py"
     ).exists()
@@ -141,7 +137,7 @@ def test_paper_scenario_compiles_with_participant_runtime_artifacts():
 
 def test_paper_scenario_content_surface_realizes_with_no_rejection():
     _scenario, _model, plan, config = _paper_plan()
-    _assert_paper_scoring_chain_admitted_not_projected(plan)
+    _assert_paper_capture_rejected_and_truth_unresolved(plan)
 
     realization = interpret_provisioning_plan(
         plan=plan.provisioning,
@@ -177,12 +173,10 @@ def test_paper_scenario_content_surface_realizes_with_no_rejection():
         "wazuh",
         "kali",
         "enterprise",
-        "otel",
     ]
     nodes = {node.name: node for node in realization.nodes}
     assert {
-        name: (node.container_name, node.networks)
-        for name, node in nodes.items()
+        name: (node.container_name, node.networks) for name, node in nodes.items()
     } == {
         "customer-db": ("aptl-db", ("internal-net",)),
         "customer-portal": ("aptl-webapp", ("dmz-net", "internal-net")),

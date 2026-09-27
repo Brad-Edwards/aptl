@@ -26,27 +26,14 @@ from aptl.backends.raes_materializer import (
 )
 from aptl.core.deployment.realization import LOOPBACK_HOST_IP
 
-# ADR-047: a scenario declares runtime.linux_capabilities.add and APTL grants
-# it directly via `docker run --cap-add`, with no per-product code standing
-# between the SDL and the host-privilege flag. Without a bound on which
-# capabilities are grantable, any scenario could request CAP_SYS_ADMIN or
-# another host-impacting capability and APTL would honor it unquestioningly
-# (issue #816). Only capabilities APTL's own scenarios have a verified need
-# for are permitted; anything else fails admission rather than a silent
-# grant. Expanding this set is a deliberate decision, matching the
-# manifest-honesty rule elsewhere in the materializer: never claim more than
-# is proven necessary.
-_ALLOWED_EXTRA_CAPABILITIES = frozenset(
-    {
-        # aptl lab continuity-audit reverts blanket kali source-IP DROPs on a
-        # target's own INPUT chain (src/aptl/core/continuity.py).
-        "NET_ADMIN",
-    }
-)
+# Capabilities selected by APTL itself as part of an OPEN compute-substrate
+# implementation. These are distinct from author-requested runtime capabilities
+# and remain a deliberately tiny allowlist.
+_ALLOWED_BACKEND_RUN_CAPABILITIES = frozenset({"SYS_ADMIN"})
 
 
 class UnauthorizedCapabilityError(ValueError):
-    """Raised when a scenario declares a Linux capability outside APTL's allowlist."""
+    """Raised when a backend choice exceeds its implementation envelope."""
 
 
 @dataclass(frozen=True)
@@ -57,9 +44,9 @@ class InitRequirements:
     One code-owned cgroup v2 posture, measured against real local Docker (issue
     #955): a PRIVATE cgroup namespace, a writable cgroup mount obtained through
     `--security-opt writable-cgroups=true`, `/run`, `/run/lock` and `/tmp`
-    tmpfs, NO added capabilities, the daemon's default seccomp profile, and the
-    base image's own init as PID 1. Generic init mechanics, never
-    product-specific.
+    tmpfs, NO added capabilities, the daemon's default seccomp and AppArmor
+    profiles, and the base image's own init as PID 1. Generic init mechanics,
+    never product-specific.
 
     What systemd actually needs is a *writable* cgroup filesystem, not a
     privileged one. It creates `/init.scope` at boot and exits immediately
@@ -81,9 +68,18 @@ class InitRequirements:
     `ConditionCapability=` and reaches `running` cleanly. An added capability
     may return only as a documented, measured, per-substrate necessity.
 
-    The retired `cgroup_host`, `cgroupfs_rw_mount`, and `seccomp_unconfined`
-    fields are deleted rather than defaulted false: a field that still exists
-    is a field a caller can set back to True.
+    The same capability explains the AppArmor relaxation the retired recipe
+    later acquired. Rocky's hardened `rsyslog.service` failed under Docker's
+    `docker-default` AppArmor profile only because CAP_SYS_ADMIN let systemd
+    create the unit's mount namespace, whose mounts AppArmor then denied.
+    Without the capability systemd cannot unshare the namespace, recognizes a
+    containerized execution, and runs the unit unsandboxed inside the
+    container's own confinement: measured, rsyslog reaches `active` with
+    `docker-default` in force. So AppArmor stays confined too.
+
+    The retired `cgroup_host`, `cgroupfs_rw_mount`, `seccomp_unconfined`, and
+    `apparmor_unconfined` fields are deleted rather than defaulted false: a
+    field that still exists is a field a caller can set back to True.
 
     This posture requires a cgroup v2 daemon at Docker Engine 28.0 or newer.
     That is enforced before anything is created, by
@@ -153,6 +149,26 @@ class BaseContainerSpec:
     # readback. Its base container must start immutably — never pull, and run the
     # exact config id availability verified, not whatever a moved tag now names.
     dynamic_composition: bool = False
+    # Some selected provider substrates own a minimal entrypoint that waits for
+    # typed materialization input, then execs the provider process. Ordinary
+    # generic bases continue to use the backend keepalive or systemd command.
+    use_image_command: bool = False
+    # Minimum capabilities required by a backend-selected provider substrate.
+    # They are reported separately from authored runtime.linux_capabilities.
+    backend_run_capabilities: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class NodePlanningOptions:
+    """Optional backend choices carried together across node planning."""
+
+    dynamic_composition: bool = False
+    extra_volume_mounts: tuple[VolumeMount, ...] = ()
+    backend_base_image_ref: str | None = None
+    backend_base_use_image_command: bool = False
+    backend_run_capabilities: tuple[str, ...] = ()
+    backend_provider_kind: str = ""
+    backend_provider_parameters: tuple[tuple[str, str], ...] = ()
 
 
 def _container_name(node_address: str) -> str:
@@ -173,8 +189,7 @@ def base_container_spec(
     os: str,
     os_version: str,
     runtime: RuntimeConfiguration | None,
-    dynamic_composition: bool = False,
-    extra_volume_mounts: tuple[VolumeMount, ...] = (),
+    options: NodePlanningOptions = NodePlanningOptions(),
 ) -> BaseContainerSpec:
     """Return the generic base-container decision for one node.
 
@@ -188,20 +203,36 @@ def base_container_spec(
     an image-free consumer (issue #875).
     """
 
+    unauthorized_backend_capabilities = sorted(
+        set(options.backend_run_capabilities) - _ALLOWED_BACKEND_RUN_CAPABILITIES
+    )
+    if unauthorized_backend_capabilities:
+        raise UnauthorizedCapabilityError(
+            "backend-selected compute substrate requested an unsupported "
+            "capability: " + ", ".join(unauthorized_backend_capabilities)
+        )
     runs_services = bool(runtime is not None and runtime.service_manager_units)
     return BaseContainerSpec(
         node_address=node_address,
         container_name=_container_name(node_address),
-        image_ref=base_image_for_os(
-            os, os_version, runs_services=runs_services, family=package_family(runtime)
+        image_ref=(
+            options.backend_base_image_ref
+            or base_image_for_os(
+                os,
+                os_version,
+                runs_services=runs_services,
+                family=package_family(runtime),
+            )
         ),
         runs_services=runs_services,
         init=_init_requirements(runtime) if runs_services else None,
         published_ports=_published_ports(runtime),
-        volume_mounts=_volume_mounts(runtime) + tuple(extra_volume_mounts),
+        volume_mounts=_volume_mounts(runtime) + options.extra_volume_mounts,
         environment_names=_environment_names(runtime),
         environment_defaults=_environment_defaults(runtime),
-        dynamic_composition=dynamic_composition,
+        dynamic_composition=options.dynamic_composition,
+        use_image_command=options.backend_base_use_image_command,
+        backend_run_capabilities=options.backend_run_capabilities,
     )
 
 
@@ -285,7 +316,9 @@ def _volume_mounts(runtime: RuntimeConfiguration | None) -> tuple[VolumeMount, .
     if runtime is None:
         return ()
     return tuple(
-        VolumeMount(target=mount.target, source=mount.source, read_only=bool(mount.read_only))
+        VolumeMount(
+            target=mount.target, source=mount.source, read_only=bool(mount.read_only)
+        )
         for mount in runtime.mounts
         if mount.source_kind == RuntimeMountSourceKind.VOLUME and mount.source
     )
@@ -308,20 +341,18 @@ def _init_requirements(runtime: RuntimeConfiguration | None) -> InitRequirements
 
     extra = tuple(
         name.removeprefix("CAP_")
-        for name in (runtime.linux_capabilities.add if runtime and runtime.linux_capabilities else ())
-    )
-    unauthorized = sorted(set(extra) - _ALLOWED_EXTRA_CAPABILITIES)
-    if unauthorized:
-        raise UnauthorizedCapabilityError(
-            "runtime.linux_capabilities.add declared a capability APTL does "
-            f"not permit: {', '.join('CAP_' + cap for cap in unauthorized)}. "
-            "Allowed: "
-            f"{', '.join('CAP_' + cap for cap in sorted(_ALLOWED_EXTRA_CAPABILITIES))}."
+        for name in (
+            runtime.linux_capabilities.add
+            if runtime and runtime.linux_capabilities
+            else ()
         )
+    )
     if not extra:
         return InitRequirements()
     base = InitRequirements()
-    merged = base.capabilities + tuple(cap for cap in extra if cap not in base.capabilities)
+    merged = base.capabilities + tuple(
+        cap for cap in extra if cap not in base.capabilities
+    )
     return InitRequirements(capabilities=merged)
 
 
@@ -332,8 +363,7 @@ def plan_node(
     os_version: str,
     runtime: RuntimeConfiguration | None,
     content: tuple[MaterializationOp, ...] = (),
-    dynamic_composition: bool = False,
-    extra_volume_mounts: tuple[VolumeMount, ...] = (),
+    options: NodePlanningOptions = NodePlanningOptions(),
 ) -> tuple[BaseContainerSpec, tuple[MaterializationOp, ...]]:
     """Plan one node: its generic base container plus its materialization ops.
 
@@ -350,10 +380,15 @@ def plan_node(
         os=os,
         os_version=os_version,
         runtime=runtime,
-        dynamic_composition=dynamic_composition,
-        extra_volume_mounts=extra_volume_mounts,
+        options=options,
     )
     ops = plan_node_materialization(
-        os=os, os_version=os_version, runtime=runtime, content=content
+        os=os,
+        os_version=os_version,
+        runtime=runtime,
+        content=content,
+        backend_base_image_ref=options.backend_base_image_ref,
+        backend_provider_kind=options.backend_provider_kind,
+        backend_provider_parameters=options.backend_provider_parameters,
     )
     return spec, ops

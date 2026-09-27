@@ -12,7 +12,13 @@ const SCENARIO: ScenarioSummary = {
 	estimated_minutes: 60,
 	tags: ['soc', 'full-stack'],
 	required_containers: ['wazuh-manager', 'misp'],
-	validation: { valid: true, detail: null }
+	validation: { valid: true, detail: null },
+	pack: {
+		id: 'techvault',
+		version: '0.1.0',
+		set_digest: `sha256:${'a'.repeat(64)}`,
+		maturity: 'built'
+	}
 };
 
 function summary(overrides: Partial<ScenarioSummary> = {}): ScenarioSummary {
@@ -24,6 +30,7 @@ describe('ScenarioCard', () => {
 		render(ScenarioCard, { props: { scenario: SCENARIO } });
 		expect(screen.getByText('TechVault Operational')).toBeTruthy();
 		expect(screen.getByText(/Default public APTL startup scenario/)).toBeTruthy();
+		expect(screen.getByText('techvault 0.1.0 · built')).toBeTruthy();
 	});
 
 	it('links to the scenario workbench route', () => {

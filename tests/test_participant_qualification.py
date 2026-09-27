@@ -143,7 +143,7 @@ def _canonical_evidence(
         ],
     }
     run_record: dict[str, object] = {
-        "schema_version": "aptl.run-record/v1",
+        "schema_version": "aptl.run-record/v2",
         "run_id": "profile-proof",
         "outcome": "success",
         "backend_evidence": {
@@ -283,7 +283,7 @@ def test_missing_or_unexpected_runtime_service_fails() -> None:
     [
         (
             "selected_profiles",
-            ["kali", "victim", "wazuh"],
+            ["kali", "victim"],
             "reported selected profiles do not match the admitted profile surface",
         ),
         (

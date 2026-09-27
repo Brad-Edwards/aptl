@@ -1,5 +1,14 @@
 # Issue #949 Orborus Control Authority Preflight
 
+> **Superseded in part by issue #974.** The
+> [issue #974 preflight](issue-974-shuffle-worker-docker-images-preflight.md)
+> replaces this note's requirements for an authored host `bind_source`,
+> authored `realized_children`/labels/counts, a canonical host-side socket path,
+> one-template-per-image joins, blanket socket rejection on all spawned
+> children, and the prohibition on verified local alias creation while
+> offline. This file remains the historical design record for PR #959;
+> implementations must follow the newer boundaries where they conflict.
+
 This note fixes the repository-wide boundaries for realizing an authored
 runtime orchestration authority and preparing its spawned-image closure. It is
 architecture guidance, not an implementation plan. The issue contract and the
@@ -12,6 +21,13 @@ the admitted RAES plan gives that same node an exact, read-write Docker
 `RuntimeControlInterface` referenced by a host-root-equivalent
 `RuntimeOrchestrationAuthority`. Every other raw-socket prohibition in ADR-049
 continues to apply.
+
+Issue #956's
+[runtime-authority materialization preflight](issue-956-sdl-runtime-authority-materialization-preflight.md)
+governs the broader realization boundary. In particular, SDL runtime authority
+is realized by ordinary `aptl lab start`; it is not narrowed to create a secure
+host boundary. `aptl seat start` owns the secure appliance boundary. Preserve
+this note's exact joins, image identity, observation, and lifecycle machinery.
 
 ## Architecture Decisions
 
@@ -70,15 +86,19 @@ continues to apply.
 - Require each spawn template to have one matching typed `realized_children`
   record joined one-to-one by exact image, with a distinct stable workload
   identity, a positive expected count, and a unique stable
-  `docker-label:key=value` correlation selector. Duplicate-image templates are
-  ambiguous under the portable model and therefore fail closed.
-  Runtime observation intersects that selector with the exact image filter;
-  daemon-wide image scans, timestamps, and container-name guesses are not
-  ownership evidence. Because Docker's `ancestor=` filter includes descendant
-  images, every selected child is inspected and its immutable image ID must
-  equal the daemon-local ID of the exact authored repo digest. Final post-work
-  attestation requires the exact authored count, so auto-removal cannot turn
-  missing evidence into vacuous success.
+  `docker-label:key=value` semantic correlation selector. Duplicate-image
+  templates are ambiguous under the portable model and therefore fail closed.
+  Per [issue #964's ownership boundary](issue-964-backend-resource-ownership-preflight.md),
+  the authored image and label do not establish workspace or attempt ownership.
+  Runtime observation first restricts candidates through the backend ownership
+  scope (or an isolated daemon), then intersects that set with the authored
+  selector and exact image filter. Daemon-wide image scans, timestamps,
+  container-name guesses, and authored labels are not ownership evidence.
+  Because Docker's `ancestor=` filter includes descendant images, every owned
+  selected child is inspected and its immutable image ID must equal the
+  daemon-local ID of the exact authored repo digest. Final post-work attestation
+  requires the exact authored count, so auto-removal cannot turn missing
+  evidence into vacuous success.
 - Keep spawned-image requirements distinct from
   `DeploymentImageRealization`. That existing type selects a node service's
   image and writes a Compose override; a spawned child is neither a node nor a
@@ -121,7 +141,7 @@ continues to apply.
 | Image realization | `raes_image_realization.py`, `_prepare_realization_images()`, `artifact_available()`, `_verify_staged_image()`, existing digest parsing, and the backend runner. Share exact acquisition/verification primitives, but keep node Compose overrides and child closure semantics separate. |
 | Compose lowering | `_compose_node_generation.py`, generated realization files, `_validate_realization_compose_model()`, `docker compose config --format json`, project-directory/env-file scoping, and Compose `--pull never`. Validate the merged effective model, not only a renderer fragment. |
 | Backend and daemon binding | `DeploymentBackend`, `DockerComposeBackend`, its typed `_run()` boundary, and existing appliance daemon-ID binding/inventory. No raw Docker subprocess belongs in the RAES adapter, verifier plugin, or seed scripts. |
-| Runtime observation | `raes_runtime_observation.py`, `_runtime_mount_observation.py`, `_runtime_concern_excess.py`, and host-side `docker inspect`. The admitted control-interface mount is a separate allowed footprint, not an ordinary `runtime.mounts` declaration. All other excess mounts still fail closed. |
+| Runtime observation | `raes_runtime_observation.py`, `_runtime_mount_observation.py`, `_runtime_concern_excess.py`, host-side `docker inspect`, and issue #964's backend ownership receipts/native-ID binding. The admitted control-interface mount is a separate allowed footprint, not an ordinary `runtime.mounts` declaration. All other excess mounts still fail closed. |
 | Appliance boundary | ADR-049 and `appliance_boundary_inventory.py`: one guest daemon, exact authority-holder allow-list, no participant Docker access, and no host/remote daemon. The boundary helper and participant surfaces remain socket-free. |
 | Config and secrets | Strict `AptlConfig`, existing `.env`/`EnvVars` hydration and placeholder checks, project containment, and Compose env-file scoping. The socket path, authority, child list, and image identity are typed plan/backend policy, not operator env overrides. |
 | Lifecycles and waits | RAES lifecycle policy, `BackendTimeoutError`, typed backend timeouts, `wait_for_service()`, and scenario-verification monotonic deadlines. Do not create an independent Shuffle timeout loop in lab startup. |
@@ -143,7 +163,7 @@ not compensate for omission at an earlier one.
 | OS-level exposure | The endpoint is a real accessible Unix socket with stable identity; every Docker call is pinned to it. The effective Orborus process targets the mounted endpoint. No TCP exposure, permission weakening, privileged mode, helper mount, participant route, or worker/app socket bind is admitted. |
 | Exact image and platform gate | All node and child requirements are validated on the same daemon. Offline verification is local-only and proves the exact digest plus compatible platform. The complete closure passes before Compose startup. |
 | Effective Compose gate | The generated and merged model contains one authorized read-write bind on exactly one service, with no duplicate/generalized mount and no endpoint-selecting environment conflict. Compose syntax success alone is insufficient. |
-| Runtime excess and authority observation | Host-side inspect corroborates the authority holder, exact mount, access, endpoint and daemon identity. The mount-excess detector recognizes only an explicitly carried admission, never the node's raw RAES authority; unrelated, duplicate, ancestor, and resolved-alias mounts remain fatal. Spawned children are narrowed by authored image plus unique label, counted exactly, inspected for exact immutable image ID and no socket propagation, and supervised to a terminal state. |
+| Runtime excess and authority observation | Host-side inspect corroborates the authority holder, exact mount, access, endpoint and daemon identity. The mount-excess detector recognizes only an explicitly carried admission, never the node's raw RAES authority; unrelated, duplicate, ancestor, and resolved-alias mounts remain fatal. Spawned children are first restricted to the current workspace/attempt by issue #964's backend ownership boundary, then narrowed by authored image plus unique label, counted exactly, pinned by native ID, inspected for exact immutable image ID and no socket propagation, and supervised to a terminal state. If trustworthy ownership would require an SDL-observable marker, use an isolated daemon or fail before mutation. |
 | Appliance boundary | Authority remains inside one sealed guest and on its guest daemon. The participant/API, boundary helper, host, remote backend, and other scenario services do not gain Docker authority. Unsupported delivery modes fail closed. |
 | Process, error, and logging boundary | Commands use argv lists and finite timeouts. Raw subprocess/registry/inspect data is reduced inside the backend to stable, bounded, redacted diagnostics. Existing CLI/API envelopes remain the only external error shapes. |
 | Workflow and persistence boundary | One correlated execution reaches terminal success or terminal bounded failure. Evidence records non-empty successful action results, exactly one correlated TheHive case, retry outcome, and timings without persisting secrets or broad product payloads. |
@@ -188,6 +208,9 @@ Docker adapter's path acceptance or introduce a TechVault/Shuffle branch.
   workarounds.
 - Do not authorize by scenario name, node name, service name, known Shuffle
   image list, downstream seed, or currently running child containers.
+- Do not authorize spawned children by authored image and label alone. Those
+  fields prove template conformance only; workspace/attempt ownership must be
+  independently established under issue #964 before observation or termination.
 - Do not use privileged mode, Docker-over-TCP, a generic proxy, chmod/chown, or
   socket propagation as substitutes for exact authority lowering.
 - A preflight path check alone is vulnerable to replacement. Recheck identity

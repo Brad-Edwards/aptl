@@ -21,6 +21,7 @@ log = get_logger("pack-backend-interaction")
 
 _SAFE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 _DEFAULT_PROVIDER_ID = "aptl.core.unprofiled-default"
+_SAFE_GROUP = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
 
 
 class PackBackendInteractionError(RuntimeError):
@@ -66,13 +67,10 @@ def _validate_context(context: PackBackendInteractionContext) -> None:
     """Reject contexts whose bounded collections are not canonical."""
 
     addresses = context.component_addresses
-    groups = context.operator_groups
     if (
         any(not isinstance(value, str) or not value for value in addresses)
         or tuple(sorted(addresses)) != addresses
         or len(set(addresses)) != len(addresses)
-        or any(not isinstance(value, str) or not value for value in groups)
-        or len(set(groups)) != len(groups)
     ):
         raise PackBackendInteractionError("context-invalid")
 
@@ -187,7 +185,6 @@ def _validated_membership(
     membership: ComponentGroupMembership,
     expected: set[str],
     seen: set[str],
-    allowed_groups: set[str],
 ) -> ComponentGroupMembership:
     """Copy one exact membership after validating address and group bounds."""
 
@@ -198,7 +195,7 @@ def _validated_membership(
     if (
         not isinstance(groups, tuple)
         or any(
-            not isinstance(group, str) or group not in allowed_groups
+            not isinstance(group, str) or _SAFE_GROUP.fullmatch(group) is None
             for group in groups
         )
         or len(set(groups)) != len(groups)
@@ -227,9 +224,8 @@ def _validate_result(
     expected = set(context.component_addresses)
     seen: set[str] = set()
     copied: list[ComponentGroupMembership] = []
-    allowed_groups = set(context.operator_groups)
     for membership in memberships:
-        copied.append(_validated_membership(membership, expected, seen, allowed_groups))
+        copied.append(_validated_membership(membership, expected, seen))
     if seen != expected:
         raise PackBackendInteractionError("mapping-invalid")
     return tuple(sorted(copied))

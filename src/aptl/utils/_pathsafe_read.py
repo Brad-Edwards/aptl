@@ -29,6 +29,24 @@ from aptl.utils._pathsafe_core import (
 )
 
 
+def _open_dir_traverse_nofollow(component: str, parent_fd: int) -> int:
+    """Open an intermediate directory without requiring listing permission."""
+
+    flags = (
+        getattr(os, "O_PATH", os.O_RDONLY)
+        | os.O_DIRECTORY
+        | os.O_NOFOLLOW
+        | os.O_CLOEXEC
+    )
+    try:
+        return os.open(component, flags, dir_fd=parent_fd)
+    except OSError as exc:
+        raise PathContainmentError(
+            _reason_for(exc, component, parent_fd),
+            f"rejected path component {component!r}: {exc}",
+        ) from exc
+
+
 def _open_leaf_read_nofollow(component: str, parent_fd: int) -> int:
     """Open component read-only under parent_fd, no-follow, rejecting a non-regular-file target."""
     flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -42,11 +60,15 @@ def _open_leaf_read_nofollow(component: str, parent_fd: int) -> int:
     st = os.fstat(fd)
     if not stat.S_ISREG(st.st_mode):
         os.close(fd)
-        raise PathContainmentError(REASON_NOT_REGULAR_FILE, "target is not a regular file")
+        raise PathContainmentError(
+            REASON_NOT_REGULAR_FILE, "target is not a regular file"
+        )
     return fd
 
 
-def open_contained_nofollow(base_dir: Path | str, relative_path: str | Path) -> BinaryIO:
+def open_contained_nofollow(
+    base_dir: Path | str, relative_path: str | Path
+) -> BinaryIO:
     """Open ``relative_path`` under ``base_dir`` with one-open, no-follow semantics.
 
     Walks each path component with ``os.open(..., O_NOFOLLOW, dir_fd=parent)``
@@ -66,7 +88,10 @@ def open_contained_nofollow(base_dir: Path | str, relative_path: str | Path) -> 
     base_fd = _open_base_fd(base_dir)
     try:
         leaf_fd = _walk(
-            components, base_fd, open_dir=_open_dir_nofollow, open_leaf=_open_leaf_read_nofollow
+            components,
+            base_fd,
+            open_dir=_open_dir_traverse_nofollow,
+            open_leaf=_open_leaf_read_nofollow,
         )
     finally:
         os.close(base_fd)
@@ -101,7 +126,9 @@ def _open_leaf_dir_nofollow(component: str, parent_fd: int) -> int:
         ) from exc
 
 
-def listdir_contained_nofollow(base_dir: Path | str, relative_path: str | Path) -> list[str]:
+def listdir_contained_nofollow(
+    base_dir: Path | str, relative_path: str | Path
+) -> list[str]:
     """Return the sorted entry names of ``relative_path`` under ``base_dir``.
 
     Walks each path component no-follow (openat-style) exactly like
@@ -119,7 +146,10 @@ def listdir_contained_nofollow(base_dir: Path | str, relative_path: str | Path) 
     base_fd = _open_base_fd(base_dir)
     try:
         dir_fd = _walk(
-            components, base_fd, open_dir=_open_dir_nofollow, open_leaf=_open_leaf_dir_nofollow
+            components,
+            base_fd,
+            open_dir=_open_dir_traverse_nofollow,
+            open_leaf=_open_leaf_dir_nofollow,
         )
     finally:
         os.close(base_fd)

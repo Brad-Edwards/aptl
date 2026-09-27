@@ -86,7 +86,6 @@ def get_backend(
     """
     provider = config.deployment.provider
     project_name = config.deployment.project_name
-
     if provider == "docker-compose":
         return DockerComposeBackend(
             project_dir=project_dir,

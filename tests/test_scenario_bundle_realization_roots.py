@@ -80,7 +80,9 @@ def test_interpret_provisioning_plan_indexes_the_bundle_root(monkeypatch):
         "aptl.backends.raes_realization.load_compose_profile_index", _capture
     )
 
-    bundle = project_tree_bundle(_Path("/tmp/some/bundle"), _Path("scenarios/x.sdl.yaml"))
+    bundle = project_tree_bundle(
+        _Path("/tmp/some/bundle"), _Path("scenarios/x.sdl.yaml")
+    )
 
     class _Plan:
         resources: dict = {}
@@ -115,7 +117,10 @@ def test_artifact_source_path_anchors_to_the_bundle_root(tmp_path):
 
     source = artifact_source_path(elsewhere, _Artifact())
 
-    assert elsewhere.resolve() in source.resolve().parents or source.resolve() == elsewhere.resolve()
+    assert (
+        elsewhere.resolve() in source.resolve().parents
+        or source.resolve() == elsewhere.resolve()
+    )
 
 
 # --- Wiring: no ingress path reconstructs project_dir as the scenario root ---
@@ -129,13 +134,23 @@ def _capture_availability_root(monkeypatch, seen):
 
     from aptl.backends import raes
 
-    def _capture(scenario, backend, *, scenario_root=None, component_root=None):
+    def _capture(
+        scenario,
+        backend,
+        *,
+        scenario_root=None,
+        component_root=None,
+        materialize=False,
+    ):
+        del materialize
         seen["scenario_root"] = scenario_root
         seen["component_root"] = component_root
         raise RuntimeError("stop after capture")
 
     monkeypatch.setattr(raes, "parse_sdl_file", lambda path: object())
-    monkeypatch.setattr(raes, "create_aptl_runtime_target", lambda **kwargs: MagicMock())
+    monkeypatch.setattr(
+        raes, "create_aptl_runtime_target", lambda **kwargs: MagicMock()
+    )
     monkeypatch.setattr(raes, "RuntimeManager", lambda target: MagicMock())
     monkeypatch.setattr(raes, "artifact_availability_for_scenario", _capture)
 
@@ -195,7 +210,9 @@ def test_admitted_stateful_ownership_path_threads_the_bundle_root_to_availabilit
 # --- Compose execution boundary: project-directory + operator-.env authority ---
 
 
-def test_compose_uses_scenario_root_as_project_directory_and_keeps_operator_env(tmp_path):
+def test_compose_uses_scenario_root_as_project_directory_and_keeps_operator_env(
+    tmp_path,
+):
     """Compose resolves scenario inputs against the bundle root; secrets stay on project_dir.
 
     Docker Compose resolves relative build contexts, binds, includes, and
@@ -286,15 +303,23 @@ def test_realize_threads_the_bundle_root_as_scenario_root(monkeypatch, tmp_path)
 
     bundle_root = tmp_path / "bundle"
     bundle_root.mkdir()
-    bundle = project_tree_bundle(bundle_root, bundle_root / "scenarios" / "demo.sdl.yaml")
+    bundle = project_tree_bundle(
+        bundle_root, bundle_root / "scenarios" / "demo.sdl.yaml"
+    )
 
     seen: dict[str, object] = {}
     backend = MagicMock()
 
     def _capture_realize(
-        realization, *, build=True, scenario_root, substrate_digests=None
+        realization,
+        *,
+        build=True,
+        scenario_root,
+        substrate_digests=None,
+        observation_context=None,
     ):
         seen["scenario_root"] = scenario_root
+        seen["observation_context"] = observation_context
         return LabResult(success=True)
 
     backend.realize.side_effect = _capture_realize
@@ -310,15 +335,22 @@ def test_realize_threads_the_bundle_root_as_scenario_root(monkeypatch, tmp_path)
     realization.profiles = frozenset()
     realization.details.return_value = {}
     realization.generated_artifacts = ()
-    realization.deployment_spec.return_value = object()
+    from aptl.core.deployment.realization import DeploymentRealizationSpec
+
+    realization.deployment_spec.return_value = DeploymentRealizationSpec(
+        profiles=(), nodes=(), networks=()
+    )
     monkeypatch.setattr(
         provisioner, "_compose_validity_diagnostics", lambda profiles: []
     )
     monkeypatch.setattr(
-        "aptl.backends.raes_provisioner.observe_realization", lambda *a, **k: {}
+        "aptl.backends._raes_provisioner_start.observe_realization",
+        lambda *a, **k: {},
     )
     monkeypatch.setattr(
-        provisioner, "_with_artifact_satisfactions", lambda plan, snap, real: snap
+        provisioner,
+        "_with_artifact_satisfactions",
+        lambda plan, snap, real, observation_context: snap,
     )
 
     from raes_contracts.runtime_state import RuntimeSnapshot
@@ -327,3 +359,4 @@ def test_realize_threads_the_bundle_root_as_scenario_root(monkeypatch, tmp_path)
 
     assert seen["scenario_root"] == bundle.root
     assert seen["scenario_root"] != (tmp_path / "engine")
+    assert seen["observation_context"] is not None

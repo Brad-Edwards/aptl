@@ -6,15 +6,14 @@ import pytest
 
 from aptl.backends.identity import BackendIdentity
 from aptl.backends.pack_interaction import PackBackendInteractionContext
-from aptl.backends.raes_profiles import OPERATOR_GROUP_VOCABULARY
 from aptl.core.scenario_bundle import PackIdentity
-from aptl_techvault_pack_interaction import TechVaultPackInteraction
+from aptl_techvault.serving import TechVaultPackInteraction
 
 
 PACK = PackIdentity(
     pack_id="techvault",
     pack_version="0.1.0",
-    set_digest="sha256:c532775575d99438f4b4890d49a4fdb7354921f0405afdaa9f370ea4fe3f5a20",
+    set_digest="sha256:db98a9daa62a092a0c6b001217027d7f4ad489889e95d01050e77f148e8ef29b",
 )
 BACKEND = BackendIdentity("aptl", "0.1.0", "full-remote-control-plane")
 
@@ -24,7 +23,6 @@ def _context(*addresses: str) -> PackBackendInteractionContext:
         pack=PACK,
         backend=BACKEND,
         component_addresses=tuple(sorted(addresses)),
-        operator_groups=OPERATOR_GROUP_VOCABULARY,
     )
 
 
@@ -32,6 +30,7 @@ def test_provider_returns_a_total_mapping_for_an_admitted_subset() -> None:
     provider = TechVaultPackInteraction()
     context = _context(
         "provision.node.misp",
+        "provision.node.soc-workstation",
         "provision.node.victim",
         "provision.node.webapp",
     )
@@ -43,6 +42,7 @@ def test_provider_returns_a_total_mapping_for_an_admitted_subset() -> None:
         for membership in result.memberships
     } == {
         "provision.node.misp": ("soc",),
+        "provision.node.soc-workstation": ("soc",),
         "provision.node.victim": ("victim",),
         "provision.node.webapp": ("enterprise",),
     }
@@ -54,15 +54,11 @@ def test_provider_is_bound_to_the_released_shuffle_contract() -> None:
     assert provider.supported_pack_set_digests == (PACK.set_digest,)
 
 
-def test_provider_preserves_intentionally_unprofiled_components() -> None:
-    result = TechVaultPackInteraction().resolve(
-        _context("provision.node.aptl-grafana-otel", "provision.node.cortex")
-    )
-
-    assert [membership.groups for membership in result.memberships] == [
-        ("otel",),
-        ("soc",),
-    ]
+def test_provider_does_not_adopt_backend_apparatus_as_pack_components() -> None:
+    provider = TechVaultPackInteraction()
+    context = _context("provision.node.aptl-grafana-otel", "provision.node.cortex")
+    with pytest.raises(ValueError, match="unsupported-component-address"):
+        provider.resolve(context)
 
 
 def test_unknown_component_fails_instead_of_returning_a_partial_mapping() -> None:

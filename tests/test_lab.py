@@ -7,10 +7,13 @@ calls are mocked.
 
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import ANY, MagicMock, call, patch
 from uuid import uuid4
 
 import pytest
+
+from tests.helpers import docker_ps_inventory_row
 
 
 def _env_key(*parts: str) -> str:
@@ -68,6 +71,16 @@ def _admitted_surface(
         ),
         selected_profiles=selected_profiles,
         stateful_artifact_ownership=ownership,
+    )
+
+
+def _admitted_start_fixture(bundle_root: Path):
+    """Model a non-pack admission without invoking scenario-specific adapters."""
+    from aptl.core.scenario_bundle import project_tree_bundle
+
+    return SimpleNamespace(
+        bundle=project_tree_bundle(bundle_root, bundle_root / "fixture.sdl.yaml"),
+        runtime_materialization_failure=None,
     )
 
 
@@ -209,6 +222,38 @@ class TestComposeCommandBuilder:
 class TestLabStart:
     """Tests for lab start logic."""
 
+    @staticmethod
+    def _compose_up_call(mock_subprocess):
+        for call in mock_subprocess.call_args_list:
+            cmd_args = call.args[0]
+            if "compose" in cmd_args and "up" in cmd_args:
+                return call
+        raise AssertionError("docker compose up was not called")
+
+    @staticmethod
+    def _observability_inventory_then(*, compose_returncode=0, compose_stderr=""):
+        """Return empty ownership inventories before the Compose result."""
+
+        def run(command, **_kwargs):
+            if command[:3] == ["docker", "info", "--format"]:
+                return MagicMock(returncode=0, stdout="test-daemon\n", stderr="")
+            if command[:2] == ["docker", "inspect"]:
+                return MagicMock(returncode=1, stdout="", stderr="not found")
+            if command[:3] in (
+                ["docker", "network", "inspect"],
+                ["docker", "volume", "inspect"],
+            ):
+                return MagicMock(returncode=1, stdout="", stderr="not found")
+            if "compose" in command and "up" in command:
+                return MagicMock(
+                    returncode=compose_returncode,
+                    stdout="",
+                    stderr=compose_stderr,
+                )
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        return run
+
     def test_start_calls_compose_up(self, mock_subprocess):
         """start_lab should invoke docker compose up with correct profiles."""
         from aptl.core.config import AptlConfig
@@ -218,13 +263,12 @@ class TestLabStart:
             lab={"name": "test"},
             containers={"wazuh": True, "victim": True, "kali": False, "reverse": False},
         )
-        mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_subprocess.side_effect = self._observability_inventory_then()
 
         result = start_lab(config)
 
         assert result.success is True
-        mock_subprocess.assert_called_once()
-        cmd_args = mock_subprocess.call_args[0][0]
+        cmd_args = self._compose_up_call(mock_subprocess).args[0]
         assert "up" in cmd_args
         assert "wazuh" in cmd_args
         assert "victim" in cmd_args
@@ -236,8 +280,9 @@ class TestLabStart:
         from aptl.core.lab import start_lab
 
         config = AptlConfig(lab={"name": "test"})
-        mock_subprocess.return_value = MagicMock(
-            returncode=1, stdout="", stderr="Error: something went wrong"
+        mock_subprocess.side_effect = self._observability_inventory_then(
+            compose_returncode=1,
+            compose_stderr="Error: something went wrong",
         )
 
         result = start_lab(config)
@@ -252,12 +297,13 @@ class TestLabStart:
         from pathlib import Path
 
         config = AptlConfig(lab={"name": "test"})
-        mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_subprocess.side_effect = self._observability_inventory_then()
 
-        start_lab(config, project_dir=Path("/opt/aptl"))
+        project_dir = Path(__file__).resolve().parents[1]
+        start_lab(config, project_dir=project_dir)
 
-        kwargs = mock_subprocess.call_args[1]
-        assert kwargs["cwd"] == Path("/opt/aptl")
+        kwargs = self._compose_up_call(mock_subprocess).kwargs
+        assert kwargs["cwd"] == project_dir
 
 
 class TestLabStop:
@@ -306,8 +352,10 @@ class TestLabStop:
 
         assert result.success is False
 
-    def test_stop_uses_all_profiles_when_no_config(self, mock_subprocess, tmp_path):
-        """stop_lab should fall back to all profiles when no aptl.json exists."""
+    def test_stop_does_not_invent_pack_profiles_when_no_config(
+        self, mock_subprocess, tmp_path
+    ):
+        """Recovery keeps core apparatus but invents no pack vocabulary."""
         from aptl.core.lab import stop_lab
 
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
@@ -316,11 +364,9 @@ class TestLabStop:
 
         assert result.success is True
         cmd_args = self._compose_down_args(mock_subprocess)
-        # Should include all fallback profiles
-        assert "wazuh" in cmd_args
-        assert "victim" in cmd_args
-        assert "kali" in cmd_args
-        assert "soc" in cmd_args
+        assert "otel" in cmd_args
+        assert "wazuh" not in cmd_args
+        assert "soc" not in cmd_args
 
     def test_stop_uses_config_profiles_when_available(self, mock_subprocess, tmp_path):
         """stop_lab should load profiles from aptl.json when present."""
@@ -344,6 +390,32 @@ class TestLabStop:
         assert "victim" in cmd_args
         assert "wazuh" in cmd_args
 
+    def test_stop_prefers_admitted_groups_over_changed_config(
+        self, mock_subprocess, tmp_path
+    ):
+        """Recovery follows the started run, not today's container toggles."""
+        import json
+
+        from aptl.core.lab import stop_lab
+        from aptl.core.operator_group_state import persist_admitted_operator_groups
+
+        (tmp_path / "aptl.json").write_text(
+            json.dumps(
+                {
+                    "lab": {"name": "test"},
+                    "containers": {"wazuh": True, "victim": False},
+                }
+            )
+        )
+        persist_admitted_operator_groups(tmp_path, {"blue-team"})
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        assert stop_lab(project_dir=tmp_path).success is True
+
+        cmd_args = self._compose_down_args(mock_subprocess)
+        assert "blue-team" in cmd_args
+        assert "wazuh" not in cmd_args
+
     def test_stop_refuses_invalid_present_config_identity(
         self, mock_subprocess, tmp_path
     ):
@@ -361,16 +433,12 @@ class TestLabStop:
         mock_subprocess.assert_not_called()
 
     def test_stop_always_includes_otel_profile(self, mock_subprocess, tmp_path):
-        """stop_lab must tear down every profile start_lab always brings up.
+        """Recovery teardown includes optional backend OTel apparatus.
 
-        start_lab unconditionally adds "otel" (Collector + Tempo + Grafana
-        are core infrastructure, not an aptl.json container toggle) even
-        when aptl.json has no "otel" key at all. Before this fix, stop_lab's
-        profile set came from config.containers.enabled_profiles() alone, so
-        `docker compose down` never targeted the otel-profiled containers —
-        they stayed attached to the project's networks/volumes, and a
-        subsequent clean-state reboot failed cleanup outright with "network
-        has active endpoints" (caught by a real local live-gate boot).
+        Ordinary scenario startup no longer adds OTel. An earlier explicitly
+        admitted or operator-started apparatus run can still leave those
+        resources attached, so scenario-independent teardown includes the
+        profile even though it is not an aptl.json container toggle.
         """
         import json
         from aptl.core.lab import stop_lab
@@ -649,12 +717,18 @@ class TestLabStatus:
     """Tests for lab status checking."""
 
     def test_status_parses_compose_ps_output(self, mock_subprocess):
-        """lab_status should parse docker compose ps output."""
+        """lab_status should parse project-scoped Docker inventory output."""
         from aptl.core.lab import lab_status
 
         mock_subprocess.return_value = MagicMock(
             returncode=0,
-            stdout='[{"Name":"aptl-victim","State":"running","Health":"healthy"}]',
+            stdout=(
+                docker_ps_inventory_row(
+                    "aptl-victim",
+                    status="Up 1 minute (healthy)",
+                    labels="com.docker.compose.project=aptl",
+                )
+            ),
             stderr="",
         )
 
@@ -662,7 +736,7 @@ class TestLabStatus:
 
         assert status.running is True
         assert len(status.containers) == 1
-        assert status.containers[0]["Name"] == "aptl-victim"
+        assert status.containers[0]["name"] == "aptl-victim"
 
     def test_status_returns_not_running_when_no_containers(self, mock_subprocess):
         """If no containers are returned, status should indicate not running."""
@@ -675,15 +749,26 @@ class TestLabStatus:
         assert status.running is False
         assert len(status.containers) == 0
 
-    def test_status_parses_ndjson_output(self, mock_subprocess):
-        """lab_status should handle NDJSON (one JSON object per line)."""
+    def test_status_parses_multiple_inventory_rows(self, mock_subprocess):
+        """lab_status should handle one TSV record per project container."""
         from aptl.core.lab import lab_status
 
-        ndjson = (
-            '{"Name":"aptl-victim","State":"running","Health":"healthy"}\n'
-            '{"Name":"aptl-kali","State":"running","Health":"healthy"}'
+        rows = "\n".join(
+            (
+                docker_ps_inventory_row(
+                    "aptl-victim",
+                    container_id="aaa",
+                    labels="com.docker.compose.project=aptl",
+                ),
+                docker_ps_inventory_row(
+                    "aptl-kali",
+                    image="kali:latest",
+                    container_id="bbb",
+                    labels="aptl.lifecycle.project=aptl",
+                ),
+            )
         )
-        mock_subprocess.return_value = MagicMock(returncode=0, stdout=ndjson, stderr="")
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout=rows, stderr="")
 
         status = lab_status()
 
@@ -726,6 +811,37 @@ class TestLabStatus:
 
         assert status.running is False
         assert "docker not found" in status.error
+
+    def test_status_loads_present_project_configuration(self, tmp_path, mocker):
+        import json
+
+        from aptl.core.lab import LabStatus, lab_status
+
+        (tmp_path / "aptl.json").write_text(
+            json.dumps({"deployment": {"project_name": "custom-project"}}),
+            encoding="utf-8",
+        )
+        backend = MagicMock()
+        backend.status.return_value = LabStatus(running=False)
+        get_backend = mocker.patch("aptl.core.lab._get_backend", return_value=backend)
+
+        status = lab_status(project_dir=tmp_path)
+
+        assert status.running is False
+        config = get_backend.call_args.args[1]
+        assert config.deployment.project_name == "custom-project"
+
+    def test_status_refuses_invalid_present_configuration(self, tmp_path, mocker):
+        from aptl.core.lab import lab_status
+
+        (tmp_path / "aptl.json").write_text("{not-json", encoding="utf-8")
+        get_backend = mocker.patch("aptl.core.lab._get_backend")
+
+        status = lab_status(project_dir=tmp_path)
+
+        assert status.running is False
+        assert "invalid configuration" in status.error
+        get_backend.assert_not_called()
 
 
 class TestCheckBindMounts:
@@ -922,9 +1038,7 @@ class TestCheckBindMounts:
 
         assert _step_check_bind_mounts(ctx) is None
 
-    def test_step_reads_the_compose_model_from_the_admitted_bundle_root(
-        self, tmp_path
-    ):
+    def test_step_reads_the_compose_model_from_the_admitted_bundle_root(self, tmp_path):
         """The Compose model is scenario input, read from the admitted bundle.
 
         An env-pack bundle ships no ``docker-compose.yml``; the backend
@@ -945,15 +1059,11 @@ class TestCheckBindMounts:
         pack_root = tmp_path / ".aptl" / "staged-packs" / "fixture"
         pack_root.mkdir(parents=True)
         ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
-        ctx.admitted_surface = _admitted_surface(
-            pack_root, selected_profiles=("soc",)
-        )
+        ctx.admitted_surface = _admitted_surface(pack_root, selected_profiles=("soc",))
 
         assert _step_check_bind_mounts(ctx) is None
 
-    def test_step_filters_by_admitted_profiles_not_the_config_ceiling(
-        self, tmp_path
-    ):
+    def test_step_filters_by_admitted_profiles_not_the_config_ceiling(self, tmp_path):
         """A reduced scenario is not judged against services it never starts.
 
         ``containers.enabled_profiles()`` is the operator's capability ceiling;
@@ -981,9 +1091,7 @@ class TestCheckBindMounts:
         assert "soc" in ctx.config.containers.enabled_profiles()
         assert _step_check_bind_mounts(ctx) is None
 
-    def test_step_still_fails_an_admitted_service_with_a_missing_source(
-        self, tmp_path
-    ):
+    def test_step_still_fails_an_admitted_service_with_a_missing_source(self, tmp_path):
         """The compatibility guard still protects the project-tree model."""
         from aptl.core.lab import _LabStartContext, _step_check_bind_mounts
 
@@ -1505,6 +1613,21 @@ class TestOrchestrateLabStart:
             "DockerComposeBackend.observe_project_runtime",
             return_value=ProjectRuntimePresence(),
         )
+        from aptl.core.lab_types import LabStatus
+
+        mocks["terminal_status"] = mocker.patch(
+            "aptl.core.deployment.docker_compose.DockerComposeBackend.status",
+            return_value=LabStatus(
+                running=True,
+                containers=[
+                    {
+                        "name": "aptl-victim",
+                        "state": "running",
+                        "status": "Up 1 minute",
+                    }
+                ],
+            ),
+        )
         # The seed step also runs the legacy source-ownership repair, which
         # now probes hostenv (docker info). Stub it so the orchestration
         # tests stay hermetic (#678).
@@ -1531,11 +1654,24 @@ class TestOrchestrateLabStart:
         pack_root = tmp_path / ".aptl" / "staged-packs" / "fixture"
         pack_root.mkdir(parents=True)
         mocks["admitted_surface"] = _admitted_surface(
-            pack_root, selected_profiles=("wazuh", "victim", "kali", "otel")
+            pack_root,
+            env_pack=False,
+            selected_profiles=(
+                "wazuh",
+                "victim",
+                "kali",
+                "otel",
+                "soc",
+                "enterprise",
+                "fileshare",
+            ),
         )
         mocks["admit"] = mocker.patch(
             "aptl.core.lab.admit_start_surface",
-            return_value=(object(), mocks["admitted_surface"]),
+            return_value=(
+                _admitted_start_fixture(pack_root),
+                mocks["admitted_surface"],
+            ),
         )
 
         # Mock RAES runtime handoff start. The planned profile set is part of
@@ -1544,7 +1680,15 @@ class TestOrchestrateLabStart:
             "aptl.core.lab.start_raes_scenario",
             return_value=_raes_outcome(
                 success=True,
-                selected_profiles=("wazuh", "victim", "kali", "otel"),
+                selected_profiles=(
+                    "wazuh",
+                    "victim",
+                    "kali",
+                    "otel",
+                    "soc",
+                    "enterprise",
+                    "fileshare",
+                ),
             ),
         )
 
@@ -1569,6 +1713,10 @@ class TestOrchestrateLabStart:
             "aptl.core.lab.subprocess.run",
             return_value=MagicMock(returncode=0, stdout="", stderr=""),
         )
+        seed_script = tmp_path / "scripts" / "seed-prime.sh"
+        seed_script.parent.mkdir(exist_ok=True)
+        seed_script.write_text("#!/bin/sh\nexit 0\n")
+        seed_script.chmod(0o755)
 
         # Mock container IP resolution for the SSH readiness step —
         # lab targets are addressed by container IP (issue #293).
@@ -1584,16 +1732,76 @@ class TestOrchestrateLabStart:
         from aptl.core.lab import orchestrate_lab_start
 
         mocks = self._patch_all_steps(mocker, tmp_path)
+        order = []
+        tracked_effects = (
+            "admit",
+            "project_presence",
+            "ssh",
+            "sysreqs",
+            "certs",
+            "start",
+            "wait_indexer",
+            "terminal_status",
+            "capture_snapshot",
+        )
+        for name in tracked_effects:
+            return_value = mocks[name].return_value
+            mocks[name].side_effect = (
+                lambda *args, _name=name, _value=return_value, **kwargs: (
+                    order.append(_name) or _value
+                )
+            )
 
         result = orchestrate_lab_start(tmp_path)
 
         assert result.success is True
+        assert order == [
+            "admit",
+            "project_presence",
+            "ssh",
+            "sysreqs",
+            "certs",
+            "start",
+            "wait_indexer",
+            "wait_indexer",
+            "terminal_status",
+            "capture_snapshot",
+        ]
         mocks["ssh"].assert_called_once()
         mocks["sysreqs"].assert_called_once()
         mocks["buildx"].assert_called_once()
         mocks["certs"].assert_called_once()
         mocks["start"].assert_called_once()
         mocks["capture_snapshot"].assert_called_once()
+        assert (
+            mocks["capture_snapshot"].call_args.kwargs["container_rows"]
+            is mocks["terminal_status"].return_value.containers
+        )
+
+    def test_terminal_attestation_failure_prevents_success_evidence(
+        self, mocker, tmp_path
+    ):
+        from aptl.core.lab import orchestrate_lab_start
+        from aptl.core.lab_types import LabStatus, StartupOutcome
+
+        mocks = self._patch_all_steps(mocker, tmp_path)
+        mocks["terminal_status"].return_value = LabStatus(
+            running=False,
+            containers=[
+                {
+                    "name": "aptl-broken",
+                    "state": "created",
+                    "status": "Created",
+                }
+            ],
+        )
+        mocks["terminal_status"].return_value.containers[0]["id"] = "broken-id"
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.outcome is StartupOutcome.FAILED
+        mocks["capture_snapshot"].assert_not_called()
+        assert not list((tmp_path / ".aptl" / "runs").glob("*/manifest.json"))
 
     def test_orchestrate_emits_progress_when_requested(self, mocker, tmp_path):
         """A supplied progress callback should receive user-facing startup phases."""
@@ -1611,6 +1819,28 @@ class TestOrchestrateLabStart:
             "several minutes while images build."
         )
         progress.assert_any_call("Waiting for Wazuh services to become ready.")
+
+    def test_product_neutral_progress_omits_adapter_specific_phases(self, tmp_path):
+        """An admitted scenario with no adapter profiles stays product-neutral."""
+
+        from aptl.core.lab import (
+            _LabStartContext,
+            _start_progress_message,
+            _step_build_mcps,
+            _step_generate_certs,
+            _step_start_containers,
+            _step_wait_for_services,
+        )
+
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.admitted_surface = object()
+
+        assert _start_progress_message(ctx, _step_generate_certs) is None
+        assert _start_progress_message(ctx, _step_wait_for_services) is None
+        assert _start_progress_message(ctx, _step_build_mcps) is None
+        assert "Starting containers" in str(
+            _start_progress_message(ctx, _step_start_containers)
+        )
 
     def test_orchestrates_selected_scenario_path(self, mocker, tmp_path):
         """Selected RAES SDL paths should reach the startup handoff."""
@@ -1638,10 +1868,8 @@ class TestOrchestrateLabStart:
 
         assert result.success is True
         assert find_placeholder_env_values(env) == []
-        assert (
-            env[_env_key("INDEXER", "PASSWORD")] == mocks["template_values"]["indexer"]
-        )
-        assert env[_env_key("API", "PASSWORD")] == mocks["template_values"]["api"]
+        assert env[_env_key("INDEXER", "PASSWORD")]
+        assert env[_env_key("API", "PASSWORD")]
         mocks["dashboard_creds"].assert_called_once()
         assert (
             mocks["dashboard_creds"].call_args.args[1]
@@ -1792,15 +2020,17 @@ class TestOrchestrateLabStart:
         from aptl.core.services import ServiceResult
 
         mocks = self._patch_all_steps(mocker, tmp_path)
-        # wait_for_service is used for indexer, manager, and now SSH —
-        # return not-ready to simulate SSH timeout
-        mocks["wait_indexer"].return_value = ServiceResult(
-            ready=False, elapsed_seconds=60.0, error="SSH timed out"
+        # wait_for_service is shared by the Wazuh waits and the SSH probes.
+        # Wazuh readiness is fail-closed (#1002), so only SSH times out here.
+        mocks["wait_indexer"].side_effect = lambda **kwargs: ServiceResult(
+            ready=kwargs["service_name"].startswith("Wazuh"),
+            elapsed_seconds=60.0,
+            error="SSH timed out",
         )
 
         result = orchestrate_lab_start(tmp_path)
 
-        # Overall should still succeed (SSH/service waits are non-critical)
+        # Overall should still succeed (SSH waits are non-critical)
         assert result.success is True
         mocks["capture_snapshot"].assert_called_once()
 
@@ -1826,10 +2056,14 @@ class TestOrchestrateLabStart:
 
         orchestrate_lab_start(tmp_path)
 
-        # Dashboard config should be called with API password
+        from aptl.core.env import load_dotenv
+
+        env = load_dotenv(tmp_path / ".env")
+        # Dashboard config receives the admitted scenario API fixture pair.
         mocks["dashboard_creds"].assert_called_once()
         call_args = mocks["dashboard_creds"].call_args
-        assert call_args[0][1] == "apisecret"
+        assert call_args[0][1] == env["API_PASSWORD"]
+        assert call_args[0][2] == env["API_USERNAME"]
 
         # Manager config should be called with cluster key
         mocks["manager_creds"].assert_called_once()
@@ -1939,9 +2173,7 @@ class TestOrchestrateLabStart:
         )
 
         # Re-mock RAES handoff and wait_for_service since config changes
-        from aptl.core.lab import LabResult
-
-        mocks["start"].return_value = LabResult(success=True, message="Lab started")
+        mocks["start"].return_value = _raes_outcome(success=True, selected_profiles=())
 
         result = orchestrate_lab_start(tmp_path)
 
@@ -2018,16 +2250,17 @@ class TestAdmittedStartSurface:
         ctx = self._ctx(tmp_path)
         admit = mocker.patch(
             "aptl.core.lab.admit_start_surface",
-            return_value=(object(), _admitted_surface(tmp_path / "pack")),
+            return_value=(
+                _admitted_start_fixture(tmp_path / "pack"),
+                _admitted_surface(tmp_path / "pack"),
+            ),
         )
 
         assert _load_admitted_start_surface(ctx) is None
 
         assert admit.call_args.kwargs["scenario_path"] is None
 
-    def test_explicit_selection_reaches_the_resolver_unchanged(
-        self, mocker, tmp_path
-    ):
+    def test_explicit_selection_reaches_the_resolver_unchanged(self, mocker, tmp_path):
         """An operator-selected scenario path is not rewritten before resolution."""
         from aptl.core.lab import _load_admitted_start_surface
 
@@ -2035,7 +2268,10 @@ class TestAdmittedStartSurface:
         ctx = self._ctx(tmp_path, scenario_path=selected)
         admit = mocker.patch(
             "aptl.core.lab.admit_start_surface",
-            return_value=(object(), _admitted_surface(tmp_path, env_pack=False)),
+            return_value=(
+                _admitted_start_fixture(tmp_path),
+                _admitted_surface(tmp_path, env_pack=False),
+            ),
         )
 
         assert _load_admitted_start_surface(ctx) is None
@@ -2047,7 +2283,7 @@ class TestAdmittedStartSurface:
         from aptl.core.lab import _load_admitted_start_surface
 
         ctx = self._ctx(tmp_path)
-        admitted = object()
+        admitted = _admitted_start_fixture(tmp_path / "pack")
         surface = _admitted_surface(
             tmp_path / "pack",
             selected_profiles=("otel",),
@@ -2062,6 +2298,35 @@ class TestAdmittedStartSurface:
         assert ctx.admitted_start is admitted
         assert ctx.admitted_surface is surface
         assert ctx.stateful_artifact_ownership == surface.stateful_artifact_ownership
+
+    def test_runtime_materialization_failure_stops_before_legacy_mutation(
+        self, mocker, tmp_path
+    ):
+        """A valid SDL plan can still be unsupported by the selected backend."""
+        from aptl.core.lab import _load_admitted_start_surface
+        from aptl.core.lab_types import LabResult
+
+        ctx = self._ctx(tmp_path)
+        failure = LabResult(
+            success=False,
+            error=(
+                "aptl.provisioner.runtime-materialization-unsupported: "
+                "node=provision.node.probe field=runtime.container.privileged "
+                "backend=shared-docker"
+            ),
+        )
+        admitted = SimpleNamespace(runtime_materialization_failure=failure)
+        mocker.patch(
+            "aptl.core.lab.admit_start_surface",
+            return_value=(admitted, _admitted_surface(tmp_path)),
+        )
+
+        result = _load_admitted_start_surface(ctx)
+
+        assert result is failure
+        assert ctx.admitted_start is None
+        assert ctx.admitted_surface is None
+        assert ctx.stateful_artifact_ownership == frozenset()
 
     def test_admission_failure_fails_closed_before_legacy_mutation(
         self, mocker, tmp_path
@@ -2445,7 +2710,11 @@ class TestSyncCredentialsStep:
         result = _step_generate_certs(ctx)
 
         assert result is None
-        generator.assert_called_once_with(tmp_path)
+        # The lab's project scopes the generator so teardown can find it if a
+        # killed process strands it.
+        generator.assert_called_once_with(
+            tmp_path, project=ctx.backend._ephemeral_project()
+        )
 
     def test_renders_to_aptl_config_and_leaves_source_untouched(self, mocker, tmp_path):
         """End-to-end (real credential writers): the step renders the
@@ -2455,7 +2724,10 @@ class TestSyncCredentialsStep:
 
         dashboard_src = tmp_path / "config" / "wazuh_dashboard" / "wazuh.yml"
         dashboard_src.parent.mkdir(parents=True)
-        dashboard_src.write_text('      password: "TEMPLATE_PW"\n')
+        dashboard_src.write_text(
+            '      username: "__APTL_API_USERNAME__"\n'
+            '      password: "__APTL_API_PASSWORD__"\n'
+        )
         manager_src = tmp_path / "config" / "wazuh_cluster" / "wazuh_manager.conf"
         manager_src.parent.mkdir(parents=True)
         manager_src.write_text("<cluster>\n  <key>TEMPLATE_KEY</key>\n</cluster>\n")
@@ -2545,7 +2817,7 @@ class TestResolveHostPortsStep:
             "aptl.core.host_ports.resolve_host_ports", return_value=resolution
         )
         bindings = mocker.patch(
-            "aptl.core.host_ports.project_port_bindings", return_value={}
+            "aptl.core._port_bindings.project_port_bindings", return_value={}
         )
         ctx = self._ctx(tmp_path, raw_env={"APTL_DNS_HOST_PORT": "9"})
 
@@ -2565,7 +2837,6 @@ class TestResolveHostPortsStep:
                 "soc",
                 "fileshare",
                 "dns",
-                "otel",
             },
             existing_bindings={},
         )
@@ -2584,7 +2855,7 @@ class TestResolveHostPortsStep:
             remapped=True,
         )
         mocker.patch("aptl.core.host_ports.resolve_host_ports", return_value=[remapped])
-        mocker.patch("aptl.core.host_ports.project_port_bindings", return_value={})
+        mocker.patch("aptl.core._port_bindings.project_port_bindings", return_value={})
         progress = MagicMock()
 
         _step_resolve_host_ports(self._ctx(tmp_path, progress=progress))
@@ -2593,6 +2864,55 @@ class TestResolveHostPortsStep:
         assert "wazuh.dashboard" in notes
         assert "443" in notes
         assert "20009" in notes
+
+    @pytest.mark.parametrize("static_bundle", [False, True])
+    def test_resolves_only_the_admitted_bundles_ports(
+        self, mocker, monkeypatch, tmp_path, static_bundle
+    ):
+        import os
+
+        from aptl.backends._raes_scenario_queries import AdmittedStartSurface
+        from aptl.core.lab import _step_resolve_host_ports
+        from aptl.core.scenario_bundle import ScenarioSourceKind
+
+        # The checkout's legacy service key differs from the pack's generated
+        # wazuh-indexer. Its busy port must not inject a fictitious remap.
+        variable = "APTL_HP_WAZUH_INDEXER_9200"
+        monkeypatch.delenv(variable, raising=False)
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n  wazuh.indexer:\n    ports:\n"
+            f"      - '127.0.0.1:${{{variable}:-9200}}:9200'\n"
+        )
+        bundle = tmp_path / "selected-bundle"
+        bundle.mkdir()
+        if static_bundle:
+            (bundle / "docker-compose.yml").write_text(
+                "services:\n  selected:\n    ports:\n"
+                "      - '127.0.0.1:${APTL_SELECTED_PORT:-18080}:8080'\n"
+            )
+        monkeypatch.delenv("APTL_SELECTED_PORT", raising=False)
+        mocker.patch(
+            "aptl.core.host_ports.port_available",
+            side_effect=lambda port, *_args: port != 9200,
+        )
+        mocker.patch("aptl.core._port_bindings.project_port_bindings", return_value={})
+        ctx = self._ctx(tmp_path)
+        ctx.admitted_surface = AdmittedStartSurface(
+            bundle_root=bundle,
+            source_kind=(
+                ScenarioSourceKind.PROJECT_TREE
+                if static_bundle
+                else ScenarioSourceKind.ENV_PACK
+            ),
+            selected_profiles=(),
+            stateful_artifact_ownership=frozenset(),
+        )
+
+        assert _step_resolve_host_ports(ctx) is None
+        assert os.environ.get(variable) is None
+        assert [port.service for port in ctx.resolved_ports] == (
+            ["selected"] if static_bundle else []
+        )
 
 
 class TestSeedSuricataVolumesStep:
@@ -2756,6 +3076,7 @@ class TestStartupClassificationWiring:
         )
 
     def _ctx(self, tmp_path, *, config=None, selected_profiles=None):
+        from aptl.backends.scenario_startup import ScenarioStartupPlan
         from aptl.core.lab import _LabStartContext
 
         cfg = config or self._make_config()
@@ -2766,6 +3087,9 @@ class TestStartupClassificationWiring:
         if selected_profiles is None:
             selected_profiles = set(cfg.containers.enabled_profiles()) | {"otel"}
 
+        backend = MagicMock()
+        backend.docker_transport_environment.return_value = {}
+
         return _LabStartContext(
             project_dir=tmp_path,
             skip_seed=False,
@@ -2773,7 +3097,20 @@ class TestStartupClassificationWiring:
             config=cfg,
             ssh_key_path=Path("/tmp/aptl_lab_key"),
             selected_profiles=selected_profiles,
-            backend=MagicMock(),
+            backend=backend,
+            scenario_startup=ScenarioStartupPlan(
+                seed_script="scripts/seed-prime.sh",
+                required_profiles=(
+                    "wazuh",
+                    "enterprise",
+                    "victim",
+                    "kali",
+                    "fileshare",
+                    "soc",
+                ),
+                activation_profiles=("soc",),
+                seed_environment_keys=("MISP_API_KEY", "SHUFFLE_API_KEY"),
+            ),
         )
 
     # -- redaction at the diagnostic boundary --------------------------
@@ -2808,6 +3145,130 @@ class TestStartupClassificationWiring:
         # Narrow internal identifiers like the step name must remain
         # intact so the diagnostic stays attributable.
         assert diag.step == "future_step_that_forgot"
+
+    # -- terminal project-container attestation -----------------------
+
+    def test_terminal_attestation_fails_with_bounded_container_state(self, tmp_path):
+        from aptl.core.lab import _step_attest_project_containers
+        from aptl.core.lab_types import LabStatus, StartupOutcome
+
+        ctx = self._ctx(tmp_path)
+        ctx.backend.status.return_value = LabStatus(
+            running=True,
+            containers=[
+                {
+                    "name": "aptl-victim",
+                    "state": "running",
+                    "status": "Up 1 minute",
+                },
+                {
+                    "name": "aptl-broken",
+                    "state": "created",
+                    "status": "Created",
+                },
+            ],
+        )
+        ctx.backend.container_inspect.return_value = {
+            "State": {
+                "Status": "created",
+                "ExitCode": 128,
+                "Error": "API_TOKEN=do-not-leak port is already allocated",
+            }
+        }
+
+        result = _step_attest_project_containers(ctx)
+
+        assert result is not None
+        assert result.outcome is StartupOutcome.FAILED
+        assert "aptl-broken" in result.error
+        assert "created" in result.error
+        assert "128" in result.error
+        assert "port is already allocated" in result.error
+        assert "do-not-leak" not in result.error
+        assert "[REDACTED]" in result.error
+
+    def test_terminal_attestation_accepts_only_running_project_containers(
+        self, tmp_path
+    ):
+        from aptl.core.lab import _step_attest_project_containers
+        from aptl.core.lab_types import LabStatus
+
+        ctx = self._ctx(tmp_path)
+        ctx.backend.status.return_value = LabStatus(
+            running=True,
+            containers=[
+                {"name": "aptl-victim", "state": "running", "status": "Up 1m"},
+                {"name": "direct-node", "state": "running", "status": "Up 1m"},
+            ],
+        )
+
+        assert _step_attest_project_containers(ctx) is None
+        assert ctx.terminal_status is ctx.backend.status.return_value
+
+    def test_terminal_evidence_steps_follow_every_container_mutation(self):
+        from aptl.core.lab import _LAB_START_STEPS
+
+        names = [step.__name__ for step in _LAB_START_STEPS]
+
+        assert names.index("_step_seed_soc") < names.index(
+            "_step_attest_project_containers"
+        )
+        assert names.index("_step_sync_mcp_config") < names.index(
+            "_step_execute_participant_injects"
+        )
+        assert names.index("_step_execute_participant_injects") < names.index(
+            "_step_attest_project_containers"
+        )
+        assert names.index("_step_attest_project_containers") < names.index(
+            "_step_capture_snapshot"
+        )
+        assert names.index("_step_capture_snapshot") < names.index(
+            "_step_write_run_record"
+        )
+
+    def test_terminal_attestation_fails_closed_on_observation_error(self, tmp_path):
+        from aptl.core.lab import _step_attest_project_containers
+        from aptl.core.lab_types import LabStatus, StartupOutcome
+
+        ctx = self._ctx(tmp_path)
+        ctx.backend.status.return_value = LabStatus(
+            running=False,
+            error="API_KEY=do-not-leak daemon unavailable",
+        )
+
+        result = _step_attest_project_containers(ctx)
+
+        assert result is not None
+        assert result.outcome is StartupOutcome.FAILED
+        assert "daemon unavailable" in result.error
+        assert "do-not-leak" not in result.error
+
+    def test_terminal_attestation_fails_closed_when_observation_raises(self, tmp_path):
+        from aptl.core.lab import _step_attest_project_containers
+        from aptl.core.lab_types import StartupOutcome
+
+        ctx = self._ctx(tmp_path)
+        ctx.backend.status.side_effect = RuntimeError("API_KEY=do-not-leak")
+
+        result = _step_attest_project_containers(ctx)
+
+        assert result is not None
+        assert result.outcome is StartupOutcome.FAILED
+        assert "could not be observed" in result.error
+        assert "do-not-leak" not in result.error
+
+    def test_terminal_attestation_rejects_empty_project_inventory(self, tmp_path):
+        from aptl.core.lab import _step_attest_project_containers
+        from aptl.core.lab_types import LabStatus, StartupOutcome
+
+        ctx = self._ctx(tmp_path)
+        ctx.backend.status.return_value = LabStatus(running=False, containers=[])
+
+        result = _step_attest_project_containers(ctx)
+
+        assert result is not None
+        assert result.outcome is StartupOutcome.FAILED
+        assert "no project containers were observed" in result.error
 
     # -- pull_images (cosmetic) ----------------------------------------
 
@@ -2850,261 +3311,28 @@ class TestStartupClassificationWiring:
         assert "rate limit" not in diag.message
         assert "2" in diag.message  # number of failed images
 
-    # -- wait_for_services (telemetry) ---------------------------------
+    # -- wait_for_services (backend-owned Wazuh attestation) -------------
 
-    def test_wait_for_services_indexer_timeout_emits_telemetry_warning(
-        self, tmp_path, mocker
-    ):
-        """Generic timeout path: the classification probe also got no
-        HTTP response at all, so the diagnostic stays the plain
-        "did not become ready" message (issue #623 added a sibling
-        branch for the 401/403 stale-credential case; this covers the
-        pre-existing "still not listening" case)."""
+    def test_wait_for_services_does_not_reconnect_to_wazuh(self, tmp_path, mocker):
+        """The backend post-start gate is the sole Wazuh login owner."""
         from aptl.core.lab import _step_wait_for_services
-        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
-        from aptl.core.services import ServiceResult
 
         ctx = self._ctx(tmp_path)
-        # Indexer not ready, Manager ready
-        mocker.patch(
-            "aptl.core.lab.wait_for_service",
-            side_effect=[
-                ServiceResult(ready=False, elapsed_seconds=300.0, error="timed out"),
-                ServiceResult(ready=True, elapsed_seconds=12.0),
-            ],
-        )
-        mocker.patch("aptl.core.lab.check_indexer_status", return_value=None)
+        indexer = mocker.patch("aptl.core.services.probe_indexer_api")
+        manager = mocker.patch("aptl.core.services.probe_manager_api")
 
-        result = _step_wait_for_services(ctx)
-        assert result is None
+        assert _step_wait_for_services(ctx) is None
 
-        indexer_diags = [d for d in ctx.diagnostics if d.component == "wazuh_indexer"]
-        assert len(indexer_diags) == 1
-        assert indexer_diags[0].impact is DiagnosticImpact.TELEMETRY
-        assert indexer_diags[0].severity is DiagnosticSeverity.WARNING
-        assert indexer_diags[0].step == "wait_for_services"
-        assert "did not become ready" in indexer_diags[0].message
-        assert "HTTP" not in indexer_diags[0].message
-        manager_diags = [d for d in ctx.diagnostics if d.component == "wazuh_manager"]
-        assert manager_diags == []
-
-    def test_wait_for_services_indexer_stale_credentials_emits_401_diagnostic(
-        self, tmp_path, mocker
-    ):
-        """When the indexer's listener is up but rejects the configured
-        .env credentials (HTTP 401), the diagnostic must call that out
-        specifically and point the operator at `aptl lab stop -v`
-        recovery instead of the generic timeout message (issue #623)."""
-        from aptl.core.lab import _step_wait_for_services, derive_startup_outcome
-        from aptl.core.lab_types import (
-            DiagnosticImpact,
-            DiagnosticSeverity,
-            StartupOutcome,
-        )
-        from aptl.core.services import ServiceResult
-
-        ctx = self._ctx(tmp_path)
-        mocker.patch(
-            "aptl.core.lab.wait_for_service",
-            side_effect=[
-                ServiceResult(ready=False, elapsed_seconds=300.0, error="timed out"),
-                ServiceResult(ready=True, elapsed_seconds=12.0),
-            ],
-        )
-        mock_status = mocker.patch(
-            "aptl.core.lab.check_indexer_status", return_value=401
-        )
-
-        result = _step_wait_for_services(ctx)
-        assert result is None
-
-        mock_status.assert_called_once_with(
-            url="https://localhost:9200",
-            username=ctx.env.indexer_username,
-            password=ctx.env.indexer_password,
-        )
-
-        indexer_diags = [d for d in ctx.diagnostics if d.component == "wazuh_indexer"]
-        assert len(indexer_diags) == 1
-        diag = indexer_diags[0]
-        assert diag.impact is DiagnosticImpact.TELEMETRY
-        assert diag.severity is DiagnosticSeverity.WARNING
-        assert diag.step == "wait_for_services"
-        assert "HTTP 401" in diag.message
-        assert "aptl lab stop -v" in diag.operator_action
-        # Never the password -- only the env KEY name and the int status.
-        assert ctx.env.indexer_password not in diag.message
-        assert ctx.env.indexer_password not in diag.operator_action
-
-        assert (
-            derive_startup_outcome(ctx.diagnostics, fatal=False)
-            is StartupOutcome.DEGRADED_USABLE
-        )
-
-    def test_wait_for_services_indexer_stale_credentials_403_also_flags(
-        self, tmp_path, mocker
-    ):
-        """403 is the other "listening but rejected" status some OpenSearch
-        security configurations return instead of 401."""
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import ServiceResult
-
-        ctx = self._ctx(tmp_path)
-        mocker.patch(
-            "aptl.core.lab.wait_for_service",
-            side_effect=[
-                ServiceResult(ready=False, elapsed_seconds=300.0, error="timed out"),
-                ServiceResult(ready=True, elapsed_seconds=12.0),
-            ],
-        )
-        mocker.patch("aptl.core.lab.check_indexer_status", return_value=403)
-
-        result = _step_wait_for_services(ctx)
-        assert result is None
-
-        indexer_diags = [d for d in ctx.diagnostics if d.component == "wazuh_indexer"]
-        assert len(indexer_diags) == 1
-        assert "HTTP 403" in indexer_diags[0].message
-        assert "aptl lab stop -v" in indexer_diags[0].operator_action
-
-    def test_wait_for_services_probes_the_resolved_indexer_port_not_9200(
-        self, tmp_path, mocker
-    ):
-        """When 9200 is already in use on the host, `_step_resolve_host_ports`
-        remaps the indexer publish; the readiness probe must follow the
-        remap or it hits whatever else is on 9200 and reports the SIEM
-        store as unready even though it is fully healthy on the remapped
-        port."""
-        from aptl.core.host_ports import ResolvedPort
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import ServiceResult
-
-        ctx = self._ctx(tmp_path)
-        ctx.resolved_ports = [
-            ResolvedPort(
-                service="wazuh.indexer",
-                env_var="APTL_HP_WAZUH_INDEXER_9200",
-                default_port=9200,
-                resolved_port=20015,
-                protos=("tcp",),
-                host_ip="127.0.0.1",
-                remapped=True,
-            ),
-        ]
-        mock_wait = mocker.patch(
-            "aptl.core.lab.wait_for_service",
-            return_value=ServiceResult(ready=True, elapsed_seconds=1.0),
-        )
-
-        _step_wait_for_services(ctx)
-
-        # First wait_for_service call is the indexer wait; its check_fn is a
-        # partial(check_indexer_ready, url=..., ...) — assert the resolved
-        # port made it through.
-        indexer_call_kwargs = mock_wait.call_args_list[0].kwargs
-        assert indexer_call_kwargs["service_name"] == "Wazuh Indexer"
-        assert indexer_call_kwargs["check_fn"].keywords["url"] == (
-            "https://localhost:20015"
-        )
-
-    def test_wait_for_services_falls_back_to_9200_when_no_remap(self, tmp_path, mocker):
-        """No entry for wazuh.indexer in `ctx.resolved_ports` (the common
-        case where 9200 was free) keeps the historical URL."""
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import ServiceResult
-
-        ctx = self._ctx(tmp_path)
-        # resolved_ports left as the default empty list.
-        mock_wait = mocker.patch(
-            "aptl.core.lab.wait_for_service",
-            return_value=ServiceResult(ready=True, elapsed_seconds=1.0),
-        )
-
-        _step_wait_for_services(ctx)
-
-        indexer_call_kwargs = mock_wait.call_args_list[0].kwargs
-        assert indexer_call_kwargs["check_fn"].keywords["url"] == (
-            "https://localhost:9200"
-        )
-
-    def test_wait_for_services_manager_timeout_emits_telemetry_warning(
-        self, tmp_path, mocker
-    ):
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
-        from aptl.core.services import ServiceResult
-
-        ctx = self._ctx(tmp_path)
-        mocker.patch(
-            "aptl.core.lab.wait_for_service",
-            side_effect=[
-                ServiceResult(ready=True, elapsed_seconds=12.0),
-                ServiceResult(ready=False, elapsed_seconds=120.0, error="timed out"),
-            ],
-        )
-
-        result = _step_wait_for_services(ctx)
-        assert result is None
-
-        manager_diags = [d for d in ctx.diagnostics if d.component == "wazuh_manager"]
-        assert len(manager_diags) == 1
-        assert manager_diags[0].impact is DiagnosticImpact.TELEMETRY
-        assert manager_diags[0].severity is DiagnosticSeverity.WARNING
-
-    def test_wait_for_services_clean_emits_no_diagnostic(self, tmp_path, mocker):
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import ServiceResult
-
-        ctx = self._ctx(tmp_path)
-        mocker.patch(
-            "aptl.core.lab.wait_for_service",
-            return_value=ServiceResult(ready=True, elapsed_seconds=10.0),
-        )
-
-        result = _step_wait_for_services(ctx)
-        assert result is None
-
+        indexer.assert_not_called()
+        manager.assert_not_called()
         assert ctx.diagnostics == []
 
-    def test_wait_for_services_skipped_when_wazuh_disabled(self, tmp_path, mocker):
-        from aptl.core.lab import _step_wait_for_services
-        from aptl.core.services import ServiceResult
-
-        ctx = self._ctx(tmp_path, config=self._make_config(wazuh=False))
-        wait_mock = mocker.patch(
-            "aptl.core.lab.wait_for_service",
-            return_value=ServiceResult(
-                ready=False, elapsed_seconds=300.0, error="timed out"
-            ),
-        )
-
-        result = _step_wait_for_services(ctx)
-        assert result is None
-
-        # Wazuh probes never ran -> no diagnostics.
-        assert ctx.diagnostics == []
-        wait_mock.assert_not_called()
-
-    def test_wait_for_services_skipped_when_wazuh_not_in_selected_profiles(
-        self, tmp_path, mocker
-    ):
-        """A bounded scenario may omit Wazuh even when the container is enabled
-        in config. The readiness wait must gate on the scenario's selected
-        profiles, not the config flag, so it does not falsely wait on (and warn
-        about) a Wazuh the scenario never started."""
+    def test_wait_for_services_skips_when_wazuh_not_selected(self, tmp_path):
         from aptl.core.lab import _step_wait_for_services
 
-        ctx = self._ctx(
-            tmp_path,
-            config=self._make_config(wazuh=True),
-            selected_profiles={"otel"},
-        )
-        wait_mock = mocker.patch("aptl.core.lab.wait_for_service")
+        ctx = self._ctx(tmp_path, selected_profiles={"otel"})
 
-        result = _step_wait_for_services(ctx)
-        assert result is None
-
-        wait_mock.assert_not_called()
+        assert _step_wait_for_services(ctx) is None
         assert ctx.diagnostics == []
 
     # -- test_ssh (readiness) ------------------------------------------
@@ -3294,6 +3522,18 @@ class TestStartupClassificationWiring:
 
     # -- build_mcps (capability) ---------------------------------------
 
+    def test_product_neutral_start_skips_mcp_build(self, tmp_path, mocker):
+        from aptl.core.lab import _step_build_mcps
+
+        ctx = self._ctx(tmp_path, selected_profiles=set())
+        ctx.admitted_surface = object()
+        run_script = mocker.patch("aptl.utils.shell.run_shell_script")
+
+        assert _step_build_mcps(ctx) is None
+
+        run_script.assert_not_called()
+        assert ctx.diagnostics == []
+
     def test_build_mcps_missing_script_emits_capability_warning(self, tmp_path):
         from aptl.core.lab import _step_build_mcps
         from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
@@ -3375,6 +3615,36 @@ class TestStartupClassificationWiring:
         assert result is None
 
         assert ctx.diagnostics == []
+
+    def test_capture_snapshot_reuses_terminal_attestation_inventory(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _step_capture_snapshot
+        from aptl.core.lab_types import LabStatus
+        from aptl.core.snapshot import RangeSnapshot
+
+        rows = [
+            {
+                "name": "aptl-victim",
+                "id": "abc",
+                "state": "running",
+                "status": "Up 1 minute",
+            }
+        ]
+        ctx = self._ctx(tmp_path)
+        ctx.backend = MagicMock()
+        ctx.terminal_status = LabStatus(running=True, containers=rows)
+        capture = mocker.patch(
+            "aptl.core.lab.capture_snapshot", return_value=RangeSnapshot()
+        )
+
+        assert _step_capture_snapshot(ctx) is None
+
+        capture.assert_called_once_with(
+            config_dir=tmp_path,
+            backend=ctx.backend,
+            container_rows=rows,
+        )
 
     def test_capture_snapshot_failure_emits_telemetry_warning(self, tmp_path, mocker):
         """Snapshot is the run-archive inventory — its loss is observability
@@ -3515,6 +3785,20 @@ class TestStartupClassificationWiring:
         store.create_run(run_id)
         store.write_json(run_id, "manifest.json", {"run_id": run_id})
         assert run_id in store.list_runs()
+
+    def test_resolve_run_target_uses_configured_run_storage(self, tmp_path):
+        """Startup records must be discoverable through ``aptl runs``."""
+        from aptl.cli._common import resolve_run_store
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import _LabStartContext, _resolve_run_target
+
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.config = AptlConfig(run_storage={"local_path": "evidence/runs"})
+
+        store, _run_id = _resolve_run_target(ctx)
+
+        assert store.base_dir == (tmp_path / "evidence" / "runs").resolve()
+        assert store.base_dir == resolve_run_store(tmp_path, ctx.config).base_dir
 
     # -- seed_soc (capability) -----------------------------------------
 
@@ -3717,6 +4001,18 @@ class TestStartupClassificationWiring:
 
     # -- mcp_config_sync (capability) ----------------------------------
 
+    def test_product_neutral_start_skips_mcp_config_sync(self, tmp_path, mocker):
+        from aptl.core.lab import _step_sync_mcp_config
+
+        ctx = self._ctx(tmp_path, selected_profiles=set())
+        ctx.admitted_surface = object()
+        sync = mocker.patch("aptl.core.lab._sync_mcp_config_keys")
+
+        assert _step_sync_mcp_config(ctx) is None
+
+        sync.assert_not_called()
+        assert ctx.diagnostics == []
+
     def test_mcp_config_sync_exception_emits_capability_warning(self, tmp_path, mocker):
         from aptl.core.lab import _step_sync_mcp_config
         from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
@@ -3750,6 +4046,32 @@ class TestStartupClassificationWiring:
 
         assert ctx.diagnostics == []
 
+    def test_mcp_config_sync_prefers_owned_live_port_over_prestart_resolution(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _step_sync_mcp_config
+
+        ctx = self._ctx(tmp_path)
+        prestart = SimpleNamespace(
+            env_var="APTL_HP_WAZUH_INDEXER_9200", resolved_port=9200
+        )
+        live = SimpleNamespace(
+            env_var="APTL_HP_WAZUH_INDEXER_9200", resolved_port=29200
+        )
+        ctx.resolved_ports = [prestart]
+        runtime = mocker.patch(
+            "aptl.core.lab._runtime_mcp_host_ports", return_value=[live]
+        )
+        sync = mocker.patch("aptl.core.lab._sync_mcp_config_keys")
+
+        assert _step_sync_mcp_config(ctx) is None
+
+        runtime.assert_called_once_with(
+            ctx.project_dir, ctx.backend, active_profiles=None
+        )
+        assert sync.call_args.args[1] == [live]
+        assert ctx.diagnostics == []
+
 
 class TestOrchestrateLabStartOutcome:
     """End-to-end checks that ``orchestrate_lab_start`` returns a
@@ -3780,20 +4102,20 @@ class TestOrchestrateLabStartOutcome:
         from aptl.core.services import ServiceResult
 
         mocks = self._patch_happy(mocker, tmp_path)
-        # Make every wait_for_service call time out — covers indexer,
-        # manager, and every SSH probe.
-        mocks["wait_indexer"].return_value = ServiceResult(
-            ready=False, elapsed_seconds=60.0, error="timed out"
+        # Make every SSH probe time out. Wazuh readiness is fail-closed
+        # (#1002) and is covered by the wait_for_services tests.
+        mocks["wait_indexer"].side_effect = lambda **kwargs: ServiceResult(
+            ready=kwargs["service_name"].startswith("Wazuh"),
+            elapsed_seconds=60.0,
+            error="timed out",
         )
 
         result = orchestrate_lab_start(tmp_path)
 
         assert result.success is True  # back-compat: non-fatal warnings
         assert result.outcome is StartupOutcome.DEGRADED_UNUSABLE
-        # At least one readiness diagnostic and one telemetry diagnostic.
         impacts = {d.impact for d in result.diagnostics}
         assert DiagnosticImpact.READINESS in impacts
-        assert DiagnosticImpact.TELEMETRY in impacts
 
     def test_mcp_build_failure_yields_degraded_unusable(self, mocker, tmp_path):
         from aptl.core.lab import orchestrate_lab_start
@@ -3838,9 +4160,32 @@ class TestLabOrchestrationContracts:
     """
 
     def _ctx(self, tmp_path: Path):
-        from aptl.core.lab import _LabStartContext
+        from aptl.backends.scenario_startup import (
+            ScenarioStartupPlan,
+            ScenarioStartupSelection,
+            StartupHook,
+        )
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import StartSelection, _LabStartContext
+        from aptl.core.scenario_bundle import project_tree_bundle
+        from aptl_techvault.startup import TechVaultStartupProvider
 
-        return _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        plan = ScenarioStartupPlan(
+            seed_script="scripts/seed-prime.sh",
+            required_profiles=(),
+            activation_profiles=(),
+            startup_hooks=frozenset({StartupHook.BEFORE_BACKEND_RETRY}),
+        )
+        bundle = project_tree_bundle(tmp_path, tmp_path / "fixture.sdl.yaml")
+        provider_selection = ScenarioStartupSelection(
+            None, TechVaultStartupProvider(), plan
+        )
+        ctx.scenario_startup = plan
+        ctx.start_selection = StartSelection(
+            AptlConfig(), bundle, plan, provider_selection
+        )
+        return ctx
 
     def _full_env(self):
         from aptl.core.env import EnvVars
@@ -4579,24 +4924,18 @@ class TestStopLabCleanupIsContractFree:
         result = stop_lab(project_dir=tmp_path, backend=backend)
 
         assert result.success is True
-        # Fell back to ALL_KNOWN_PROFILES since no aptl.json exists.
+        # Core keeps only its own apparatus profile; pack profiles are supplied
+        # by admitted runtime state, never a global product vocabulary.
         backend.stop.assert_called_once()
         called_profiles = backend.stop.call_args[0][0]
-        assert "wazuh" in called_profiles
+        assert called_profiles == ["otel"]
 
 
 class TestSeedSocPrimeProfileDiagnostic:
-    """Soft check against `_PRIME_REQUIRED_PROFILES`, diffed against
-    `ctx.selected_profiles` (the scenario-realized surface, issue #550) at
-    the SOC seed boundary. ADR-005 supports selective SOC labs, so a
-    missing prime profile must NOT fatally refuse lab startup — it
-    surfaces as a CAPABILITY diagnostic and the step returns None. The
-    config-bound `required_profiles_enabled` predicate in
-    `aptl.core.contracts` remains available as a hard contract for a
-    future explicit prime-scenario entrypoint; this boundary uses plain
-    set containment against the selected surface instead."""
+    """Soft checks use the adapter's required scenario profile surface."""
 
     def _ctx(self, tmp_path: Path, *, soc: bool, selected_profiles=None, **extra):
+        from aptl.backends.scenario_startup import ScenarioStartupPlan
         from aptl.core.config import AptlConfig
         from aptl.core.env import EnvVars
         from aptl.core.lab import _LabStartContext
@@ -4620,6 +4959,18 @@ class TestSeedSocPrimeProfileDiagnostic:
             ),
             config=cfg,
             selected_profiles=selected_profiles,
+            scenario_startup=ScenarioStartupPlan(
+                seed_script="scripts/seed-prime.sh",
+                required_profiles=(
+                    "wazuh",
+                    "enterprise",
+                    "victim",
+                    "kali",
+                    "fileshare",
+                    "soc",
+                ),
+                activation_profiles=("soc",),
+            ),
         )
 
     def test_partial_prime_set_emits_capability_diagnostic(self, tmp_path):
@@ -4746,6 +5097,7 @@ class TestGenerateSocCertsStep:
                 scenario=ScenarioSourceConfig(source="project-tree"),
             ),
             backend=backend or MagicMock(),
+            selected_profiles={"soc"} if soc else set(),
         )
 
     def test_skips_when_soc_disabled(self, tmp_path, mocker):
@@ -4840,15 +5192,14 @@ class TestTerminalHostKeyPinningStep:
     """The lab-start step that pins terminal SSH host keys (ADR-040,
     issue #418) — registered after snapshot capture and non-fatal."""
 
-    def test_step_registered_after_capture_before_mcps(self):
+    def test_step_registered_before_mcps(self):
         from aptl.core.lab import _LAB_START_STEPS
 
         names = [s.__name__ for s in _LAB_START_STEPS]
         assert "_step_pin_terminal_host_keys" in names
         i_pin = names.index("_step_pin_terminal_host_keys")
-        i_cap = names.index("_step_capture_snapshot")
         i_mcp = names.index("_step_build_mcps")
-        assert i_cap < i_pin < i_mcp
+        assert i_pin < i_mcp
 
     @patch("aptl.core.lab.pin_terminal_host_keys")
     @patch("aptl.core.lab.list_container_snapshots")

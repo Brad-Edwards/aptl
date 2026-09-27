@@ -78,6 +78,25 @@ def test_project_observed_properties_maps_declared_fields_only() -> None:
     assert projection == _CORTEX_FIELDS
 
 
+def test_join_field_projects_to_exact_token_semantics() -> None:
+    """A native join field is exact-valued even though it also carries relations."""
+    observed = {
+        "key": {"type": "keyword"},
+        "status": {"type": "keyword"},
+        "relations": {
+            "type": "join",
+            "relations": {"organization": "worker"},
+        },
+    }
+
+    projection, reason = sis.project_observed_properties(
+        observed, _CORTEX_FIELDS.keys()
+    )
+
+    assert reason is None
+    assert projection == _CORTEX_FIELDS
+
+
 @pytest.mark.parametrize(
     ("observed", "needle"),
     [

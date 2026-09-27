@@ -132,7 +132,7 @@ def validate_scenario(
     )
 
     # 5. Provisioning realization — interpret the plan, scenario-generically.
-    _realization_details, realization_check = checks.check_provisioning_realization(
+    realization_details, realization_check = checks.check_provisioning_realization(
         scenario=scenario, project_dir=project_dir, config=config
     )
     results.append(realization_check)
@@ -143,7 +143,9 @@ def validate_scenario(
 
     results.append(
         _account_parity.check_account_provisioner_parity(
-            scenario=scenario, project_dir=project_dir
+            scenario=scenario,
+            project_dir=project_dir,
+            realization_details=realization_details,
         )
     )
 

@@ -30,6 +30,14 @@ evidence distinguishing them. It would also defeat the exact-readback contract,
 which cannot describe two postures at once without reintroducing a conditional
 exemption.
 
+**Rootless and userns-remap daemons are refused by name.** Both reject an
+explicit ``writable-cgroups`` request at container create (moby
+``daemon/oci_linux.go``: "option WritableCgroups conflicts with user namespaces
+and rootless mode"), and a userns-remap daemon forces writable cgroups on
+regardless of what was asked. Neither is a qualified substrate runtime -- that
+qualification is issue #1120 -- so the gate names the mode before mutation
+instead of letting the create fail with an opaque start error.
+
 A future supported cgroup v1 path would be a separately qualified backend policy
 with its own exact readback baseline -- never a boolean that re-enables host
 authority through this gate.
@@ -37,8 +45,12 @@ authority through this gate.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import json
+from collections.abc import Callable, Iterable
+from pathlib import Path
 from typing import Any
+
+import yaml
 
 from aptl.core.deployment.errors import BackendSeedError
 
@@ -53,6 +65,13 @@ WRITABLE_CGROUPS_OPTION = "writable-cgroups=true"
 SUBSTRATE_MIN_DOCKER_ENGINE = (28, 0)
 
 _PROBE_TIMEOUT_SECONDS = 30
+
+# Daemon modes, as named in ``docker info``'s SecurityOptions, that cannot run
+# the substrate posture, with the wording an operator will recognize.
+_UNQUALIFIED_DAEMON_MODES = (
+    ("rootless", "rootless"),
+    ("userns", "user-namespace remapping (userns-remap)"),
+)
 
 
 def _probe(run: Callable[..., Any], argv: list[str], subject: str) -> str:
@@ -120,6 +139,50 @@ def _engine_version(run: Callable[..., Any]) -> tuple[int, int]:
         ) from exc
 
 
+def _security_option_names(raw: str) -> frozenset[str]:
+    """Return the ``name=`` values of a daemon's JSON SecurityOptions list."""
+
+    try:
+        options = json.loads(raw) if raw else None
+    except ValueError as exc:
+        raise BackendSeedError(
+            "could not parse the target Docker daemon's security options"
+        ) from exc
+    options = [] if options is None else options
+    if not isinstance(options, list) or not all(
+        isinstance(option, str) for option in options
+    ):
+        raise BackendSeedError(
+            "could not parse the target Docker daemon's security options"
+        )
+    return frozenset(
+        part.removeprefix("name=")
+        for option in options
+        for part in option.split(",")
+        if part.startswith("name=")
+    )
+
+
+def _require_qualified_daemon_mode(run: Callable[..., Any]) -> None:
+    """Refuse rootless and userns-remap daemons with a named reason."""
+
+    names = _security_option_names(
+        _probe(
+            run,
+            ["docker", "info", "--format", "{{json .SecurityOptions}}"],
+            "security options",
+        )
+    )
+    for mode, label in _UNQUALIFIED_DAEMON_MODES:
+        if mode in names:
+            raise BackendSeedError(
+                "the generic systemd substrate does not support a Docker daemon "
+                f"running in {label} mode: it refuses the writable-cgroups "
+                "option systemd nodes depend on. Use a rootful daemon without "
+                "userns-remap"
+            )
+
+
 def require_substrate_daemon_support(run: Callable[..., Any]) -> None:
     """Fail closed unless the target daemon can run the substrate's posture.
 
@@ -128,7 +191,8 @@ def require_substrate_daemon_support(run: Callable[..., Any]) -> None:
     error translation already configured. A local-host probe would inspect the
     wrong daemon entirely.
 
-    Ordered: cgroup v2, then engine version. The order is the safety property.
+    Ordered: cgroup v2, then engine version, then daemon mode. cgroup v2 comes
+    first because that order is the safety property.
     """
 
     _require_cgroup_v2(run)
@@ -140,3 +204,68 @@ def require_substrate_daemon_support(run: Callable[..., Any]) -> None:
             f" or newer; this daemon reports {major}.{minor}. Older engines "
             "lack the writable-cgroups option systemd nodes depend on"
         )
+    _require_qualified_daemon_mode(run)
+
+
+def _selected(
+    name: str,
+    service: dict,
+    profiles: frozenset[str],
+    exclude_services: frozenset[str],
+    only_services: frozenset[str],
+) -> bool:
+    """Whether Compose would start this service for the given selection.
+
+    A service named explicitly as an ``up`` target is started even when none of
+    its profiles is enabled, so an explicit target is selected regardless of
+    profile; otherwise the profile rules decide.
+    """
+
+    if name in exclude_services:
+        return False
+    if only_services:
+        return name in only_services
+    service_profiles = service.get("profiles") or ()
+    return not service_profiles or bool(profiles.intersection(service_profiles))
+
+
+def compose_services_requesting_writable_cgroups(
+    compose_files: Iterable[Path],
+    profiles: Iterable[str],
+    *,
+    exclude_services: Iterable[str] = (),
+    only_services: Iterable[str] = (),
+) -> tuple[str, ...]:
+    """Return the selected Compose services that ask for writable cgroups.
+
+    A Compose-managed systemd service (the ``reverse`` profile) takes the same
+    posture as the generic substrate, so it depends on the same daemon support.
+    Compose itself would surface an unsupported daemon only as Docker's opaque
+    ``invalid --security-opt`` at create; knowing which selected services need
+    the option lets the backend run this gate before ``up`` instead.
+
+    Reads each file's authored model. An unreadable file names nothing here;
+    Compose's own model validation owns reporting it.
+    """
+
+    selected_profiles = frozenset(profiles)
+    excluded = frozenset(exclude_services)
+    only = frozenset(only_services)
+    requesting: dict[str, None] = {}
+    for compose_file in compose_files:
+        try:
+            model = yaml.safe_load(Path(compose_file).read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            continue
+        services = model.get("services") if isinstance(model, dict) else None
+        if not isinstance(services, dict):
+            continue
+        for name, service in services.items():
+            if not isinstance(service, dict):
+                continue
+            options = service.get("security_opt") or ()
+            if WRITABLE_CGROUPS_OPTION in options and _selected(
+                str(name), service, selected_profiles, excluded, only
+            ):
+                requesting[str(name)] = None
+    return tuple(requesting)

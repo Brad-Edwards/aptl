@@ -1,4 +1,4 @@
-# TechVault Curated RAES Startup Variants
+# APTL Research Scenario Fixtures
 
 Issue #534 adds small RAES SDL startup variants for TechVault. Their purpose is
 to prove that APTL realizes Compose profiles from declared RAES node content,
@@ -12,14 +12,15 @@ not from the full TechVault scenario name or a preset.
 - APTL realization belongs to `aptl.backends.raes_realization` and the Compose
   profile index in `aptl.backends.raes_profiles`.
 - Dependency expansion belongs to `aptl.backends.raes_dependency_closure`.
-- Startup aliases belong to the strict `scenarios/catalog.json` schema and
-  `aptl.core.scenario_catalog`; catalog rows are aliases, not behavior.
-- Public startup still defaults to `scenarios/techvault-operational.sdl.yaml`.
+- Research fixture references belong to `scenarios/catalog.json` and
+  `aptl.validation.research_scenario_catalog`. Explicit participant profiles bind
+  these references by path and digest. They are not normal startup aliases.
+- Public startup defaults to the installed `techvault` environment pack.
 
 ## Guardrails
 
-- Keep variants small: attacker/target, enterprise web, defensive minimum, or
-  observability/core slices are valid only when they parse, compile, and realize
+- Keep variants small: attacker/target, enterprise web, or defensive-minimum
+  slices are valid only when they parse, compile, and realize
   without APTL-specific diagnostics.
 - Tests must assert selected Compose profiles for each variant through
   `interpret_provisioning_plan` / `select_backend_profiles`.
@@ -33,25 +34,24 @@ not from the full TechVault scenario name or a preset.
 
 ## Curated variants
 
-The catalog registers four curated variants alongside the default operational
-scenario. Each one is a small single-file RAES SDL document under `scenarios/`.
+APTL retains three small RAES SDL fixtures under `scenarios/` for backend
+realization tests and the explicit guided research profile. These files are
+checkout-only inputs, excluded from the default wheel and normal pack catalog.
 The selected profile set is derived from declared node content and dependency
-closure, then gated by the enabled container profiles in configuration. The
-`otel` profile is always part of the public start set, so every variant includes
-the OTEL core observability nodes.
+closure, then gated by the enabled container profiles in configuration. Backend
+capture and OTel apparatus is not authored as scenario nodes and is selected
+only after evidence and scope admission.
 
 | Catalog id | Includes | Omits | Selected profiles | Proves |
 |---|---|---|---|---|
-| `techvault-attacker-target` | Kali host and capture sidecar, one monitored victim, Wazuh manager and indexer, OTEL core | Enterprise web tier, the wider SOC stack | `kali`, `victim`, `wazuh`, `otel` | A red-team host against a monitored target; the victim pulls Wazuh through declared dependency content, not through the scenario name |
-| `techvault-enterprise-web` | The enterprise tier (vulnerable webapp, database, AD, workstation), the Wazuh monitoring core, OTEL core | The wider SOC stack (Suricata, MISP, TheHive, Cortex, Shuffle), the red-team apparatus | `enterprise`, `wazuh`, `otel` | The enterprise tier realizes with the Wazuh core it requires and no SOC surface |
-| `techvault-defensive-min` | Wazuh manager, indexer, dashboard, OTEL core | The wider SOC stack, attacker and enterprise components | `wazuh`, `otel` | Wazuh monitoring realizes without pulling the full `soc` profile |
-| `techvault-observability-core` | OTEL collector, Tempo, Grafana | Every attacker, target, enterprise, and defensive component | `otel` | The smallest bounded startup surface APTL realizes from SDL |
+| `techvault-attacker-target` | Kali host, one monitored victim, Wazuh manager and indexer | Enterprise web tier, wider SOC stack, backend apparatus | `kali`, `victim`, `wazuh` | A red-team host against a monitored target; the victim pulls Wazuh through declared dependency content, not through the scenario name |
+| `techvault-enterprise-web` | The enterprise tier (vulnerable webapp, database, AD, workstation) and Wazuh monitoring core | Wider SOC stack, red-team apparatus, backend observability | `enterprise`, `wazuh` | The enterprise tier realizes with the Wazuh core it requires and no SOC surface |
+| `techvault-defensive-min` | Wazuh manager, indexer, dashboard | Wider SOC stack, attacker and enterprise components, backend observability | `wazuh` | Wazuh monitoring realizes without pulling the full `soc` profile |
 
-Start a variant by catalog id:
+From a development checkout, select a fixture explicitly:
 
 ```bash
-aptl lab scenarios
-aptl lab start --scenario techvault-attacker-target
+aptl lab start --scenario-path scenarios/techvault-attacker-target.sdl.yaml
 ```
 
 The static realization proof for these variants lives in

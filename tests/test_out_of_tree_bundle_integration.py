@@ -24,6 +24,7 @@ from textwrap import dedent
 import pytest
 
 from aptl.core.deployment.docker_compose import DockerComposeBackend
+from tests.helpers import realized_container_name
 
 pytestmark = pytest.mark.integration
 
@@ -83,8 +84,11 @@ def test_out_of_tree_bundle_realizes_from_its_own_root_not_the_engine(tmp_path):
         # The running container was BUILT FROM THE BUNDLE tree, proving Compose
         # resolved the relative build context against --project-directory=bundle,
         # not the engine checkout it was configured with.
+        # The realized container carries a workspace-scoped external name, so
+        # ask ownership what it is rather than assuming the declared one (#1054).
+        realized = realized_container_name(backend, _CONTAINER)
         origin = subprocess.run(
-            ["docker", "exec", _CONTAINER, "cat", "/origin"],
+            ["docker", "exec", realized, "cat", "/origin"],
             capture_output=True,
             text=True,
             timeout=60,
@@ -97,6 +101,9 @@ def test_out_of_tree_bundle_realizes_from_its_own_root_not_the_engine(tmp_path):
         # Teardown is scenario-agnostic (identity-based); it takes no root.
         backend.stop([], remove_volumes=True)
         # Belt-and-suspenders: force-remove in case the boot failed mid-build.
+        # Removing the declared name would remove nothing and leak the container.
         subprocess.run(
-            ["docker", "rm", "-f", _CONTAINER], capture_output=True, timeout=60
+            ["docker", "rm", "-f", realized_container_name(backend, _CONTAINER)],
+            capture_output=True,
+            timeout=60,
         )

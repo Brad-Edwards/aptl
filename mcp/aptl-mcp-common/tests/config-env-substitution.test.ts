@@ -1,12 +1,35 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   environmentForConfig,
   substituteEnvVars,
   parseDotEnv,
+  loadLabConfig,
 } from '../src/config.js';
+
+describe('native Kali capture ingress', () => {
+  it('uses port 22 at the guest-admitted address and rejects malformed addresses', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'aptl-native-ingress-'));
+    const path = join(root, 'docker-lab-config.json');
+    writeFileSync(path, JSON.stringify({
+      server: { configKey: 'kali' }, lab: { name: 'test' },
+      containers: { kali: { container_ip: 'localhost', ssh_port: 2023, ssh_key: '/key' } },
+    }));
+    try {
+      vi.stubEnv('APTL_MCP_KALI_HOST', '172.20.10.10');
+      const config = await loadLabConfig(path);
+      expect(config.containers!.kali.container_ip).toBe('172.20.10.10');
+      expect(config.containers!.kali.ssh_port).toBe(22);
+      vi.stubEnv('APTL_MCP_KALI_HOST', 'untrusted.example');
+      await expect(loadLabConfig(path)).rejects.toThrow('native Kali');
+    } finally {
+      vi.unstubAllEnvs();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('substituteEnvVars', () => {
   it('substitutes a single variable', () => {
@@ -177,18 +200,18 @@ describe('parseDotEnv', () => {
     const content = [
       '# APTL Lab Credentials',
       'INDEXER_USERNAME=admin',
-      'INDEXER_PASSWORD=SecretPassword',
+      'INDEXER_PASSWORD=indexer-test-value',
       '',
       '# Wazuh API',
-      'API_USERNAME=wazuh-wui',
-      'API_PASSWORD="WazuhPass123!"',
+      'API_USERNAME=api-test-user',
+      'API_PASSWORD="api-test-value"',
     ].join('\n');
     const result = parseDotEnv(content);
     expect(result).toEqual({
       INDEXER_USERNAME: 'admin',
-      INDEXER_PASSWORD: 'SecretPassword',
-      API_USERNAME: 'wazuh-wui',
-      API_PASSWORD: 'WazuhPass123!',
+      INDEXER_PASSWORD: 'indexer-test-value',
+      API_USERNAME: 'api-test-user',
+      API_PASSWORD: 'api-test-value',
     });
   });
 });

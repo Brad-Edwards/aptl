@@ -12,6 +12,11 @@ secret:
     # secret. Restoring this loot is the whole point of #581 parity.
     - 'scenarios/fixtures/techvault-content/**'
   ignored_matches:
+    # Docker Compose uses this text only as the diagnostic when the required
+    # Grafana credential variable is absent. It is an error message, not the
+    # credential value (incident 37287193).
+    - name: grafana-required-credential-diagnostic
+      match: "Grafana credential required"
     # tests/test_correlation_models.py: assert_non_secret() must reject
     # secret-shaped strings, so its test fixtures are intentionally
     # secret-shaped fakes, never real credentials (incident 34972675).
@@ -42,11 +47,3 @@ secret:
       match: "31a211c4-ea5c-4a49-b022-5e2434e758a7"
     - name: techvault-misp-fixture-api-key
       match: "JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw"
-    # scripts/envpack-soar-fixups.sh (#889) recreates aptl-misp-redis and
-    # aptl-misp with the same lab defaults docker-compose.yml has always run
-    # with, restated on new lines the scanner treats as fresh occurrences.
-    # Same lab defaults, same non-secret rationale as the entries above.
-    - name: envpack-soar-fixups-misp-redis-password
-      match: "redispassword"
-    - name: envpack-soar-fixups-misp-db-root-password
-      match: "misp_root_password"

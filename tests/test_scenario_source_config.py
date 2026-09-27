@@ -60,6 +60,12 @@ def test_an_empty_identity_is_rejected(tmp_path):
         load_config(config_path)
 
 
+@pytest.mark.parametrize("identity", ["../elsewhere", "/etc", "a/b", ".", ".."])
+def test_identity_cannot_act_as_a_path(tmp_path, identity):
+    with pytest.raises(ValueError):  # NOSONAR
+        load_config(_write(tmp_path, {"scenario": {"identity": identity}}))
+
+
 @pytest.mark.parametrize(
     "hostile", ["../elsewhere", "/etc", "packs/../../etc", "a\x00b"]
 )
@@ -116,3 +122,10 @@ def test_a_configured_root_anchors_the_scenario(tmp_path):
     resolved = _resolve_scenario_path(tmp_path, None, config)
 
     assert (tmp_path / "environments" / "demo") in resolved.parents
+
+
+def test_no_implicit_project_tree_default_without_config(tmp_path):
+    from aptl.backends.raes import _resolve_scenario_path
+
+    with pytest.raises(ValueError, match="explicit scenario path or configuration"):
+        _resolve_scenario_path(tmp_path, None, None)

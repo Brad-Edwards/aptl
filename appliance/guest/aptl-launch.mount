@@ -1,0 +1,12 @@
+[Unit]
+Description=APTL read-only appliance launch inputs
+Before=aptl-appliance-first-boot.service
+
+[Mount]
+What=aptl-launch
+Where=/run/aptl-launch
+Type=9p
+Options=trans=virtio,version=9p2000.L,ro
+
+[Install]
+WantedBy=multi-user.target

@@ -82,6 +82,13 @@ export interface ScenarioValidation {
 	detail: string | null;
 }
 
+export interface ScenarioPackIdentity {
+	id: string;
+	version: string;
+	set_digest: string;
+	maturity: string;
+}
+
 /** Enriched scenario card summary for the Lab Home entry points (UI-008d).
  *
  *  Mirrors `aptl.api.schemas.ScenarioSummaryResponse`: catalog-owned id/name/
@@ -99,6 +106,7 @@ export interface ScenarioSummary {
 	tags: string[];
 	required_containers: string[];
 	validation: ScenarioValidation;
+	pack: ScenarioPackIdentity;
 }
 
 // --- Scenario-detail workbench projection (UI-008d) ---
@@ -183,6 +191,7 @@ export interface ScenarioDetail {
 	tags: string[];
 	required_containers: string[];
 	validation: ScenarioValidation;
+	pack: ScenarioPackIdentity;
 	blocks: WorkbenchBlock[];
 }
 

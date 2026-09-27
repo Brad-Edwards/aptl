@@ -21,10 +21,39 @@ from opentelemetry import trace
 # ---------------------------------------------------------------------------
 
 
+def test_export_boundary_redacts_attributes_events_exceptions_and_resources(
+    monkeypatch,
+):
+    from opentelemetry.trace import Link, SpanContext, TraceFlags
+    import aptl.core.telemetry as mod
+
+    secret = "fixture-export-secret-992"
+    exporter = InMemorySpanExporter()
+    monkeypatch.setattr(mod, "OTLPSpanExporter", lambda **kwargs: exporter)
+    monkeypatch.setenv("OTEL_RESOURCE_ATTRIBUTES", f"api_key={secret}")
+    monkeypatch.setattr(mod.trace, "set_tracer_provider", lambda provider: None)
+    mod.init_tracing()
+    tracer = mod._provider.get_tracer("boundary-test")
+    link = Link(
+        SpanContext(1, 1, False, TraceFlags(1)), attributes={"password": secret}
+    )
+    with tracer.start_as_current_span("capture", links=[link]) as span:
+        span.set_attribute("api_key", secret)
+        span.set_attribute("nested", json.dumps({"password": secret}))
+        span.add_event("event", {"token": secret})
+        span.record_exception(ValueError(f"password={secret}"))
+    assert mod._provider.force_flush()
+    exported = exporter.get_finished_spans()
+    assert len(exported) == 1
+    assert secret not in exported[0].to_json()
+    assert exported[0].context.trace_id == span.context.trace_id
+
+
 @pytest.fixture(autouse=True)
 def _reset_telemetry():
     """Ensure telemetry module state is clean for each test."""
     import aptl.core.telemetry as mod
+
     mod._provider = None
     yield
     # Clean up after test
@@ -50,7 +79,9 @@ def memory_exporter(monkeypatch):
     import aptl.core.telemetry as mod
 
     # Patch get_tracer to use our test provider
-    monkeypatch.setattr(mod, "get_tracer", lambda name="aptl": provider.get_tracer(name))
+    monkeypatch.setattr(
+        mod, "get_tracer", lambda name="aptl": provider.get_tracer(name)
+    )
     mod._provider = provider
 
     yield exporter
@@ -219,10 +250,15 @@ class TestRecordEvent:
         tracer = get_tracer()
         parent_ctx = make_parent_context("a" * 32, "b" * 16)
 
-        record_event(tracer, parent_ctx, "alert_matched", {
-            "rule_id": "1234",
-            "severity": "high",
-        })
+        record_event(
+            tracer,
+            parent_ctx,
+            "alert_matched",
+            {
+                "rule_id": "1234",
+                "severity": "high",
+            },
+        )
 
         spans = memory_exporter.get_finished_spans()
         assert len(spans) == 1
@@ -258,9 +294,14 @@ class TestCreateChildSpan:
         tracer = get_tracer()
         parent_ctx = make_parent_context("a" * 32, "b" * 16)
 
-        span = create_child_span(tracer, parent_ctx, "aptl.precondition", {
-            "precondition.name": "file-check",
-        })
+        span = create_child_span(
+            tracer,
+            parent_ctx,
+            "aptl.precondition",
+            {
+                "precondition.name": "file-check",
+            },
+        )
         span.end()
 
         spans = memory_exporter.get_finished_spans()

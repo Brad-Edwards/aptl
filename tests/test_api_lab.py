@@ -384,6 +384,61 @@ class TestLabEventGenerator:
 
     @patch("aptl.api.routers.lab.asyncio.sleep", _noop_sleep)
     @patch("aptl.api.routers.lab._build_status_response")
+    def test_emits_when_same_container_changes_state(self, mock_build, tmp_path):
+        from aptl.api.routers.lab import _lab_event_generator
+        from aptl.api.schemas import ContainerInfo, LabStatusResponse
+
+        mock_build.side_effect = [
+            LabStatusResponse(
+                running=True,
+                containers=[
+                    ContainerInfo(
+                        name="aptl-victim",
+                        state="running",
+                        status="Up 1 minute",
+                        health="healthy",
+                    ),
+                    ContainerInfo(
+                        name="aptl-indexer",
+                        state="running",
+                        status="Up 1 minute",
+                        health="healthy",
+                    ),
+                ],
+            ),
+            LabStatusResponse(
+                running=True,
+                containers=[
+                    ContainerInfo(
+                        name="aptl-victim",
+                        state="exited",
+                        status="Exited (23)",
+                        health="",
+                    ),
+                    ContainerInfo(
+                        name="aptl-indexer",
+                        state="running",
+                        status="Up 1 minute",
+                        health="healthy",
+                    ),
+                ],
+            ),
+        ]
+
+        async def run():
+            gen = _lab_event_generator(tmp_path)
+            first = await gen.__anext__()
+            second = await asyncio.wait_for(gen.__anext__(), timeout=0.05)
+            await gen.aclose()
+            return first, second
+
+        first, second = asyncio.run(run())
+        assert json.loads(first["data"])["containers"][0]["state"] == "running"
+        changed = json.loads(second["data"])["containers"]
+        assert any(item["name"] == "aptl-victim" and item["state"] == "exited" for item in changed)
+
+    @patch("aptl.api.routers.lab.asyncio.sleep", _noop_sleep)
+    @patch("aptl.api.routers.lab._build_status_response")
     def test_emits_error_event(self, mock_build, tmp_path):
         from aptl.api.routers.lab import _lab_event_generator
 

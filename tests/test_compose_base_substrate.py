@@ -29,6 +29,7 @@ from aptl.core.deployment import (
     DockerComposeBackend,
 )
 from aptl.core.deployment.errors import BackendSeedError
+from aptl.core.deployment._compose_resource_ownership import ResourceReceipt
 from aptl.core.lab_types import LabResult
 
 
@@ -39,23 +40,133 @@ from aptl.core.lab_types import LabResult
 def _supported_daemon(*, cgroup_version="2", engine_version="29.5.0"):
     def run(cmd, *args, **kwargs):
         del args, kwargs
+        if "SecurityOptions" in " ".join(cmd):
+            return MagicMock(
+                returncode=0, stdout='["name=seccomp,profile=builtin"]\n', stderr=""
+            )
         if "info" in cmd:
             return MagicMock(returncode=0, stdout=f"{cgroup_version}\n", stderr="")
         if "version" in " ".join(cmd):
             return MagicMock(returncode=0, stdout=f"{engine_version}\n", stderr="")
-        return MagicMock(returncode=0, stdout="", stderr="")
+        return MagicMock(returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr="")
 
     return run
 
 
+def _values_after(argv: list[str], flag: str) -> list[str]:
+    return [value for option, value in zip(argv, argv[1:]) if option == flag]
+
+
+def _inspect_honoring(argv: list[str], run_image_ref: str) -> dict:
+    """The inspect payload of a daemon that honored exactly this create argv."""
+
+    cgroupns = next(
+        (item.split("=", 1)[1] for item in argv if item.startswith("--cgroupns=")),
+        "private",
+    )
+    ports = {}
+    for published in _values_after(argv, "-p"):
+        host_side, container_port = published.rsplit(":", 1)
+        host_ip, _, host_port = host_side.rpartition(":")
+        ports[container_port] = [{"HostIp": host_ip, "HostPort": host_port}]
+    mounts = []
+    for volume in _values_after(argv, "-v"):
+        name, target, *mode = volume.split(":")
+        mounts.append(
+            {"Type": "volume", "Name": name, "Destination": target, "RW": mode != ["ro"]}
+        )
+    names = _values_after(argv, "--name")
+    labels = dict(
+        label.split("=", 1) for label in _values_after(argv, "--label") if "=" in label
+    )
+    return {
+        "Id": _CONTAINER_ID,
+        "Name": f"/{names[0]}" if names else "",
+        "State": {"Running": True},
+        "Config": {"Image": run_image_ref, "Labels": labels},
+        "AppArmorProfile": "docker-default",
+        "HostConfig": {
+            "Privileged": False,
+            "PidMode": "",
+            "IpcMode": "private",
+            "UsernsMode": "",
+            "UTSMode": "",
+            "CgroupnsMode": cgroupns,
+            "CapAdd": _values_after(argv, "--cap-add") or None,
+            "CapDrop": None,
+            "SecurityOpt": _values_after(argv, "--security-opt") or None,
+            "Devices": [],
+            "DeviceCgroupRules": None,
+            "Binds": None,
+            "Tmpfs": {path: "" for path in _values_after(argv, "--tmpfs")} or None,
+            "PortBindings": ports,
+        },
+        "Mounts": mounts,
+    }
+
+
+def _posture_for(
+    spec: BaseContainerSpec, *, volume_prefix: str = "test-proj", **overrides
+) -> dict:
+    """A realized container carrying exactly ``spec``'s posture, then overrides.
+
+    Overrides replace top-level keys, so a test states only the identity fields
+    (``Id``, ``Name``, ``State``, ``Config``) its ownership path verifies.
+    """
+
+    argv: list[str] = [*(_init_run_flags(spec.init) if spec.init else [])]
+    for capability in spec.backend_run_capabilities:
+        argv += ["--cap-add", capability]
+    for port in spec.published_ports:
+        host = f"{port.host_ip}:" if port.host_ip else ""
+        host_port = "" if port.host_port is None else str(port.host_port)
+        argv += ["-p", f"{host}{host_port}:{port.container_port}/{port.protocol}"]
+    for mount in spec.volume_mounts:
+        suffix = ":ro" if mount.read_only else ""
+        argv += ["-v", f"{volume_prefix}_{mount.source}:{mount.target}{suffix}"]
+    info = _inspect_honoring(argv, spec.image_ref)
+    info.update(overrides)
+    return info
+
+
 def _backend(tmp_path: Path) -> DockerComposeBackend:
-    return DockerComposeBackend(project_dir=tmp_path, project_name="test-proj")
+    """A backend whose daemon honors the create argv APTL sends.
+
+    The start path reads each created container back before materializing
+    content (issue #955). Tests that exercise argv, ordering, or networks mock
+    ``subprocess.run`` and would otherwise answer that readback with a container
+    id instead of an inspect payload. This seam answers it the way a real daemon
+    would -- with exactly the posture the recorded create command requested --
+    and delegates every other inspect to the backend. Tests of a daemon that did
+    NOT honor the argv override ``_raw_container_inspect`` themselves.
+    """
+
+    backend = DockerComposeBackend(project_dir=tmp_path, project_name="test-proj")
+    backend._docker_daemon_id = "test-daemon"
+    created: list[tuple[list[str], str]] = []
+    build_command = backend._base_container_create_command
+    raw_inspect = backend._raw_container_inspect
+
+    def recording_create_command(spec, network_bindings, run_image_ref, **kwargs):
+        argv = build_command(spec, network_bindings, run_image_ref, **kwargs)
+        created.append((list(argv), run_image_ref))
+        return argv
+
+    def honoring_inspect(native_id):
+        if created and native_id == _CONTAINER_ID:
+            return _inspect_honoring(*created[-1])
+        return raw_inspect(native_id)
+
+    backend._base_container_create_command = recording_create_command
+    backend._raw_container_inspect = honoring_inspect
+    return backend
 
 
 # A stand-in for the substrate's image config id — the sha256 domain
 # `docker image inspect --format {{.Id}}` reports and `docker run <id>` records
 # as the container's ``Config.Image``.
 _CONFIG_ID = "sha256:" + "a" * 64
+_CONTAINER_ID = "b" * 64
 
 
 class TestEnsureGenericBaseImage:
@@ -71,7 +182,7 @@ class TestEnsureGenericBaseImage:
             del kwargs
             if cmd[:3] == ["docker", "image", "inspect"]:
                 return MagicMock(returncode=1, stdout="", stderr="No such image")
-            return MagicMock(returncode=0, stdout="", stderr="")
+            return MagicMock(returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr="")
 
         with patch("subprocess.run", side_effect=fake_run) as mock_run:
             failures = backend.ensure_generic_base_image(
@@ -89,29 +200,38 @@ class TestEnsureGenericBaseImage:
             "-t",
             "aptl/generic-systemd-base-debian:latest",
         ]
-        assert argv[4] == str(tmp_path / "containers" / "generic-systemd-base-debian")
+        assert argv[-1] == str(tmp_path)
 
-    def test_no_op_when_the_image_already_exists(self, tmp_path):
+    def test_rebuilds_even_when_the_tag_already_exists(self, tmp_path):
+        """Presence of `aptl/...:latest` is not evidence of freshness.
+
+        Skipping the build when the tag existed pinned every install to the
+        substrate it first built, so an advanced base image or a patched layer
+        never reached a machine that had already started a lab. Docker's layer
+        cache keeps the unchanged case cheap (issue #1006).
+        """
         backend = _backend(tmp_path)
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+            )
             failures = backend.ensure_generic_base_image(
                 "aptl/generic-systemd-base-debian:latest"
             )
 
         assert failures == []
-        assert not any(
+        assert any(
             c.args[0][:2] == ["docker", "build"] for c in mock_run.call_args_list
         )
 
     def test_no_op_for_a_real_registry_image(self, tmp_path):
-        # debian:12-slim / rockylinux:9 are real registry references; `docker
+        # debian:13-slim / rockylinux:9 are real registry references; `docker
         # run` pulls them on demand, so this must never attempt to build them.
         backend = _backend(tmp_path)
 
         with patch("subprocess.run") as mock_run:
-            failures = backend.ensure_generic_base_image("debian:12-slim")
+            failures = backend.ensure_generic_base_image("debian:13-slim")
 
         assert failures == []
         mock_run.assert_not_called()
@@ -133,18 +253,66 @@ class TestEnsureGenericBaseImage:
         assert failures
         assert "aptl/generic-systemd-base-debian:latest" in failures[0]
 
+    def test_builds_backend_selected_node22_systemd_base(self, tmp_path):
+        backend = _backend(tmp_path)
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "image", "inspect"]:
+                return MagicMock(returncode=1, stdout="", stderr="No such image")
+            return MagicMock(returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            failures = backend.ensure_generic_base_image(
+                "aptl/generic-systemd-node22-base:latest"
+            )
+
+        assert failures == []
+        build_call = next(
+            call
+            for call in mock_run.call_args_list
+            if call.args[0][:2] == ["docker", "build"]
+        )
+        assert build_call.args[0][-1] == str(tmp_path)
+
+    def test_builds_backend_selected_samba_provider_base(self, tmp_path):
+        backend = _backend(tmp_path)
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "image", "inspect"]:
+                return MagicMock(returncode=1, stdout="", stderr="No such image")
+            return MagicMock(returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            failures = backend.ensure_generic_base_image(
+                "aptl/generic-samba-ad-base:latest"
+            )
+
+        assert failures == []
+        build_call = next(
+            call
+            for call in mock_run.call_args_list
+            if call.args[0][:2] == ["docker", "build"]
+        )
+        assert build_call.args[0][-1] == str(
+            tmp_path / "containers" / "generic-samba-ad-base"
+        )
+
 
 def test_start_base_container_carries_the_compose_project_ownership_label(tmp_path):
     backend = _backend(tmp_path)
     spec = BaseContainerSpec(
         node_address="provision.node.victim",
         container_name="aptl-victim",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
     )
 
     with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+        )
         backend.start_base_container(spec)
 
     run_call = next(
@@ -152,7 +320,7 @@ def test_start_base_container_carries_the_compose_project_ownership_label(tmp_pa
     )
     argv = run_call.args[0]
     assert "--label" in argv
-    assert "com.docker.compose.project=test-proj" in argv
+    assert f"com.docker.compose.project={backend.project_name}" in argv
     # container_exists/host snapshot listing key on this exact label+value -
     # any other project's containers on a shared daemon must not match.
     assert f"com.docker.compose.project={backend.project_name}" in argv
@@ -163,20 +331,48 @@ def test_start_base_container_keeps_the_aptl_lifecycle_labels(tmp_path):
     spec = BaseContainerSpec(
         node_address="provision.node.victim",
         container_name="aptl-victim",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
     )
 
     with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+        )
         backend.start_base_container(spec)
 
     run_call = next(
         c for c in mock_run.call_args_list if c.args[0][:2] == ["docker", "run"]
     )
     argv = run_call.args[0]
-    assert "aptl.lifecycle.project=test-proj" in argv
+    assert f"aptl.lifecycle.project={backend.project_name}" in argv
     assert "aptl.node.address=provision.node.victim" in argv
+
+
+def test_start_base_container_can_retain_the_provider_image_command(tmp_path):
+    backend = _backend(tmp_path)
+    spec = BaseContainerSpec(
+        node_address="provision.node.ad",
+        container_name="aptl-ad",
+        image_ref="aptl/generic-samba-ad-base:latest",
+        runs_services=False,
+        use_image_command=True,
+        backend_run_capabilities=("SYS_ADMIN",),
+    )
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+        )
+        backend.start_base_container(spec)
+
+    run_call = next(
+        c for c in mock_run.call_args_list if c.args[0][:2] == ["docker", "run"]
+    )
+    argv = run_call.args[0]
+    image_index = argv.index("aptl/generic-samba-ad-base:latest")
+    assert argv[image_index:] == ["aptl/generic-samba-ad-base:latest"]
+    assert argv[image_index - 2 : image_index] == ["--cap-add", "SYS_ADMIN"]
 
 
 def test_start_base_container_with_init_still_carries_the_label(tmp_path):
@@ -196,11 +392,17 @@ def test_start_base_container_with_init_still_carries_the_label(tmp_path):
         c for c in mock_run.call_args_list if c.args[0][:2] == ["docker", "run"]
     )
     argv = run_call.args[0]
-    assert "com.docker.compose.project=test-proj" in argv
+    assert f"com.docker.compose.project={backend.project_name}" in argv
+    # issue #955: the init posture runs under the daemon's default seccomp and
+    # AppArmor profiles, with a private, writable cgroup namespace.
+    assert not any("unconfined" in item for item in argv)
+    assert "--cgroupns=private" in argv
+    assert "writable-cgroups=true" in argv
 
 
 def test_declared_network_is_attached_before_image_free_node_starts(tmp_path):
     backend = _backend(tmp_path)
+    backend._ensure_resource_ownership(attempt_id="run-a")
     backend._appliance_boundary = (MagicMock(), MagicMock())
     node = MagicMock(
         address="provision.node.kali",
@@ -211,18 +413,22 @@ def test_declared_network_is_attached_before_image_free_node_starts(tmp_path):
             ),
         ),
     )
-    backend.host_list_lab_networks = MagicMock(return_value=["test-proj_aptl-security"])
+    backend.host_list_lab_networks = MagicMock(
+        return_value=[f"{backend.project_name}_aptl-security"]
+    )
     backend.connect_container_network = MagicMock(return_value=LabResult(success=True))
     backend.configure_base_container_networks((node,))
     spec = BaseContainerSpec(
         node_address=node.address,
         container_name="aptl-kali",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
     )
 
     with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+        )
         backend.start_base_container(spec)
 
     create = next(
@@ -231,11 +437,11 @@ def test_declared_network_is_attached_before_image_free_node_starts(tmp_path):
         if call.args[0][:2] == ["docker", "create"]
     )
     assert "--network" in create.args[0]
-    assert "test-proj_aptl-security" in create.args[0]
+    assert f"{backend.project_name}_aptl-security" in create.args[0]
     assert "--ip" in create.args[0]
     assert "172.31.8.10" in create.args[0]
     assert "none" not in create.args[0]
-    assert ["docker", "start", "aptl-kali"] in [
+    assert ["docker", "start", _CONTAINER_ID] in [
         call.args[0] for call in mock_run.call_args_list
     ]
     assert not any(
@@ -259,15 +465,47 @@ def test_materialization_is_idempotent_for_an_already_running_node(tmp_path):
     spec = BaseContainerSpec(
         node_address="provision.node.kali",
         container_name="aptl-kali",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
     )
-    backend.container_inspect = MagicMock(
-        return_value={"State": {"Running": True}, "Config": {"Image": "debian:12-slim"}}
+    ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+    external = ownership.container_name(spec.container_name)
+    ownership.record(
+        ResourceReceipt(
+            kind="container",
+            native_id=_CONTAINER_ID,
+            external_name=external,
+            semantic_name=spec.container_name,
+            node_address=spec.node_address,
+            workspace_id=ownership.workspace_id,
+            project_name=ownership.project_name,
+            daemon_id="test-daemon",
+            attempt_id="run-a",
+        )
+    )
+    backend._raw_container_inspect = MagicMock(
+        return_value=_posture_for(
+            spec,
+            volume_prefix=ownership.project_name,
+            **{
+            "Id": _CONTAINER_ID,
+            "Name": f"/{external}",
+            "State": {"Running": True},
+            "Config": {
+                "Image": "debian:13-slim",
+                "Labels": {
+                    "aptl.workspace.id": ownership.workspace_id,
+                    "aptl.lifecycle.project": ownership.project_name,
+                },
+            },
+            },
+        )
     )
 
     with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+        )
         backend.start_base_container(spec)
 
     # No teardown, no recreate: the running container keeps its networks.
@@ -289,25 +527,193 @@ def test_materialization_recreates_a_stopped_or_wrong_image_node(tmp_path):
     spec = BaseContainerSpec(
         node_address="provision.node.kali",
         container_name="aptl-kali",
-        image_ref="debian:12-slim",
+        image_ref="debian:13-slim",
         runs_services=False,
     )
     # Present but not running -> must recreate.
-    backend.container_inspect = MagicMock(
-        return_value={
+    ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+    external = ownership.container_name(spec.container_name)
+    ownership.record(
+        ResourceReceipt(
+            kind="container",
+            native_id=_CONTAINER_ID,
+            external_name=external,
+            semantic_name=spec.container_name,
+            node_address=spec.node_address,
+            workspace_id=ownership.workspace_id,
+            project_name=ownership.project_name,
+            daemon_id="test-daemon",
+            attempt_id="run-a",
+        )
+    )
+    backend._raw_container_inspect = MagicMock(
+        return_value=_posture_for(
+            spec,
+            volume_prefix=ownership.project_name,
+            **{
+            "Id": _CONTAINER_ID,
+            "Name": f"/{external}",
             "State": {"Running": False},
-            "Config": {"Image": "debian:12-slim"},
-        }
+            "Config": {
+                "Image": "debian:13-slim",
+                "Labels": {
+                    "aptl.workspace.id": ownership.workspace_id,
+                    "aptl.lifecycle.project": ownership.project_name,
+                },
+            },
+            },
+        )
     )
 
     with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+        )
         backend.start_base_container(spec)
 
     assert any(call.args[0][:2] == ["docker", "rm"] for call in mock_run.call_args_list)
     assert any(
         call.args[0][:2] == ["docker", "run"] for call in mock_run.call_args_list
     )
+
+
+def test_foreign_same_name_container_is_neither_adopted_nor_removed(tmp_path):
+    """A name/image match is discovery evidence, never cleanup authority."""
+
+    backend = _backend(tmp_path)
+    backend._docker_daemon_id = "daemon-a"
+    ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+    external = ownership.container_name("aptl-victim")
+    spec = BaseContainerSpec(
+        node_address="provision.node.victim",
+        container_name="aptl-victim",
+        image_ref="debian:13-slim",
+        runs_services=False,
+    )
+    backend._raw_container_inspect = MagicMock(
+        return_value={
+            "Id": "f" * 64,
+            "Name": f"/{external}",
+            "State": {"Running": True},
+            "Config": {
+                "Image": "debian:13-slim",
+                "Labels": {"aptl.workspace.id": "foreign-workspace"},
+            },
+        }
+    )
+    backend._run = MagicMock()
+
+    with pytest.raises(BackendSeedError, match="resource ownership conflict"):
+        backend.start_base_container(spec)
+
+    backend._run.assert_not_called()
+
+
+def test_base_container_records_native_id_and_uses_scoped_external_name(tmp_path):
+    backend = _backend(tmp_path)
+    backend._docker_daemon_id = "daemon-a"
+    ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+    external = ownership.container_name("aptl-victim")
+    spec = BaseContainerSpec(
+        node_address="provision.node.victim",
+        container_name="aptl-victim",
+        image_ref="debian:13-slim",
+        runs_services=False,
+    )
+    # Nothing exists under the external name; the created container reads back
+    # with exactly the requested posture.
+    backend._raw_container_inspect = MagicMock(
+        side_effect=lambda native_id: (
+            _posture_for(spec) if native_id == _CONTAINER_ID else {}
+        )
+    )
+    backend._run = MagicMock(
+        return_value=MagicMock(
+            returncode=0,
+            stdout=f"{_CONTAINER_ID}\n",
+            stderr="",
+        )
+    )
+
+    backend.start_base_container(spec)
+
+    argv = next(
+        call.args[0]
+        for call in backend._run.call_args_list
+        if call.args[0][:2] == ["docker", "run"]
+    )
+    assert argv[argv.index("--name") + 1] == external
+    assert argv[argv.index("--hostname") + 1] == "aptl-victim"
+    assert f"aptl.workspace.id={ownership.workspace_id}" in argv
+    assert "aptl.attempt.id=run-a" in argv
+    assert not any(
+        call.args[0][:2] == ["docker", "rm"] for call in backend._run.call_args_list
+    )
+    receipt = ownership.candidates(
+        "aptl-victim", kind="container", daemon_id="daemon-a"
+    )
+    assert len(receipt) == 1
+    assert receipt[0].native_id == _CONTAINER_ID
+    assert receipt[0].external_name == external
+
+
+@pytest.mark.parametrize("network_failures", [[], ["declared network was absent"]])
+def test_image_free_realization_reconciles_networks_after_materialization(
+    tmp_path, network_failures: list[str]
+) -> None:
+    backend = _backend(tmp_path)
+    realization = MagicMock(
+        nodes=(MagicMock(address="provision.node.webapp"),),
+        networks=(MagicMock(name="dmz-net"),),
+        content=(),
+        persistent_volumes=(),
+    )
+    backend._realize_networks_and_boundaries = MagicMock(return_value=None)
+    backend._image_free_generated_artifact_ops = MagicMock(return_value=(None, {}))
+    backend._reconcile_realization_networks = MagicMock(
+        return_value=network_failures
+    )
+    backend._realize_platform_boundary = MagicMock(return_value=None)
+
+    with patch(
+        "aptl.core.deployment._compose_realization._realize_node_subset",
+        return_value=LabResult(success=True),
+    ) as materialize:
+        result = backend._realize_without_compose(realization, tmp_path)
+
+    materialize.assert_called_once()
+    backend._reconcile_realization_networks.assert_called_once_with(realization)
+    assert result.success == (not network_failures)
+    if network_failures:
+        backend._realize_platform_boundary.assert_not_called()
+        assert "declared network was absent" in (result.error or "")
+    else:
+        backend._realize_platform_boundary.assert_called_once()
+
+
+def test_image_free_realization_without_declared_networks_skips_reconciliation(
+    tmp_path,
+) -> None:
+    backend = _backend(tmp_path)
+    realization = MagicMock(
+        nodes=(MagicMock(address="provision.node.unbound"),),
+        networks=(),
+        content=(),
+        persistent_volumes=(),
+    )
+    backend._realize_networks_and_boundaries = MagicMock(return_value=None)
+    backend._image_free_generated_artifact_ops = MagicMock(return_value=(None, {}))
+    backend._reconcile_realization_networks = MagicMock()
+    backend._realize_platform_boundary = MagicMock(return_value=None)
+
+    with patch(
+        "aptl.core.deployment._compose_realization._realize_node_subset",
+        return_value=LabResult(success=True),
+    ):
+        result = backend._realize_without_compose(realization, tmp_path)
+
+    assert result.success
+    backend._reconcile_realization_networks.assert_not_called()
 
 
 def test_appliance_image_free_node_without_network_fails_before_create(
@@ -334,10 +740,11 @@ class TestStartBaseContainerVolumesAndPorts:
 
     def test_volume_mount_uses_the_project_scoped_volume_name(self, tmp_path):
         backend = _backend(tmp_path)
+        backend._ensure_labeled_project_volume = MagicMock()
         spec = BaseContainerSpec(
             node_address="provision.node.misp-suricata-sync",
             container_name="aptl-misp-suricata-sync",
-            image_ref="debian:12-slim",
+            image_ref="debian:13-slim",
             runs_services=False,
             volume_mounts=(
                 VolumeMount(
@@ -347,7 +754,9 @@ class TestStartBaseContainerVolumesAndPorts:
         )
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+            )
             backend.start_base_container(spec)
 
         run_call = next(
@@ -355,14 +764,21 @@ class TestStartBaseContainerVolumesAndPorts:
         )
         argv = run_call.args[0]
         assert "-v" in argv
-        assert "test-proj_suricata_misp_rules:/var/lib/suricata/rules/misp" in argv
+        assert (
+            f"{backend.project_name}_suricata_misp_rules:/var/lib/suricata/rules/misp"
+            in argv
+        )
+        backend._ensure_labeled_project_volume.assert_called_once_with(
+            "suricata_misp_rules"
+        )
 
     def test_read_only_volume_mount_appends_ro_suffix(self, tmp_path):
         backend = _backend(tmp_path)
+        backend._ensure_labeled_project_volume = MagicMock()
         spec = BaseContainerSpec(
             node_address="provision.node.misp-suricata-sync",
             container_name="aptl-misp-suricata-sync",
-            image_ref="debian:12-slim",
+            image_ref="debian:13-slim",
             runs_services=False,
             volume_mounts=(
                 VolumeMount(
@@ -374,27 +790,50 @@ class TestStartBaseContainerVolumesAndPorts:
         )
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+            )
             backend.start_base_container(spec)
 
         run_call = next(
             c for c in mock_run.call_args_list if c.args[0][:2] == ["docker", "run"]
         )
         argv = run_call.args[0]
-        assert "test-proj_suricata_command_socket:/var/run/suricata:ro" in argv
+        assert (
+            f"{backend.project_name}_suricata_command_socket:/var/run/suricata:ro"
+            in argv
+        )
+        backend._ensure_labeled_project_volume.assert_called_once_with(
+            "suricata_command_socket"
+        )
 
-    def test_published_port_defaults_host_port_to_container_port(self, tmp_path):
+    def test_published_port_without_a_host_port_publishes_ephemerally(self, tmp_path):
+        """An unfixed binding asks Docker to choose the host port.
+
+        ``host_port=None`` is the author declaring a container port with *no*
+        fixed host binding. Substituting the container port number turned that
+        into an exact binding the author never wrote, and
+        ``published_port_conflicts`` skips its probe for exactly these bindings
+        because one with no host port "cannot conflict" — so the invented
+        binding was also never checked, and a host port already in use failed
+        the boot with a raw Docker error instead of APTL's fail-closed message.
+        """
+
         backend = _backend(tmp_path)
         spec = BaseContainerSpec(
             node_address="provision.node.webapp",
             container_name="aptl-webapp",
-            image_ref="debian:12-slim",
+            image_ref="debian:13-slim",
             runs_services=False,
-            published_ports=(PublishedPort(container_port=8080),),
+            published_ports=(
+                PublishedPort(container_port=8080, host_ip="127.0.0.1"),
+            ),
         )
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+            )
             backend.start_base_container(spec)
 
         run_call = next(
@@ -402,14 +841,55 @@ class TestStartBaseContainerVolumesAndPorts:
         )
         argv = run_call.args[0]
         assert "-p" in argv
-        assert "8080:8080/tcp" in argv
+        assert "127.0.0.1::8080/tcp" in argv
+        assert "127.0.0.1:8080:8080/tcp" not in argv
+
+    def test_unfixed_binding_agrees_with_the_compose_path(self, tmp_path):
+        """The same declaration must realize the same way on both paths.
+
+        An image-free node is realized by ``docker run -p`` here; an
+        image-backed one by the Compose port override. A declaration that
+        publishes ephemerally through one and exactly through the other is the
+        realization divergence this pins shut.
+        """
+
+        from aptl.core.deployment._compose_port_realization import compose_port_entry
+        from aptl.core.deployment.realization import DeploymentPublishedPort
+
+        compose_entry = compose_port_entry(
+            DeploymentPublishedPort(container_port=8080, host_ip="127.0.0.1")
+        )
+        assert "published" not in compose_entry
+
+        backend = _backend(tmp_path)
+        spec = BaseContainerSpec(
+            node_address="provision.node.webapp",
+            container_name="aptl-webapp",
+            image_ref="debian:13-slim",
+            runs_services=False,
+            published_ports=(
+                PublishedPort(container_port=8080, host_ip="127.0.0.1"),
+            ),
+        )
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+            )
+            backend.start_base_container(spec)
+
+        run_call = next(
+            c for c in mock_run.call_args_list if c.args[0][:2] == ["docker", "run"]
+        )
+        published = run_call.args[0][run_call.args[0].index("-p") + 1]
+        assert published.split(":")[1] == "", published
 
     def test_published_port_honours_explicit_host_ip_and_host_port(self, tmp_path):
         backend = _backend(tmp_path)
         spec = BaseContainerSpec(
             node_address="provision.node.dns",
             container_name="aptl-dns",
-            image_ref="debian:12-slim",
+            image_ref="debian:13-slim",
             runs_services=False,
             published_ports=(
                 PublishedPort(
@@ -422,7 +902,9 @@ class TestStartBaseContainerVolumesAndPorts:
         )
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+            )
             backend.start_base_container(spec)
 
         run_call = next(
@@ -446,7 +928,7 @@ class TestDynamicCompositionImmutableStart:
         base = dict(
             node_address="provision.node.web",
             container_name="aptl-web",
-            image_ref="debian:12-slim",
+            image_ref="debian:13-slim",
             runs_services=False,
             dynamic_composition=True,
         )
@@ -464,7 +946,9 @@ class TestDynamicCompositionImmutableStart:
         spec = self._spec()
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+            )
             backend.start_base_container(spec)
 
         run_call = next(
@@ -475,7 +959,7 @@ class TestDynamicCompositionImmutableStart:
         # declared tag never appears as the image argument.
         assert "--pull=never" in argv
         assert argv[-3:] == [_CONFIG_ID, "sleep", "infinity"]
-        assert "debian:12-slim" not in argv
+        assert "debian:13-slim" not in argv
         # The mutable tag is never resolved at start: no `docker image inspect`.
         assert not any(
             c.args[0][:4] == ["docker", "image", "inspect", "--format"]
@@ -492,7 +976,9 @@ class TestDynamicCompositionImmutableStart:
         spec = self._spec()  # apply context deliberately not seeded
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+            )
             with pytest.raises(BackendSeedError, match="not verified by availability"):
                 backend.start_base_container(spec)
 
@@ -507,12 +993,44 @@ class TestDynamicCompositionImmutableStart:
         spec = self._spec()
         # Already up on the verified config id (what `docker run <id>` records as
         # ``Config.Image``) -- a retry must leave it in place.
-        backend.container_inspect = MagicMock(
-            return_value={"State": {"Running": True}, "Config": {"Image": _CONFIG_ID}}
+        ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+        external = ownership.container_name(spec.container_name)
+        ownership.record(
+            ResourceReceipt(
+                kind="container",
+                native_id=_CONTAINER_ID,
+                external_name=external,
+                semantic_name=spec.container_name,
+                node_address=spec.node_address,
+                workspace_id=ownership.workspace_id,
+                project_name=ownership.project_name,
+                daemon_id="test-daemon",
+                attempt_id="run-a",
+            )
+        )
+        backend._raw_container_inspect = MagicMock(
+            return_value=_posture_for(
+                spec,
+                volume_prefix=ownership.project_name,
+                **{
+                "Id": _CONTAINER_ID,
+                "Name": f"/{external}",
+                "State": {"Running": True},
+                "Config": {
+                    "Image": _CONFIG_ID,
+                    "Labels": {
+                        "aptl.workspace.id": ownership.workspace_id,
+                        "aptl.lifecycle.project": ownership.project_name,
+                    },
+                },
+                },
+            )
         )
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+            )
             backend.start_base_container(spec)
 
         assert not any(
@@ -528,7 +1046,9 @@ class TestDynamicCompositionImmutableStart:
         spec = self._spec(dynamic_composition=False)
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+            )
             backend.start_base_container(spec)
 
         run_call = next(
@@ -536,7 +1056,7 @@ class TestDynamicCompositionImmutableStart:
         )
         argv = run_call.args[0]
         assert "--pull=never" not in argv
-        assert argv[-3:] == ["debian:12-slim", "sleep", "infinity"]
+        assert argv[-3:] == ["debian:13-slim", "sleep", "infinity"]
 
 
 class TestRemoveGenericMaterializerContainers:
@@ -548,33 +1068,21 @@ class TestRemoveGenericMaterializerContainers:
     endpoints" - the whole stop/kill operation failed, not just a warning.
     """
 
-    def test_removes_containers_matching_the_lifecycle_label(self, tmp_path):
+    def test_never_queries_labels_when_no_receipts_exist(self, tmp_path):
         backend = _backend(tmp_path)
-
-        def fake_run(cmd, **kwargs):
-            del kwargs
-            if cmd[:3] == ["docker", "ps", "-aq"]:
-                return MagicMock(returncode=0, stdout="abc123\ndef456\n", stderr="")
-            return MagicMock(returncode=0, stdout="", stderr="")
-
-        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+        with patch("subprocess.run") as mock_run:
             failures = backend.remove_generic_materializer_containers()
 
         assert failures == []
-        list_call = next(
-            c for c in mock_run.call_args_list if c.args[0][:2] == ["docker", "ps"]
-        )
-        assert "label=aptl.lifecycle.project=test-proj" in list_call.args[0]
-        rm_call = next(
-            c for c in mock_run.call_args_list if c.args[0][:2] == ["docker", "rm"]
-        )
-        assert rm_call.args[0] == ["docker", "rm", "-f", "abc123", "def456"]
+        mock_run.assert_not_called()
 
     def test_no_containers_is_a_clean_noop(self, tmp_path):
         backend = _backend(tmp_path)
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{_CONTAINER_ID}\n", stderr=""
+            )
             failures = backend.remove_generic_materializer_containers()
 
         assert failures == []
@@ -585,27 +1093,78 @@ class TestRemoveGenericMaterializerContainers:
 
     def test_removal_failure_is_reported_not_raised(self, tmp_path):
         backend = _backend(tmp_path)
+        ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+        external = ownership.container_name("aptl-victim")
+        ownership.record(
+            ResourceReceipt(
+                kind="container",
+                native_id=_CONTAINER_ID,
+                external_name=external,
+                semantic_name="aptl-victim",
+                node_address="provision.node.victim",
+                workspace_id=ownership.workspace_id,
+                project_name=ownership.project_name,
+                daemon_id="test-daemon",
+                attempt_id="run-a",
+            )
+        )
+        backend._raw_container_inspect = MagicMock(
+            return_value={
+                "Id": _CONTAINER_ID,
+                "Name": f"/{external}",
+                "Config": {
+                    "Labels": {
+                        "aptl.workspace.id": ownership.workspace_id,
+                        "aptl.lifecycle.project": ownership.project_name,
+                    }
+                },
+            }
+        )
+        backend._run = MagicMock(
+            return_value=MagicMock(returncode=1, stdout="", stderr="container in use")
+        )
 
-        def fake_run(cmd, **kwargs):
-            del kwargs
-            if cmd[:3] == ["docker", "ps", "-aq"]:
-                return MagicMock(returncode=0, stdout="abc123\n", stderr="")
-            return MagicMock(returncode=1, stdout="", stderr="container in use")
-
-        with patch("subprocess.run", side_effect=fake_run):
-            failures = backend.remove_generic_materializer_containers()
-
-        assert failures == ["failed to remove generic-materializer containers"]
+        assert backend.remove_generic_materializer_containers() == [
+            "failed to remove receipt-owned container"
+        ]
 
     def test_docker_unavailable_is_reported_not_raised(self, tmp_path):
         # kill_compose_lab's own tests hit this exact path: every subprocess
         # call fails, and the whole operation must still return gracefully.
         backend = _backend(tmp_path)
 
-        with patch("subprocess.run", side_effect=FileNotFoundError("docker not found")):
-            failures = backend.remove_generic_materializer_containers()
+        ownership = backend._ensure_resource_ownership(attempt_id="run-a")
+        external = ownership.container_name("aptl-victim")
+        ownership.record(
+            ResourceReceipt(
+                kind="container",
+                native_id=_CONTAINER_ID,
+                external_name=external,
+                semantic_name="aptl-victim",
+                node_address="provision.node.victim",
+                workspace_id=ownership.workspace_id,
+                project_name=ownership.project_name,
+                daemon_id="test-daemon",
+                attempt_id="run-a",
+            )
+        )
+        backend._raw_container_inspect = MagicMock(
+            return_value={
+                "Id": _CONTAINER_ID,
+                "Name": f"/{external}",
+                "Config": {
+                    "Labels": {
+                        "aptl.workspace.id": ownership.workspace_id,
+                        "aptl.lifecycle.project": ownership.project_name,
+                    }
+                },
+            }
+        )
+        backend._run = MagicMock(side_effect=FileNotFoundError("docker not found"))
 
-        assert failures == ["failed to remove generic-materializer containers"]
+        assert backend.remove_generic_materializer_containers() == [
+            "failed to establish container cleanup authority"
+        ]
 
 
 class TestInitRunFlagsPosture:
@@ -680,31 +1239,30 @@ class TestBaseContainerReuseRejectsDrift:
     def _inspect(self, **overrides):
         """A realized container matching the current spec, before overrides."""
 
-        info = {
-            "State": {"Running": True},
-            "Config": {
-                "Image": "aptl/generic-systemd-base-debian:latest",
-                "Env": ["container=docker"],
-            },
-            "HostConfig": {
-                "CgroupnsMode": "private",
-                "SecurityOpt": ["writable-cgroups=true"],
-                "CapAdd": None,
-                "Binds": None,
-                "Tmpfs": {"/run": "", "/run/lock": "", "/tmp": ""},
-                "PortBindings": {},
-            },
-            "Mounts": [],
-        }
+        info = _inspect_honoring(
+            [
+                "--cgroupns=private",
+                "--security-opt",
+                "writable-cgroups=true",
+                "--tmpfs",
+                "/run",
+                "--tmpfs",
+                "/run/lock",
+                "--tmpfs",
+                "/tmp",
+            ],
+            "aptl/generic-systemd-base-debian:latest",
+        )
         info["HostConfig"].update(overrides.pop("HostConfig", {}))
         info.update(overrides)
         return info
 
     def test_a_matching_container_is_still_reused(self, tmp_path):
         backend = _backend(tmp_path)
-        backend.container_inspect = MagicMock(return_value=self._inspect())
+        backend._raw_container_inspect = MagicMock(return_value=self._inspect())
 
         assert backend._base_container_already_realized(
+            _CONTAINER_ID,
             self._spec(), "aptl/generic-systemd-base-debian:latest"
         )
 
@@ -730,11 +1288,12 @@ class TestBaseContainerReuseRejectsDrift:
     )
     def test_drift_from_the_current_spec_is_not_reused(self, tmp_path, drift):
         backend = _backend(tmp_path)
-        backend.container_inspect = MagicMock(
+        backend._raw_container_inspect = MagicMock(
             return_value=self._inspect(HostConfig=drift)
         )
 
         assert not backend._base_container_already_realized(
+            _CONTAINER_ID,
             self._spec(), "aptl/generic-systemd-base-debian:latest"
         )
 
@@ -744,9 +1303,10 @@ class TestBaseContainerReuseRejectsDrift:
             self._spec(),
             volume_mounts=(VolumeMount(target="/var/lib/pgsql", source="db_data"),),
         )
-        backend.container_inspect = MagicMock(return_value=self._inspect())
+        backend._raw_container_inspect = MagicMock(return_value=self._inspect())
 
         assert not backend._base_container_already_realized(
+            _CONTAINER_ID,
             spec, "aptl/generic-systemd-base-debian:latest"
         )
 
@@ -762,10 +1322,13 @@ class TestBaseContainerReuseRejectsDrift:
 
         backend = _backend(tmp_path)
         info = self._inspect()
-        info["Mounts"] = [{"Type": "volume", "Destination": "/var/lib/anon"}]
-        backend.container_inspect = MagicMock(return_value=info)
+        info["Mounts"] = [
+            {"Type": "volume", "Name": "c" * 64, "Destination": "/var/lib/anon", "RW": True}
+        ]
+        backend._raw_container_inspect = MagicMock(return_value=info)
 
         assert backend._base_container_already_realized(
+            _CONTAINER_ID,
             self._spec(), "aptl/generic-systemd-base-debian:latest"
         )
 
@@ -777,9 +1340,10 @@ class TestBaseContainerReuseRejectsDrift:
         info["Mounts"] = [
             {"Type": "bind", "Source": "/sys/fs/cgroup", "Destination": "/sys/fs/cgroup"}
         ]
-        backend.container_inspect = MagicMock(return_value=info)
+        backend._raw_container_inspect = MagicMock(return_value=info)
 
         assert not backend._base_container_already_realized(
+            _CONTAINER_ID,
             self._spec(), "aptl/generic-systemd-base-debian:latest"
         )
 
@@ -793,15 +1357,76 @@ class TestBaseContainerReuseRejectsDrift:
             image_ref="debian:12-slim",
             runs_services=False,
         )
-        backend.container_inspect = MagicMock(
-            return_value={
-                "State": {"Running": True},
-                "Config": {"Image": "debian:12-slim"},
-                "HostConfig": {"CgroupnsMode": "host"},
-            }
+        backend._raw_container_inspect = MagicMock(return_value=_posture_for(spec))
+
+        assert backend._base_container_already_realized(
+            _CONTAINER_ID, spec, "debian:12-slim"
         )
 
-        assert backend._base_container_already_realized(spec, "debian:12-slim")
+    def test_a_plain_node_sharing_the_host_cgroup_namespace_is_drift(self, tmp_path):
+        # No base container is created in the host cgroup namespace, init or
+        # not, so one found there was created by some other policy.
+        backend = _backend(tmp_path)
+        spec = BaseContainerSpec(
+            node_address="provision.node.kali",
+            container_name="aptl-kali",
+            image_ref="debian:12-slim",
+            runs_services=False,
+        )
+        info = _posture_for(spec)
+        info["HostConfig"]["CgroupnsMode"] = "host"
+        backend._raw_container_inspect = MagicMock(return_value=info)
+
+        assert not backend._base_container_already_realized(
+            _CONTAINER_ID, spec, "debian:12-slim"
+        )
+
+    def _provider_spec(self) -> BaseContainerSpec:
+        # A backend-selected provider substrate (the Samba AD base) carries its
+        # own measured capability minimum, separate from any authored grant.
+        return BaseContainerSpec(
+            node_address="provision.node.ad",
+            container_name="aptl-ad",
+            image_ref="aptl/generic-samba-ad-base:latest",
+            runs_services=False,
+            use_image_command=True,
+            backend_run_capabilities=("SYS_ADMIN",),
+        )
+
+    def _provider_inspect(self, cap_add):
+        info = _posture_for(self._provider_spec())
+        info["HostConfig"]["CapAdd"] = cap_add
+        return info
+
+    def test_a_backend_selected_capability_is_expected_state(self, tmp_path):
+        backend = _backend(tmp_path)
+        backend._raw_container_inspect = MagicMock(
+            return_value=self._provider_inspect(["CAP_SYS_ADMIN"])
+        )
+
+        assert backend._base_container_already_realized(
+            _CONTAINER_ID, self._provider_spec(), "aptl/generic-samba-ad-base:latest"
+        )
+
+    @pytest.mark.parametrize(
+        "cap_add",
+        [
+            pytest.param(None, id="backend-grant-missing"),
+            pytest.param(["SYS_ADMIN", "NET_ADMIN"], id="extra-grant"),
+        ],
+    )
+    def test_capability_drift_is_checked_on_plain_nodes_too(self, tmp_path, cap_add):
+        # The capability set is compared for every base container, not only
+        # init-capable ones: a provider substrate's grant is realized state
+        # APTL chose, so anything more or less is a different policy.
+        backend = _backend(tmp_path)
+        backend._raw_container_inspect = MagicMock(
+            return_value=self._provider_inspect(cap_add)
+        )
+
+        assert not backend._base_container_already_realized(
+            _CONTAINER_ID, self._provider_spec(), "aptl/generic-samba-ad-base:latest"
+        )
 
 
 class TestSubstrateDaemonGateInStartPath:
@@ -882,6 +1507,7 @@ class TestSubstrateDaemonGateInStartPath:
             call.args[0]
             for call in mock_run.call_args_list
             if call.args[0][:2] == ["docker", "info"]
+            and "{{.CgroupVersion}}" in call.args[0]
         ]
         assert len(probes) == 1
 
@@ -894,3 +1520,144 @@ class TestSubstrateDaemonGateInStartPath:
                 backend.start_base_container(self._init_spec())
             with pytest.raises(BackendSeedError):
                 backend.start_base_container(self._init_spec())
+
+
+class TestCreatedContainerAttestation:
+    """issue #955: a just-created container is read back before content lands.
+
+    The create argv is intent. A daemon that did not honor it -- or anything
+    that changed the container between create and readback -- must fail the
+    node rather than have service content materialized onto a posture APTL
+    never asked for.
+    """
+
+    def _spec(self) -> BaseContainerSpec:
+        return BaseContainerSpec(
+            node_address="provision.node.db",
+            container_name="aptl-db",
+            image_ref="aptl/generic-systemd-base-debian:latest",
+            runs_services=True,
+            init=InitRequirements(),
+        )
+
+    def test_a_daemon_that_did_not_honor_the_posture_fails_the_node(self, tmp_path):
+        backend = _backend(tmp_path)
+        spec = self._spec()
+        realized = _posture_for(spec)
+        realized["HostConfig"]["Privileged"] = True
+        backend._raw_container_inspect = MagicMock(
+            side_effect=lambda native_id: (
+                realized if native_id == _CONTAINER_ID else {}
+            )
+        )
+
+        with patch("subprocess.run", side_effect=_supported_daemon()) as mock_run:
+            with pytest.raises(BackendSeedError, match="privileged"):
+                backend.start_base_container(spec)
+
+        removals = [
+            call.args[0]
+            for call in mock_run.call_args_list
+            if call.args[0][:2] == ["docker", "rm"]
+        ]
+        assert removals and _CONTAINER_ID in removals[-1]
+
+    def test_an_unreadable_created_container_fails_closed(self, tmp_path):
+        backend = _backend(tmp_path)
+        spec = self._spec()
+        backend._raw_container_inspect = MagicMock(return_value={})
+
+        with patch("subprocess.run", side_effect=_supported_daemon()):
+            with pytest.raises(BackendSeedError, match="inspect-malformed"):
+                backend.start_base_container(spec)
+
+    def test_a_daemon_honoring_the_posture_passes(self, tmp_path):
+        backend = _backend(tmp_path)
+
+        with patch("subprocess.run", side_effect=_supported_daemon()):
+            backend.start_base_container(self._spec())  # does not raise
+
+
+class TestSubstrateDaemonGateCaching:
+    def test_a_changed_docker_endpoint_is_probed_again(self, tmp_path, monkeypatch):
+        # A pass belongs to one daemon. A changed DOCKER_HOST is a different
+        # daemon and must be qualified on its own.
+        backend = _backend(tmp_path)
+        run = _supported_daemon()
+        probes: list[list[str]] = []
+
+        def recording(cmd, *args, **kwargs):
+            if cmd[:2] == ["docker", "info"] and "{{.CgroupVersion}}" in cmd:
+                probes.append(cmd)
+            return run(cmd, *args, **kwargs)
+
+        with patch("subprocess.run", side_effect=recording):
+            monkeypatch.setenv("DOCKER_HOST", "unix:///run/docker-a.sock")
+            backend._require_substrate_daemon()
+            backend._require_substrate_daemon()
+            monkeypatch.setenv("DOCKER_HOST", "unix:///run/docker-b.sock")
+            backend._require_substrate_daemon()
+
+        assert len(probes) == 2
+
+
+class TestSubstrateDaemonGateBeforeImageBuild:
+    """The gate runs at the realization boundary, before any image is built."""
+
+    def _node(self, *, runs_services: bool):
+        from raes.runtime_configuration import RuntimeConfiguration
+
+        runtime = RuntimeConfiguration.model_validate(
+            {
+                "service_manager_units": [
+                    {
+                        "unit_id": "svc",
+                        "unit_name": "svc.service",
+                        "enabled_state": "enabled",
+                        "active_state": "active",
+                    }
+                ]
+            }
+            if runs_services
+            else {}
+        )
+        return MagicMock(
+            address="provision.node.db",
+            os="linux",
+            os_version="",
+            runtime=runtime,
+            backend_base_image_ref=None,
+        )
+
+    def test_an_unsupported_daemon_is_refused_before_any_image_build(self, tmp_path):
+        from aptl.core.deployment._compose_image_free_realization import (
+            _realize_node_subset,
+        )
+
+        backend = _backend(tmp_path)
+        backend.ensure_generic_base_image = MagicMock(return_value=[])
+
+        with patch("subprocess.run", side_effect=_supported_daemon(cgroup_version="1")):
+            result = _realize_node_subset(
+                backend, (self._node(runs_services=True),), (), tmp_path
+            )
+
+        assert result is not None and not result.success
+        assert "cgroup" in result.error
+        backend.ensure_generic_base_image.assert_not_called()
+
+    def test_a_subset_without_systemd_nodes_is_not_gated(self, tmp_path):
+        from aptl.core.deployment._compose_image_free_realization import (
+            _require_substrate_daemon_for,
+        )
+
+        backend = _backend(tmp_path)
+        backend._require_substrate_daemon = MagicMock()
+
+        assert (
+            _require_substrate_daemon_for(
+                backend, (self._node(runs_services=False),)
+            )
+            is None
+        )
+        backend._require_substrate_daemon.assert_not_called()

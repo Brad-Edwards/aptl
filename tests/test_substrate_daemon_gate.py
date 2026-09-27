@@ -18,26 +18,34 @@ convenience check:
    parsed as one.
 
 So the gate is ORDERED and JOINED: prove cgroup v2, then prove engine support,
-and fail closed on anything else. There is deliberately no fallback to the
+then refuse the daemon modes that cannot run the posture (rootless,
+userns-remap), and fail closed on anything else. There is deliberately no fallback to the
 retired privileged recipe: a fallback would make the realized security posture
 a silent function of the operator's Docker version.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
 from aptl.core.deployment._compose_substrate_gate import (
     SUBSTRATE_MIN_DOCKER_ENGINE,
+    compose_services_requesting_writable_cgroups,
     require_substrate_daemon_support,
 )
 from aptl.core.deployment.errors import BackendSeedError
 
 
-def _runner(*, cgroup_version="2", engine_version="29.5.0", fail=()):
-    """A fake list-form `_run` answering the gate's two probes.
+_ROOTFUL = '["name=apparmor","name=seccomp,profile=builtin","name=cgroupns"]'
+
+
+def _runner(
+    *, cgroup_version="2", engine_version="29.5.0", security_options=_ROOTFUL, fail=()
+):
+    """A fake list-form `_run` answering the gate's three probes.
 
     Mirrors the backend's own runner contract (argv list in, completed-process
     out) so the gate stays exercised through the seam it really uses -- the
@@ -51,6 +59,10 @@ def _runner(*, cgroup_version="2", engine_version="29.5.0", fail=()):
         del kwargs
         calls.append(list(cmd))
         joined = " ".join(cmd)
+        if "SecurityOptions" in joined:
+            if "security" in fail:
+                return MagicMock(returncode=1, stdout="", stderr="daemon unreachable")
+            return MagicMock(returncode=0, stdout=f"{security_options}\n", stderr="")
         if "info" in cmd:
             if "info" in fail:
                 return MagicMock(returncode=1, stdout="", stderr="daemon unreachable")
@@ -106,7 +118,7 @@ class TestFailsClosed:
         # The operator needs the required version to act on the failure.
         assert "28" in str(excinfo.value)
 
-    @pytest.mark.parametrize("probe", ["info", "version"])
+    @pytest.mark.parametrize("probe", ["info", "version", "security"])
     def test_a_failed_probe_is_refused_not_assumed(self, probe):
         # An unanswerable question is not a yes. A probe that errors must fail
         # closed rather than fall through to the retired privileged recipe.
@@ -116,6 +128,52 @@ class TestFailsClosed:
     def test_an_unparseable_engine_version_is_refused(self):
         with pytest.raises(BackendSeedError):
             require_substrate_daemon_support(_runner(engine_version="not-a-version"))
+
+    @pytest.mark.parametrize(
+        ("security_options", "mode"),
+        [
+            pytest.param(
+                '["name=seccomp,profile=builtin","name=rootless","name=cgroupns"]',
+                "rootless",
+                id="rootless",
+            ),
+            pytest.param(
+                '["name=apparmor","name=seccomp,profile=builtin","name=userns"]',
+                "userns-remap",
+                id="userns-remap",
+            ),
+        ],
+    )
+    def test_an_unqualified_daemon_mode_is_refused_by_name(self, security_options, mode):
+        # Both modes reject an explicit writable-cgroups request at create
+        # (moby daemon/oci_linux.go). Refusing here names the cause before any
+        # mutation instead of an opaque "failed to start base container".
+        with pytest.raises(BackendSeedError) as excinfo:
+            require_substrate_daemon_support(
+                _runner(security_options=security_options)
+            )
+
+        assert mode in str(excinfo.value)
+
+    @pytest.mark.parametrize(
+        "security_options",
+        [
+            pytest.param("not json", id="unparseable"),
+            pytest.param('{"name": "rootless"}', id="not-a-list"),
+            pytest.param("[1, 2]", id="not-strings"),
+        ],
+    )
+    def test_malformed_security_options_are_refused(self, security_options):
+        with pytest.raises(BackendSeedError):
+            require_substrate_daemon_support(
+                _runner(security_options=security_options)
+            )
+
+    def test_a_daemon_reporting_no_security_options_is_not_misread_as_unqualified(
+        self,
+    ):
+        # `{{json .SecurityOptions}}` renders a nil list as `null`.
+        require_substrate_daemon_support(_runner(security_options="null"))
 
     def test_the_diagnostic_carries_no_raw_daemon_stderr(self):
         with pytest.raises(BackendSeedError) as excinfo:
@@ -141,10 +199,98 @@ class TestOrdering:
             "a cgroup v1 daemon must be refused before the engine probe runs"
         )
 
-    def test_the_cgroup_probe_runs_before_the_engine_probe(self):
+    def test_the_probes_run_cgroup_then_engine_then_daemon_mode(self):
         run = _runner()
 
         require_substrate_daemon_support(run)
 
-        kinds = ["info" if "info" in cmd else "version" for cmd in run.calls]
-        assert kinds == ["info", "version"]
+        def kind(cmd):
+            joined = " ".join(cmd)
+            if "SecurityOptions" in joined:
+                return "mode"
+            return "cgroup" if "info" in cmd else "version"
+
+        assert [kind(cmd) for cmd in run.calls] == ["cgroup", "version", "mode"]
+
+
+class TestComposePathSelection:
+    """A Compose-managed systemd service needs the same daemon support.
+
+    `reverse` takes the substrate's posture through Compose rather than through
+    `start_base_container`, so without this selection it would reach the daemon
+    ungated and an unsupported engine would surface only as Docker's opaque
+    `invalid --security-opt` at create.
+    """
+
+    _COMPOSE = Path(__file__).parents[1] / "docker-compose.yml"
+
+    def test_the_reverse_profile_requests_writable_cgroups(self):
+        assert compose_services_requesting_writable_cgroups(
+            [self._COMPOSE], ["reverse"]
+        ) == ("reverse",)
+
+    def test_the_default_profiles_request_nothing(self):
+        from aptl.core.config import ContainerSettings
+
+        assert (
+            compose_services_requesting_writable_cgroups(
+                [self._COMPOSE], ContainerSettings().enabled_profiles()
+            )
+            == ()
+        )
+
+    def test_an_excluded_or_unselected_service_is_not_counted(self):
+        assert (
+            compose_services_requesting_writable_cgroups(
+                [self._COMPOSE], ["reverse"], exclude_services=["reverse"]
+            )
+            == ()
+        )
+        assert (
+            compose_services_requesting_writable_cgroups(
+                [self._COMPOSE], ["reverse"], only_services=["kali"]
+            )
+            == ()
+        )
+
+    def test_an_explicit_target_is_selected_without_its_profile(self):
+        # core-F2: `docker compose up reverse` starts the profiled service even
+        # when the `reverse` profile is not enabled, so it must still be gated.
+        assert compose_services_requesting_writable_cgroups(
+            [self._COMPOSE], ["soc"], only_services=["reverse"]
+        ) == ("reverse",)
+
+    def test_an_explicit_target_that_is_also_excluded_is_not_selected(self):
+        assert (
+            compose_services_requesting_writable_cgroups(
+                [self._COMPOSE],
+                [],
+                exclude_services=["reverse"],
+                only_services=["reverse"],
+            )
+            == ()
+        )
+
+    def test_an_unprofiled_service_is_always_selected(self, tmp_path):
+        compose = tmp_path / "docker-compose.yml"
+        compose.write_text(
+            "services:\n"
+            "  node:\n"
+            "    image: example\n"
+            "    security_opt: [writable-cgroups=true]\n"
+        )
+
+        assert compose_services_requesting_writable_cgroups([compose], []) == (
+            "node",
+        )
+
+    def test_an_unreadable_model_names_nothing(self, tmp_path):
+        broken = tmp_path / "broken.yml"
+        broken.write_text("services: [unclosed\n")
+
+        assert (
+            compose_services_requesting_writable_cgroups(
+                [broken, tmp_path / "missing.yml"], ["reverse"]
+            )
+            == ()
+        )

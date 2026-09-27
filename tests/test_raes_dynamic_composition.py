@@ -50,6 +50,10 @@ from aptl.backends.raes_artifact_satisfaction import (
 )
 from aptl.backends.raes_image_realization import resolve_node_image
 from aptl.backends.raes_manifest import create_aptl_manifest
+from aptl.core.deployment.observation import (
+    CompletedContainerReceipt,
+    DeploymentObservationContext,
+)
 from aptl.backends.raes_substrate import SubstrateIdentity, resolve_substrate
 
 _ADDRESS = "provision.node.web"
@@ -310,10 +314,10 @@ class _RealizedOnlyBackend:
     correct start); the container itself still reports its immutable image id.
     """
 
-    def __init__(self, config_id: str):
+    def __init__(self, config_id: str | None):
         self._config_id = config_id
 
-    def container_image_config_id(self, container: str) -> str:
+    def container_image_config_id(self, container: str) -> str | None:
         return self._config_id
 
     def container_image_digest(self, container: str) -> str | None:
@@ -342,6 +346,32 @@ def test_satisfaction_reuses_the_realized_config_id_when_the_tag_is_gone():
     )
     assert _ADDRESS in disclosures
     assert disclosures[_ADDRESS]["integrity_refs"] == [_SUBSTRATE_DIGEST]
+    assert disclosures[_ADDRESS]["artifact"]["digest"] == _SUBSTRATE_DIGEST
+
+
+def test_satisfaction_uses_apply_scoped_receipt_after_verified_autoremove():
+    resource = _node_resource(
+        {"name": "web", "artifact_requirement": _dc_contract().model_dump(mode="json")}
+    )
+    plan = _Plan({_ADDRESS: resource})
+    context = DeploymentObservationContext(
+        completed_autoremove={
+            "aptl-web": CompletedContainerReceipt(
+                inspect={},
+                image_config_id=_SUBSTRATE_DIGEST,
+            )
+        }
+    )
+
+    disclosures = satisfactions_for_plan(
+        plan,
+        {_ADDRESS: "aptl-web"},
+        _RealizedOnlyBackend(None),
+        create_aptl_manifest(),
+        requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
+        observation_context=context,
+    )
+
     assert disclosures[_ADDRESS]["artifact"]["digest"] == _SUBSTRATE_DIGEST
 
 
@@ -486,7 +516,7 @@ def test_substrate_identity_is_the_image_config_id():
     # the container readback; a registry RepoDigest (ambiguous, possibly a Docker
     # rather than OCI manifest) is deliberately not used.
     backend = _substrate_backend("sha256:configid")
-    assert backend.substrate_image_identity("debian:12-slim") == (
+    assert backend.substrate_image_identity("debian:13-slim") == (
         "sha256:configid",
         _CONFIG_MEDIA,
     )

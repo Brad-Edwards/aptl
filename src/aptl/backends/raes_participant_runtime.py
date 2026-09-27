@@ -116,7 +116,13 @@ class AptlParticipantRuntime(BaseParticipantRuntime):
         return ApplyResult(
             success=True,
             snapshot=snapshot,
-            changed_addresses=[request.participant_address],
+            # The validated selection is pending backend state until the
+            # subsequent RAES admission operation commits a participant
+            # history transition.  This solicitation does not alter the
+            # portable snapshot and therefore must not report a changed
+            # snapshot address (RAES 4.1 contract validation rejects that
+            # false transition claim).
+            changed_addresses=[],
         )
 
     def _selection_context_failure(
@@ -403,21 +409,6 @@ class AptlParticipantRuntime(BaseParticipantRuntime):
                 action_result=request.action_result,
                 post_state_digest=request.post_state_digest,
             )
-        shared_records = {
-            **snapshot.shared_state_records,
-            **execution.shared_state_records,
-        }
-        shared_history = {
-            address: [dict(record) for record in records]
-            for address, records in snapshot.shared_state_history.items()
-        }
-        for address, record in execution.shared_state_records.items():
-            shared_history.setdefault(address, []).append(dict(record))
-        working = snapshot.with_entries(
-            {**snapshot.entries, **execution.snapshot_entries},
-            shared_state_records=shared_records,
-            shared_state_history=shared_history,
-        )
         observation_details = execution.behavior_events[-1].get("details", {})
         observations = [
             value
@@ -444,9 +435,12 @@ class AptlParticipantRuntime(BaseParticipantRuntime):
         return ParticipantNativeActionExecution(
             apply_result=ApplyResult(
                 success=execution.success,
-                snapshot=working,
+                # RAES owns participant history and lifecycle projection. The
+                # native command result is evidence, not authority to realize
+                # action-contract, boundary, instance, or shared-state resources.
+                snapshot=snapshot,
                 diagnostics=execution.diagnostics,
-                changed_addresses=list(execution.snapshot_entries),
+                changed_addresses=[],
             ),
             action_result=result,
             post_state_digest=request.post_state_digest,

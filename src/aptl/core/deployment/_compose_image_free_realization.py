@@ -33,6 +33,8 @@ def _needs_compose(realization: DeploymentRealizationSpec) -> bool:
     stateful prerequisites and validation.
     """
 
+    if realization.capture_apparatus:
+        return True
     if not realization.nodes:
         return True
     materialized = _image_free_node_addresses(realization)
@@ -80,7 +82,7 @@ def _image_free_node_addresses(
     start, not a bare-OS node to stub.
 
     Keying on ``runtime`` alone silently scaled those services to zero and started
-    a ``debian:12-slim`` ``sleep infinity`` substrate in their place, so declaring
+    a ``debian:13-slim`` ``sleep infinity`` substrate in their place, so declaring
     a node's security tooling turned the actual tool off. The image check is the
     same one the realization-time materializable test applies
     (``_is_materializable_node``); the two must agree, or a node is realized one
@@ -140,6 +142,9 @@ def _realize_node_subset(
     from aptl.backends.raes_node_materialization import realize_nodes
 
     volume_mounts_by_node = _volume_mounts_by_node(nodes, persistent_volumes)
+    daemon_failure = _require_substrate_daemon_for(backend, nodes)
+    if daemon_failure is not None:
+        return daemon_failure
     image_build_failures = _ensure_generic_base_images(backend, nodes)
     if image_build_failures:
         return LabResult(success=False, error="; ".join(image_build_failures[:5]))
@@ -189,6 +194,32 @@ def _volume_mounts_by_node(
     return mounts
 
 
+def _require_substrate_daemon_for(
+    backend: object, nodes: tuple[object, ...]
+) -> LabResult | None:
+    """Qualify the target daemon before any generic image build (issue #955).
+
+    Runs only when the subset contains a systemd node, since only those request
+    writable cgroups. It sits at this boundary so an unsupported daemon is
+    refused before an image build, network attachment, or container exists;
+    ``start_base_container`` keeps its own guard for direct callers. A backend
+    without the gate (a non-Docker test double) has no substrate posture to
+    qualify.
+    """
+
+    require = getattr(backend, "_require_substrate_daemon", None)
+    if require is None or not any(
+        getattr(getattr(node, "runtime", None), "service_manager_units", None)
+        for node in nodes
+    ):
+        return None
+    try:
+        require()
+    except BackendSeedError as exc:
+        return LabResult(success=False, error=str(exc))
+    return None
+
+
 def _ensure_generic_base_images(
     backend: object, nodes: tuple[object, ...]
 ) -> list[str]:
@@ -201,7 +232,10 @@ def _ensure_generic_base_images(
     node's own start_base_container discover it missing one at a time.
     """
 
-    from aptl.backends.raes_base_substrate import base_container_spec
+    from aptl.backends.raes_base_substrate import (
+        NodePlanningOptions,
+        base_container_spec,
+    )
 
     failures: list[str] = []
     for image_ref in sorted(
@@ -211,6 +245,9 @@ def _ensure_generic_base_images(
                 os=node.os,
                 os_version=node.os_version,
                 runtime=node.runtime,
+                options=NodePlanningOptions(
+                    backend_base_image_ref=getattr(node, "backend_base_image_ref", None)
+                ),
             ).image_ref
             for node in nodes
         }
@@ -275,6 +312,8 @@ def _content_placement_op(item: object) -> object | None:
             artifact_id=item.artifact_id,
             artifact_digest=item.artifact_digest,
             is_directory=item.source_kind == "pack-directory",
+            sensitive=item.sensitive,
+            executable=item.media_type in {"text/x-python", "text/x-shellscript"},
         )
     elif (
         item.source_kind in ("project-file", "project-directory")

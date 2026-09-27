@@ -2,12 +2,24 @@
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
 from aptl.appliance.seat.errors import SeatLauncherError
 
 _SEAT_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+
+
+def default_seat_root() -> Path:
+    """Return the current user's private, XDG-compatible seat state root."""
+
+    configured = os.environ.get("XDG_STATE_HOME")
+    if configured:
+        candidate = Path(configured)
+        if candidate.is_absolute():
+            return candidate / "aptl" / "seat"
+    return Path.home() / ".local" / "state" / "aptl" / "seat"
 
 
 def validate_seat_id(seat_id: str) -> str:

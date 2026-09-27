@@ -1,5 +1,7 @@
 # Issue #862 Explicit Participant Model Selection Preflight
 
+> Historical scope: issue #601 removed the checkout-only `aptl lab participant-readiness` command and its dedicated qualification runner. The TechVault participant study now authors its participant deliveries in SDL; normal `aptl lab start` executes them through the participant's authenticated host CLI.
+
 This note fixes the architecture boundaries for explicit model selection by
 installed participant providers. It is design guidance, not an implementation
 plan. No new ADR is needed: ADR-025 owns strict first-party configuration,

@@ -1,161 +1,169 @@
-"""Tests for the shared secret-safe curl status probe (``curl_status``).
+"""Tests for the shared secret-safe curl helpers.
 
 Subprocess calls are mocked; no real network I/O happens here. The
-critical guarantee under test is that Basic-auth credentials passed to
-``curl_status`` never appear in the ``subprocess.run`` argv — only in a
-0600 temp file passed via ``-H @file`` (ADR-029), mirroring the pattern
-already covered for ``curl_json`` in test_misp_suricata_sync.py.
+critical guarantee under test is that credentials never appear in the
+``subprocess.run`` argv — only in a 0600 temp file passed via ``-H @file``
+(ADR-029), mirroring the pattern already covered for ``curl_json`` in
+test_misp_suricata_sync.py.
 """
 
 import os
+import stat
 import subprocess
 
 import pytest
 
 
-class TestCurlStatus:
-    """Tests for ``aptl.utils.curl_safe.curl_status``."""
+class TestCurlRequest:
+    """Tests for ``aptl.utils.curl_safe.curl_request`` (issue #1002).
 
-    def _run(self, monkeypatch, *, stdout="200", side_effect=None, **kwargs):
+    The classification seam readiness owners poll through: it keeps curl's
+    numeric exit and the HTTP status apart so a warm-up transport failure is
+    distinguishable from a rejected credential, and it leaves severity to the
+    caller instead of logging a warning per attempt.
+    """
+
+    def _run(
+        self,
+        monkeypatch,
+        *,
+        returncode=0,
+        stdout="{}\n200",
+        side_effect=None,
+        **kwargs,
+    ):
         from aptl.utils import curl_safe
 
-        captured: dict = {}
+        captured: dict = {"files": {}}
 
         def fake_run(cmd, *args, **kw):
             captured["cmd"] = list(cmd)
+            captured.setdefault("modes", {})
             for arg in cmd:
                 if isinstance(arg, str) and arg.startswith("@"):
                     path = arg[1:]
-                    captured["header_path"] = path
-                    try:
-                        with open(path) as fh:
-                            captured["header_contents"] = fh.read()
-                    except OSError:
-                        pass
+                    captured["modes"][path] = stat.S_IMODE(os.stat(path).st_mode)
+                    with open(path) as fh:
+                        captured["files"][path] = fh.read()
             if side_effect is not None:
                 raise side_effect
             return type(
-                "Result", (), {"returncode": 0, "stdout": stdout, "stderr": ""}
+                "Result",
+                (),
+                {"returncode": returncode, "stdout": stdout, "stderr": "secret-ish"},
             )()
 
         monkeypatch.setattr(curl_safe.subprocess, "run", fake_run)
-        result = curl_safe.curl_status(
-            kwargs.pop("url", "https://localhost:9200"), **kwargs
+        outcome = curl_safe.curl_request(
+            kwargs.pop("url", "https://localhost:55000/"), **kwargs
         )
-        return captured, result
+        return captured, outcome
 
-    def test_returns_200_from_parsed_stdout(self, monkeypatch):
-        _, result = self._run(monkeypatch, stdout="200")
-        assert result == 200
+    def test_http_response_carries_status_and_parsed_payload(self, monkeypatch):
+        captured, outcome = self._run(monkeypatch, stdout='{"error": 0}\n200')
+        assert outcome.exit_code == 0
+        assert outcome.http_status == 200
+        assert outcome.payload == {"error": 0}
+        assert outcome.category == "http_response"
+        assert "Accept: application/json" in captured["cmd"]
+        assert "Content-Type: application/json" not in captured["cmd"]
 
-    def test_returns_401_from_parsed_stdout(self, monkeypatch):
-        _, result = self._run(monkeypatch, stdout="401")
-        assert result == 401
+    def test_http_error_status_is_reported_not_swallowed(self, monkeypatch):
+        """No ``-f``: a 401 is an HTTP answer, not a transport failure."""
+        captured, outcome = self._run(
+            monkeypatch, stdout='{"title": "Unauthorized"}\n401'
+        )
+        assert "-f" not in captured["cmd"]
+        assert "-sf" not in captured["cmd"]
+        assert outcome.http_status == 401
+        assert outcome.category == "http_response"
 
-    def test_returns_none_for_curl_000_no_http_response(self, monkeypatch):
-        """curl emits ``000`` in %{http_code} when it never got an HTTP
-        response at all (e.g. connection refused) — that must not be
-        mistaken for a real status code."""
-        _, result = self._run(monkeypatch, stdout="000")
-        assert result is None
+    @pytest.mark.parametrize(
+        ("returncode", "category"),
+        [
+            (7, "connection_refused"),
+            (28, "timeout"),
+            (35, "tls_handshake"),
+            (52, "empty_reply"),
+            (56, "connection_reset"),
+            (60, "curl_error"),
+        ],
+    )
+    def test_no_http_response_is_classified_from_the_exit_code(
+        self, monkeypatch, returncode, category
+    ):
+        _, outcome = self._run(monkeypatch, returncode=returncode, stdout="\n000")
+        assert outcome.exit_code == returncode
+        assert outcome.http_status is None
+        assert outcome.payload is None
+        assert outcome.category == category
 
-    def test_returns_none_on_timeout(self, monkeypatch):
-        _, result = self._run(
+    def test_timeout_and_spawn_failure_have_no_exit_code(self, monkeypatch):
+        _, timed_out = self._run(
             monkeypatch,
             side_effect=subprocess.TimeoutExpired(cmd="curl", timeout=10),
         )
-        assert result is None
+        _, missing = self._run(monkeypatch, side_effect=OSError("curl not found"))
+        assert (timed_out.exit_code, timed_out.category) == (None, "request_timeout")
+        assert (missing.exit_code, missing.category) == (None, "curl_unavailable")
+        assert timed_out.http_status is None
+        assert missing.http_status is None
 
-    def test_returns_none_on_os_error(self, monkeypatch):
-        _, result = self._run(monkeypatch, side_effect=OSError("curl not found"))
-        assert result is None
+    def test_non_json_body_keeps_status_without_payload(self, monkeypatch):
+        _, outcome = self._run(monkeypatch, stdout="<html>ok</html>\n200")
+        assert outcome.http_status == 200
+        assert outcome.payload is None
 
-    def test_returns_none_on_non_digit_stdout(self, monkeypatch):
-        _, result = self._run(monkeypatch, stdout="")
-        assert result is None
+    def test_never_logs_a_warning(self, monkeypatch, caplog):
+        """Severity belongs to the polling owner, not the transport seam."""
+        with caplog.at_level("DEBUG", logger="aptl"):
+            self._run(monkeypatch, returncode=35, stdout="\n000")
+            self._run(
+                monkeypatch,
+                side_effect=subprocess.TimeoutExpired(cmd="curl", timeout=10),
+            )
+        assert [r for r in caplog.records if r.levelno >= 30] == []
 
-    def test_never_raises_on_transport_failure(self, monkeypatch):
-        """Never raise — matches the fault-tolerant curl_safe contract.
-
-        The absence of a try/except here is deliberate: if ``curl_status``
-        regressed to letting the ``OSError`` propagate, this test would
-        error out naturally, which is the failure signal we want.
-        """
-        _, result = self._run(monkeypatch, side_effect=OSError("boom"))
-        assert result is None
-
-    def test_credentials_never_appear_in_argv(self, monkeypatch):
-        """Basic-auth credentials MUST NOT be observable via ``ps`` or
-        ``/proc/<pid>/cmdline`` — they go into a 0600 temp header file,
-        never argv (ADR-029)."""
-        captured, result = self._run(
+    def test_secrets_travel_in_0600_files_never_argv_or_outcome(self, monkeypatch):
+        captured, outcome = self._run(
             monkeypatch,
-            stdout="200",
-            auth=("admin", "super-secret-password"),
+            stdout='{"data": {"token": "bearer-token-value"}}\n200',
+            auth_header="Basic c3VwZXItc2VjcmV0",
+            body={"password": "body-secret"},
+            method="POST",
             insecure=True,
         )
-        cmd = captured["cmd"]
-        joined = " ".join(str(a) for a in cmd)
-        assert "admin" not in joined
-        assert "super-secret-password" not in joined
-        assert result == 200
-
-    def test_auth_header_passed_via_at_file(self, monkeypatch):
-        captured, _ = self._run(
-            monkeypatch, stdout="200", auth=("admin", "secret"), insecure=True
-        )
-        cmd = captured["cmd"]
-        assert "-H" in cmd
-        header_args = [a for a in cmd if isinstance(a, str) and a.startswith("@")]
-        assert len(header_args) == 1
-        header_path = header_args[0][1:]
-        assert captured["header_path"] == header_path
-        # The header file DOES carry the credentials -- it's just not on argv.
-        assert "Authorization: Basic" in captured["header_contents"]
-
-    def test_no_dash_f_flag_so_error_codes_are_returned_verbatim(self, monkeypatch):
-        """Unlike curl_json's ``-sf``, curl_status must NOT use ``-f`` --
-        otherwise curl would swallow 4xx/5xx and never report the real
-        status via %{http_code}."""
-        captured, _ = self._run(monkeypatch, stdout="401", auth=("a", "b"))
-        cmd = captured["cmd"]
-        assert "-f" not in cmd
-        assert "-w" in cmd
-        assert "%{http_code}" in cmd
-        assert "-o" in cmd
-        assert os.devnull in cmd
-
-    def test_insecure_sets_dash_k(self, monkeypatch):
-        captured, _ = self._run(monkeypatch, stdout="200", insecure=True)
+        joined = " ".join(captured["cmd"])
+        assert "c3VwZXItc2VjcmV0" not in joined
+        assert "body-secret" not in joined
+        # While curl runs, each secret file is readable by its owner only.
+        if hasattr(os, "fchmod"):
+            assert len(captured["modes"]) == 2
+            assert set(captured["modes"].values()) == {0o600}
+        contents = "".join(captured["files"].values())
+        assert "Authorization: Basic c3VwZXItc2VjcmV0" in contents
+        assert "body-secret" in contents
+        assert all(not os.path.exists(path) for path in captured["files"])
+        assert "bearer-token-value" not in repr(outcome)
+        assert "secret-ish" not in repr(outcome)
+        method_at = captured["cmd"].index("-X")
+        assert captured["cmd"][method_at : method_at + 2] == ["-X", "POST"]
         assert "-k" in captured["cmd"]
+        assert "Content-Type: application/json" in captured["cmd"]
 
-    def test_ca_cert_path_sets_dash_dash_cacert(self, monkeypatch):
+    def test_temp_files_are_unlinked_on_timeout(self, monkeypatch):
         captured, _ = self._run(
-            monkeypatch, stdout="200", ca_cert_path="/etc/aptl/lab-ca.pem"
-        )
-        cmd = captured["cmd"]
-        assert "--cacert" in cmd
-        assert "/etc/aptl/lab-ca.pem" in cmd
-        assert "-k" not in cmd
-
-    def test_header_temp_file_is_unlinked_after_call(self, monkeypatch):
-        captured, _ = self._run(
-            monkeypatch, stdout="200", auth=("admin", "secret"), insecure=True
-        )
-        header_path = captured["header_path"]
-        assert not os.path.exists(header_path)
-
-    def test_header_temp_file_is_unlinked_even_on_timeout(self, monkeypatch):
-        captured, result = self._run(
             monkeypatch,
-            auth=("admin", "secret"),
-            insecure=True,
+            auth_header="Basic abc",
             side_effect=subprocess.TimeoutExpired(cmd="curl", timeout=10),
         )
-        assert result is None
-        header_path = captured.get("header_path")
-        assert header_path is not None
-        assert not os.path.exists(header_path)
+        assert captured["files"]
+        assert all(not os.path.exists(path) for path in captured["files"])
+
+    def test_ca_cert_path_is_used_when_not_insecure(self, monkeypatch):
+        captured, _ = self._run(monkeypatch, ca_cert_path="/etc/aptl/lab-ca.pem")
+        assert "--cacert" in captured["cmd"]
+        assert "-k" not in captured["cmd"]
 
 
 class TestBasicAuthHeader:

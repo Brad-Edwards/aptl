@@ -61,7 +61,7 @@ class _Variant:
     catalog_id: str
     filename: str
     config: AptlConfig
-    # Content-derived realization profiles (otel is the always-on core profile).
+    # Content-derived scenario-serving profiles. Backend apparatus is separate.
     expected_profiles: frozenset[str]
 
     @property
@@ -71,28 +71,22 @@ class _Variant:
 
 VARIANTS = (
     _Variant(
-        catalog_id="techvault-observability-core",
-        filename="techvault-observability-core.sdl.yaml",
-        config=_config(),
-        expected_profiles=frozenset({"otel"}),
-    ),
-    _Variant(
         catalog_id="techvault-enterprise-web",
         filename="techvault-enterprise-web.sdl.yaml",
         config=_config("enterprise", "wazuh"),
-        expected_profiles=frozenset({"enterprise", "wazuh", "otel"}),
+        expected_profiles=frozenset({"enterprise", "wazuh"}),
     ),
     _Variant(
         catalog_id="techvault-defensive-min",
         filename="techvault-defensive-min.sdl.yaml",
         config=_config("wazuh"),
-        expected_profiles=frozenset({"wazuh", "otel"}),
+        expected_profiles=frozenset({"wazuh"}),
     ),
     _Variant(
         catalog_id="techvault-attacker-target",
         filename="techvault-attacker-target.sdl.yaml",
         config=_config("kali", "victim", "wazuh"),
-        expected_profiles=frozenset({"kali", "victim", "wazuh", "otel"}),
+        expected_profiles=frozenset({"kali", "victim", "wazuh"}),
     ),
 )
 
@@ -146,7 +140,9 @@ def test_variant_selected_profiles_form_valid_compose_project(variant: _Variant)
         select_backend_profiles(variant.config, frozenset(details.get("profiles", [])))
     )
     gaps = index.cross_profile_dependency_gaps(selected)
-    assert gaps == {}, f"{variant.catalog_id} selects an invalid compose project: {gaps}"
+    assert gaps == {}, (
+        f"{variant.catalog_id} selects an invalid compose project: {gaps}"
+    )
 
 
 @pytest.mark.parametrize("variant", VARIANTS, ids=lambda v: v.catalog_id)
@@ -180,7 +176,9 @@ def test_variant_selection_is_content_driven_not_name_driven(variant: _Variant):
     """Renaming the scenario must not change the realized profile set."""
     text = variant.path.read_text(encoding="utf-8")
     original = parse_sdl(text)
-    renamed = parse_sdl(text.replace("name: " + _scenario_name(text), "name: renamed-x", 1))
+    renamed = parse_sdl(
+        text.replace("name: " + _scenario_name(text), "name: renamed-x", 1)
+    )
 
     original_details, original_check = check_provisioning_realization(
         scenario=original, project_dir=PROJECT_ROOT, config=variant.config
@@ -203,26 +201,18 @@ def _scenario_name(text: str) -> str:
 
 
 @pytest.mark.parametrize("variant", VARIANTS, ids=lambda v: v.catalog_id)
-def test_variant_is_registered_and_resolvable(variant: _Variant):
+def test_variant_is_an_explicit_research_fixture(variant: _Variant):
+    from aptl.validation.research_scenario_catalog import load_research_scenario_catalog
+
+    fixtures = load_research_scenario_catalog(PROJECT_ROOT)
+    assert fixtures.get(variant.catalog_id).path == str(variant.path.relative_to(PROJECT_ROOT))
+    assert load_scenario_catalog(PROJECT_ROOT).get(variant.catalog_id) is None
+    with pytest.raises(ValueError, match="Unknown scenario id"):
+        resolve_scenario_selection(PROJECT_ROOT, scenario_id=variant.catalog_id)
+    assert resolve_scenario_selection(PROJECT_ROOT, scenario_path=variant.path) == variant.path
+
+
+def test_normal_catalog_selects_only_the_acquired_pack():
     catalog = load_scenario_catalog(PROJECT_ROOT)
-    ids = {entry.id for entry in catalog.scenarios}
-    assert variant.catalog_id in ids
-
-    resolved = resolve_scenario_selection(PROJECT_ROOT, scenario_id=variant.catalog_id)
-    assert resolved == variant.path
-
-
-def test_catalog_lists_curated_variants_and_default_is_the_env_pack():
-    """The retired in-tree ``techvault-operational`` is no longer a catalog entry.
-
-    The default public startup contract now resolves from the bundled TechVault
-    env-pack (#875), not a catalog scenario; the curated variants still register.
-    """
-    catalog = load_scenario_catalog(PROJECT_ROOT)
-    ids = [entry.id for entry in catalog.scenarios]
-    assert "techvault-operational" not in ids
-    assert set(VARIANTS_BY_ID).issubset(set(ids))
-
-    default_scenario = AptlConfig().scenario
-    assert default_scenario.source == "env-pack"
-    assert default_scenario.identity == "techvault"
+    assert [entry.id for entry in catalog.scenarios] == ["techvault"]
+    assert AptlConfig().scenario.source == "env-pack"

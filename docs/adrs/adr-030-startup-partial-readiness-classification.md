@@ -96,6 +96,85 @@ startup, it must be advisory, non-reversible, versioned service metadata under
 ignored state (for example `.aptl/`) and never a replacement for the live auth
 probe.
 
+### Amendment: Wazuh Readiness Is Startup-Fatal
+
+Issue #1002 reclassifies Wazuh indexer and manager API readiness from a
+telemetry-impacting warning to a fatal startup failure. A scenario that selects
+the `wazuh` profile uses Wazuh to meet its goals: without the SIEM, detection
+and evidence collection do not work, so a lab that starts without it is not
+usable for that scenario. This supersedes the non-fatal classification of the
+Wazuh readiness wait in the original decision and the `degraded_usable`
+outcome of the persisted-credential amendment above. The #623 credential
+diagnosis and its `aptl lab stop -v` recovery guidance remain, but they now
+arrive in the fatal error.
+
+The policy is the same on every path that starts Wazuh:
+
+- For a Wazuh service that consumes a scenario-declared generated artifact,
+  the deployment backend's post-start authenticated readiness gate is the
+  single authority. It fails the realization closed and records boolean
+  `authenticated_readiness` evidence. Lab startup does not authenticate that
+  service again.
+- For a Wazuh service the backend did not prove, such as one in a scenario that
+  declares no Wazuh generated artifacts, the lab `wait_for_services` step polls
+  it under the same fail-closed policy. Both paths probe the controller's
+  published loopback ports, which is sound because `aptl lab start` refuses
+  the SSH-remote backend before any container starts.
+- Each path polls within one bounded budget and does not probe again after the
+  deadline. The failure reason is the last observation made inside the budget:
+  the service, the probe phase (`transport`, `authentication`,
+  `manager_status`), a normalized category such as `tls_handshake` or
+  `credentials_rejected`, and the numeric curl exit or HTTP status. The reason
+  never includes credentials, tokens, response bodies, or curl stderr.
+- Expected warm-up attempts log at debug level only. A persistent state at the
+  deadline is the only terminal signal.
+
+### Amendment: Wazuh Startup Gate Attests Declared Realization
+
+Issue #957 narrows and grounds the Wazuh amendment above. Startup failure
+remains mandatory, but authenticated readiness is no longer the fact being
+proved. The reason APTL may connect to the manager API or indexer is to attest
+the admitted realization's declared native facts.
+
+- The deployment backend's post-start observation is the single owner. It is
+  driven by the admitted `DeploymentRealizationSpec` and semantic Wazuh
+  identity, not by a profile name, familiar container name, or the presence of
+  a generated artifact.
+- Generic node, listener, and published-port observations retain their existing
+  owners. The native Wazuh observation adds only facts that require the manager
+  API or indexer API, including the indexer's declared partitions, templates,
+  and mappings.
+- Successful transport or authentication is a precondition, not proof. The
+  backend records a structured, secret-free observation of every declared fact.
+  A boolean `authenticated_readiness` may be a temporary compatibility
+  projection, but it is not an attestation and cannot disclose a RAES concern.
+- The existing RAES observation and exact-concern gate consume those
+  observations. An unreachable service, malformed response, absent fact, or
+  mismatched fact withholds the affected concern and fails realization through
+  the existing RAES diagnostic envelope.
+- `Lab` does not repeat a Wazuh login after backend observation. All native
+  checks share one bounded polling budget and one owner.
+- No declared Wazuh fact means no authority for the APTL control plane to make
+  that connection. Participant MCP access is separate and remains available
+  through its declared loopback publications.
+- Evidence collection is also separate. It follows the admitted source and
+  channel declarations and does not reuse the attestation connection as an
+  evidence source.
+
+Pack-declared Wazuh credentials used by this attestation are scenario fixtures,
+not APTL operator secrets. Their values and provenance come from the admitted
+pack and travel through the existing scenario-startup, environment-validation,
+and secret-safe transport boundaries. They must not be copied into core
+profiles, templates, probe defaults, or diagnostics. Release-specific fallback
+knowledge for facts not yet declared by the pack belongs only to the exact
+TechVault adapter and does not acquire pack provenance.
+
+The detailed reuse, validation, and boundary rules are recorded in
+`docs/architecture/issue-957-wazuh-attestation-evidence-credentials-preflight.md`.
+
+Other late startup checks keep their original classification, including SSH
+reachability, MCP build, SOC seeding, and snapshot capture.
+
 ## Guardrails
 
 - Keep lab-start orchestration in `core.lab` as a flat sequence of `_step_*`

@@ -68,6 +68,10 @@ outputs:
 
 pcap:
   - interface: any
+    # Container veth checksum offload leaves pre-offload packets looking
+    # invalid to AF_PACKET. Trust the kernel/NIC path here so HTTP inspection
+    # is not suppressed by synthetic checksum errors inside the lab sensor.
+    checksum-checks: no
 
 pcap-file:
   checksum-checks: auto

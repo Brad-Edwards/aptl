@@ -7,9 +7,12 @@ Pure functions — no I/O. Three responsibilities:
 * build the ``samba-tool`` argv lists the Compose account mixin runs through
   ``container_exec``.
 
-A credential never appears in any argv this module builds: user creation uses
-``samba-tool user create <name> --random-password`` so the secret is generated
-inside the target boundary and never disclosed. Identity values (username,
+User creation uses ``samba-tool user create <name> --random-password`` so the
+secret is generated inside the target boundary. The one exception is
+``samba_user_setpassword``: a scenario that declares a ``weak`` or ``medium``
+account is declaring a credential an attacker is meant to obtain, so the
+backend mints one of that class and sets it explicitly (issue #1006). It
+travels as a discrete argv token inside the target, never through a shell. Identity values (username,
 group, mail, SPN) travel as discrete argv tokens, never interpolated into a
 shell string; the validation below additionally rejects control characters and
 leading dashes so an untrusted value cannot become an option or shell syntax
@@ -270,10 +273,11 @@ def dedupe_groups(
 # --random-password.
 
 
-# The AD entrypoint (containers/ad/setup-ad.sh) writes this marker AFTER its
-# baseline account provisioner (provision-users.sh) finishes, and it persists on
-# the ad_data volume. It is the samba-ad provider's explicit "baseline
-# provisioning complete" signal — the generic AD-DC marker, not a scenario branch.
+# The samba-ad substrate's provisioning script
+# (containers/generic-samba-ad-base/provision-domain.sh) writes this marker
+# AFTER `samba-tool domain provision` finishes, and it persists on the ad_data
+# volume. It is the samba-ad provider's explicit "baseline provisioning
+# complete" signal — the generic AD-DC marker, not a scenario branch.
 _SAMBA_PROVISIONED_MARKER = "/var/lib/samba/private/.provisioned"
 
 
@@ -332,6 +336,75 @@ def samba_user_create(user: str, *, mail: str = "") -> list[str]:
     if mail:
         cmd.append(f"--mail-address={mail}")
     return cmd
+
+
+def samba_domain_relax_password_policy() -> list[str]:
+    """Argv to let the domain hold the weak credentials the scenario declares.
+
+    Samba's default domain policy (complexity on, minimum length 7) refuses the
+    weak passwords a scenario declares as its credential-guessing surface, so
+    `samba-tool user setpassword` fails and the declared account is realized
+    with something stronger than declared. Relaxing the policy is backend
+    apparatus that exists to make the authored environment true; it is scoped to
+    the range's own throwaway domain (issue #1006).
+    """
+
+    return [
+        "samba-tool",
+        "domain",
+        "passwordsettings",
+        "set",
+        "--complexity=off",
+        "--min-pwd-length=1",
+        "--min-pwd-age=0",
+        "--history-length=0",
+    ]
+
+
+def samba_user_setpassword(user: str) -> list[str]:
+    """Argv to set one account's password, with the secret read from stdin.
+
+    `samba-tool user setpassword` prompts for the password when
+    `--newpassword` is absent, so the value travels on stdin and never reaches
+    a command line. It used to be a `--newpassword=<secret>` token: a discrete
+    argv element, which keeps it out of shell syntax but not out of
+    `/proc/<pid>/cmdline` — world-readable on the host through
+    `docker exec ...` and readable by any process inside the container. That
+    defeated the mode-0600 disclosure this same path writes (issue #1105).
+    """
+
+    return ["samba-tool", "user", "setpassword", user]
+
+
+def samba_setpassword_input(password: str) -> str:
+    """The stdin `samba-tool user setpassword` prompts for: the value, twice."""
+
+    return f"{password}\n{password}\n"
+
+
+def samba_user_authenticate(realm: str = "") -> list[str]:
+    """Argv proving the realized credential authenticates, secret on stdin.
+
+    A zero exit from `setpassword` says the directory accepted the write, not
+    that the account is usable with that credential. This is the
+    read-after-write for a credential: list shares as the user itself.
+
+    The identity and its secret arrive through smbclient's authentication
+    file, which `/dev/stdin` makes a pipe, so neither the `user%password`
+    principal nor any other form of the secret enters a command line
+    (issue #1105).
+    """
+
+    cmd = ["smbclient", "-L", "localhost", "-A", "/dev/stdin"]
+    if realm:
+        cmd.extend(["-W", realm])
+    return cmd
+
+
+def samba_authenticate_input(user: str, password: str) -> str:
+    """The credentials smbclient reads from its authentication file."""
+
+    return f"username={user}\npassword={password}\n"
 
 
 def samba_user_set_mail(user: str, mail: str) -> list[str]:

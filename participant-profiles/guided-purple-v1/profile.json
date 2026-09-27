@@ -9,7 +9,7 @@
   "scenario": {
     "catalog_id": "techvault-attacker-target",
     "path": "scenarios/techvault-attacker-target.sdl.yaml",
-    "sha256": "a85b11d98aab9b5b4cd209bade57b5869556882dab5b5f3f41e5f44292372a78"
+    "sha256": "e010069719372b0371cbd86525457578dc2170ffc7359b125751617d7afab320"
   },
   "config": {
     "path": "participant-profiles/guided-purple-v1/aptl.json",
@@ -29,7 +29,7 @@
     "asset_lock_schema": "aptl.participant-asset-lock/v1",
     "qualification_report_schema": "aptl.participant-qualification/v1",
     "asset_lock_ref": "participant-profiles/guided-purple-v1/asset-lock.json",
-    "asset_lock_sha256": "2ac87643af3d15b9ab0ff1040be756a94151eeb08353a997bb5c023dd2d7f963",
+    "asset_lock_sha256": "e18838954f597a1d721e9b411c4901795106fdbc2ff99c5da680664c028cf98f",
     "qualification_report_ref": "release/qualification/guided-purple-v1.json"
   },
   "budgets": {

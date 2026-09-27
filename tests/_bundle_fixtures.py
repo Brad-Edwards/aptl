@@ -80,6 +80,7 @@ def build_evidence_record(
             )
         ],
         evidence_kind=evidence_kind,
+        output_contract="experiment-evidence-record-v1",
         captured_at=captured_at,
         capture_window_ref=requirement_id,
         raw_content=ExperimentRawEvidenceContentModel(
@@ -92,6 +93,9 @@ def build_evidence_record(
         ),
         sensitivity=sensitivity,
         redaction_state=redaction_state,
+        redaction_policy=(
+            "aptl.fixture-redaction/v1" if redaction_state != "none" else None
+        ),
     )
 
 

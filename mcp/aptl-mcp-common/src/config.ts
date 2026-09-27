@@ -2,6 +2,7 @@
 
 import { existsSync, readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
+import { isIP } from 'node:net';
 import { expandTilde } from './utils.js';
 
 // Lab configuration matching actual docker-lab-config.json structure
@@ -25,7 +26,10 @@ export interface LabConfig {
       container_ip: string;
       ssh_key: string;
       ssh_user: string;
-      ssh_port: number;
+      // May arrive as a string after `${APTL_HP_*}` env substitution (the host
+      // SSH port is resolved per lab at start and injected via `.mcp.json`);
+      // coerced to a number at every use site.
+      ssh_port: number | string;
       enabled: boolean;
       shell?: 'bash' | 'sh' | 'powershell' | 'cmd';
       /**
@@ -228,6 +232,7 @@ export async function loadLabConfig(configPath: string): Promise<LabConfig> {
   if (config.containers && config.server.configKey) {
     const configKey = config.server.configKey;
     const container = config.containers[configKey];
+    applyNativeKaliIngress(config, configKey);
     if (container && container.ssh_key.startsWith('~')) {
       container.ssh_key = expandTilde(container.ssh_key);
     }
@@ -276,7 +281,19 @@ export function getTargetCredentials(config: LabConfig): { sshKey: string; usern
   return {
     sshKey: container.ssh_key,
     username: container.ssh_user,
-    port: container.ssh_port,
+    port: Number(container.ssh_port),
     target: container.container_ip
   };
+}
+
+/** Bind the native Kali capture ingress supplied by guest admission. */
+function applyNativeKaliIngress(config: LabConfig, configKey: string): void {
+  const nativeKaliHost = process.env.APTL_MCP_KALI_HOST;
+  if (configKey !== 'kali' || nativeKaliHost === undefined) return;
+  if (!isIP(nativeKaliHost)) throw new Error('Invalid native Kali ingress address');
+  const container = config.containers?.[configKey];
+  if (!container) throw new Error('Native Kali container is not configured');
+  // Native RAES uses the capture broker on port 22; workload sshd stays private.
+  container.container_ip = nativeKaliHost;
+  container.ssh_port = 22;
 }

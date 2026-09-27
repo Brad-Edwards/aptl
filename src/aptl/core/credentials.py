@@ -29,6 +29,7 @@ log = get_logger("credentials")
 
 # Matches: password: "anything" (with optional surrounding whitespace)
 _PASSWORD_PATTERN = re.compile(r'(password:\s*)"[^"]*"')
+_DASHBOARD_USERNAME_MARKER = 'username: "__APTL_API_USERNAME__"'
 
 # Matches: <key>anything</key> (used only within pre-extracted <cluster> blocks)
 _KEY_PATTERN = re.compile(r"<key>[^<]*</key>")
@@ -88,7 +89,8 @@ class CredentialRenderError(ValueError):
 
 
 def _resolve_within_project(
-    project_dir: Path, relative_path: Path,
+    project_dir: Path,
+    relative_path: Path,
 ) -> Path:
     """Resolve ``project_dir / relative_path`` and assert containment.
 
@@ -115,7 +117,8 @@ def _resolve_within_project(
 
 
 def _canonical_generated_path(
-    project_dir: Path, output_relpath: Path,
+    project_dir: Path,
+    output_relpath: Path,
 ) -> Path:
     """Return ``<project_root>/<output_relpath>``, rejecting symlinked chains.
 
@@ -168,7 +171,9 @@ def _enforce_mode(path: Path, mode: int, kind: str) -> None:
             # Off POSIX file modes are advisory; a chmod failure is benign.
             log.debug(
                 "chmod %s on %s not honoured on this platform: %s",
-                oct(mode), path, exc,
+                oct(mode),
+                path,
+                exc,
             )
             return
         raise CredentialRenderError(
@@ -307,8 +312,10 @@ def _render_secure(
     return output_path
 
 
-def _dashboard_transform(api_password: str) -> Callable[[str], str]:
-    """Build the ``password: "..."`` substitution for the dashboard config."""
+def _dashboard_transform(
+    api_password: str, api_username: str | None = None
+) -> Callable[[str], str]:
+    """Build the scenario-credential substitutions for dashboard config."""
     # Escape characters that would break YAML double-quoted strings.
     safe_pw = api_password.replace("\\", "\\\\").replace('"', '\\"')
 
@@ -322,6 +329,18 @@ def _dashboard_transform(api_password: str) -> Callable[[str], str]:
                 "No 'password: \"...\"' line found in the dashboard config "
                 "template; refusing to render a copy with the template's "
                 "placeholder/stale password"
+            )
+        if api_username is not None:
+            safe_username = api_username.replace("\\", "\\\\").replace('"', '\\"')
+            if _DASHBOARD_USERNAME_MARKER not in new_content:
+                raise CredentialRenderError(
+                    "No dashboard API username marker found; refusing to render "
+                    "a copy with a stale username"
+                )
+            new_content = new_content.replace(
+                _DASHBOARD_USERNAME_MARKER,
+                f'username: "{safe_username}"',
+                1,
             )
         log.info("Rendered %d password occurrence(s) in dashboard config", count)
         return new_content
@@ -369,15 +388,16 @@ def _manager_transform(cluster_key: str) -> Callable[[str], str]:
                 "config template; refusing to render a copy with the "
                 "template's placeholder/stale cluster key"
             )
-        log.info("Rendered %d cluster <key> occurrence(s) in manager config",
-                 count)
+        log.info("Rendered %d cluster <key> occurrence(s) in manager config", count)
         return new_content
 
     return transform
 
 
-def sync_dashboard_config(project_dir: Path, api_password: str) -> Path:
-    """Render the Wazuh Dashboard config (wazuh.yml) with the real API password.
+def sync_dashboard_config(
+    project_dir: Path, api_password: str, api_username: str | None = None
+) -> Path:
+    """Render Wazuh Dashboard config with admitted scenario API credentials.
 
     Reads the checked-in template at
     ``<project_dir>/config/wazuh_dashboard/wazuh.yml``, replaces the
@@ -388,7 +408,10 @@ def sync_dashboard_config(project_dir: Path, api_password: str) -> Path:
 
     Args:
         project_dir: APTL project root.
-        api_password: The real API password to inject.
+        api_password: The admitted scenario API password to inject.
+        api_username: The admitted scenario API username to inject. The
+            optional default preserves the narrow transformation helper API
+            used by callers that provide their own source fixture.
 
     Returns:
         The path of the rendered output file.
@@ -404,7 +427,7 @@ def sync_dashboard_config(project_dir: Path, api_password: str) -> Path:
         project_dir,
         _DASHBOARD_SOURCE_RELPATH,
         RENDERED_DASHBOARD_RELPATH,
-        _dashboard_transform(api_password),
+        _dashboard_transform(api_password, api_username),
     )
 
 

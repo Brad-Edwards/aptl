@@ -29,13 +29,13 @@ class HostExposureReport:
     findings: tuple[str, ...]
 
 
-def _fsdev_options(argv: tuple[str, ...]) -> tuple[str, ...]:
-    """Return QEMU -fsdev option strings from a fixed argv list."""
+def _argument_options(argv: tuple[str, ...], flag: str) -> tuple[str, ...]:
+    """Return option strings for a repeated QEMU argument."""
 
     options: list[str] = []
     index = 0
     while index < len(argv):
-        if argv[index] == "-fsdev" and index + 1 < len(argv):
+        if argv[index] == flag and index + 1 < len(argv):
             options.append(argv[index + 1])
             index += 2
             continue
@@ -46,23 +46,49 @@ def _fsdev_options(argv: tuple[str, ...]) -> tuple[str, ...]:
 def audit_vm_argv(argv: tuple[str, ...]) -> HostExposureReport:
     """Reject VM launch arguments that widen the physical-host boundary."""
 
+    findings = _forbidden_argument_findings(argv)
+    findings.extend(_network_exposure_findings(argv))
+    return HostExposureReport(passed=not findings, findings=tuple(findings))
+
+
+def _forbidden_argument_findings(argv: tuple[str, ...]) -> list[str]:
+    """Return forbidden QEMU device and writable-share findings."""
+
     findings: list[str] = []
     joined = " ".join(argv)
     for flag in FORBIDDEN_VM_FLAGS:
         if flag in joined:
             findings.append(f"host.exposure.forbidden-vm-flag:{flag}")
-    fsdev_joined = " ".join(_fsdev_options(argv))
+    fsdev_joined = " ".join(_argument_options(argv, "-fsdev"))
     for flag in FORBIDDEN_VM_WRITABLE_SHARE_FLAGS:
         if flag in fsdev_joined:
             findings.append(f"host.exposure.forbidden-vm-share:{flag}")
-    return HostExposureReport(passed=not findings, findings=tuple(findings))
+    return findings
+
+
+def _network_exposure_findings(argv: tuple[str, ...]) -> list[str]:
+    """Require exactly one restricted SLIRP network declaration."""
+
+    # Ordinary SLIRP NAT permits a guest to reach the physical host and other
+    # seats. Restriction blocks guest-originated traffic outside this VM while
+    # retaining the explicit hostfwd publications used by participant clients.
+    networks = _argument_options(argv, "-netdev")
+    if len(networks) != 1 or "-nic" in argv or "-net" in argv:
+        return ["host.exposure.unrestricted-vm-network"]
+    options = networks[0].split(",")
+    restrictions = [item for item in options if item.startswith("restrict=")]
+    return (
+        []
+        if options[0] == "user" and restrictions == ["restrict=on"]
+        else ["host.exposure.unrestricted-vm-network"]
+    )
 
 
 def audit_host_process_inventory(
     *,
     docker_daemon_running: bool | None = None,
 ) -> HostExposureReport:
-    """Ensure the seat host does not require Docker for launcher operations."""
+    """Observe host Docker without treating unrelated workloads as exposure."""
 
     findings: list[str] = []
     if hostenv.host_os() != hostenv.OS_LINUX:
@@ -72,8 +98,10 @@ def audit_host_process_inventory(
         if docker_daemon_running is None
         else docker_daemon_running
     )
-    if docker_running:
-        findings.append("host.exposure.docker-daemon-present")
+    # A responding host daemon is not part of a seat's authority boundary and
+    # is therefore neither required nor forbidden.  VM argv and guest
+    # admission checks prove that the launcher does not consume its socket.
+    _ = docker_running
     return HostExposureReport(passed=not findings, findings=tuple(findings))
 
 

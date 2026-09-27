@@ -57,6 +57,33 @@ Pages, gated by a strict mkdocs build.
   versioned-docs workflow exists, and carrying the config without the
   apparatus misleads.
 
+## Amendment: Dual Publishing On Read The Docs
+
+Issue #1114 revisited hosting on 2026-09-22. Keep GitHub Pages as the canonical
+site and publish a mirror on Read the Docs. This is an explicit dual-hosting
+decision, not a migration.
+
+- GitHub Pages retains the stable `https://brad-edwards.github.io/aptl/` URLs,
+  avoiding broken inbound links and a redirect-only legacy deployment.
+- Read the Docs builds the same `mkdocs.yml` from the same repository. It does
+  not own a second navigation tree, copy of the prose, dependency list, or
+  generated site output.
+- `.readthedocs.yaml` installs the hash-locked `requirements/docs.txt` closure,
+  installs APTL itself without resolving a second dependency graph, and treats
+  MkDocs warnings as build failures.
+- Both publishers build from full Git history for revision metadata. GitHub
+  Actions uses `fetch-depth: 0`; Read the Docs must successfully unshallow its
+  checkout when necessary.
+- The GitHub Pages URL remains `site_url`, so canonical metadata from either
+  rendering identifies one preferred site. The Read the Docs mirror is an
+  additional discovery and version surface, not an independently edited site.
+
+The repository configuration is necessary but not sufficient to publish the
+mirror. A maintainer must import `Brad-Edwards/aptl` in Read the Docs and keep
+the default version bound to the protected release branch. Pull-request builds
+may be enabled, but they do not replace the repository's required strict docs
+check.
+
 ## Consequences
 
 - Markdown touched by a commit must pass Google style at error level
@@ -65,6 +92,9 @@ Pages, gated by a strict mkdocs build.
 - The published site exposes nav rot immediately: a page that exists
   on disk but not in `nav` is visible in the strict build log, and a
   removed page fails the build.
+- The two public hosts cannot acquire source-level content drift because both
+  consume the same tree, configuration, and locked documentation dependencies.
+  A host outage can still make one rendering temporarily stale.
 - Contributors get one new local dependency, installed automatically
   and verified by checksum on first commit that touches markdown.
 - The Google style is a US-English, developer-docs voice. Where it

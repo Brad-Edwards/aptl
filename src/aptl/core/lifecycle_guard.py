@@ -102,6 +102,24 @@ def lifecycle_mutation_lock(project_dir: Path) -> Iterator[Path]:
         _release_lock(key)
 
 
+@contextmanager
+def lifecycle_observation_lock(project_dir: Path) -> Iterator[Path]:
+    """Share a stable POSIX project view while excluding lifecycle mutations.
+
+    Observers in different threads/processes can overlap. An active mutation
+    still fails admission immediately; a mutation cannot begin during a read.
+    Guest runtime observation is Linux-only. Unsupported platforms fail closed
+    rather than silently replacing a shared lock with an exclusive one.
+    """
+    root = canonical_lifecycle_project_root(project_dir)
+    fd = _acquire_lock_fd(root, shared=True)
+    try:
+        yield root
+    finally:
+        _unlock(fd)
+        os.close(fd)
+
+
 def _increment_reentrant_lock(key: tuple[str, int]) -> bool:
     """Increment and report an existing same-thread ownership record."""
 
@@ -112,13 +130,13 @@ def _increment_reentrant_lock(key: tuple[str, int]) -> bool:
     return held is not None
 
 
-def _acquire_lock_fd(root: Path) -> int:
+def _acquire_lock_fd(root: Path, *, shared: bool = False) -> int:
     """Open and acquire a new OS lock, closing the descriptor on failure."""
 
     fd: int | None = None
     try:
         fd = _open_lock_fd(root)
-        _try_lock(fd)
+        _try_lock(fd, shared=shared)
     except LifecycleBusyError:
         _close_if_open(fd)
         raise
@@ -401,12 +419,15 @@ def _windows_close_handle(handle: int) -> None:
         raise ctypes.WinError(ctypes.get_last_error())
 
 
-def _try_lock(fd: int) -> None:
+def _try_lock(fd: int, *, shared: bool = False) -> None:
     """Acquire the platform lock without waiting."""
 
     try:
         if fcntl is not None:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            mode = fcntl.LOCK_SH if shared else fcntl.LOCK_EX
+            fcntl.flock(fd, mode | fcntl.LOCK_NB)
+        elif shared:
+            raise OSError("shared lifecycle observations require POSIX flock")
         # Windows uses a one-byte Microsoft C runtime lock.
         elif msvcrt is not None:
             os.lseek(fd, 0, os.SEEK_SET)

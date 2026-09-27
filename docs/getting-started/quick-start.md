@@ -1,85 +1,142 @@
-# Quick Start
+# Run Your First Lab
 
-## Start Lab
+Start in the project directory created by `aptl lab init`. If you do not have
+one yet, follow [Installation](installation.md).
 
-```bash
-pipx install aptl-labs
-aptl lab init my-lab
-cd my-lab
-aptl lab start
-```
+## Choose The Execution Boundary
 
-The published wheel bundles the lab assets, so a PyPI install alone can run a
-lab, no clone required. `aptl lab init <dir>` copies the Compose topology,
-scenarios, and config templates out of the installed package into `<dir>`, your
-lab project directory. [pipx](https://pipx.pypa.io/) isolates the CLI in its own
-virtualenv, so the [PEP 668](https://peps.python.org/pep-0668/) system-`pip`
-block on modern Debian/Ubuntu/WSL2 hosts never applies (`sudo apt install pipx`
-to get it). To run from source instead, clone the repo and use a virtualenv
-editable install
-(`python3 -m venv .venv && source .venv/bin/activate && pip install -e .`; needs
-`python3-venv`). See [Prerequisites](prerequisites.md).
+`aptl lab start` runs intentionally vulnerable containers and agent tools on
+the selected Docker engine. Use it for supervised work on a dedicated,
+rebuildable machine. Do not treat an everyday workstation containing unrelated
+credentials or workloads as disposable lab infrastructure.
 
-`aptl lab start` creates `.env` automatically when it is missing and replaces
-template placeholder values with lab credentials that match the running
-containers. The startup output points to `.env` for passwords and tokens. Run
-`aptl lab info` later to reprint the same access summary.
+For agent-driven or multi-user work on Linux/KVM, the disposable
+[`aptl seat start`](../reference/appliance-seat-launcher.md) path provides a
+stronger VM boundary around Docker and the lab. Neither containers nor a VM
+are an absolute sandbox. Keep the host kernel and hypervisor current and
+control the surrounding network.
 
-`aptl lab start` defaults to the curated TechVault operational RAES SDL. List
-the curated startup inputs with:
+## Choose A Scenario
 
-```bash
+List the validated scenarios supplied by the installed environment pack:
+
+```shell
 aptl lab scenarios
 ```
 
-Start from a catalog id or an explicit project-local SDL path with:
+For the standard released lab, select the `techvault` catalog identity. Use
+the identifiers printed by the command rather than a copied list: availability
+and qualification belong to the installed pack version.
 
-```bash
-aptl lab start --scenario techvault-operational
-aptl lab start --scenario-path scenarios/techvault-operational.sdl.yaml
+An explicit `--scenario-path` is a development surface for a project-local SDL
+file. It is not the normal released-package path.
+
+## Start And Verify The Lab
+
+Start the selected scenario:
+
+```shell
+aptl lab start --scenario techvault
 ```
 
-## Manage Lab
+Startup validates the project and scenario, prepares keys and certificates,
+realizes the requested topology, starts its containers and MCP artifacts, and
+waits for required readiness checks. Read the final structured result. A
+container shown as running is not by itself proof that the scenario is ready.
 
-```bash
-aptl lab status   # Show running containers and health
-aptl lab info     # Show URLs, usernames, and .env credential references
-aptl lab stop     # Stop the lab
-aptl lab stop -v  # Stop and remove all volumes
-aptl kill         # Emergency: kill all MCP server processes immediately
-aptl kill -c      # Emergency: kill MCP processes AND all lab containers
+Verify the current state and print runtime-derived access information:
+
+```shell
+aptl lab status
+aptl lab info
 ```
 
-## Access
+If startup reports `degraded` or `failed`, follow its named diagnostic before
+starting an exercise. The [troubleshooting guide](../troubleshooting/index.md)
+shows the safe inspection and recovery commands.
 
-**Wazuh Dashboard:** <https://localhost:443> (`admin` / your `INDEXER_PASSWORD` from `.env`)
+## Inspect The Running Lab
 
-**Container shells** (victim and kali publish no host SSH ports):
+The realized scenario determines which services exist. Discover them at
+runtime:
 
-```bash
+```shell
+aptl container list
+aptl lab info
+```
+
+`aptl lab info` reports current URLs, remapped host ports, usernames, and the
+project-local locations of credentials. Read the values from your own project;
+do not use a password or port copied from documentation. Wazuh values such as
+`INDEXER_USERNAME` and `INDEXER_PASSWORD` are scenario credentials, not APTL
+control-plane logins.
+
+Open the Wazuh Dashboard or another realized service at the URL printed by
+`aptl lab info`. For a shell in a listed container, use:
+
+```shell
 aptl container shell aptl-victim
 aptl container shell aptl-kali
 ```
 
-The optional reverse engineering container uses host SSH when enabled:
-`ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`. The default
-TechVault scenario does not realize this service, so use the command only when
-`reverse` appears in `aptl lab status`.
+Only use a container name that appears in `aptl container list` for the
+selected scenario.
 
-## Test
+## Generate Safe Test Activity
 
-Generate test activity and view in Wazuh Dashboard:
+Generate activity only inside the authorized lab range. A simple local event
+from a realized victim shell is enough to verify the telemetry path:
 
-```bash
-# Generate log from victim
-docker exec aptl-victim logger 'Test log entry'
-
-# Run scan from Kali
-docker exec aptl-kali nmap 172.20.2.20
+```shell
+logger "APTL first-lab test event"
+exit
 ```
 
-View events in Wazuh Dashboard → Security Events
+Use the [lab walkthrough](../workshop/walkthrough.md) for a complete guided
+exercise. It pairs activity with observations and keeps target selection inside
+the realized scenario. Do not copy lab commands to systems outside the range.
 
-## AI Integration
+## Inspect Results
 
-For AI agent control, build and configure MCP servers. See [MCP Integration](../components/mcp-integration.md) for setup details.
+Use the SOC interfaces reported by `aptl lab info` to inspect alerts and
+service data. APTL also records scenario runs in the project-local run store:
+
+```shell
+aptl runs list
+aptl runs show <run-id>
+aptl runs path <run-id>
+```
+
+The commands distinguish runtime health, service observations, and archived
+run evidence. Use `aptl runs export-bundle <run-id>` when you need a portable,
+self-describing evidence bundle; see the
+[evidence bundle reference](../reference/evidence-bundle-export.md).
+
+## Stop Or Reset The Lab
+
+Use normal, project-scoped teardown at the end of a session:
+
+```shell
+aptl lab stop
+```
+
+This stops the realized lab while preserving its Docker volumes. To remove the
+project's volumes and all data they contain, use the explicit destructive path:
+
+```shell
+aptl lab stop -v
+```
+
+The command asks for confirmation and destroys lab indexes, tool data, and
+other volume-backed state. It does not remove unrelated Docker resources.
+
+`aptl kill` is an emergency process-control command, not normal teardown or a
+credential reset. Do not use `docker system prune` for APTL cleanup; it is
+daemon-wide rather than project-scoped.
+
+## Continue From Here
+
+- [CLI reference](../reference/cli.md)
+- [MCP reference](../reference/mcp.md)
+- [Web reference](../reference/web.md)
+- [Troubleshooting](../troubleshooting/index.md)

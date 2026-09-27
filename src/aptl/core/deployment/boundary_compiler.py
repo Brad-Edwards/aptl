@@ -10,6 +10,7 @@ from aptl.core.deployment.boundary import (
     AcesBoundarySpec,
     BoundaryNetwork,
     BoundaryWorkload,
+    PlatformBoundaryBootstrapSpec,
     PlatformBoundarySpec,
     PlatformCrossing,
 )
@@ -92,6 +93,27 @@ def compile_platform_boundary(
             for item in policy.fixed_crossings
         ),
         egress_ports=tuple(sorted({item.port for item in policy.egress_authorities})),
+    )
+
+
+def compile_platform_bootstrap(
+    policy: ApplianceBoundaryPolicy,
+    *,
+    policy_digest: str,
+    networks: Sequence[BoundaryNetwork],
+    owner: str,
+) -> PlatformBoundaryBootstrapSpec:
+    """Bind signed zones to observed bridges with no workload grants."""
+
+    selected = _select_platform_networks(policy, networks)
+    return PlatformBoundaryBootstrapSpec(
+        owner=owner,
+        policy_digest=policy_digest,
+        networks=tuple(sorted(selected.values(), key=lambda item: item.name)),
+        zone_networks=tuple(
+            (zone, selected[zone].name)
+            for zone in ("participant", "management", "egress")
+        ),
     )
 
 

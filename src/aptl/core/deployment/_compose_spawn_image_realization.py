@@ -8,6 +8,7 @@ from aptl.core.deployment._compose_runtime_orchestration import (
 from aptl.core.deployment._docker_image_identity import (
     EXACT_IMAGE_INSPECT_FORMAT,
     DockerPlatform,
+    ExactDockerImageIdentity,
     exact_inspected_image_identity,
     normalized_platform,
     platform_is_compatible,
@@ -33,8 +34,39 @@ def prepare_spawn_images(
     except ValueError as exc:
         failure = LabResult(success=False, error=str(exc))
     if failure is None and requirements:
+        failure = _conflicting_tag_failure(requirements)
+    if failure is None and requirements:
         failure = _prepare_on_bound_daemon(backend, requirements)
     return failure
+
+
+def _conflicting_tag_failure(
+    requirements: tuple[DeploymentSpawnImageRequirement, ...],
+) -> LabResult | None:
+    """Reject two references demanding one local name resolve to two images.
+
+    One ``repository:tag`` cannot resolve to two different digests at once, so
+    whichever was realized last would silently win and leave the other naming
+    something its author did not write. This is a contradiction in what was
+    authored, so it needs no daemon to detect and is caught before any.
+    """
+
+    images_by_tag: dict[str, set[str]] = {}
+    for requirement in requirements:
+        if requirement.tag_reference:
+            images_by_tag.setdefault(requirement.tag_reference, set()).add(
+                requirement.image_ref
+            )
+    conflicted = sorted(tag for tag, images in images_by_tag.items() if len(images) > 1)
+    if not conflicted:
+        return None
+    return LabResult(
+        success=False,
+        error=(
+            "Spawn image tag conflict: "
+            f"{', '.join(conflicted)} is authored for more than one image."
+        ),
+    )
 
 
 def _prepare_on_bound_daemon(
@@ -111,14 +143,126 @@ def _prepare_one_image(
     failure = None
     if not backend._offline_staged:
         failure = _pull_spawn_image(backend, requirement, timeout=timeout)
+    identity = None
     if failure is None:
-        failure = _inspect_spawn_image(
+        identity, failure = _inspect_spawn_image(
             backend,
             requirement,
             expected,
             timeout=timeout,
         )
+    if failure is None and identity is not None and requirement.tag_reference:
+        failure = _realize_authored_tag(
+            backend,
+            requirement,
+            identity.image_id,
+            timeout=timeout,
+        )
     return failure
+
+
+def _realize_authored_tag(
+    backend: object,
+    requirement: DeploymentSpawnImageRequirement,
+    image_id: str,
+    *,
+    timeout: int,
+) -> LabResult | None:
+    """Make the authored tag resolve locally to the authored digest.
+
+    The author wrote one reference naming both a tag and a digest, so both are
+    met here or realization fails. Docker stores an image pulled by digest
+    under that digest alone, leaving the tag pointing wherever it already
+    pointed -- at an unrelated image, or at nothing. Whatever consumes the
+    reference by name would then run something the author did not write.
+
+    Only local operations are used, so this is identical online and offline.
+    """
+
+    observed, failure = _tag_image_id(backend, requirement, timeout=timeout)
+    if failure is None and observed != image_id:
+        failure = _point_tag_at_image(
+            backend,
+            requirement,
+            image_id,
+            timeout=timeout,
+        )
+    return failure
+
+
+def _point_tag_at_image(
+    backend: object,
+    requirement: DeploymentSpawnImageRequirement,
+    image_id: str,
+    *,
+    timeout: int,
+) -> LabResult | None:
+    """Establish the authored tag on the verified image and read it back."""
+
+    tagged = _run_bounded(
+        backend,
+        ["docker", "tag", requirement.image_ref, requirement.tag_reference],
+        timeout=timeout,
+    )
+    if tagged is None or tagged.returncode != 0:
+        return _spawn_image_failure("tag could not be established", requirement)
+    confirmed, failure = _tag_image_id(backend, requirement, timeout=timeout)
+    if failure is None and confirmed != image_id:
+        failure = _spawn_image_failure(
+            "tag does not resolve to the image",
+            requirement,
+        )
+    return failure
+
+
+def _tag_image_id(
+    backend: object,
+    requirement: DeploymentSpawnImageRequirement,
+    *,
+    timeout: int,
+) -> tuple[str | None, LabResult | None]:
+    """Resolve the authored tag to a local image id.
+
+    Returns ``(None, None)`` only for a positively identified absent name. Any
+    other failure is indeterminate and returns a diagnostic: a timeout, a
+    daemon or permission error, or unparseable output is not evidence that the
+    name is free, and must never authorize mutating shared daemon state.
+    """
+
+    result = _run_bounded(
+        backend,
+        ["docker", "image", "inspect", "--format", "{{.Id}}", requirement.tag_reference],
+        timeout=timeout,
+    )
+    if result is None:
+        return None, _spawn_image_failure("tag inspection timed out", requirement)
+    if result.returncode == 0:
+        observed = str(result.stdout or "").strip()
+        failure = (
+            None
+            if observed
+            else _spawn_image_failure("tag identity unavailable", requirement)
+        )
+        return (observed or None), failure
+    # Only a positively identified not-found means the name is free.
+    absent = "no such image" in str(result.stderr or "").lower()
+    return None, (
+        None if absent else _spawn_image_failure("tag could not be read", requirement)
+    )
+
+
+def _run_bounded(
+    backend: object,
+    command: list[str],
+    *,
+    timeout: int,
+) -> object | None:
+    """Run one bounded local Docker command, or ``None`` when it times out."""
+
+    try:
+        return backend._run(command, timeout=timeout)
+    except BackendTimeoutError:
+        return None
 
 
 def _pull_spawn_image(
@@ -147,23 +291,21 @@ def _inspect_spawn_image(
     expected: DockerPlatform,
     *,
     timeout: int,
-) -> LabResult | None:
+) -> tuple[ExactDockerImageIdentity | None, LabResult | None]:
     """Attest exact local identity and native platform for one child image."""
 
-    try:
-        result = backend._run(
-            [
-                "docker",
-                "image",
-                "inspect",
-                "--format",
-                EXACT_IMAGE_INSPECT_FORMAT,
-                requirement.image_ref,
-            ],
-            timeout=timeout,
-        )
-    except BackendTimeoutError:
-        result = None
+    result = _run_bounded(
+        backend,
+        [
+            "docker",
+            "image",
+            "inspect",
+            "--format",
+            EXACT_IMAGE_INSPECT_FORMAT,
+            requirement.image_ref,
+        ],
+        timeout=timeout,
+    )
     failure: LabResult | None = None
     identity = None
     if result is None or result.returncode != 0:
@@ -178,7 +320,7 @@ def _inspect_spawn_image(
         and not platform_is_compatible(expected, identity.platform)
     ):
         failure = _spawn_image_failure("platform incompatible", requirement)
-    return failure
+    return (None if failure is not None else identity), failure
 
 
 def _spawn_image_failure(

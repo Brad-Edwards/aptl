@@ -1,0 +1,97 @@
+{
+  "schema_version": "associated-artifact-manifest/v1",
+  "manifest_id": "materialization-envelope-associated-artifacts",
+  "manifest_version": "1.0.0",
+  "canonicalization_profile": "associated-artifact-set/v1",
+  "scope": "scenario",
+  "parent_ref": {
+    "ref_kind": "scenario",
+    "ref_id": "materialization-envelope",
+    "ref_version": null,
+    "ref_digest": null,
+    "ref_path": null
+  },
+  "artifacts": {
+    "materialization-envelope-pack-yaml": {
+      "artifact_id": "materialization-envelope-pack-yaml",
+      "role": "other",
+      "media_type": "application/yaml",
+      "uri": "raes-environment-pack:/pack.yaml",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "cf1d2a95449df94b507eff1afbeb3e7364cca4d85234835067b355e6e73bfffe"
+      },
+      "size_bytes": 556,
+      "created_at": "2026-09-21T00:00:00Z",
+      "source": "aptl-test-fixture",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": "Pack manifest."
+    },
+    "materialization-envelope-provenance-ledger": {
+      "artifact_id": "materialization-envelope-provenance-ledger",
+      "role": "other",
+      "media_type": "application/yaml",
+      "uri": "raes-environment-pack:/docs/provenance-ledger.yaml",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "6515c91163c250619cd51fcc94340442cfeba85449cf211e2926c0d7db40a7fd"
+      },
+      "size_bytes": 1316,
+      "created_at": "2026-09-21T00:00:00Z",
+      "source": "aptl-test-fixture",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": "Pack provenance ledger."
+    },
+    "materialization-envelope-sdl": {
+      "artifact_id": "materialization-envelope-sdl",
+      "role": "other",
+      "media_type": "application/yaml",
+      "uri": "raes-environment-pack:/sdl/materialization-envelope.sdl.yaml",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "aa49f8782b4fde5eb43479f5e9538dea2f3d63033da8d32e9e20e16e6ce2d16f"
+      },
+      "size_bytes": 3714,
+      "created_at": "2026-09-21T00:00:00Z",
+      "source": "aptl-test-fixture",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": "Product-neutral materialization scenario."
+    },
+    "materialization-envelope-notice": {
+      "artifact_id": "materialization-envelope-notice",
+      "role": "other",
+      "media_type": "text/plain",
+      "uri": "raes-environment-pack:/assets/content/notice.txt",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "b5e5e76c05bbe38db3426197545a76c7a1d3103dd13de12d15c31aa0b2af0830"
+      },
+      "size_bytes": 53,
+      "created_at": "2026-09-21T00:00:00Z",
+      "source": "aptl-test-fixture",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": "Synthetic file content for pack-file resolution tests."
+    },
+    "materialization-envelope-tree": {
+      "artifact_id": "materialization-envelope-tree",
+      "role": "other",
+      "media_type": "application/x-tar",
+      "uri": "raes-environment-pack:/assets/content/tree.tar",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "2f3f736920073b48bfdc6fd07cd289cc8960ace89488ec54c292d9f1894f5010"
+      },
+      "size_bytes": 10240,
+      "created_at": "2026-09-21T00:00:00Z",
+      "source": "aptl-test-fixture",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": "Synthetic archive for pack-directory resolution tests."
+    }
+  },
+  "set_digest": "sha256:77e209f80485e2ec0f3226ca4f1fd83d2944d365673c1b4aefefbfde8d23c4e4"
+}

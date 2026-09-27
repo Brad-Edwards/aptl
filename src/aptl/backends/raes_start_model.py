@@ -9,17 +9,19 @@ from typing import TYPE_CHECKING, Any
 from raes_contracts.runtime_state import RuntimeSnapshot
 
 from aptl.core.lab_types import LabResult
+from aptl.core.experiment.capture_plan import CapturePlan, empty_capture_plan
 
 if TYPE_CHECKING:
     from raes_processor.models import ExecutionPlan
     from raes_runtime.registry import RuntimeTarget
+    from raes_runtime.manager import RuntimeManager
 
+    from aptl.backends.raes_participant_delivery import ParticipantDeliveryPlan
     from aptl.backends.raes_realization_model import AptlRealization
+    from aptl.backends.scenario_startup import ScenarioStartupSelection
+    from aptl.backends.scenario_capture import ResolvedScenarioCapture
     from aptl.core.runstore import RunStorageBackend
     from aptl.core.scenario_bundle import ScenarioBundle
-
-DEFAULT_RAES_SCENARIO = Path("scenarios") / "techvault-operational.sdl.yaml"
-
 
 @dataclass(frozen=True)
 class AdmittedScenarioStart:
@@ -37,6 +39,12 @@ class AdmittedScenarioStart:
     target: RuntimeTarget
     execution_plan: ExecutionPlan
     realization: AptlRealization | None
+    capture_plan: CapturePlan = field(default_factory=empty_capture_plan)
+    runtime_materialization_failure: LabResult | None = None
+    startup_selection: ScenarioStartupSelection | None = None
+    capture_selection: ResolvedScenarioCapture | None = None
+    scenario: object | None = None
+    participant_delivery_plan: ParticipantDeliveryPlan | None = None
 
 
 @dataclass(frozen=True)
@@ -59,3 +67,5 @@ class AcesStartOutcome:
     manifest_payload: dict[str, Any] = field(default_factory=dict)
     pack_interaction_evidence: dict[str, Any] = field(default_factory=dict)
     retryable: bool = False
+    capture_plan: CapturePlan | None = None
+    runtime_manager: RuntimeManager | None = None

@@ -9,8 +9,10 @@ output into gate diagnostics, returning ``None`` when the CLI is unavailable.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
+import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -30,9 +32,13 @@ def conformance_cli_diagnostics(
         cli += ["--profiles-root", str(profiles_root)]
     result = run_raes(cli)
     if result is None:
-        return ["`raes` CLI not found on PATH; conformance command is unavailable"]
+        return [
+            "`raes` CLI not found beside active Python or on PATH; conformance command is unavailable"
+        ]
     if result.returncode != 0:
-        return [redact(f"raes conformance backend exited non-zero: {_cli_detail(result)}")]
+        return [
+            redact(f"raes conformance backend exited non-zero: {_cli_detail(result)}")
+        ]
     return []
 
 
@@ -41,7 +47,9 @@ def verify_imports_diagnostics(
 ) -> list[str]:
     """Turn an ``raes sdl verify-imports`` run into gate diagnostics."""
     if result is None:
-        return ["`raes` CLI not found on PATH; RAES import tooling is unavailable"]
+        return [
+            "`raes` CLI not found beside active Python or on PATH; RAES import tooling is unavailable"
+        ]
     if result.returncode != 0:
         return [redact(f"raes sdl verify-imports failed: {_cli_detail(result)}")]
     return []
@@ -50,8 +58,13 @@ def verify_imports_diagnostics(
 def run_raes(
     args: Sequence[str], *, timeout: int = _SUBPROCESS_TIMEOUT_S
 ) -> subprocess.CompletedProcess[str] | None:
-    """Run an ``raes`` subcommand, returning None when the CLI is unavailable."""
-    executable = shutil.which("raes")
+    """Run RAES from the active Python environment, with PATH as a fallback."""
+    sibling = Path(sys.executable).with_name("raes")
+    executable = (
+        str(sibling)
+        if sibling.is_file() and os.access(sibling, os.X_OK)
+        else shutil.which("raes")
+    )
     if executable is None:
         return None
     # Fixed argv (resolved executable, subcommand, paths/profile), no shell;

@@ -30,9 +30,6 @@ from raes_contracts.contracts import (
     ExperimentEvidenceRecordModel,
     ExperimentReferenceModel,
 )
-from raes_contracts.contracts.experiment_capture import (
-    ExperimentRawEvidenceContentModel,
-)
 
 # RAES 1.1.0 stopped re-exporting this model from ``raes_contracts.contracts``;
 # it is now owned by the ``experiment_capture`` submodule.
@@ -49,6 +46,8 @@ from aptl.core.experiment.capture_registry import CaptureBinding
 _EVIDENCE_ID_DOMAIN = "aptl.exp.evidence-record/v1"
 _EVIDENCE_ID_PREFIX = "evidence-"
 _RECORD_VERSION = "1.0.0"
+_DEFAULT_REDACTION_POLICY = "aptl.redact-secrets/v1"
+_DEFAULT_WITHHOLDING_POLICY = "aptl.evaluator-only-withholding/v1"
 
 
 @dataclass(frozen=True)
@@ -98,7 +97,9 @@ def _raw_content(
     """Build the raw-content block: content_uri + checksum of the RETAINED bytes + loss disclosure."""
     return ExperimentRawEvidenceContentModel(
         content_uri=content.relative_path,
-        content_checksum=ExperimentChecksumModel(algorithm="sha256", value=_bare_hex(content.digest)),
+        content_checksum=ExperimentChecksumModel(
+            algorithm="sha256", value=_bare_hex(content.digest)
+        ),
         payload_summary=f"{event_count} event(s), {content.size} byte(s) retained",
         loss_disclosure=loss_disclosure,
     )
@@ -122,10 +123,20 @@ def build_evidence_record(
     channel the evidence satisfies; identity is derived deterministically from
     the binding + retained-content digest.
     """
-    window_ref = binding.window_refs[0] if binding.window_refs else binding.requirement_id
-    record_id = derive_evidence_record_id(
-        run_id=run_id, planned_trial_id=planned_trial_id, binding=binding, content_digest=content.digest
+    window_ref = (
+        binding.window_refs[0] if binding.window_refs else binding.requirement_id
     )
+    record_id = derive_evidence_record_id(
+        run_id=run_id,
+        planned_trial_id=planned_trial_id,
+        binding=binding,
+        content_digest=content.digest,
+    )
+    redaction_policy = binding.redaction_policy
+    if disclosure.redaction_state == "withheld" and redaction_policy is None:
+        redaction_policy = _DEFAULT_WITHHOLDING_POLICY
+    elif disclosure.redaction_state == "redacted" and redaction_policy is None:
+        redaction_policy = _DEFAULT_REDACTION_POLICY
     return ExperimentEvidenceRecordModel(
         schema_version="experiment-evidence-record/v1",
         evidence_record_id=record_id,
@@ -134,20 +145,28 @@ def build_evidence_record(
             ref_kind="capture-spec", ref_id=binding.capture_spec_id
         ),
         capture_requirement_ref=binding.requirement_id,
+        output_contract=binding.output_contract,
         run_ref=ExperimentReferenceModel(ref_kind="run", ref_id=run_id),
         source_refs=[
+            *[
+                ExperimentReferenceModel.model_validate(ref)
+                for ref in outcome.source_pipeline.get("source_refs", [])
+            ],
             ExperimentReferenceModel(
                 ref_kind="measurement-channel",
                 ref_id=binding.channel_ref_id,
                 ref_version=binding.channel_ref_version,
-            )
+            ),
         ],
         evidence_kind=binding.capture_kind,
         captured_at=captured_at,
         capture_window_ref=window_ref,
         raw_content=_raw_content(
-            content, event_count=outcome.event_count, loss_disclosure=disclosure.loss_disclosure
+            content,
+            event_count=outcome.event_count,
+            loss_disclosure=disclosure.loss_disclosure,
         ),
         sensitivity=disclosure.sensitivity,
         redaction_state=disclosure.redaction_state,
+        redaction_policy=redaction_policy,
     )

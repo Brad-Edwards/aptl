@@ -13,7 +13,7 @@ import socket
 
 import pytest
 
-from aptl.core import host_ports
+from aptl.core import _port_bindings as port_bindings, host_ports
 
 
 # --------------------------------------------------------------------------- #
@@ -24,7 +24,14 @@ from aptl.core import host_ports
     [
         (
             "127.0.0.1:${APTL_HP_WAZUH_DASHBOARD_5601:-443}:5601",
-            ("wazuh.dashboard", "APTL_HP_WAZUH_DASHBOARD_5601", 443, 5601, "tcp", "127.0.0.1"),
+            (
+                "wazuh.dashboard",
+                "APTL_HP_WAZUH_DASHBOARD_5601",
+                443,
+                5601,
+                "tcp",
+                "127.0.0.1",
+            ),
         ),
         (
             "${APTL_DNS_HOST_PORT:-5353}:53/udp",
@@ -253,9 +260,7 @@ def test_existing_project_remap_is_reused(mocker, tmp_path, _clean_env):
     assert all(call.args[0] != 5353 for call in probe.call_args_list)
 
 
-def test_incomplete_existing_group_falls_back_to_probe(
-    mocker, tmp_path, _clean_env
-):
+def test_incomplete_existing_group_falls_back_to_probe(mocker, tmp_path, _clean_env):
     mocker.patch("aptl.core.host_ports._load_compose", return_value=_compose())
     mocker.patch("aptl.core.host_ports.port_available", return_value=True)
 
@@ -289,7 +294,7 @@ def test_project_port_bindings_deduplicates_address_families(mocker):
         }
     }
 
-    result = host_ports.project_port_bindings(backend)
+    result = port_bindings.project_port_bindings(backend)
 
     assert result == {
         ("dns", 53, "tcp"): 20000,
@@ -297,11 +302,41 @@ def test_project_port_bindings_deduplicates_address_families(mocker):
     }
 
 
+def test_project_port_bindings_includes_receipt_owned_operator_relays(mocker):
+    backend = mocker.MagicMock()
+    backend.container_list.return_value = []
+
+    def inspect(name):
+        port = {
+            "aptl-operator-ssh-kali": (2023, 12023),
+            "aptl-operator-ssh-soc-workstation": (2024, 12024),
+        }.get(name)
+        if port is None:
+            raise OSError("unrecorded")
+        container_port, host_port = port
+        return {
+            "NetworkSettings": {
+                "Ports": {
+                    f"{container_port}/tcp": [
+                        {"HostIp": "127.0.0.1", "HostPort": str(host_port)}
+                    ]
+                }
+            }
+        }
+
+    backend.container_inspect.side_effect = inspect
+
+    assert port_bindings.project_port_bindings(backend) == {
+        ("aptl-operator-ssh-kali", 2023, "tcp"): 12023,
+        ("aptl-operator-ssh-soc-workstation", 2024, "tcp"): 12024,
+    }
+
+
 def test_project_port_bindings_returns_empty_when_list_fails(mocker):
     backend = mocker.MagicMock()
     backend.container_list.side_effect = OSError("daemon unavailable")
 
-    assert host_ports.project_port_bindings(backend) == {}
+    assert port_bindings.project_port_bindings(backend) == {}
 
 
 def test_project_port_bindings_ignores_malformed_runtime_state(mocker):
@@ -343,6 +378,6 @@ def test_project_port_bindings_ignores_malformed_runtime_state(mocker):
 
     backend.container_inspect.side_effect = inspect
 
-    assert host_ports.project_port_bindings(backend) == {
+    assert port_bindings.project_port_bindings(backend) == {
         ("dns", 54, "tcp"): 20002,
     }

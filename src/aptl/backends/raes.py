@@ -7,9 +7,18 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from raes_contracts.runtime_state import RuntimeSnapshot
-from raes_runtime.manager import RuntimeManager
-from raes_runtime.registry import RuntimeTarget
+from raes_runtime.registry import ReferenceTimeRuntime, RuntimeTarget
 from raes import SDLError, SDLInstantiationError, parse_sdl_file
+from aptl.backends.raes_operator_access import (
+    OperatorAccessDecision,
+    operator_access_decision,
+)
+from aptl.backends.raes_observability_scope import (
+    ObservabilityScopeDecision,
+    observability_scope_decision,
+)
+from aptl.core.experiment.errors import AdmissionRejection
+from aptl.core.experiment.capture_plan import empty_capture_plan
 
 from aptl.backends._raes_apply_helpers import (
     _drive_orchestrator_workflows,
@@ -19,9 +28,19 @@ from aptl.backends._raes_scenario_resolution import (
     _resolve_scenario_path,
     resolve_scenario_bundle,
 )
-from aptl.backends.raes_diagnostics import (
-    render_raes_diagnostics,
+from aptl.backends._raes_runtime_materialization_admission import (
+    qualify_admitted_runtime,
 )
+from aptl.backends._raes_admission_helpers import (
+    prepare_admission_scenario,
+    resolve_admission_adapters,
+)
+from aptl.backends._raes_runtime_target_options import RuntimeTargetOptions
+from aptl.backends._raes_start_failure import (
+    INSTANTIATION_FAILURE_MESSAGE as INSTANTIATION_FAILURE_MESSAGE,
+    start_failure_outcome as _start_failure_outcome,
+)
+from aptl.backends.raes_diagnostics import render_raes_diagnostics
 from aptl.backends.raes_execution_helpers import (
     evaluation_results as collect_evaluation_results,
     interpret_realization,
@@ -31,20 +50,23 @@ from aptl.backends.raes_runtime_orchestration import (
     prepare_runtime_orchestration_for_scenario,
 )
 from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, create_aptl_manifest
+from aptl.backends.raes_planning_compat import (
+    AptlPlanningOptions,
+    AptlRuntimeManager,
+    plan_aptl_scenario,
+    resolve_target_planning_compatibility,
+)
 from aptl.backends.raes_evaluator import AptlEvaluator
 from aptl.backends.raes_orchestrator import AptlOrchestrator
 from aptl.backends.raes_participant_actions import (
     DEFAULT_PARTICIPANT_ACTIONS,
-    ParticipantActionSpec,
     participant_action_specs_from_runtime_model,
 )
 from aptl.backends.raes_participant_driver import ParticipantPlanAuthority
+from aptl.backends import raes_participant_delivery as participant_delivery
 from aptl.backends.raes_participant_runtime import AptlParticipantRuntime
 from aptl.backends.raes_provisioner import AptlProvisioner
 from aptl.backends.raes_start_model import (
-    # ``DEFAULT_RAES_SCENARIO`` is re-exported: callers read the default
-    # scenario selection off this module.
-    DEFAULT_RAES_SCENARIO as DEFAULT_RAES_SCENARIO,
     AcesRunTarget,
     AcesStartOutcome,
     AdmittedScenarioStart,
@@ -56,24 +78,20 @@ from aptl.core.scenario_bundle import (
 )
 from aptl.core.lab_types import LabResult
 from aptl.utils.logging import get_logger
-from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
-    from raes_contracts.contracts import ArtifactAvailabilityContext
     from raes_processor.models import ExecutionPlan
 
+    from aptl.backends.scenario_startup import ScenarioStartupSelection
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.runstore import RunStorageBackend
 
 log = get_logger("raes-backend")
 
-# Fixed disclosure for a rejected variable binding: the rejected value can be an
-# operator secret, so no admission failure — here or in lab start's pre-mutation
-# admission — may echo it back (issue #951 moved that second call site).
-INSTANTIATION_FAILURE_MESSAGE = (
-    "RAES runtime variable binding failed before deployment. Provide every "
-    "required variable using its declared type and allowed values."
-)
+# Keep the long-standing module seam used by runtime handoff tests and callers,
+# while routing real planning through the narrow compatibility subclass.
+RuntimeManager = AptlRuntimeManager
+
 _RETRYABLE_APPLY_DIAGNOSTIC_CODES = frozenset({"aptl.provisioner.backend-start-failed"})
 
 
@@ -82,10 +100,8 @@ def create_aptl_runtime_target(
     project_dir: Path,
     config: AptlConfig,
     backend: "DeploymentBackend",
-    participant_action_specs: Mapping[str, ParticipantActionSpec] | None = None,
-    participant_plan_authority: ParticipantPlanAuthority | None = None,
     bundle: ScenarioBundle,
-    artifact_availability: ArtifactAvailabilityContext | None = None,
+    options: RuntimeTargetOptions | None = None,
 ) -> RuntimeTarget:
     """Build APTL's canonical ``full-remote-control-plane`` runtime target.
 
@@ -99,29 +115,53 @@ def create_aptl_runtime_target(
     (issue #876 cycle-6 review).
     """
 
+    selected = options or RuntimeTargetOptions()
     provisioner = AptlProvisioner(
         project_dir=project_dir,
         config=config,
         deployment_backend=backend,
         bundle=bundle,
-        artifact_availability=artifact_availability,
+        artifact_availability=selected.artifact_availability,
+        capture_plan=selected.capture_plan or empty_capture_plan(),
+        observability_scope=selected.observability_scope
+        or ObservabilityScopeDecision(),
+        operator_access=selected.operator_access or OperatorAccessDecision(),
+        startup_selection=selected.startup_selection,
+        planning_compatibility=resolve_target_planning_compatibility(bundle, config),
     )
     orchestrator = AptlOrchestrator()
     action_specs = dict(DEFAULT_PARTICIPANT_ACTIONS)
-    if participant_action_specs:
-        action_specs.update(participant_action_specs)
+    if selected.participant_action_specs:
+        action_specs.update(selected.participant_action_specs)
     participant_runtime = AptlParticipantRuntime(
         deployment_backend=backend,
         action_specs=action_specs,
-        plan_authority=participant_plan_authority,
+        plan_authority=selected.participant_plan_authority,
+    )
+    capture_registry = (
+        selected.capture_selection.registry
+        if selected.capture_selection is not None
+        else None
     )
     return RuntimeTarget(
         name=APTL_RAES_TARGET_NAME,
-        manifest=create_aptl_manifest(),
+        manifest=create_aptl_manifest(
+            capture_registry,
+            participant_inject_delivery=selected.participant_inject_delivery,
+        ),
         provisioner=provisioner,  # type: ignore[arg-type]
         orchestrator=orchestrator,  # type: ignore[arg-type]
-        evaluator=AptlEvaluator(),  # type: ignore[arg-type]
+        evaluator=AptlEvaluator(
+            proposition_interpreter=(
+                selected.capture_selection.contribution.proposition_interpreter
+                if selected.capture_selection is not None
+                else None
+            )
+        ),  # type: ignore[arg-type]
         participant_runtime=participant_runtime,  # type: ignore[arg-type]
+        time_runtime=(
+            ReferenceTimeRuntime() if selected.participant_inject_delivery else None
+        ),
     )
 
 
@@ -169,6 +209,7 @@ def start_raes_scenario(
             before_backend_retry,
         )
     except (
+        AdmissionRejection,
         EnvPackError,
         SDLInstantiationError,
         FileNotFoundError,
@@ -179,33 +220,6 @@ def start_raes_scenario(
         return _start_failure_outcome(exc, resolved_scenario)
 
 
-def _start_failure_outcome(
-    exc: Exception, resolved_scenario: Path
-) -> AcesStartOutcome:
-    """Map a scenario-start failure onto its unretryable failure outcome.
-
-    Each cause keeps the disclosure it always had: a pack acquisition failure and
-    a runtime handoff failure report the redacted exception, while a variable
-    binding failure reports the fixed instantiation message rather than the
-    binding it rejected.
-    """
-
-    if isinstance(exc, EnvPackError):
-        error = redact(f"RAES scenario pack acquisition failed: {exc}")
-    elif isinstance(exc, SDLInstantiationError):
-        error = INSTANTIATION_FAILURE_MESSAGE
-    else:
-        error = redact(f"RAES runtime handoff failed: {exc}")
-    return AcesStartOutcome(
-        lab_result=LabResult(success=False, error=error),
-        final_snapshot=RuntimeSnapshot(),
-        realization_details={},
-        selected_profiles=[],
-        scenario_path=resolved_scenario,
-        retryable=False,
-    )
-
-
 def admit_raes_scenario(
     project_dir: Path,
     config: AptlConfig,
@@ -213,6 +227,8 @@ def admit_raes_scenario(
     *,
     scenario_path: Path | None = None,
     parameters: Mapping[str, object] | None = None,
+    bundle: ScenarioBundle | None = None,
+    startup_selection: ScenarioStartupSelection | None = None,
 ) -> AdmittedScenarioStart:
     """Admit one scenario execution: resolve, parse, plan, and interpret it once.
 
@@ -228,8 +244,14 @@ def admit_raes_scenario(
     # env-pack yields a staged, validated pack. Everything downstream anchors to
     # this rather than the engine's checkout, so rehoming changes only the
     # resolver (issue #874 / #875).
-    bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
-    scenario = parse_sdl_file(bundle.sdl_path)
+    if bundle is None:
+        bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
+    startup_selection, capture_selection = resolve_admission_adapters(
+        bundle, config, startup_selection
+    )
+    scenario, parameters, capture_plan = prepare_admission_scenario(
+        bundle, parameters, capture_selection, parser=parse_sdl_file
+    )
     # A runtime authority is joined and bound before any artifact probe, so
     # every image fact and later mutation targets the same exact local daemon.
     prepare_runtime_orchestration_for_scenario(scenario, backend)
@@ -239,30 +261,54 @@ def admit_raes_scenario(
     # own inputs (including a component build context) anchor to the bundle,
     # which is the project directory only while the scenario still lives in-tree.
     availability = artifact_availability_for_scenario(
-        scenario, backend, scenario_root=bundle.root, component_root=project_dir
+        scenario,
+        backend,
+        scenario_root=bundle.root,
+        component_root=project_dir,
+        materialize=False,
     )
     target = create_aptl_runtime_target(
         project_dir=project_dir,
         config=config,
         backend=backend,
         bundle=bundle,
-        artifact_availability=availability,
-    )
-    manager = RuntimeManager(target)
-    execution_plan = (
-        manager.plan(
-            scenario,
-            parameters=dict(parameters),
+        options=RuntimeTargetOptions(
             artifact_availability=availability,
-        )
-        if parameters is not None
-        else manager.plan(scenario, artifact_availability=availability)
+            capture_plan=capture_plan,
+            observability_scope=observability_scope_decision(scenario),
+            operator_access=operator_access_decision(scenario),
+            startup_selection=startup_selection,
+            capture_selection=capture_selection,
+            participant_inject_delivery=(
+                participant_delivery.has_participant_inject_deliveries(scenario)
+            ),
+        ),
+    )
+    runtime_manager = RuntimeManager(target)
+    execution_plan = plan_aptl_scenario(
+        target=target,
+        bundle=bundle,
+        scenario=scenario,
+        options=AptlPlanningOptions(
+            parameters=dict(parameters) if parameters is not None else None,
+            artifact_availability=availability,
+            runtime_manager=runtime_manager,
+        ),
     )
     provisioner = target.provisioner
     realization = (
         provisioner.realize_plan(execution_plan.provisioning)
         if isinstance(provisioner, AptlProvisioner)
         else None
+    )
+    execution_plan, availability, materialization_failure = qualify_admitted_runtime(
+        scenario=scenario,
+        bundle=bundle,
+        project_dir=project_dir,
+        provisioner=provisioner,
+        realization=realization,
+        execution_plan=execution_plan,
+        availability=availability,
     )
     participant_action_specs = participant_action_specs_from_runtime_model(
         execution_plan.model,
@@ -278,11 +324,24 @@ def admit_raes_scenario(
             execution_plan,
             bundle.sdl_path,
         )
+    participant_delivery_plan = participant_delivery.bind_participant_delivery_capture(
+        participant_delivery.build_participant_delivery_plan(
+            scenario,
+            execution_plan.model,
+        ),
+        capture_plan,
+    )
     return AdmittedScenarioStart(
         bundle=bundle,
         target=target,
         execution_plan=execution_plan,
         realization=realization,
+        capture_plan=capture_plan,
+        runtime_materialization_failure=materialization_failure,
+        startup_selection=startup_selection,
+        capture_selection=capture_selection,
+        scenario=scenario,
+        participant_delivery_plan=participant_delivery_plan,
     )
 
 
@@ -293,7 +352,7 @@ def _apply_with_backend_retry(
     run_target: AcesRunTarget | None,
     before_backend_retry: Callable[[], None] | None,
 ) -> AcesStartOutcome:
-    """Apply one admitted plan, retrying only its SOC backend-start failure."""
+    """Apply one admitted plan and run one admitted preparation hook on retry."""
 
     run_store = run_target.run_store if run_target is not None else None
     run_id = run_target.run_id if run_target is not None else None
@@ -304,11 +363,7 @@ def _apply_with_backend_retry(
         run_store=run_store,
         run_id=run_id,
     )
-    if (
-        outcome.retryable
-        and "soc" in outcome.selected_profiles
-        and before_backend_retry is not None
-    ):
+    if outcome.retryable and before_backend_retry is not None:
         before_backend_retry()
         return _run_execution_plan(
             target,
@@ -361,7 +416,7 @@ def _run_execution_plan(
                 run_store=run_store,
                 run_id=run_id,
             )
-    failure, snapshot, retryable = _apply_execution_plan(
+    failure, snapshot, retryable, runtime_manager = _apply_execution_plan(
         target,
         execution_plan,
         run_store=run_store,
@@ -376,6 +431,7 @@ def _run_execution_plan(
             scenario_path=scenario_path,
             pack_interaction_evidence=pack_interaction_evidence,
             retryable=retryable,
+            runtime_manager=runtime_manager,
         )
     return AcesStartOutcome(
         lab_result=LabResult(
@@ -387,6 +443,7 @@ def _run_execution_plan(
         selected_profiles=selected_profiles,
         scenario_path=scenario_path,
         pack_interaction_evidence=pack_interaction_evidence,
+        runtime_manager=runtime_manager,
     )
 
 
@@ -396,7 +453,7 @@ def _apply_execution_plan(
     *,
     run_store: RunStorageBackend | None = None,
     run_id: str | None = None,
-) -> tuple[LabResult | None, RuntimeSnapshot, bool]:
+) -> tuple[LabResult | None, RuntimeSnapshot, bool, RuntimeManager]:
     """Apply the plan through RAES's own runtime manager, then drive workflows.
 
     ``RuntimeManager.apply`` is the only path that threads the compiled
@@ -406,11 +463,13 @@ def _apply_execution_plan(
     replaces the parallel disclosure/write-back pass APTL once hand-rolled around
     ``RuntimeControlPlane`` (issue #578, ADR-046).
 
-    Returns ``(failure | None, snapshot, retryable)``. Only the existing
+    Returns ``(failure | None, snapshot, retryable, manager)``. Only the existing
     deployment-backend start diagnostic is retryable; deterministic admission,
     planning, provider-policy, and workflow failures are not.
     """
 
+    if isinstance(target.provisioner, AptlProvisioner):
+        target.provisioner.bind_attempt_id(run_id)
     manager = RuntimeManager(target, initial_snapshot=execution_plan.base_snapshot)
     apply_result = manager.apply(execution_plan)
     snapshot = apply_result.snapshot
@@ -428,6 +487,7 @@ def _apply_execution_plan(
                 diagnostic.code in _RETRYABLE_APPLY_DIAGNOSTIC_CODES
                 for diagnostic in diagnostics
             ),
+            manager,
         )
     evaluation_results = collect_evaluation_results(target, execution_plan)
     failure = _drive_orchestrator_workflows(
@@ -436,4 +496,4 @@ def _apply_execution_plan(
         run_store=run_store,
         run_id=run_id,
     )
-    return failure, snapshot, False
+    return failure, snapshot, False, manager

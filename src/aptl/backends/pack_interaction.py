@@ -31,7 +31,6 @@ class PackBackendInteractionContext:
     pack: PackIdentity
     backend: BackendIdentity
     component_addresses: tuple[str, ...]
-    operator_groups: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -70,6 +69,14 @@ class ResolvedPackBackendInteraction:
     distribution: str = ""
     distribution_version: str = ""
     entry_point: str = ""
+
+    @property
+    def operator_groups(self) -> tuple[str, ...]:
+        """Return the normalized vocabulary declared by this mapping."""
+
+        return tuple(
+            sorted({group for item in self.memberships for group in item.groups})
+        )
 
     def groups_for(self, component_address: str) -> tuple[str, ...]:
         """Return the exact groups assigned to an admitted component."""

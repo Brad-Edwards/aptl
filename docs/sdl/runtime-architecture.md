@@ -6,7 +6,7 @@ were removed after the ADR-035 RAES SDL cutover.
 
 The supported runtime handoff is now:
 
-1. Resolve the curated catalog ID or explicit project-contained SDL path.
+1. Resolve the configured acquired-pack identity or explicit project-contained development SDL path.
 2. Validate the selected file with `raes.parse_sdl_file`.
 3. Pass any explicit per-run runtime bindings to
    `raes_runtime.manager.RuntimeManager.plan(parameters=...)`. RAES owns

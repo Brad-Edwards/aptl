@@ -20,7 +20,10 @@ _COMPOSE_PROJECT_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
 _PARTICIPANT_MODEL_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$")
 _CREDENTIAL_SOURCE_VARIABLE_PATTERN = re.compile(r"^[A-Z_][A-Z0-9_]{0,127}$")
 _IMMUTABLE_PARTICIPANT_MODEL_PATTERNS = {
-    "claude": re.compile(r"^claude-[a-z0-9-]+-\d{8}$", flags=re.ASCII),
+    "claude": re.compile(
+        r"^claude-(?:[a-z0-9-]+-\d{8}|(?:sonnet|opus|haiku)-[1-9]\d*)$",
+        flags=re.ASCII,
+    ),
     "codex": re.compile(
         r"^(?:codex-[a-z0-9._-]+|gpt-[a-z0-9._-]+|o\d[a-z0-9._-]*)"
         r"-\d{4}-\d{2}-\d{2}$",
@@ -113,9 +116,9 @@ class ScenarioSourceConfig(BaseModel):
     operator decision made before ``aptl lab start`` rather than something the
     backend decides or switches at runtime, so it lives here.
 
-    ``root`` is where the scenario's own inputs — its start-state document and
-    the content it declares — are anchored. ``None`` keeps the historical
-    behaviour of resolving them inside the APTL checkout. A configured root is
+    ``root`` applies only to an explicitly selected project-tree development
+    scenario. Acquired packs are staged and validated beneath APTL's private
+    project state instead of being read from the checkout. A configured root is
     operator input and is treated as untrusted: it must be a relative path that
     cannot escape the project.
     """
@@ -125,7 +128,7 @@ class ScenarioSourceConfig(BaseModel):
     identity: str = "techvault"
     root: str | None = None
     # ``env-pack`` (the default since #875) resolves the scenario from the
-    # bundled ``raes-env-packs`` pack named by ``identity``, staged and validated
+    # installed ``raes-env-packs`` pack named by ``identity``, staged and validated
     # before use, with no host paths in the document. ``project-tree`` is the
     # legacy path that resolves it from the APTL checkout and requires an explicit
     # scenario. The operator selects the source; the backend never switches it.
@@ -139,7 +142,9 @@ class ScenarioSourceConfig(BaseModel):
         cleaned = value.strip()
         if not cleaned:
             raise ValueError("scenario identity must not be empty")
-        return cleaned
+        from aptl.core.scenario_bundle import validate_scenario_identity
+
+        return validate_scenario_identity(cleaned)
 
     @field_validator("root")
     @classmethod
@@ -199,7 +204,6 @@ class DeploymentConfig(BaseModel):
         """Validate the identity used by Compose and destructive label queries."""
 
         return validate_compose_project_name(value)
-
 
 _TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -382,6 +386,15 @@ class ExperimentSettings(BaseModel):
     )
 
 
+class SeatSettings(BaseModel):
+    """Operator-selected VM source and independent signing trust."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    image: str | None = Field(default=None, min_length=1, max_length=512)
+    public_key: str | None = Field(default=None, min_length=1, max_length=4096)
+
+
 class AptlConfig(BaseModel):
     """Top-level APTL configuration.
 
@@ -400,6 +413,7 @@ class AptlConfig(BaseModel):
     run_storage: RunStorageConfig = RunStorageConfig()
     lifecycle_policy: LabLifecyclePolicyConfig | None = None
     experiment: ExperimentSettings = ExperimentSettings()
+    seat: SeatSettings = SeatSettings()
 
 
 def load_config(path: Path) -> AptlConfig:

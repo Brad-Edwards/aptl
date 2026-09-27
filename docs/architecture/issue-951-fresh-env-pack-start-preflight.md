@@ -78,7 +78,7 @@ checkout. Build the wheel with the existing locked, no-isolation toolchain;
 install locked runtime dependencies plus that wheel into a clean virtual
 environment; do not install the project editable or copy ignored generated
 state. Run the public `aptl lab init`, start
-`techvault-observability-core`, and run `aptl lab stop -v --yes`.
+`techvault-defensive-min`, and run `aptl lab stop -v --yes`.
 
 Teardown verification is project-scoped. Reuse the identities and query rules
 from `observe_project_runtime()` and `_compose_volume_cleanup`: both Compose and

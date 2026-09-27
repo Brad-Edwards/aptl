@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
+import signal
+import subprocess
 import sys
+import time
 from pathlib import Path
+from unittest import mock
 
 import pytest
-from fastapi.testclient import TestClient
 
 from aptl.workbench.agent import (
     AgentExecutionError,
@@ -17,6 +22,7 @@ from aptl.workbench.agent import (
     _admitted_executable,
     probe_mcp_server,
 )
+from aptl.workbench.codex_agent import CodexManagedAgentAdapter
 from aptl.workbench.credentials import (
     EphemeralCredentialBroker,
     WorkbenchCredentialError,
@@ -25,7 +31,6 @@ from aptl.workbench.participant_source_binding import (
     ProcessEnvironmentCredentialResolver,
     evidence_from_error,
 )
-from aptl.workbench.codex_agent import CodexManagedAgentAdapter
 from aptl.workbench.profiles import ProfileId, profile_for, render_profile_config
 from aptl.workbench.runtime import DecisionAgentLaunch, ProfileLaunch
 
@@ -743,30 +748,138 @@ def test_bounded_runner_terminates_output_overflow_and_timeout(
         )
 
 
-def test_appliance_factory_wires_the_production_workbench_without_operator_routes(
+def _poll_until_absent(pid: int, timeout: float = 30.0) -> bool:
+    """Whether ``pid`` disappears within ``timeout`` seconds.
+
+    EPERM is inconclusive, not proof of presence: Darwin answers it for an
+    unreaped zombie where Linux answers 0. Keep polling on it.
+    """
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        except PermissionError:
+            pass
+        time.sleep(0.02)
+    return False
+
+
+def test_bounded_runner_kills_a_descendant_that_outlives_sigterm(
     tmp_path: Path,
 ) -> None:
+    """Escalation to SIGKILL cannot be conditional on the direct child.
+
+    The regression: teardown escalated only when the process it holds a
+    handle for outlived the grace period. A descendant that ignores SIGTERM
+    therefore survived whenever its parent died promptly — which is exactly
+    the residue a bounded run promises not to leave behind.
+    """
+
+    from aptl.workbench.process import _terminate_process_group
+
+    pid_path = tmp_path / "grandchild.pid"
+    grandchild_program = (
+        "import signal,time;"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN);"
+        "time.sleep(120)"
+    )
+    program = (
+        "import pathlib,subprocess,sys;"
+        f"child=subprocess.Popen([sys.executable,'-c',{grandchild_program!r}]);"
+        f"pathlib.Path({str(pid_path)!r}).write_text(str(child.pid));"
+        "sys.exit(0)"
+    )
+    process = subprocess.Popen(
+        (sys.executable, "-c", program),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline and not pid_path.exists():
+        time.sleep(0.02)
+    assert pid_path.exists(), "fixture never recorded the grandchild pid"
+    grandchild = int(pid_path.read_text(encoding="utf-8"))
+
+    try:
+        _terminate_process_group(process)
+        assert _poll_until_absent(grandchild), "the descendant outlived teardown"
+    finally:
+        with contextlib.suppress(OSError):
+            os.kill(grandchild, signal.SIGKILL)
+
+
+def test_bounded_runner_tolerates_eperm_from_the_group_signal() -> None:
+    """Neither errno killpg can raise is treated as an error.
+
+    Darwin answers EPERM where Linux answers ESRCH once a group holds only
+    unreaped zombies. Treating that platform-specific EPERM as a real failure
+    turned an "output exceeded" verdict into an unhandled PermissionError.
+    """
+
+    from aptl.workbench.process import _terminate_process_group
+
+    process = subprocess.Popen(
+        (sys.executable, "-c", "pass"),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    process.wait()
+
+    with mock.patch(
+        "aptl.workbench.process.os.killpg",
+        side_effect=PermissionError(1, "Operation not permitted"),
+    ):
+        _terminate_process_group(process)
+
+    assert process.returncode == 0
+
+
+def test_bounded_runner_escalates_even_when_the_child_exits_promptly() -> None:
+    """SIGKILL reaches the group whether or not the handle process lingers."""
+
+    from aptl.workbench.process import _terminate_process_group
+
+    process = subprocess.Popen(
+        (sys.executable, "-c", "pass"),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    process.wait()
+
+    with mock.patch("aptl.workbench.process.os.killpg") as killpg:
+        _terminate_process_group(process)
+
+    assert [call.args[1] for call in killpg.call_args_list] == [
+        signal.SIGTERM,
+        signal.SIGKILL,
+    ]
+
+
+def test_appliance_factory_requires_enrolled_guest_binding(tmp_path: Path) -> None:
     from aptl.workbench.bootstrap import (
         ApplianceWorkbenchSettings,
         create_appliance_workbench_app,
     )
+    from aptl.workbench.profiles import WorkbenchConfigurationError
 
-    app = create_appliance_workbench_app(
-        ApplianceWorkbenchSettings(
-            payload_root=tmp_path / "payload",
-            state_dir=tmp_path / "state",
-            claude_executable=_executable(tmp_path / "claude"),
-            node_executable=Path(sys.executable),
-            model="claude-sonnet-4-5-20250929",
-        ),
-        secret_source={"ANTHROPIC_API_KEY": "model-secret"},
-        authorizer=lambda request: request.headers.get("X-Seat") == "seat",
+    prepared_input_1 = ApplianceWorkbenchSettings(
+        payload_root=tmp_path,
+        state_dir=tmp_path / "state",
+        claude_executable=_executable(tmp_path / "claude"),
+        model="test",
     )
-    client = TestClient(app)
-
-    assert client.get("/").status_code == 401
-    assert client.get("/", headers={"X-Seat": "seat"}).status_code == 200
-    assert client.get("/api/lab/status", headers={"X-Seat": "seat"}).status_code == 404
+    with pytest.raises(WorkbenchConfigurationError, match="enrolled"):
+        create_appliance_workbench_app(
+            prepared_input_1,
+            secret_source={},
+            authorizer=lambda request: None,
+        )
 
 
 class _Invocation:

@@ -23,7 +23,7 @@ _WORKFLOW_SCENARIO = dedent(
     name: orchestrator-test
     nodes:
       vm:
-        type: vm
+        type: compute
         os: linux
         resources: {ram: 1 gib, cpu: 1}
         conditions: {health: ops}
@@ -96,7 +96,9 @@ def test_start_registers_workflows_as_pending_with_pending_steps():
 
     assert isinstance(result, ApplyResult)
     assert result.success is True
-    assert result.snapshot.orchestration_results, "expected at least one workflow run recorded"
+    assert result.snapshot.orchestration_results, (
+        "expected at least one workflow run recorded"
+    )
 
     for payload in result.snapshot.orchestration_results.values():
         state = WorkflowExecutionState.from_payload(payload)
@@ -105,7 +107,10 @@ def test_start_registers_workflows_as_pending_with_pending_steps():
         assert state.workflow_status == WorkflowStatus.PENDING
         assert state.run_id
         assert state.steps, "workflow must report its observable steps"
-        assert all(step.lifecycle == WorkflowStepLifecycle.PENDING for step in state.steps.values())
+        assert all(
+            step.lifecycle == WorkflowStepLifecycle.PENDING
+            for step in state.steps.values()
+        )
     # No history events are invented for a not-yet-executed workflow.
     assert result.snapshot.orchestration_history == {}
 
@@ -127,7 +132,9 @@ def test_results_and_status_reflect_registered_workflows():
 
     assert orchestrator.results()
     assert orchestrator.history() == {}
-    assert orchestrator.status()["registered_workflows"] == sorted(orchestrator.results())
+    assert orchestrator.status()["registered_workflows"] == sorted(
+        orchestrator.results()
+    )
 
 
 def test_drive_workflows_reports_real_execution_state():
@@ -181,7 +188,9 @@ def test_drive_workflows_resolves_outcomes_from_evaluation_results():
     )
 
     assert diagnostics == []
-    state = WorkflowExecutionState.from_payload(next(iter(orchestrator.results().values())))
+    state = WorkflowExecutionState.from_payload(
+        next(iter(orchestrator.results().values()))
+    )
     assert state.workflow_status == WorkflowStatus.SUCCEEDED
 
 
@@ -224,8 +233,63 @@ def test_drive_workflows_persists_run_archive_artifacts(tmp_path):
 
     address = next(iter(orchestrator.results()))
     safe_address = address.replace("/", "_")
-    assert (tmp_path / "runs" / run_id / "orchestration" / safe_address / "result.json").is_file()
-    assert (tmp_path / "runs" / run_id / "orchestration" / safe_address / "history.jsonl").is_file()
+    archive = tmp_path / "runs" / run_id / "orchestration" / safe_address
+    assert (archive / "result.json").is_file()
+    assert (archive / "history.jsonl").is_file()
+
+
+def test_persisted_history_is_the_portable_event_stream(tmp_path):
+    """The archive must hold the events, not the shape of one.
+
+    ``append_jsonl`` takes a *list* of records and redacts each one, so handing
+    it a single event mapping iterated that mapping and wrote one JSON string
+    per key — a ``history.jsonl`` of ``"event_type"``, ``"timestamp"``, ...
+    with every fact gone. The file existed, which is exactly why a presence
+    check never saw it (issue #993).
+    """
+
+    import json
+
+    from raes_contracts.workflow import WorkflowHistoryEvent
+
+    from aptl.core.runstore import LocalRunStore
+
+    orchestrator = AptlOrchestrator()
+    orchestrator.start(_orchestration_plan(), RuntimeSnapshot())
+    store = LocalRunStore(tmp_path / "runs")
+    run_id = "run-993"
+    store.create_run(run_id)
+
+    orchestrator.drive_workflows(
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED,
+        },
+        run_store=store,
+        run_id=run_id,
+    )
+
+    address = next(iter(orchestrator.results()))
+    history_path = (
+        tmp_path
+        / "runs"
+        / run_id
+        / "orchestration"
+        / address.replace("/", "_")
+        / "history.jsonl"
+    )
+    lines = [
+        line for line in history_path.read_text(encoding="utf-8").splitlines() if line
+    ]
+    persisted = [json.loads(line) for line in lines]
+
+    assert persisted == orchestrator.history()[address]
+    for event in persisted:
+        assert isinstance(event, dict)
+        WorkflowHistoryEvent.from_payload(event)
+    assert any(
+        event["event_type"] == WorkflowHistoryEventType.WORKFLOW_COMPLETED.value
+        for event in persisted
+    )
 
 
 def test_drive_workflows_reports_drive_failure():
@@ -263,7 +327,8 @@ def test_start_preserves_existing_provisioning_entries():
 
     assert "provision.node.vm" in result.snapshot.entries
     assert any(
-        entry.domain == RuntimeDomain.ORCHESTRATION for entry in result.snapshot.entries.values()
+        entry.domain == RuntimeDomain.ORCHESTRATION
+        for entry in result.snapshot.entries.values()
     )
 
 
@@ -308,7 +373,10 @@ def test_start_fails_closed_on_workflow_missing_result_contract():
     )
 
     assert result.success is False
-    assert any(d.code == "aptl.orchestrator.workflow-contract-missing" for d in result.diagnostics)
+    assert any(
+        d.code == "aptl.orchestrator.workflow-contract-missing"
+        for d in result.diagnostics
+    )
 
 
 def test_start_fails_closed_on_invalid_result_contract():
@@ -323,7 +391,10 @@ def test_start_fails_closed_on_invalid_result_contract():
     )
 
     assert result.success is False
-    assert any(d.code == "aptl.orchestrator.workflow-contract-invalid" for d in result.diagnostics)
+    assert any(
+        d.code == "aptl.orchestrator.workflow-contract-invalid"
+        for d in result.diagnostics
+    )
 
 
 def test_start_handles_delete_operation():

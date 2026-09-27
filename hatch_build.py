@@ -152,7 +152,11 @@ class CustomBuildHook(BuildHookInterface):
             )
         except (OSError, subprocess.CalledProcessError):
             return None
-        rels = [Path(p) for p in completed.stdout.decode("utf-8").split("\0") if p]
+        rels = [
+            Path(p)
+            for p in completed.stdout.decode("utf-8").split("\0")
+            if p and (root / p).is_file()
+        ]
         return rels or None
 
     @staticmethod

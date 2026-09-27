@@ -1,7 +1,7 @@
 .PHONY: policy devmain
 
 policy:
-	bash tools/vale-lint-all.sh
+	pre-commit run
 
 # Open the dev -> main promotion PR with the standardized title (issue #852).
 #

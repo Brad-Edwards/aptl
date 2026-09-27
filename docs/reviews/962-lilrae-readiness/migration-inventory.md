@@ -38,6 +38,15 @@ They do not prescribe another content move or a permanent repository decision.
 
 ## Safe retirement candidates
 
+Issue #970 retired the three recorded private RAES import dependencies against
+the pinned RAES 5.0.0 release. Artifact identity uses
+`raes.artifact_requirements.ArtifactIdentity`, provision addresses use
+`raes_contracts.addressing.render_compiled_address`, and run records project
+the public runtime snapshot dataclass with RAES's public value-free account
+placement helper. The obsolete manifest import fallback is gone. The AST gate
+now requires zero private RAES imports across production Python source; the
+removed rows are no longer active blockers in the identity ledger.
+
 - Static TechVault Compose/profile lookup paths after equivalent acquired-pack
   behavior is qualified. A checked-in file's existence must not select a
   privileged alternate execution path indefinitely.

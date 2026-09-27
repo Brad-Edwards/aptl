@@ -13,51 +13,101 @@ from raes_contracts.contracts import ExperimentEvidenceRecordModel
 
 from aptl.core.evidence.protocol import CollectorOutcome
 from aptl.core.evidence.outcomes import CollectorStatus
-from aptl.core.evidence.records import RecordDisclosure, build_evidence_record, derive_evidence_record_id
+from aptl.core.evidence.records import (
+    RecordDisclosure,
+    build_evidence_record,
+    derive_evidence_record_id,
+)
 from aptl.core.evidence.content_store import ContentInsertion
-from aptl.core.experiment.capture_registry import CaptureBinding, CaptureLimits, CaptureVisibility
+from aptl.core.experiment.capture_registry import (
+    CaptureBinding,
+    CaptureLimits,
+    CaptureVisibility,
+)
 
 
 def _binding(**overrides) -> CaptureBinding:
     fields: dict = {
-        "capture_spec_id": "cap-1", "requirement_id": "network-trace", "window_refs": ("run-window",),
-        "registration_id": "aptl.collector.a", "implementation_version": "1.0.0",
-        "contract_version": "experiment-capture-spec/v1", "effective_config_digest": "sha256:" + "cd" * 32,
-        "channel_ref_id": "chan", "channel_ref_version": "1.0.0", "channel_kind": "evaluation-history",
-        "capture_kind": "trace", "capture_scope": "network", "expected_media_types": ("application/json",),
-        "required_artifact_roles": ("observation",), "sensitivity": "internal", "redaction_required": False,
-        "integrity_requirements": ("sha256-digest",), "retention_policy": "retain", "loss_disclosure_required": True,
+        "capture_spec_id": "cap-1",
+        "requirement_id": "network-trace",
+        "window_refs": ("run-window",),
+        "registration_id": "aptl.collector.a",
+        "implementation_version": "1.0.0",
+        "contract_version": "experiment-capture-spec/v1",
+        "effective_config_digest": "sha256:" + "cd" * 32,
+        "channel_ref_id": "chan",
+        "channel_ref_version": "1.0.0",
+        "channel_kind": "evaluation-history",
+        "capture_kind": "trace",
+        "capture_scope": "network",
+        "expected_media_types": ("application/json",),
+        "required_artifact_roles": ("observation",),
+        "sensitivity": "internal",
+        "redaction_required": False,
+        "integrity_requirements": ("sha256-digest",),
+        "retention_policy": "retain",
+        "loss_disclosure_required": True,
         "visibility_class": CaptureVisibility.EVALUATOR_ONLY,
-        "limits": CaptureLimits(max_bytes=1024, max_artifact_count=10, max_duration_s=60),
+        "limits": CaptureLimits(
+            max_bytes=1024, max_artifact_count=10, max_duration_s=60
+        ),
     }
     fields.update(overrides)
     return CaptureBinding(**fields)
 
 
 def _content(digest_hex="ab" * 32, size=42) -> ContentInsertion:
-    return ContentInsertion(relative_path=f"evidence/{digest_hex}", digest=f"sha256:{digest_hex}", size=size, truncated=False)
+    return ContentInsertion(
+        relative_path=f"evidence/{digest_hex}",
+        digest=f"sha256:{digest_hex}",
+        size=size,
+        truncated=False,
+    )
 
 
 def _outcome() -> CollectorOutcome:
-    return CollectorOutcome(status=CollectorStatus.OK, started_at="2026-07-20T00:00:00Z", finished_at="2026-07-20T00:00:05Z", event_count=3)
+    return CollectorOutcome(
+        status=CollectorStatus.OK,
+        started_at="2026-07-20T00:00:00Z",
+        finished_at="2026-07-20T00:00:05Z",
+        event_count=3,
+    )
 
 
-def _record(*, sensitivity="internal", redaction_state="none", loss_disclosure=None, **overrides):
+def _record(
+    *, sensitivity="internal", redaction_state="none", loss_disclosure=None, **overrides
+):
     kwargs = dict(
-        binding=_binding(), run_id="run-1", planned_trial_id="trial-1", content=_content(), outcome=_outcome(),
+        binding=_binding(),
+        run_id="run-1",
+        planned_trial_id="trial-1",
+        content=_content(),
+        outcome=_outcome(),
         captured_at="2026-07-20T00:00:05Z",
     )
     kwargs.update(overrides)
     disclosure = RecordDisclosure(
-        sensitivity=sensitivity, redaction_state=redaction_state, loss_disclosure=loss_disclosure
+        sensitivity=sensitivity,
+        redaction_state=redaction_state,
+        loss_disclosure=loss_disclosure,
     )
     return build_evidence_record(disclosure=disclosure, **kwargs)
 
 
 class TestIdentity:
     def test_same_inputs_yield_the_same_id(self):
-        a = derive_evidence_record_id(run_id="r", planned_trial_id="t", binding=_binding(), content_digest="sha256:" + "ab" * 32)
-        b = derive_evidence_record_id(run_id="r", planned_trial_id="t", binding=_binding(), content_digest="sha256:" + "ab" * 32)
+        a = derive_evidence_record_id(
+            run_id="r",
+            planned_trial_id="t",
+            binding=_binding(),
+            content_digest="sha256:" + "ab" * 32,
+        )
+        b = derive_evidence_record_id(
+            run_id="r",
+            planned_trial_id="t",
+            binding=_binding(),
+            content_digest="sha256:" + "ab" * 32,
+        )
         assert a == b
 
     def test_id_excludes_captured_at(self):
@@ -78,9 +128,12 @@ class TestConformance:
         # field from one explicitly present as null (a capture-spec ref must
         # not CARRY ref_digest/ref_path), so canonical serialization drops
         # None-valued optionals.
-        reparsed = ExperimentEvidenceRecordModel.model_validate(record.model_dump(mode="json", exclude_none=True))
+        reparsed = ExperimentEvidenceRecordModel.model_validate(
+            record.model_dump(mode="json", exclude_none=True)
+        )
         assert reparsed.evidence_record_id == record.evidence_record_id
         assert reparsed.schema_version == "experiment-evidence-record/v1"
+        assert reparsed.output_contract == "experiment-evidence-record-v1"
 
     def test_record_carries_run_and_channel_references(self):
         record = _record()
@@ -91,8 +144,12 @@ class TestConformance:
 
 class TestLossDisclosure:
     def test_withheld_record_requires_a_disclosure(self):
-        record = _record(redaction_state="withheld", loss_disclosure="withheld for evaluator-only visibility")
+        record = _record(
+            redaction_state="withheld",
+            loss_disclosure="withheld for evaluator-only visibility",
+        )
         assert record.raw_content.loss_disclosure is not None
+        assert record.redaction_policy == "aptl.evaluator-only-withholding/v1"
 
     def test_lossless_participant_visible_record_has_none(self):
         record = _record(redaction_state="none", loss_disclosure=None)

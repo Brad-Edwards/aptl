@@ -43,6 +43,9 @@
 		</a>
 
 		<h1 class="truncate text-sm font-semibold text-aptl-text">{scenario.name}</h1>
+		<span class="font-mono text-xs text-aptl-text-muted">
+			{scenario.pack.id} {scenario.pack.version} · {scenario.pack.maturity}
+		</span>
 
 		{#if scenario.mode}
 			<span class="rounded-full px-2 py-0.5 text-xs font-medium {modeColor}">

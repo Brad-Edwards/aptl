@@ -10,6 +10,7 @@ from aptl.core.deployment.realization import (
     DeploymentNetworkRealization,
     DeploymentNodeRealization,
 )
+from aptl.core.deployment.errors import BackendSeedError
 
 _NETWORK_TOKEN_SEPARATORS = re.compile(r"[^a-z0-9]+")
 _COMPOSE_PROJECT_LABEL = "com.docker.compose.project"
@@ -89,6 +90,31 @@ def _resolve_realization_network_attachments(
         else:
             desired[match] = attachment
     return desired, missing
+
+
+def _resolve_base_network_bindings(
+    nodes: tuple[object, ...],
+    managed_networks: set[str],
+    project_name: str,
+    *,
+    appliance_boundary: bool,
+) -> dict[str, tuple[tuple[str, DeploymentNetworkAttachment], ...]]:
+    """Resolve exact Docker network bindings for image-free base containers."""
+
+    bindings: dict[str, tuple[tuple[str, DeploymentNetworkAttachment], ...]] = {}
+    for node in nodes:
+        desired, missing = _resolve_realization_network_attachments(
+            tuple(getattr(node, "network_attachments", ())),
+            managed_networks,
+            project_name,
+        )
+        if missing:
+            raise BackendSeedError("image-free node network binding was not observed")
+        if desired:
+            bindings[str(getattr(node, "address"))] = tuple(desired.items())
+        elif appliance_boundary:
+            raise BackendSeedError("appliance image-free node has no admitted network")
+    return bindings
 
 
 def _match_managed_network(
@@ -180,9 +206,7 @@ def _network_policy_mismatches(
     for label, expected in expected_labels.items():
         actual = labels.get(label, "")
         if actual != expected:
-            mismatches.append(
-                f"label {label} expected {expected!r}, found {actual!r}"
-            )
+            mismatches.append(f"label {label} expected {expected!r}, found {actual!r}")
     if network.internal is not None and (
         bool(details.get("internal")) != network.internal
     ):
@@ -210,8 +234,7 @@ def _node_network_attachments(
     if node.network_attachments:
         return node.network_attachments
     return tuple(
-        DeploymentNetworkAttachment(network=network)
-        for network in node.networks
+        DeploymentNetworkAttachment(network=network) for network in node.networks
     )
 
 
@@ -219,9 +242,5 @@ def _node_network_aliases(node: DeploymentNodeRealization) -> tuple[str, ...]:
     """Return stable DNS aliases to preserve on manual Docker connects."""
 
     return tuple(
-        dict.fromkeys(
-            alias
-            for alias in (node.service_name, node.name)
-            if alias
-        )
+        dict.fromkeys(alias for alias in (node.service_name, node.name) if alias)
     )

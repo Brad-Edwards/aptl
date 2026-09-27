@@ -59,7 +59,9 @@ def _split_components(relative_path: str | Path) -> list[str]:
     if not text:
         raise PathContainmentError(REASON_EMPTY_COMPONENT, "path must not be empty")
     if text.startswith("/"):
-        raise PathContainmentError(REASON_NOT_RELATIVE, f"path must be relative: {text!r}")
+        raise PathContainmentError(
+            REASON_NOT_RELATIVE, f"path must be relative: {text!r}"
+        )
     components = text.split("/")
     for component in components:
         if component == "":

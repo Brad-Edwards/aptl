@@ -8,7 +8,6 @@ import typer
 
 from aptl.cli import lab_init, lifecycle
 from aptl.cli.participant_profile import qualify_profile
-from aptl.cli.participant_readiness import participant_readiness
 from aptl.cli.continuity import continuity_audit
 from aptl.cli.lab_render import (
     emit_lab_access_summary,
@@ -27,6 +26,7 @@ from aptl.core.scenario_catalog import (
     resolve_scenario_selection,
 )
 from aptl.utils.logging import get_logger
+from aptl.utils.redaction import redact
 
 log = get_logger("cli.lab")
 
@@ -46,7 +46,6 @@ lab_init.register(app)
 # `aptl lab enforce` / `monitor` / `policy show`).
 lifecycle.register(app)
 app.command("qualify-profile")(qualify_profile)
-app.command("participant-readiness")(participant_readiness)
 
 
 # Shared destructive-data warning. Both `stop --volumes` and
@@ -99,7 +98,7 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
     scenario: Optional[str] = typer.Option(
         None,
         "--scenario",
-        help="Curated RAES startup scenario id from the catalog.",
+        help="Acquired RAES environment-pack id from the catalog.",
     ),
     scenario_path: Optional[Path] = typer.Option(
         None,
@@ -145,6 +144,28 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
         "--appliance-qualification-public-key",
         help="Independent APP-2 qualification trust anchor.",
     ),
+    appliance_readiness_challenge: Optional[Path] = typer.Option(
+        None,
+        "--appliance-readiness-challenge",
+        hidden=True,
+    ),
+    appliance_readiness_device: Optional[Path] = typer.Option(
+        None,
+        "--appliance-readiness-device",
+        hidden=True,
+    ),
+    appliance_access_request: Optional[Path] = typer.Option(
+        None, "--appliance-access-request", hidden=True
+    ),
+    appliance_access_device: Optional[Path] = typer.Option(
+        None, "--appliance-access-device", hidden=True
+    ),
+    appliance_access_output_dir: Optional[Path] = typer.Option(
+        None, "--appliance-access-output-dir", hidden=True
+    ),
+    appliance_candidate_trust: bool = typer.Option(
+        False, "--appliance-candidate-trust", hidden=True
+    ),
 ) -> None:
     """Start the APTL lab environment."""
     log.info("Starting lab from %s (clean=%s)", project_dir, clean)
@@ -159,14 +180,42 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=2)
 
-    launch_values = (
-        appliance_launch_descriptor,
-        appliance_release_public_key,
-        appliance_qualification_public_key,
+    launch_values = (appliance_launch_descriptor,)
+    readiness_values = (
+        appliance_readiness_challenge,
+        appliance_readiness_device,
     )
-    if any(launch_values) and (not all(launch_values) or not offline_staged):
+    if any(launch_values) and not offline_staged:
         typer.echo(
-            "error: appliance launch requires both trust anchors and --offline-staged",
+            "error: appliance launch requires --offline-staged",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    if appliance_candidate_trust:
+        typer.echo(
+            "error: candidate trust is unavailable for seat images",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    if (appliance_release_public_key or appliance_qualification_public_key) and not appliance_launch_descriptor:
+        typer.echo("error: appliance trust anchors require a launch descriptor", err=True)
+        raise typer.Exit(code=2)
+    if any(readiness_values) and (
+        not all(readiness_values) or not appliance_launch_descriptor or not offline_staged
+    ):
+        typer.echo(
+            "error: appliance readiness requires a verified offline launch",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    access_values = (
+        appliance_access_request,
+        appliance_access_device,
+        appliance_access_output_dir,
+    )
+    if any(access_values) and (not all(access_values) or not all(readiness_values)):
+        typer.echo(
+            "error: appliance access requires complete readiness and access channels",
             err=True,
         )
         raise typer.Exit(code=2)
@@ -179,6 +228,12 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
             launch_descriptor=appliance_launch_descriptor,
             release_public_key=appliance_release_public_key,
             qualification_public_key=appliance_qualification_public_key,
+            readiness_challenge=appliance_readiness_challenge,
+            readiness_device=appliance_readiness_device,
+            access_request=appliance_access_request,
+            access_device=appliance_access_device,
+            access_output_dir=appliance_access_output_dir,
+            candidate_trust=appliance_candidate_trust,
         )
     if clean:
         if not _confirm_destructive(yes):
@@ -238,16 +293,21 @@ def scenarios(
         help="Path to the APTL project directory.",
     ),
 ) -> None:
-    """List curated RAES startup scenarios."""
+    """List validated acquired-pack identities."""
     try:
         catalog = load_scenario_catalog(project_dir)
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=2)
 
-    for entry in catalog.scenarios:
-        description = f" - {entry.description}" if entry.description else ""
-        typer.echo(f"{entry.id}\t{entry.path}\t{entry.name}{description}")
+    with catalog:
+        for entry in catalog.scenarios:
+            description = f" - {entry.description}" if entry.description else ""
+            identity = catalog.pack_identity
+            typer.echo(
+                f"{entry.id}\t{identity.pack_version}\t{catalog.maturity}\t"
+                f"{identity.set_digest}\t{entry.name}{description}"
+            )
 
 
 @app.command()
@@ -293,6 +353,7 @@ def _emit_snapshot_json(project_dir: Path, output_file: Optional[Path]) -> None:
     """
     from aptl.cli._common import resolve_config_for_cli
     from aptl.core.deployment import get_backend
+    from aptl.core.deployment.errors import BackendObservationError
     from aptl.core.snapshot import capture_snapshot
 
     # `capture_snapshot` requires an explicit backend (no silent default).
@@ -302,7 +363,11 @@ def _emit_snapshot_json(project_dir: Path, output_file: Optional[Path]) -> None:
     config, project_root = resolve_config_for_cli(project_dir)
     backend = get_backend(config, project_root)
 
-    snapshot = capture_snapshot(config_dir=project_root, backend=backend)
+    try:
+        snapshot = capture_snapshot(config_dir=project_root, backend=backend)
+    except BackendObservationError as exc:
+        typer.echo(f"Error: {redact(str(exc))}", err=True)
+        raise typer.Exit(code=1) from exc
     data = json.dumps(snapshot.to_dict(), indent=2)
 
     if output_file:
@@ -320,13 +385,12 @@ def _emit_status_text(current: LabStatus) -> None:
         typer.echo("Lab is not running.")
         if current.error:
             typer.echo(f"Error: {current.error}")
-        return
-
-    typer.echo("Lab is running.")
+    else:
+        typer.echo("Lab is running.")
     for container in current.containers:
-        name = container.get("Name", "unknown")
-        state = container.get("State", "unknown")
-        health = container.get("Health", "")
+        name = container.get("Name", container.get("name", "unknown"))
+        state = container.get("State", container.get("state", "unknown"))
+        health = container.get("Health", container.get("health", ""))
         line = f"  {name}: {state}"
         if health:
             line += f" ({health})"
@@ -383,7 +447,10 @@ def validate_live(
     scenario: Optional[Path] = typer.Option(
         None,
         "--scenario",
-        help="RAES SDL scenario (default: the configured scenario, the bundled TechVault env-pack).",
+        help=(
+            "Explicit project-tree RAES SDL override "
+            "(default: the configured acquired TechVault pack)."
+        ),
     ),
     profile: str = typer.Option(
         "full-remote-control-plane",

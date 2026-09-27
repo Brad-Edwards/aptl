@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import traceback
 from dataclasses import dataclass
+from collections.abc import Mapping
 from pathlib import Path
 
 from cryptography import x509
@@ -127,6 +128,7 @@ SOC_SERVICE_REGISTRY: tuple[ServiceCert, ...] = (
 
 def derive_soc_service_certs(
     output_paths: tuple[str, ...],
+    authored_hosts: Mapping[str, tuple[str, ...]] | None = None,
 ) -> tuple[ServiceCert, ...]:
     """Derive the SOC service certificate set from declared bundle outputs.
 
@@ -139,7 +141,12 @@ def derive_soc_service_certs(
     - each first path segment names a service (root-level outputs like the CA's
       ``lab-ca.pem`` are not a service);
     - a ``.p12`` output for a service means it needs a PKCS#12 keystore;
-    - SANs are the service's own DNS name plus host-loopback for local access.
+    - SANs are the service's own DNS name plus host-loopback for local access,
+      plus any additional host the scenario itself authored for that service
+      (``authored_hosts``). A service the scenario says is reached at a
+      canonical DNS name needs a certificate that covers that name, or every
+      verifying consumer of the authored address fails -- which is exactly the
+      trust failure a lab CA exists to avoid.
 
     The subject CN is the conventional ``aptl-<service>`` (TLS verifies SANs, not
     CN). The per-service PKCS#12 requirement is derived here from the declared
@@ -155,15 +162,24 @@ def derive_soc_service_certs(
         if len(parts) < 2:
             continue
         files_by_service.setdefault(parts[0], set()).add(parts[-1])
+    hosts = authored_hosts or {}
     return tuple(
         ServiceCert(
             name=service,
             subject_cn=f"aptl-{service}",
-            sans=(service, "localhost", "127.0.0.1"),
+            sans=_service_sans(service, hosts.get(service, ())),
             needs_keystore=any(name.endswith(".p12") for name in files),
         )
         for service, files in sorted(files_by_service.items())
     )
+
+
+def _service_sans(service: str, authored: tuple[str, ...]) -> tuple[str, ...]:
+    """Return the service's SANs with authored hosts appended, order-stable."""
+
+    sans = [service, "localhost", "127.0.0.1"]
+    sans.extend(host for host in sorted(set(authored)) if host not in sans)
+    return tuple(sans)
 
 
 def soc_bundle_evidence(

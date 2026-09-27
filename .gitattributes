@@ -53,3 +53,8 @@ mcp/**/*.sh text eol=lf
 
 .aptl/config/** text eol=lf
 .aptl/realization/** text eol=lf
+
+# The owned test fixture pack is byte-bound: its associated-artifact manifest
+# pins a sha256 for every member, and env-packs refuses the pack when one byte
+# differs. Never convert its line endings on checkout (issue #985).
+tests/fixtures/packs/** -text

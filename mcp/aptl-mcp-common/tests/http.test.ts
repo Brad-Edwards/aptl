@@ -51,6 +51,56 @@ describe('HTTPClient', () => {
     );
   });
 
+  it('sends Accept: application/json by default', async () => {
+    const config = {
+      baseUrl: 'https://api.example.com',
+      auth: { type: 'apikey' as const, header: 'Authorization', apiKey: 'k' }
+    };
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve('{"ok":true}')
+    } as any);
+
+    const client = new HTTPClient(config);
+    await client.makeRequest('/attributes/add/1', 'POST', { body: { type: 'ip-dst' } });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://api.example.com/attributes/add/1',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'Accept': 'application/json'
+        })
+      })
+    );
+  });
+
+  it('lets a per-call header override the default Accept', async () => {
+    const config = {
+      baseUrl: 'https://api.example.com',
+      auth: { type: 'apikey' as const, header: 'Authorization', apiKey: 'k' }
+    };
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve('ok')
+    } as any);
+
+    const client = new HTTPClient(config);
+    await client.makeRequest('/raw', 'GET', { headers: { 'Accept': 'text/plain' } });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://api.example.com/raw',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'Accept': 'text/plain'
+        })
+      })
+    );
+  });
+
   it('builds bearer auth headers correctly', async () => {
     const config = {
       baseUrl: 'https://api.example.com',

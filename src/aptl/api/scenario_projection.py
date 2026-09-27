@@ -1,6 +1,6 @@
 """RAES scenario-detail workbench projection (UI-008d).
 
-Turns a curated catalog entry plus its parsed RAES ``Scenario`` into the
+Turns an acquired-pack catalog entry plus its parsed RAES ``Scenario`` into the
 backend-owned wire DTOs in :mod:`aptl.api.schemas`: the enriched card summary
 and the scenario-detail response (header facts + an ordered ``WorkbenchBlock``
 discriminated union).
@@ -8,7 +8,7 @@ discriminated union).
 The block families are projected from whatever the RAES SDL actually owns and
 are omitted when their source section is empty — the projection never
 fabricates steps, objectives, or SIEM queries for infra-only scenarios. The
-catalog ``path`` locator is never read into any wire field.
+private bundle root and SDL locator are never exposed in a wire field.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from aptl.api.schemas import (
     ScenarioDetailResponse,
     ScenarioDifficultyLiteral,
     ScenarioModeLiteral,
+    ScenarioPackIdentityResponse,
     ScenarioSummaryResponse,
     ScenarioValidationState,
     SectionDividerBlock,
@@ -42,14 +43,14 @@ class MetadataFacts(TypedDict):
 
 
 def _node_type(node: object) -> str:
-    """Return the node's RAES type string (``vm`` / ``switch``), or ``""``."""
+    """Return the node's RAES type string (``compute`` / ``switch``), or ``""``."""
     node_type = getattr(node, "type", None)
     return getattr(node_type, "value", node_type) or ""
 
 
-def _is_vm(node: object) -> bool:
-    """Return whether a RAES node is a VM (a candidate required container)."""
-    return _node_type(node) == "vm"
+def _is_compute(node: object) -> bool:
+    """Return whether a RAES node is a compute endpoint backed by a container."""
+    return _node_type(node) == "compute"
 
 
 def _exposes_ssh(node: object) -> bool:
@@ -64,15 +65,17 @@ def _exposes_ssh(node: object) -> bool:
 
 
 def scenario_required_containers(scenario: object) -> list[str]:
-    """Return the required-container names: the scenario's RAES VM nodes."""
+    """Return the required-container names: the scenario's RAES compute nodes."""
     nodes = getattr(scenario, "nodes", {}) or {}
-    return [name for name, node in nodes.items() if _is_vm(node)]
+    return [name for name, node in nodes.items() if _is_compute(node)]
 
 
 def _ssh_containers(scenario: object) -> list[str]:
-    """Return the VM node names that expose an SSH service."""
+    """Return the compute-node names that expose an SSH service."""
     nodes = getattr(scenario, "nodes", {}) or {}
-    return [name for name, node in nodes.items() if _is_vm(node) and _exposes_ssh(node)]
+    return [
+        name for name, node in nodes.items() if _is_compute(node) and _exposes_ssh(node)
+    ]
 
 
 def _metadata_facts(entry: ScenarioCatalogEntry) -> MetadataFacts:
@@ -172,7 +175,7 @@ def _step_blocks(scenario: object) -> list[WorkbenchBlock]:
 
 
 def _terminal_blocks(scenario: object) -> list[WorkbenchBlock]:
-    """Project SSH-exposing VM nodes into lazy terminal blocks (empty if none)."""
+    """Project SSH-exposing compute nodes into lazy terminal blocks (empty if none)."""
     ssh_containers = _ssh_containers(scenario)
     if not ssh_containers:
         return []
@@ -205,7 +208,9 @@ def build_workbench_blocks(
 
 
 def build_scenario_detail(
-    entry: ScenarioCatalogEntry, scenario: object
+    entry: ScenarioCatalogEntry,
+    scenario: object,
+    pack: ScenarioPackIdentityResponse | None = None,
 ) -> ScenarioDetailResponse:
     """Build the scenario-detail response from a catalog entry + parsed SDL."""
     facts = _metadata_facts(entry)
@@ -219,12 +224,15 @@ def build_scenario_detail(
         tags=facts["tags"],
         required_containers=scenario_required_containers(scenario),
         validation=ScenarioValidationState(valid=True),
+        pack=pack,
         blocks=build_workbench_blocks(entry, scenario, facts),
     )
 
 
 def build_scenario_summary(
-    entry: ScenarioCatalogEntry, scenario: object
+    entry: ScenarioCatalogEntry,
+    scenario: object,
+    pack: ScenarioPackIdentityResponse | None = None,
 ) -> ScenarioSummaryResponse:
     """Build an enriched card summary from a catalog entry + parsed SDL."""
     facts = _metadata_facts(entry)
@@ -238,10 +246,14 @@ def build_scenario_summary(
         tags=facts["tags"],
         required_containers=scenario_required_containers(scenario),
         validation=ScenarioValidationState(valid=True),
+        pack=pack,
     )
 
 
-def invalid_scenario_summary(entry: ScenarioCatalogEntry) -> ScenarioSummaryResponse:
+def invalid_scenario_summary(
+    entry: ScenarioCatalogEntry,
+    pack: ScenarioPackIdentityResponse | None = None,
+) -> ScenarioSummaryResponse:
     """Build a card summary for an entry whose RAES SDL failed to project.
 
     Carries the catalog-owned facts (id/name/description/metadata) and a
@@ -261,4 +273,5 @@ def invalid_scenario_summary(entry: ScenarioCatalogEntry) -> ScenarioSummaryResp
         validation=ScenarioValidationState(
             valid=False, detail="Scenario projection is currently unavailable."
         ),
+        pack=pack,
     )

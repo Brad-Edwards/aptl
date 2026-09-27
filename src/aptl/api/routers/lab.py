@@ -41,6 +41,25 @@ def _build_status_response(project_dir: Path) -> LabStatusResponse:
     )
 
 
+def _status_projection(response: LabStatusResponse) -> tuple[object, ...]:
+    """Return stable, complete state used to suppress duplicate SSE events."""
+
+    containers = tuple(
+        sorted(
+            (
+                container.name,
+                container.state,
+                container.status,
+                container.health,
+                container.image,
+                tuple(container.ports),
+            )
+            for container in response.containers
+        )
+    )
+    return response.running, response.error, containers
+
+
 @router.get("/lab/status")
 async def lab_status(
     project_dir: Annotated[Path, Depends(get_project_dir)],
@@ -124,8 +143,7 @@ async def _lab_event_generator(
     MAX_CONSECUTIVE_ERRORS consecutive failures (circuit breaker).
     """
     log.info("SSE connection opened")
-    previous_running: bool | None = None
-    previous_containers: list[str] = []
+    previous_projection: tuple[object, ...] | None = None
     consecutive_errors = 0
 
     while True:
@@ -134,20 +152,15 @@ async def _lab_event_generator(
                 _build_status_response, project_dir
             )
             consecutive_errors = 0
-            current_containers = [c.name for c in response.containers]
+            current_projection = _status_projection(response)
 
             # Emit event if state changed or on first poll
-            if (
-                previous_running is None
-                or response.running != previous_running
-                or current_containers != previous_containers
-            ):
+            if current_projection != previous_projection:
                 yield {
                     "event": "lab_status",
                     "data": response.model_dump_json(),
                 }
-                previous_running = response.running
-                previous_containers = current_containers
+                previous_projection = current_projection
 
         except Exception as exc:
             consecutive_errors += 1
@@ -183,8 +196,8 @@ async def lab_events(
 ) -> EventSourceResponse:
     """SSE stream of lab status changes.
 
-    Polls lab status every 5 seconds and emits events when the
-    running state or container list changes.
+    Polls lab status every 5 seconds and emits events when the running state,
+    error, or projected container state changes.
     """
     log.info("GET /lab/events — starting SSE stream")
     return EventSourceResponse(_lab_event_generator(project_dir))

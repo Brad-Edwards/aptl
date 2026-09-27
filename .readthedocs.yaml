@@ -1,0 +1,24 @@
+# Read the Docs configuration for the ADR-038 dual-publishing decision.
+version: 2
+
+build:
+  os: ubuntu-24.04
+  tools:
+    python: "3.12"
+  jobs:
+    post_checkout:
+      # The revision-date plugin needs the complete repository history. A
+      # normal clone already passes the right side; a shallow clone must be
+      # successfully unshallowed or the build stops.
+      - git fetch --unshallow || git rev-parse --is-shallow-repository | grep -qx false
+    post_install:
+      # requirements/docs.txt contains the hash-locked dependency closure.
+      - pip install -e . --no-deps --no-build-isolation
+
+python:
+  install:
+    - requirements: requirements/docs.txt
+
+mkdocs:
+  configuration: mkdocs.yml
+  fail_on_warning: true

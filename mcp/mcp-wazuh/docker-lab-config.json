@@ -14,7 +14,7 @@
     "network_subnet": "172.20.0.0/16"
   },
   "api": {
-    "baseUrl": "https://localhost:9200",
+    "baseUrl": "https://localhost:${APTL_HP_WAZUH_INDEXER_9200}",
     "auth": {
       "type": "basic",
       "username": "${INDEXER_USERNAME}",
@@ -28,7 +28,7 @@
   },
   "queries": {
     "query_alerts": {
-      "url": "https://localhost:9200/wazuh-alerts-4.x-*/_search",
+      "url": "https://localhost:${APTL_HP_WAZUH_INDEXER_9200}/wazuh-alerts-4.x-*/_search",
       "method": "POST",
       "auth": {
         "type": "basic",
@@ -46,7 +46,7 @@
       "description": "Search processed Wazuh alerts with filters. Use Elasticsearch query DSL in body parameter. Example: {\"body\": {\"query\": {\"range\": {\"@timestamp\": {\"gte\": \"now-1h\"}}}}}"
     },
     "query_logs": {
-      "url": "https://localhost:9200/wazuh-archives-4.x-*/_search",
+      "url": "https://localhost:${APTL_HP_WAZUH_INDEXER_9200}/wazuh-archives-4.x-*/_search",
       "method": "POST",
       "auth": {
         "type": "basic",
@@ -64,7 +64,7 @@
       "description": "Search raw log data (archives) before rule processing. Requires logall_json=yes in ossec.conf and the archives fileset enabled in the Filebeat wazuh module. Use Elasticsearch query DSL in body parameter. Example: {\"body\": {\"query\": {\"match\": {\"data.srcip\": \"192.168.1.1\"}}}}"
     },
     "create_detection_rule": {
-      "url": "https://localhost:55000/manager/files",
+      "url": "https://localhost:${APTL_HP_WAZUH_MANAGER_55000}/manager/files",
       "method": "PUT",
       "auth": {
         "type": "basic",

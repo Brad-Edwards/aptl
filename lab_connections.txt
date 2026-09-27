@@ -8,9 +8,9 @@
    Wazuh Indexer: https://localhost:9200
    Wazuh API: https://172.20.0.10:55000 (internal only)
 
-   Default Credentials:
-   Dashboard: admin / SecretPassword
-   API: wazuh-wui / WazuhPass123!
+   Scenario Credentials (not APTL logins):
+   Dashboard: see INDEXER_USERNAME / INDEXER_PASSWORD in .env
+   API: see API_USERNAME / API_PASSWORD in .env
 
    SSH Access:
    Victim:          ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022

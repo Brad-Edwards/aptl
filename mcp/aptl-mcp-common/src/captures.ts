@@ -12,7 +12,7 @@
  * When an SSH session closes, the MCP server invokes `harvestSession()` which
  * runs `docker cp` against the capture container (the sidecar — see
  * `resolveCaptureContainer` / `capture_container_name`) to copy the
- * per-session subtree out into `.aptl/runs/<run_id>/kali-side/<session_id>/`
+ * per-session subtree out into `<run_store_base>/<run_id>/kali-side/<session_id>/`
  * on the host, then sets 0600 permissions on every file. The harvest is
  * best-effort — a missing container / docker / missing subdir logs to stderr
  * but does not throw out of the close path.
@@ -237,7 +237,7 @@ export async function harvestSession(opts: HarvestOptions, sessionId: string): P
 
   let destDir: string;
   try {
-    destDir = kaliSideSessionDir(stateDir, tid, sessionId);
+    destDir = kaliSideSessionDir(stateDir, tid, sessionId, env);
   } catch (err) {
     console.error('[captures] invalid run/session id; skipping harvest:', err);
     return false;

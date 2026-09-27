@@ -21,10 +21,6 @@ from aptl.backends.pack_interaction_discovery import (
     resolve_pack_backend_interaction,
 )
 from aptl.backends.raes_diagnostics import PROVISIONING_ADDRESS, diagnostic
-from aptl.backends.raes_profiles import (
-    OPERATOR_GROUP_VOCABULARY,
-    public_start_profiles,
-)
 from aptl.backends.raes_realization_model import NodeRealization
 from aptl.core.config import AptlConfig
 from aptl.core.scenario_bundle import ScenarioBundle
@@ -55,7 +51,6 @@ def apply_pack_interaction(
             transport=config.deployment.provider,
         ),
         component_addresses=tuple(sorted(node.address for node in nodes)),
-        operator_groups=OPERATOR_GROUP_VOCABULARY,
     )
     try:
         resolved = resolve_pack_backend_interaction(context)
@@ -72,30 +67,7 @@ def apply_pack_interaction(
     labelled = [
         replace(node, profiles=resolved.groups_for(node.address)) for node in nodes
     ]
-    _append_disabled_group_diagnostics(labelled, config, diagnostics)
     return labelled, resolved
-
-
-def _append_disabled_group_diagnostics(
-    nodes: list[NodeRealization],
-    config: AptlConfig,
-    diagnostics: list[Diagnostic],
-) -> None:
-    """Reject components assigned exclusively to disabled operator groups."""
-
-    enabled = set(public_start_profiles(config))
-    for node in nodes:
-        if node.profiles and enabled.isdisjoint(node.profiles):
-            diagnostics.append(
-                diagnostic(
-                    "aptl.provisioner.pack-interaction-group-disabled",
-                    node.address,
-                    (
-                        "The component is assigned only to disabled operator groups: "
-                        f"{', '.join(node.profiles)}."
-                    ),
-                )
-            )
 
 
 __all__ = ["apply_pack_interaction"]

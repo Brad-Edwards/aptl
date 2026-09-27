@@ -159,7 +159,7 @@ Each step maps to a MITRE ATT&CK technique:
 
 ```python
 # Current code does not expose historical load/discovery helpers.
-# See scenarios/archive/README.md for the reference-only fixture boundary.
+# Historical APTL-local scenario fixtures have been removed; see the SDL boundary docs.
 ```
 
 ---

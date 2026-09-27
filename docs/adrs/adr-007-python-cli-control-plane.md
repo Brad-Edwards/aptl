@@ -86,6 +86,16 @@ The separation between `cli/` and `core/` is intentional—the core domain logic
 
 ### 12-Step Lab Orchestration
 
+> **Superseded in part by [ADR-030](adr-030-startup-partial-readiness-classification.md)
+> (issue #1018).** The fixed 12-step list and the rule that every step fails the
+> sequence no longer describe `aptl lab start`. The step order is now
+> `_LAB_START_STEPS` in `src/aptl/core/lab.py`, containers start through the
+> RAES realization handoff rather than a direct `docker compose up`, and
+> late-startup failures are classified as fatal, `degraded_unusable`, or
+> `degraded_usable` per ADR-030. Requirement
+> [CLI-003](../requirements/CLI-003/requirement.md) states the current ordering
+> invariants and failure policy. The list below is the original decision.
+
 `aptl lab start` executes a deterministic sequence:
 
 1. Load and validate configuration (`aptl.json`)
@@ -150,4 +160,4 @@ validate containment at the core-module boundary, then perform I/O.
 
 - The `subprocess.run()` calls to `docker compose` are a fragile interface—changes to Docker Compose's CLI, output format, or exit codes can break the orchestration. The NDJSON parsing bug (v4.5.0) was an example.
 - Credential synchronization uses regex to modify Wazuh configuration XML files. A polynomial backtracking (ReDoS) vulnerability was found and fixed in v4.6.5. XML manipulation via regex remains fragile.
-- The 12-step sequence is serial. Steps 7-12 could potentially be parallelized for faster startup, but the dependency ordering makes this non-trivial.
+- The startup sequence is serial. Its later steps could potentially be parallelized for faster startup, but the dependency ordering makes this non-trivial.

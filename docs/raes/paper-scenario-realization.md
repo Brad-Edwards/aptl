@@ -16,7 +16,7 @@ content on the participant container (issue #691).
 Run it through the public path:
 
 ```bash
-aptl lab start --scenario paper-agent-loop
+aptl lab start --scenario-path scenarios/paper-agent-loop.sdl.yaml
 ```
 
 The required container profiles are derived from the compiled RAES resources.
@@ -42,6 +42,8 @@ participant-visible projection (the internal DB and Wazuh endpoint identities
 never appear in `observable_refs` / `disclosed_refs`). Wazuh evidence likewise
 remains evaluator-only rather than participant-visible task context or a
 detection-quality claim.
+
+This is a checkout-only research fixture, excluded from the ordinary acquired-pack catalog.
 
 ## Evidence surfaces
 

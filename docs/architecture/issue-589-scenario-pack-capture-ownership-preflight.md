@@ -1,7 +1,7 @@
 # Issue #589 RAES Scenario-Pack Capture Workflow Ownership Preflight
 
 This note records the APTL-side boundary for RAES scenario packs. RAES is the
-renamed RAES project; existing `raes_*` package, module, and CLI names remain
+current project name; existing `raes_*` package, module, and CLI names remain
 technical compatibility identifiers. This is guidance, not an implementation
 plan. No new ADR is needed: ADR-035 establishes RAES as the scenario authoring
 surface, ADR-046 removes APTL's capture-inventory and parity-inventory surfaces,
@@ -59,7 +59,8 @@ capture/inventory ownership and
 [env-packs #138](https://github.com/OpenRAE/env-packs/issues/138) for the
 environment-pack format reference. There is no APTL asset migration to create:
 the former APTL capture/parity surfaces were intentionally removed under
-#690/#757.
+#690/#757. The historical source-path audit and migration rejection record is
+[issue #591](issue-591-scenario-pack-capture-asset-ownership-preflight.md).
 
 ## Required Reuse And Validation Passage
 

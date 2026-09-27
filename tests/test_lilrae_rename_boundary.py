@@ -70,8 +70,10 @@ REJECTED_CURRENT_PHRASES = (
     "experience-plugin",
 )
 EXPECTED_APTL_IMAGE_IDENTITIES = {
+    "aptl/generic-samba-ad-base:latest",
     "aptl/generic-systemd-base-debian:latest",
     "aptl/generic-systemd-base:latest",
+    "aptl/generic-systemd-node22-base:latest",
     "aptl-wazuh-sidecar:local",
 }
 
@@ -131,6 +133,14 @@ def test_tracked_file_ledger_reconciles_the_final_tree() -> None:
         text=True,
     )
     actual_paths = {line for line in completed.stdout.splitlines() if line}
+    deleted = subprocess.run(
+        ["git", "ls-files", "--deleted"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    actual_paths.difference_update(deleted.stdout.splitlines())
     assert set(ledger_paths) == actual_paths
 
     review = (REVIEW_ROOT / "README.md").read_text(encoding="utf-8")

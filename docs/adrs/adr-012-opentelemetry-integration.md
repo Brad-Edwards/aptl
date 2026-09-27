@@ -2,6 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-03-21
+**Updated:** 2026-09-11
 **Deciders:** Brad Edwards
 
 ## Context
@@ -57,16 +58,23 @@ env var controls the endpoint.
 
 ### Infrastructure
 
-The OTel stack is always-on lab infrastructure (not optional):
+The OTel stack is backend-owned lab infrastructure. Its activation is subject
+to scope and minimum-intrusion admission, superseding the earlier unconditional
+"always-on" policy:
 
 - **OTel Collector** (`otel/opentelemetry-collector-contrib`)—receives OTLP,
   batches, forwards to Tempo
 - **Grafana Tempo**: trace storage with 72h retention
 - **Grafana**: trace visualization at `http://localhost:3100` (bound to
-  localhost only; default credentials `admin`/`aptl-otel`)
+  localhost only; username `admin`, with the generated password recorded in
+  the operator `.env` file)
 
-All services run under the `otel` Docker Compose profile, automatically
-included by `aptl lab start`.
+All services run under the `otel` Docker Compose profile. The local deployment
+backend owns their Compose definition and lifecycle, independently of whether
+an env-pack has a Compose file or image-backed nodes. They are not scenario
+nodes. The backend's default profile selection is filtered by evidence and
+scope admission; it is neither unconditional authority to add apparatus nor a
+reason to make scenario data the topology authority for these services.
 
 Host-published observability surfaces are operator/control-plane infrastructure,
 not target attack surface. Per ADR-034 and ADR-039, the default Compose host
@@ -75,6 +83,72 @@ to `127.0.0.1`. Container-side listeners may remain wildcard-bound for
 Docker-network peers; remote OTLP ingestion or Tempo access requires an explicit
 documented deployment mode with authentication or network controls rather than
 scattered `0.0.0.0` host publishes.
+
+Loopback is a reachability boundary, not producer authentication. The local
+OTLP receivers and the Collector-to-Tempo hop are unauthenticated, so this
+deployment does not establish signed origin, exclusive-producer integrity, or
+chain of custody. Capture admission and evidence records must retain that
+distinction; a content checksum proves retained bytes, not who emitted them.
+Grafana and Tempo are operator surfaces and must not enter participant endpoint
+or credential projections.
+
+Tempo's 72-hour storage is a bounded operational query buffer, not the
+retention contract for admitted evidence. Evidence that satisfies an authored
+retention requirement is finalized through the existing capture coordinator
+and content-addressed `LocalRunStore`; Grafana is an operator view, not an
+evidence repository. Authored availability or deletion obligations also apply
+to retained buffer copies; the 72-hour default cannot override them. Collector
+logs must not become a second trace sink.
+
+### Evidence-Capture Contract
+
+Running Collector, Tempo, and Grafana proves only that the apparatus is
+available. It does not prove that an authored `evidence_requirements` entry was
+captured or that its redaction, integrity, retention, or loss-disclosure terms
+were met.
+
+The existing versioned collector registry admits normalized RAES capture
+demands into immutable `CaptureBinding` values; the evidence coordinator
+acquires them and persists public RAES evidence records. Issue #992 connects
+scenario evidence intent through RAES 4.1's public
+`compile_scenario_capture_demands()` boundary, preserving its distinct
+vocabulary and references. This ADR does not claim that arbitrary retention
+semantics are implemented beyond the exact registered policies.
+The Tempo trace adapter is one trusted source behind that boundary; the
+presence of the OTel stack must not make it match a different channel or media
+contract. Scenario evidence intent and experiment capture contracts remain
+RAES-owned shapes and must not be copied into a local OTel schema.
+
+Redaction occurs at the shared producer/serialization and evidence-persistence
+boundaries described below, before sensitive structured data is exported or
+stored. Retention policies must be enforced by their exact admitted semantics,
+not by treating a generic capability flag or Tempo's TTL as equivalent.
+Required loss disclosure must distinguish an empty successful capture from
+export failure, source unavailability, drops, truncation, timeout, and
+finalization failure. A best-effort OTel SDK path may degrade silently only
+when no admitted requirement depends on it.
+
+Backend ownership does not bypass RAES open/closed scope semantics. Capture
+must satisfy every SDL evidence requirement. Closed scopes prohibit intrusion
+into the scenario's in-principle visible world. Open scopes require the least
+intrusive supported option that genuinely meets the need, not every addition
+the scope would permit. Prefer existing native readback over added logging
+agents or a stack whenever that readback meets the full evidence contract.
+Fail admission if no compliant option does so; never weaken evidence promises
+or widen a closed scope to obtain admission.
+
+In particular, TechVault's host-root-equivalent Docker authority makes a
+same-daemon stack visible despite its private network. Its `raes-env-packs`
+6.0.0 requirements cover Cortex enrichment readback, Suricata local-rule
+readiness, correlated Suricata/Wazuh SQLi evidence, and the red-team session
+transcript. They have native source boundaries and do not activate OTel. Omit
+the stack even in an open scope and report the absent operator view. This does
+not permit permanent rejection as a substitute for implementing those required
+native sources. Report every actual observability addition through runtime
+observation, including anything not explicitly requested by the SDL, with
+native evidence of what was realized rather than a plan echo.
+The [issue #992 preflight](../architecture/issue-992-backend-observability-ownership-preflight.md)
+records the cross-cutting guardrails and remaining contract gaps.
 
 ### GenAI SIG Conventions
 
@@ -116,7 +190,9 @@ call-site filtering:
 - Distributed tracing links Python CLI and TypeScript MCP server spans
 - Real-time visibility into running scenarios (not just post-hoc)
 - Run archives contain complete trace data in `traces/spans.json`
-- OTel SDK gracefully degrades—if Collector is unreachable, spans are silently dropped
+- Best-effort tracing can remain available when the Collector is unreachable;
+  admitted evidence capture must instead report the resulting unavailability
+  or loss through the evidence outcome contract
 
 ### Negative
 

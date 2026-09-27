@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import sys
+import time
 
 import pytest
 
@@ -132,3 +133,36 @@ def test_exchange_rejects_timeout_without_leaking_child_stderr(
 def test_exchange_rejects_empty_argv(tmp_path: Path) -> None:
     with pytest.raises(McpProtocolError, match="MCP command is empty"):
         exchange_jsonrpc([], [], cwd=tmp_path)
+
+
+def test_exchange_allows_completed_transport_to_prove_slow_cleanup(
+    tmp_path: Path,
+) -> None:
+    marker = tmp_path / "cleanup-complete"
+    server = r"""
+import json
+import os
+import sys
+import time
+
+message = json.loads(sys.stdin.readline())
+print(json.dumps({"jsonrpc": "2.0", "id": message["id"], "result": {}}), flush=True)
+for _line in sys.stdin:
+    pass
+time.sleep(1.25)
+with open(os.environ["CLEANUP_MARKER"], "w", encoding="utf-8") as output:
+    output.write("clean")
+"""
+
+    started = time.monotonic()
+    responses = exchange_jsonrpc(
+        [sys.executable, "-c", server],
+        [{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}],
+        cwd=tmp_path,
+        env={**os.environ, "CLEANUP_MARKER": str(marker)},
+        timeout_seconds=2,
+    )
+
+    assert responses == [{"jsonrpc": "2.0", "id": 1, "result": {}}]
+    assert marker.read_text() == "clean"
+    assert time.monotonic() - started >= 1.0

@@ -111,8 +111,12 @@ class TestResourceExhaustion:
         fixtures.build_ready_to_seal_run(run_dir, run_id="run-1")
         # Enlarge the blob well past a tight member bound; schema/envelope stay small.
         blob = next((run_dir / "evidence" / "blobs").iterdir())
-        blob.write_bytes(os.urandom(50_000))
-        limits = dataclasses.replace(DEFAULT_LIMITS, max_member_bytes=20_000)
+        blob.write_bytes(os.urandom(200_000))
+        # RAES 4.1's published evidence schema is larger than the old 20 KiB
+        # fixture bound.  Keep the bound above governed schemas and below the
+        # deliberately oversized retained blob so this still tests exclusion
+        # of evidence data rather than rejection of required metadata.
+        limits = dataclasses.replace(DEFAULT_LIMITS, max_member_bytes=100_000)
 
         out = tmp_path / "exports" / "b.tar"
         result = build_evidence_bundle(

@@ -21,14 +21,17 @@ from typing import TYPE_CHECKING
 
 from aptl.backends.raes_diagnostics import render_raes_diagnostics
 from aptl.backends.raes_profiles import select_backend_profiles
+from aptl.backends.raes_provisioner import AptlProvisioner
 from aptl.core.config import AptlConfig
 from aptl.core.deployment._compose_stateful_model import artifact_source_path
 from aptl.core.scenario_bundle import ScenarioSourceKind
 
 if TYPE_CHECKING:
+    from aptl.backends.scenario_startup import ScenarioStartupSelection
     from aptl.backends.raes_realization_model import AptlRealization
     from aptl.backends.raes_start_model import AdmittedScenarioStart
     from aptl.core.deployment.backend import DeploymentBackend
+    from aptl.core.scenario_bundle import ScenarioBundle
 
 
 @dataclass(frozen=True)
@@ -62,6 +65,9 @@ def admit_start_surface(
     config: AptlConfig,
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
+    *,
+    bundle: ScenarioBundle | None = None,
+    startup_selection: ScenarioStartupSelection | None = None,
 ) -> tuple["AdmittedScenarioStart", AdmittedStartSurface]:
     """Admit the scenario once and project the pre-start facts off it.
 
@@ -72,7 +78,12 @@ def admit_start_surface(
     from aptl.backends.raes import admit_raes_scenario
 
     admitted = admit_raes_scenario(
-        project_dir, config, backend, scenario_path=scenario_path
+        project_dir,
+        config,
+        backend,
+        scenario_path=scenario_path,
+        bundle=bundle,
+        startup_selection=startup_selection,
     )
     return admitted, start_surface_of(admitted, config)
 
@@ -84,12 +95,16 @@ def start_surface_of(
     """Project one admitted execution onto the facts pre-start steps need."""
 
     realization = _admitted_realization(admitted)
+    provisioner = admitted.target.provisioner
+    profiles = (
+        provisioner.selected_profiles(realization)
+        if isinstance(provisioner, AptlProvisioner)
+        else select_backend_profiles(config, realization.profiles)
+    )
     return AdmittedStartSurface(
         bundle_root=admitted.bundle.root,
         source_kind=admitted.bundle.source_kind,
-        selected_profiles=tuple(
-            select_backend_profiles(config, realization.profiles)
-        ),
+        selected_profiles=tuple(profiles),
         stateful_artifact_ownership=_artifact_ownership(
             admitted.bundle.root, realization
         ),

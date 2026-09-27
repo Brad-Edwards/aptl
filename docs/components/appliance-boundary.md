@@ -57,10 +57,8 @@ Docker default-bridge or package-install egress window.
 
 The [participant workbench](participant-workbench.md) remains the source of
 the closed workbench launch contracts. The boundary does not copy that
-profile model or infer a profile from a scenario name. The bounded participant
-profile introduced by #820 currently composes `red` and `guided-blue`; another
-participant profile can select a different admitted sequence without changing
-the boundary schema or enforcement implementation.
+profile model or infer a profile from a scenario name. The canonical full-TechVault participant profile composes `red` and `blue`.
+The historical guided fixture remains separate.
 
 The appliance payload places the participant browser gateway on the signed
 participant anchor and the installed agent and selected MCP processes on the
@@ -133,3 +131,18 @@ and image-qualification invocation. Issue #824 supplies the authenticated
 physical-host observation and invokes the same gate during seat launch. Those
 issues consume this boundary contract; they do not define its policy,
 enforcement semantics, or verdict rules.
+
+## Host MCP policy extension
+
+[ADR-059](../adrs/adr-059-canonical-techvault-delivery-and-host-mcp-access.md)
+adds `host_mcp_contract: aptl.restricted-ssh-mcp/v1` and the `host-mcp`
+publication audience. Opt-in requires exactly one TCP guest publication.
+A host observation must record both its outer loopback address/port and its
+guest loopback address/port. Observation identities cover that mapping;
+matching port numbers or a stale access file are insufficient authorization.
+
+The restricted dispatcher verifies its signed launch, current guest boot,
+Docker daemon, project and complete container IDs, active run/capture and a
+management-owned boundary observation no more than five seconds old. A missing
+or failed check prevents operations and closes existing connections. This does
+not expose a Docker API, SFTP, SSH forwarding or an unrestricted guest shell.

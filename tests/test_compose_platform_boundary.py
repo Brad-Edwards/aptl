@@ -7,7 +7,11 @@ from aptl.core.appliance_boundary import (
     ApplianceBoundaryPolicy,
 )
 from aptl.core.deployment.docker_compose import DockerComposeBackend
-from aptl.core.deployment.realization import DeploymentRealizationSpec
+from aptl.core.deployment.realization import (
+    DeploymentImageRealization,
+    DeploymentNodeRealization,
+    DeploymentRealizationSpec,
+)
 from aptl.core.lab_types import LabResult
 
 
@@ -185,6 +189,126 @@ def test_ambiguous_platform_anchor_fails_before_mutation(tmp_path) -> None:
     assert result is not None
     assert result.success is False
     backend.realize_boundary.assert_not_called()
+
+
+def test_appliance_installs_deny_baseline_before_anchor_workloads(tmp_path) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="seat")
+    backend.configure_appliance_boundary(_policy(), _binding())
+    backend._ensure_realization_networks = MagicMock(return_value=[])
+    backend.host_list_lab_networks = MagicMock(
+        return_value=["seat_participant", "seat_management", "seat_egress"]
+    )
+    backend.host_inspect_network = MagicMock(side_effect=_network)
+    backend.host_list_lab_containers = MagicMock(return_value=[])
+    backend.realize_boundary = MagicMock(return_value=LabResult(success=True))
+    backend._realize_raes_boundary = MagicMock(return_value=None)
+
+    result = backend._realize_networks_and_boundaries(
+        DeploymentRealizationSpec(profiles=(), nodes=(), networks=())
+    )
+
+    assert result is None
+    baseline = backend.realize_boundary.call_args.args[0]
+    assert baseline.authority == "platform"
+    assert baseline.bootstrap is True
+    assert baseline.anchors == ()
+    assert baseline.crossings == ()
+    assert baseline.egress_ports == ()
+    backend.host_list_lab_containers.assert_not_called()
+
+
+def test_full_boundary_precedes_service_index_and_general_start(tmp_path) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="seat")
+    backend.configure_appliance_boundary(_policy(), _binding())
+    events: list[str] = []
+    backend._start_boundary_anchor_services = MagicMock(
+        side_effect=lambda *args, **kwargs: events.append("anchors")
+    )
+    backend._realize_platform_boundary = MagicMock(
+        side_effect=lambda: events.append("full")
+    )
+    backend._materialize_service_index_schemas = MagicMock(
+        side_effect=lambda *args, **kwargs: events.append("index")
+    )
+    backend._start_realized_services = MagicMock(
+        side_effect=lambda *args, **kwargs: (
+            events.append("general"),
+            LabResult(success=True),
+        )[1]
+    )
+    backend._realization_result = MagicMock(
+        side_effect=lambda *args: (
+            events.append("post"),
+            LabResult(success=True),
+        )[1]
+    )
+
+    result = backend._start_compose_realization(
+        DeploymentRealizationSpec(profiles=(), nodes=(), networks=()),
+        profiles=[],
+        build=False,
+        compose_files=None,
+        excluded_services=(),
+        scenario_root=tmp_path,
+        observation_context=MagicMock(),
+    )
+
+    assert result.success
+    assert events == ["anchors", "full", "index", "general", "post"]
+
+
+def test_only_image_backed_anchor_starts_under_deny_baseline(tmp_path) -> None:
+    policy = _policy().model_dump(mode="json")
+    policy["platform_anchors"] = {
+        "participant": "aptl.node.address=provision.node.kali",
+        "management": "aptl.node.address=provision.node.soc-workstation",
+        "egress": "aptl.node.address=provision.node.suricata",
+    }
+    backend = DockerComposeBackend(tmp_path, project_name="seat")
+    backend.configure_appliance_boundary(
+        ApplianceBoundaryPolicy.model_validate(policy), _binding()
+    )
+    backend._start_realized_services = MagicMock(return_value=LabResult(success=True))
+    nodes = tuple(
+        DeploymentNodeRealization(
+            address=f"provision.node.{name}",
+            name=name,
+            service_name=name,
+            container_name=f"aptl-{name}",
+            networks=(),
+        )
+        for name in ("kali", "soc-workstation", "suricata")
+    )
+    realization = DeploymentRealizationSpec(
+        profiles=("soc",),
+        nodes=nodes,
+        networks=(),
+        images=(
+            DeploymentImageRealization(
+                address="provision.node.suricata",
+                service_name="suricata",
+                source_name="suricata",
+                source_version="1",
+                image_ref="suricata:1",
+                mode="pull",
+                policy_rule="test",
+            ),
+        ),
+    )
+
+    result = backend._start_boundary_anchor_services(
+        realization,
+        profiles=["soc"],
+        build=False,
+        compose_files=None,
+        excluded_services=(),
+        scenario_root=tmp_path,
+    )
+
+    assert result is None
+    assert backend._start_realized_services.call_args.kwargs["only_services"] == (
+        "suricata",
+    )
 
 
 def test_scenario_without_acls_removes_stale_raes_authority(tmp_path) -> None:

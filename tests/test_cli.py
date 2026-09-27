@@ -144,17 +144,27 @@ class TestLabStartCommand:
             "aptl.cli.lab.orchestrate_lab_start",
             return_value=LabResult(success=True, message="Lab started"),
         )
+        # The summary reconciles against live Docker state, so pin it empty:
+        # otherwise this asserts against whatever range happens to be up on the
+        # machine running the suite. Both queries have to be pinned -- the
+        # access lines are gated on the live service list as well as the
+        # published ports, so pinning only the ports still renders a range
+        # that is running in this checkout's directory.
+        mocker.patch("aptl.cli.lab_render.live_resolved_ports", return_value=[])
+        mocker.patch("aptl.cli.lab_render.live_services", return_value=frozenset())
 
         result = runner.invoke(app, ["lab", "start"])
 
         assert result.exit_code == 0
         mock_orchestrate.assert_called_once()
         assert "Credentials file: .env" in result.stdout
-        assert "Wazuh Dashboard: https://localhost:443" in result.stdout
-        assert "see INDEXER_PASSWORD in .env" in result.stdout
+        assert "Wazuh Dashboard" not in result.stdout
+        assert "Grafana" not in result.stdout
 
-    def test_lab_info_prints_access_summary(self, runner, tmp_path):
-        """lab info should reprint access URLs and credential locations."""
+    def test_lab_info_without_a_running_service_omits_access_urls(
+        self, runner, tmp_path
+    ):
+        """lab info must not invent product-specific endpoints."""
         from aptl.cli.main import app
 
         (tmp_path / ".env").touch()
@@ -163,7 +173,8 @@ class TestLabStartCommand:
 
         assert result.exit_code == 0
         assert f"Credentials file: {tmp_path / '.env'}" in result.stdout
-        assert "Grafana: http://localhost:3100" in result.stdout
+        assert "Wazuh Dashboard" not in result.stdout
+        assert "Grafana" not in result.stdout
 
     def test_lab_info_omits_reverse_access_when_service_is_not_running(
         self, runner, tmp_path, mocker
@@ -202,9 +213,7 @@ class TestLabStartCommand:
                 )
             ],
         )
-        mocker.patch(
-            "aptl.cli.lab_render.live_services", return_value={"reverse"}
-        )
+        mocker.patch("aptl.cli.lab_render.live_services", return_value={"reverse"})
 
         result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
 
@@ -220,6 +229,135 @@ class TestLabStartCommand:
 
         assert result.exit_code == 1
         assert "run `aptl lab start` first" in result.stderr
+
+    def test_lab_info_omits_grafana_when_the_scenario_publishes_no_host_port(
+        self, runner, tmp_path, mocker
+    ):
+        """Do not advertise a URL the scenario never published.
+
+        TechVault declares no `published_ports` for `aptl-grafana-otel`, so the
+        container exposes 3000/tcp to the range and nothing to the host. The
+        summary printed the compile-time default anyway, sending an operator to
+        `http://localhost:3100`, which answers nothing -- and it is the second
+        line of the quick start.
+
+        A populated resolved-port list that omits the service means it genuinely
+        publishes nothing. An *empty* list means the query failed, which is the
+        separate case covered below.
+        """
+        from aptl.cli.main import app
+        from aptl.core.host_ports import ResolvedPort
+
+        (tmp_path / ".env").touch()
+        mocker.patch(
+            "aptl.cli.lab.live_resolved_ports",
+            return_value=[
+                ResolvedPort(
+                    service="wazuh.dashboard",
+                    env_var=None,
+                    default_port=443,
+                    resolved_port=443,
+                    protos=("tcp",),
+                    host_ip="127.0.0.1",
+                    remapped=False,
+                ),
+            ],
+        )
+
+        result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "Wazuh Dashboard: https://localhost:443" in result.stdout
+        assert "Grafana" not in result.stdout
+        assert "GRAFANA_ADMIN_PASSWORD" not in result.stdout
+
+    def test_lab_start_omits_an_endpoint_docker_never_published(
+        self, runner, tmp_path, mocker
+    ):
+        """`lab start` must advertise what the range published, not what it planned.
+
+        The list `lab start` hands the summary comes from resolving the
+        checked-in Compose stack's convenience ports, so it carries Grafana's
+        3100 default even though TechVault's SDL declares no `published_ports`
+        for it and the container binds nothing to the host. Live Docker state is
+        the ground truth once the range is up, so the summary reconciles against
+        it and stays silent about a URL that answers nothing.
+        """
+        from aptl.cli.main import app
+        from aptl.core.host_ports import ResolvedPort
+        from aptl.core.lab import LabResult
+
+        planned = [
+            ResolvedPort(
+                service="aptl-grafana-otel",
+                env_var=None,
+                default_port=3100,
+                resolved_port=3100,
+                protos=("tcp",),
+                host_ip="127.0.0.1",
+                remapped=False,
+            ),
+        ]
+        published = [
+            ResolvedPort(
+                service="wazuh.dashboard",
+                env_var=None,
+                default_port=443,
+                resolved_port=443,
+                protos=("tcp",),
+                host_ip="127.0.0.1",
+                remapped=False,
+            ),
+        ]
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(
+                success=True, message="Lab started", resolved_ports=planned
+            ),
+        )
+        mocker.patch("aptl.cli.lab_render.live_resolved_ports", return_value=published)
+
+        result = runner.invoke(app, ["lab", "start"])
+
+        assert result.exit_code == 0
+        assert "Wazuh Dashboard: https://localhost:443" in result.stdout
+        assert "Grafana" not in result.stdout
+
+    def test_lab_info_matches_live_service_names_against_spec_names(
+        self, runner, tmp_path, mocker
+    ):
+        """Docker reports `wazuh-dashboard`; the spec calls it `wazuh.dashboard`.
+
+        The two naming forms never matched, so the live lookup silently missed
+        every Wazuh service and the summary fell back to the compile-time
+        default -- which is exactly the remapped-port bug #737 set out to fix,
+        still live for the dashboard. Here the live port is 8443, so a printed
+        443 would prove the fallback rather than a match.
+        """
+        from aptl.cli.main import app
+        from aptl.core.host_ports import ResolvedPort
+
+        (tmp_path / ".env").touch()
+        mocker.patch(
+            "aptl.cli.lab.live_resolved_ports",
+            return_value=[
+                ResolvedPort(
+                    service="wazuh-dashboard",
+                    env_var=None,
+                    default_port=5601,
+                    resolved_port=8443,
+                    protos=("tcp",),
+                    host_ip="127.0.0.1",
+                    remapped=True,
+                ),
+            ],
+        )
+
+        result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "Wazuh Dashboard: https://localhost:8443" in result.stdout
+        assert "https://localhost:443" not in result.stdout
 
     def test_lab_info_reflects_remapped_ports_from_live_docker_state(
         self, runner, tmp_path, mocker
@@ -249,9 +387,7 @@ class TestLabStartCommand:
             ],
         )
 
-        result = runner.invoke(
-            app, ["lab", "info", "--project-dir", str(tmp_path)]
-        )
+        result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
 
         assert result.exit_code == 0
         assert "Grafana: http://localhost:20005" in result.stdout
@@ -291,9 +427,7 @@ class TestLabStartCommand:
             "aptl.cli._common.resolve_config_for_cli",
             return_value=(mocker.MagicMock(), tmp_path),
         )
-        mocker.patch(
-            "aptl.core.deployment.get_backend", return_value=backend
-        )
+        mocker.patch("aptl.core.deployment.get_backend", return_value=backend)
 
         result = live_resolved_ports(tmp_path)
 
@@ -632,20 +766,22 @@ class TestLabStartCommand:
         assert "--clean" in plain
 
     def test_lab_scenarios_lists_catalog_entries(self, runner, mocker, tmp_path):
-        """The list command should read catalog rows dynamically."""
+        """The list command reports validated pack identity, never a path."""
         from aptl.cli.main import app
+        from aptl.core.scenario_bundle import PackIdentity
 
         mocker.patch(
             "aptl.cli.lab.load_scenario_catalog",
-            return_value=SimpleNamespace(
+            return_value=mocker.MagicMock(
                 scenarios=[
                     SimpleNamespace(
-                        id="techvault-operational",
-                        name="TechVault Operational",
-                        path="scenarios/techvault-operational.sdl.yaml",
+                        id="techvault",
+                        name="TechVault",
                         description="Default public startup scenario.",
                     )
-                ]
+                ],
+                pack_identity=PackIdentity("techvault", "0.1.0", "sha256:" + "a" * 64),
+                maturity="built",
             ),
         )
 
@@ -655,8 +791,9 @@ class TestLabStartCommand:
         )
 
         assert result.exit_code == 0
-        assert "techvault-operational" in result.stdout
-        assert "scenarios/techvault-operational.sdl.yaml" in result.stdout
+        assert "techvault\t0.1.0\tbuilt" in result.stdout
+        assert "sha256:" + "a" * 64 in result.stdout
+        assert "scenarios/" not in result.stdout
 
     def test_start_ready_outcome_prints_ready(self, runner, mocker):
         """A clean start prints the ready outcome (ADR-030)."""
@@ -781,6 +918,30 @@ class TestLabStartCommand:
         assert result.exit_code == 1
         assert "vm.max_map_count" in result.stdout
         assert "failed" in result.stdout.lower()
+
+    def test_start_terminal_attestation_failure_exits_nonzero(self, runner, mocker):
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import StartupOutcome
+
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(
+                success=False,
+                error=(
+                    "Lab start left project containers non-running: "
+                    "'aptl-broken' state='created' status='Created' exit_code=128"
+                ),
+                outcome=StartupOutcome.FAILED,
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "start"])
+
+        assert result.exit_code == 1
+        assert "aptl-broken" in result.stdout
+        assert "created" in result.stdout
+        assert "128" in result.stdout
 
 
 class TestLabStopCommand:
@@ -932,6 +1093,55 @@ class TestLabStatusCommand:
         assert "not running" in result.stdout.lower()
         assert "docker daemon not running" in result.output
 
+    def test_status_renders_stopped_inventory_when_nothing_is_running(
+        self, runner, mocker
+    ):
+        from aptl.cli.main import app
+        from aptl.core.lab import LabStatus
+
+        mocker.patch(
+            "aptl.cli.lab.lab_status",
+            return_value=LabStatus(
+                running=False,
+                containers=[
+                    {
+                        "name": "aptl-failed",
+                        "state": "exited",
+                        "status": "Exited (128)",
+                    }
+                ],
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "status"])
+
+        assert result.exit_code == 0
+        assert "not running" in result.stdout.lower()
+        assert "aptl-failed" in result.stdout
+        assert "exited" in result.stdout
+
+    def test_status_json_reports_inventory_observation_failure(
+        self, runner, mocker, tmp_path
+    ):
+        from aptl.cli.main import app
+        from aptl.core.config import AptlConfig
+        from aptl.core.deployment.errors import BackendObservationError
+
+        mocker.patch(
+            "aptl.cli._common.resolve_config_for_cli",
+            return_value=(AptlConfig(), tmp_path),
+        )
+        mocker.patch("aptl.core.deployment.get_backend", return_value=MagicMock())
+        mocker.patch(
+            "aptl.core.snapshot.capture_snapshot",
+            side_effect=BackendObservationError("project inventory unavailable"),
+        )
+
+        result = runner.invoke(app, ["lab", "status", "--json"])
+
+        assert result.exit_code == 1
+        assert "project inventory unavailable" in result.output
+
 
 def _continuity_result(events):
     """Helper: wrap an event list in a ContinuityAuditResult for mocks."""
@@ -963,7 +1173,9 @@ class TestLabContinuityAuditCommand:
             return_value=mocker.MagicMock(),
         )
         get_active = mocker.patch.object(
-            ScenarioSession, "get_active", return_value=None,
+            ScenarioSession,
+            "get_active",
+            return_value=None,
         )
         return get_active
 
@@ -975,7 +1187,8 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips",
+            return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch(
             "aptl.cli.continuity.audit_and_revert",
@@ -983,7 +1196,8 @@ class TestLabContinuityAuditCommand:
         )
 
         result = runner.invoke(
-            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+            app,
+            ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
         )
 
         assert result.exit_code == 0
@@ -995,14 +1209,13 @@ class TestLabContinuityAuditCommand:
         targets_arg = positional[1] if len(positional) > 1 else kwargs["targets"]
         assert targets_arg == default_targets()
 
-    def test_no_findings_prints_clean_summary(
-        self, runner, mocker, tmp_path
-    ):
+    def test_no_findings_prints_clean_summary(self, runner, mocker, tmp_path):
         from aptl.cli.main import app
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips",
+            return_value=["172.20.4.30"],
         )
         mocker.patch(
             "aptl.cli.continuity.audit_and_revert",
@@ -1010,7 +1223,8 @@ class TestLabContinuityAuditCommand:
         )
 
         result = runner.invoke(
-            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+            app,
+            ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
         )
 
         assert result.exit_code == 0
@@ -1022,7 +1236,8 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips",
+            return_value=["172.20.4.30"],
         )
         event = KaliCarveOutEvent(
             timestamp="2026-05-03T12:00:00+00:00",
@@ -1038,7 +1253,8 @@ class TestLabContinuityAuditCommand:
         )
 
         result = runner.invoke(
-            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+            app,
+            ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
         )
 
         assert result.exit_code == 0
@@ -1053,7 +1269,8 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips",
+            return_value=["172.20.4.30"],
         )
         event = KaliCarveOutEvent(
             timestamp="2026-05-03T12:00:00+00:00",
@@ -1080,14 +1297,13 @@ class TestLabContinuityAuditCommand:
         assert parsed[0]["target"] == "aptl-victim"
         assert parsed[0]["action"] == "REVERTED"
 
-    def test_target_option_overrides_defaults(
-        self, runner, mocker, tmp_path
-    ):
+    def test_target_option_overrides_defaults(self, runner, mocker, tmp_path):
         from aptl.cli.main import app
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips",
+            return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch(
             "aptl.cli.continuity.audit_and_revert",
@@ -1097,9 +1313,12 @@ class TestLabContinuityAuditCommand:
         result = runner.invoke(
             app,
             [
-                "lab", "continuity-audit",
-                "--project-dir", str(tmp_path),
-                "--target", "aptl-victim",
+                "lab",
+                "continuity-audit",
+                "--project-dir",
+                str(tmp_path),
+                "--target",
+                "aptl-victim",
             ],
         )
 
@@ -1125,7 +1344,8 @@ class TestLabContinuityAuditCommand:
         )
 
         result = runner.invoke(
-            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+            app,
+            ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
         )
 
         assert result.exit_code != 0
@@ -1157,9 +1377,12 @@ class TestLabContinuityAuditCommand:
         result = runner.invoke(
             app,
             [
-                "lab", "continuity-audit",
-                "--project-dir", str(tmp_path),
-                "--target", "foreign-container",
+                "lab",
+                "continuity-audit",
+                "--project-dir",
+                str(tmp_path),
+                "--target",
+                "foreign-container",
             ],
         )
 
@@ -1168,7 +1391,10 @@ class TestLabContinuityAuditCommand:
         mock_audit.assert_not_called()
 
     def test_default_targets_filtered_to_present_subset(
-        self, runner, mocker, tmp_path,
+        self,
+        runner,
+        mocker,
+        tmp_path,
     ):
         # Codex finding C8 (cycle 2): when using defaults (no --target),
         # a missing default in the active compose profile must NOT
@@ -1189,7 +1415,8 @@ class TestLabContinuityAuditCommand:
         mocker.patch("aptl.cli.continuity.get_backend", return_value=backend)
         mocker.patch.object(ScenarioSession, "get_active", return_value=None)
         mocker.patch(
-            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips",
+            return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch(
             "aptl.cli.continuity.audit_and_revert",
@@ -1197,7 +1424,8 @@ class TestLabContinuityAuditCommand:
         )
 
         result = runner.invoke(
-            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+            app,
+            ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
         )
 
         assert result.exit_code == 0
@@ -1226,28 +1454,34 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips",
+            return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch(
             "aptl.cli.continuity.audit_and_revert",
-            return_value=_continuity_result([
-                KaliCarveOutEvent(
-                    timestamp="2026-05-03T12:00:00+00:00",
-                    target="aptl-webapp",
-                    source_ip="172.20.4.30/32",
-                    rule_text="-A INPUT -s 172.20.4.30/32 -j DROP",
-                    action="REVERTED",
-                    error=None,
-                ),
-            ]),
+            return_value=_continuity_result(
+                [
+                    KaliCarveOutEvent(
+                        timestamp="2026-05-03T12:00:00+00:00",
+                        target="aptl-webapp",
+                        source_ip="172.20.4.30/32",
+                        rule_text="-A INPUT -s 172.20.4.30/32 -j DROP",
+                        action="REVERTED",
+                        error=None,
+                    ),
+                ]
+            ),
         )
 
         result = runner.invoke(
             app,
             [
-                "lab", "continuity-audit",
-                "--project-dir", str(tmp_path),
-                "--run-id", run_id,
+                "lab",
+                "continuity-audit",
+                "--project-dir",
+                str(tmp_path),
+                "--run-id",
+                run_id,
             ],
         )
 
@@ -1263,16 +1497,20 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips",
+            return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch("aptl.cli.continuity.audit_and_revert")
 
         result = runner.invoke(
             app,
             [
-                "lab", "continuity-audit",
-                "--project-dir", str(tmp_path),
-                "--run-id", "../../escape",
+                "lab",
+                "continuity-audit",
+                "--project-dir",
+                str(tmp_path),
+                "--run-id",
+                "../../escape",
             ],
         )
 
@@ -1287,16 +1525,20 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips",
+            return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch("aptl.cli.continuity.audit_and_revert")
 
         result = runner.invoke(
             app,
             [
-                "lab", "continuity-audit",
-                "--project-dir", str(tmp_path),
-                "--run-id", "typo-not-a-real-run",
+                "lab",
+                "continuity-audit",
+                "--project-dir",
+                str(tmp_path),
+                "--run-id",
+                "typo-not-a-real-run",
             ],
         )
 
@@ -1322,11 +1564,13 @@ class TestLabContinuityAuditCommand:
         backend.container_exists.return_value = True
         mocker.patch("aptl.cli.continuity.get_backend", return_value=backend)
         mocker.patch.object(
-            ScenarioSession, "get_active",
+            ScenarioSession,
+            "get_active",
             side_effect=ScenarioStateError("corrupt session"),
         )
         mocker.patch(
-            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips",
+            return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch(
             "aptl.cli.continuity.audit_and_revert",
@@ -1334,7 +1578,8 @@ class TestLabContinuityAuditCommand:
         )
 
         result = runner.invoke(
-            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+            app,
+            ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
         )
 
         # Audit ran; no archive was wired.
@@ -1345,7 +1590,10 @@ class TestLabContinuityAuditCommand:
         assert kwargs.get("run_store") is None
 
     def test_fails_when_no_default_targets_present(
-        self, runner, mocker, tmp_path,
+        self,
+        runner,
+        mocker,
+        tmp_path,
     ):
         # If *none* of the defaults are running, there's nothing to
         # audit and the CLI must fail loudly so automation notices.
@@ -1364,7 +1612,8 @@ class TestLabContinuityAuditCommand:
         mock_audit = mocker.patch("aptl.cli.continuity.audit_and_revert")
 
         result = runner.invoke(
-            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+            app,
+            ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
         )
 
         assert result.exit_code != 0
@@ -1379,24 +1628,28 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips",
+            return_value=["172.20.4.30"],
         )
         mocker.patch(
             "aptl.cli.continuity.audit_and_revert",
-            return_value=_continuity_result([
-                KaliCarveOutEvent(
-                    timestamp="2026-05-03T12:00:00+00:00",
-                    target="aptl-webapp",
-                    source_ip="172.20.4.30/32",
-                    rule_text="-A INPUT -s 172.20.4.30/32 -j DROP",
-                    action="REVERT_FAILED",
-                    error="iptables: bad rule",
-                ),
-            ]),
+            return_value=_continuity_result(
+                [
+                    KaliCarveOutEvent(
+                        timestamp="2026-05-03T12:00:00+00:00",
+                        target="aptl-webapp",
+                        source_ip="172.20.4.30/32",
+                        rule_text="-A INPUT -s 172.20.4.30/32 -j DROP",
+                        action="REVERT_FAILED",
+                        error="iptables: bad rule",
+                    ),
+                ]
+            ),
         )
 
         result = runner.invoke(
-            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+            app,
+            ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
         )
 
         assert result.exit_code != 0
@@ -1410,24 +1663,28 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips",
+            return_value=["172.20.4.30"],
         )
         mocker.patch(
             "aptl.cli.continuity.audit_and_revert",
-            return_value=_continuity_result([
-                KaliCarveOutEvent(
-                    timestamp="2026-05-03T12:00:00+00:00",
-                    target="aptl-webapp",
-                    source_ip="",
-                    rule_text="",
-                    action="AUDIT_FAILED",
-                    error="iptables -S on aptl-webapp failed: ...",
-                ),
-            ]),
+            return_value=_continuity_result(
+                [
+                    KaliCarveOutEvent(
+                        timestamp="2026-05-03T12:00:00+00:00",
+                        target="aptl-webapp",
+                        source_ip="",
+                        rule_text="",
+                        action="AUDIT_FAILED",
+                        error="iptables -S on aptl-webapp failed: ...",
+                    ),
+                ]
+            ),
         )
 
         result = runner.invoke(
-            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+            app,
+            ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
         )
 
         assert result.exit_code != 0

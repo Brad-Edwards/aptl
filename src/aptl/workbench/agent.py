@@ -10,7 +10,6 @@ import os
 import stat
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from datetime import timedelta
 from pathlib import Path
 
 from mcp import ClientSession, StdioServerParameters
@@ -72,7 +71,7 @@ async def _probe(
         async with ClientSession(
             read_stream,
             write_stream,
-            read_timeout_seconds=timedelta(seconds=_MCP_INVENTORY_TIMEOUT_SECONDS),
+            read_timeout_seconds=float(_MCP_INVENTORY_TIMEOUT_SECONDS),
         ) as session:
             await session.initialize()
             result = await session.list_tools()

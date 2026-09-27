@@ -116,7 +116,8 @@ def serve(
     # exchanged for an HttpOnly cookie so the browser never holds the API token,
     # and a sibling local process — which never sees this terminal output —
     # cannot obtain a session.
-    launch_token = generate_secret()
+    # A seat supervisor supplies the token delivered over its private channel.
+    launch_token = os.environ.get(LAUNCH_TOKEN_ENV) or generate_secret()
     os.environ[LAUNCH_TOKEN_ENV] = launch_token
     os.environ.setdefault(SESSION_SECRET_ENV, generate_secret())
 

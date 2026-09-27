@@ -146,7 +146,7 @@ def test_authored_demand_suppresses_build_provenance(tmp_path):
             "name": _ALLOWLISTED_NAME,
             "version": _ALLOWLISTED_VERSION,
             "build": {
-                "dockerfile_path": "containers/ad/Dockerfile",
+                "dockerfile_path": "containers/generic-samba-ad-base/Dockerfile",
                 "instructions": ["FROM scratch"],
             },
             "artifact_requirement": {

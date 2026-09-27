@@ -1,0 +1,18 @@
+name: materialization-envelope
+title: Materialization envelope
+version: 1.0.0
+status: draft
+description: >-
+  APTL-owned test fixture for the generic lab machinery. It is admitted through
+  the same resolver as a released pack, so core tests do not depend on a
+  released scenario pack. It is not published.
+authors:
+  - APTL Contributors
+license: MIT
+requirement: null
+contents:
+  flag_layer: false
+  reference_triangle: false
+  profile_bundles: false
+provenance_ledger: docs/provenance-ledger.yaml
+associated_artifact_manifest: associated-artifacts.json

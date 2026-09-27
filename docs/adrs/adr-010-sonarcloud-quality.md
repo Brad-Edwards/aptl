@@ -195,3 +195,12 @@ for mocking` (it predates this gate)—`ruff check` prints a one-line warning
 for it but still passes. Left as-is here because fixing it touches `lab.py`,
 which would drag `lab.py`'s pre-existing SonarCloud issues into this
 config-only PR; fix it to `# noqa: PLC0415` the next time `lab.py` is edited.
+
+## Update (2026-09-20): Platform dependency gate (issue #969)
+
+The earlier #502 statement that `dependency-audit` remains non-blocking is
+superseded for `dev` pull requests. The existing `Dependency vulnerability
+scan` job is now required and blocks on shipped platform dependencies, while
+the mixed target Trivy and OSV scanners remain advisory. ADR-026's dated
+amendment defines this boundary. The SonarCloud quality gate and other existing
+required contexts are unchanged.

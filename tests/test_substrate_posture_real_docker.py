@@ -40,7 +40,15 @@ from aptl.core.deployment._compose_substrate_gate import SUBSTRATE_MIN_DOCKER_EN
 _IMAGES = {
     "debian": "aptl/generic-systemd-base-debian:latest",
     "rocky": "aptl/generic-systemd-base:latest",
+    # Layered systemd substrates the backend selects for nodes that carry a
+    # Wazuh agent or need Node.js. Each can bring units the bare bases never
+    # exercise (Rocky's hardened rsyslog among them), so each is qualified on
+    # its own rather than inheriting the bases' result.
+    "rocky-wazuh-agent": "aptl/generic-systemd-wazuh-agent-base:latest",
+    "debian-wazuh-agent": "aptl/generic-systemd-wazuh-agent-base-debian:latest",
+    "node22": "aptl/generic-systemd-node22-base:latest",
 }
+_ALL_SYSTEMD_IMAGES = list(_IMAGES)
 
 
 def _docker(*args: str, timeout: int = 120) -> subprocess.CompletedProcess:
@@ -84,22 +92,36 @@ def started_node(tmp_path):
             pytest.skip(f"{image} is not built on this host")
         name = f"aptl-955-{image_key}-{int(time.time() * 1000)}"
         spec = BaseContainerSpec(
-            node_address=f"provision.node.{image_key}",
+            node_address=f"provision.node.{name}",
             container_name=name,
             image_ref=image,
             runs_services=True,
             init=InitRequirements(),
         )
         backend = DockerComposeBackend(project_dir=tmp_path, project_name="aptl955")
-        started.append(name)
-        backend.start_base_container(spec)
-        info = json.loads(_docker("inspect", name).stdout)[0]
-        return name, info
+        try:
+            backend.start_base_container(spec)
+        finally:
+            # The backend names the container inside its workspace-scoped
+            # namespace; resolve the native id it recorded so cleanup and
+            # readback address exactly the container it created.
+            native_ids = [
+                line
+                for line in _docker(
+                    "ps", "-aq", "--no-trunc",
+                    "--filter", f"label=aptl.node.address={spec.node_address}",
+                ).stdout.split()
+                if line
+            ]
+            started.extend(native_ids)
+        assert len(native_ids) == 1, "exactly one container per started node"
+        info = json.loads(_docker("inspect", native_ids[0]).stdout)[0]
+        return native_ids[0], info
 
     yield start
 
-    for name in started:
-        _docker("rm", "-f", name)
+    for native_id in started:
+        _docker("rm", "-f", native_id)
 
 
 def _wait_for_systemd(name: str, timeout: int = 120) -> str:
@@ -120,7 +142,7 @@ def _wait_for_systemd(name: str, timeout: int = 120) -> str:
 
 @pytest.mark.integration
 @requires_daemon
-@pytest.mark.parametrize("image_key", ["debian", "rocky"])
+@pytest.mark.parametrize("image_key", _ALL_SYSTEMD_IMAGES)
 def test_substrate_boots_systemd_cleanly_without_privilege(started_node, image_key):
     """systemd reaches `running` with zero failed units and no added privilege."""
 
@@ -138,7 +160,7 @@ def test_substrate_boots_systemd_cleanly_without_privilege(started_node, image_k
 
 @pytest.mark.integration
 @requires_daemon
-@pytest.mark.parametrize("image_key", ["debian", "rocky"])
+@pytest.mark.parametrize("image_key", _ALL_SYSTEMD_IMAGES)
 def test_realized_container_carries_no_host_authority(started_node, image_key):
     """The daemon's own readback shows none of the retired privilege."""
 
@@ -219,7 +241,7 @@ def test_a_retired_recipe_container_is_not_reused(started_node, tmp_path):
         pytest.skip(f"{image} is not built on this host")
 
     name = f"aptl-955-stale-{int(time.time() * 1000)}"
-    _docker(
+    created = _docker(
         "run", "-d", "--name", name,
         "--cgroupns=host", "-v", "/sys/fs/cgroup:/sys/fs/cgroup:rw",
         "--cap-add", "SYS_ADMIN", "--cap-add", "SYS_NICE", "--cap-add", "SYS_RESOURCE",
@@ -236,6 +258,7 @@ def test_a_retired_recipe_container_is_not_reused(started_node, tmp_path):
             runs_services=True,
             init=InitRequirements(),
         )
-        assert not backend._base_container_already_realized(spec, image)
+        native_id = created.stdout.strip()
+        assert not backend._base_container_already_realized(native_id, spec, image)
     finally:
         _docker("rm", "-f", name)

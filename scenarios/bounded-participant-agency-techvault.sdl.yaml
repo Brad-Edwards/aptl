@@ -22,7 +22,7 @@ nodes:
     description: Red participant workbench network.
 
   webapp:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: http, port: 8080, protocol: tcp}
@@ -35,7 +35,7 @@ nodes:
       service_manager_units:
         - {unit_id: bounded-participant-web, unit_name: bounded-participant-web.service, enabled_state: enabled, active_state: active}
   db:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: postgres, port: 5432, protocol: tcp}
@@ -45,7 +45,7 @@ nodes:
       service_manager_units:
         - {unit_id: postgresql, unit_name: postgresql.service, enabled_state: enabled, active_state: active}
   workstation:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: ssh, port: 22, protocol: tcp}
@@ -53,18 +53,14 @@ nodes:
       packages:
         - {manager: apt, name: coreutils, version: "*"}
   kali:
-    type: vm
+    type: compute
     os: linux
     services: []
     runtime:
       packages:
         - {manager: apt, name: curl, version: "*"}
-  kali-capture:
-    type: vm
-    os: linux
-    services: []
   defender-console:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: defender-api, port: 55000, protocol: tcp}
@@ -72,30 +68,13 @@ nodes:
       packages:
         - {manager: apt, name: coreutils, version: "*"}
   event-store:
-    type: vm
+    type: compute
     os: linux
     services:
       - {name: event-api, port: 9200, protocol: tcp}
     runtime:
       packages:
         - {manager: apt, name: coreutils, version: "*"}
-  aptl-otel-collector:
-    type: vm
-    os: linux
-    services:
-      - {name: otlp-grpc, port: 4317, protocol: tcp}
-      - {name: otlp-http, port: 4318, protocol: tcp}
-  aptl-tempo:
-    type: vm
-    os: linux
-    services:
-      - {name: tempo-http, port: 3200, protocol: tcp}
-  aptl-grafana-otel:
-    type: vm
-    os: linux
-    services:
-      - {name: grafana, port: 3000, protocol: tcp}
-
 infrastructure:
   security-net:
     properties: {cidr: 172.20.0.0/24, gateway: 172.20.0.1, internal: false}
@@ -126,8 +105,6 @@ infrastructure:
       - {redteam-net: 172.20.4.30}
       - {dmz-net: 172.20.1.30}
       - {internal-net: 172.20.2.35}
-  kali-capture:
-    dependencies: [kali]
   defender-console:
     links: [security-net, dmz-net, internal-net]
     properties:
@@ -138,14 +115,6 @@ infrastructure:
     links: [security-net]
     properties:
       - {security-net: 172.20.0.12}
-  aptl-otel-collector:
-    links: [security-net]
-  aptl-tempo:
-    links: [security-net]
-  aptl-grafana-otel:
-    links: [security-net]
-    dependencies: [aptl-tempo]
-
 entities:
   benign-customer:
     role: green
@@ -1403,7 +1372,6 @@ behavior_specifications:
     observation_boundary_refs: [blue-triage-view]
     authority_scope_refs: [nodes.defender-console.services.defender-api, nodes.event-store.services.event-api, content.blue-triage-task]
     behavior_mode: autonomous
-    defensive_behavior_refs: [adverse-event-analysis]
     realization_profile_ref: participant-implementation-manifest:security-analyst-agent
     backend_feature_support_refs: [action_contracts, observation_boundaries, behavior_history]
     evidence_contract_refs: [participant-behavior-history-event-stream-v1]
@@ -1418,7 +1386,6 @@ behavior_specifications:
     observation_boundary_refs: [blue-investigation-view]
     authority_scope_refs: [nodes.defender-console.services.defender-api, nodes.event-store.services.event-api, content.blue-investigation-task]
     behavior_mode: autonomous
-    defensive_behavior_refs: [adverse-event-analysis]
     realization_profile_ref: participant-implementation-manifest:security-analyst-agent
     backend_feature_support_refs: [action_contracts, observation_boundaries, behavior_history]
     evidence_contract_refs: [participant-behavior-history-event-stream-v1]
@@ -1433,7 +1400,6 @@ behavior_specifications:
     observation_boundary_refs: [blue-response-view]
     authority_scope_refs: [nodes.defender-console.services.defender-api, nodes.event-store.services.event-api, nodes.webapp.services.http, content.blue-response-task]
     behavior_mode: autonomous
-    defensive_behavior_refs: [incident-management]
     realization_profile_ref: participant-implementation-manifest:security-analyst-agent
     backend_feature_support_refs: [action_contracts, observation_boundaries, behavior_history]
     evidence_contract_refs: [participant-behavior-history-event-stream-v1]

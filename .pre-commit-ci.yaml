@@ -1,0 +1,113 @@
+# CI-only dependency freshness and whole-tree complexity checks.
+# Tests and prose lint have dedicated jobs in .github/workflows/checks.yml.
+# Run explicitly: pre-commit run --config .pre-commit-ci.yaml --all-files
+fail_fast: true
+repos:
+- repo: https://github.com/astral-sh/uv-pre-commit
+  rev: e3e6ef7d9bda544b2e795782dbd7d2a4fbd7eb6d
+  hooks:
+  - id: uv-lock
+  - id: uv-export
+    alias: uv-export-runtime
+    name: Export hashed runtime requirements
+    args:
+    - --frozen
+    - --no-emit-project
+    - --group
+    - build
+    - --no-default-groups
+    - --quiet
+    - -o
+    - requirements/runtime.txt
+    files: ^(uv\.lock|pyproject\.toml)$
+  - id: uv-export
+    alias: uv-export-web
+    name: Export hashed web-service requirements
+    args:
+    - --frozen
+    - --no-emit-project
+    - --group
+    - build
+    - --no-default-groups
+    - --extra
+    - web
+    - --quiet
+    - -o
+    - requirements/web.txt
+    files: ^(uv\.lock|pyproject\.toml)$
+  - id: uv-export
+    alias: uv-export-dev
+    name: Export hashed dev/test requirements
+    args:
+    - --frozen
+    - --no-emit-project
+    - --group
+    - build
+    - --no-default-groups
+    - --extra
+    - dev
+    - --extra
+    - web
+    - --quiet
+    - -o
+    - requirements/dev.txt
+    files: ^(uv\.lock|pyproject\.toml)$
+  - id: uv-export
+    alias: uv-export-docs
+    name: Export hashed docs requirements
+    args:
+    - --frozen
+    - --no-emit-project
+    - --group
+    - build
+    - --no-default-groups
+    - --extra
+    - docs
+    - --quiet
+    - -o
+    - requirements/docs.txt
+    files: ^(uv\.lock|pyproject\.toml)$
+  - id: uv-export
+    alias: uv-export-ci
+    name: Export hashed CI-tooling requirements
+    args:
+    - --frozen
+    - --no-emit-project
+    - --only-group
+    - ci
+    - --only-group
+    - build
+    - --quiet
+    - -o
+    - requirements/ci.txt
+    files: ^(uv\.lock|pyproject\.toml)$
+- repo: local
+  hooks:
+  - id: ruff-complexity
+    name: Python complexity gate (ruff C901)
+    entry: ruff
+    args:
+    - check
+    - src/
+    language: python
+    additional_dependencies:
+    - ruff>=0.15.0
+    pass_filenames: false
+    files: ^(src/.*\.py|pyproject\.toml)$
+  - id: ts-complexity
+    name: TypeScript complexity gate (ESLint complexity)
+    entry: eslint
+    args:
+    - --config
+    - eslint.config.js
+    - --quiet
+    - mcp
+    - web/src
+    language: node
+    additional_dependencies:
+    - eslint@9.34.0
+    - '@typescript-eslint/parser@8.41.0'
+    - svelte-eslint-parser@1.8.0
+    - svelte@5.54.0
+    pass_filenames: false
+    files: ^(mcp/[^/]+/src/.*\.ts|web/src/.*\.(ts|svelte)|eslint\.config\.js)$

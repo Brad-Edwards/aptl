@@ -47,14 +47,14 @@ class TestQueryAndParse:
     def test_apt_query_then_parse_returns_installed_set(self):
         argv = query_installed_argv("apt", ("curl", "wazuh-manager"))
         assert "dpkg-query" in argv
-        # dpkg-query -W -f '${Package}\n' prints one installed package per line.
-        stdout = "curl\nwazuh-manager\n"
+        stdout = "ii \tcurl\t1.0\tamd64\t\nii \twazuh-manager\t1.0\tamd64\t\n"
         assert parse_installed("apt", stdout) == frozenset({"curl", "wazuh-manager"})
 
     def test_apt_parse_ignores_not_installed_noise(self):
-        # dpkg-query emits errors on stderr for missing packages; stdout carries
-        # only the installed ones, so a partial install parses to what is present.
-        assert parse_installed("apt", "curl\n") == frozenset({"curl"})
+        # dpkg-query can print a known package with the `un` status while
+        # returning nonzero. It is available to apt but not installed.
+        stdout = "ii \tcurl\t1.0\tamd64\t\nun \topenssh-server\t1.0\tamd64\t\n"
+        assert parse_installed("apt", stdout) == frozenset({"curl"})
 
     def test_pip_parse_reads_freeze_names(self):
         stdout = "requests==2.31.0\nurllib3==2.0.0\n"
@@ -81,3 +81,32 @@ class TestManifestInstall:
             manifest_install_argv("npm", "/app")
         with pytest.raises(UnsupportedDependencyEcosystemError):
             manifest_query_argv("npm", "some-pkg")
+
+
+@pytest.mark.parametrize("status", ["ii ", "hi "])
+def test_apt_installed_provider_satisfies_virtual_package(status):
+    output = f"{status}\tbind9-dnsutils\t9.20\tamd64\tdnsutils, dns-client (= 1.0)\n"
+    assert {"bind9-dnsutils", "dnsutils", "dns-client"} <= parse_installed(
+        "apt", output
+    )
+
+
+@pytest.mark.parametrize("status", ["rc ", "un ", "iU ", "iiR"])
+def test_apt_unconfigured_provider_does_not_satisfy_package(status):
+    output = f"{status}\tbind9-dnsutils\t9.20\tamd64\tdnsutils\n"
+    assert not parse_installed("apt", output)
+
+
+def test_virtual_version_comes_from_provides_not_provider_version():
+    from aptl.backends.raes_package_managers import apt_package_rows
+
+    rows = apt_package_rows("ii \tprovider\t9.20\tamd64\tvirtual, versioned (= 1.0)\n")
+    assert rows["provider"] == ("9.20", "amd64")
+    assert rows["virtual"] == ("", "amd64")
+    assert rows["versioned"] == ("1.0", "amd64")
+
+
+def test_virtual_package_query_includes_installed_providers():
+    argv = query_installed_argv("apt", ("virtual-package",))
+    assert "virtual-package" not in argv
+    assert "${Provides}" in argv[-1]

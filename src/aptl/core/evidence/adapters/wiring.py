@@ -16,24 +16,34 @@ from collections.abc import Mapping
 
 from aptl.core.evidence.adapters.sources import WindowedQueryCollector, WindowedSource
 from aptl.core.evidence.protocol import Collector
-from aptl.core.experiment.capture_registrations import BUILTIN_REGISTRATIONS
+from aptl.core.experiment.capture_registry import (
+    DEFAULT_COLLECTOR_REGISTRY,
+    CollectorRegistry,
+)
 
-#: The registration ids the built-in wiring will bind a collector for.
+#: Compatibility projection for callers that still inspect the default registry.
 BUILTIN_REGISTRATION_IDS: frozenset[str] = frozenset(
-    registration.registration_id for registration in BUILTIN_REGISTRATIONS
+    registration.registration_id
+    for registration in DEFAULT_COLLECTOR_REGISTRY.registrations
 )
 
 
-def build_collectors(sources: Mapping[str, WindowedSource]) -> dict[str, Collector]:
+def build_collectors(
+    sources: Mapping[str, WindowedSource],
+    registry: CollectorRegistry = DEFAULT_COLLECTOR_REGISTRY,
+) -> dict[str, Collector]:
     """Wire each provided windowed source to its generic collector, keyed by registration id.
 
     Raises :class:`ValueError` for a registration id outside the built-in
-    fleet — the coordinator then has no collector for an unrecognized binding
+    registry — the coordinator then has no collector for an unrecognized binding
     and reports it as unavailable, never silently resolving it.
     """
+    admitted_ids = frozenset(
+        registration.registration_id for registration in registry.registrations
+    )
     collectors: dict[str, Collector] = {}
     for registration_id, source in sources.items():
-        if registration_id not in BUILTIN_REGISTRATION_IDS:
+        if registration_id not in admitted_ids:
             raise ValueError(f"unknown collector registration id: {registration_id!r}")
         collectors[registration_id] = WindowedQueryCollector(registration_id, source)
     return collectors

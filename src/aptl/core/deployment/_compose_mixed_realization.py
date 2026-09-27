@@ -6,6 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
+from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
 from aptl.core.deployment._compose_image_free_realization import (
     _image_free_node_addresses,
     _image_free_service_names,
@@ -16,6 +17,7 @@ from aptl.core.deployment._compose_runtime_orchestration import (
     realization_has_docker_authority,
 )
 from aptl.core.deployment.realization import DeploymentRealizationSpec
+from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.lab_types import LabResult
 
 
@@ -28,6 +30,7 @@ class ComposeMixedRealizationMixin:
         *,
         build: bool,
         scenario_root: Path,
+        observation_context: DeploymentObservationContext,
     ) -> LabResult:
         """Realize a spec with at least one still-Compose-managed node."""
 
@@ -42,6 +45,7 @@ class ComposeMixedRealizationMixin:
             build=build,
             scenario_root=scenario_root,
             excluded_services=excluded_services,
+            observation_context=observation_context,
         )
 
     def _prepare_mixed_subset(
@@ -60,6 +64,8 @@ class ComposeMixedRealizationMixin:
             scenario_root,
             self._project_dir,
         )
+        if failure is None:
+            failure = self._prepare_capture_target(realization)
         if failure is not None:
             return failure, realization, ()
         excluded_services = (
@@ -84,6 +90,7 @@ class ComposeMixedRealizationMixin:
         build: bool,
         scenario_root: Path,
         excluded_services: tuple[str, ...],
+        observation_context: DeploymentObservationContext,
     ) -> LabResult:
         """Run each ordered Compose stage and return the first failure."""
 
@@ -116,6 +123,7 @@ class ComposeMixedRealizationMixin:
                 compose_files=compose_files,
                 excluded_services=excluded_services,
                 scenario_root=scenario_root,
+                observation_context=observation_context,
             )
         return failure or LabResult(success=True)
 
@@ -162,13 +170,22 @@ class ComposeMixedRealizationMixin:
         compose_files: tuple[Path, ...] | None,
         excluded_services: tuple[str, ...],
         scenario_root: Path,
+        observation_context: DeploymentObservationContext,
     ) -> LabResult:
         """Run phased startup and post-start reconciliation."""
 
-        failure: LabResult | None = None
-        if realization_has_docker_authority(realization):
-            endpoint = self.revalidate_local_docker_socket()
-            failure = None if endpoint.success else endpoint
+        failure = self._docker_authority_failure(realization)
+        if failure is None:
+            failure = self._start_boundary_anchor_services(
+                realization,
+                profiles=profiles,
+                build=build,
+                compose_files=compose_files,
+                excluded_services=excluded_services,
+                scenario_root=scenario_root,
+            )
+        if failure is None:
+            failure = self._realize_platform_boundary()
         if failure is None:
             phase = self._materialize_service_index_schemas(
                 realization,
@@ -186,5 +203,77 @@ class ComposeMixedRealizationMixin:
                 exclude_services=excluded_services,
                 scenario_root=scenario_root,
             )
-            failure = self._realization_result(start_result, realization)
+            failure = self._realization_result(
+                start_result,
+                realization,
+                observation_context,
+            )
         return failure
+
+    def _docker_authority_failure(
+        self, realization: DeploymentRealizationSpec
+    ) -> LabResult | None:
+        """Revalidate a required local daemon endpoint before mutation."""
+
+        if not realization_has_docker_authority(realization):
+            return None
+        endpoint = self.revalidate_local_docker_socket()
+        return None if endpoint.success else endpoint
+
+    def _start_boundary_anchor_services(
+        self,
+        realization: DeploymentRealizationSpec,
+        *,
+        profiles: list[str],
+        build: bool,
+        compose_files: tuple[Path, ...] | None,
+        excluded_services: tuple[str, ...],
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Start only missing signed anchors under the observed deny baseline."""
+
+        configured = self._appliance_boundary
+        if configured is None or not configured[0].internal_zone_isolation:
+            return None
+        services = _boundary_anchor_services(configured[0], realization)
+        if isinstance(services, LabResult):
+            return services
+        result: LabResult | None = None
+        if services:
+            started = self._start_realized_services(
+                profiles,
+                build=build and not self._offline_staged,
+                compose_files=compose_files,
+                exclude_services=excluded_services,
+                only_services=services,
+                scenario_root=scenario_root,
+            )
+            result = None if started.success else started
+        return result
+
+
+def _boundary_anchor_services(
+    policy: ApplianceBoundaryPolicy, realization: DeploymentRealizationSpec
+) -> tuple[str, ...] | LabResult:
+    """Resolve every signed platform anchor to an authored Compose service."""
+
+    nodes = {node.address: node for node in realization.nodes}
+    imaged = {image.address for image in realization.images}
+    services: set[str] = set()
+    for zone in ("participant", "management", "egress"):
+        selector = getattr(policy.platform_anchors, zone)
+        key, separator, address = selector.partition("=")
+        node = nodes.get(address)
+        if key != "aptl.node.address" or not separator or node is None:
+            return LabResult(
+                success=False,
+                error="Platform boundary anchor selection is unsupported.",
+            )
+        if address in imaged:
+            if not node.service_name:
+                return LabResult(
+                    success=False,
+                    error="Platform boundary anchor has no Compose service.",
+                )
+            services.add(node.service_name)
+    return tuple(sorted(services))

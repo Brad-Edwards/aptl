@@ -13,6 +13,7 @@ its size budget. It depends only on lower-level helpers, never back on
 from __future__ import annotations
 
 from collections.abc import Mapping
+from textwrap import dedent
 from typing import TYPE_CHECKING, Any
 
 from aptl.backends.raes_profiles import public_start_profiles
@@ -28,6 +29,55 @@ if TYPE_CHECKING:
 
     from aptl.backends._compose_profile_index import ComposeProfileIndex
     from aptl.core.config import AptlConfig
+
+
+# RAES 4.1's generic full-target probe leaves operating-system identity closed.
+# APTL is a Linux-only backend and necessarily realizes a Linux substrate, so
+# use the public conformance runner's backend-specific witness seam to make that
+# required identity explicit. The rest of the probe remains backend-neutral.
+APTL_TARGET_CONFORMANCE_SCENARIO = dedent(
+    """
+    name: aptl-conformance
+    nodes:
+      vm:
+        type: compute
+        os: linux
+        resources: {ram: 1 gib, cpu: 1}
+        conditions: {health: ops}
+        roles: {ops: operator}
+    conditions:
+      health: {proposition: health-state, command: /bin/true, interval: 15}
+    entities:
+      blue: {role: blue}
+    propositions:
+      health-state:
+        description: The conformance VM is declared in the admitted scenario.
+        subjects: [nodes.vm]
+        basis: declared_state
+        predicate:
+          kind: presence
+          property: node
+          semantic_ref: urn:raes:declared-property:node
+          operator: exists
+    assertions:
+      health:
+        proposition: health-state
+        role: postcondition
+    objectives:
+      validate:
+        entity: blue
+        success: {assertions: [health]}
+    workflows:
+      response:
+        start: run
+        steps:
+          run:
+            type: objective
+            objective: validate
+            on_success: finish
+          finish: {type: end}
+    """
+)
 
 
 def _is_raes_conformance_probe_node(
@@ -50,15 +100,17 @@ def _has_raes_conformance_probe_identity(
     resource: PlannedResource,
     payload: Mapping[str, Any],
 ) -> bool:
-    """Return whether resource identity matches RAES' generic VM probe."""
+    """Return whether resource identity matches RAES' generic compute probe."""
 
-    return (
+    identity = (
         resource.address,
         str(payload.get("name", "")),
         str(payload.get("node_name", "")),
-        str(payload.get("node_type", "")),
-        str(payload.get("os_family", "")),
-    ) == ("provision.node.vm", "vm", "vm", "vm", "linux")
+        str(payload.get("node_kind", "")),
+    )
+    return identity == ("provision.node.vm", "vm", "vm", "compute") and str(
+        payload.get("os_family", "")
+    ) in {"", "linux"}
 
 
 def _has_empty_raes_probe_node_spec(

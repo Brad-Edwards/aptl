@@ -240,3 +240,19 @@ class TestWebServeWebRoot:
         assert os.environ.get("APTL_WEB_ROOT") == str(root)
         # Cleanup
         os.environ.pop("APTL_WEB_ROOT", None)
+
+
+def test_serve_preserves_supervisor_launch_token(monkeypatch):
+    from unittest.mock import patch
+    from typer.testing import CliRunner
+    from aptl.cli.web import app
+    from aptl.api.session import LAUNCH_TOKEN_ENV
+    import os
+
+    token = "supervisor-supplied-token-for-private-seat-channel"
+    monkeypatch.setenv(LAUNCH_TOKEN_ENV, token)
+    with patch("uvicorn.run") as run:
+        result = CliRunner().invoke(app, ["--api-only"])
+    assert result.exit_code == 0, result.output
+    assert os.environ[LAUNCH_TOKEN_ENV] == token
+    run.assert_called_once()

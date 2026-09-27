@@ -854,6 +854,53 @@ class TestEnsureSuricataConfigSourceOwnership:
         assert result.success is True
         assert result.repaired == ()
 
+    def test_a_timed_out_root_chown_helper_is_removed(self, tmp_path, monkeypatch):
+        """A root helper bind-mounting the project must not outlive a killed CLI.
+
+        ``--rm`` never reaches a container whose ``docker run`` was killed
+        before it exited. This helper runs as root with the whole project
+        mounted, so an orphan is the worst kind to leave. It is now named and
+        removed by that name, with the removal's output captured.
+        """
+
+        from aptl.core.suricata_seed import ensure_suricata_config_source_ownership
+
+        self._force_linux_native(monkeypatch)
+        _write_suricata_sources(tmp_path)
+        yaml_path = tmp_path / "config" / "suricata" / "suricata.yaml"
+        rules_path = tmp_path / "config" / "suricata" / "rules" / "local.rules"
+        original_stat = Path.stat
+
+        def selective_stat(self, *args, **kwargs):
+            if self in (yaml_path, rules_path):
+                return SimpleNamespace(st_uid=998, st_mode=0o100644)
+            return original_stat(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "stat", selective_stat)
+        calls: list[tuple[list[str], dict]] = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append((cmd, kwargs))
+            if cmd[:2] == ["docker", "rm"]:
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            raise subprocess.TimeoutExpired(cmd, 60)
+
+        monkeypatch.setattr(
+            os,
+            "chown",
+            lambda *args, **kwargs: (_ for _ in ()).throw(PermissionError()),
+        )
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        result = ensure_suricata_config_source_ownership(tmp_path, self._IMAGE)
+
+        assert result.success is False
+        run_cmd = calls[0][0]
+        name = run_cmd[run_cmd.index("--name") + 1]
+        removal, removal_kwargs = calls[1]
+        assert removal == ["docker", "rm", "-f", "-v", name]
+        assert removal_kwargs.get("capture_output") is True
+
     def test_restores_foreign_owned_sources_with_container(self, tmp_path, monkeypatch):
         from aptl.core.suricata_seed import ensure_suricata_config_source_ownership
 

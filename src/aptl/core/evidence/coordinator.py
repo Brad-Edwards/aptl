@@ -32,7 +32,11 @@ from raes_contracts.contracts import ExperimentEvidenceRecordModel
 from raes_contracts.diagnostics import Diagnostic
 
 from aptl.core.correlation.clock import ClockProvider
-from aptl.core.evidence._persist import EvidenceRef, media_type_supported, persist_success_outcome
+from aptl.core.evidence._persist import (
+    EvidenceRef,
+    media_type_supported,
+    persist_success_outcome,
+)
 from aptl.core.evidence.outcomes import (
     STATUS_DIAGNOSTIC_CODES,
     SUCCESS_STATUSES,
@@ -40,7 +44,12 @@ from aptl.core.evidence.outcomes import (
     CollectorStatus,
     capture_diagnostic,
 )
-from aptl.core.evidence.protocol import Collector, CollectorContext, CollectorOutcome, RunScope
+from aptl.core.evidence.protocol import (
+    Collector,
+    CollectorContext,
+    CollectorOutcome,
+    RunScope,
+)
 from aptl.core.experiment.capture_registry import CaptureBinding
 
 #: Statuses that abort the attempt before participant action (source never
@@ -66,7 +75,9 @@ _CODE_REGISTRATION_MISMATCH = "aptl.experiment-capture.collector-registration-mi
 _CODE_MEDIA_MISMATCH = "aptl.experiment-capture.media-type-mismatch"
 
 _MSG_NO_COLLECTOR = "no collector wired for the pinned registration"
-_MSG_REGISTRATION_MISMATCH = "collector registration id does not match the pinned binding"
+_MSG_REGISTRATION_MISMATCH = (
+    "collector registration id does not match the pinned binding"
+)
 _MSG_MEDIA_MISMATCH = "captured media type is not one the requirement expects"
 
 
@@ -113,7 +124,9 @@ def _binding_key(binding: CaptureBinding) -> tuple[str, str]:
     return (binding.capture_spec_id, binding.requirement_id)
 
 
-def _context(binding: CaptureBinding, *, scope: RunScope, clock: ClockProvider) -> CollectorContext:
+def _context(
+    binding: CaptureBinding, *, scope: RunScope, clock: ClockProvider
+) -> CollectorContext:
     """Build the narrow immutable context handed to a collector at start."""
     return CollectorContext(
         planned_trial_id=scope.planned_trial_id,
@@ -125,14 +138,21 @@ def _context(binding: CaptureBinding, *, scope: RunScope, clock: ClockProvider) 
     )
 
 
-def _failed_outcome(status: CollectorStatus, clock: ClockProvider, detail: str) -> CollectorOutcome:
+def _failed_outcome(
+    status: CollectorStatus, clock: ClockProvider, detail: str
+) -> CollectorOutcome:
     """Build a typed failure outcome stamped with the coordinator's observation clock."""
     now = clock.now()
-    return CollectorOutcome(status=status, started_at=now, finished_at=now, detail=detail)
+    return CollectorOutcome(
+        status=status, started_at=now, finished_at=now, detail=detail
+    )
 
 
 def _start_all(
-    plan: Sequence[tuple[CaptureBinding, Collector]], *, scope: RunScope, clock: ClockProvider
+    plan: Sequence[tuple[CaptureBinding, Collector]],
+    *,
+    scope: RunScope,
+    clock: ClockProvider,
 ) -> tuple[list[_Started], dict[tuple[str, str], CollectorOutcome]]:
     """Start collectors in order; on the first startup failure, stop early.
 
@@ -146,7 +166,9 @@ def _start_all(
     for binding, collector in plan:
         if aborted:
             not_started[_binding_key(binding)] = _failed_outcome(
-                CollectorStatus.STARTUP_FAILURE, clock, "not started (an earlier collector failed to start)"
+                CollectorStatus.STARTUP_FAILURE,
+                clock,
+                "not started (an earlier collector failed to start)",
             )
             continue
         context = _context(binding, scope=scope, clock=clock)
@@ -158,27 +180,53 @@ def _start_all(
             )
             aborted = True
             continue
+        except BaseException:
+            # An interrupted start has no returned handle to stop, but every
+            # earlier successful start is still owned by this coordinator.
+            _stop_all(started, clock)
+            raise
         started.append(_Started(binding=binding, collector=collector, handle=handle))
     return started, not_started
 
 
-def _stop_all(started: Sequence[_Started], clock: ClockProvider) -> dict[tuple[str, str], CollectorOutcome]:
+def _stop_all(
+    started: Sequence[_Started], clock: ClockProvider
+) -> dict[tuple[str, str], CollectorOutcome]:
     """Stop started collectors in REVERSE order; a stop raising becomes a finalization failure."""
     outcomes: dict[tuple[str, str], CollectorOutcome] = {}
+    interrupted: BaseException | None = None
     for entry in reversed(started):
         try:
             outcome = entry.collector.stop(entry.handle)
         except Exception:
             outcome = _failed_outcome(
-                CollectorStatus.FINALIZATION_FAILURE, clock, "collector raised during stop"
+                CollectorStatus.FINALIZATION_FAILURE,
+                clock,
+                "collector raised during stop",
+            )
+        except (KeyboardInterrupt, SystemExit, GeneratorExit) as exc:  # NOSONAR
+            # Finish reverse-order cleanup even if one stop is interrupted.
+            # Do not convert an operator interrupt into apparent success.
+            if interrupted is None:
+                interrupted = exc
+            outcome = _failed_outcome(
+                CollectorStatus.FINALIZATION_FAILURE,
+                clock,
+                "collector stop interrupted",
             )
         outcomes[_binding_key(entry.binding)] = outcome
+    if interrupted is not None:
+        raise interrupted
     return outcomes
 
 
 def _resolve_plan(
     bindings: Sequence[CaptureBinding], collectors: Mapping[str, Collector]
-) -> tuple[list[tuple[CaptureBinding, Collector]], list[Diagnostic], dict[tuple[str, str], CollectorOutcome]]:
+) -> tuple[
+    list[tuple[CaptureBinding, Collector]],
+    list[Diagnostic],
+    dict[tuple[str, str], CollectorOutcome],
+]:
     """Pair each binding with its collector, verifying the pinned registration id.
 
     A missing or mismatched collector is a coordinator wiring fault, not an
@@ -192,17 +240,27 @@ def _resolve_plan(
         collector = collectors.get(binding.registration_id)
         address = f"capture.{binding.capture_spec_id}.{binding.requirement_id}"
         if collector is None:
-            diagnostics.append(capture_diagnostic(_CODE_NO_COLLECTOR, address, _MSG_NO_COLLECTOR))
+            diagnostics.append(
+                capture_diagnostic(_CODE_NO_COLLECTOR, address, _MSG_NO_COLLECTOR)
+            )
             unavailable[_binding_key(binding)] = CollectorOutcome(
-                status=CollectorStatus.SOURCE_UNAVAILABLE, started_at="", finished_at="", detail="no collector"
+                status=CollectorStatus.SOURCE_UNAVAILABLE,
+                started_at="",
+                finished_at="",
+                detail="no collector",
             )
             continue
         if collector.registration_id != binding.registration_id:
             diagnostics.append(
-                capture_diagnostic(_CODE_REGISTRATION_MISMATCH, address, _MSG_REGISTRATION_MISMATCH)
+                capture_diagnostic(
+                    _CODE_REGISTRATION_MISMATCH, address, _MSG_REGISTRATION_MISMATCH
+                )
             )
             unavailable[_binding_key(binding)] = CollectorOutcome(
-                status=CollectorStatus.SOURCE_UNAVAILABLE, started_at="", finished_at="", detail="registration mismatch"
+                status=CollectorStatus.SOURCE_UNAVAILABLE,
+                started_at="",
+                finished_at="",
+                detail="registration mismatch",
             )
             continue
         plan.append((binding, collector))
@@ -215,42 +273,45 @@ def _process_outcome(
     *,
     run_store: object,
     scope: RunScope,
-) -> tuple[CollectorReport, ExperimentEvidenceRecordModel | None, EvidenceRef | None, Diagnostic | None]:
+) -> tuple[
+    CollectorReport,
+    ExperimentEvidenceRecordModel | None,
+    EvidenceRef | None,
+    Diagnostic | None,
+]:
     """Turn one collector outcome into a report (+ record/ref for a success, + diagnostic for a failure)."""
+    failure = _pre_persistence_failure(binding, outcome)
+    if failure is not None:
+        return failure
+
     accepted = binding.accepted_limitation is not None
-    if outcome.status not in SUCCESS_STATUSES:
-        code = STATUS_DIAGNOSTIC_CODES.get(outcome.status, "aptl.experiment-capture.unknown-failure")
-        address = f"capture.{binding.capture_spec_id}.{binding.requirement_id}"
-        diagnostic = capture_diagnostic(code, address, f"collector reported {outcome.status.value}")
-        report = CollectorReport(
-            registration_id=binding.registration_id,
-            requirement_id=binding.requirement_id,
-            status=outcome.status,
-            accepted_degradation=accepted,
-            diagnostic_code=code,
+    try:
+        processed = persist_success_outcome(
+            binding=binding,
+            outcome=outcome,
+            run_store=run_store,  # type: ignore[arg-type]
+            run_id=scope.run_id,
+            planned_trial_id=scope.planned_trial_id,
+            captured_at=outcome.finished_at,
         )
-        return report, None, None, diagnostic
-
-    if not media_type_supported(outcome, binding):
-        address = f"capture.{binding.capture_spec_id}.{binding.requirement_id}"
-        diagnostic = capture_diagnostic(_CODE_MEDIA_MISMATCH, address, _MSG_MEDIA_MISMATCH)
-        report = CollectorReport(
-            registration_id=binding.registration_id,
-            requirement_id=binding.requirement_id,
-            status=CollectorStatus.MID_RUN_LOSS,
-            accepted_degradation=accepted,
-            diagnostic_code=_CODE_MEDIA_MISMATCH,
+    except (BufferError, ValueError, RecursionError, OSError) as exc:
+        # Persistence is part of capture, not an exception-shaped escape from
+        # terminal accounting. Never project the exception or source bytes.
+        status = (
+            CollectorStatus.TRUNCATION
+            if isinstance(exc, BufferError)
+            else CollectorStatus.FINALIZATION_FAILURE
         )
-        return report, None, None, diagnostic
-
-    processed = persist_success_outcome(
-        binding=binding,
-        outcome=outcome,
-        run_store=run_store,  # type: ignore[arg-type]
-        run_id=scope.run_id,
-        planned_trial_id=scope.planned_trial_id,
-        captured_at=outcome.finished_at,
-    )
+        return _process_outcome(
+            binding,
+            CollectorOutcome(
+                status=status,
+                started_at=outcome.started_at,
+                finished_at=outcome.finished_at,
+            ),
+            run_store=run_store,
+            scope=scope,
+        )
     report = CollectorReport(
         registration_id=binding.registration_id,
         requirement_id=binding.requirement_id,
@@ -266,6 +327,55 @@ def _process_outcome(
     return report, processed.record, processed.ref, None
 
 
+def _pre_persistence_failure(
+    binding: CaptureBinding,
+    outcome: CollectorOutcome,
+) -> (
+    tuple[
+        CollectorReport,
+        ExperimentEvidenceRecordModel | None,
+        EvidenceRef | None,
+        Diagnostic | None,
+    ]
+    | None
+):
+    """Project source/media failures before any bytes reach persistence."""
+
+    accepted = binding.accepted_limitation is not None
+    if outcome.status not in SUCCESS_STATUSES:
+        code = STATUS_DIAGNOSTIC_CODES.get(
+            outcome.status, "aptl.experiment-capture.unknown-failure"
+        )
+        address = f"capture.{binding.capture_spec_id}.{binding.requirement_id}"
+        diagnostic = capture_diagnostic(
+            code, address, f"collector reported {outcome.status.value}"
+        )
+        report = CollectorReport(
+            registration_id=binding.registration_id,
+            requirement_id=binding.requirement_id,
+            status=outcome.status,
+            accepted_degradation=accepted,
+            diagnostic_code=code,
+        )
+        return report, None, None, diagnostic
+
+    result = None
+    if not media_type_supported(outcome, binding):
+        address = f"capture.{binding.capture_spec_id}.{binding.requirement_id}"
+        diagnostic = capture_diagnostic(
+            _CODE_MEDIA_MISMATCH, address, _MSG_MEDIA_MISMATCH
+        )
+        report = CollectorReport(
+            registration_id=binding.registration_id,
+            requirement_id=binding.requirement_id,
+            status=CollectorStatus.MID_RUN_LOSS,
+            accepted_degradation=accepted,
+            diagnostic_code=_CODE_MEDIA_MISMATCH,
+        )
+        result = (report, None, None, diagnostic)
+    return result
+
+
 def _disposition(reports: Sequence[CollectorReport]) -> AcquisitionDisposition:
     """Compute the overall disposition from the per-binding effective statuses."""
     if any(r.status in _ABORTING_STATUSES for r in reports):
@@ -276,7 +386,11 @@ def _disposition(reports: Sequence[CollectorReport]) -> AcquisitionDisposition:
             if not report.accepted_degradation:
                 return AcquisitionDisposition.INVALIDATED
             partial = True
-    return AcquisitionDisposition.COMPLETED_PARTIAL if partial else AcquisitionDisposition.SEALED_READY
+    return (
+        AcquisitionDisposition.COMPLETED_PARTIAL
+        if partial
+        else AcquisitionDisposition.SEALED_READY
+    )
 
 
 def acquire_evidence(
@@ -298,16 +412,34 @@ def acquire_evidence(
     between.
     """
     plan, diagnostics, unavailable = _resolve_plan(bindings, collectors)
-    started, not_started = _start_all(plan, scope=scope, clock=clock)
+    if unavailable:
+        # Resolve the entire set before starting observers. A missing required
+        # source must not leave a partially instrumented participant running.
+        started = []
+        not_started = {
+            _binding_key(binding): _failed_outcome(
+                CollectorStatus.STARTUP_FAILURE, clock, "capture set unavailable"
+            )
+            for binding, _ in plan
+        }
+    else:
+        started, not_started = _start_all(plan, scope=scope, clock=clock)
 
-    if started:
-        try:
+    try:
+        if not unavailable and not not_started:
             trial_body()
-        except Exception:
-            pass
-    stop_outcomes = _stop_all(started, clock)
+    except Exception:
+        pass
+    finally:
+        # Includes KeyboardInterrupt/SystemExit: cleanup must not depend on
+        # the participant returning normally, and interrupts still propagate.
+        stop_outcomes = _stop_all(started, clock)
 
-    outcomes_by_key: dict[tuple[str, str], CollectorOutcome] = {**unavailable, **not_started, **stop_outcomes}
+    outcomes_by_key: dict[tuple[str, str], CollectorOutcome] = {
+        **unavailable,
+        **not_started,
+        **stop_outcomes,
+    }
     reports: list[CollectorReport] = []
     records: list[ExperimentEvidenceRecordModel] = []
     refs: list[EvidenceRef] = []

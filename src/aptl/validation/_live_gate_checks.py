@@ -47,7 +47,11 @@ from aptl.validation._live_gate_variation import (
     _single_node_plan,
     _variation_diagnostics,
 )
+from aptl.validation._live_gate_models import (
+    verification_provenance as _verification_provenance,
+)
 from aptl.validation._live_gate_readiness import (
+    _apparatus_readiness_diagnostics,
     _node_readiness_diagnostics,
     _undeclared_container_diagnostics,
 )
@@ -180,12 +184,15 @@ def check_raes_driven_boot(
     name. Then runs ``stop_lab(-v)`` cleanup and ``orchestrate_lab_start`` (whose
     only container-start path is the RAES handoff) and records the snapshot.
     """
-    realization, interp_errors = _compute_realization(scenario, project_dir, config)
+    realization, interp_errors, apparatus = _compute_realization(
+        scenario, project_dir, config, scenario_path=scenario_path
+    )
     if realization is None or interp_errors:
         return _check(
             "raes_driven_boot", CATEGORY_BACKEND_INTERPRETATION, interp_errors
         )
     state.realization_details = realization.details()
+    state.planned_apparatus = apparatus
     state.diagnostics_seen = len(realization.diagnostics)
     state.selected_profiles = select_backend_profiles(config, realization.profiles)
     state.deployment_spec = realization.deployment_spec(state.selected_profiles)
@@ -239,10 +246,9 @@ def check_defensive_stack_readiness(
 ) -> LiveGateCheck:
     """Assert every RAES-realized node is live + healthy in the booted range.
 
-    Pass/fail is keyed to the realized node surface (anti-preset): each declared
-    node must map to a running, non-unhealthy container. Non-node infrastructure
-    (e.g. OTEL/Tempo/Grafana observability) that is unhealthy is surfaced as a
-    degraded note, not a hard failure of the scenario surface.
+    Pass/fail is keyed to the realized node and admitted apparatus surfaces:
+    every expected container must be running and healthy when it defines a
+    healthcheck, and no unaccounted project container is tolerated.
     """
     snapshot = state.snapshot or {}
     containers = snapshot.get("containers", [])
@@ -255,9 +261,15 @@ def check_defensive_stack_readiness(
             ["no containers in post-boot snapshot"],
         )
 
-    diagnostics, matched_names = _node_readiness_diagnostics(
+    diagnostics, matched_names, semantic_names = _node_readiness_diagnostics(
         nodes, containers, selected
     )
+    state.semantic_container_names = semantic_names
+    apparatus_diagnostics, apparatus_names = _apparatus_readiness_diagnostics(
+        state.planned_apparatus, containers
+    )
+    diagnostics.extend(apparatus_diagnostics)
+    matched_names.update(apparatus_names)
     # Parity runs both ways (ADR-048): a declared node that never started, and a
     # container running that nothing declared. The second direction is what
     # catches range content the scenario has drifted away from describing.
@@ -290,6 +302,11 @@ def check_run_archive_manifest(
     progression is emitted by ``AptlEvaluator`` from observed runtime state.
     """
     realization = state.realization_details or {}
+    validation_status = "failed"
+    if any(check.status.value == "blocked" for check in prior_checks):
+        validation_status = "blocked"
+    elif all(check.passed for check in prior_checks):
+        validation_status = "passed"
     manifest = {
         "schema": "aptl.live-gate.manifest/v1",
         "scenario": {
@@ -304,10 +321,12 @@ def check_run_archive_manifest(
         },
         "validation": {
             "checks": [_check_to_dict(check) for check in prior_checks],
-            # Key is "ok", not "passed": the run-archive redaction boundary masks
-            # any key containing "pass" (the password heuristic), which would
-            # render every check outcome as [REDACTED].
-            "ok": all(check.passed for check in prior_checks),
+            "status": validation_status,
+            # Which installed answer key reached the semantic verdict, observed
+            # by discovery from installed package metadata. ``None`` when no
+            # plugin answered, so an unattributed verdict is explicit rather
+            # than an absent key (#879).
+            "verification": _verification_provenance(state.verification),
         },
         "snapshot": state.snapshot,
         "evidence": state.evidence,

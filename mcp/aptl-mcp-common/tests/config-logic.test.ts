@@ -27,6 +27,28 @@ describe('getTargetCredentials', () => {
     expect(creds.target).toBe('172.20.0.50');
   });
 
+  it('coerces a string ssh_port (from ${APTL_HP_*} substitution) to a number', () => {
+    const config = {
+      server: { configKey: 'test-container', targetName: 'Test Container' },
+      containers: {
+        'test-container': {
+          ssh_key: '/path/to/key',
+          ssh_user: 'testuser',
+          // After `${APTL_HP_KALI_SSH_PROXY_2023}` env substitution the port
+          // arrives as a JSON string; the resolved SSH port must still be numeric.
+          ssh_port: '2023',
+          container_ip: '172.20.0.50',
+          enabled: true
+        }
+      }
+    } as any;
+
+    const creds = getTargetCredentials(config);
+
+    expect(creds.port).toBe(2023);
+    expect(typeof creds.port).toBe('number');
+  });
+
   it('throws error when container disabled', () => {
     const config = {
       server: {

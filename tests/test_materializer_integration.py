@@ -30,7 +30,7 @@ from aptl.backends.raes_materializer_engine import materialize_node
 
 pytestmark = pytest.mark.integration
 
-_BASE_IMAGE = "debian:12-slim"
+_BASE_IMAGE = "debian:13-slim"
 
 
 def _docker_available() -> bool:

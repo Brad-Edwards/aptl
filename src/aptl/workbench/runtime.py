@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import os
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from collections.abc import Collection, Mapping
 from threading import RLock
 from typing import Protocol
 
@@ -98,6 +98,14 @@ class _ActiveProfile:
     config_removed: bool = False
 
 
+@dataclass(frozen=True)
+class GuestRuntimeBinding:
+    """Trusted guest admission and matching configuration renderer."""
+
+    admit_run: Callable[[], str]
+    config_renderer: Callable[[ProfileId, str], Path]
+
+
 class WorkbenchRuntime:
     """Run one profile at a time and retain its existing scenario correlation."""
 
@@ -110,7 +118,10 @@ class WorkbenchRuntime:
         paths: WorkbenchPaths,
         credential_broker: SessionCredentialBroker,
         model: str,
+        guest_binding: GuestRuntimeBinding | None = None,
     ) -> None:
+        self._admit_run = guest_binding.admit_run if guest_binding else None
+        self._config_renderer = guest_binding.config_renderer if guest_binding else None
         self._session_manager = session_manager
         self._adapter = adapter
         self._run_store = run_store
@@ -162,15 +173,18 @@ class WorkbenchRuntime:
             selected.profile_id, run_id, selected.credential_aliases
         )
         try:
-            config_path = render_profile_config(
-                profile=selected.profile_id,
-                payload_root=self._payload_root,
-                output_dir=self._generated_config_dir,
-                state_dir=self._session_manager.state_dir,
-                node_executable=self._node_executable,
-                run_id=run_id,
-                credential_aliases=selected.credential_aliases,
-            )
+            if self._config_renderer is not None:
+                config_path = self._config_renderer(selected.profile_id, run_id)
+            else:
+                config_path = render_profile_config(
+                    profile=selected.profile_id,
+                    payload_root=self._payload_root,
+                    output_dir=self._generated_config_dir,
+                    state_dir=self._session_manager.state_dir,
+                    node_executable=self._node_executable,
+                    run_id=run_id,
+                    credential_aliases=selected.credential_aliases,
+                )
         except Exception:
             self._credential_broker.destroy(selected.profile_id, run_id)
             raise
@@ -216,6 +230,9 @@ class WorkbenchRuntime:
         if self._current is None:
             raise WorkbenchStateError("no participant profile is running")
         active = self._current
+        if self._admit_run is not None and self._admit_run() != active.launch.run_id:
+            self._close()
+            raise WorkbenchStateError("active deployment changed")
         try:
             response = self._adapter.respond(active.handle, message)
         except Exception as exc:
@@ -283,6 +300,10 @@ class WorkbenchRuntime:
         self._current = None
 
     def _active_trace_id(self) -> str:
+        if self._admit_run is not None:
+            from aptl.core.runstore_internals import _validate_id
+
+            return _validate_id(self._admit_run(), "admitted run")
         session = self._session_manager.get_active()
         if session is None or not session.trace_id:
             raise WorkbenchStateError("an active scenario with a trace id is required")

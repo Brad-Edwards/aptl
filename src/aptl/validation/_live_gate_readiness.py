@@ -5,7 +5,7 @@ under the file-size budget. These helpers compare the realized RAES node
 surface against the booted range's container snapshot in **both** directions:
 every realized node in a started profile must map to a live container, any
 container carrying a healthcheck must actually report healthy, and every running
-container must be accounted for by a declared node.
+or stopped project container must be accounted for by a declared node.
 ``_live_gate_checks.check_defensive_stack_readiness`` imports
 ``_node_readiness_diagnostics`` and ``_undeclared_container_diagnostics``
 from here.
@@ -26,10 +26,11 @@ def _node_readiness_diagnostics(
     nodes: Sequence[Mapping[str, Any]],
     containers: Sequence[Mapping[str, Any]],
     selected: set[str],
-) -> tuple[list[str], set[str]]:
-    """Return (hard-failure diagnostics, matched container names) for realized nodes."""
+) -> tuple[list[str], set[str], dict[str, str]]:
+    """Return failures, matched names, and semantic-to-observed node names."""
     diagnostics: list[str] = []
     matched_names: set[str] = set()
+    semantic_names: dict[str, str] = {}
     for node in nodes:
         # Only nodes whose profile is in the started subset get a container; a
         # declared node in a non-selected profile (e.g. mail/reverse when those
@@ -43,23 +44,56 @@ def _node_readiness_diagnostics(
             )
             continue
         matched_names.add(container.get("name", ""))
+        semantic_name = node.get("container_name")
+        if isinstance(semantic_name, str) and semantic_name:
+            semantic_names[semantic_name] = str(container.get("name", ""))
         diagnostics.extend(
             _container_health_diagnostics(node.get("name", "?"), container)
         )
+    return diagnostics, matched_names, semantic_names
+
+
+def _apparatus_readiness_diagnostics(
+    planned: Sequence[Mapping[str, str]],
+    containers: Sequence[Mapping[str, Any]],
+) -> tuple[list[str], set[str]]:
+    """Read back only helpers derived from the admitted scenario contract."""
+    diagnostics: list[str] = []
+    matched_names: set[str] = set()
+    for apparatus in planned:
+        name = apparatus["name"]
+        label_key = apparatus["label_key"]
+        label_value = apparatus["label_value"]
+        match = next(
+            (
+                container
+                for container in containers
+                if isinstance(container.get("labels"), Mapping)
+                and container["labels"].get("aptl.lifecycle.project")
+                and container["labels"].get("aptl.workspace.id")
+                and container["labels"].get(label_key) == label_value
+                and container.get("name", "") not in matched_names
+            ),
+            None,
+        )
+        if match is None:
+            diagnostics.append(f"admitted apparatus {name!r} has no live container")
+            continue
+        matched_names.add(str(match.get("name", "")))
+        diagnostics.extend(_container_health_diagnostics(name, match))
     return diagnostics, matched_names
 
 
 def _undeclared_container_diagnostics(
     containers: Sequence[Mapping[str, Any]], matched_names: set[str]
 ) -> list[str]:
-    """Return a hard failure for every running container the graph never declared.
+    """Return a hard failure for every observed container the graph never declared.
 
     The other half of ADR-048 parity. Comparing declared-to-realized catches a
     node that failed to start; only comparing realized-to-declared catches the
-    opposite and more dangerous case — something running in the range that the
-    admitted graph does not account for. A scenario that cannot name what is
-    running has not described the range, and an operator reading it would be
-    misled about what an attacker can reach.
+    opposite case: project residue that the admitted graph does not account for.
+    A scenario that cannot name what was realized has not described the range,
+    and an operator reading it would be misled about the observed deployment.
 
     This was previously a ``log.warning``, which meant an undeclared container
     could never fail a run. It is now a failure, deliberately with no allowance
@@ -70,8 +104,9 @@ def _undeclared_container_diagnostics(
     """
 
     return [
-        f"container {container.get('name', '?')!r} is running but no declared node "
-        "accounts for it"
+        f"container {container.get('name', '?')!r} has observed status "
+        f"{str(container.get('status', 'unknown'))!r} but no declared node accounts "
+        "for it"
         for container in containers
         if container.get("name", "") not in matched_names
     ]
@@ -111,10 +146,9 @@ def _container_health_diagnostics(
     return [diag] if diag else []
 
 
-def _live_container_for_node(
-    node: Mapping[str, Any], containers: Sequence[Mapping[str, Any]]
-) -> Mapping[str, Any] | None:
-    """Match a realized node to a live container by normalized alias."""
+def _node_identity_keys(node: Mapping[str, Any]) -> set[str]:
+    """Normalize the declared name and aliases for legacy snapshot matching."""
+
     node_keys: set[str] = set()
     raw_values = [node.get("name", ""), *node.get("aliases", ())]
     for raw in raw_values:
@@ -122,8 +156,37 @@ def _live_container_for_node(
         if norm:
             node_keys.add(norm)
             node_keys.add(norm.removeprefix("aptl-"))
-    for container in containers:
-        cname = normalize_identifier(str(container.get("name", "")))
-        if cname in node_keys or cname.removeprefix("aptl-") in node_keys:
-            return container
-    return None
+    return node_keys
+
+
+def _container_matches_node(
+    container: Mapping[str, Any], node: Mapping[str, Any], node_keys: set[str]
+) -> bool:
+    """Prefer authoritative labels and fall back to names only without them."""
+
+    labels = container.get("labels")
+    if isinstance(labels, Mapping):
+        address = labels.get("aptl.node.address")
+        if address:
+            return address == node.get("address")
+        service = labels.get("com.docker.compose.service")
+        if service:
+            return normalize_identifier(str(service)) in node_keys
+    cname = normalize_identifier(str(container.get("name", "")))
+    return cname in node_keys or cname.removeprefix("aptl-") in node_keys
+
+
+def _live_container_for_node(
+    node: Mapping[str, Any], containers: Sequence[Mapping[str, Any]]
+) -> Mapping[str, Any] | None:
+    """Prefer backend identity labels, retaining legacy alias-only snapshots."""
+
+    node_keys = _node_identity_keys(node)
+    return next(
+        (
+            container
+            for container in containers
+            if _container_matches_node(container, node, node_keys)
+        ),
+        None,
+    )

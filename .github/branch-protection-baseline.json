@@ -1,5 +1,5 @@
 {
-  "source": "APTL required merge checks (issues #502, #852); advisory scanners per ADR-026 stay optional",
+  "source": "APTL required merge checks (issues #502, #852, #969); platform dependency audit is required on dev while target scanners remain advisory per ADR-026",
   "branches": {
     "main": {
       "admin_bypass_allowed": true,
@@ -27,6 +27,8 @@
           "Docs (Vale prose lint + mkdocs strict build)",
           "Python tests + coverage",
           "MCP TypeScript tests + coverage",
+          "Dependency vulnerability scan",
+          "Clean-install lab boot and teardown (DEP-008)",
           "Web frontend tests + coverage",
           "SonarCloud quality gate",
           "PR title lint"

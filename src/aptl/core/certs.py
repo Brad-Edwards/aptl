@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from aptl.core import hostenv
+from aptl.core.ephemeral_containers import EphemeralContainer
 from aptl.utils.logging import get_logger
 
 log = get_logger("certs")
@@ -43,6 +44,7 @@ def ensure_ssl_certs(
     project_dir: Path,
     *,
     run_command: CommandRunner | None = None,
+    project: str | None = None,
 ) -> CertResult:
     """Ensure SSL certificates exist for the Wazuh Indexer.
 
@@ -91,17 +93,22 @@ def ensure_ssl_certs(
             certs_dir=certs_dir,
         )
 
-    return _generate_ssl_certs(project_dir, certs_dir, run_command)
+    return _generate_ssl_certs(project_dir, certs_dir, run_command, project=project)
 
 
 def _generate_ssl_certs(
     project_dir: Path,
     certs_dir: Path,
     run_command: CommandRunner | None,
+    *,
+    project: str | None = None,
 ) -> CertResult:
     """Run certificate generation and convert the generator outcome."""
     log.info("Generating SSL certificates...")
-    error = _run_cert_generator(project_dir, certs_dir, run_command)
+    rootless = _docker_is_rootless(run_command, project_dir)
+    error = _run_cert_generator(
+        project_dir, certs_dir, run_command, rootless, project=project
+    )
     result = error
     if result is None:
         alias_error = _ensure_manager_root_ca_alias(certs_dir)
@@ -168,12 +175,15 @@ def _run_cert_generator(
     project_dir: Path,
     certs_dir: Path,
     run_command: CommandRunner | None,
+    rootless: bool,
+    *,
+    project: str | None = None,
 ) -> CertResult | None:
     """Run the compose cert generator, returning a failure result when needed."""
     error_msg = None
     try:
         result = _execute_command(
-            _cert_generator_command(project_dir, certs_dir),
+            _cert_generator_command(project_dir, certs_dir, rootless, project=project),
             run_command=run_command,
             project_dir=project_dir,
             timeout=300,
@@ -259,19 +269,30 @@ def _reclaim_certs_dir(certs_dir: Path, uid: int) -> None:
     certs_dir.mkdir(parents=True, exist_ok=True)
 
 
-def _cert_generator_command(project_dir: Path, certs_dir: Path) -> list[str]:
+def _cert_generator_command(
+    project_dir: Path, certs_dir: Path, rootless: bool, *, project: str | None = None
+) -> list[str]:
     """Build the isolated Docker Compose command for the cert generator.
 
-    On native Linux Docker, the generator runs as the invoking host UID/GID
-    (``--user``) so its output is producer-owned; the bind-mount source is
-    pre-created by the host user so Docker does not create it as root first. Any
-    directory left root-owned by a prior baked lab has already been reclaimed by
+    On native Linux Docker the generator's output must be producer-owned: under
+    rootful Docker it runs as the invoking host UID/GID (``--user``); under
+    rootless Docker it runs as container-root ``0:0``, which the daemon maps
+    back to the invoking host user (a non-root ``--user`` would map to an
+    unrelated subuid that owns nothing in the ``/certificates`` bind mount and
+    fail to ``cp`` its output). The bind-mount source is pre-created by the host
+    user so Docker does not create it as root first. Any directory left
+    root-owned by a prior baked lab has already been reclaimed by
     :func:`ensure_ssl_certs` before this point, so ``exist_ok`` here only ever
     finds a fresh, host-owned directory.
     """
-    user = _native_linux_user()
-    if user is not None:
+    host_user = _native_linux_user()
+    if host_user is not None:
         certs_dir.mkdir(parents=True, exist_ok=True)
+    # Named and labelled like every other helper. Removal is not left to
+    # ``--rm`` alone: the generator runs under its own Compose project, and
+    # :func:`_cleanup_cert_generator` takes that project down after every
+    # outcome, a timeout included. ``project`` also lets the lab's own
+    # teardown find one stranded by a killed process.
     command = [
         "docker",
         "compose",
@@ -280,13 +301,51 @@ def _cert_generator_command(project_dir: Path, certs_dir: Path) -> list[str]:
         "-f",
         _CERT_COMPOSE_FILE,
         "run",
-        "--rm",
+        *EphemeralContainer.for_role("cert-generator", project=project).run_options(),
     ]
+    user = _container_cert_user(host_user, rootless)
     if user is not None:
         uid, gid = user
         command += ["--user", f"{uid}:{gid}"]
     command.append("generator")
     return command
+
+
+def _container_cert_user(
+    host_user: tuple[int, int] | None, rootless: bool
+) -> tuple[int, int] | None:
+    """Return the Compose ``--user`` for the generator, or ``None``.
+
+    ``host_user`` is ``None`` on Docker Desktop, whose file-sharing layer maps
+    output ownership back to the host without a ``--user`` override. On native
+    Linux the generator must produce host-owned certificates: under rootful
+    Docker that is the host uid/gid 1:1; under rootless Docker container-root
+    (``0:0``) is what maps back to the invoking host user.
+    """
+    if host_user is None:
+        return None
+    return (0, 0) if rootless else host_user
+
+
+def _docker_is_rootless(
+    run_command: CommandRunner | None, project_dir: Path
+) -> bool:
+    """Return ``True`` when the bound Docker daemon runs rootless.
+
+    Rootless daemons report ``name=rootless`` in ``docker info`` security
+    options. Any probe failure defaults to ``False`` (rootful), preserving the
+    prior host-UID behavior on a daemon whose mode cannot be determined.
+    """
+    try:
+        result = _execute_command(
+            ["docker", "info", "--format", "{{.SecurityOptions}}"],
+            run_command=run_command,
+            project_dir=project_dir,
+            timeout=30,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    return result.returncode == 0 and "rootless" in (result.stdout or "")
 
 
 def _cert_generator_project_name(project_dir: Path) -> str:

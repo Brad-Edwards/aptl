@@ -223,13 +223,15 @@ def test_built_wheel_has_both_package_and_bundle(tmp_path: Path) -> None:
     assert "aptl/core/assets.py" in names
     # Lab bundle, secret-free.
     assert "aptl/_labdata/docker-compose.yml" in names
-    assert any(n.startswith("aptl/_labdata/scenarios/") for n in names)
+    assert not any(n.startswith("aptl/_labdata/scenarios/") for n in names)
     assert not any(
         s in n
         for n in names
         for s in ("soc_certs", "lab-ssh", "wazuh_indexer_ssl_certs")
     )
     assert not any(n.endswith(".pyc") for n in names)
-    # Pack-specific serving providers are separate distributions and must not
-    # leak into the aptl-labs core wheel.
-    assert not any("aptl_techvault_pack_interaction" in n for n in names)
+    # Scenario adapters ship in this distribution, so the bundled `src` copy
+    # carries them. What must not happen is one landing *inside* the framework
+    # package, where it would stop being reachable only through an entry point.
+    assert any("_labdata/src/aptl_techvault/" in n for n in names)
+    assert not any(n.startswith("aptl/scenarios/aptl_techvault") for n in names)

@@ -52,7 +52,12 @@ _ENV_VAR_NAMES = st.text(
 )
 _ENV_VAR_VALUES = st.text(min_size=0, max_size=200)
 
-_REQUIRED_VARS = ("INDEXER_USERNAME", "INDEXER_PASSWORD", "API_USERNAME", "API_PASSWORD")
+_REQUIRED_VARS = (
+    "INDEXER_USERNAME",
+    "INDEXER_PASSWORD",
+    "API_USERNAME",
+    "API_PASSWORD",
+)
 
 
 @given(body=_ENV_BYTES)
@@ -100,9 +105,8 @@ _OPTIONAL_VALUE = st.text(min_size=0, max_size=200)
 def _valid_env_dict(draw):
     """Build a dict where every required var is present and non-empty.
 
-    Optional fields (``DASHBOARD_USERNAME``, ``DASHBOARD_PASSWORD``,
-    ``WAZUH_CLUSTER_KEY``) are randomly included so the successful
-    construction path also exercises optional-default fallbacks.
+    Dashboard bindings and the cluster key are randomly included so the
+    successful path also exercises scenario-neutral empty defaults.
     """
     env: dict[str, str] = {var: draw(_NONEMPTY_VALUE) for var in _REQUIRED_VARS}
     for optional in ("DASHBOARD_USERNAME", "DASHBOARD_PASSWORD", "WAZUH_CLUSTER_KEY"):
@@ -127,7 +131,7 @@ def test_env_vars_from_dict_valid_input_constructs_envvars(env):
     assert result.indexer_password == env["INDEXER_PASSWORD"]
     assert result.api_username == env["API_USERNAME"]
     assert result.api_password == env["API_PASSWORD"]
-    assert result.dashboard_username == env.get("DASHBOARD_USERNAME", "kibanaserver")
+    assert result.dashboard_username == env.get("DASHBOARD_USERNAME", "")
     assert result.dashboard_password == env.get("DASHBOARD_PASSWORD", "")
     assert result.wazuh_cluster_key == env.get("WAZUH_CLUSTER_KEY", "")
 

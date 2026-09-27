@@ -60,3 +60,27 @@ MIN_OVERRIDE_COMPOSE_VERSION = (2, 24, 4)
 # service key differs.
 WAZUH_INDEXER_SERVICE = "wazuh.indexer"
 WAZUH_MANAGER_SERVICE = "wazuh.manager"
+
+# The generated-artifact producers allowed to deliver an output into a
+# container's environment rather than a mount. Environment delivery hands a
+# secret to a process without a file the operator can inspect or rotate, so it
+# stays an explicit short list rather than a property any producer can claim.
+# ``_compose_stateful_graph`` admits the shape and ``_compose_stateful_realization``
+# writes the files; both read this one set so they cannot drift apart.
+ENVIRONMENT_DELIVERY_PROVENANCES = frozenset(
+    {
+        "techvault:cortex-service-credentials/v1",
+        "techvault:misp-cache-credential/v2",
+    }
+)
+
+# Owner-only staging root for the MISP cache credential and the Redis server
+# configuration that carries it. Same mount discipline as the other secret
+# producers: the server config is mounted read-only into the cache node, and
+# the password itself reaches MISP only through environment delivery.
+MISP_CACHE_CREDENTIAL_ROOT_RELPATH = Path(".aptl/realization/misp-cache-credential")
+
+# Owner-only staging root for the MISP leaf certificate under the filenames the
+# pinned misp-core image reads. The SOC certificate bundle remains the producer;
+# this root only holds the image-native delivery shape.
+MISP_SERVER_TLS_ROOT_RELPATH = Path(".aptl/realization/misp-server-tls")

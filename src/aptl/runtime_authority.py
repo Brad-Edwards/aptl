@@ -12,20 +12,27 @@ DOCKER_SOCKET_PATH = "/var/run/docker.sock"
 
 @dataclass(frozen=True)
 class DeploymentSpawnImageRequirement:
-    """One exact child image plus its runtime-observation contract."""
+    """One image an authority will run, as the author wrote its reference.
+
+    ``image_ref`` is realized as authored. ``tag_reference`` is the
+    ``repository:tag`` that same reference names, when it names one alongside a
+    digest; both components were written, so both are met locally or
+    realization fails. This is what to fetch, not a bound on what the holder
+    may launch -- a host-root-equivalent holder is not constrained by what
+    APTL staged.
+    """
 
     node_address: str
     authority_id: str
     template_id: str
     image_ref: str
     execution_timeout_seconds: int
-    child_label: str
-    expected_count: int
+    tag_reference: str = ""
 
 
 @dataclass(frozen=True)
 class DeploymentDockerAuthorityAdmission:
-    """Complete trusted decision allowing one management-only holder."""
+    """The endpoint and images APTL realizes for one authority-holding node."""
 
     node_address: str
     service_name: str
@@ -36,7 +43,10 @@ class DeploymentDockerAuthorityAdmission:
     endpoint_target: str
     endpoint_read_write: bool
     spawn_requirements: tuple[DeploymentSpawnImageRequirement, ...]
+    authority_id: str = ""
+    image_template_ids: tuple[str, ...] = ()
     allowed_mount_targets: tuple[str, ...] = ()
+    allowed_networks: tuple[str, ...] = ()
 
 
 def bind_source_exposes_docker_socket(source: object) -> bool:

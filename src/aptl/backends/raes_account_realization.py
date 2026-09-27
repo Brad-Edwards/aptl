@@ -29,6 +29,10 @@ from aptl.backends.raes_realization_values import (
     optional_string as _optional_string,
     placement_spec as _placement_spec,
 )
+from aptl.core.deployment._account_credentials import (
+    DEFAULT_PASSWORD_STRENGTH,
+    REALIZABLE_PASSWORD_STRENGTHS,
+)
 from aptl.core.deployment._account_provider import account_provider_services
 from aptl.core.deployment.realization import DeploymentAccountRealization
 
@@ -50,7 +54,8 @@ def resolve_account_placement(
 
     spec = _placement_spec(payload)
     username = _optional_string(spec, "username") if spec is not None else None
-    reason = _account_placement_rejection(spec, username, target_service)
+    strength = _declared_strength(spec)
+    reason = _account_placement_rejection(spec, username, target_service, strength)
 
     account: DeploymentAccountRealization | None = None
     diagnostics: list[Diagnostic] = []
@@ -68,14 +73,32 @@ def resolve_account_placement(
             # the author omitted `disabled`, so the backend never flips an
             # existing account's enabled state on an unrelated placement.
             disabled=_optional_bool(spec, "disabled"),
+            password_strength=strength,
         )
     return account, diagnostics
+
+
+def _declared_strength(spec: Mapping[str, Any] | None) -> str:
+    """Return the authored credential class, or RAES's own default.
+
+    RAES defaults ``Account.password_strength`` to ``medium``, so an absent key
+    is an authored medium account, not an unrealizable one. A present but
+    unrecognized value is a different matter and is refused below.
+    """
+
+    if spec is None:
+        return ""
+    raw = _optional_string(spec, "password_strength")
+    if raw is None or not raw.strip():
+        return DEFAULT_PASSWORD_STRENGTH
+    return raw.strip().lower()
 
 
 def _account_placement_rejection(
     spec: Mapping[str, Any] | None,
     username: str | None,
     target_service: str | None,
+    strength: str,
 ) -> str | None:
     """Return the first fail-closed rejection reason for an account placement.
 
@@ -89,6 +112,12 @@ def _account_placement_rejection(
         reason = "account-missing-username"
     elif target_service is None or target_service not in _ACCOUNT_PROVISIONER_SERVICES:
         reason = "no-account-provisioner-for-target"
+    elif strength not in REALIZABLE_PASSWORD_STRENGTHS:
+        # An authored credential class this backend cannot realize is refused
+        # here rather than quietly realized as something else. A `weak` account
+        # realized with a random password is a different environment than the
+        # one the scenario declares (issue #1006).
+        reason = "account-password-strength-unrealizable"
     return reason
 
 

@@ -162,6 +162,31 @@ def test_platform_floor_covers_forward_and_guest_host_paths(helper) -> None:
     ) in rendered
 
 
+def test_platform_bootstrap_is_deny_only_before_anchors_exist(helper) -> None:
+    policy = _platform_policy()
+    policy["bootstrap"] = True
+    policy["anchors"] = []
+    policy["crossings"] = []
+    policy["egress_ports"] = []
+
+    rendered = helper.render_ruleset(policy, existing_families=())
+
+    assert "authority=platform" in rendered
+    assert 'iifname "br-mgmt" drop comment' in rendered
+    assert 'oifname "br-mgmt" drop comment' in rendered
+    assert "tcp dport" not in rendered
+    assert "ip saddr" not in rendered
+
+
+def test_platform_bootstrap_refuses_grants_without_observed_anchors(helper) -> None:
+    policy = _platform_policy()
+    policy["bootstrap"] = True
+    policy["anchors"] = []
+
+    with pytest.raises(ValueError, match="bootstrap"):
+        helper.validate_policy(policy)
+
+
 def test_authorities_get_distinct_owned_tables(helper) -> None:
     raes = helper.render_ruleset(_raes_policy(), existing_families=())
     platform = helper.render_ruleset(_platform_policy(), existing_families=())

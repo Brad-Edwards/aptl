@@ -92,7 +92,7 @@ These limits prevent any single container from starving the others and provide p
 
 - **Profile complexity**: Users must understand which profiles provide which capabilities. Enabling `soc` without `wazuh` is meaningless (SOC tools need SIEM data).
 - **Inter-profile dependencies**: Some containers in one profile depend on containers in another. Docker Compose handles this via `depends_on` but only within the active profile set.
-- **Start order constraints**: The Python CLI enforces a 12-step orchestration sequence because `depends_on` alone doesn't handle cross-profile readiness (see [ADR-007](adr-007-python-cli-control-plane.md)).
+- **Start order constraints**: The Python CLI enforces an ordered orchestration sequence because `depends_on` alone doesn't handle cross-profile readiness (see [ADR-007](adr-007-python-cli-control-plane.md)).
 
 ### Risks
 

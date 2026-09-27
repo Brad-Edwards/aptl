@@ -15,6 +15,7 @@ the remote daemon and behave identically to local Docker Compose.
 import hashlib
 import sys
 import time
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -68,7 +69,11 @@ def _backend_exec(
     return ""
 
 
-def _get_software_versions(backend: "DeploymentBackend") -> SoftwareVersions:
+def _get_software_versions(
+    backend: "DeploymentBackend",
+    *,
+    active_services: set[str] | None = None,
+) -> SoftwareVersions:
     """Collect software version information."""
     versions = SoftwareVersions()
 
@@ -79,23 +84,31 @@ def _get_software_versions(backend: "DeploymentBackend") -> SoftwareVersions:
     versions.compose_version = daemon_versions.get("compose", "")
 
     # Wazuh manager version from container
-    wm_out = _backend_exec(
-        backend,
-        "aptl-wazuh-manager",
-        ["/var/ossec/bin/wazuh-control", "info", "-v"],
+    wm_out = (
+        _backend_exec(
+            backend,
+            "aptl-wazuh-manager",
+            ["/var/ossec/bin/wazuh-control", "info", "-v"],
+        )
+        if active_services is None or "wazuh-manager" in active_services
+        else ""
     )
     if wm_out:
         versions.wazuh_manager_version = wm_out.strip().lstrip("v")
 
     # Wazuh indexer version (extract from opensearch jar filename)
-    wi_out = _backend_exec(
-        backend,
-        "aptl-wazuh-indexer",
-        [
-            "bash",
-            "-c",
-            "ls /usr/share/wazuh-indexer/lib/opensearch-[0-9]*.jar 2>/dev/null | head -1",
-        ],
+    wi_out = (
+        _backend_exec(
+            backend,
+            "aptl-wazuh-indexer",
+            [
+                "bash",
+                "-c",
+                "ls /usr/share/wazuh-indexer/lib/opensearch-[0-9]*.jar 2>/dev/null | head -1",
+            ],
+        )
+        if active_services is None or "wazuh-indexer" in active_services
+        else ""
     )
     if wi_out:
         # Extract version from e.g. "opensearch-2.19.1.jar"
@@ -138,9 +151,7 @@ def _parse_health(status: str) -> str:
     return ""
 
 
-def container_networks(
-    backend: "DeploymentBackend", name: str
-) -> dict[str, str]:
+def container_networks(backend: "DeploymentBackend", name: str) -> dict[str, str]:
     """Return a container's ``{network_name: IPv4 address}`` map.
 
     Public because the lab-start SSH readiness step (``lab.py``) needs
@@ -161,7 +172,7 @@ def container_networks(
 
 
 def _row_to_snapshot(
-    backend: "DeploymentBackend", row: dict[str, Any]
+    backend: "DeploymentBackend", row: Mapping[str, Any]
 ) -> ContainerSnapshot:
     """Build a ContainerSnapshot from a backend container row."""
     name = row.get("name", "")
@@ -202,13 +213,12 @@ def container_restart_policy(backend: "DeploymentBackend", name: str) -> str:
 def _get_container_snapshots(
     backend: "DeploymentBackend",
 ) -> list[ContainerSnapshot]:
-    """Snapshot all aptl- containers with network IPs and port mappings.
+    """Snapshot all project-owned containers with network IPs and ports.
 
     Goes through ``backend.host_list_lab_containers`` (and per-container
     ``backend.container_inspect``) so SSH-remote labs enumerate the
-    remote daemon. The backend filters by the ``aptl-`` name prefix to
-    catch any containers the user named that way even if they're outside
-    the current compose project — defensive coverage.
+    remote daemon. The backend uses the configured project ownership labels,
+    includes all states, and never treats a name prefix as authority.
     """
     rows = backend.host_list_lab_containers()
     return [_row_to_snapshot(backend, row) for row in rows]
@@ -217,7 +227,7 @@ def _get_container_snapshots(
 def list_container_snapshots(
     backend: "DeploymentBackend",
 ) -> list[ContainerSnapshot]:
-    """Public wrapper: snapshot all ``aptl-`` containers with network IPs.
+    """Public wrapper: snapshot project-owned containers with network IPs.
 
     Consumers that need the per-container network/port inventory without
     building a full :class:`RangeSnapshot` (e.g. the terminal relay's
@@ -229,9 +239,13 @@ def list_container_snapshots(
 
 def _get_wazuh_rules_snapshot(
     backend: "DeploymentBackend",
+    *,
+    enabled: bool = True,
 ) -> WazuhRulesSnapshot:
     """Snapshot Wazuh rule/decoder counts."""
     snap = WazuhRulesSnapshot()
+    if not enabled:
+        return snap
     manager = "aptl-wazuh-manager"
 
     def _count(query: str) -> int | None:
@@ -304,12 +318,14 @@ def _get_network_snapshots(
     snapshots: list[NetworkSnapshot] = []
     for net_name in backend.host_list_lab_networks("aptl"):
         info = backend.host_inspect_network(net_name)
-        snapshots.append(NetworkSnapshot(
-            name=net_name,
-            subnet=info.get("subnet", ""),
-            gateway=info.get("gateway", ""),
-            containers=info.get("containers", []),
-        ))
+        snapshots.append(
+            NetworkSnapshot(
+                name=net_name,
+                subnet=info.get("subnet", ""),
+                gateway=info.get("gateway", ""),
+                containers=info.get("containers", []),
+            )
+        )
     return snapshots
 
 
@@ -384,6 +400,8 @@ def detection_content_digest(project_dir: Path) -> str:
 def capture_snapshot(
     config_dir: Path | None,
     backend: "DeploymentBackend",
+    *,
+    container_rows: Sequence[Mapping[str, Any]] | None = None,
 ) -> RangeSnapshot:
     """Capture a complete snapshot of the current lab state.
 
@@ -399,6 +417,10 @@ def capture_snapshot(
                  deliberately no default; a misconfigured caller must
                  fail loudly rather than silently snapshot the local
                  daemon for an SSH-remote lab.
+        container_rows: Optional checked project inventory captured by the
+                        caller. Supplying it binds the persisted container
+                        evidence to that exact observation instead of querying
+                        the backend a second time.
 
     Returns:
         A RangeSnapshot with all collected data.
@@ -412,12 +434,27 @@ def capture_snapshot(
 
     log.info("Capturing range snapshot")
 
-    containers = _get_container_snapshots(backend)
+    containers = (
+        _get_container_snapshots(backend)
+        if container_rows is None
+        else [_row_to_snapshot(backend, row) for row in container_rows]
+    )
+    active_services = {
+        service
+        for container in containers
+        if (service := container.labels.get("com.docker.compose.service", ""))
+    }
     snapshot = RangeSnapshot(
         timestamp=datetime.now(timezone.utc).isoformat(),
-        software=_get_software_versions(backend),
+        software=_get_software_versions(
+            backend,
+            active_services=active_services,
+        ),
         containers=containers,
-        wazuh_rules=_get_wazuh_rules_snapshot(backend),
+        wazuh_rules=_get_wazuh_rules_snapshot(
+            backend,
+            enabled="wazuh-manager" in active_services,
+        ),
         networks=_get_network_snapshots(backend),
         config_hashes=_hash_config_files(config_dir),
         services=build_service_endpoints(containers),

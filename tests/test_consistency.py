@@ -3,6 +3,7 @@
 These tests validate that docker-compose.yml, aptl.json, scripts, and code
 references are internally consistent. No running Docker environment needed.
 """
+
 import json
 import re
 from pathlib import Path
@@ -95,29 +96,27 @@ class TestComposeConsistency:
                 else:
                     seen[key] = service_name
 
-        assert not dupes, (
-            "Duplicate static ipv4_address assignments:\n"
-            + "\n".join(
-                f"  {network}: {ip} used by {first} and {second}"
-                for network, ip, first, second in dupes
-            )
+        assert not dupes, "Duplicate static ipv4_address assignments:\n" + "\n".join(
+            f"  {network}: {ip} used by {first} and {second}"
+            for network, ip, first, second in dupes
         )
 
-    def test_misp_suricata_rules_mount_named_volume(self, compose_config, techvault_sdl):
+    def test_misp_suricata_rules_mount_named_volume(
+        self, compose_config, techvault_sdl
+    ):
         """ADR-043: MISP rules ride a shared named volume, never a host bind.
 
         Nothing checked-in or under ``.aptl/`` may be bind-mounted onto a
         path the Suricata image entrypoint chowns (that rewrote host-side
         ownership, issue #325). ``suricata`` (still Compose-managed) and
         ``misp-suricata-sync`` (realized generically from the SDL, issue
-        #581, via ``runtime.mounts`` — never a Compose volume mount) share
-        the ``suricata_misp_rules`` named volume instead. The env-var side
+        #581, via a declared persistent-volume consumer — never a Compose
+        volume mount) share the ``suricata_misp_rules`` named volume instead. The env-var side
         of misp-suricata-sync's config (RULES_OUT_PATH, MISP_API_KEY, ...)
         is a separate, not-yet-built secrets-injection concern for
         image-free nodes (tracked alongside #809) and is not asserted here.
         """
         from raes import parse_sdl_file
-        from raes.runtime_mounts import RuntimeMountSourceKind
 
         services = compose_config["services"]
         suricata_volumes = services["suricata"]["volumes"]
@@ -137,14 +136,21 @@ class TestComposeConsistency:
         assert "suricata_config_seed" in top_level
 
         scenario = parse_sdl_file(techvault_sdl)
-        sync_node = scenario.nodes["misp-suricata-sync"]
-        volume_mounts = {
-            mount.source: mount.target
-            for mount in sync_node.runtime.mounts
-            if mount.source_kind == RuntimeMountSourceKind.VOLUME
+        consumers = {
+            volume_name: {
+                (consumer.node, consumer.mount_destination, consumer.access_mode.value)
+                for consumer in scenario.persistent_volumes[volume_name].consumers
+            }
+            for volume_name in ("suricata_misp_rules", "suricata_command_socket")
         }
-        assert volume_mounts.get("suricata_misp_rules") == "/var/lib/suricata/rules/misp"
-        assert volume_mounts.get("suricata_command_socket") == "/var/run/suricata"
+        assert consumers["suricata_misp_rules"] == {
+            ("suricata", "/var/lib/suricata/rules/misp", "read_only"),
+            ("misp-suricata-sync", "/var/lib/suricata/rules/misp", "read_write"),
+        }
+        assert consumers["suricata_command_socket"] == {
+            ("suricata", "/var/run/suricata", "read_write"),
+            ("misp-suricata-sync", "/var/run/suricata", "read_write"),
+        }
 
     def test_suricata_config_seeded_not_bind_mounted(self, compose_config):
         """ADR-043: suricata.yaml / local.rules are seeded via a named volume
@@ -154,19 +160,34 @@ class TestComposeConsistency:
         volumes = suricata["volumes"]
 
         assert "suricata_config_seed:/seed:ro" in volumes
-        assert not any(
-            volume.startswith("./config/suricata/") for volume in volumes
-        )
+        assert not any(volume.startswith("./config/suricata/") for volume in volumes)
         # Wrapper entrypoint stages the seed into image-owned /etc/suricata
         # then delegates to the upstream entrypoint.
         entrypoint = "\n".join(suricata["entrypoint"])
         assert "/seed/suricata.yaml" in entrypoint
         assert "exec /docker-entrypoint.sh" in entrypoint
 
-    def test_otel_collector_healthcheck_uses_image_binary(self, compose_config):
+    def test_legacy_suricata_config_disables_container_checksum_validation(self):
+        """The in-tree legacy scenario keeps its live-capture checksum policy."""
+
+        config = yaml.safe_load(
+            (PROJECT_ROOT / "config/suricata/suricata.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        assert config["pcap"] == [{"interface": "any", "checksum-checks": False}]
+
+        seed = (PROJECT_ROOT / "scripts/seed-prime.sh").read_text(encoding="utf-8")
+        assert "envpack-suricata-fixups" not in seed
+
+    def test_otel_collector_healthcheck_uses_image_binary(self):
         """The OTEL collector image is distroless, so the healthcheck cannot
         depend on shell utilities such as wget or curl."""
-        collector = compose_config["services"]["aptl-otel-collector"]
+        apparatus = yaml.safe_load(
+            (PROJECT_ROOT / "docker-compose.observability.yml").read_text()
+        )
+        collector = apparatus["services"]["aptl-otel-collector"]
         test = collector.get("healthcheck", {}).get("test")
 
         assert test == [
@@ -177,9 +198,7 @@ class TestComposeConsistency:
             "/etc/otelcol-contrib/config.yaml",
         ]
 
-    def test_thehive_elasticsearch_stays_writable_on_full_host(
-        self, compose_config
-    ):
+    def test_thehive_elasticsearch_stays_writable_on_full_host(self, compose_config):
         """Fresh TheHive and Cortex bootstrap must not depend on host usage.
 
         Elasticsearch's percentage flood-stage can reject the first Cortex
@@ -189,14 +208,9 @@ class TestComposeConsistency:
         """
         environment = compose_config["services"]["thehive-es"]["environment"]
 
-        assert (
-            "cluster.routing.allocation.disk.threshold_enabled=false"
-            in environment
-        )
+        assert "cluster.routing.allocation.disk.threshold_enabled=false" in environment
 
-    def test_shuffle_opensearch_stays_writable_on_full_host(
-        self, compose_config
-    ):
+    def test_shuffle_opensearch_stays_writable_on_full_host(self, compose_config):
         """Shuffle's lab datastore must not use host percentage watermarks.
 
         A container can share a large, mostly-full host filesystem and still
@@ -204,23 +218,16 @@ class TestComposeConsistency:
         watermark then makes indices read-only while its healthcheck remains
         green, so the first-load Shuffle workflow silently fails to seed.
         """
-        environment = compose_config["services"]["shuffle-opensearch"][
-            "environment"
-        ]
+        environment = compose_config["services"]["shuffle-opensearch"]["environment"]
 
-        assert (
-            "cluster.routing.allocation.disk.threshold_enabled=false"
-            in environment
-        )
+        assert "cluster.routing.allocation.disk.threshold_enabled=false" in environment
 
     def test_web_api_token_does_not_block_inactive_profiles(self, compose_config):
         """Compose expands environment substitutions for inactive profiles, so
         the optional web token must be validated by the web runtime instead of
         by `${VAR:?}` interpolation in docker-compose.yml."""
         api_env = compose_config["services"]["aptl-web-api"]["environment"]
-        token_lines = [
-            line for line in api_env if line.startswith("APTL_API_TOKEN=")
-        ]
+        token_lines = [line for line in api_env if line.startswith("APTL_API_TOKEN=")]
 
         assert token_lines == ["APTL_API_TOKEN=${APTL_API_TOKEN:-}"]
         assert not any(":?" in line for line in token_lines)
@@ -231,9 +238,9 @@ class TestComposeConsistency:
         receive APTL_API_TOKEN — it holds no secret and enforces no auth."""
         ui = compose_config["services"]["aptl-web-ui"]
         env_lines = ui.get("environment", []) or []
-        assert not any(
-            "APTL_API_TOKEN" in line for line in env_lines
-        ), "aptl-web-ui must not carry the control-plane token (UI-008a)"
+        assert not any("APTL_API_TOKEN" in line for line in env_lines), (
+            "aptl-web-ui must not carry the control-plane token (UI-008a)"
+        )
 
 
 class TestKaliContainerLifecycle:
@@ -269,63 +276,36 @@ class TestKaliContainerLifecycle:
             "the non-service base image, which has no PID-1 reaper."
         )
 
-    def test_kali_capture_wiring_is_verified_not_a_bare_port_probe(self, techvault_sdl):
-        """kali's readiness must reflect the usable surface — sshd AND the
-        OBS-003 ForceCommand capture wrapper — not merely an open port
-        (ADR-033 §2). The generic materializer's read-after-write
-        verification of these two service units (fail-closed: a lab start
-        does not report ready if either is not observed active) replaces
-        the old aptl-healthcheck.sh script."""
+    def test_kali_scenario_owns_only_native_sshd(self, techvault_sdl):
+        """Kali declares sshd; capture is admitted backend apparatus.
+
+        The scenario must not claim the backend-owned OBS-003 capture broker as
+        a guest service.  Apparatus construction, activation, and disclosure
+        are verified separately by ``test_capture_apparatus.py``.
+        """
         kali = self._kali_node(techvault_sdl)
-        unit_names = {
-            unit.unit_name for unit in kali.runtime.service_manager_units
-        }
+        unit_names = {unit.unit_name for unit in kali.runtime.service_manager_units}
         assert "ssh.service" in unit_names, "kali must run and verify sshd"
-        assert "kali-capture-bootstrap.service" in unit_names, (
-            "kali must run and verify the unit that wires the OBS-003 "
-            "ForceCommand capture wrapper — sshd alone is exactly the bare "
-            "port-22 probe this test exists to reject"
-        )
+        assert "kali-capture-bootstrap.service" not in unit_names
 
-    def test_kali_loopback_ssh_proxy_matches_mcp_red(self, compose_config):
-        """mcp-red must use a host-routable Kali SSH endpoint.
+    def test_kali_has_no_scenario_declared_host_proxy(self, compose_config):
+        """Kali's host-routable endpoint is backend apparatus, not a scenario node.
 
-        Docker VM backends do not route Compose bridge IPs back to the host,
-        so the SSH-based MCP server needs the loopback-only proxy published
-        by docker-compose.yml.
+        The old `kali-ssh-proxy` service published 127.0.0.1:2023 for host-run
+        MCP clients. TechVault declares no such node, nothing started it, and it
+        has been removed (issue #1006). Operator access is declared as
+        `agents.red-team-operator.interactive_access` and is the backend's to
+        provide and disclose; this test pins only that the scenario does not
+        reintroduce a proxy node of its own.
         """
         services = compose_config["services"]
+        assert "kali-ssh-proxy" not in services
+        assert "webapp-proxy" not in services
         kali = services["kali"]
         assert "aptl-control" not in kali.get("networks", {}), (
-            "kali must not attach to aptl-control; only the SSH proxy should "
-            "publish a host-routable control endpoint"
+            "kali must not attach to aptl-control; host-routable operator "
+            "access is published by backend apparatus, not by the node"
         )
-
-        proxy = services["kali-ssh-proxy"]
-        assert proxy["container_name"] == "aptl-kali-ssh-proxy"
-        resolved_ports = [
-            _resolve_compose_vars(str(p)) for p in proxy.get("ports", [])
-        ]
-        assert "127.0.0.1:2023:2023" in resolved_ports, (
-            "kali-ssh-proxy must publish 127.0.0.1:2023 by default so host-run "
-            "MCP clients work on Docker Desktop, Colima, and WSL2"
-        )
-        assert set(proxy.get("networks", {})) == {
-            "aptl-control",
-            "aptl-redteam",
-        }, (
-            "kali-ssh-proxy should bridge only the host-published control "
-            "network and Kali's red-team network"
-        )
-
-        mcp_config = json.loads(
-            (PROJECT_ROOT / "mcp/mcp-red/docker-lab-config.json").read_text(
-                encoding="utf-8"
-            )
-        )
-        kali_mcp = mcp_config["containers"]["kali"]
-        assert kali_mcp["container_ip"] == "localhost"
-        assert kali_mcp["ssh_port"] == 2023
 
 
 class TestCodeReferencesMatchCompose:
@@ -351,9 +331,7 @@ class TestCodeReferencesMatchCompose:
                 for match in pattern.finditer(text):
                     ref = match.group(1)
                     if ref not in valid_names:
-                        bad_refs.append(
-                            (str(fpath.relative_to(PROJECT_ROOT)), ref)
-                        )
+                        bad_refs.append((str(fpath.relative_to(PROJECT_ROOT)), ref))
 
         assert not bad_refs, (
             "docker exec references to non-existent container names:\n"

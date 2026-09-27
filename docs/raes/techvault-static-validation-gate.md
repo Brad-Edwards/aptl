@@ -17,7 +17,7 @@ editing the gate. TechVault is the proving input, never a hardcoded branch.
 `GateReport`. Each stage is one `GateCheck`:
 
 1. **Parse.** The RAES reference parser (`raes.parse_sdl_file`) accepts
-   `scenarios/techvault-operational.sdl.yaml`.
+   the SDL resolved from the validated acquired `techvault` bundle.
 2. **Import lock** (when the scenario declares imports and `check_imports` is
    enabled). `raes sdl verify-imports` verifies the committed
    `raes.lock.json` next to the scenario against a fresh resolution. The

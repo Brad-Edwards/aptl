@@ -13,11 +13,11 @@ commands and agent prompts for every hands-on step.
 
 ## Before you start
 
-For an appliance release produced by issue #823, staging and qualification
-happen before delivery. Students use only its participant surface. For a
-developer preview, complete the prerequisites in the
+The guided profile is a checkout-only research fixture, distinct from the
+canonical full TechVault participant appliance (ADR-059). For this developer
+and facilitator preview, complete the staging prerequisites in the
 [Lab Walkthrough](walkthrough.md), start the `techvault-attacker-target`
-scenario with the profile config, confirm health, and register exactly the
+fixture through `--scenario-path` with the profile config, confirm health, and register exactly the
 three profile MCP servers. Facilitators can use management access for support,
 but management commands are not part of participant acceptance.
 

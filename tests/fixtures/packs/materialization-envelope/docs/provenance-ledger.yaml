@@ -1,0 +1,45 @@
+schema_version: "environment-pack-provenance/v3"
+pack:
+  name: materialization-envelope
+sources:
+  - source_id: aptl-test-fixture
+    name: APTL lab-machinery test fixture
+    license: MIT
+    usage: generated-from
+    attribution_required: false
+    used: All pack content, authored in the APTL repository for its test suite.
+    url: https://github.com/Brad-Edwards/aptl
+artifacts:
+  - artifact_id: scenario
+    path: sdl/
+    classification: open
+    sources: [aptl-test-fixture]
+    description: Product-neutral materialization scenario.
+  - artifact_id: content
+    path: assets/
+    classification: open
+    sources: [aptl-test-fixture]
+    description: Synthetic file and archive content for pack-content tests.
+  - artifact_id: documentation
+    path: docs/
+    classification: open
+    sources: [aptl-test-fixture]
+    description: Pack provenance.
+content_safety:
+  no_real_malware: true
+  no_real_third_party_targets: true
+  no_real_credentials: true
+  no_sensitive_data: true
+  offensive_tooling_boundary: true
+  notes: Synthetic, non-secret test content only.
+review:
+  status: approved
+  gates:
+    - gate_id: licensing
+      status: approved
+    - gate_id: attribution
+      status: approved
+    - gate_id: sensitive-data
+      status: approved
+    - gate_id: offensive-tooling
+      status: approved

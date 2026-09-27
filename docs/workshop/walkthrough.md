@@ -5,8 +5,9 @@ the `guided-purple` version 1 participant path. Bracketed numbers point back
 to the matching playbook section.
 
 The shell commands below are a developer and facilitator preview of the inner
-APTL profile. Issue #823 embeds this same profile in the signed participant
-appliance; these commands are not outer-appliance qualification evidence.
+APTL research profile. ADR-059 distinguishes this checkout-only fixture from
+the full TechVault participant appliance; these commands are not appliance
+qualification evidence.
 
 Two ways drive the attack and investigate steps:
 
@@ -23,7 +24,7 @@ and staged dependencies. It requires the hardware fixture named in the
 16 GiB of memory, and 100 GiB of disk.
 
 For the developer preview only, you need Docker, Python 3.11 or newer, `pipx`,
-Node.js 18 or newer for the MCP servers, and an MCP-capable agent.
+Node.js 20 or newer for the MCP servers, and an MCP-capable agent.
 
 On native Linux Docker Engine only, raise the memory-map limit that OpenSearch
 needs:
@@ -52,18 +53,19 @@ docker buildx version
 
 ## 1. Install and stand up the range [2]
 
-```bash
-pipx install aptl-labs
-aptl --version
-aptl lab init workshop && cd workshop
-```
-
-For a source-tree preview, copy the profile config into the initialized
-project and select its referenced catalog scenario:
+Use an APTL installation built from the same revision as your source checkout.
+The wheel does not deliver the guided profile or research SDL. Stage those
+explicit inputs from that checkout:
 
 ```bash
-cp participant-profiles/guided-purple-v1/aptl.json aptl.json
-aptl lab start --scenario techvault-attacker-target --yes
+APTL_SOURCE=/absolute/path/to/aptl-checkout
+aptl lab init workshop
+cp -R "$APTL_SOURCE/scenarios" workshop/scenarios
+mkdir -p workshop/participant-profiles
+cp -R "$APTL_SOURCE/participant-profiles/guided-purple-v1" workshop/participant-profiles/
+cp workshop/participant-profiles/guided-purple-v1/aptl.json workshop/aptl.json
+cd workshop
+aptl lab start --scenario-path scenarios/techvault-attacker-target.sdl.yaml --yes
 ```
 
 A developer start may build or pull missing assets. The participant appliance
@@ -186,10 +188,12 @@ Expect rule 5710 (`sshd`: non-existent user) from Kali's internal address.
 Path B (direct):
 
 ```bash
-IP=$(grep -m1 '^INDEXER_PASSWORD=' .env | cut -d= -f2-)
-docker exec aptl-wazuh-indexer curl -sk -u "admin:$IP" \
+source scripts/aptl-env.sh
+aptl_load_env_key .env INDEXER_PASSWORD
+aptl_curl_config -sk -u "admin:$INDEXER_PASSWORD" \
   "https://localhost:9200/wazuh-alerts-*/_search" -H 'Content-Type: application/json' \
   -d '{"size":20,"query":{"query_string":{"query":"rule.id:5710"}}}' \
+  | docker exec -i aptl-wazuh-indexer curl --config - \
   | python3 -c 'import sys,json;d=json.load(sys.stdin);print("alerts:",d["hits"]["total"]["value"]);[print(" ",x["_source"]["rule"]["id"],x["_source"]["rule"]["description"]) for x in d["hits"]["hits"][:6]]'
 ```
 

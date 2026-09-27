@@ -13,7 +13,8 @@ stays at the repository root because the Sonar scanner reads it from there.
 
 The CI `SonarCloud quality gate` job runs the scanner with
 `-Dsonar.qualitygate.wait=true`, then runs `tools/sonar/assert_no_new_issues.py`.
-The script uses `SONAR_TOKEN` only for SonarCloud API authentication, derives
-the pull request number from the GitHub event payload, and prints only issue
+The script uses `SONAR_TOKEN` only for SonarCloud API authentication, passes
+the required organization key for organization-scoped tokens, derives the pull
+request number from the GitHub event payload, and prints only issue
 metadata when it fails. This keeps the repo-side merge gate stricter than a
 SonarCloud project gate that may still allow non-blocking code smells.

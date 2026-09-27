@@ -738,4 +738,4 @@ jobs:
         if: github.ref_type != 'tag'
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: python3 tools/sonar/assert_no_new_issues.py --project-key Brad-Edwards_aptl
+        run: python3 tools/sonar/assert_no_new_issues.py --project-key Brad-Edwards_aptl --organization brad-edwards

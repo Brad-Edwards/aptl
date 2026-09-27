@@ -79,15 +79,16 @@ def execution_boundary_disclosure(
 
 
 def _boundary_admission_failed(backend: BoundaryProbeBackend) -> bool:
+    """Reject changed daemons and required seats with unreadable identities."""
+
     observed = revalidate_execution_boundary(backend)
     required_seat = isinstance(getattr(backend, "_appliance_boundary", None), tuple)
-    return (
-        observed.observation_status == "mismatch"
-        and has_bound_daemon_identity(backend)
-    ) or (
-        required_seat
-        and (not has_bound_daemon_identity(backend) or observed.host_containment == "unknown")
-    )
+    bound_identity = has_bound_daemon_identity(backend)
+    if observed.observation_status == "mismatch" and bound_identity:
+        return True
+    if required_seat:
+        return not bound_identity or observed.host_containment == "unknown"
+    return False
 
 
 class ProvisionerStartMixin(object):

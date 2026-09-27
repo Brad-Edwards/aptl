@@ -327,6 +327,54 @@ def _emit_host_port_remaps(resolved_ports: list[ResolvedPort]) -> None:
         )
 
 
+def _emit_dashboard_access(
+    port: int | None,
+    remote: bool,
+    caller_reported_no_ports: bool,
+    live_ports: list[ResolvedPort],
+    active_services: set[str],
+) -> None:
+    """Print the dashboard address only when a published port is supported."""
+
+    if _published_access_port(port, caller_reported_no_ports, live_ports, active_services):
+        if remote:
+            typer.echo(f"  Wazuh Dashboard: remote Docker host port {port} (HTTPS)")
+        else:
+            typer.echo(f"  Wazuh Dashboard: https://localhost:{port}")
+        typer.echo("    scenario credentials (not an APTL control-plane login):")
+        typer.echo("    username: see INDEXER_USERNAME in .env")
+        typer.echo("    password: see INDEXER_PASSWORD in .env")
+
+
+def _emit_grafana_access(
+    port: int | None,
+    remote: bool,
+    caller_reported_no_ports: bool,
+    live_ports: list[ResolvedPort],
+    active_services: set[str],
+) -> None:
+    """Print Grafana access only when the selected host publishes its port."""
+
+    if _published_access_port(port, caller_reported_no_ports, live_ports, active_services):
+        if remote:
+            typer.echo(f"  Grafana: remote Docker host port {port} (HTTP)")
+        else:
+            typer.echo(f"  Grafana: http://localhost:{port}")
+        typer.echo("    username: admin")
+        typer.echo("    password: see GRAFANA_ADMIN_PASSWORD in .env")
+
+
+def _emit_reverse_access(port: int | None, remote: bool, active_services: set[str]) -> None:
+    """Print the reverse-engineering SSH endpoint when the service is live."""
+
+    if _REVERSE_SVC in active_services and port is not None:
+        typer.echo("  Reverse engineering SSH:")
+        if remote:
+            typer.echo(f"    remote Docker host port {port} (SSH)")
+        else:
+            typer.echo(f"    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p {port}")
+
+
 def emit_lab_access_summary(
     project_dir: Path,
     resolved_ports: list[ResolvedPort] | None = None,
@@ -374,33 +422,13 @@ def emit_lab_access_summary(
             "  Published host ports are unverified; access locations below "
             "may be planned or default guesses."
         )
-    if _published_access_port(
-        dashboard_port, caller_reported_no_ports, live_ports, active_services
-    ):
-        if remote:
-            typer.echo(f"  Wazuh Dashboard: remote Docker host port {dashboard_port} (HTTPS)")
-        else:
-            typer.echo(f"  Wazuh Dashboard: https://localhost:{dashboard_port}")
-        typer.echo("    scenario credentials (not an APTL control-plane login):")
-        typer.echo("    username: see INDEXER_USERNAME in .env")
-        typer.echo("    password: see INDEXER_PASSWORD in .env")
-    if _published_access_port(
-        grafana_port, caller_reported_no_ports, live_ports, active_services
-    ):
-        if remote:
-            typer.echo(f"  Grafana: remote Docker host port {grafana_port} (HTTP)")
-        else:
-            typer.echo(f"  Grafana: http://localhost:{grafana_port}")
-        typer.echo("    username: admin")
-        typer.echo("    password: see GRAFANA_ADMIN_PASSWORD in .env")
-    if _REVERSE_SVC in active_services and reverse_port is not None:
-        typer.echo("  Reverse engineering SSH:")
-        if remote:
-            typer.echo(f"    remote Docker host port {reverse_port} (SSH)")
-        else:
-            typer.echo(
-                f"    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p {reverse_port}"
-            )
+    _emit_dashboard_access(
+        dashboard_port, remote, caller_reported_no_ports, live_ports, active_services
+    )
+    _emit_grafana_access(
+        grafana_port, remote, caller_reported_no_ports, live_ports, active_services
+    )
+    _emit_reverse_access(reverse_port, remote, active_services)
     _emit_host_port_remaps(resolved_ports)
 
 

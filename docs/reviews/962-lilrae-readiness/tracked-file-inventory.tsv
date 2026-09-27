@@ -1838,3 +1838,6 @@ src/aptl/backends/_raes_participant_snapshot.py	core-candidate	Keep governed par
 src/aptl/backends/_raes_participant_transport.py	core-candidate	Keep generic authenticated host transport and role scoped MCP rendering with RAES integration
 src/aptl/core/deployment/_compose_image_free_network_reconciliation.py	backend-substrate	Retain declared image-free network reconciliation with Compose realization
 src/aptl_techvault/study_capture_registrations.py	scenario-integration	Keep participant study capture declarations with the TechVault scenario adapter
+docs/architecture/issue-958-execution-boundary-preflight.md	architecture-history	Preserve issue 958 execution-boundary ownership decisions and guardrails
+src/aptl/core/execution_boundary.py	core-candidate	Keep selected-daemon observation and disclosure with the lab lifecycle owner
+tests/test_execution_boundary.py	tests-follow-owner	Retain selected-daemon boundary regression coverage with the lab lifecycle owner

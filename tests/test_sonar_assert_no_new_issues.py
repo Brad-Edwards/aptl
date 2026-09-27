@@ -6,6 +6,7 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -21,14 +22,18 @@ _SPEC.loader.exec_module(gate)
 
 
 def test_resolve_scope_from_pull_request_arg() -> None:
-    scope = gate.resolve_scope(gate.parse_args(["--project-key", "proj", "--pull-request", "42"]))
+    scope = gate.resolve_scope(
+        gate.parse_args(["--project-key", "proj", "--organization", "org", "--pull-request", "42"])
+    )
     assert scope.query_key == "pullRequest"
     assert scope.query_value == "42"
     assert scope.label == "PR 42"
 
 
 def test_resolve_scope_from_branch_arg() -> None:
-    scope = gate.resolve_scope(gate.parse_args(["--project-key", "proj", "--branch", "dev"]))
+    scope = gate.resolve_scope(
+        gate.parse_args(["--project-key", "proj", "--organization", "org", "--branch", "dev"])
+    )
     assert scope.query_key == "branch"
     assert scope.query_value == "dev"
 
@@ -37,9 +42,18 @@ def test_resolve_scope_from_github_event(tmp_path: Path, monkeypatch: pytest.Mon
     event_path = tmp_path / "event.json"
     event_path.write_text(json.dumps({"pull_request": {"number": 99}}), encoding="utf-8")
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(event_path))
-    scope = gate.resolve_scope(gate.parse_args(["--project-key", "proj"]))
+    scope = gate.resolve_scope(gate.parse_args(["--project-key", "proj", "--organization", "org"]))
     assert scope.query_key == "pullRequest"
     assert scope.query_value == "99"
+
+
+def test_build_request_url_includes_organization_for_scoped_token() -> None:
+    url = gate.build_request_url("proj", "org", gate.AnalysisScope("pullRequest", "42"), 1)
+    query = parse_qs(urlsplit(url).query)
+    assert query["componentKeys"] == ["proj"]
+    assert query["organization"] == ["org"]
+    assert query["pullRequest"] == ["42"]
+    assert query["issueStatuses"] == ["OPEN,CONFIRMED"]
 
 
 def test_render_issue_includes_rule_and_location() -> None:

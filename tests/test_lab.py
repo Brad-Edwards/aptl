@@ -558,6 +558,35 @@ class TestCleanBootLab:
         assert result.outcome is StartupOutcome.READY
         assert order == ["stop", "start"]
 
+    def test_required_seat_failure_preserves_existing_range(
+        self, monkeypatch, tmp_path
+    ):
+        """An unsupported required boundary fails before destructive cleanup."""
+        from aptl.core import lab
+        from aptl.core.lab import ApplianceStartOptions, clean_boot_lab
+
+        stopped = []
+        started = []
+        monkeypatch.setattr(lab, "stop_lab", lambda **kwargs: stopped.append(kwargs))
+        monkeypatch.setattr(
+            lab,
+            "orchestrate_lab_start",
+            lambda *args, **kwargs: started.append((args, kwargs)),
+        )
+
+        result = clean_boot_lab(
+            tmp_path,
+            appliance=ApplianceStartOptions(
+                offline_staged=True,
+                launch_descriptor=tmp_path / "missing-appliance-launch.json",
+            ),
+        )
+
+        assert result.success is False
+        assert "appliance" in result.error.lower()
+        assert stopped == []
+        assert started == []
+
     def test_clean_boot_stop_failure_is_fatal_and_skips_start(
         self, monkeypatch, tmp_path
     ):

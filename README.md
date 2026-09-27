@@ -22,9 +22,19 @@ dedicated, rebuildable host, keep unrelated credentials and workloads
 elsewhere, control the surrounding network, and operate only on systems you are
 authorized to test.
 
+Ordinary `aptl lab start` uses the selected Docker daemon. On native Linux that
+can give the lab and its control components authority over the physical host's
+Docker engine; Docker Desktop or another Docker VM changes that placement but
+is not, by its name alone, a qualified containment boundary. `aptl lab start`
+and `aptl lab info` report the observed transport and boundary, or `unknown`
+when they cannot establish one. See [tested profiles, host exposure and
+limits](docs/getting-started/prerequisites.md#tested-execution-profiles-and-limits).
+
 For stronger host and cross-seat isolation on Linux/KVM, use a disposable
 [`aptl seat`](docs/reference/appliance-seat-launcher.md). A VM boundary reduces
-risk but does not eliminate it; keep the host kernel and hypervisor current.
+risk but does not eliminate it; keep the host kernel and hypervisor current. A
+seat needs KVM, QEMU, OVMF, adequate per-seat resources and a verified image;
+it does not make the workloads inside its guest mutually isolated.
 
 ## Quick Start
 
@@ -40,7 +50,8 @@ aptl lab start --scenario techvault
 
 Startup validates the selected scenario, creates private project state,
 realizes the topology, waits for required readiness checks, and reports a
-structured outcome. Inspect the runtime-derived state and access information:
+structured outcome with the observed execution boundary. Inspect the fresh
+runtime-derived state, boundary and access information:
 
 ```shell
 aptl lab status

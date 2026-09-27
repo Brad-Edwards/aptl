@@ -4,6 +4,25 @@
 
 accepted
 
+## Current scope clarification
+
+**As of 2026-09-26:** Ordinary `aptl lab start` is a
+supported local operator path that uses the selected Docker daemon; it does not
+create or attest a disposable seat. The optional `aptl seat` path supplies a
+separate VM boundary when its exact image, host, and runtime profile passes
+qualification. [ADR-060](adr-060-vm-only-seat-containment.md) supersedes this
+ADR's internal-zone enforcement claims for the current seat: workloads inside
+that VM share the guest boundary. The topology and milestone controls below
+describe the broader participant architecture, not properties inferred from a
+Docker or VM label or promised by an ordinary local start. Scenario-visible
+node/VM/container requirements remain RAES admission and realization concerns.
+The current seat requires Linux/KVM, QEMU, OVMF, reserved CPU/RAM/disk and a
+verified signed image; [one-host acceptance](../reviews/1162-seat-acceptance.md)
+does not qualify every host or runtime version. Ordinary local use exposes the
+selected Docker daemon to its control plane and may publish scenario ports and
+mount project files. [Execution-profile limits](../getting-started/prerequisites.md#tested-execution-profiles-and-limits)
+record the exact tested versions and unsupported claims.
+
 ## Date
 
 2026-07-25
@@ -57,10 +76,10 @@ artifact-integrity, and operator-recovery properties are demonstrated to be at
 least equivalent; a container, namespace, Docker daemon, user account, or
 shared multi-seat host process is not equivalent.
 
-Trusted developer-local execution may remain available as an explicitly
-developer-only mode. It is not the workshop, classroom, research-participant,
-or hosted product shape and must not be used as evidence that the participant
-boundary is safe.
+Ordinary local execution remains available to trusted operators using their
+selected Docker daemon. Its host exposure and limits must be reported from
+observed runtime facts. A successful local lab start is not evidence that the
+optional seat's host or cross-seat containment contract passed.
 
 ### Topology
 

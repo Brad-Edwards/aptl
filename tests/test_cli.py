@@ -228,7 +228,102 @@ class TestLabStartCommand:
         result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
 
         assert result.exit_code == 1
+        assert "Execution boundary: unknown" in result.stdout
         assert "run `aptl lab start` first" in result.stderr
+
+    def test_lab_start_reports_the_attempt_boundary(self, runner, mocker):
+        """The start summary carries the selected attempt's observed facts."""
+        from aptl.cli.main import app
+        from aptl.core.execution_boundary import ExecutionBoundaryObservation
+        from aptl.core.lab import LabResult
+
+        boundary = ExecutionBoundaryObservation(
+            transport="remote-ssh",
+            override_source="docker-host",
+            daemon_runtime="unknown",
+            host_containment="remote-unverified",
+            observation_status="partial",
+            host_os="linux",
+        )
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(success=False, error="admission failed", execution_boundary=boundary),
+        )
+        result = runner.invoke(app, ["lab", "start"])
+
+        assert result.exit_code == 1
+        assert "Execution boundary: remote-unverified" in result.stdout
+        assert "transport=remote-ssh" in result.stdout
+        assert "override=docker-host" in result.stdout
+
+    def test_lab_info_reobserves_even_when_credentials_are_absent(
+        self, runner, tmp_path, mocker
+    ):
+        """A missing .env cannot hide a changed or unreadable Docker boundary."""
+        from aptl.cli.main import app
+        from aptl.core.execution_boundary import ExecutionBoundaryObservation
+
+        observed = ExecutionBoundaryObservation(
+            transport="unknown",
+            override_source="docker-context",
+            daemon_runtime="unknown",
+            host_containment="unknown",
+            observation_status="mismatch",
+            host_os="linux",
+        )
+        readback = mocker.patch(
+            "aptl.cli.lab.fresh_execution_boundary",
+            return_value=observed,
+        )
+        result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
+
+        readback.assert_called_once_with(tmp_path)
+        assert result.exit_code == 1
+        assert "status=mismatch" in result.stdout
+        assert "override=docker-context" in result.stdout
+
+    def test_remote_backend_access_is_not_advertised_as_localhost(
+        self, runner, tmp_path, mocker
+    ):
+        """Remote daemon ports belong to its host, not the CLI machine."""
+        from aptl.cli.main import app
+        from aptl.core.execution_boundary import ExecutionBoundaryObservation
+        from aptl.core.host_ports import ResolvedPort
+
+        (tmp_path / ".env").touch()
+        mocker.patch(
+            "aptl.cli.lab.fresh_execution_boundary",
+            return_value=ExecutionBoundaryObservation(
+                transport="remote-ssh",
+                override_source="docker-host",
+                daemon_runtime="unknown",
+                host_containment="remote-unverified",
+                observation_status="partial",
+                host_os="linux",
+            ),
+        )
+        ports = [
+            ResolvedPort(
+                service="wazuh.dashboard",
+                env_var=None,
+                default_port=443,
+                resolved_port=8443,
+                protos=("tcp",),
+                host_ip="127.0.0.1",
+                remapped=True,
+            )
+        ]
+        mocker.patch("aptl.cli.lab.live_resolved_ports", return_value=ports)
+        mocker.patch("aptl.cli.lab_render.live_resolved_ports", return_value=ports)
+        mocker.patch(
+            "aptl.cli.lab_render.live_services", return_value={"wazuh-dashboard"}
+        )
+
+        result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "remote Docker host port 8443" in result.stdout
+        assert "https://localhost:8443" not in result.stdout
 
     def test_lab_info_omits_grafana_when_the_scenario_publishes_no_host_port(
         self, runner, tmp_path, mocker
@@ -394,6 +489,19 @@ class TestLabStartCommand:
         assert "Grafana: http://localhost:3100" not in result.stdout
         # The remap block also appears now (aids reconciliation vs walkthrough).
         assert "3100 -> 20005" in result.stdout
+
+    def test_lab_info_labels_unverified_default_ports(self, runner, tmp_path, mocker):
+        from aptl.cli.main import app
+
+        (tmp_path / ".env").touch()
+        mocker.patch("aptl.cli.lab.live_resolved_ports", return_value=[])
+        mocker.patch("aptl.cli.lab_render.live_services", return_value={"wazuh-dashboard"})
+
+        result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "Published host ports are unverified" in result.stdout
+        assert "Wazuh Dashboard: https://localhost:443" in result.stdout
 
     def test_live_resolved_ports_returns_empty_when_config_missing(self, tmp_path):
         """Best-effort: no aptl.json / no backend / any error path just

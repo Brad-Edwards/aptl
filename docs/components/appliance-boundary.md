@@ -1,5 +1,12 @@
 # Appliance Network Boundary
 
+> Current delivery scope: [ADR-060](../adrs/adr-060-vm-only-seat-containment.md)
+> narrows the optional seat to VM-only containment. The V1 internal-zone and
+> controlled-egress design below is historical architecture for the deferred
+> [issue #1127](https://github.com/Brad-Edwards/aptl/issues/1127); it is not
+> enforced or claimed by a current V2 seat. The current host and guest limits
+> are in the [execution-profile guide](../getting-started/prerequisites.md#tested-execution-profiles-and-limits).
+
 The appliance boundary is the reusable materialization surface for
 [ADR-049](../adrs/adr-049-sealed-disposable-lab-appliance.md). It is not a
 TechVault topology and it does not assign scenario roles. It consumes two

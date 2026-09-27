@@ -38,6 +38,15 @@ may affect other containers, credentials, or evidence in that same VM. Reset
 destroys the overlay and revokes the previous generation; it does not turn a
 known-compromised physical host back into a trusted one.
 
+The [one-host KVM acceptance record](../reviews/1162-seat-acceptance.md) is
+evidence for the exact signed image and operations it exercised. It does not
+record a complete host OS/kernel/QEMU version profile or satisfy the independent
+machine qualification for every supported seat. `aptl lab start` inside the
+guest can report its selected Docker endpoint, but only the launcher can
+observe the outer host and qualify that seat generation. A signed image, a VM
+label, or passing unit tests do not replace fresh host and guest observations.
+See [tested profiles and limits](../getting-started/prerequisites.md#tested-execution-profiles-and-limits).
+
 ## Prerequisites
 
 The physical host must satisfy the resources the seat image declares:

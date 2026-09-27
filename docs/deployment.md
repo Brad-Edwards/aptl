@@ -83,6 +83,16 @@ URLs, remapped host ports, usernames, and credential locations for the realized
 scenario. `aptl container list` reports project-owned containers. These results
 replace fixed port, service, and credential tables.
 
+Both `lab start` and `lab info` print a separate execution-boundary observation:
+selected transport, whether the daemon appears native, VM-backed, remote or
+unknown, and whether an override selected the endpoint. `info` re-observes the
+backend even when `.env` is absent. Unknown or conflicting facts are reported
+as such. A remote daemon's published ports belong to its host; the CLI does not
+claim they are reachable on the operator's `localhost`. This host-boundary
+observation is separate from RAES-authored scenario VM/container requirements
+and is disclosed in RAES-validated backend-owned `ApplyResult.details` for a run.
+See [tested profiles and limits](getting-started/prerequisites.md#tested-execution-profiles-and-limits).
+
 Inspect one realized service with:
 
 ```shell

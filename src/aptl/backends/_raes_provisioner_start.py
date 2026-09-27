@@ -101,6 +101,30 @@ def _boundary_admission_failed(backend: BoundaryProbeBackend) -> bool:
 class ProvisionerStartMixin(object):
     """Start the lowered deployment, then report the world it realized."""
 
+    def _realize_backend(
+        self,
+        deployment_spec: DeploymentRealizationSpec,
+        observation_context: DeploymentObservationContext,
+    ) -> str | None:
+        """Start the backend and return an actionable failure reason, if any."""
+
+        try:
+            start_result = self.deployment_backend.realize(
+                deployment_spec,
+                scenario_root=self.bundle.root,
+                substrate_digests=self._availability_substrate_digests(),
+                observation_context=observation_context,
+            )
+        # The RAES backend-call boundary replaces a TypeError or ValueError
+        # escaping apply() with an opaque contract diagnostic. Deployment
+        # lowering uses those exception types for invalid realized service
+        # models, so preserve the actionable, redacted reason here.
+        except (TypeError, ValueError) as exc:
+            return str(exc)
+        if not start_result.success:
+            return start_result.error or "APTL deployment backend failed."
+        return None
+
     def _start_and_observe_apparatus(
         self,
         deployment_spec: DeploymentRealizationSpec,
@@ -126,36 +150,13 @@ class ProvisionerStartMixin(object):
             return self._failed_apply(
                 snapshot, diagnostics, selected_profiles, realization
             )
-        try:
-            start_result = self.deployment_backend.realize(
-                deployment_spec,
-                scenario_root=self.bundle.root,
-                substrate_digests=self._availability_substrate_digests(),
-                observation_context=observation_context,
-            )
-        # The RAES backend-call boundary replaces a TypeError or ValueError
-        # escaping apply() with an opaque contract diagnostic. Deployment
-        # lowering uses those exception types for invalid realized service
-        # models, so preserve the actionable, redacted reason in the failed
-        # ApplyResult just as _lowered_spec does above.
-        except (TypeError, ValueError) as exc:
+        start_error = self._realize_backend(deployment_spec, observation_context)
+        if start_error is not None:
             diagnostics.append(
                 diagnostic(
                     "aptl.provisioner.backend-start-failed",
                     PROVISIONING_ADDRESS,
-                    str(exc),
-                )
-            )
-            result = self._failed_apply(
-                snapshot, diagnostics, selected_profiles, realization
-            )
-            start_result = None
-        if result is None and start_result is not None and not start_result.success:
-            diagnostics.append(
-                diagnostic(
-                    "aptl.provisioner.backend-start-failed",
-                    PROVISIONING_ADDRESS,
-                    start_result.error or "APTL deployment backend failed.",
+                    start_error,
                 )
             )
             result = self._failed_apply(

@@ -9,6 +9,7 @@ import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -17,6 +18,9 @@ from typing import Any
 
 
 SONARCLOUD_API = "https://sonarcloud.io/api/issues/search"
+# SonarCloud explains a rejected request in the response body; keep a bounded
+# excerpt so a failing lookup says why instead of only "HTTP Error 400".
+ERROR_BODY_LIMIT = 500
 OPEN_ISSUE_STATUSES = "OPEN,CONFIRMED"
 
 
@@ -87,8 +91,12 @@ def build_request_url(project_key: str, scope: AnalysisScope, page: int) -> str:
 def fetch_json(url: str, token: str) -> dict[str, Any]:
     encoded = base64.b64encode(f"{token}:".encode("utf-8")).decode("ascii")
     request = urllib.request.Request(url, headers={"Authorization": f"Basic {encoded}"})
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read(ERROR_BODY_LIMIT).decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"HTTP {exc.code}: {detail or exc.reason}") from exc
 
 
 def fetch_issues(project_key: str, scope: AnalysisScope, token: str) -> list[dict[str, Any]]:

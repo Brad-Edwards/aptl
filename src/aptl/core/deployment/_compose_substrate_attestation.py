@@ -56,18 +56,14 @@ def _first_mismatch(*checks: Callable[[], str | None]) -> str | None:
     return next((reason for check in checks if (reason := check()) is not None), None)
 
 
-def _is_list_of(value: object, kind: type) -> bool:
-    """Whether ``value`` is a list whose every item is a ``kind``."""
-
-    return isinstance(value, list) and all(isinstance(item, kind) for item in value)
-
-
 def _string_list(value: object) -> list[str] | None:
     """Return a list of strings, ``[]`` for Docker's null, or None if malformed."""
 
     if value is None:
         return []
-    return value if _is_list_of(value, str) else None
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return value
+    return None
 
 
 def _normalized_capabilities(values: list[str]) -> frozenset[str]:
@@ -171,10 +167,13 @@ def _tmpfs_mismatch(host: _Payload, spec: "BaseContainerSpec") -> str | None:
     """Check the tmpfs set: the init's exactly, and none otherwise."""
 
     tmpfs = host.get("Tmpfs")
-    if not isinstance(tmpfs, (Mapping, type(None))):
+    if tmpfs is None:
+        tmpfs = {}
+    if not isinstance(tmpfs, Mapping):
         return _MALFORMED
+    realized = frozenset(str(target) for target in tmpfs)
     expected = frozenset(spec.init.tmpfs) if spec.init is not None else frozenset()
-    return None if frozenset(tmpfs or {}) == expected else "tmpfs"
+    return "tmpfs" if realized != expected else None
 
 
 def _binding_mismatch(entries: object, host_ip: str, host_port: str | None) -> str | None:
@@ -182,7 +181,9 @@ def _binding_mismatch(entries: object, host_ip: str, host_port: str | None) -> s
 
     from aptl.backends._runtime_concern_excess import _port_entry_matches
 
-    if not _is_list_of(entries, Mapping):
+    if not isinstance(entries, list) or not all(
+        isinstance(entry, Mapping) for entry in entries
+    ):
         return _MALFORMED
     matches = all(_port_entry_matches(entry, host_ip, host_port) for entry in entries)
     return None if matches else "published-ports"
@@ -198,7 +199,9 @@ def _published_ports_mismatch(host: _Payload, spec: "BaseContainerSpec") -> str 
     """
 
     bindings = host.get("PortBindings")
-    if not isinstance(bindings, (Mapping, type(None))):
+    if bindings is None:
+        bindings = {}
+    if not isinstance(bindings, Mapping):
         return _MALFORMED
     expected = {
         f"{port.container_port}/{port.protocol}": (
@@ -207,7 +210,7 @@ def _published_ports_mismatch(host: _Payload, spec: "BaseContainerSpec") -> str 
         )
         for port in spec.published_ports
     }
-    realized = {key: value for key, value in (bindings or {}).items() if value}
+    realized = {key: value for key, value in bindings.items() if value}
     if set(realized) != set(expected):
         return "published-ports"
     reasons = (
@@ -268,7 +271,11 @@ def _mounts_mismatch(
 
     mounts = info.get("Mounts")
     host_bind = _host_bind_present(host)
-    if host_bind is None or not _is_list_of(mounts, Mapping):
+    if (
+        host_bind is None
+        or not isinstance(mounts, list)
+        or not all(isinstance(mount, Mapping) for mount in mounts)
+    ):
         return _MALFORMED
     if host_bind or any(_is_foreign_mount(mount) for mount in mounts):
         return "host-bind"

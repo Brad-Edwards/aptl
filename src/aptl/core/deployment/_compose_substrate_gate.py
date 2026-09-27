@@ -46,7 +46,7 @@ authority through this gate.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -85,7 +85,9 @@ def _probe(run: Callable[..., Any], argv: list[str], subject: str) -> str:
 
     try:
         result = run(argv, timeout=_PROBE_TIMEOUT_SECONDS)
-    except Exception as exc:  # noqa: BLE001 - any runner failure is a refusal
+    # Any runner failure -- a timeout, a missing binary, a transport error on a
+    # remote endpoint -- is a refusal, never a pass.
+    except Exception as exc:
         raise BackendSeedError(
             f"could not determine the target Docker daemon's {subject}; "
             "the generic systemd substrate requires a cgroup v2 daemon at "
@@ -209,7 +211,7 @@ def require_substrate_daemon_support(run: Callable[..., Any]) -> None:
 
 def _selected(
     name: str,
-    service: dict,
+    service: Mapping[str, Any],
     profiles: frozenset[str],
     exclude_services: frozenset[str],
     only_services: frozenset[str],
@@ -251,21 +253,23 @@ def compose_services_requesting_writable_cgroups(
     selected_profiles = frozenset(profiles)
     excluded = frozenset(exclude_services)
     only = frozenset(only_services)
-    requesting: dict[str, None] = {}
-    for compose_file in compose_files:
-        try:
-            model = yaml.safe_load(Path(compose_file).read_text(encoding="utf-8"))
-        except (OSError, yaml.YAMLError):
-            continue
-        services = model.get("services") if isinstance(model, dict) else None
-        if not isinstance(services, dict):
-            continue
-        for name, service in services.items():
-            if not isinstance(service, dict):
-                continue
-            options = service.get("security_opt") or ()
-            if WRITABLE_CGROUPS_OPTION in options and _selected(
-                str(name), service, selected_profiles, excluded, only
-            ):
-                requesting[str(name)] = None
-    return tuple(requesting)
+    requesting = (
+        str(name)
+        for compose_file in compose_files
+        for name, service in _compose_services(Path(compose_file)).items()
+        if isinstance(service, Mapping)
+        and WRITABLE_CGROUPS_OPTION in (service.get("security_opt") or ())
+        and _selected(str(name), service, selected_profiles, excluded, only)
+    )
+    return tuple(dict.fromkeys(requesting))
+
+
+def _compose_services(compose_file: Path) -> Mapping[str, Any]:
+    """Return one Compose file's authored ``services`` map, or none if unreadable."""
+
+    try:
+        model = yaml.safe_load(compose_file.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return {}
+    services = model.get("services") if isinstance(model, Mapping) else None
+    return services if isinstance(services, Mapping) else {}

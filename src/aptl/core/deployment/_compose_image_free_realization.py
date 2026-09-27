@@ -142,15 +142,9 @@ def _realize_node_subset(
     from aptl.backends.raes_node_materialization import realize_nodes
 
     volume_mounts_by_node = _volume_mounts_by_node(nodes, persistent_volumes)
-    daemon_failure = _require_substrate_daemon_for(backend, nodes)
-    if daemon_failure is not None:
-        return daemon_failure
-    image_build_failures = _ensure_generic_base_images(backend, nodes)
-    if image_build_failures:
-        return LabResult(success=False, error="; ".join(image_build_failures[:5]))
-    network_failure = _bind_base_container_networks(backend, nodes)
-    if network_failure is not None:
-        return network_failure
+    preparation_failure = _prepare_node_subset(backend, nodes)
+    if preparation_failure is not None:
+        return preparation_failure
 
     content_by_node = _content_ops_by_node(content)
     for address, ops in (extra_ops or {}).items():
@@ -192,6 +186,35 @@ def _volume_mounts_by_node(
                 ),
             )
     return mounts
+
+
+def _prepare_node_subset(
+    backend: object, nodes: tuple[object, ...]
+) -> LabResult | None:
+    """Run the pre-materialization steps in order, stopping at the first failure.
+
+    The daemon gate comes first so an unsupported daemon is refused before any
+    image build or network attachment (issue #955).
+    """
+
+    for step in (
+        _require_substrate_daemon_for,
+        _generic_base_image_failure,
+        _bind_base_container_networks,
+    ):
+        failure = step(backend, nodes)
+        if failure is not None:
+            return failure
+    return None
+
+
+def _generic_base_image_failure(
+    backend: object, nodes: tuple[object, ...]
+) -> LabResult | None:
+    """Build the subset's generic base images, reporting any failure."""
+
+    failures = _ensure_generic_base_images(backend, nodes)
+    return LabResult(success=False, error="; ".join(failures[:5])) if failures else None
 
 
 def _require_substrate_daemon_for(

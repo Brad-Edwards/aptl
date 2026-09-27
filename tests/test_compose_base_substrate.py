@@ -1183,10 +1183,10 @@ class TestInitRunFlagsPosture:
 
         assert "--cgroupns=private" in flags
         # Adjacency matters: `--security-opt` and its value must stay paired.
-        assert ["--security-opt", "writable-cgroups=true"] == flags[
-            flags.index("--security-opt") : flags.index("--security-opt") + 2
-        ]
-        assert "--stop-signal" in flags and "SIGRTMIN+3" in flags
+        option = flags.index("--security-opt")
+        assert flags[option : option + 2] == ["--security-opt", "writable-cgroups=true"]
+        assert "--stop-signal" in flags
+        assert "SIGRTMIN+3" in flags
         for path in ("/run", "/run/lock", "/tmp"):
             assert path in flags
 
@@ -1452,8 +1452,9 @@ class TestSubstrateDaemonGateInStartPath:
         with patch(
             "subprocess.run", side_effect=_supported_daemon(cgroup_version="1")
         ) as mock_run:
+            spec = self._init_spec()
             with pytest.raises(BackendSeedError):
-                backend.start_base_container(self._init_spec())
+                backend.start_base_container(spec)
 
         mutations = [
             call.args[0][:2]
@@ -1469,8 +1470,9 @@ class TestSubstrateDaemonGateInStartPath:
         with patch(
             "subprocess.run", side_effect=_supported_daemon(engine_version="27.5.1")
         ) as mock_run:
+            spec = self._init_spec()
             with pytest.raises(BackendSeedError):
-                backend.start_base_container(self._init_spec())
+                backend.start_base_container(spec)
 
         assert not any(
             call.args[0][:2] == ["docker", "run"] for call in mock_run.call_args_list
@@ -1516,10 +1518,12 @@ class TestSubstrateDaemonGateInStartPath:
         backend = _backend(tmp_path)
 
         with patch("subprocess.run", side_effect=_supported_daemon(cgroup_version="1")):
+            spec = self._init_spec()
             with pytest.raises(BackendSeedError):
-                backend.start_base_container(self._init_spec())
+                backend.start_base_container(spec)
+            spec = self._init_spec()
             with pytest.raises(BackendSeedError):
-                backend.start_base_container(self._init_spec())
+                backend.start_base_container(spec)
 
 
 class TestCreatedContainerAttestation:
@@ -1560,7 +1564,8 @@ class TestCreatedContainerAttestation:
             for call in mock_run.call_args_list
             if call.args[0][:2] == ["docker", "rm"]
         ]
-        assert removals and _CONTAINER_ID in removals[-1]
+        assert removals
+        assert _CONTAINER_ID in removals[-1]
 
     def test_an_unreadable_created_container_fails_closed(self, tmp_path):
         backend = _backend(tmp_path)
@@ -1642,7 +1647,8 @@ class TestSubstrateDaemonGateBeforeImageBuild:
                 backend, (self._node(runs_services=True),), (), tmp_path
             )
 
-        assert result is not None and not result.success
+        assert result is not None
+        assert not result.success
         assert "cgroup" in result.error
         backend.ensure_generic_base_image.assert_not_called()
 

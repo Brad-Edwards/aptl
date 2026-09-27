@@ -21,7 +21,8 @@ caller can report the failure without echoing host paths or daemon output.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from collections.abc import Callable, Mapping
+from typing import TYPE_CHECKING, Any
 
 from aptl.core.deployment._compose_substrate_gate import WRITABLE_CGROUPS_OPTION
 
@@ -40,15 +41,33 @@ _ACCEPTED_APPARMOR_PROFILES = frozenset({"", "docker-default"})
 # Docker names an anonymous volume (an image's own ``VOLUME``) by a 64-hex id.
 _ANONYMOUS_VOLUME_NAME = re.compile(r"^[0-9a-f]{64}$")
 
+# Host fields that must be absent or empty on a generic base container: APTL
+# maps no device, adds no device-cgroup rule, and drops no capability.
+_EMPTY_HOST_FIELDS = ("Devices", "DeviceCgroupRules", "CapDrop")
+
+_MALFORMED = "inspect-malformed"
+
+_Payload = Mapping[str, Any]
+
+
+def _first_mismatch(*checks: Callable[[], str | None]) -> str | None:
+    """Return the first reason any check reports, running them in order."""
+
+    return next((reason for check in checks if (reason := check()) is not None), None)
+
+
+def _is_list_of(value: object, kind: type) -> bool:
+    """Whether ``value`` is a list whose every item is a ``kind``."""
+
+    return isinstance(value, list) and all(isinstance(item, kind) for item in value)
+
 
 def _string_list(value: object) -> list[str] | None:
     """Return a list of strings, ``[]`` for Docker's null, or None if malformed."""
 
     if value is None:
         return []
-    if isinstance(value, list) and all(isinstance(item, str) for item in value):
-        return value
-    return None
+    return value if _is_list_of(value, str) else None
 
 
 def _normalized_capabilities(values: list[str]) -> frozenset[str]:
@@ -80,66 +99,96 @@ def _expected_security_options(spec: "BaseContainerSpec") -> frozenset[str]:
     return frozenset()
 
 
-def _host_privilege_mismatch(info: dict, host: dict) -> str | None:
-    """Check the fields that grant host authority beyond the spec."""
+def _privileged_mismatch(host: _Payload) -> str | None:
+    """A privileged container holds every capability and every device."""
 
-    if not isinstance(host.get("Privileged"), bool):
-        return "inspect-malformed"
-    if host["Privileged"]:
-        return "privileged"
-    for field in _HOST_NAMESPACE_FIELDS:
-        mode = host.get(field)
-        if not isinstance(mode, str):
-            return "inspect-malformed"
-        if mode == "host" or mode.startswith("container:"):
-            return "shared-host-namespace"
-    for field in ("Devices", "DeviceCgroupRules", "CapDrop"):
-        values = host.get(field)
-        if values is None:
-            continue
-        if not isinstance(values, list):
-            return "inspect-malformed"
-        if values:
-            return "undeclared-device-or-capability-drop"
+    privileged = host.get("Privileged")
+    if not isinstance(privileged, bool):
+        return _MALFORMED
+    return "privileged" if privileged else None
+
+
+def _namespace_mismatch(host: _Payload) -> str | None:
+    """Reject a PID, IPC, user, or UTS namespace shared with the host or a peer."""
+
+    modes = [host.get(field) for field in _HOST_NAMESPACE_FIELDS]
+    if not all(isinstance(mode, str) for mode in modes):
+        return _MALFORMED
+    shared = any(mode == "host" or mode.startswith("container:") for mode in modes)
+    return "shared-host-namespace" if shared else None
+
+
+def _device_mismatch(host: _Payload) -> str | None:
+    """Reject mapped devices, device-cgroup rules, and dropped capabilities."""
+
+    values = [host.get(field) for field in _EMPTY_HOST_FIELDS]
+    if any(value is not None and not isinstance(value, list) for value in values):
+        return _MALFORMED
+    return "undeclared-device-or-capability-drop" if any(values) else None
+
+
+def _apparmor_mismatch(info: _Payload) -> str | None:
+    """Accept only the daemon's default AppArmor profile, or none at all."""
+
     profile = info.get("AppArmorProfile")
     if not isinstance(profile, str):
-        return "inspect-malformed"
-    if profile not in _ACCEPTED_APPARMOR_PROFILES:
-        return "apparmor-profile"
-    return None
+        return _MALFORMED
+    return None if profile in _ACCEPTED_APPARMOR_PROFILES else "apparmor-profile"
 
 
-def _security_mismatch(host: dict, spec: "BaseContainerSpec") -> str | None:
+def _cgroup_namespace_mismatch(cgroupns: str, spec: "BaseContainerSpec") -> str | None:
+    """No base container shares the host's; an init node requires a private one."""
+
+    requires_private = spec.init is not None and spec.init.cgroup_private
+    wrong = cgroupns == "host" or (requires_private and cgroupns != "private")
+    return "cgroup-namespace" if wrong else None
+
+
+def _security_mismatch(host: _Payload, spec: "BaseContainerSpec") -> str | None:
     """Check capabilities, security options, and cgroup namespace mode."""
 
     capabilities = _string_list(host.get("CapAdd"))
     options = _string_list(host.get("SecurityOpt"))
     cgroupns = host.get("CgroupnsMode")
     if capabilities is None or options is None or not isinstance(cgroupns, str):
-        return "inspect-malformed"
-    if _normalized_capabilities(capabilities) != _expected_capabilities(spec):
-        return "capabilities"
-    if frozenset(options) != _expected_security_options(spec):
-        return "security-options"
-    if cgroupns == "host":
-        return "cgroup-namespace"
-    if spec.init is not None and spec.init.cgroup_private and cgroupns != "private":
-        return "cgroup-namespace"
-    return None
+        return _MALFORMED
+    return _first_mismatch(
+        lambda: (
+            "capabilities"
+            if _normalized_capabilities(capabilities) != _expected_capabilities(spec)
+            else None
+        ),
+        lambda: (
+            "security-options"
+            if frozenset(options) != _expected_security_options(spec)
+            else None
+        ),
+        lambda: _cgroup_namespace_mismatch(cgroupns, spec),
+    )
 
 
-def _tmpfs_mismatch(host: dict, spec: "BaseContainerSpec") -> str | None:
+def _tmpfs_mismatch(host: _Payload, spec: "BaseContainerSpec") -> str | None:
     """Check the tmpfs set: the init's exactly, and none otherwise."""
 
     tmpfs = host.get("Tmpfs")
-    if tmpfs is not None and not isinstance(tmpfs, dict):
-        return "inspect-malformed"
-    realized = frozenset(tmpfs or {})
+    if not isinstance(tmpfs, (Mapping, type(None))):
+        return _MALFORMED
     expected = frozenset(spec.init.tmpfs) if spec.init is not None else frozenset()
-    return None if realized == expected else "tmpfs"
+    return None if frozenset(tmpfs or {}) == expected else "tmpfs"
 
 
-def _published_ports_mismatch(host: dict, spec: "BaseContainerSpec") -> str | None:
+def _binding_mismatch(entries: object, host_ip: str, host_port: str | None) -> str | None:
+    """Check every realized entry for one container port against its declaration."""
+
+    from aptl.backends._runtime_concern_excess import _port_entry_matches
+
+    if not _is_list_of(entries, Mapping):
+        return _MALFORMED
+    matches = all(_port_entry_matches(entry, host_ip, host_port) for entry in entries)
+    return None if matches else "published-ports"
+
+
+def _published_ports_mismatch(host: _Payload, spec: "BaseContainerSpec") -> str | None:
     """Check the container publishes exactly the declared bindings.
 
     Compares each realized host address and host port with its declaration, not
@@ -148,11 +197,9 @@ def _published_ports_mismatch(host: dict, spec: "BaseContainerSpec") -> str | No
     host port) accepts whatever port Docker recorded for it.
     """
 
-    from aptl.backends._runtime_concern_excess import _port_entry_matches
-
     bindings = host.get("PortBindings")
-    if bindings is not None and not isinstance(bindings, dict):
-        return "inspect-malformed"
+    if not isinstance(bindings, (Mapping, type(None))):
+        return _MALFORMED
     expected = {
         f"{port.container_port}/{port.protocol}": (
             port.host_ip,
@@ -163,18 +210,13 @@ def _published_ports_mismatch(host: dict, spec: "BaseContainerSpec") -> str | No
     realized = {key: value for key, value in (bindings or {}).items() if value}
     if set(realized) != set(expected):
         return "published-ports"
-    for key, entries in realized.items():
-        if not isinstance(entries, list) or not all(
-            isinstance(entry, dict) for entry in entries
-        ):
-            return "inspect-malformed"
-        host_ip, host_port = expected[key]
-        if not all(_port_entry_matches(entry, host_ip, host_port) for entry in entries):
-            return "published-ports"
-    return None
+    reasons = (
+        _binding_mismatch(entries, *expected[key]) for key, entries in realized.items()
+    )
+    return next((reason for reason in reasons if reason is not None), None)
 
 
-def _host_bind_present(host: dict) -> bool | None:
+def _host_bind_present(host: _Payload) -> bool | None:
     """Whether ``HostConfig.Binds`` names a host path; None if malformed."""
 
     binds = _string_list(host.get("Binds"))
@@ -183,8 +225,37 @@ def _host_bind_present(host: dict) -> bool | None:
     return any(bind.split(":", 1)[0].startswith("/") for bind in binds)
 
 
+def _is_foreign_mount(mount: _Payload) -> bool:
+    """A mount that is not a volume APTL could have created (a bind, above all)."""
+
+    return mount.get("Type") != "volume" or not isinstance(
+        mount.get("Destination"), str
+    )
+
+
+def _volume_set_mismatch(
+    mounts: list[_Payload], spec: "BaseContainerSpec", volume_prefix: str
+) -> str | None:
+    """Declared volumes match exactly; any other volume must be anonymous."""
+
+    declared = {
+        mount.target: (f"{volume_prefix}_{mount.source}", not mount.read_only)
+        for mount in spec.volume_mounts
+    }
+    realized = {
+        mount["Destination"]: (mount.get("Name"), mount.get("RW")) for mount in mounts
+    }
+    undeclared_named = any(
+        destination not in declared
+        and not _ANONYMOUS_VOLUME_NAME.fullmatch(str(name or ""))
+        for destination, (name, _) in realized.items()
+    )
+    declared_match = all(realized.get(target) == want for target, want in declared.items())
+    return None if declared_match and not undeclared_named else "volume-mounts"
+
+
 def _mounts_mismatch(
-    info: dict, host: dict, spec: "BaseContainerSpec", volume_prefix: str
+    info: _Payload, host: _Payload, spec: "BaseContainerSpec", volume_prefix: str
 ) -> str | None:
     """Check every mount is a declared volume or an image's anonymous volume.
 
@@ -196,29 +267,12 @@ def _mounts_mismatch(
     """
 
     mounts = info.get("Mounts")
-    if not isinstance(mounts, list) or not all(isinstance(m, dict) for m in mounts):
-        return "inspect-malformed"
     host_bind = _host_bind_present(host)
-    if host_bind is None:
-        return "inspect-malformed"
-    if host_bind:
+    if host_bind is None or not _is_list_of(mounts, Mapping):
+        return _MALFORMED
+    if host_bind or any(_is_foreign_mount(mount) for mount in mounts):
         return "host-bind"
-    declared = {
-        mount.target: (f"{volume_prefix}_{mount.source}", not mount.read_only)
-        for mount in spec.volume_mounts
-    }
-    seen: set[str] = set()
-    for mount in mounts:
-        destination = mount.get("Destination")
-        if mount.get("Type") != "volume" or not isinstance(destination, str):
-            return "host-bind"
-        if destination in declared:
-            if (mount.get("Name"), mount.get("RW")) != declared[destination]:
-                return "volume-mounts"
-            seen.add(destination)
-        elif not _ANONYMOUS_VOLUME_NAME.fullmatch(str(mount.get("Name") or "")):
-            return "volume-mounts"
-    return None if seen == set(declared) else "volume-mounts"
+    return _volume_set_mismatch(mounts, spec, volume_prefix)
 
 
 def substrate_posture_mismatch(
@@ -233,17 +287,16 @@ def substrate_posture_mismatch(
     and a variable absent from the operator environment is legitimately omitted.
     """
 
-    if not isinstance(info, dict) or not isinstance(info.get("HostConfig"), dict):
-        return "inspect-malformed"
-    host = info["HostConfig"]
-    for check in (
-        lambda: _host_privilege_mismatch(info, host),
+    host = info.get("HostConfig") if isinstance(info, Mapping) else None
+    if not isinstance(host, Mapping):
+        return _MALFORMED
+    return _first_mismatch(
+        lambda: _privileged_mismatch(host),
+        lambda: _namespace_mismatch(host),
+        lambda: _device_mismatch(host),
+        lambda: _apparmor_mismatch(info),
         lambda: _security_mismatch(host, spec),
         lambda: _tmpfs_mismatch(host, spec),
         lambda: _published_ports_mismatch(host, spec),
         lambda: _mounts_mismatch(info, host, spec, volume_prefix),
-    ):
-        reason = check()
-        if reason is not None:
-            return reason
-    return None
+    )

@@ -122,9 +122,9 @@ class ComposeOwnedStartMixin:
         refused = self._compose_substrate_daemon_refusal(
             compose_files, profiles, exclude_services, only_services
         )
-        if refused is not None:
-            return refused
-        prepared = self._prepare_owned_start(compose_files)
+        prepared = (
+            refused if refused is not None else self._prepare_owned_start(compose_files)
+        )
         if isinstance(prepared, LabResult):
             return prepared
         command = self._owned_up_command(

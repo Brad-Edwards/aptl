@@ -196,18 +196,17 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
             raise BackendSeedError(
                 "base-container ownership observation failed"
             ) from exc
-        if not info:
-            return False
-        if not isinstance(info, dict):
-            return False
+        info = info if isinstance(info, dict) else {}
         state = info.get("State")
         running = isinstance(state, dict) and bool(state.get("Running"))
         config = info.get("Config")
         image = config.get("Image") if isinstance(config, dict) else None
-        if not (running and image == run_image_ref):
-            return False
         return (
-            substrate_posture_mismatch(info, spec, volume_prefix=self._project_name)
+            running
+            and image == run_image_ref
+            and substrate_posture_mismatch(
+                info, spec, volume_prefix=self._project_name
+            )
             is None
         )
 

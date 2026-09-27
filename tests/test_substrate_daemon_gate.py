@@ -92,8 +92,9 @@ class TestSupportedDaemon:
         # "5.0.0" > "28.0.0" as strings; 5 < 28 as numbers. A string compare
         # here would admit an ancient daemon and reject a future one.
         require_substrate_daemon_support(_runner(engine_version="128.0.0"))
+        run = _runner(engine_version="5.0.0")
         with pytest.raises(BackendSeedError):
-            require_substrate_daemon_support(_runner(engine_version="5.0.0"))
+            require_substrate_daemon_support(run)
 
 
 class TestFailsClosed:
@@ -106,14 +107,16 @@ class TestFailsClosed:
         ],
     )
     def test_a_non_v2_daemon_is_refused(self, cgroup_version):
+        run = _runner(cgroup_version=cgroup_version)
         with pytest.raises(BackendSeedError) as excinfo:
-            require_substrate_daemon_support(_runner(cgroup_version=cgroup_version))
+            require_substrate_daemon_support(run)
 
         assert "cgroup" in str(excinfo.value).lower()
 
     def test_an_engine_older_than_the_floor_is_refused(self):
+        run = _runner(engine_version="27.5.1")
         with pytest.raises(BackendSeedError) as excinfo:
-            require_substrate_daemon_support(_runner(engine_version="27.5.1"))
+            require_substrate_daemon_support(run)
 
         # The operator needs the required version to act on the failure.
         assert "28" in str(excinfo.value)
@@ -122,12 +125,14 @@ class TestFailsClosed:
     def test_a_failed_probe_is_refused_not_assumed(self, probe):
         # An unanswerable question is not a yes. A probe that errors must fail
         # closed rather than fall through to the retired privileged recipe.
+        run = _runner(fail=(probe,))
         with pytest.raises(BackendSeedError):
-            require_substrate_daemon_support(_runner(fail=(probe,)))
+            require_substrate_daemon_support(run)
 
     def test_an_unparseable_engine_version_is_refused(self):
+        run = _runner(engine_version="not-a-version")
         with pytest.raises(BackendSeedError):
-            require_substrate_daemon_support(_runner(engine_version="not-a-version"))
+            require_substrate_daemon_support(run)
 
     @pytest.mark.parametrize(
         ("security_options", "mode"),
@@ -148,10 +153,9 @@ class TestFailsClosed:
         # Both modes reject an explicit writable-cgroups request at create
         # (moby daemon/oci_linux.go). Refusing here names the cause before any
         # mutation instead of an opaque "failed to start base container".
+        run = _runner(security_options=security_options)
         with pytest.raises(BackendSeedError) as excinfo:
-            require_substrate_daemon_support(
-                _runner(security_options=security_options)
-            )
+            require_substrate_daemon_support(run)
 
         assert mode in str(excinfo.value)
 
@@ -164,10 +168,9 @@ class TestFailsClosed:
         ],
     )
     def test_malformed_security_options_are_refused(self, security_options):
+        run = _runner(security_options=security_options)
         with pytest.raises(BackendSeedError):
-            require_substrate_daemon_support(
-                _runner(security_options=security_options)
-            )
+            require_substrate_daemon_support(run)
 
     def test_a_daemon_reporting_no_security_options_is_not_misread_as_unqualified(
         self,
@@ -176,8 +179,9 @@ class TestFailsClosed:
         require_substrate_daemon_support(_runner(security_options="null"))
 
     def test_the_diagnostic_carries_no_raw_daemon_stderr(self):
+        run = _runner(fail=("info",))
         with pytest.raises(BackendSeedError) as excinfo:
-            require_substrate_daemon_support(_runner(fail=("info",)))
+            require_substrate_daemon_support(run)
 
         assert "daemon unreachable" not in str(excinfo.value)
 

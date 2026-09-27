@@ -8,6 +8,10 @@ from typing import TYPE_CHECKING
 import typer
 
 from aptl.core.host_ports import PortSpec, ResolvedPort, published_port_specs
+from aptl.core.execution_boundary import (
+    ExecutionBoundaryObservation,
+    observe_execution_boundary,
+)
 from aptl.core.lab import LabResult
 from aptl.core.lab_types import StartupDiagnostic, StartupOutcome
 
@@ -57,6 +61,7 @@ def render_start_result(result: LabResult) -> None:
     typer.echo(_OUTCOME_HEADLINES[result.outcome])
     if result.outcome is StartupOutcome.FAILED and result.error:
         typer.echo(f"  error: {result.error}")
+    emit_execution_boundary_summary(result.execution_boundary)
     if not result.diagnostics:
         return
     typer.echo(f"  diagnostics ({len(result.diagnostics)}):")
@@ -73,6 +78,34 @@ def render_start_result(result: LabResult) -> None:
             )
             if diag.operator_action:
                 typer.echo(f"      action: {diag.operator_action}")
+
+
+def emit_execution_boundary_summary(
+    boundary: ExecutionBoundaryObservation | None,
+) -> None:
+    """Render observed facts without treating a Docker or VM label as proof."""
+
+    if boundary is None:
+        typer.echo("Execution boundary: unknown (status=unknown)")
+        return
+    typer.echo(
+        f"Execution boundary: {boundary.host_containment} "
+        f"(status={boundary.observation_status}, transport={boundary.transport}, "
+        f"override={boundary.override_source})"
+    )
+    if boundary.docker_version:
+        typer.echo(f"  selected Docker Engine: {boundary.docker_version}")
+    if boundary.host_containment != "native-docker":
+        typer.echo("  host containment: unverified for this selected profile")
+
+
+def fresh_execution_boundary(
+    project_dir: Path,
+) -> ExecutionBoundaryObservation | None:
+    """Re-read the configured backend for info; prior start state may be stale."""
+
+    backend = _cli_backend(project_dir)
+    return observe_execution_boundary(backend) if backend is not None else None
 
 
 def _resolved_port(
@@ -272,7 +305,7 @@ def _emit_host_port_remaps(resolved_ports: list[ResolvedPort]) -> None:
         return
     typer.echo("")
     typer.echo(
-        "Host port remaps (a default was already in use on this host, so the "
+        "Host port remaps (a default was already in use on the selected Docker host, so the "
         "service is published on a free port instead):"
     )
     mcp_affected = []
@@ -298,6 +331,7 @@ def emit_lab_access_summary(
     project_dir: Path,
     resolved_ports: list[ResolvedPort] | None = None,
     active_services: set[str] | None = None,
+    execution_boundary: ExecutionBoundaryObservation | None = None,
 ) -> None:
     """Print the credential locations and common lab entry points.
 
@@ -317,6 +351,10 @@ def emit_lab_access_summary(
     resolved_ports = live_ports or resolved_ports or []
     if active_services is None:
         active_services = live_services(project_dir)
+    remote = (
+        execution_boundary is not None
+        and execution_boundary.transport in {"remote-ssh", "remote-tcp"}
+    )
     env_path = project_dir / ".env"
     dashboard_port = _resolved_port(
         resolved_ports, _WAZUH_DASHBOARD_SVC, _WAZUH_DASHBOARD_DEFAULT
@@ -331,24 +369,38 @@ def emit_lab_access_summary(
     )
     typer.echo("")
     typer.echo("Access:")
+    if not live_ports and (resolved_ports or active_services):
+        typer.echo(
+            "  Published host ports are unverified; access locations below "
+            "may be planned or default guesses."
+        )
     if _published_access_port(
         dashboard_port, caller_reported_no_ports, live_ports, active_services
     ):
-        typer.echo(f"  Wazuh Dashboard: https://localhost:{dashboard_port}")
+        if remote:
+            typer.echo(f"  Wazuh Dashboard: remote Docker host port {dashboard_port} (HTTPS)")
+        else:
+            typer.echo(f"  Wazuh Dashboard: https://localhost:{dashboard_port}")
         typer.echo("    scenario credentials (not an APTL control-plane login):")
         typer.echo("    username: see INDEXER_USERNAME in .env")
         typer.echo("    password: see INDEXER_PASSWORD in .env")
     if _published_access_port(
         grafana_port, caller_reported_no_ports, live_ports, active_services
     ):
-        typer.echo(f"  Grafana: http://localhost:{grafana_port}")
+        if remote:
+            typer.echo(f"  Grafana: remote Docker host port {grafana_port} (HTTP)")
+        else:
+            typer.echo(f"  Grafana: http://localhost:{grafana_port}")
         typer.echo("    username: admin")
         typer.echo("    password: see GRAFANA_ADMIN_PASSWORD in .env")
     if _REVERSE_SVC in active_services and reverse_port is not None:
         typer.echo("  Reverse engineering SSH:")
-        typer.echo(
-            f"    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p {reverse_port}"
-        )
+        if remote:
+            typer.echo(f"    remote Docker host port {reverse_port} (SSH)")
+        else:
+            typer.echo(
+                f"    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p {reverse_port}"
+            )
     _emit_host_port_remaps(resolved_ports)
 
 

@@ -156,6 +156,7 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [Issue #958 Execution Boundary](issue-958-execution-boundary-preflight.md)
 - [Issue #601 Participant Demonstration](issue-601-participant-demonstration-preflight.md)
 - [Issue #851 First-Time User Documentation](issue-851-first-time-user-docs-preflight.md)
 - [Issue #880 TechVault Env-Pack Consumption](issue-880-techvault-env-pack-consumption-preflight.md)

@@ -71,6 +71,12 @@ from aptl.core.endpoints import (
     select_ssh_host,
     terminal_ssh_endpoints,
 )
+from aptl.core.execution_boundary import (
+    ExecutionBoundaryObservation,
+    bind_execution_boundary,
+    disclosed_execution_boundary,
+    observe_execution_boundary,
+)
 from aptl.core.host_keys import pin_terminal_host_keys
 from aptl.core import hostenv
 from aptl.core.snapshot import (
@@ -746,12 +752,20 @@ def _clean_boot_lab_owned(
 ) -> LabResult:
     """Clean and restart the lab while the caller owns lifecycle mutation."""
 
+    # A signed appliance descriptor is a required containment request. Its
+    # verification and daemon binding must succeed before --clean removes any
+    # existing project data. Normal start rechecks the same gate before apply.
+    preflight_failure, selected_backend = _preflight_clean_appliance_boundary(
+        project_root, appliance, backend
+    )
+    if preflight_failure is not None:
+        return preflight_failure
     if progress is not None:
         progress("Stopping the existing lab before clean boot.")
     stop_result = stop_lab(
         remove_volumes=remove_volumes,
         project_dir=project_root,
-        backend=backend,
+        backend=selected_backend,
     )
     if not stop_result.success:
         return LabResult(
@@ -769,6 +783,57 @@ def _clean_boot_lab_owned(
         progress=progress,
         **appliance_kwargs,
     )
+
+
+def _preflight_clean_appliance_boundary(
+    project_root: Path,
+    appliance: ApplianceStartOptions | None,
+    backend: "DeploymentBackend | None",
+) -> tuple[LabResult | None, "DeploymentBackend | None"]:
+    """Refuse unsupported required seat containment before clean teardown."""
+
+    if appliance is None or appliance.launch_descriptor is None:
+        return None, backend
+    if not appliance.offline_staged:
+        return LabResult(success=False, error="Appliance launch requires offline staging."), backend
+    from aptl.appliance.seat.launch_descriptor import verify_seat_launch
+
+    try:
+        verify_seat_launch(appliance.launch_descriptor)
+        if not _attest_private_appliance_daemon(appliance.launch_descriptor):
+            raise ValueError("not an isolated guest")
+        config_path = find_config(project_root)
+        if config_path is None:
+            raise ValueError("appliance project configuration is unavailable")
+        config = load_config(config_path)
+        selected = backend or _get_backend(
+            project_root, config, offline_staged=True
+        )
+        ctx = _LabStartContext(
+            project_dir=project_root,
+            skip_seed=False,
+            offline_staged=True,
+            appliance_launch_descriptor=appliance.launch_descriptor,
+            appliance_release_public_key=appliance.release_public_key,
+            appliance_qualification_public_key=appliance.qualification_public_key,
+            appliance_readiness_challenge=appliance.readiness_challenge,
+            appliance_readiness_device=appliance.readiness_device,
+            appliance_access_request=appliance.access_request,
+            appliance_access_device=appliance.access_device,
+            appliance_access_output_dir=appliance.access_output_dir,
+            appliance_candidate_trust=appliance.candidate_trust,
+            config=config,
+            backend=selected,
+        )
+        failure = _configure_verified_appliance_launch(ctx)
+        if failure is not None:
+            return failure, backend
+        endpoint = selected.revalidate_local_docker_socket()
+        if not endpoint.success:
+            raise ValueError("appliance guest Docker endpoint changed")
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
+        return LabResult(success=False, error="Verified appliance launch preflight failed."), backend
+    return None, selected
 
 
 def lab_status(
@@ -1022,6 +1087,7 @@ class _LabStartContext(object):
     config: "AptlConfig | None" = None
     start_selection: StartSelection | None = None
     backend: "DeploymentBackend | None" = None
+    execution_boundary: ExecutionBoundaryObservation | None = None
     ssh_key_path: Path | None = None
     selected_profiles: set[str] = field(default_factory=set)
     # Published host ports after conflict resolution (host_ports.ResolvedPort),
@@ -1407,6 +1473,14 @@ def _step_load_config(ctx: _LabStartContext) -> LabResult | None:
                 offline_staged=ctx.offline_staged,
             )
             result = _configure_verified_appliance_launch(ctx)
+            ctx.execution_boundary = (
+                bind_execution_boundary(
+                    ctx.backend,
+                    seat_guest=ctx.appliance_launch_descriptor is not None,
+                )
+                if result is None
+                else observe_execution_boundary(ctx.backend)
+            )
         if result is None:
             result = _load_admitted_start_surface(ctx)
     return result
@@ -1813,7 +1887,13 @@ def _generate_host_side_pivot_keys(keys_dir: Path, pivot_dir: Path) -> LabResult
 def _step_check_sysreqs(ctx: _LabStartContext) -> LabResult | None:
     """Validate host requirements before Compose starts building images."""
     log.info("Step 4: Checking system requirements...")
-    sysreq_result = check_max_map_count()
+    boundary = ctx.execution_boundary
+    selected_mode = hostenv.DOCKER_UNKNOWN
+    if boundary is not None and boundary.host_containment == "native-docker":
+        selected_mode = hostenv.DOCKER_LINUX_NATIVE
+    elif boundary is not None and boundary.host_containment == "docker-vm-unverified":
+        selected_mode = hostenv.DOCKER_VM
+    sysreq_result = check_max_map_count(selected_mode=selected_mode)
     if not sysreq_result.passed:
         log.error(
             "vm.max_map_count too low (%d < %d). "
@@ -2342,6 +2422,11 @@ def _interpret_start_outcome(
 
     from aptl.backends.raes_start_model import AcesStartOutcome
 
+    if ctx.backend is not None:
+        ctx.execution_boundary = (
+            disclosed_execution_boundary(ctx.backend) or ctx.execution_boundary
+        )
+
     result: LabResult | None
     if isinstance(outcome, AcesStartOutcome) and outcome.lab_result.success:
         # Store the RAES start outcome for the run record step (REP-001).
@@ -2434,10 +2519,10 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
         and ctx.ssh_key_path is not None
         and ctx.backend is not None
     )
-    if _docker_vm_hides_bridge_ips():
+    if _docker_vm_hides_bridge_ips(ctx.execution_boundary):
         log.info(
-            "Skipping host SSH probes: Docker VM mode does not expose "
-            "Compose bridge IPs to the host"
+            "Skipping host SSH probes: selected Docker bridge addresses "
+            "are not verified reachable from this host"
         )
         return None
     for name, user in _ssh_test_targets(ctx):
@@ -2548,8 +2633,19 @@ def _realized_service_is_not_absent(
     return declared
 
 
-def _docker_vm_hides_bridge_ips() -> bool:
-    """Return True when host-side probes cannot route to container IPs."""
+def _docker_vm_hides_bridge_ips(
+    boundary: ExecutionBoundaryObservation | None = None,
+) -> bool:
+    """Skip bridge-IP probes when the selected daemon is known to be elsewhere."""
+    if boundary is not None:
+        if boundary.transport in {"remote-ssh", "remote-tcp"}:
+            return True
+        if boundary.host_containment == "docker-vm-unverified":
+            return True
+        if boundary.host_containment in {"native-docker", "seat-guest-unverified"}:
+            return False
+    # When observation failed, retain the established readiness behavior;
+    # silently skipping SSH probes would weaken scenario readiness.
     return hostenv.docker_mode() in {
         hostenv.DOCKER_DESKTOP,
         hostenv.DOCKER_VM,
@@ -3009,10 +3105,10 @@ def _step_pin_terminal_host_keys(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 11b: Pinning terminal SSH host keys...")
     if ctx.backend is None or ctx.ssh_key_path is None:
         log.debug("Skipping host-key pinning: backend or ssh key unavailable")
-    elif _docker_vm_hides_bridge_ips():
+    elif _docker_vm_hides_bridge_ips(ctx.execution_boundary):
         log.info(
-            "Skipping host-key pinning: Docker VM mode does not expose "
-            "Compose bridge IPs to the host"
+            "Skipping host-key pinning: selected Docker bridge addresses "
+            "are not verified reachable from this host"
         )
     else:
         try:
@@ -4068,6 +4164,7 @@ def _orchestrate_lab_start_owned(
                 ),
                 outcome=StartupOutcome.FAILED,
                 diagnostics=list(ctx.diagnostics),
+                execution_boundary=ctx.execution_boundary,
             )
         ctx.diagnostics.extend(stage.diagnostics)
         if stage.error is not None:
@@ -4080,6 +4177,7 @@ def _orchestrate_lab_start_owned(
                 error=stage.error,
                 outcome=StartupOutcome.FAILED,
                 diagnostics=list(ctx.diagnostics),
+                execution_boundary=ctx.execution_boundary,
             )
 
     if after_start is not None:
@@ -4104,6 +4202,7 @@ def _orchestrate_lab_start_owned(
         outcome=outcome,
         diagnostics=list(ctx.diagnostics),
         resolved_ports=list(ctx.resolved_ports),
+        execution_boundary=ctx.execution_boundary,
     )
 
 

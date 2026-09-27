@@ -46,6 +46,12 @@ from aptl.backends.raes_realization import AptlRealization
 from aptl.core.deployment._operator_access_proof import operator_access_details
 from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.deployment.realization import DeploymentRealizationSpec
+from aptl.core.execution_boundary import (
+    BoundaryProbeBackend,
+    disclosed_execution_boundary,
+    has_bound_daemon_identity,
+    revalidate_execution_boundary,
+)
 from aptl.utils.logging import get_logger
 
 log = get_logger("raes-provisioner")
@@ -54,6 +60,34 @@ log = get_logger("raes-provisioner")
 # bounded native readback without admitting an absent or partial value.
 _REALIZATION_READBACK_TIMEOUT_SECONDS = 300.0
 _REALIZATION_READBACK_INTERVAL_SECONDS = 2.0
+
+
+def execution_boundary_disclosure(
+    backend: BoundaryProbeBackend,
+    *,
+    host_system: str | None = None,
+    host_kernel: str | None = None,
+) -> dict[str, object]:
+    """Publish per-run facts in RAES's validated backend-owned apply details."""
+
+    observed = disclosed_execution_boundary(backend)
+    if observed is None:
+        observed = revalidate_execution_boundary(
+            backend, host_system=host_system, host_kernel=host_kernel
+        )
+    return observed.model_dump(mode="json")
+
+
+def _boundary_admission_failed(backend: BoundaryProbeBackend) -> bool:
+    observed = revalidate_execution_boundary(backend)
+    required_seat = isinstance(getattr(backend, "_appliance_boundary", None), tuple)
+    return (
+        observed.observation_status == "mismatch"
+        and has_bound_daemon_identity(backend)
+    ) or (
+        required_seat
+        and (not has_bound_daemon_identity(backend) or observed.host_containment == "unknown")
+    )
 
 
 class ProvisionerStartMixin(object):
@@ -73,6 +107,17 @@ class ProvisionerStartMixin(object):
 
         observation_context = DeploymentObservationContext(attempt_id=self._attempt_id)
         result: ApplyResult | None = None
+        if _boundary_admission_failed(self.deployment_backend):
+            diagnostics.append(
+                diagnostic(
+                    "aptl.provisioner.execution-boundary-mismatch",
+                    PROVISIONING_ADDRESS,
+                    "Selected Docker endpoint or daemon changed or required seat identity is unavailable.",
+                )
+            )
+            return self._failed_apply(
+                snapshot, diagnostics, selected_profiles, realization
+            )
         try:
             start_result = self.deployment_backend.realize(
                 deployment_spec,
@@ -200,6 +245,17 @@ class ProvisionerStartMixin(object):
                     len(readback_diagnostics),
                 )
             time.sleep(min(_REALIZATION_READBACK_INTERVAL_SECONDS, deadline - now))
+        if _boundary_admission_failed(self.deployment_backend):
+            diagnostics.append(
+                diagnostic(
+                    "aptl.provisioner.execution-boundary-mismatch",
+                    PROVISIONING_ADDRESS,
+                    "Selected Docker endpoint or daemon changed or required seat identity is unavailable.",
+                )
+            )
+            return self._failed_apply(
+                snapshot, diagnostics, selected_profiles, realization
+            )
         return ApplyResult(
             success=True,
             snapshot=realized_snapshot,
@@ -220,6 +276,9 @@ class ProvisionerStartMixin(object):
                     "capture_apparatus": list(apparatus_observations),
                     "operator_access": operator_access_details(
                         self.operator_access.accesses
+                    ),
+                    "aptl_execution_boundary": execution_boundary_disclosure(
+                        self.deployment_backend
                     ),
                 },
                 realization,

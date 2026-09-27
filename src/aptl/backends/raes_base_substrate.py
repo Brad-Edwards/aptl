@@ -41,29 +41,60 @@ class InitRequirements:
     """Run requirements for a node whose declared service units need a service
     manager (systemd) as container init.
 
-    These are the flags APTL already uses for its systemd nodes, validated
-    locally against Docker: a host cgroup namespace, a read-write cgroupfs
-    mount, `/run` and `/tmp` tmpfs, the capabilities systemd needs, an
-    unconfined seccomp and AppArmor profiles, and `/usr/sbin/init` as PID 1. They are
-    generic (init mechanics), never product-specific.
+    One code-owned cgroup v2 posture, measured against real local Docker (issue
+    #955): a PRIVATE cgroup namespace, a writable cgroup mount obtained through
+    `--security-opt writable-cgroups=true`, `/run`, `/run/lock` and `/tmp`
+    tmpfs, NO added capabilities, the daemon's default seccomp and AppArmor
+    profiles, and the base image's own init as PID 1. Generic init mechanics,
+    never product-specific.
+
+    What systemd actually needs is a *writable* cgroup filesystem, not a
+    privileged one. It creates `/init.scope` at boot and exits immediately
+    otherwise ("Failed to create /init.scope control group: Read-only file
+    system"). runc mounts the container's own namespace-scoped cgroup2
+    read-only unless the container is privileged, which is why the retired
+    recipe reached for a host cgroup namespace plus a read-write bind of the
+    host's `/sys/fs/cgroup` -- handing every systemd node read-write access to
+    the entire host cgroup tree. Docker Engine 28.0 (moby#48828) added
+    `writable-cgroups=true`, which clears the read-only flag on that same
+    scoped mount and nothing else, so the node gets a writable cgroup2 rooted
+    at its own namespace and cannot see the host tree at all.
+
+    The added capabilities were not merely unnecessary, they were harmful:
+    holding CAP_SYS_ADMIN made systemd *attempt* host operations
+    (`dev-hugepages.mount`, `sys-fs-fuse-connections.mount`, `logind`) that
+    then failed inside a container, booting the substrate `degraded` with six
+    failed units on Debian. Without the capability systemd skips them via
+    `ConditionCapability=` and reaches `running` cleanly. An added capability
+    may return only as a documented, measured, per-substrate necessity.
+
+    The same capability explains the AppArmor relaxation the retired recipe
+    later acquired. Rocky's hardened `rsyslog.service` failed under Docker's
+    `docker-default` AppArmor profile only because CAP_SYS_ADMIN let systemd
+    create the unit's mount namespace, whose mounts AppArmor then denied.
+    Without the capability systemd cannot unshare the namespace, recognizes a
+    containerized execution, and runs the unit unsandboxed inside the
+    container's own confinement: measured, rsyslog reaches `active` with
+    `docker-default` in force. So AppArmor stays confined too.
+
+    The retired `cgroup_host`, `cgroupfs_rw_mount`, `seccomp_unconfined`, and
+    `apparmor_unconfined` fields are deleted rather than defaulted false: a
+    field that still exists is a field a caller can set back to True.
+
+    This posture requires a cgroup v2 daemon at Docker Engine 28.0 or newer.
+    That is enforced before anything is created, by
+    :func:`aptl.core.deployment._compose_substrate_gate.require_substrate_daemon_support`
+    -- and the cgroup v2 half of that gate is a safety precondition of this
+    posture, not a portability nicety. See that module for why.
     """
 
     # Empty: the generic systemd base image's own CMD runs init (/sbin/init or
     # /usr/sbin/init), so the run does not override the command.
     init_command: tuple[str, ...] = ()
-    capabilities: tuple[str, ...] = ("SYS_ADMIN", "SYS_NICE", "SYS_RESOURCE")
-    cgroup_host: bool = True
-    cgroupfs_rw_mount: bool = True
-    tmpfs: tuple[str, ...] = (
-        "/run",
-        "/run/lock",  # NOSONAR python:S5443 - container tmpfs mount target
-        "/tmp",  # NOSONAR python:S5443 - container tmpfs mount target
-    )
-    seccomp_unconfined: bool = True
-    # Docker's default AppArmor profile denies the mount namespace operations
-    # systemd performs for hardened units such as Rocky Linux's rsyslog.service.
-    # Keep this relaxation confined to init-capable base containers.
-    apparmor_unconfined: bool = True
+    capabilities: tuple[str, ...] = ()
+    cgroup_private: bool = True
+    writable_cgroups: bool = True
+    tmpfs: tuple[str, ...] = ("/run", "/run/lock", "/tmp")  # NOSONAR python:S5443 - tmpfs mount targets for the container's own init, not application file I/O into a shared host directory
     env: tuple[tuple[str, str], ...] = (("container", "docker"),)
     stop_signal: str = "SIGRTMIN+3"
 
@@ -298,7 +329,14 @@ def _init_requirements(runtime: RuntimeConfiguration | None) -> InitRequirements
 
     ``runtime.linux_capabilities.add`` entries are in Linux ``CAP_*`` form
     (RAES's typed convention); the container run flag form Docker expects
-    (and this module's own fixed defaults already use) drops that prefix.
+    drops that prefix.
+
+    Since issue #955 the init baseline is empty, so a declared extra is the
+    ENTIRE grant on the realized container. That is what makes the closed-world
+    capability readback exact: every ``CapAdd`` traces to an SDL declaration,
+    with nothing subtracted as substrate baseline. The merge below is kept
+    (rather than collapsed to ``extra``) so a future measured, documented init
+    capability composes with declared ones instead of silently replacing them.
     """
 
     extra = tuple(

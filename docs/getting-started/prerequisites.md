@@ -4,7 +4,16 @@
 
 - RAM: the full `techvault` stack needs more than 20GB
 - 20GB+ disk
-- Docker Engine 20.10+ on native Linux, or Docker Desktop on macOS, Windows, or Linux
+- Docker Engine 28.0+ on a cgroup v2 host: native Linux, or the engine inside
+  Docker Desktop (macOS, Windows, Linux) or Colima. Check with
+  `docker version --format '{{.Server.Version}}'` and
+  `docker info --format '{{.CgroupVersion}}'` (must print `2`). Nodes that run
+  service units boot systemd inside their container, which needs a writable
+  cgroup filesystem; APTL obtains one with `--security-opt
+  writable-cgroups=true`, added in Engine 28.0. `aptl lab start` checks the
+  daemon before creating anything and stops with a clear message on an older
+  engine or a cgroup v1 host rather than falling back to a privileged container
+  recipe
 - Docker Compose 2.0+ (`docker compose version`)
 - Docker Buildx (`docker buildx version`)
 - Python 3.11+ (for the CLI)
@@ -37,6 +46,8 @@ sudo apt install docker.io docker-compose-v2 docker-buildx
 ```
 
 Docker CE repositories name the last package `docker-buildx-plugin` instead.
+Distribution packages can lag behind Docker's own releases; confirm the server
+reports Engine 28.0 or newer before starting a lab.
 
 **macOS (Docker Desktop):** Install Docker Desktop and allocate enough memory
 in Settings -> Resources. The full `techvault` stack needs more

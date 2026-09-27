@@ -71,3 +71,45 @@ def test_render_issue_includes_rule_and_location() -> None:
     assert "python:S1234" in rendered
     assert "src/aptl/core/lab.py:10" in rendered
     assert "example" in rendered
+
+
+def test_fetch_json_reports_the_sonarcloud_error_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A rejected lookup must say why, not only its status code."""
+
+    import io
+    import urllib.error
+
+    body = json.dumps({"errors": [{"msg": "Unknown parameter 'x'"}]}).encode("utf-8")
+
+    def reject(request, timeout):
+        del request, timeout
+        raise urllib.error.HTTPError(
+            "https://sonarcloud.io/api/issues/search", 400, "Bad Request", {}, io.BytesIO(body)
+        )
+
+    monkeypatch.setattr(gate.urllib.request, "urlopen", reject)
+
+    with pytest.raises(RuntimeError, match=r"HTTP 400: .*Unknown parameter 'x'"):
+        gate.fetch_json("https://sonarcloud.io/api/issues/search", "token")
+
+
+def test_fetch_json_bounds_the_reported_error_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    import io
+    import urllib.error
+
+    def reject(request, timeout):
+        del request, timeout
+        raise urllib.error.HTTPError(
+            "https://sonarcloud.io/api/issues/search",
+            400,
+            "Bad Request",
+            {},
+            io.BytesIO(b"x" * (gate.ERROR_BODY_LIMIT * 4)),
+        )
+
+    monkeypatch.setattr(gate.urllib.request, "urlopen", reject)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        gate.fetch_json("https://sonarcloud.io/api/issues/search", "token")
+
+    assert len(str(excinfo.value)) <= gate.ERROR_BODY_LIMIT + len("HTTP 400: ")

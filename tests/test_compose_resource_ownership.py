@@ -1079,3 +1079,65 @@ def test_a_failed_compose_up_receipts_and_rolls_back_partial_runtime(
     backend._roll_back_started_project.assert_called_once_with(
         scope, ["core"], remove_volumes=False
     )
+
+
+def _writable_cgroups_compose(tmp_path: Path) -> Path:
+    compose = tmp_path / "docker-compose.yml"
+    compose.write_text(
+        "services:\n"
+        "  reverse:\n"
+        "    profiles: [reverse]\n"
+        "    image: example\n"
+        "    security_opt: [writable-cgroups=true]\n"
+    )
+    return compose
+
+
+def test_compose_up_of_a_writable_cgroups_service_refuses_an_unsupported_daemon(
+    tmp_path: Path,
+) -> None:
+    """issue #955: a Compose-managed systemd service is gated before any mutation."""
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl")
+    backend._prepare_owned_start = MagicMock()
+    backend._run = MagicMock(
+        side_effect=lambda cmd, **_: subprocess.CompletedProcess(
+            cmd, 0, stdout="1\n", stderr=""
+        )
+    )
+
+    result = backend._run_owned_compose_up(
+        ["reverse"],
+        build=False,
+        compose_files=(_writable_cgroups_compose(tmp_path),),
+        exclude_services=(),
+        only_services=(),
+        scenario_root=None,
+    )
+
+    assert not result.success
+    assert "cgroup v2" in result.error
+    backend._prepare_owned_start.assert_not_called()
+    assert all("up" not in call.args[0] for call in backend._run.call_args_list)
+
+
+def test_compose_up_without_a_writable_cgroups_service_does_not_probe(
+    tmp_path: Path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl")
+    backend._require_substrate_daemon = MagicMock()
+    backend._prepare_owned_start = MagicMock(
+        return_value=LabResult(success=False, error="stop here")
+    )
+
+    result = backend._run_owned_compose_up(
+        ["core"],
+        build=False,
+        compose_files=(_writable_cgroups_compose(tmp_path),),
+        exclude_services=(),
+        only_services=(),
+        scenario_root=None,
+    )
+
+    assert result.error == "stop here"
+    backend._require_substrate_daemon.assert_not_called()

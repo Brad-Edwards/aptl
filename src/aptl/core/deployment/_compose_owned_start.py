@@ -8,11 +8,15 @@ from pathlib import Path
 from aptl.core.deployment._compose_build_dedupe import (
     write_duplicate_build_override,
 )
+from aptl.core.deployment._compose_substrate_gate import (
+    compose_services_requesting_writable_cgroups,
+)
 from aptl.core.deployment._compose_resource_ownership import (
     OwnershipConflictError,
     WorkspaceOwnership,
     write_compose_ownership_override,
 )
+from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
 from aptl.utils.logging import get_logger
@@ -115,7 +119,12 @@ class ComposeOwnedStartMixin:
     ) -> LabResult:
         """Preflight, run, and receipt one Compose up operation."""
 
-        prepared = self._prepare_owned_start(compose_files)
+        refused = self._compose_substrate_daemon_refusal(
+            compose_files, profiles, exclude_services, only_services
+        )
+        prepared = (
+            refused if refused is not None else self._prepare_owned_start(compose_files)
+        )
         if isinstance(prepared, LabResult):
             return prepared
         command = self._owned_up_command(
@@ -144,6 +153,33 @@ class ComposeOwnedStartMixin:
                 )
             return LabResult(success=False, error=result.stderr)
         return self._capture_started_resources(prepared, profiles)
+
+    def _compose_substrate_daemon_refusal(
+        self,
+        compose_files: tuple[Path, ...],
+        profiles: list[str],
+        exclude_services: tuple[str, ...],
+        only_services: tuple[str, ...],
+    ) -> LabResult | None:
+        """Refuse before ``up`` when a selected service needs an unsupported daemon.
+
+        Same gate, same once-per-run cache, as a generic systemd node (issue
+        #955), so a Compose-managed systemd service cannot reach the daemon
+        through a path the substrate gate does not cover.
+        """
+
+        if not compose_services_requesting_writable_cgroups(
+            compose_files,
+            profiles,
+            exclude_services=exclude_services,
+            only_services=only_services,
+        ):
+            return None
+        try:
+            self._require_substrate_daemon()
+        except BackendSeedError as exc:
+            return LabResult(success=False, error=str(exc))
+        return None
 
     def _prepare_owned_start(
         self, compose_files: tuple[Path, ...]

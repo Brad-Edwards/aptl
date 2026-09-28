@@ -547,6 +547,7 @@ services:
     def test_realize_disconnects_implicit_default_bridge(
         self,
         tmp_path,
+        monkeypatch,
         published_ports,
         expect_disconnect,
     ):
@@ -564,6 +565,14 @@ services:
         alone (per the sibling test above): it is Docker's own fixed
         default, not something a user attached on purpose.
         """
+        # The exact host-port availability probe binds a real socket, so a lab
+        # (or anything else) holding 127.0.0.1:2023 on the test host would fail
+        # this case for a reason unrelated to bridge reconciliation. The probe
+        # has its own coverage in tests/test_host_ports.py.
+        monkeypatch.setattr(
+            "aptl.core.deployment._compose_port_realization.port_available",
+            lambda *_args, **_kwargs: True,
+        )
         backend = self._make_backend(tmp_path)
         spec = DeploymentRealizationSpec(
             profiles=("kali",),

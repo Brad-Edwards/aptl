@@ -46,6 +46,12 @@ from aptl.backends.raes_realization import AptlRealization
 from aptl.core.deployment._operator_access_proof import operator_access_details
 from aptl.core.deployment.observation import DeploymentObservationContext
 from aptl.core.deployment.realization import DeploymentRealizationSpec
+from aptl.core.execution_boundary import (
+    BoundaryProbeBackend,
+    disclosed_execution_boundary,
+    has_bound_daemon_identity,
+    revalidate_execution_boundary,
+)
 from aptl.utils.logging import get_logger
 
 log = get_logger("raes-provisioner")
@@ -56,8 +62,68 @@ _REALIZATION_READBACK_TIMEOUT_SECONDS = 300.0
 _REALIZATION_READBACK_INTERVAL_SECONDS = 2.0
 
 
+def execution_boundary_disclosure(
+    backend: BoundaryProbeBackend,
+    *,
+    host_system: str | None = None,
+    host_kernel: str | None = None,
+) -> dict[str, object]:
+    """Publish per-run facts in RAES's validated backend-owned apply details."""
+
+    observed = disclosed_execution_boundary(backend)
+    if observed is None:
+        observed = revalidate_execution_boundary(
+            backend, host_system=host_system, host_kernel=host_kernel
+        )
+    return observed.model_dump(mode="json")
+
+
+def _required_seat_identity_unavailable(
+    backend: BoundaryProbeBackend, *, bound_identity: bool, containment: str
+) -> bool:
+    """A required seat must have a readable daemon and containment label."""
+
+    required_seat = isinstance(getattr(backend, "_appliance_boundary", None), tuple)
+    return required_seat and (not bound_identity or containment == "unknown")
+
+
+def _boundary_admission_failed(backend: BoundaryProbeBackend) -> bool:
+    """Reject changed daemons and required seats with unreadable identities."""
+
+    observed = revalidate_execution_boundary(backend)
+    bound_identity = has_bound_daemon_identity(backend)
+    changed_bound_daemon = observed.observation_status == "mismatch" and bound_identity
+    return changed_bound_daemon or _required_seat_identity_unavailable(
+        backend, bound_identity=bound_identity, containment=observed.host_containment
+    )
+
+
 class ProvisionerStartMixin(object):
     """Start the lowered deployment, then report the world it realized."""
+
+    def _realize_backend(
+        self,
+        deployment_spec: DeploymentRealizationSpec,
+        observation_context: DeploymentObservationContext,
+    ) -> str | None:
+        """Start the backend and return an actionable failure reason, if any."""
+
+        try:
+            start_result = self.deployment_backend.realize(
+                deployment_spec,
+                scenario_root=self.bundle.root,
+                substrate_digests=self._availability_substrate_digests(),
+                observation_context=observation_context,
+            )
+        # The RAES backend-call boundary replaces a TypeError or ValueError
+        # escaping apply() with an opaque contract diagnostic. Deployment
+        # lowering uses those exception types for invalid realized service
+        # models, so preserve the actionable, redacted reason here.
+        except (TypeError, ValueError) as exc:
+            return str(exc)
+        if not start_result.success:
+            return start_result.error or "APTL deployment backend failed."
+        return None
 
     def _start_and_observe_apparatus(
         self,
@@ -73,36 +139,24 @@ class ProvisionerStartMixin(object):
 
         observation_context = DeploymentObservationContext(attempt_id=self._attempt_id)
         result: ApplyResult | None = None
-        try:
-            start_result = self.deployment_backend.realize(
-                deployment_spec,
-                scenario_root=self.bundle.root,
-                substrate_digests=self._availability_substrate_digests(),
-                observation_context=observation_context,
-            )
-        # The RAES backend-call boundary replaces a TypeError or ValueError
-        # escaping apply() with an opaque contract diagnostic. Deployment
-        # lowering uses those exception types for invalid realized service
-        # models, so preserve the actionable, redacted reason in the failed
-        # ApplyResult just as _lowered_spec does above.
-        except (TypeError, ValueError) as exc:
+        if _boundary_admission_failed(self.deployment_backend):
             diagnostics.append(
                 diagnostic(
-                    "aptl.provisioner.backend-start-failed",
+                    "aptl.provisioner.execution-boundary-mismatch",
                     PROVISIONING_ADDRESS,
-                    str(exc),
+                    "Selected Docker endpoint or daemon changed or required seat identity is unavailable.",
                 )
             )
-            result = self._failed_apply(
+            return self._failed_apply(
                 snapshot, diagnostics, selected_profiles, realization
             )
-            start_result = None
-        if result is None and start_result is not None and not start_result.success:
+        start_error = self._realize_backend(deployment_spec, observation_context)
+        if start_error is not None:
             diagnostics.append(
                 diagnostic(
                     "aptl.provisioner.backend-start-failed",
                     PROVISIONING_ADDRESS,
-                    start_result.error or "APTL deployment backend failed.",
+                    start_error,
                 )
             )
             result = self._failed_apply(
@@ -200,6 +254,17 @@ class ProvisionerStartMixin(object):
                     len(readback_diagnostics),
                 )
             time.sleep(min(_REALIZATION_READBACK_INTERVAL_SECONDS, deadline - now))
+        if _boundary_admission_failed(self.deployment_backend):
+            diagnostics.append(
+                diagnostic(
+                    "aptl.provisioner.execution-boundary-mismatch",
+                    PROVISIONING_ADDRESS,
+                    "Selected Docker endpoint or daemon changed or required seat identity is unavailable.",
+                )
+            )
+            return self._failed_apply(
+                snapshot, diagnostics, selected_profiles, realization
+            )
         return ApplyResult(
             success=True,
             snapshot=realized_snapshot,
@@ -220,6 +285,9 @@ class ProvisionerStartMixin(object):
                     "capture_apparatus": list(apparatus_observations),
                     "operator_access": operator_access_details(
                         self.operator_access.accesses
+                    ),
+                    "aptl_execution_boundary": execution_boundary_disclosure(
+                        self.deployment_backend
                     ),
                 },
                 realization,

@@ -18,6 +18,7 @@ path	proposed_owner	migration_rule
 .github/dependabot.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 .github/workflows/checks.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 .github/workflows/docs-deploy.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+.github/workflows/ground-control-phase-e.yml	build-governance	Keep merged-delivery finalization with repository workflow governance
 .github/workflows/pr-title-lint.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 .github/workflows/release-please.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 .github/workflows/scorecard.yml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
@@ -295,6 +296,7 @@ docs/architecture/issue-913-shuffle-post-realization-mutation-preflight.md	docs-
 docs/architecture/issue-934-rename-boundary-preflight.md	architecture-history	Binding #934 rename-boundary inventory and retirement guardrails
 docs/architecture/issue-949-orborus-control-authority-preflight.md	architecture-history	Post-baseline architecture guidance; retain with its owning issue
 docs/architecture/issue-951-fresh-env-pack-start-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+docs/architecture/issue-955-systemd-substrate-privilege-preflight.md	architecture-history	Preserve issue 955 substrate posture decisions and daemon-gate guardrails
 docs/architecture/issue-956-sdl-runtime-authority-materialization-preflight.md	architecture-history	Preserve runtime-authority materialization decisions and implementation guardrails
 docs/architecture/issue-957-wazuh-attestation-evidence-credentials-preflight.md	architecture-history	Preserve Wazuh attestation, evidence-source, and scenario-credential ownership decisions
 docs/architecture/issue-964-backend-resource-ownership-preflight.md	architecture-history	Post-baseline backend ownership guidance; retain with its owning issue
@@ -1066,6 +1068,8 @@ src/aptl/core/deployment/_compose_stateful_realization.py	core-candidate	Migrate
 src/aptl/core/deployment/_compose_stateful_services.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_stateful_volumes.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_stop.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_substrate_attestation.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_substrate_gate.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_traffic_mirror.py	backend-observability	Retain scope-admitted minimum-intrusion traffic-mirror realization and readback
 src/aptl/core/deployment/_compose_volume_cleanup.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_cortex_service_credentials.py	backend-substrate	Post-baseline runtime credential delivery; retain with deployment authority
@@ -1620,7 +1624,11 @@ tests/test_soc_ca.py	tests-follow-owner	Retain meaningful boundary and parity te
 tests/test_sonar_assert_no_new_issues.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_ssh.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_ssh_key_bundle.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_compose_capability_necessity.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_compose_substrate_attestation.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_stage_hosted_seat_payload.py	tests-follow-owner	Retain private hosted payload staging coverage
+tests/test_substrate_daemon_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_substrate_posture_real_docker.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_supply_chain_pinning.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_sysreqs.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_techvault_build_cache.py	tests-follow-owner	Retain verified artifact and cache identity regressions
@@ -1830,3 +1838,6 @@ src/aptl/backends/_raes_participant_snapshot.py	core-candidate	Keep governed par
 src/aptl/backends/_raes_participant_transport.py	core-candidate	Keep generic authenticated host transport and role scoped MCP rendering with RAES integration
 src/aptl/core/deployment/_compose_image_free_network_reconciliation.py	backend-substrate	Retain declared image-free network reconciliation with Compose realization
 src/aptl_techvault/study_capture_registrations.py	scenario-integration	Keep participant study capture declarations with the TechVault scenario adapter
+docs/architecture/issue-958-execution-boundary-preflight.md	architecture-history	Preserve issue 958 execution-boundary ownership decisions and guardrails
+src/aptl/core/execution_boundary.py	core-candidate	Keep selected-daemon observation and disclosure with the lab lifecycle owner
+tests/test_execution_boundary.py	tests-follow-owner	Retain selected-daemon boundary regression coverage with the lab lifecycle owner

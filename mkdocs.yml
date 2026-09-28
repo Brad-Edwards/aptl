@@ -93,6 +93,7 @@ nav:
     - RNG-001 Ephemeral Environments Preflight: architecture/rng-001-ephemeral-environments-preflight.md
     - DEP-003 Ephemeral Lifecycle Policy Preflight: architecture/dep-003-ephemeral-lifecycle-preflight.md
     - GRC Boundary Surface Vocabulary Preflight: architecture/grc-boundary-surface-vocabulary-preflight.md
+    - "Issue #958 Execution Boundary Preflight": architecture/issue-958-execution-boundary-preflight.md
     - "Issue #851 First-Time User Documentation Preflight": architecture/issue-851-first-time-user-docs-preflight.md
     - "Issue #557 Participant Implementation Binding Preflight": architecture/issue-557-participant-implementation-binding-preflight.md
     - "Issue #821 In-Appliance Participant Workbench Preflight": architecture/issue-821-participant-workbench-preflight.md

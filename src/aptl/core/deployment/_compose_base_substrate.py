@@ -27,6 +27,13 @@ from aptl.core.deployment._compose_generic_base_images import (
 from aptl.core.deployment._compose_realization_networks import (
     _resolve_base_network_bindings,
 )
+from aptl.core.deployment._compose_substrate_attestation import (
+    substrate_posture_mismatch,
+)
+from aptl.core.deployment._compose_substrate_gate import (
+    WRITABLE_CGROUPS_OPTION,
+    require_substrate_daemon_support,
+)
 from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.deployment.realization import (
     DeploymentNetworkAttachment,
@@ -39,21 +46,25 @@ if TYPE_CHECKING:
 
 
 def _init_run_flags(init: "InitRequirements") -> list[str]:
-    """Build the `docker run` flags a systemd-capable base container needs."""
+    """Build the `docker run` flags a systemd-capable base container needs.
+
+    Issue #955: a private cgroup namespace plus `writable-cgroups=true` gives
+    systemd the writable, namespace-scoped cgroup2 it needs without a host
+    cgroup namespace, a host cgroupfs bind, an unconfined seccomp profile, or
+    any added capability. `--cgroupns=private` is requested explicitly rather
+    than relied on as the cgroup v2 default, so the inspected contract is
+    deterministic and the start-time attestation has an exact value to compare.
+    """
 
     flags: list[str] = []
-    if init.cgroup_host:
-        flags.append("--cgroupns=host")
-    if init.cgroupfs_rw_mount:
-        flags += ["-v", "/sys/fs/cgroup:/sys/fs/cgroup:rw"]
+    if init.cgroup_private:
+        flags.append("--cgroupns=private")
+    if init.writable_cgroups:
+        flags += ["--security-opt", WRITABLE_CGROUPS_OPTION]
     for path in init.tmpfs:
         flags += ["--tmpfs", path]
     for capability in init.capabilities:
         flags += ["--cap-add", capability]
-    if init.seccomp_unconfined:
-        flags += ["--security-opt", "seccomp:unconfined"]
-    if init.apparmor_unconfined:
-        flags += ["--security-opt", "apparmor:unconfined"]
     for env_name, env_value in init.env:
         if not valid_environment_variable_name(env_name):
             raise BackendSeedError("invalid base-container environment variable name")
@@ -96,6 +107,24 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
     ``_project_dir``.
     """
 
+    def _require_substrate_daemon(self) -> None:
+        """Prove the target daemon can run the substrate posture.
+
+        Called at the pre-mutation realization boundary, before any generic
+        image build, and again by ``start_base_container`` for direct callers.
+        A pass is cached per daemon endpoint: the answer is a property of the
+        daemon, so re-probing per node would add subprocess round trips for an
+        answer that cannot change, but a changed ``DOCKER_HOST`` or context is
+        a different daemon and is probed again. A refusal is never cached, so
+        one node cannot be admitted because another was checked first.
+        """
+
+        endpoint = tuple(sorted(self.docker_transport_environment().items()))
+        if getattr(self, "_substrate_daemon_verified_for", None) == endpoint:
+            return
+        require_substrate_daemon_support(self._run)
+        self._substrate_daemon_verified_for = endpoint
+
     def _resolve_base_run_image(self, spec: "BaseContainerSpec") -> str:
         """Return the exact image reference a node's base container runs from.
 
@@ -126,18 +155,37 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
         return verified
 
     def _base_container_already_realized(
-        self, native_id: str, run_image_ref: str
+        self, native_id: str, spec: "BaseContainerSpec", run_image_ref: str
     ) -> bool:
         """Return whether this node's base container is already up on its image.
 
         True only when a container of the exact name is running the exact image
         the spec calls for — ``run_image_ref``, which for a dynamic-composition
         node is the verified config id (the value ``docker run`` recorded as
-        ``Config.Image``), and for an ordinary node is the declared tag. A
-        stopped, missing, or wrong-image container returns False so it is
-        recreated cleanly. Network attachments are deliberately not part of the
-        test: the post-start reconcile owns them, and a preserved container keeps
-        whatever it already had.
+        ``Config.Image``), and for an ordinary node is the declared tag —  AND
+        still matches the spec that would be created now. A stopped, missing,
+        wrong-image, or drifted container returns False so it is recreated
+        cleanly. Network attachments are deliberately not part of the test: the
+        post-start reconcile owns them, and a preserved container keeps whatever
+        it already had.
+
+        The drift comparison exists because image identity is not realization
+        identity (issue #955). A container created under the retired privileged
+        recipe is byte-identical to a new one on name and image, so on any
+        machine carrying a warm lab it would be silently reused and the
+        substrate hardening would never apply — while the fresh-directory boot
+        gate, which runs on a clean tree, passed. That is the same class of
+        cache-masked gap that hid the missing generic base image builds until a
+        real fresh-machine boot surfaced it (#581, see
+        ``_GENERIC_BASE_IMAGE_BUILD_CONTEXTS``). The same blindness applied to
+        every other realized fact — published ports, mounts, environment, tmpfs
+        — so the comparison covers those too rather than only the posture that
+        prompted it.
+
+        A mismatch returns False and nothing more: the caller's ordinary
+        recreate path owns removal, and that path carries the project-ownership
+        proof (#964). Posture drift is never licence to force-remove a
+        same-named container APTL cannot prove it owns.
         """
 
         try:
@@ -148,15 +196,19 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
             raise BackendSeedError(
                 "base-container ownership observation failed"
             ) from exc
-        if not info:
-            return False
-        if not isinstance(info, dict):
-            return False
+        info = info if isinstance(info, dict) else {}
         state = info.get("State")
         running = isinstance(state, dict) and bool(state.get("Running"))
         config = info.get("Config")
         image = config.get("Image") if isinstance(config, dict) else None
-        return running and image == run_image_ref
+        return (
+            running
+            and image == run_image_ref
+            and substrate_posture_mismatch(
+                info, spec, volume_prefix=self._project_name
+            )
+            is None
+        )
 
     def _base_container_create_command(
         self,
@@ -351,6 +403,35 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
             raise BackendSeedError(
                 f"failed to start base container for node {spec.node_address}"
             )
+        self._attest_created_base_container(spec, native_id)
+
+    def _attest_created_base_container(
+        self, spec: "BaseContainerSpec", native_id: str
+    ) -> None:
+        """Read back a just-created container's posture before any content lands.
+
+        The create argv is intent; the daemon's inspect payload is what actually
+        runs (issue #955). A mismatch removes the container this start recorded
+        and fails the node with a stable reason, so service content is never
+        materialized onto a posture APTL did not ask for.
+        """
+
+        try:
+            info = self._raw_container_inspect(native_id)
+        except Exception as exc:
+            raise BackendSeedError(
+                f"base-container posture readback failed for node {spec.node_address}"
+            ) from exc
+        reason = substrate_posture_mismatch(
+            info, spec, volume_prefix=self._project_name
+        )
+        if reason is None:
+            return
+        self._run(remove_container_command(native_id), timeout=30)
+        raise BackendSeedError(
+            f"base container for node {spec.node_address} does not carry the "
+            f"expected substrate posture ({reason})"
+        )
 
     def _attach_and_start_base_container(
         self,

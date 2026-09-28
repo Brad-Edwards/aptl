@@ -10,6 +10,14 @@ the selected Docker engine. Use it for supervised work on a dedicated,
 rebuildable machine. Do not treat an everyday workstation containing unrelated
 credentials or workloads as disposable lab infrastructure.
 
+The start summary and `aptl lab info` report the selected Docker transport and
+observed host boundary. `native-docker` means the selected local engine's kernel
+matched the CLI host at observation time; `docker-vm-unverified` describes a VM
+runtime without a containment qualification. Remote, changed, or unreadable
+endpoints report a limited or `unknown` result. The label does not prove that
+ports, devices, egress, or other host resources are contained. See the
+[tested profiles and limits](prerequisites.md#tested-execution-profiles-and-limits).
+
 For agent-driven or multi-user work on Linux/KVM, the disposable
 [`aptl seat start`](../reference/appliance-seat-launcher.md) path provides a
 stronger VM boundary around Docker and the lab. Neither containers nor a VM
@@ -66,7 +74,9 @@ aptl lab info
 ```
 
 `aptl lab info` reports current URLs, remapped host ports, usernames, and the
-project-local locations of credentials. Read the values from your own project;
+project-local locations of credentials. For a remote Docker daemon it reports
+ports on the remote host rather than making a local `localhost` URL claim.
+Read the values from your own project;
 do not use a password or port copied from documentation. Wazuh values such as
 `INDEXER_USERNAME` and `INDEXER_PASSWORD` are scenario credentials, not APTL
 control-plane logins.

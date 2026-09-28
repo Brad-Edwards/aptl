@@ -313,8 +313,15 @@ class ComposeResourceResolutionMixin:
         return None
 
     def start_base_container(self, spec: BaseContainerSpec) -> None:
-        """Start or reuse one receipt-owned generic base container."""
+        """Start or reuse one receipt-owned generic base container.
 
+        An init-capable node first proves the target daemon can run the
+        substrate posture (issue #955), before any ownership record, volume,
+        removal, or creation, so an unsupported host fails without mutation.
+        """
+
+        if spec.init is not None:
+            self._require_substrate_daemon()
         ownership = self._ensure_resource_ownership()
         attempt_id = self._resource_attempt_id
         assert attempt_id is not None
@@ -328,7 +335,7 @@ class ComposeResourceResolutionMixin:
             spec, external_name=external_name, daemon_id=daemon_id
         )
         if existing_id is not None and self._base_container_already_realized(
-            existing_id, run_image_ref
+            existing_id, spec, run_image_ref
         ):
             return
         if (

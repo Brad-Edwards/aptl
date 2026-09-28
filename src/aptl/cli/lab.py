@@ -11,6 +11,8 @@ from aptl.cli.participant_profile import qualify_profile
 from aptl.cli.continuity import continuity_audit
 from aptl.cli.lab_render import (
     emit_lab_access_summary,
+    emit_execution_boundary_summary,
+    fresh_execution_boundary,
     live_resolved_ports,
     render_start_result,
 )
@@ -257,7 +259,11 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
 
     render_start_result(result)
     if result.success:
-        emit_lab_access_summary(project_dir, result.resolved_ports)
+        emit_lab_access_summary(
+            project_dir,
+            result.resolved_ports,
+            execution_boundary=result.execution_boundary,
+        )
     if not result.success:
         raise typer.Exit(code=1)
 
@@ -272,6 +278,8 @@ def info(
     ),
 ) -> None:
     """Show lab access URLs and credential locations."""
+    boundary = fresh_execution_boundary(project_dir)
+    emit_execution_boundary_summary(boundary)
     env_path = project_dir / ".env"
     if not env_path.exists():
         typer.echo(
@@ -281,7 +289,11 @@ def info(
         raise typer.Exit(code=1)
     # Reconstruct the ResolvedPort list from docker's runtime state so the
     # printed URLs reflect the actual published ports (#737).
-    emit_lab_access_summary(project_dir, live_resolved_ports(project_dir))
+    emit_lab_access_summary(
+        project_dir,
+        live_resolved_ports(project_dir),
+        execution_boundary=boundary,
+    )
 
 
 @app.command("scenarios")

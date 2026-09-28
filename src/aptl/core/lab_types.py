@@ -15,6 +15,8 @@ keep working.
 from dataclasses import dataclass, field
 from enum import Enum
 
+from aptl.core.execution_boundary import ExecutionBoundaryObservation
+
 
 class StartupOutcome(str, Enum):
     """Closed set of lab-start outcomes (ADR-030).
@@ -117,6 +119,9 @@ class LabResult:
     # populated on lab start so the CLI can report the real host port each
     # service landed on when a default was already in use. Empty for other ops.
     resolved_ports: list[object] = field(default_factory=list)
+    # The selected daemon observed during this exact startup attempt. A missing
+    # observation is rendered explicitly as unknown, including on early failure.
+    execution_boundary: ExecutionBoundaryObservation | None = None
 
     def __post_init__(self) -> None:
         # Make the invariant total: ``outcome`` is the authoritative

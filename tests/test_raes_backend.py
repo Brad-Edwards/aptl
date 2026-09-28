@@ -4487,6 +4487,10 @@ def test_apply_provisioning_records_content_type_provenance_when_honored(tmp_pat
     result = _apply_content_disclosure_scenario(tmp_path, "file")
 
     assert result.success is True, [d.message for d in result.diagnostics]
+    boundary = result.details["aptl_execution_boundary"]
+    assert boundary["schema_version"] == "aptl.execution-boundary/v1"
+    assert boundary["containment_verified"] is False
+    assert "aptl_execution_boundary" not in result.snapshot.metadata
     assert "content-type" in {
         entry.requirement_kind for entry in result.snapshot.realization_provenance
     }

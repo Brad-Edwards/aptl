@@ -12,6 +12,7 @@ from aptl.backends.scenario_startup import (
     ENTRY_POINT_GROUP,
     ScenarioStartupProviderError,
     ScenarioStartupPlan,
+    StartupHookContext,
     _safe_relative_script,
     observe_scenario_runtime_concerns,
     run_scenario_runtime,
@@ -53,6 +54,23 @@ from aptl.core.deployment.realization import (
 )
 from aptl.core.scenario_bundle import PackIdentity, ScenarioBundle, ScenarioSourceKind
 from aptl_techvault.runtime_parameters import TECHVAULT_PACK_SET_DIGEST
+
+
+def test_techvault_reset_clears_baseline_from_explicit_project_root(tmp_path):
+    from aptl_techvault.evidence.techvault_enrollment_baseline import (
+        enrollment_baseline,
+        record_enrollment_baseline,
+    )
+    from aptl_techvault.startup import TechVaultStartupProvider
+
+    assert record_enrollment_baseline(tmp_path, {"db": "001"})
+    assert enrollment_baseline(tmp_path) == {"db": "001"}
+
+    TechVaultStartupProvider.reset(
+        StartupHookContext(backend=object(), project_dir=tmp_path)
+    )
+
+    assert enrollment_baseline(tmp_path) == {}
 
 
 def _bundle(*, digest: str = TECHVAULT_PACK_SET_DIGEST) -> ScenarioBundle:

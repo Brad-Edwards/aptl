@@ -447,6 +447,7 @@ def test_host_adapter_uses_authenticated_cli_and_strict_profile_tools(
     host_home = tmp_path / "host-home"
     host_home.mkdir()
     monkeypatch.setenv("HOME", str(host_home))
+    monkeypatch.setenv("CLOUD_ML_REGION", "us-east5")
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
     config = tmp_path / "profile.json"
@@ -486,6 +487,7 @@ def test_host_adapter_uses_authenticated_cli_and_strict_profile_tools(
     assert "--bare" in initial
     assert "--no-session-persistence" not in initial
     assert runner.environments[0]["HOME"] == str(host_home)
+    assert runner.environments[0]["CLOUD_ML_REGION"] == "us-east5"
     assert "XDG_CONFIG_HOME" not in runner.environments[0]
     assert "CLAUDE_CONFIG_DIR" not in runner.environments[0]
     assert "PYTHONPATH" not in runner.environments[0]

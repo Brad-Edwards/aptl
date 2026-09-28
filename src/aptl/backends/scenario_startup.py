@@ -68,6 +68,7 @@ class StartupHookContext:
     operation: Callable[[], object] | None = field(
         default=None, repr=False, compare=False
     )
+    project_dir: Path | None = None
 
     def run_operation(self) -> object:
         """Run the single core operation delegated for this fixed phase."""

@@ -10,8 +10,10 @@ specifications, exact logical-time windows, and four delivery-evidence
 requirements. The scenario declares Claude Code through the realization
 profile `participant-implementation-manifest:claude-code`.
 
-The exact admitted pack set digest is
+The diagnostic run admitted pack set digest
 `sha256:94dc0236f3e2d4c62db782040acd73b1739ba0bf12adec580289a916fbfcce5a`.
+The digest must be replaced with the released, regenerated study-pack digest
+before a clean qualification.
 The study pack remains `built`; that lifecycle state makes no claim that an
 attempt produced golden proof.
 
@@ -41,13 +43,24 @@ window, control transition, or evidence binding is missing or unsupported.
 
 ## Reproduce the run
 
-1. Install builds containing the env pack, the matching APTL adapter, and a
-   RAES runtime that accepts participant-inject delivery addresses as temporal
-   subjects. Record their distribution versions and source revisions.
+The published-component run is blocked by
+[env-packs #401](https://github.com/OpenRAE/env-packs/issues/401) and
+[RAES #1401](https://github.com/OpenRAE/rae/issues/1401). The merged
+participant work has not reached compatible releases; the APTL lockfile still
+pins RAES 5.0.0 and env-packs 6.1.0. The steps below are the intended
+qualification procedure once those dependencies are resolved.
+
+1. Install pinned, published builds containing the corrected env pack, the
+   matching APTL adapter, and a RAES runtime that accepts participant-inject
+   delivery addresses as temporal subjects. Record their distribution versions,
+   lockfile identity, and qualified pack digest.
 2. Sign into the host Claude Code CLI using the participant operator's own
    account. Provider authentication remains in that CLI's host session and is
    not copied into SDL, `aptl.json`, the generated MCP files, or the run
-   archive.
+   archive. Set `experiment.participant_models.claude` to an immutable model
+   identifier; Vertex identifiers may use the `@YYYYMMDD` suffix. When the
+   authenticated CLI uses Vertex, provide its region through the host's
+   `CLOUD_ML_REGION` environment variable.
 3. Set `scenario.identity` to `techvault-participant-study` and
    `scenario.source` to `env-pack` in `aptl.json`. Keep the existing deployment
    and container selection.
@@ -66,9 +79,22 @@ window, control transition, or evidence binding is missing or unsupported.
    when the attempt reaches the applicable terminal state. Report absent seals,
    capture loss, participant deviations, and unsupported conclusions as such.
 
+A clean completion record requires a successful volume-reset stop, the four
+delivery records, the native evidence and control/crossing records, the
+terminal run provenance record, and a verified sealed bundle. The start result
+alone does not establish the terminal archive.
+
 ## Evidence and claim limits
 
 ### Four-inject qualification run
+
+The later `run_20260927T190733Z` delivered four injects, nine evidence records,
+eight control occurrences, and sixteen crossing occurrences through a local
+engineering setup. That setup used temporary dependency and configuration
+changes plus manual Wazuh baseline recovery. Its 23-member exported bundle
+verified byte integrity but was unsealed and lacked
+`provenance/run-provenance.json`. It is diagnostic evidence only and does not
+qualify issue 601 against published contracts.
 
 Run `run_20260925T153251Z` completed through the ordinary `aptl lab start`
 path with Claude Code 2.1.282, the authenticated host CLI, and the immutable

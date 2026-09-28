@@ -361,7 +361,7 @@ def test_reset_uses_persisted_adapter_when_current_config_is_absent(
         supported_pack_versions=(PACK.pack_version,),
         supported_pack_set_digests=(PACK.set_digest,),
         resolve=lambda _bundle: None,
-        reset=lambda context: resets.append(context.backend),
+        reset=lambda context: resets.append((context.backend, context.project_dir)),
     )
     startup_entry = SimpleNamespace(
         name="otherpack",
@@ -383,7 +383,7 @@ def test_reset_uses_persisted_adapter_when_current_config_is_absent(
     backend = object()
 
     assert _reset_selected_scenario_state(tmp_path, backend) is None
-    assert resets == [backend]
+    assert resets == [(backend, tmp_path)]
 
     upgraded_entry = SimpleNamespace(
         name="otherpack",
@@ -394,7 +394,7 @@ def test_reset_uses_persisted_adapter_when_current_config_is_absent(
 
     # The retired 1.0.0 receipt must not select the obsolete adapter again.
     assert _reset_selected_scenario_state(tmp_path, backend) is None
-    assert resets == [backend]
+    assert resets == [(backend, tmp_path)]
 
     persist_startup_reset_authority(
         tmp_path,
@@ -409,7 +409,7 @@ def test_reset_uses_persisted_adapter_when_current_config_is_absent(
         ),
     )
     assert _reset_selected_scenario_state(tmp_path, backend) is None
-    assert resets == [backend, backend]
+    assert resets == [(backend, tmp_path), (backend, tmp_path)]
 
 
 def test_failed_reset_authority_remains_retryable(tmp_path: Path, monkeypatch) -> None:

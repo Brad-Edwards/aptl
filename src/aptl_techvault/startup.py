@@ -164,9 +164,9 @@ class TechVaultStartupProvider:
     def reset(context: StartupHookContext) -> None:
         """Clear adapter-owned retained evidence state after volume removal."""
 
-        failures = clear_enrollment_baseline(
-            getattr(context.backend, "project_dir", None)
-        )
+        if context.project_dir is None:
+            raise ValueError("reset project root is unavailable")
+        failures = clear_enrollment_baseline(context.project_dir)
         if failures:
             raise RuntimeError("adapter reset failed")
 

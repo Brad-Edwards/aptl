@@ -340,6 +340,51 @@ class TestLabStop:
         cmd_args = self._compose_down_args(mock_subprocess)
         assert "-v" in cmd_args
 
+    def test_volume_stop_clears_selected_adapter_baseline(self, tmp_path, monkeypatch):
+        """Teardown passes its project root even if the backend has none."""
+        from aptl.backends import scenario_startup
+        from aptl.core.lab import stop_lab
+        from aptl.core.lab_types import LabResult
+        from aptl.core.startup_reset_state import (
+            StartupResetAuthority,
+            load_startup_reset_authorities,
+            persist_startup_reset_authority,
+        )
+        from aptl_techvault.evidence.techvault_enrollment_baseline import (
+            enrollment_baseline,
+            record_enrollment_baseline,
+        )
+        from aptl_techvault.runtime_parameters import TECHVAULT_PACK_SET_DIGEST
+        from aptl_techvault.startup import TechVaultStartupProvider
+
+        entry = SimpleNamespace(
+            name="techvault",
+            dist=SimpleNamespace(name="aptl-labs", version="6.0.0"),
+            load=TechVaultStartupProvider,
+        )
+        monkeypatch.setattr(scenario_startup, "_entry_points", lambda: [entry])
+        persist_startup_reset_authority(
+            tmp_path,
+            StartupResetAuthority(
+                "techvault",
+                "0.1.0",
+                TECHVAULT_PACK_SET_DIGEST,
+                "aptl-labs",
+                "6.0.0",
+                "techvault",
+            ),
+        )
+        assert record_enrollment_baseline(tmp_path, {"db": "001"})
+        backend = SimpleNamespace(
+            stop=lambda _profiles, *, remove_volumes: LabResult(
+                success=remove_volumes
+            )
+        )
+
+        assert stop_lab(remove_volumes=True, project_dir=tmp_path, backend=backend).success
+        assert enrollment_baseline(tmp_path) == {}
+        assert load_startup_reset_authorities(tmp_path) == ()
+
     def test_stop_returns_failure_on_error(self, mock_subprocess, tmp_path):
         """If docker compose down fails, stop_lab returns failure."""
         from aptl.core.lab import stop_lab

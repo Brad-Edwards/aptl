@@ -579,7 +579,7 @@ def _reset_selected_scenario_state(
                     authority.distribution_version,
                     authority.entry_point,
                 ),
-                StartupHookContext(backend),
+                StartupHookContext(backend, project_dir=project_dir),
             )
             complete_startup_reset_authority(project_dir, authority)
     except (OSError, ValueError, ScenarioStartupProviderError):

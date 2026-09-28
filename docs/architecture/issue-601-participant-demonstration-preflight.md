@@ -18,6 +18,14 @@ preflight discussion below records the earlier boundary analysis; where it
 mentions readiness or configured provider credentials, this approved revision
 controls the implementation.
 
+The retained four-inject run in that runbook is an **unsealed engineering
+qualification**, with failed transcript finalization on stop. It is evidence
+for delivered turns, not a completed published research bundle or proof that
+all of #558's evidence is present. A future closure claim must identify the
+exact attempt and verify required captures, terminal state, archive seal and
+bundle integrity; it must disclose any missing independent tool-call or target
+observation. A successful `aptl lab start` is not a terminal attempt result.
+
 ## Decision boundary
 
 The deliverable is an observed run by a real installed participant against an
@@ -47,7 +55,7 @@ actions, evaluator observations, failed or missing captures, and interpretation.
 | --- | --- |
 | Scenario meaning and validation | Published RAES SDL parser, processor, runtime and diagnostics; `src/aptl/backends/raes.py`, `raes_manifest.py`, and `src/aptl/validation/` gates. Use the compiled, admitted addresses and contracts; do not parse SDL again into APTL mirrors or infer success from declarations. |
 | Experiment admission | `src/aptl/core/experiment/` and `aptl experiment admit`: bounded, project-contained artifact resolution; public RAES task, capture, experiment and cross-artifact models; apparatus and capture capability checks; immutable trial plan. Admission does not start a lab or prove a participant acted (ADR-047). |
-| Installed participant | RAES participant behavior specifications and compiled participant-inject deliveries own the behavioral contract. `src/aptl/backends/raes_participant_delivery.py` implements the named Claude Code realization profile using the authenticated host CLI and the existing `src/aptl/workbench/` role profiles. Record the selected implementation/model and actual delivery evidence, not just a provider process exit or a plausible transcript. |
+| Installed participant | RAES participant behavior specifications and compiled participant-inject deliveries own the behavioral contract. `src/aptl/backends/raes_participant_delivery.py`, `_raes_participant_planning.py`, `_raes_participant_execution.py`, and `_raes_participant_transport.py` implement the currently admitted Claude Code realization profile using the authenticated host CLI, `BoundedProcessRunner`, and existing `src/aptl/workbench/profiles.py` role profiles. Record the selected implementation/model and actual delivery evidence, not just a provider process exit or a plausible transcript. |
 | Capture and persistence | `src/aptl/core/experiment/capture_registry.py` binds published capture intent to closed collectors; `src/aptl/core/evidence/coordinator.py` owns capture lifecycle, quotas, redaction, content-addressed bytes, typed outcomes and RAES evidence records. `src/aptl/core/runstore.py` owns contained writes. Missing required capture invalidates or interrupts the attempt; it cannot be filled with an authored requirement or a manually assembled JSON file. |
 | Terminal result and export | `src/aptl/core/execution/`, `src/aptl/core/archival/` and ADR-050 own attempt identity, status, RAES `experiment-run/v1`, cross-artifact checks and atomic seal. `src/aptl/core/archival/verify.py` and `aptl runs verify-bundle` verify artifacts. `aptl runs export-bundle` packages existing bytes and discloses an absent seal; packaging is not validation of a scientific claim. |
 | Auth and participant reach | ADR-039 and `docs/components/participant-workbench.md` govern browser principal, live grant, role, deployment identity, revocation, capture admission and narrow MCP dispatch. `docs/reference/host-mcp-access.md` governs host clients. A participant cannot receive operator API, Docker socket, evaluator store or unrestricted service credentials through a convenience demonstration path. |
@@ -55,27 +63,42 @@ actions, evaluator observations, failed or missing captures, and interpretation.
 
 ## Cross-cutting gates for the live path
 
-- **Input and configuration:** resolve paths through the project-contained
-  resolver and existing no-follow run-store rules. Pass scenario, experiment,
-  task and capture input through the published RAES parser/models and the
-  admission policy; pass durable settings through strict `AptlConfig` and
-  runtime secrets through its established environment binding. Unknown fields,
-  unsupported capabilities, mismatched digests and missing sources fail closed.
+- **Input and configuration:** resolve paths through `ScenarioBundle`, the
+  project-contained experiment resolver and existing no-follow run-store rules.
+  Pass scenario, experiment, task and capture input through the published RAES
+  parser/models and admission policy; pass durable settings through strict
+  `AptlConfig` (`ScenarioSourceConfig`, `ExperimentSettings`, and explicit
+  `InstalledParticipantModels`). Lab service secrets use the existing `.env`
+  and MCP synchronization path; the host Claude CLI uses its own login and the
+  transport's allowlisted host environment. The configured credential-source
+  field used by another participant path does not validate or pin this host
+  CLI login. Unknown fields, unsupported capabilities, mismatched digests and
+  missing sources fail closed.
 - **Secret and process surface:** ADR-029 and ADR-052 classify operator/provider
-  credentials separately from designed target data. The participant signs in
-  to Claude Code directly; APTL neither accepts nor persists the provider
-  credential. The adapter uses the host authentication context, a bounded
-  process runner, a private generated MCP configuration, strict MCP selection,
-  role-specific allowed tools, temporary-workspace cleanup, persistent
-  participant sessions, and explicit model selection. Check the host process,
-  descendants and outbound reach actually allowed; ADR-057's stronger OS
-  compartment is proposed, so current tool restriction alone cannot support a
-  sandbox or host-isolation claim.
+  credentials separately from designed target data. The operator signs in to
+  Claude Code directly; APTL does not persist that login in run artifacts, but
+  `_raes_participant_transport.py` forwards selected provider-auth environment
+  variables and the host home/config coordinates to the child. It does not
+  establish the explicit source-provenance or ambient-source exclusion claimed
+  by ADR-052 for its separate configured-source path. The adapter uses
+  `BoundedProcessRunner`, private generated MCP configuration, strict MCP
+  selection, role-specific allowed tools, temporary-workspace cleanup,
+  persistent participant sessions and explicit model selection. Provider
+  credential bytes must never enter argv, prompts or public output. Current
+  argv does carry private config paths and a provider session identifier for
+  resume; treat those as host-visible sensitive metadata, and do not claim
+  process secrecy or credential revocation. Check the host process, descendants
+  and outbound reach actually allowed; ADR-057's stronger OS compartment is
+  proposed, so current tool restriction alone cannot support a sandbox or
+  host-isolation claim.
 - **Capture and output:** redact at the Python run-store / evidence persistence
   and MCP trace boundaries before bytes reach logs, CLI/API responses, OTel,
   archives or exports. The shared redactors and safe diagnostic projections
-  handle error envelopes; raw provider errors, command output, absolute private
-  paths and credential locators do not become public diagnostics. Keep the
+  handle error envelopes; raw provider errors, exception tracebacks, command
+  output, absolute private paths and credential locators must not become public
+  diagnostics or log entries. In particular, the broad participant-delivery
+  exception handler in `src/aptl/core/lab.py` must be assessed for secret-bearing
+  exception text before a production confidentiality claim. Keep the
   participant projection separate from evaluator-only Wazuh and negative
   boundary evidence, as in `docs/raes/paper-scenario-realization.md`.
 - **Host and runtime:** `aptl lab start` and `DeploymentBackend` own real range
@@ -83,6 +106,14 @@ actions, evaluator observations, failed or missing captures, and interpretation.
   action effect/readback, capture status, seal state and residual state. A
   clean-start request, static conformance pass, container health, or mock-backed
   readiness result alone does not establish a reproduced live demonstration.
+
+The next realization profile belongs at the compiled profile-to-adapter
+selection boundary, with a provider-specific model and process policy selected
+there. The present `lab.py` handoff selects `model_for("claude")` and the
+executor constructs `ClaudeCodeHostParticipantAdapter` directly. Extend that
+single boundary when another installed provider is admitted; do not add a
+second `lab start` sequence, change authored prompts, or widen role MCP access
+to accommodate it.
 
 ## Claim limits and non-goals
 

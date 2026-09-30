@@ -46,7 +46,7 @@ timeout --signal=TERM --kill-after=30s 4200 \
     -enable-kvm -cpu host -smp 8 -m 32768 -no-reboot \
     -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd \
     -drive "file=$overlay,format=qcow2,if=virtio,cache=none,aio=threads,readonly=off" \
-    -netdev user,id=participant,restrict=on,net=10.0.2.0/24,dhcpstart=10.0.2.15 \
+    -netdev user,id=participant,net=10.0.2.0/24,dhcpstart=10.0.2.15 \
     -device virtio-net-pci,netdev=participant \
     -device virtio-rng-pci \
     -serial "file:$work/serial.log" -display none -monitor none \

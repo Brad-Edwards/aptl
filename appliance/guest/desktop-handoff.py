@@ -68,10 +68,6 @@ def _desktop_config(
             "APTL_MCP_ADMITTED_RUN_ID": run_id,
             "APTL_MCP_RUN_STORE_BASE": str(run_store),
             "APTL_STATE_DIR": str(project / ".aptl"),
-            # Claude needs the public HTTPS proxy for provider sign-in, but
-            # these guest-local tools must address scenario loopback directly.
-            "HTTP_PROXY": "", "HTTPS_PROXY": "",
-            "http_proxy": "", "https_proxy": "",
         })
         selected[name] = {
             "command": "/usr/bin/node",

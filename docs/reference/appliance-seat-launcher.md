@@ -9,13 +9,17 @@ Additional isolation and controlled egress between workloads inside a guest are
 not promised; that work is tracked in #1127. The signed boundary policy the image
 carries identifies this contract explicitly.
 
-The launcher uses restricted QEMU user networking: the guest cannot initiate
-direct connections to the physical host, another seat, or the LAN. One private
-guest-to-host proxy forward permits HTTPS CONNECT to public DNS destinations
-on port 443, so the desktop browser and Claude can reach their providers. It
-rejects private and local addresses and has no participant login. Only the
-declared host-to-guest Guacamole port is published. This does not separate
-workloads inside the VM.
+**Seats have no default outbound network controls.** The guest uses user-mode
+NAT and can initiate ordinary internet and LAN connections, including HTTP,
+HTTPS, SSH, and other TCP/UDP traffic. The launcher adds no destination or port
+allow-list and no outbound proxy. The host network, selected scenario, or an
+operator's event-specific network controls may still affect connectivity.
+Optional controls for future events are tracked in
+[issue #1182](https://github.com/Brad-Edwards/aptl/issues/1182).
+Only the declared host-to-guest Guacamole port is published, inside the seat
+user's private network namespace. The VM does not share the host filesystem or
+Docker socket. Network services exposed by the physical host may be reachable
+from the guest. This does not separate workloads inside the VM.
 
 ## Security boundary
 
@@ -29,8 +33,9 @@ contained by an additional KVM/QEMU boundary before it reaches the physical
 host or another seat.
 
 The launcher starts QEMU in a rootless network namespace owned by the seat's
-Unix account. Other local accounts cannot enter it, and its loopback gateway
-does not answer in the ordinary host network. `aptl seat open-kiosk` launches
+Unix account. `slirp4netns` gives that namespace outbound connectivity without
+publishing its Guacamole listener on the ordinary host network. Other local
+accounts cannot enter the namespace. `aptl seat open-kiosk` launches
 the browser in that namespace without adding an APTL login. Processes under
 the same Unix account share access to that account's seat. Guacamole, guacd,
 PostgreSQL, and xrdp have no separate host port mappings. The gateway's xrdp
@@ -65,7 +70,8 @@ The physical host must satisfy the resources the seat image declares:
 
 - Linux with hardware virtualization (`/dev/kvm`)
 - `qemu-img`, `qemu-system-x86_64`, and read-only OVMF UEFI firmware
-- `bwrap` (Bubblewrap) and `nsenter` for the per-user desktop network namespace
+- `bwrap` (Bubblewrap), `nsenter`, `slirp4netns`, and `/dev/net/tun` for the
+  per-user desktop network namespace and its outbound route
 - available CPU/RAM at or above the image's minimums, and free disk at or
   above its declared runtime reservation
 - [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) for first acquisition and updates
@@ -78,7 +84,7 @@ bounded error instead of stopping after the first missing resource or tool.
 On Debian/Ubuntu hosts, install the complete host dependency set once with:
 
 ```bash
-sudo apt-get install qemu-system-x86 qemu-utils ovmf bubblewrap util-linux
+sudo apt-get install qemu-system-x86 qemu-utils ovmf bubblewrap util-linux slirp4netns
 ```
 
 No shared `seat-state` directory is required. Each user's seat state is

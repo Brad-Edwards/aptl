@@ -70,8 +70,8 @@ def test_desktop_handoff_delivers_live_red_and_blue_mcp_inputs(tmp_path: Path) -
     assert all(
         spec["env"]["APTL_MCP_ADMITTED_RUN_ID"] == "run-1"
         and spec["env"]["APTL_HP_TEST"] == "1234"
-        and spec["env"]["HTTPS_PROXY"] == ""
-        and spec["env"]["http_proxy"] == ""
+        and "HTTPS_PROXY" not in spec["env"]
+        and "http_proxy" not in spec["env"]
         for spec in (*red.values(), *blue.values())
     )
     assert (home / ".ssh" / "aptl_lab_key").read_text() == "private-guest-key\n"
@@ -114,6 +114,15 @@ def test_gateway_strips_client_identity_before_injecting_seat_identity() -> None
     compose = (ROOT / "appliance/guest/desktop-compose.yml").read_text()
     assert "HTTP_AUTH_ENABLED" in compose
     assert "127.0.0.1:8080:80" in compose
+
+
+def test_desktop_uses_direct_network_without_an_outbound_proxy() -> None:
+    session = (ROOT / "appliance/guest/desktop-session.sh").read_text()
+
+    assert "gsettings set org.gnome.system.proxy mode none" in session
+    assert "HTTP_PROXY" not in session
+    assert "HTTPS_PROXY" not in session
+    assert "10.0.2.100:3128" not in session
 
 
 def test_desktop_prepare_creates_private_stable_overlay_credentials(

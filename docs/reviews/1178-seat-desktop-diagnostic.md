@@ -1,5 +1,10 @@
 # Issue #1178: VM desktop diagnostic
 
+This records an earlier diagnostic image. Its HTTPS-only proxy was removed
+after the owner selected ordinary outbound access with no default seat filter;
+see [ADR-061](../adrs/adr-061-gateless-vm-seat-access.md). The network results
+below describe that earlier image, not the current seat design.
+
 These checks ran on one Linux KVM host on 2026-09-30. They used a local,
 uncommitted diagnostic bake. This is functional evidence for the implementation,
 not a signed release or APP-3 multi-machine qualification.

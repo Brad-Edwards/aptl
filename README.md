@@ -35,6 +35,10 @@ For stronger host and cross-seat isolation on Linux/KVM, use a disposable
 risk but does not eliminate it; keep the host kernel and hypervisor current. A
 seat needs KVM, QEMU, OVMF, adequate per-seat resources and a verified image;
 it does not make the workloads inside its guest mutually isolated.
+**Seats have no default outbound network controls.** The guest can initiate
+ordinary internet and LAN connections through user-mode NAT, subject to the
+host network and any rules defined by the selected scenario. Event-specific
+outbound restrictions are the operator's responsibility.
 
 ## Quick Start
 

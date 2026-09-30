@@ -5,26 +5,23 @@ from __future__ import annotations
 import ipaddress
 import json
 import os
-import secrets
+import select
 import shutil
 import signal
 import subprocess
-import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
 from aptl.appliance.seat.errors import SeatLauncherError
-from aptl.appliance.seat.https_egress import (
-    GUEST_PROXY_ADDRESS,
-    GUEST_PROXY_PORT,
-    start_proxy,
-)
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 
 # Intentional RFC 1918 guest-only network.
 QEMU_SLIRP_SUBNET = "10.0.2.0/24"
+PRIVATE_NETWORK_SUBNET = "10.0.3.0/24"
+PRIVATE_NETWORK_DNS = "10.0.3.3"
 # Fixed address inside that private subnet.
 DEFAULT_QEMU_GUEST_ADDRESS = "10.0.2.15"
 # Ubuntu's supported cloud image is UEFI-only.  Keep firmware immutable so all
@@ -58,7 +55,6 @@ class VmLaunchSpec:
     readiness_socket: Path | None = None
     access_socket: Path | None = None
     include_access_channel: bool = False
-    public_https_egress: bool = False
     guest_adapter_address: str = DEFAULT_QEMU_GUEST_ADDRESS
     mappings: tuple[BoundaryEndpoint, ...] = field(
         default_factory=lambda: (
@@ -88,13 +84,6 @@ class VmLaunchSpec:
             raise ValueError("VM mappings currently support TCP only")
         if self.disk_reservation_bytes < 0:
             raise ValueError("disk reservation cannot be negative")
-        if self.public_https_egress and (
-            self.include_access_channel
-            or len(self.mappings) != 1
-            or self.mappings[0].audience != "participant"
-            or self.mappings[0].guest_port != 8080
-        ):
-            raise ValueError("public HTTPS egress requires a desktop-only seat")
         adapter = ipaddress.ip_address(self.guest_adapter_address)
         if (
             adapter not in ipaddress.ip_network(QEMU_SLIRP_SUBNET)
@@ -153,10 +142,6 @@ def build_qemu_argv(spec: VmLaunchSpec) -> tuple[str, ...]:
     ):
         if any(character in str(path) for character in (",", "\n", "\x00")):
             raise ValueError("path contains a QEMU option separator")
-    if spec.public_https_egress and any(
-        character in sys.executable for character in (",", "\n", "\x00")
-    ):
-        raise ValueError("Python executable contains a QEMU option separator")
     launch_path = str(spec.launch_mount.resolve())
     forwards = ",".join(
         (
@@ -165,11 +150,6 @@ def build_qemu_argv(spec: VmLaunchSpec) -> tuple[str, ...]:
         )
         for mapping in spec.mappings
     )
-    if spec.public_https_egress:
-        forwards += (
-            f",guestfwd=tcp:{GUEST_PROXY_ADDRESS}:{GUEST_PROXY_PORT}-"
-            f"cmd:{sys.executable} -m aptl.appliance.seat.https_egress bridge"
-        )
     resource_arguments: tuple[str, ...] = ()
     if spec.disk_reservation_bytes:
         resource_arguments = (
@@ -215,7 +195,7 @@ def build_qemu_argv(spec: VmLaunchSpec) -> tuple[str, ...]:
         "-qmp",
         f"unix:{management_socket},server=on,wait=off",
         "-netdev",
-        f"user,id=participant,restrict=on,net={QEMU_SLIRP_SUBNET},dhcpstart={spec.guest_adapter_address},{forwards}",
+        f"user,id=participant,net={QEMU_SLIRP_SUBNET},dhcpstart={spec.guest_adapter_address},{forwards}",
         "-device",
         "virtio-net-pci,netdev=participant",
         "-serial",
@@ -246,6 +226,83 @@ def _private_qemu_pid(process: subprocess.Popen[bytes]) -> int:
     raise SeatLauncherError("failed-launch", "private VM namespace did not start")
 
 
+def _start_private_vm(argv: list[str], overlay_path: Path) -> tuple[subprocess.Popen[bytes], int]:
+    """Keep the desktop port private while giving QEMU ordinary outbound NAT."""
+
+    resolver_fd, resolver_name = tempfile.mkstemp(
+        prefix=".seat-resolv-", dir=overlay_path.parent,
+    )
+    exit_read, exit_write = os.pipe()
+    process: subprocess.Popen[bytes] | None = None
+    network: subprocess.Popen[bytes] | None = None
+    guest_pid: int | None = None
+    try:
+        with os.fdopen(resolver_fd, "w", encoding="ascii") as resolver:
+            resolver.write(f"nameserver {PRIVATE_NETWORK_DNS}\n")
+        process = subprocess.Popen(
+            [
+                "bwrap", "--unshare-net", "--dev-bind", "/", "/",
+                "--ro-bind", resolver_name, "/etc/resolv.conf",
+                "--sync-fd", str(exit_write), *argv,
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            pass_fds=(exit_write,),
+            start_new_session=True,
+        )
+        os.close(exit_write)
+        exit_write = -1
+        guest_pid = _private_qemu_pid(process)
+        ready_read, ready_write = os.pipe()
+        try:
+            network = subprocess.Popen(
+                [
+                    "slirp4netns", "--configure", f"--cidr={PRIVATE_NETWORK_SUBNET}",
+                    f"--ready-fd={ready_write}", f"--exit-fd={exit_read}",
+                    str(guest_pid), "tap0",
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
+                pass_fds=(ready_write, exit_read),
+                start_new_session=True,
+            )
+            os.close(ready_write)
+            ready_write = -1
+            ready = (
+                os.read(ready_read, 1)
+                if select.select([ready_read], [], [], 10)[0]
+                else b""
+            )
+        finally:
+            os.close(ready_read)
+            if ready_write >= 0:
+                os.close(ready_write)
+        if ready != b"1" or network.poll() is not None:
+            raise SeatLauncherError("failed-launch", "private VM outbound network did not start")
+        return process, guest_pid
+    except (OSError, SeatLauncherError) as exc:
+        if network is not None and network.poll() is None:
+            network.terminate()
+        if guest_pid is not None:
+            try:
+                os.kill(guest_pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        if process is not None and process.poll() is None:
+            process.terminate()
+        raise SeatLauncherError("failed-launch", "private VM network did not start") from exc
+    finally:
+        if exit_read >= 0:
+            os.close(exit_read)
+        if exit_write >= 0:
+            os.close(exit_write)
+        Path(resolver_name).unlink(missing_ok=True)
+
+
 def start_vm(
     spec: VmLaunchSpec,
     *,
@@ -266,49 +323,31 @@ def start_vm(
     for socket_path in socket_paths:
         socket_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         socket_path.unlink(missing_ok=True)
-    if private_network and (shutil.which("bwrap") is None or shutil.which("nsenter") is None):
+    if private_network and any(
+        shutil.which(tool) is None for tool in ("bwrap", "nsenter", "slirp4netns")
+    ):
         raise SeatLauncherError(
             "missing-private-network-tool",
-            "desktop seats require bubblewrap and nsenter on the host",
+            "desktop seats require bubblewrap, nsenter and slirp4netns on the host",
         )
-    if spec.public_https_egress and not private_network:
+    if private_network and not os.access("/dev/net/tun", os.R_OK | os.W_OK):
         raise SeatLauncherError(
-            "invalid-network", "desktop HTTPS egress requires a private VM network",
+            "missing-private-network-tool", "desktop seats require /dev/net/tun",
         )
-    proxy_socket = (
-        spec.overlay_path.with_name(
-            f".{spec.overlay_path.stem}.{secrets.token_hex(8)}.https.sock"
+    if private_network:
+        process, guest_pid = _start_private_vm(argv, spec.overlay_path)
+    else:
+        process = subprocess.Popen(
+            argv,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            start_new_session=True,
         )
-        if spec.public_https_egress else None
-    )
-    environment = os.environ.copy()
-    if proxy_socket is not None:
-        environment["APTL_SEAT_HTTPS_SOCKET"] = str(proxy_socket)
-    command = (
-        ["bwrap", "--unshare-net", "--dev-bind", "/", "/", *argv]
-        if private_network else argv
-    )
-    process = subprocess.Popen(
-        command,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        close_fds=True,
-        start_new_session=True,
-        env=environment,
-    )
+        guest_pid = None
     if process.poll() is not None:
         raise SeatLauncherError("failed-launch", "VM exited during launch")
-    guest_pid = _private_qemu_pid(process) if private_network else None
-    if proxy_socket is not None:
-        assert guest_pid is not None
-        try:
-            start_proxy(proxy_socket, guest_pid)
-        except (OSError, RuntimeError) as exc:
-            process.terminate()
-            raise SeatLauncherError(
-                "failed-launch", "desktop HTTPS egress proxy did not start",
-            ) from exc
     if runner is None:
         return SubprocessVm(process=process, guest_pid=guest_pid)
     return runner(process=process)

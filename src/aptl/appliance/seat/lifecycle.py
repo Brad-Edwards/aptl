@@ -807,7 +807,6 @@ def start_seat(
             readiness_socket=readiness_socket,
             access_socket=access_socket,
             include_access_channel=policy.host_mcp_contract is not None,
-            public_https_egress=private_desktop(record.mappings),
             mappings=record.mappings,
         )
         private_network = private_desktop(record.mappings)

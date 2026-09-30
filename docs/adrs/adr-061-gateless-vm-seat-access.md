@@ -18,10 +18,19 @@ The guest desktop autostarts a browser and red/blue terminal tabs. The signed im
 
 The signed boundary policy advances generation and declares one `participant` TCP publication at guest loopback port 8080. Host-side port allocation may choose a different loopback outer port. QEMU runs inside a rootless network namespace owned by the launching Unix account. The launcher enters that namespace to observe its listener, verify Guacamole readiness, and open the participant browser. Other host accounts cannot enter the namespace, and the gateway port is unreachable from the ordinary host network. The launcher keeps exact policy-to-mapping validation, private 9p launch share, KVM resource admission, forbidden-reachability probe, fresh guest boundary observation, and a fatal readiness gate. Status checks current gateway availability separately from saved lifecycle state and QEMU PID. Old image digests remain sticky and keep their old signed contract; existing overlays are neither migrated nor reset.
 
+The seat launcher does not impose default outbound network controls. Rootless
+`slirp4netns` gives QEMU's private namespace an outbound route, and QEMU's
+user-mode NAT has no egress restriction or HTTPS-only proxy. Guest traffic is
+subject to the host network and scenario rules; operators may apply their own
+event-specific controls. Network services exposed by the physical host can be
+reached from the guest. The VM boundary does not share host files or Docker.
+Optional outbound controls are tracked in
+[issue #1182](https://github.com/Brad-Edwards/aptl/issues/1182).
+
 The bake reuses the canonical offline package and OCI image closures, golden-state scan, build record, qualification path, and GHCR/Cosign publication. The image may be promoted only after a clean build, real-VM desktop/lab and host-boundary checks, signed candidate publication, and anonymous acquisition/boot. No source change may silently change an already selected disk or a live user's overlay.
 
 ## Consequences
 
 The participant has one browser path into the VM desktop and can reopen it without an APTL token or expiring grant. The guest account is a deliberate local authority inside the disposable VM, including its guest Docker daemon. The physical host contributes no Docker socket or writable share. The network namespace separates local Unix accounts without adding participant authentication; processes running as the same Unix account can open that account's seat. A remote participant first enters their assigned host account, then runs `aptl seat open-kiosk` there.
 
-The Guacamole stack requires a generated, overlay-private database and xrdp secret even though no participant credential is entered at the gateway. A per-seat Unix-socket proxy and QEMU guest forward permit HTTPS CONNECT to public DNS addresses on port 443 for provider sign-in and browsing. The restricted guest network still blocks direct host and LAN access; the proxy denies private and local destinations and exposes no host filesystem or Docker daemon. The older APTL web control path no longer starts in new seat guests and is not their participant interface.
+The Guacamole stack requires a generated, overlay-private database and xrdp secret even though no participant credential is entered at the gateway. The older APTL web control path no longer starts in new seat guests and is not their participant interface.

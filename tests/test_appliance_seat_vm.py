@@ -149,37 +149,30 @@ def test_desktop_vm_runs_in_private_network_and_tracks_guest_pid(tmp_path: Path)
         vcpus=8, memory_mib=16384,
     )
 
-    def proc_text(path: Path, *args, **kwargs) -> str:
-        return "5151" if path.name == "children" else "qemu-system-x86_64"
-
     with (
-        patch("aptl.appliance.seat.vm.subprocess.Popen") as popen,
-        patch("aptl.appliance.seat.vm.Path.read_text", autospec=True, side_effect=proc_text),
+        patch("aptl.appliance.seat.vm._start_private_vm") as launch,
     ):
-        popen.return_value = MagicMock(pid=5150)
-        popen.return_value.poll.return_value = None
+        process = MagicMock(pid=5150)
+        process.poll.return_value = None
+        launch.return_value = (process, 5151)
         vm = start_vm(spec, private_network=True)
 
     assert vm.pid == 5151
-    assert popen.call_args.args[0][:5] == [
-        "bwrap", "--unshare-net", "--dev-bind", "/", "/",
-    ]
-    assert popen.call_args.args[0][5] == "qemu-system-x86_64"
+    assert launch.call_args.args[0][0] == "qemu-system-x86_64"
+    assert launch.call_args.args[1] == overlay
 
 
-def test_desktop_vm_forward_has_public_https_proxy_only(tmp_path: Path) -> None:
+def test_desktop_vm_has_unrestricted_outbound_nat_and_one_private_forward(tmp_path: Path) -> None:
     spec = VmLaunchSpec(
         overlay_path=tmp_path / "overlay.qcow2",
         launch_mount=tmp_path / "launch",
         vcpus=8,
         memory_mib=16384,
-        public_https_egress=True,
     )
     argv = build_qemu_argv(spec)
     netdev = argv[argv.index("-netdev") + 1]
-    assert "restrict=on" in netdev
-    assert "guestfwd=tcp:10.0.2.100:3128-cmd:" in netdev
-    assert "aptl.appliance.seat.https_egress bridge" in netdev
+    assert "restrict=" not in netdev
+    assert "guestfwd=" not in netdev
     assert netdev.count("hostfwd=") == 1
 
 
@@ -362,7 +355,7 @@ def test_qemu_argv_uses_explicit_outer_to_guest_mappings(tmp_path: Path) -> None
     netdev = argv[argv.index("-netdev") + 1]
     assert "net=10.0.2.0/24" in netdev
     assert "dhcpstart=10.0.2.15" in netdev
-    assert "restrict=on" in netdev.split(",")
+    assert "restrict=" not in netdev
     assert "hostfwd=tcp:127.0.0.1:10443-10.0.2.15:443" in netdev
     assert "hostfwd=tcp:127.0.0.1:11443-10.0.2.15:9443" in netdev
 

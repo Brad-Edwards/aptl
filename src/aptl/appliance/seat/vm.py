@@ -204,26 +204,38 @@ def build_qemu_argv(spec: VmLaunchSpec) -> tuple[str, ...]:
     )
 
 
-def _private_qemu_pid(process: subprocess.Popen[bytes]) -> int:
-    """Identify the QEMU child created by the rootless network wrapper."""
+def _private_qemu_pid(info_fd: int) -> int:
+    """Read the sandbox's reported guest PID, including when it forks a monitor."""
 
+    report = bytearray()
     deadline = time.monotonic() + 10
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
+    while time.monotonic() < deadline and len(report) < 4096:
+        if not select.select([info_fd], [], [], max(0, deadline - time.monotonic()))[0]:
             break
-        try:
-            children = Path(
-                f"/proc/{process.pid}/task/{process.pid}/children"
-            ).read_text().split()
-            for candidate in children:
-                command_name = Path(f"/proc/{candidate}/comm").read_text().strip()
+        chunk = os.read(info_fd, 4096 - len(report))
+        if not chunk:
+            break
+        report.extend(chunk)
+    try:
+        sandbox_pid = json.loads(report)["child-pid"]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise SeatLauncherError("failed-launch", "private VM process was not reported") from exc
+    if not isinstance(sandbox_pid, int) or sandbox_pid <= 0:
+        raise SeatLauncherError("failed-launch", "private VM process was not reported")
+    while time.monotonic() < deadline:
+        descendants = [sandbox_pid]
+        while descendants:
+            pid = descendants.pop()
+            try:
+                command_name = Path(f"/proc/{pid}/comm").read_text().strip()
                 if command_name.startswith("qemu-system-"):
-                    return int(candidate)
-        except OSError:
-            pass
+                    return pid
+                children = Path(f"/proc/{pid}/task/{pid}/children").read_text()
+                descendants.extend(int(child) for child in children.split())
+            except OSError:
+                continue
         time.sleep(0.05)
-    process.terminate()
-    raise SeatLauncherError("failed-launch", "private VM namespace did not start")
+    raise SeatLauncherError("failed-launch", "private VM process did not start")
 
 
 def _start_private_vm(argv: list[str], overlay_path: Path) -> tuple[subprocess.Popen[bytes], int]:
@@ -233,6 +245,7 @@ def _start_private_vm(argv: list[str], overlay_path: Path) -> tuple[subprocess.P
         prefix=".seat-resolv-", dir=overlay_path.parent,
     )
     exit_read, exit_write = os.pipe()
+    info_read, info_write = os.pipe()
     process: subprocess.Popen[bytes] | None = None
     network: subprocess.Popen[bytes] | None = None
     guest_pid: int | None = None
@@ -243,18 +256,22 @@ def _start_private_vm(argv: list[str], overlay_path: Path) -> tuple[subprocess.P
             [
                 "bwrap", "--unshare-net", "--dev-bind", "/", "/",
                 "--ro-bind", resolver_name, "/etc/resolv.conf",
-                "--sync-fd", str(exit_write), *argv,
+                "--sync-fd", str(exit_write), "--info-fd", str(info_write), *argv,
             ],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             close_fds=True,
-            pass_fds=(exit_write,),
+            pass_fds=(exit_write, info_write),
             start_new_session=True,
         )
         os.close(exit_write)
         exit_write = -1
-        guest_pid = _private_qemu_pid(process)
+        os.close(info_write)
+        info_write = -1
+        guest_pid = _private_qemu_pid(info_read)
+        os.close(info_read)
+        info_read = -1
         ready_read, ready_write = os.pipe()
         try:
             network = subprocess.Popen(
@@ -287,19 +304,21 @@ def _start_private_vm(argv: list[str], overlay_path: Path) -> tuple[subprocess.P
     except (OSError, SeatLauncherError) as exc:
         if network is not None and network.poll() is None:
             network.terminate()
-        if guest_pid is not None:
+        if process is not None:
             try:
-                os.kill(guest_pid, signal.SIGTERM)
+                os.killpg(process.pid, signal.SIGTERM)
             except ProcessLookupError:
                 pass
-        if process is not None and process.poll() is None:
-            process.terminate()
         raise SeatLauncherError("failed-launch", "private VM network did not start") from exc
     finally:
         if exit_read >= 0:
             os.close(exit_read)
         if exit_write >= 0:
             os.close(exit_write)
+        if info_read >= 0:
+            os.close(info_read)
+        if info_write >= 0:
+            os.close(info_write)
         Path(resolver_name).unlink(missing_ok=True)
 
 

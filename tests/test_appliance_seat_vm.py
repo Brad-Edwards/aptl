@@ -16,6 +16,7 @@ from aptl.appliance.seat.vm import (
     SubprocessVm,
     VmLaunchSpec,
     VmProcessIdentity,
+    _private_qemu_pid,
     build_qemu_argv,
     read_vm_pid,
     start_vm,
@@ -38,6 +39,29 @@ def test_subprocess_vm_delegates_to_process() -> None:
     process.send_signal.assert_called_once_with(signal.SIGTERM)
     vm.wait(timeout=1.0)
     process.wait.assert_called_once_with(timeout=1.0)
+
+
+def test_private_qemu_pid_uses_bwrap_reported_child_not_monitor_pid() -> None:
+    read_fd, write_fd = os.pipe()
+    try:
+        os.write(write_fd, b'{"child-pid":5150,"net-namespace":42}\n')
+        os.close(write_fd)
+        write_fd = -1
+        def proc_text(path: Path, *args, **kwargs) -> str:
+            if str(path) == "/proc/5150/comm":
+                return "bwrap\n"
+            if str(path) == "/proc/5150/task/5150/children":
+                return "5151\n"
+            if str(path) == "/proc/5151/comm":
+                return "qemu-system-x86\n"
+            raise AssertionError(f"unexpected process path: {path}")
+
+        with patch("aptl.appliance.seat.vm.Path.read_text", autospec=True, side_effect=proc_text):
+            assert _private_qemu_pid(read_fd) == 5151
+    finally:
+        os.close(read_fd)
+        if write_fd >= 0:
+            os.close(write_fd)
 
 
 def test_write_and_read_vm_pid_roundtrip(tmp_path: Path) -> None:

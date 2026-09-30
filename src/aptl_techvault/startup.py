@@ -26,9 +26,6 @@ from aptl.backends.scenario_service_policy import (
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 from aptl.core.scenario_bundle import ScenarioBundle
 from aptl_techvault.log_sources import realize_log_sources
-from aptl_techvault.evidence.techvault_enrollment_baseline import (
-    clear_enrollment_baseline,
-)
 from aptl_techvault.redis_acl_observation import observe_redis_app_authorizations
 from aptl_techvault.runtime_parameters import TECHVAULT_PACK_SET_DIGEST
 from aptl_techvault.wazuh_credentials import techvault_wazuh_environment
@@ -89,7 +86,6 @@ class TechVaultStartupProvider:
                 {
                     StartupHook.STACK_ENVIRONMENT,
                     StartupHook.BEFORE_BACKEND_RETRY,
-                    StartupHook.RESET,
                 }
             ),
             seed_environment_keys=(
@@ -159,16 +155,6 @@ class TechVaultStartupProvider:
                 context.backend.container_restart(container)
         except Exception:
             return
-
-    @staticmethod
-    def reset(context: StartupHookContext) -> None:
-        """Clear adapter-owned retained evidence state after volume removal."""
-
-        failures = clear_enrollment_baseline(
-            getattr(context.backend, "project_dir", None)
-        )
-        if failures:
-            raise RuntimeError("adapter reset failed")
 
     @staticmethod
     def compose_startup_policy() -> ScenarioComposeStartupPolicy:

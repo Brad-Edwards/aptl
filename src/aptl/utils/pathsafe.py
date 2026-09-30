@@ -39,6 +39,7 @@ from __future__ import annotations
 import errno
 import itertools
 import os
+import stat
 from pathlib import Path
 
 from aptl.utils._pathsafe_core import (
@@ -54,6 +55,7 @@ from aptl.utils._pathsafe_core import (
     REASON_TRAVERSAL,
     PathContainmentError,
     _open_base_fd,
+    _open_dir_nofollow,
     _open_dir_nofollow_or_create,
     _split_components,
     _walk_to_parent,
@@ -82,6 +84,7 @@ __all__ = [
     "open_contained_nofollow",
     "open_dir_contained_nofollow",
     "read_contained_nofollow",
+    "remove_contained_nofollow",
     "write_all",
 ]
 
@@ -154,6 +157,65 @@ def create_exclusive_nofollow(
         if parent_fd != base_fd:
             os.close(parent_fd)
         os.close(base_fd)
+
+
+def remove_contained_nofollow(base_dir: Path | str, relative_path: str | Path) -> bool:
+    """Durably remove one regular file under ``base_dir``, walked no-follow.
+
+    Every directory component is opened ``O_DIRECTORY | O_NOFOLLOW`` under its
+    parent's descriptor and the leaf is inspected and unlinked relative to that
+    same descriptor, so a symlink swapped in anywhere on the path can never
+    redirect the removal. Returns ``True`` when a file was removed and ``False``
+    when the leaf or any parent is already absent, which an idempotent cleanup
+    treats as complete. The parent directory is ``fsync``-ed after a removal so
+    the change survives a crash before the caller records completion.
+
+    Raises :class:`PathContainmentError` for a structurally invalid path, a
+    symlinked component or leaf (``REASON_SYMLINK``), or a leaf that is not a
+    regular file (``REASON_NOT_REGULAR_FILE``); nothing is removed then.
+    """
+    components = _split_components(relative_path)
+    leaf_component = components[-1]
+    base_fd = _open_base_fd(base_dir)
+    parent_fd = base_fd
+    try:
+        try:
+            parent_fd = _walk_to_parent(
+                components[:-1], base_fd, open_dir=_open_dir_nofollow
+            )
+        except PathContainmentError as exc:
+            if exc.reason == REASON_NOT_FOUND:
+                return False
+            raise
+        return _unlink_regular_leaf(parent_fd, leaf_component)
+    finally:
+        if parent_fd != base_fd:
+            os.close(parent_fd)
+        os.close(base_fd)
+
+
+def _unlink_regular_leaf(parent_fd: int, leaf_component: str) -> bool:
+    """Unlink a regular leaf relative to ``parent_fd``; absent is ``False``."""
+
+    try:
+        status = os.stat(leaf_component, dir_fd=parent_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return False
+    if stat.S_ISLNK(status.st_mode):
+        raise PathContainmentError(
+            REASON_SYMLINK, f"refusing to remove symlinked leaf {leaf_component!r}"
+        )
+    if not stat.S_ISREG(status.st_mode):
+        raise PathContainmentError(
+            REASON_NOT_REGULAR_FILE,
+            f"refusing to remove non-regular leaf {leaf_component!r}",
+        )
+    try:
+        os.unlink(leaf_component, dir_fd=parent_fd)
+    except FileNotFoundError:
+        return False
+    os.fsync(parent_fd)
+    return True
 
 
 def _atomic_publish(parent_fd: int, leaf_component: str, data: bytes) -> None:

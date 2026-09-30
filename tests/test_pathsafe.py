@@ -20,6 +20,7 @@ from aptl.utils.pathsafe import (
     listdir_contained_nofollow,
     open_contained_nofollow,
     read_contained_nofollow,
+    remove_contained_nofollow,
 )
 
 
@@ -345,3 +346,47 @@ class TestCreateExclusiveNofollowDurability:
         # Both the file (not a dir) and its containing directory were fsynced.
         assert True in fsynced_modes  # a directory fd was fsynced
         assert False in fsynced_modes  # a regular file fd was fsynced
+
+
+class TestRemoveContainedNofollow:
+    def test_removes_a_contained_regular_file(self, tmp_path):
+        (tmp_path / "state").mkdir()
+        (tmp_path / "state" / "baseline.json").write_bytes(b"{}")
+
+        assert remove_contained_nofollow(tmp_path, "state/baseline.json") is True
+        assert not (tmp_path / "state" / "baseline.json").exists()
+
+    def test_absent_leaf_or_parent_is_not_an_error(self, tmp_path):
+        (tmp_path / "state").mkdir()
+
+        assert remove_contained_nofollow(tmp_path, "state/baseline.json") is False
+        assert remove_contained_nofollow(tmp_path, "missing/baseline.json") is False
+
+    def test_never_follows_a_symlinked_parent(self, tmp_path):
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (outside / "baseline.json").write_bytes(b"keep")
+        (tmp_path / "state").symlink_to(outside)
+
+        with pytest.raises(PathContainmentError) as excinfo:
+            remove_contained_nofollow(tmp_path, "state/baseline.json")
+
+        assert excinfo.value.reason == "symlink"
+        assert (outside / "baseline.json").read_bytes() == b"keep"
+
+    def test_refuses_a_symlinked_or_non_regular_leaf(self, tmp_path):
+        target = tmp_path / "target.json"
+        target.write_bytes(b"keep")
+        (tmp_path / "link.json").symlink_to(target)
+        (tmp_path / "dir.json").mkdir()
+
+        with pytest.raises(PathContainmentError) as link:
+            remove_contained_nofollow(tmp_path, "link.json")
+        with pytest.raises(PathContainmentError) as directory:
+            remove_contained_nofollow(tmp_path, "dir.json")
+
+        assert link.value.reason == "symlink"
+        assert directory.value.reason == "not_regular_file"
+        assert target.read_bytes() == b"keep"
+        assert (tmp_path / "link.json").is_symlink()
+        assert (tmp_path / "dir.json").is_dir()

@@ -750,8 +750,8 @@ def test_the_first_capture_establishes_its_own_baseline(tmp_path):
 def test_the_explicit_reset_clears_the_baseline_it_owns(tmp_path):
     """Otherwise a legitimate `stop -v` leaves every host permanently failing."""
 
+    from aptl.core.lifecycle_cleanup import clear_wazuh_enrollment_baseline
     from aptl_techvault.evidence.techvault_enrollment_baseline import (
-        clear_enrollment_baseline,
         enrollment_baseline,
         record_enrollment_baseline,
     )
@@ -759,9 +759,8 @@ def test_the_explicit_reset_clears_the_baseline_it_owns(tmp_path):
     record_enrollment_baseline(tmp_path, {"db": "001"})
     assert enrollment_baseline(tmp_path) == {"db": "001"}
 
-    assert clear_enrollment_baseline(tmp_path) == []
+    clear_wazuh_enrollment_baseline(tmp_path)
 
     assert enrollment_baseline(tmp_path) == {}
     # Clearing what is already absent is not a failure; the reset is idempotent.
-    assert clear_enrollment_baseline(tmp_path) == []
-    assert clear_enrollment_baseline(None) == []
+    clear_wazuh_enrollment_baseline(tmp_path)

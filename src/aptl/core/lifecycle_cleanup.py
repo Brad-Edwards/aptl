@@ -123,11 +123,14 @@ def _run_action(project_dir: Path, pending: PendingCleanup, backend: object) -> 
         clear_wazuh_enrollment_baseline(project_dir)
     elif pending.action.action == ACTION_PACK_RESET:
         _run_pack_reset(pending.action, backend)
-    else:  # pragma: no cover - load_pending_cleanup admits only known actions
+    else:
+        # load_pending_cleanup admits only known actions; refuse defensively.
         raise CleanupActionError("cleanup-action-unsupported")
 
 
 def _failure(pending: PendingCleanup, reason: str) -> PendingCleanupFailure:
+    """Describe one runnable record that stays pending for ``reason``."""
+
     return PendingCleanupFailure(
         pending.record, pending.action.action, pending.action.subject, reason
     )
@@ -184,6 +187,8 @@ def run_pending_cleanup(project_dir: Path, backend: object) -> CleanupReport:
 
 
 def _count(number: int, noun: str) -> str:
+    """Return ``number`` with ``noun`` pluralized for operator messages."""
+
     return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
 
 

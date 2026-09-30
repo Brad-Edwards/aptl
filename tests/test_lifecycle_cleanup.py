@@ -414,11 +414,9 @@ def test_admitted_cleanup_actions_round_trip(tmp_path: Path, monkeypatch) -> Non
     assert not baseline.exists()
     assert len(calls) == 1
     assert len(list((tmp_path / ACTION_DONE_DIR).iterdir())) == 2
+    anonymous = CleanupAction(ACTION_PACK_RESET, "1", **{**provenance, "pack_id": ""})
     with pytest.raises(ValueError):
-        persist_cleanup_action(
-            tmp_path,
-            CleanupAction(ACTION_PACK_RESET, "1", **{**provenance, "pack_id": ""}),
-        )
+        persist_cleanup_action(tmp_path, anonymous)
 
 
 class _Backend:
@@ -502,7 +500,8 @@ def test_repeat_stop_finishes_pending_cleanup_when_docker_is_already_gone(
     first = stop_lab(remove_volumes=True, project_dir=tmp_path, backend=backend)
     second = stop_lab(remove_volumes=True, project_dir=tmp_path, backend=backend)
 
-    assert first.success is True and second.success is True
+    assert first.success is True
+    assert second.success is True
     assert not baseline.exists()
     assert len(list((tmp_path / LEGACY_DONE_DIR).iterdir())) == 1
 
@@ -590,7 +589,8 @@ def test_start_fails_closed_when_cleanup_cannot_be_recorded(tmp_path: Path) -> N
 
     result = _persist_start_recovery(ctx)
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert "pending lab cleanup records" in result.error
 
 

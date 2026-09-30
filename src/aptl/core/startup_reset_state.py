@@ -128,26 +128,35 @@ def _valid_text(value: object, *, required: bool) -> bool:
     return _SAFE_TEXT.fullmatch(value) is not None
 
 
+def _valid_pack(action: CleanupAction) -> bool:
+    """Return whether the pack identity is absent or complete and well formed."""
+
+    has_pack = any(getattr(action, name) for name in _PACK_FIELDS)
+    if not isinstance(action.pack_set_digest, str):
+        return False
+    if not has_pack:
+        return True
+    return (
+        _valid_text(action.pack_id, required=True)
+        and _valid_text(action.pack_version, required=True)
+        and _SAFE_DIGEST.fullmatch(action.pack_set_digest) is not None
+    )
+
+
 def _validated(action: CleanupAction) -> CleanupAction:
     """Validate one action's shape and its owner-specific provenance."""
 
     if not isinstance(action, CleanupAction):
         raise ValueError("invalid cleanup action")
     pack_owned = action.action == ACTION_PACK_RESET
-    pack = tuple(getattr(action, name) for name in _PACK_FIELDS)
-    has_pack = any(pack)
+    required = (action.action, action.action_version, action.admission_id)
+    optional = (action.distribution, action.distribution_version)
     if (
-        not _valid_text(action.action, required=True)
-        or not _valid_text(action.action_version, required=True)
-        or not _valid_text(action.admission_id, required=True)
-        or not _valid_text(action.pack_id, required=has_pack)
-        or not _valid_text(action.pack_version, required=has_pack)
-        or not isinstance(action.pack_set_digest, str)
-        or (has_pack and _SAFE_DIGEST.fullmatch(action.pack_set_digest) is None)
-        or not _valid_text(action.distribution, required=False)
-        or not _valid_text(action.distribution_version, required=False)
+        not all(_valid_text(value, required=True) for value in required)
+        or not all(_valid_text(value, required=False) for value in optional)
         or not _valid_text(action.entry_point, required=pack_owned)
-        or (pack_owned and not has_pack)
+        or not _valid_pack(action)
+        or (pack_owned and not action.pack_id)
     ):
         raise ValueError("invalid cleanup action")
     return action

@@ -1,0 +1,57 @@
+name: aptl-seat-desktop
+services:
+  database:
+    image: aptl-seat-postgres:16
+    pull_policy: never
+    environment:
+      POSTGRES_DB: guacamole_db
+      POSTGRES_USER: guacamole
+      POSTGRES_PASSWORD: ${APTL_GUAC_DB_PASSWORD:?required}
+    volumes:
+      - database:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U guacamole -d guacamole_db"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  guacd:
+    image: aptl-seat-guacd:1.6.0
+    pull_policy: never
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: [CMD-SHELL, "nc -z 127.0.0.1 4822"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+  guacamole:
+    image: aptl-seat-guacamole:1.6.0
+    pull_policy: never
+    environment:
+      GUACD_HOSTNAME: guacd
+      POSTGRESQL_ENABLED: "true"
+      POSTGRESQL_HOSTNAME: database
+      POSTGRESQL_DATABASE: guacamole_db
+      POSTGRESQL_USER: guacamole
+      POSTGRESQL_PASSWORD: ${APTL_GUAC_DB_PASSWORD:?required}
+      HTTP_AUTH_ENABLED: "true"
+      HTTP_AUTH_HEADER: REMOTE_USER
+      WEBAPP_CONTEXT: ROOT
+    depends_on:
+      database:
+        condition: service_healthy
+      guacd:
+        condition: service_started
+  gateway:
+    image: aptl-seat-nginx:stable
+    pull_policy: never
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      guacamole:
+        condition: service_started
+volumes:
+  database:

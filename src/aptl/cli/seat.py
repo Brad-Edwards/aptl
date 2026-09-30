@@ -16,6 +16,8 @@ from aptl.appliance.seat.access import SeatAccessEnrollment, ensure_transport_id
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.appliance.seat.retained_image import cache_for_seat
 from aptl.appliance.seat.kiosk import open_participant_kiosk, resolve_kiosk_access
+from aptl.appliance.seat.namespace import private_desktop
+from aptl.appliance.seat.vm import read_vm_pid
 from aptl.appliance.seat.image import SeatImageError, parse_seat_image_reference
 from aptl.appliance.seat.image_trust import configure_trust
 from aptl.appliance.seat.image_update import update_seat_image
@@ -399,6 +401,12 @@ def open_kiosk(
     try:
         resolved_root = _resolved_seat_root(seat_root)
         participant_port, launch_token = resolve_kiosk_access(resolved_root, participant_port)
+        record = load_seat_record(resolved_root)
+        namespace_pid = None
+        if record is not None and private_desktop(record.mappings):
+            namespace_pid = read_vm_pid(resolved_root)
+            if namespace_pid is None:
+                raise SeatLauncherError("vm-not-running", "seat desktop VM is not running")
     except SeatLauncherError as exc:
         _fail(exc)
     plan = open_participant_kiosk(
@@ -407,6 +415,7 @@ def open_kiosk(
         dry_run=dry_run,
         launch_token=launch_token,
         bootstrap_directory=resolved_root / "runtime/kiosk",
+        namespace_pid=namespace_pid,
     )
     _emit({"kiosk": True, "argv": list(plan.argv), "url": plan.url})
 

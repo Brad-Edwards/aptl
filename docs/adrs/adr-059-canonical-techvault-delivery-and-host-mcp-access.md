@@ -2,10 +2,12 @@
 
 ## Status
 
-accepted
+superseded in part by ADR-060 and ADR-061
 
 Implemented by issue #868. Software integration verification is distinct
 from signed appliance qualification and offline VM boot evidence.
+The VM-seat browser and host-MCP access decisions below are superseded by
+ADR-061 for future seat images; this record describes the earlier contract.
 This partially supersedes ADR-049's guest-agent-only access
 policy and developer-only restriction on ordinary local use. ADR-000 keeps
 the accepted historical record immutable. All other ADR-049 containment,

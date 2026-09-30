@@ -16,7 +16,7 @@ from aptl.appliance.seat.observation import (
     observation_id_for,
     probe_forbidden_host_reachability,
     wait_for_loopback_listeners,
-    wait_for_web_publications,
+    wait_for_desktop_publication,
 )
 from aptl.appliance.seat.errors import SeatLauncherError
 from tests.test_appliance_boundary_inventory import _policy
@@ -259,36 +259,29 @@ def test_host_boundary_findings_detect_identity_mismatches() -> None:
     assert "boundary.host-observation-incomplete" in findings
 
 
-def test_web_publications_require_both_actual_http_services() -> None:
-    mappings = tuple(
-        BoundaryEndpoint(
-            audience=audience,
-            address="127.0.0.1",
-            port=port,
-            protocol="tcp",
-            guest_address="127.0.0.1",
-            guest_port=port,
-        )
-        for audience, port in (("participant", 3000), ("recovery", 8400))
-    )
+def test_desktop_publication_requires_live_gateway_and_header_auth() -> None:
+    mappings = (BoundaryEndpoint(
+        audience="participant", address="127.0.0.1", port=8080,
+        protocol="tcp", guest_address="127.0.0.1", guest_port=8080,
+    ),)
 
     class Connection:
         def __init__(self, _host: str, port: int, *, timeout: int) -> None:
             self.port = port
 
-        def request(self, method: str, path: str) -> None:
-            assert method == "GET"
-            assert path == ("/" if self.port == 3000 else "/api/health")
+        def request(self, method: str, path: str, **_kwargs: object) -> None:
+            assert (method, path) in {("GET", "/"), ("POST", "/api/tokens")}
 
         def getresponse(self) -> object:
-            return type("Response", (), {"status": 200 if self.port == 3000 else 401})()
+            return type("Response", (), {"status": 200,
+                                         "read": lambda _self, _size: b'{"authToken":"ready"}'})()
 
         def close(self) -> None:
             pass
 
     with patch("aptl.appliance.seat.observation.http.client.HTTPConnection", Connection):
-        wait_for_web_publications(mappings, process_alive=lambda: True)
+        wait_for_desktop_publication(mappings, process_alive=lambda: True)
 
     with patch("aptl.appliance.seat.observation.http.client.HTTPConnection", side_effect=OSError):
-        with pytest.raises(SeatLauncherError, match="guest web publications"):
-            wait_for_web_publications(mappings, process_alive=lambda: False)
+        with pytest.raises(SeatLauncherError, match="desktop gateway"):
+            wait_for_desktop_publication(mappings, process_alive=lambda: False)

@@ -1,0 +1,179 @@
+#!/usr/bin/python3
+"""Give the disposable desktop account its live, guest-local MCP inputs."""
+
+from __future__ import annotations
+
+import json
+import os
+import pwd
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+ROLES = {
+    "red": ("aptl-red",),
+    "blue": (
+        "aptl-wazuh", "aptl-indexer", "aptl-network",
+        "aptl-threatintel", "aptl-casemgmt", "aptl-soar",
+    ),
+}
+
+
+def _regular(path: Path) -> Path:
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("seat desktop input is missing or unsafe")
+    return path
+
+
+def _private_file(path: Path, payload: bytes, uid: int, gid: int) -> None:
+    if path.is_symlink():
+        raise ValueError("seat desktop destination is unsafe")
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".seat-", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as output:
+            output.write(payload)
+        os.chown(temporary, uid, gid)
+        temporary.chmod(0o600)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _desktop_config(
+    source: dict, project: Path, names: tuple[str, ...],
+    run_id: str, run_store: Path,
+) -> bytes:
+    servers = source.get("mcpServers")
+    if not isinstance(servers, dict):
+        raise ValueError("seat desktop MCP source is invalid")
+    selected = {}
+    for name in names:
+        item = servers.get(name)
+        if not isinstance(item, dict) or not isinstance(item.get("env"), dict):
+            raise ValueError("seat desktop MCP registration is incomplete")
+        args = item.get("args")
+        if not isinstance(args, list) or len(args) != 1 or not isinstance(args[0], str):
+            raise ValueError("seat desktop MCP artifact is invalid")
+        artifact = (project / args[0]).resolve()
+        if not artifact.is_relative_to((project / "mcp").resolve()) or not artifact.is_file():
+            raise ValueError("seat desktop MCP artifact is missing")
+        if not all(isinstance(k, str) and isinstance(v, str) for k, v in item["env"].items()):
+            raise ValueError("seat desktop MCP environment is invalid")
+        environment = dict(item["env"])
+        environment.update({
+            "APTL_MCP_ADMITTED_RUN_ID": run_id,
+            "APTL_MCP_RUN_STORE_BASE": str(run_store),
+            "APTL_STATE_DIR": str(project / ".aptl"),
+            # Claude needs the public HTTPS proxy for provider sign-in, but
+            # these guest-local tools must address scenario loopback directly.
+            "HTTP_PROXY": "", "HTTPS_PROXY": "",
+            "http_proxy": "", "https_proxy": "",
+        })
+        selected[name] = {
+            "command": "/usr/bin/node",
+            "args": [str(artifact)],
+            "env": environment,
+        }
+    return (json.dumps({"mcpServers": selected}, separators=(",", ":")) + "\n").encode()
+
+
+def _run_store(project: Path) -> Path:
+    config = json.loads(_regular(project / "aptl.json").read_text())
+    try:
+        name = config["run_storage"]["local_path"]
+    except (KeyError, TypeError):
+        name = "./runs"
+    if not isinstance(name, str) or not name:
+        raise ValueError("seat desktop run store is unavailable")
+    run_store = Path(name)
+    if not run_store.is_absolute():
+        run_store = project / run_store
+    if not run_store.is_absolute() or not run_store.resolve().is_relative_to(project.resolve()):
+        raise ValueError("seat desktop run store escapes the guest project")
+    if not run_store.is_dir() or run_store.is_symlink():
+        raise ValueError("seat desktop run store is unsafe")
+    return run_store.resolve()
+
+
+def _assign_run_store(run_store: Path, uid: int, gid: int) -> None:
+    for root, directories, files in os.walk(run_store, followlinks=False):
+        directory = Path(root)
+        if directory.is_symlink() or any((directory / name).is_symlink() for name in (*directories, *files)):
+            raise ValueError("seat desktop run store contains a link")
+        os.chown(directory, uid, gid)
+        for name in files:
+            os.chown(directory / name, uid, gid)
+
+
+def handoff(
+    project: Path, home: Path, supervisor_home: Path,
+    uid: int, gid: int, run_id: str,
+) -> None:
+    """Publish live role configs, lab SSH key, and only the needed guest state."""
+
+    source = json.loads(_regular(project / ".mcp.json").read_text())
+    if not isinstance(source, dict):
+        raise ValueError("seat desktop MCP source is invalid")
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", run_id) is None or ".." in run_id:
+        raise ValueError("seat desktop run identity is invalid")
+    run_store = _run_store(project)
+    configs = {
+        role: _desktop_config(source, project, names, run_id, run_store)
+        for role, names in ROLES.items()
+    }
+    env_path = _regular(project / ".env")
+    key = _regular(supervisor_home / ".ssh" / "aptl_lab_key").read_bytes()
+    if not key:
+        raise ValueError("seat desktop SSH identity is empty")
+    if home.is_symlink() or not home.is_dir():
+        raise ValueError("seat desktop home is unsafe")
+    ssh_dir = home / ".ssh"
+    state_dir = home / ".config" / "aptl"
+    for directory in (ssh_dir, state_dir):
+        if directory.is_symlink():
+            raise ValueError("seat desktop private directory is unsafe")
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        directory.chmod(0o700)
+        os.chown(directory, uid, gid)
+    # MCP loaders resolve their own docker-lab-config.json beneath the project,
+    # then search ancestor directories for .env. Give this guest account read
+    # access only after the live lab has generated those values.
+    os.chown(env_path, -1, gid)
+    env_path.chmod(0o640)
+    _assign_run_store(run_store, uid, gid)
+    ca_dir = project / "config" / "soc_certs"
+    ca = ca_dir / "lab-ca.pem"
+    if ca.is_file() and not ca.is_symlink() and not ca_dir.is_symlink():
+        os.chown(ca_dir, -1, gid)
+        ca_dir.chmod(0o710)
+        os.chown(ca, -1, gid)
+        ca.chmod(0o640)
+    _private_file(ssh_dir / "aptl_lab_key", key, uid, gid)
+    for role, payload in configs.items():
+        _private_file(home / f"{role}.mcp.json", payload, uid, gid)
+    if os.environ.get("APTL_SEAT_DESKTOP_MCP_SMOKE") == "1":
+        subprocess.run(
+            ["/usr/bin/python3", "/opt/aptl/desktop/desktop-mcp-smoke.py"],
+            cwd=project,
+            env={**os.environ, "HOME": str(home), "USER": "aptl", "LOGNAME": "aptl"},
+            user=uid,
+            group=gid,
+            check=True,
+            timeout=210,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    _private_file(state_dir / "run-ready", b"ready\n", uid, gid)
+
+
+if __name__ == "__main__":
+    account = pwd.getpwnam("aptl")
+    handoff(
+        Path(sys.argv[1]), Path(account.pw_dir), Path.home(),
+        account.pw_uid, account.pw_gid, sys.argv[2],
+    )

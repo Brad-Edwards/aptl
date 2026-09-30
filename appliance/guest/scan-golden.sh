@@ -20,21 +20,24 @@ then
     exit 1
 fi
 
-# aptl-mcp is the sole intentionally unlocked account: it has no password and
-# the generation-bound transport starts its own public-key-only sshd.
+# The desktop account remains locked until the disposable overlay starts.
 if awk -F: '$2 != "" && $2 !~ /^[!*]/ { print $1 }' /etc/shadow | grep -q .
 then
     exit 1
 fi
-test "$(awk -F: '$2 == "" { print $1 }' /etc/shadow)" = aptl-mcp
+test -z "$(awk -F: '$2 == "" { print $1 }' /etc/shadow)"
+getent passwd aptl >/dev/null
 
-for executable in docker node python3 systemctl sshd
+for executable in docker node python3 systemctl xrdp startxfce4 \
+    xfce4-terminal epiphany tmux
 do
     command -v "$executable" >/dev/null
 done
+test -x /usr/local/bin/claude
 docker buildx version >/dev/null
 docker compose version >/dev/null
 test -x /opt/aptl/app/bin/aptl
+/usr/local/bin/claude --version >/dev/null
 /usr/local/bin/aptl --version >/dev/null
 # Exercise the immutable runtime through the identity that the enrolled SSH
 # transport actually uses. A root-only scan cannot detect missing traversal or
@@ -42,14 +45,14 @@ test -x /opt/aptl/app/bin/aptl
 su -s /bin/sh -c '
     /usr/local/bin/aptl --version >/dev/null &&
     test -r /opt/aptl/project/mcp/mcp-red/build/index.js
-' aptl-mcp
+' aptl
 case "$(node --version)" in
     v22.*) ;;
     *) exit 1 ;;
 esac
 # Allow five percent for EFI/boot partitions and filesystem metadata.
 # Compare the root filesystem to the requested virtual size, not a fixed cut.
-expected_disk_gib=${APTL_SEAT_DISK_GIB:-250}
+expected_disk_gib=${APTL_SEAT_DISK_GIB:-128}
 case "$expected_disk_gib" in
     ''|*[!0-9]*) echo 'invalid expected disk size' >&2; exit 1 ;;
 esac
@@ -83,15 +86,9 @@ do
     fi
 done
 
-# The service account's empty home is immutable account scaffolding, not
-# overlay state. No sibling or descendant may exist in the golden image.
-test -d /var/lib/aptl/mcp
-if find /var/lib/aptl -mindepth 1 -maxdepth 1 ! -name mcp -print -quit |
+# No overlay state may be present in the immutable disk.
+if find /var/lib/aptl -mindepth 1 -print -quit |
     grep -q .
-then
-    exit 1
-fi
-if find /var/lib/aptl/mcp -mindepth 1 -print -quit | grep -q .
 then
     exit 1
 fi

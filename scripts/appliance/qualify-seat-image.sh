@@ -3,6 +3,11 @@
 set -euo pipefail
 export LIBGUESTFS_BACKEND=${LIBGUESTFS_BACKEND:-direct}
 export LIBGUESTFS_BACKEND_SETTINGS=force_kvm
+guestfs_command=(env)
+if test "${APTL_SEAT_LIBGUESTFS_SUDO:-0}" = 1; then
+  guestfs_command=(sudo env "LIBGUESTFS_BACKEND=$LIBGUESTFS_BACKEND"
+    "LIBGUESTFS_BACKEND_SETTINGS=$LIBGUESTFS_BACKEND_SETTINGS")
+fi
 
 source_root=$PWD
 disk=${1:?baked seat disk is required}
@@ -30,7 +35,7 @@ trap cleanup EXIT
 overlay=$work/seat.qcow2
 qemu-img create -f qcow2 -F qcow2 -b "$(realpath "$disk")" "$overlay" >/dev/null
 
-virt-customize --add "$overlay" \
+"${guestfs_command[@]}" virt-customize --add "$overlay" \
   --copy-in "$source_root/appliance/guest/seat-qualification-smoke.sh:/usr/local/libexec" \
   --copy-in "$source_root/appliance/guest/seat-qualification-smoke.service:/etc/systemd/system" \
   --run-command 'chmod 0755 /usr/local/libexec/seat-qualification-smoke.sh && systemctl disable aptl-appliance-first-boot.service && systemctl enable seat-qualification-smoke.service'
@@ -48,7 +53,7 @@ timeout --signal=TERM --kill-after=30s 4200 \
   || vm_status=$?
 
 result=$work/result
-if ! virt-cat -a "$overlay" /var/log/aptl-seat-qualification.result >"$result"; then
+if ! "${guestfs_command[@]}" virt-cat -a "$overlay" /var/log/aptl-seat-qualification.result >"$result"; then
   echo 'seat qualification produced no guest result' >&2
   exit 1
 fi

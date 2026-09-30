@@ -85,6 +85,29 @@ def test_saved_archive_must_match_inspected_image_roles(tmp_path: Path) -> None:
         )
 
 
+def test_seat_archive_omits_abandoned_web_profile(tmp_path: Path, monkeypatch) -> None:
+    module = _script("assemble-seat-inputs.py")
+    (tmp_path / "docker-compose.yml").write_text(
+        "services:\n"
+        "  scenario:\n    image: aptl/scenario:1\n"
+        "  web-ui:\n    image: aptl-web-ui:1\n    profiles: [web]\n"
+    )
+    inspected = []
+
+    def inspect(*argv: str) -> str:
+        inspected.append(argv)
+        return "sha256:" + "a" * 64
+
+    monkeypatch.setattr(module, "_docker", inspect)
+    tags: dict[str, str] = {}
+
+    module._add_compose_images(tmp_path, tags)
+
+    assert "aptl/scenario:1" in tags
+    assert "aptl-web-ui:1" not in tags
+    assert all("aptl-web-ui:1" not in argv for argv in inspected)
+
+
 def test_generated_config_validates_against_the_launcher_contract() -> None:
     # The bake writes this and the launcher parses it; a declaration the
     # launcher would refuse must fail the bake, not a participant's start.
@@ -110,7 +133,7 @@ def test_generated_config_validates_against_the_launcher_contract() -> None:
     config = parse_seat_image_config(payload)
 
     assert config.resources.vcpus == 8
-    assert config.participant.port == 3000
+    assert config.participant.port == 8080
 
 
 def test_generated_config_reserves_the_baked_disks_virtual_size(
@@ -158,16 +181,15 @@ def test_bake_uses_the_proven_offline_guest_provisioning() -> None:
     assert "--require-hashes --find-links" in provision
     assert "npm ci --no-audit --no-fund && npm run build" in bake
     assert "aptl appliance" not in first_boot
-    # The real Compose web services own these policy ports. A placeholder
-    # listener would take the loopback sockets before Docker could publish.
+    # The desktop gateway is the only seat participant publication.
     assert "guest_services surfaces" not in first_boot
-    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
-    local_images = (ROOT / "scripts/appliance/build-local-images.sh").read_text()
-    for name in ("aptl-web-api", "aptl-web-ui"):
-        assert compose["services"][name]["image"] == f"{name}:1"
-        assert f"build_image {name}:1" in local_images
-    assert "APTL_WEB_LAUNCH_TOKEN" in first_boot
-    assert "APTL_WEB_BIND_ADDRESS=127.0.0.1" in first_boot
+    desktop = yaml.safe_load((ROOT / "appliance/guest/desktop-compose.yml").read_text())
+    assert desktop["services"]["gateway"]["ports"] == ["127.0.0.1:8080:80"]
+    assert all("ports" not in desktop["services"][name]
+               for name in ("guacamole", "guacd", "database"))
+    assert "APTL_WEB_LAUNCH_TOKEN" not in first_boot
+    assert "APTL_API_TOKEN" not in first_boot
+    assert "start-seat-desktop" in first_boot
     from aptl.appliance.loopback_proxy import build_proxy_bindings
     from aptl.appliance.policy import full_techvault_boundary_policy
     from aptl.appliance.seat.vm import DEFAULT_QEMU_GUEST_ADDRESS
@@ -176,10 +198,8 @@ def test_bake_uses_the_proven_offline_guest_provisioning() -> None:
     )
     assert all(item.listen_address == "10.0.2.15" for item in bindings)
     assert all(item.target_address == "127.0.0.1" for item in bindings)
-    web_start = (ROOT / "src/aptl/appliance/guest_web.py").read_text()
-    assert "build=False" in web_start
-    assert "backend.start(" in web_start
-    assert '"aptl-web-api", "aptl-web-ui"' in web_start
+    assert "desktop-compose.yml" in bake
+    assert "desktop-compose.yml" in provision
 
     # The image archive ships on disk and first boot loads it once per
     # overlay, so a participant's seat pulls nothing. Loading at bake time is
@@ -219,9 +239,9 @@ def test_seat_bake_is_not_part_of_package_release() -> None:
 
 def test_bake_uses_checkout_config_writer_and_configured_disk_scan() -> None:
     bake = BAKE.read_text()
-    assert ('PYTHONPATH="$source_root/src" python3 ' + chr(92) + chr(10)
-            + '  "$source_root/scripts/appliance/write-seat-image-config.py"') in bake
+    assert '"$source_root/scripts/appliance/write-seat-image-config.py"' in bake
+    assert '--disk "$disk"' in bake
     assert 'APTL_SEAT_DISK_GIB=$disk_gib /tmp/scan-golden.sh' in bake
     scan = (ROOT / "appliance/guest/scan-golden.sh").read_text()
-    assert 'expected_disk_gib=${APTL_SEAT_DISK_GIB:-250}' in scan
+    assert 'expected_disk_gib=${APTL_SEAT_DISK_GIB:-128}' in scan
     assert 'expected_disk_gib * 1024 * 1024 * 1024 * 19 / 20' in scan

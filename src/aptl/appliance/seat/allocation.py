@@ -260,6 +260,7 @@ def launch_with_reserved_mappings(
     capacity: tuple[int, int, int] | None = None,
     available: tuple[int, int, int] | None = None,
     retained_disk_bytes: int = 0,
+    occupied_probe: Callable[[T, BoundaryEndpoint], bool] | None = None,
 ) -> T:
     """Hold the allocator lock until the launched VM owns every endpoint."""
 
@@ -294,7 +295,11 @@ def launch_with_reserved_mappings(
         while time.monotonic() < deadline:
             if callable(poll) and poll() is not None:
                 raise SeatLauncherError("failed-launch", "VM exited during port bind")
-            if all(_mapping_is_occupied(mapping) for mapping in mappings):
+            if all(
+                occupied_probe(handle, mapping)
+                if occupied_probe is not None else _mapping_is_occupied(mapping)
+                for mapping in mappings
+            ):
                 return handle
             time.sleep(0.05)
         raise SeatLauncherError(

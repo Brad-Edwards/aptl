@@ -57,6 +57,10 @@ test -f "$payload_dir/aptl-appliance-first-boot.service"
 test -f "$payload_dir/aptl-launch.mount"
 test -d "$payload_dir/system-packages"
 test -f "$payload_dir/system-packages.sha256"
+test -f "$payload_dir/claude-runtime.tar"
+for filename in desktop-compose.yml desktop-nginx.conf seat-desktop.py desktop-handoff.py desktop-mcp-smoke.py desktop-session.sh guac-schema.sql; do
+    test -f "$payload_dir/$filename"
+done
 
 set -- "$payload_dir"/wheelhouse/pip-*.whl
 test "$#" -eq 1
@@ -113,6 +117,85 @@ dpkg --unpack "$payload_dir"/system-packages/*.deb
 dpkg --configure --pending
 rm -f /usr/sbin/policy-rc.d
 systemctl enable docker.service
+install -d -m 0755 /opt/aptl/claude
+tar --extract --file "$payload_dir/claude-runtime.tar" \
+    --directory /opt/aptl/claude --no-same-owner
+ln -s /opt/aptl/claude/node_modules/.bin/claude /usr/local/bin/claude
+systemctl disable avahi-daemon.service avahi-daemon.socket 2>/dev/null || true
+systemctl mask avahi-daemon.service avahi-daemon.socket 2>/dev/null || true
+
+# The account is locked in the immutable disk. The disposable overlay creates
+# its xrdp password on first boot; Guacamole supplies it automatically.
+if ! getent passwd aptl >/dev/null; then
+    useradd --create-home --home-dir /home/aptl --shell /bin/bash aptl
+fi
+usermod --append --groups docker aptl
+printf 'xfce4-session\n' >/home/aptl/.xsession
+install -d -m 0755 /home/aptl/.config/autostart \
+    /home/aptl/.config/xfce4/xfconf/xfce-perchannel-xml
+cat >/home/aptl/.config/autostart/aptl-desktop.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=APTL Desktop
+Exec=/usr/local/bin/aptl-desktop-session
+X-GNOME-Autostart-enabled=true
+EOF
+cat >/home/aptl/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="use_compositing" type="bool" value="false"/>
+  </property>
+</channel>
+EOF
+python3 - <<'PYTHON'
+import json
+from pathlib import Path
+
+root = Path('/home/aptl')
+servers = {
+    'red': ('mcp-red',),
+    'blue': ('mcp-wazuh', 'mcp-indexer', 'mcp-network',
+             'mcp-threatintel', 'mcp-casemgmt', 'mcp-soar'),
+}
+for role, names in servers.items():
+    config = {'mcpServers': {
+        f'aptl-{name.removeprefix("mcp-")}': {
+            'command': 'node',
+            'args': [f'/opt/aptl/project/mcp/{name}/build/index.js'],
+        }
+        for name in names
+    }}
+    (root / f'{role}.mcp.json').write_text(
+        json.dumps(config, separators=(',', ':')), encoding='utf-8'
+    )
+PYTHON
+cat >/etc/xrdp/startwm.sh <<'EOF'
+#!/bin/sh
+if [ -r /etc/profile ]; then . /etc/profile; fi
+if [ -r "$HOME/.profile" ]; then . "$HOME/.profile"; fi
+exec /usr/bin/startxfce4
+EOF
+chmod 0755 /etc/xrdp/startwm.sh
+sed -i 's/^max_bpp=.*/max_bpp=16/' /etc/xrdp/xrdp.ini
+if ! grep -q '^tcp_send_buffer_bytes=' /etc/xrdp/xrdp.ini; then
+    sed -i '/^tcp_nodelay=true/a tcp_send_buffer_bytes=4194304\ntcp_recv_buffer_bytes=4194304' /etc/xrdp/xrdp.ini
+fi
+usermod --append --groups ssl-cert xrdp
+chown -R aptl:aptl /home/aptl
+
+install -d -m 0755 /opt/aptl/desktop
+for filename in desktop-compose.yml desktop-nginx.conf seat-desktop.py desktop-handoff.py desktop-mcp-smoke.py guac-schema.sql; do
+    install -m 0444 "$payload_dir/$filename" "/opt/aptl/desktop/$filename"
+done
+install -m 0755 "$payload_dir/desktop-session.sh" \
+    /usr/local/bin/aptl-desktop-session
+cat >/usr/local/bin/start-seat-desktop <<'EOF'
+#!/bin/sh
+exec /usr/bin/python3 /opt/aptl/desktop/seat-desktop.py
+EOF
+chmod 0755 /usr/local/bin/start-seat-desktop
+systemctl enable xrdp.service
 
 install -d -m 0755 /opt/aptl/project
 tar --extract --file "$payload_dir/project.tar" \
@@ -134,18 +217,6 @@ install -m 0644 "$payload_dir/aptl-appliance-first-boot.service" \
 install -m 0644 "$payload_dir/aptl-launch.mount" \
     /etc/systemd/system/run-aptl\\x2dlaunch.mount
 install -d -m 0711 /var/lib/aptl
-if ! getent passwd aptl-mcp >/dev/null; then
-    useradd --system --no-create-home --home-dir /var/lib/aptl/mcp \
-        --shell /bin/sh aptl-mcp
-fi
-# sshd disables every password method. An empty password field keeps the
-# account eligible for public-key forced commands on builds that reject locked
-# accounts before consulting AuthorizedKeysFile.
-passwd --delete aptl-mcp >/dev/null
-if getent group docker >/dev/null; then
-    usermod --append --groups docker aptl-mcp
-fi
-install -d -m 0700 -o aptl-mcp -g aptl-mcp /var/lib/aptl/mcp
 systemctl enable run-aptl\\x2dlaunch.mount
 systemctl enable aptl-appliance-first-boot.service
 

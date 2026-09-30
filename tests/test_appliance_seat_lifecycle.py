@@ -14,6 +14,7 @@ from aptl.appliance.seat.lifecycle import (
     _establish_host_access,
     _ensure_overlay,
     _fail_closed_start,
+    _require_guest_publication,
     _seat_paths,
     image_requires_host_access,
     reconcile_seat_after_reboot,
@@ -793,6 +794,69 @@ def test_status_reports_vm_not_running_for_ready_seat(tmp_path: Path) -> None:
         projection = status_seat(seat_root)
 
     assert projection.diagnostics == ("vm-not-running",)
+
+
+def test_status_reports_gateway_failure_even_when_vm_pid_is_live(tmp_path: Path) -> None:
+    seat_root = tmp_path / "seat"
+    record = SeatRecord(
+        schema_version="aptl.seat-record/v2",
+        seat_id="seat-01", instance_id="a" * 32, generation=1,
+        image_reference="ghcr.io/owner/seat:latest",
+        image_digest="sha256:" + "c" * 64,
+        launch_descriptor_digest="sha256:" + "a" * 64,
+        overlay_path="instances/seat-01.qcow2",
+        host_observation_id="sha256:" + "b" * 64,
+        lifecycle_state="ready", taint_state="clean", host_boot_id="boot-1",
+        mappings=(BoundaryEndpoint(
+            audience="participant", address="127.0.0.1", port=8080,
+            protocol="tcp", guest_address="127.0.0.1", guest_port=8080,
+        ),),
+    )
+    persist_seat_record(seat_root, record)
+
+    with (
+        patch("aptl.appliance.seat.lifecycle.read_vm_pid", return_value=123),
+        patch("aptl.appliance.seat.lifecycle.probe_desktop_publication", return_value=False),
+    ):
+        projection = status_seat(seat_root)
+
+    assert projection.diagnostics == ("desktop-unavailable",)
+
+
+def test_existing_web_image_keeps_its_browser_readiness_path(tmp_path: Path) -> None:
+    seat_root = tmp_path / "seat"
+    token = seat_root / "access/generation-1/web-launch-token"
+    token.parent.mkdir(parents=True)
+    token.write_text("legacy-token")
+    record = SeatRecord(
+        schema_version="aptl.seat-record/v2",
+        seat_id="seat-01", instance_id="a" * 32, generation=1,
+        image_reference="ghcr.io/owner/seat:old",
+        image_digest="sha256:" + "c" * 64,
+        launch_descriptor_digest="sha256:" + "a" * 64,
+        overlay_path="instances/seat-01.qcow2",
+        host_observation_id="sha256:" + "b" * 64,
+        lifecycle_state="starting", taint_state="clean", host_boot_id="boot-1",
+        mappings=(
+            BoundaryEndpoint(
+                audience="participant", address="127.0.0.1", port=13000,
+                protocol="tcp", guest_address="127.0.0.1", guest_port=3000,
+            ),
+            BoundaryEndpoint(
+                audience="recovery", address="127.0.0.1", port=18400,
+                protocol="tcp", guest_address="127.0.0.1", guest_port=8400,
+            ),
+        ),
+    )
+    with (
+        patch("aptl.appliance.seat.lifecycle.read_vm_pid", return_value=123),
+        patch("aptl.appliance.seat.lifecycle.wait_for_web_publications") as web,
+        patch("aptl.appliance.seat.lifecycle.wait_for_desktop_publication") as desktop,
+    ):
+        _require_guest_publication(seat_root, record, StartSeatOptions(), 123)
+
+    web.assert_called_once()
+    desktop.assert_not_called()
 
 
 def test_stop_seat_requires_existing_record(tmp_path: Path) -> None:

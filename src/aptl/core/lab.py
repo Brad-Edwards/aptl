@@ -3668,6 +3668,21 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
                 "Inspect .mcp.json env blocks against .env after a fresh lab start"
             ),
         )
+    if os.environ.get("APTL_SEAT_DESKTOP_HANDOFF") == "1":
+        try:
+            subprocess.run(
+                ["/usr/bin/python3", "/opt/aptl/desktop/desktop-handoff.py",
+                 str(ctx.project_dir), str(ctx.run_id or "")],
+                check=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except (OSError, subprocess.CalledProcessError):
+            return LabResult(
+                success=False,
+                error="Seat desktop MCP handoff failed.",
+            )
     return None
 
 
@@ -4239,9 +4254,6 @@ def _publish_appliance_guest_readiness(
     if realization is None or not callable(observe):
         return LabResult(success=False, error="Appliance readiness is unavailable.")
     try:
-        from aptl.appliance.guest_web import start_guest_web
-
-        start_guest_web(ctx.backend, ctx.project_dir)
         deployment = realization.deployment_spec(sorted(ctx.selected_profiles))
         observation = observe(deployment)
         from aptl.appliance.seat.readiness import publish_guest_readiness

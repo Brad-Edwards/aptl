@@ -4075,6 +4075,38 @@ class TestStartupClassificationWiring:
 
         assert ctx.diagnostics == []
 
+    def test_seat_desktop_handoff_runs_before_lab_readiness(self, tmp_path, mocker, monkeypatch):
+        from aptl.core.lab import _step_sync_mcp_config
+
+        ctx = self._ctx(tmp_path)
+        ctx.run_id = "run-1"
+        monkeypatch.setenv("APTL_SEAT_DESKTOP_HANDOFF", "1")
+        mocker.patch("aptl.core.lab._sync_mcp_config_keys")
+        handoff = mocker.patch("aptl.core.lab.subprocess.run")
+
+        assert _step_sync_mcp_config(ctx) is None
+        assert handoff.call_args.args[0] == [
+            "/usr/bin/python3", "/opt/aptl/desktop/desktop-handoff.py",
+            str(ctx.project_dir), "run-1",
+        ]
+
+    def test_seat_desktop_handoff_failure_blocks_readiness(self, tmp_path, mocker, monkeypatch):
+        from aptl.core.lab import _step_sync_mcp_config
+        from subprocess import CalledProcessError
+
+        ctx = self._ctx(tmp_path)
+        ctx.run_id = "run-1"
+        monkeypatch.setenv("APTL_SEAT_DESKTOP_HANDOFF", "1")
+        mocker.patch("aptl.core.lab._sync_mcp_config_keys")
+        mocker.patch(
+            "aptl.core.lab.subprocess.run",
+            side_effect=CalledProcessError(1, "desktop-handoff"),
+        )
+
+        result = _step_sync_mcp_config(ctx)
+        assert result is not None and not result.success
+        assert result.error == "Seat desktop MCP handoff failed."
+
     def test_mcp_config_sync_prefers_owned_live_port_over_prestart_resolution(
         self, tmp_path, mocker
     ):

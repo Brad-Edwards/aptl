@@ -7,11 +7,13 @@ the comparison still passes while every event attributed to the old id has been
 orphaned. That is precisely the failure the released scope calls out, so the
 comparison needs an identity recorded *before* the restart to compare against.
 
-This module owns that baseline. The first successful observation of a host
-records its id; every later observation compares against the recorded one. The
-baseline lives under the realization root beside the other backend-owned state,
-so it survives the container lifecycle it is there to observe, and the explicit
-volume reset that legitimately clears enrollment clears it too.
+This module records and reads that baseline. The first successful observation
+of a host records its id; every later observation compares against the recorded
+one. The baseline is APTL-owned realization state beside the other
+backend-owned state, so it survives the container lifecycle it is there to
+observe. The explicit volume reset that legitimately clears enrollment clears
+it too, through the APTL lifecycle cleanup action that every lab start records
+(:mod:`aptl.core.lifecycle_cleanup`), independent of which adapter is installed.
 """
 
 from __future__ import annotations
@@ -24,10 +26,9 @@ from aptl.core.credentials import (
     _canonical_generated_path,
     _ensure_secure_dir,
 )
+from aptl.core.lifecycle_cleanup import WAZUH_ENROLLMENT_BASELINE_RELPATH
 
-ENROLLMENT_BASELINE_RELPATH = Path(
-    ".aptl/realization/wazuh-agent-identity/baseline.json"
-)
+ENROLLMENT_BASELINE_RELPATH = WAZUH_ENROLLMENT_BASELINE_RELPATH
 
 
 def enrollment_baseline(scenario_root: Path) -> dict[str, str] | None:
@@ -63,35 +64,14 @@ def _valid_baseline(recorded: object) -> bool:
     )
 
 
-def clear_enrollment_baseline(scenario_root: Path | None) -> list[str]:
-    """Forget the recorded identities, returning any failure to do so.
-
-    The baseline only means something relative to the retained state it
-    describes. The explicit volume reset removes that state and agents
-    legitimately enrol afresh, so a baseline that outlived it would report
-    every host as re-enrolled forever. This is called from the same reset, and
-    only from there: ordinary stop/start retains both.
-    """
-
-    if scenario_root is None:
-        return []
-    try:
-        path = _canonical_generated_path(
-            Path(scenario_root), ENROLLMENT_BASELINE_RELPATH
-        )
-        path.unlink(missing_ok=True)
-    except (OSError, ValueError):
-        return ["Wazuh enrollment baseline could not be cleared"]
-    return []
-
-
 def record_enrollment_baseline(scenario_root: Path, observed: dict[str, str]) -> bool:
     """Record ids for hosts not yet baselined, never overwriting an existing one.
 
     An existing entry is deliberately immutable here: overwriting it would erase
     the very evidence a later comparison depends on, turning a lost identity
     into a fresh baseline that passes. The explicit volume reset is the one
-    operation that clears it, through :func:`clear_enrollment_baseline`.
+    operation that clears it, through
+    :func:`aptl.core.lifecycle_cleanup.clear_wazuh_enrollment_baseline`.
     """
 
     recorded = enrollment_baseline(scenario_root)
@@ -114,7 +94,6 @@ def record_enrollment_baseline(scenario_root: Path, observed: dict[str, str]) ->
 
 __all__ = (
     "ENROLLMENT_BASELINE_RELPATH",
-    "clear_enrollment_baseline",
     "enrollment_baseline",
     "record_enrollment_baseline",
 )

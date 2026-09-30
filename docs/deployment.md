@@ -119,6 +119,12 @@ clean boot, policy tick, or container kill owns the project, a second mutation
 fails without removing resources under the active operation. Wait for the
 owner to finish, or stop it and use `aptl lab stop` to reconcile the project.
 
+`aptl lab stop -v` also clears host-side state that described the removed
+volumes, such as the Wazuh agent enrollment baseline. That cleanup is recorded
+at start and survives APTL upgrades. If Docker teardown fails, or the volumes
+are gone but host cleanup remains, the stop names the failed step and the
+retry command. See [pending host cleanup](troubleshooting/index.md#aptl-lab-stop-v-reports-pending-host-cleanup).
+
 `aptl kill` is an emergency process-control surface. It is not normal teardown,
 a data reset, or a replacement for the structured startup result.
 

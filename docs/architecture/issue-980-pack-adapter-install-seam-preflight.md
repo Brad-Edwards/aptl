@@ -7,6 +7,11 @@ verification, and participant-smoke providers through entry points. Capture,
 several product-specific lifecycle choices, operator-group vocabulary, and a
 release compatibility shim still bypass that boundary.
 
+For pending reset receipts after upgrades, the [issue #1179 preflight](issue-1179-pending-lab-cleanup-preflight.md)
+supersedes this note's assignment of the generated Wazuh enrollment baseline
+to the TechVault adapter. That baseline is APTL-owned host state; truly
+pack-owned cleanup retains the bounded adapter boundary.
+
 The change must complete those seams without creating a general plugin object,
 a second capture model, or a second lifecycle controller. ADR-047 and EXP-010
 remain authoritative for capture admission and evidence persistence; ADR-053

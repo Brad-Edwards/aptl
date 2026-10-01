@@ -67,20 +67,17 @@ def _forbidden_argument_findings(argv: tuple[str, ...]) -> list[str]:
 
 
 def _network_exposure_findings(argv: tuple[str, ...]) -> list[str]:
-    """Require exactly one restricted SLIRP network declaration."""
+    """Require one user-mode NAT without an outbound restriction or bridge."""
 
-    # Ordinary SLIRP NAT permits a guest to reach the physical host and other
-    # seats. Restriction blocks guest-originated traffic outside this VM while
-    # retaining the explicit hostfwd publications used by participant clients.
     networks = _argument_options(argv, "-netdev")
     if len(networks) != 1 or "-nic" in argv or "-net" in argv:
-        return ["host.exposure.unrestricted-vm-network"]
+        return ["host.exposure.invalid-vm-network"]
     options = networks[0].split(",")
-    restrictions = [item for item in options if item.startswith("restrict=")]
     return (
         []
-        if options[0] == "user" and restrictions == ["restrict=on"]
-        else ["host.exposure.unrestricted-vm-network"]
+        if options[0] == "user"
+        and all(not item.startswith(("restrict=", "guestfwd=")) for item in options)
+        else ["host.exposure.invalid-vm-network"]
     )
 
 

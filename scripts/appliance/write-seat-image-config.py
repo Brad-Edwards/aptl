@@ -24,7 +24,7 @@ RESOURCES = {
     "architecture": "x86_64",
     "vcpus": 8,
     "memory_bytes": 32 * 1024**3,
-    "disk_bytes": 250 * 1024**3,
+    "disk_bytes": 128 * 1024**3,
     "hardware_virtualization": True,
     "local_adapter": "qemu-kvm",
     "supported_hypervisors": ["qemu-kvm"],

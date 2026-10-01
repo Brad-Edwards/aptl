@@ -22,6 +22,7 @@ from aptl.appliance.seat.vm import (
     stop_vm,
     write_vm_pid,
 )
+from aptl.appliance.seat.private_vm import _private_qemu_pid, _start_private_vm
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 
@@ -38,6 +39,101 @@ def test_subprocess_vm_delegates_to_process() -> None:
     process.send_signal.assert_called_once_with(signal.SIGTERM)
     vm.wait(timeout=1.0)
     process.wait.assert_called_once_with(timeout=1.0)
+
+
+def test_private_qemu_pid_uses_bwrap_reported_child_not_monitor_pid() -> None:
+    read_fd, write_fd = os.pipe()
+    try:
+        os.write(write_fd, b'{"child-pid":5150,"net-namespace":42}\n')
+        os.close(write_fd)
+        write_fd = -1
+        def proc_text(path: Path, *args, **kwargs) -> str:
+            if str(path) == "/proc/5150/comm":
+                return "bwrap\n"
+            if str(path) == "/proc/5150/task/5150/children":
+                return "5151\n"
+            if str(path) == "/proc/5151/comm":
+                return "qemu-system-x86\n"
+            raise AssertionError(f"unexpected process path: {path}")
+
+        with patch("aptl.appliance.seat.private_vm.Path.read_text", autospec=True, side_effect=proc_text):
+            assert _private_qemu_pid(read_fd) == 5151
+    finally:
+        os.close(read_fd)
+        if write_fd >= 0:
+            os.close(write_fd)
+
+
+def test_private_qemu_pid_rejects_missing_sandbox_pid() -> None:
+    read_fd, write_fd = os.pipe()
+    try:
+        os.write(write_fd, b"{}\n")
+        os.close(write_fd)
+        write_fd = -1
+        with pytest.raises(SeatLauncherError, match="private VM process was not reported"):
+            _private_qemu_pid(read_fd)
+    finally:
+        os.close(read_fd)
+        if write_fd >= 0:
+            os.close(write_fd)
+
+
+def test_private_vm_starts_outbound_nat_before_reporting_ready(tmp_path: Path) -> None:
+    overlay = tmp_path / "seat.qcow2"
+    vm_process = MagicMock(pid=5150)
+    network_process = MagicMock(pid=5152)
+    vm_process.poll.return_value = None
+    network_process.poll.return_value = None
+    observed = []
+
+    def start(argv, **kwargs):
+        observed.append((argv, kwargs))
+        if argv[0] == "bwrap":
+            resolver = Path(argv[argv.index("--ro-bind") + 1])
+            assert resolver.read_text() == "nameserver 10.0.3.3\n"
+            return vm_process
+        assert argv[0] == "slirp4netns"
+        assert "--configure" in argv
+        assert "--cidr=10.0.3.0/24" in argv
+        assert argv[-2:] == ["5151", "tap0"]
+        ready_fd = int(next(arg.split("=", 1)[1] for arg in argv if arg.startswith("--ready-fd=")))
+        os.write(ready_fd, b"1")
+        return network_process
+
+    with (
+        patch("aptl.appliance.seat.private_vm.subprocess.Popen", side_effect=start),
+        patch("aptl.appliance.seat.private_vm._private_qemu_pid", return_value=5151),
+    ):
+        assert _start_private_vm(["qemu-system-x86_64"], overlay) == (vm_process, 5151)
+
+    assert [args[0][0] for args in observed] == ["bwrap", "slirp4netns"]
+    assert not list(tmp_path.glob(".seat-resolv-*"))
+
+
+def test_private_vm_cleans_up_when_outbound_nat_is_not_ready(tmp_path: Path) -> None:
+    vm_process = MagicMock(pid=5150)
+    network_process = MagicMock(pid=5152)
+    vm_process.poll.return_value = None
+    network_process.poll.return_value = None
+
+    def start(argv, **_kwargs):
+        if argv[0] == "bwrap":
+            return vm_process
+        ready_fd = int(next(arg.split("=", 1)[1] for arg in argv if arg.startswith("--ready-fd=")))
+        os.write(ready_fd, b"0")
+        return network_process
+
+    with (
+        patch("aptl.appliance.seat.private_vm.subprocess.Popen", side_effect=start),
+        patch("aptl.appliance.seat.private_vm._private_qemu_pid", return_value=5151),
+        patch("aptl.appliance.seat.private_vm.os.killpg") as terminate_vm,
+        pytest.raises(SeatLauncherError, match="private VM network did not start"),
+    ):
+        _start_private_vm(["qemu-system-x86_64"], tmp_path / "seat.qcow2")
+
+    network_process.terminate.assert_called_once_with()
+    terminate_vm.assert_called_once_with(5150, signal.SIGTERM)
+    assert not list(tmp_path.glob(".seat-resolv-*"))
 
 
 def test_write_and_read_vm_pid_roundtrip(tmp_path: Path) -> None:
@@ -139,6 +235,45 @@ def test_start_vm_uses_hardened_subprocess_options(tmp_path: Path) -> None:
     assert kwargs["stdin"] == subprocess.DEVNULL
 
 
+def test_desktop_vm_runs_in_private_network_and_tracks_guest_pid(tmp_path: Path) -> None:
+    launch_mount = tmp_path / "launch"
+    launch_mount.mkdir()
+    overlay = tmp_path / "overlay.qcow2"
+    overlay.write_bytes(b"overlay")
+    spec = VmLaunchSpec(
+        overlay_path=overlay, launch_mount=launch_mount,
+        vcpus=8, memory_mib=16384,
+    )
+
+    with (
+        patch("aptl.appliance.seat.vm._start_private_vm") as launch,
+        patch("aptl.appliance.seat.vm.shutil.which", return_value="/usr/bin/tool"),
+        patch("aptl.appliance.seat.vm.os.access", return_value=True),
+    ):
+        process = MagicMock(pid=5150)
+        process.poll.return_value = None
+        launch.return_value = (process, 5151)
+        vm = start_vm(spec, private_network=True)
+
+    assert vm.pid == 5151
+    assert launch.call_args.args[0][0] == "qemu-system-x86_64"
+    assert launch.call_args.args[1] == overlay
+
+
+def test_desktop_vm_has_unrestricted_outbound_nat_and_one_private_forward(tmp_path: Path) -> None:
+    spec = VmLaunchSpec(
+        overlay_path=tmp_path / "overlay.qcow2",
+        launch_mount=tmp_path / "launch",
+        vcpus=8,
+        memory_mib=16384,
+    )
+    argv = build_qemu_argv(spec)
+    netdev = argv[argv.index("-netdev") + 1]
+    assert "restrict=" not in netdev
+    assert "guestfwd=" not in netdev
+    assert netdev.count("hostfwd=") == 1
+
+
 def test_qemu_argv_uses_private_management_socket(tmp_path: Path) -> None:
     launch_mount = tmp_path / "launch"
     launch_mount.mkdir()
@@ -222,6 +357,7 @@ def test_qemu_argv_attaches_private_guest_readiness_channel(tmp_path: Path) -> N
         f"socket,id=aptl-readiness,path={readiness_socket},server=on,wait=off"
     )
     assert "virtserialport,chardev=aptl-readiness,name=org.aptl.readiness" in argv
+    assert "org.aptl.access" not in " ".join(argv)
 
 
 def test_start_vm_rejects_immediate_qemu_exit(tmp_path: Path) -> None:
@@ -317,7 +453,7 @@ def test_qemu_argv_uses_explicit_outer_to_guest_mappings(tmp_path: Path) -> None
     netdev = argv[argv.index("-netdev") + 1]
     assert "net=10.0.2.0/24" in netdev
     assert "dhcpstart=10.0.2.15" in netdev
-    assert "restrict=on" in netdev.split(",")
+    assert "restrict=" not in netdev
     assert "hostfwd=tcp:127.0.0.1:10443-10.0.2.15:443" in netdev
     assert "hostfwd=tcp:127.0.0.1:11443-10.0.2.15:9443" in netdev
 

@@ -106,9 +106,10 @@ def test_audit_vm_argv_rejects_forbidden_usb_flag() -> None:
     "network_arguments",
     [
         (),
-        ("-netdev", "user,id=participant"),
+        ("-netdev", "user,id=participant,restrict=on"),
         ("-netdev", "user,id=participant,restrict=off"),
         ("-netdev", "user,id=participant,restrict=on,restrict=off"),
+        ("-netdev", "user,id=participant,guestfwd=tcp:10.0.2.100:3128-cmd:proxy"),
         ("-netdev", "tap,id=participant,restrict=on"),
         ("-netdev", "user,id=participant,restrict=on", "-netdev", "user,id=extra"),
         (
@@ -121,7 +122,7 @@ def test_audit_vm_argv_rejects_forbidden_usb_flag() -> None:
         ("-net", "user"),
     ],
 )
-def test_launch_boundary_rejects_guest_access_to_physical_host(
+def test_launch_boundary_rejects_unexpected_network_configuration(
     network_arguments: tuple[str, ...],
 ) -> None:
     from aptl.appliance.seat.errors import SeatLauncherError

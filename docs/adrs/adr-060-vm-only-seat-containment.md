@@ -2,10 +2,16 @@
 
 ## Status
 
-accepted
+superseded in part by ADR-061
+
+ADR-061 supersedes this record's VM-seat browser credential and restricted
+host-MCP access decisions for future images. VM containment, image trust,
+sticky selection, and qualification requirements remain in force.
 
 Owner decision on issue #1022. Supersedes the requirement to deliver internal
-security zones with the current appliance in ADR-049 and ADR-059. Their disposable-seat, host-access and qualification contracts remain.
+security zones with the current appliance in ADR-049 and ADR-059. Their
+disposable-seat and qualification contracts remain; ADR-061 replaces the
+host-access contract for new desktop images.
 The owner decision on #1162 replaces their bespoke signed-release transport
 with GHCR artifacts authenticated by Cosign, as described below.
 

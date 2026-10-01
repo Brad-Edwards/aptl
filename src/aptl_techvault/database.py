@@ -111,11 +111,20 @@ def _postgres_service(db_node: object) -> object | None:
     return services[0] if len(services) == 1 and _value(services[0].engine) == "postgresql" else None
 
 
+def _declared_listener(service: object) -> bool:
+    """Require the pack's single PostgreSQL listener on all guest interfaces."""
+    listeners = getattr(service, "listeners", ())
+    return (
+        len(listeners) == 1
+        and listeners[0].address == "0.0.0.0"
+        and listeners[0].port == 5432
+    )
+
+
 def _service_identity(service: object | None) -> tuple[str, str] | None:
     """Select one valid scenario database and login role."""
     if service is None:
         return None
-    listeners = getattr(service, "listeners", ())
     databases = [
         entry.name for entry in service.databases if _value(entry.origin) == "scenario"
     ]
@@ -125,9 +134,7 @@ def _service_identity(service: object | None) -> tuple[str, str] | None:
         if _value(entry.origin) == "scenario" and entry.can_login
     ]
     if (
-        len(listeners) != 1
-        or listeners[0].address != "0.0.0.0"
-        or listeners[0].port != 5432
+        not _declared_listener(service)
         or len(databases) != 1
         or len(roles) != 1
         or not all(_IDENTIFIER.fullmatch(name) for name in (*databases, *roles))

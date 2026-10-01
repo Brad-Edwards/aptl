@@ -18,7 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 def _desktop_module():
     path = ROOT / "appliance/guest/seat-desktop.py"
     spec = importlib.util.spec_from_file_location("seat_desktop", path)
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -27,7 +28,8 @@ def _desktop_module():
 def _handoff_module():
     path = ROOT / "appliance/guest/desktop-handoff.py"
     spec = importlib.util.spec_from_file_location("seat_desktop_handoff", path)
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -132,8 +134,9 @@ def test_desktop_handoff_refuses_missing_mcp_before_ready(tmp_path: Path) -> Non
     (project / ".mcp.json").write_text('{"mcpServers":{}}')
     home = tmp_path / "home"
     home.mkdir()
+    uid, gid = os.getuid(), os.getgid()
     with pytest.raises(ValueError, match="registration is incomplete"):
-        handoff.handoff(project, home, tmp_path, os.getuid(), os.getgid(), "run-1")
+        handoff.handoff(project, home, tmp_path, uid, gid, "run-1")
     assert not (home / ".config" / "aptl" / "run-ready").exists()
 
 

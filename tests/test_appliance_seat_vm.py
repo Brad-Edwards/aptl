@@ -16,14 +16,13 @@ from aptl.appliance.seat.vm import (
     SubprocessVm,
     VmLaunchSpec,
     VmProcessIdentity,
-    _private_qemu_pid,
-    _start_private_vm,
     build_qemu_argv,
     read_vm_pid,
     start_vm,
     stop_vm,
     write_vm_pid,
 )
+from aptl.appliance.seat.private_vm import _private_qemu_pid, _start_private_vm
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 
@@ -57,7 +56,7 @@ def test_private_qemu_pid_uses_bwrap_reported_child_not_monitor_pid() -> None:
                 return "qemu-system-x86\n"
             raise AssertionError(f"unexpected process path: {path}")
 
-        with patch("aptl.appliance.seat.vm.Path.read_text", autospec=True, side_effect=proc_text):
+        with patch("aptl.appliance.seat.private_vm.Path.read_text", autospec=True, side_effect=proc_text):
             assert _private_qemu_pid(read_fd) == 5151
     finally:
         os.close(read_fd)
@@ -102,8 +101,8 @@ def test_private_vm_starts_outbound_nat_before_reporting_ready(tmp_path: Path) -
         return network_process
 
     with (
-        patch("aptl.appliance.seat.vm.subprocess.Popen", side_effect=start),
-        patch("aptl.appliance.seat.vm._private_qemu_pid", return_value=5151),
+        patch("aptl.appliance.seat.private_vm.subprocess.Popen", side_effect=start),
+        patch("aptl.appliance.seat.private_vm._private_qemu_pid", return_value=5151),
     ):
         assert _start_private_vm(["qemu-system-x86_64"], overlay) == (vm_process, 5151)
 
@@ -125,9 +124,9 @@ def test_private_vm_cleans_up_when_outbound_nat_is_not_ready(tmp_path: Path) -> 
         return network_process
 
     with (
-        patch("aptl.appliance.seat.vm.subprocess.Popen", side_effect=start),
-        patch("aptl.appliance.seat.vm._private_qemu_pid", return_value=5151),
-        patch("aptl.appliance.seat.vm.os.killpg") as terminate_vm,
+        patch("aptl.appliance.seat.private_vm.subprocess.Popen", side_effect=start),
+        patch("aptl.appliance.seat.private_vm._private_qemu_pid", return_value=5151),
+        patch("aptl.appliance.seat.private_vm.os.killpg") as terminate_vm,
         pytest.raises(SeatLauncherError, match="private VM network did not start"),
     ):
         _start_private_vm(["qemu-system-x86_64"], tmp_path / "seat.qcow2")

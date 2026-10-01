@@ -1859,3 +1859,4 @@ src/aptl/appliance/seat/namespace.py	optional-delivery	Keep VM seat delivery wit
 tests/test_appliance_seat_namespace.py	tests-follow-owner	Retain VM seat regression coverage with the appliance owner
 tests/test_seat_desktop.py	tests-follow-owner	Retain VM seat regression coverage with the appliance owner
 tests/test_seat_launch_descriptor.py	tests-follow-owner	Retain VM seat regression coverage with the appliance owner
+src/aptl/appliance/seat/private_vm.py	optional-delivery	Keep rootless VM network startup with the appliance owner

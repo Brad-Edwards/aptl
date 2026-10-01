@@ -4104,7 +4104,8 @@ class TestStartupClassificationWiring:
         )
 
         result = _step_sync_mcp_config(ctx)
-        assert result is not None and not result.success
+        assert result is not None
+        assert not result.success
         assert result.error == "Seat desktop MCP handoff failed."
 
     def test_mcp_config_sync_prefers_owned_live_port_over_prestart_resolution(

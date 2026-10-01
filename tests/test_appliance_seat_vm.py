@@ -17,6 +17,7 @@ from aptl.appliance.seat.vm import (
     VmLaunchSpec,
     VmProcessIdentity,
     _private_qemu_pid,
+    _start_private_vm,
     build_qemu_argv,
     read_vm_pid,
     start_vm,
@@ -62,6 +63,78 @@ def test_private_qemu_pid_uses_bwrap_reported_child_not_monitor_pid() -> None:
         os.close(read_fd)
         if write_fd >= 0:
             os.close(write_fd)
+
+
+def test_private_qemu_pid_rejects_missing_sandbox_pid() -> None:
+    read_fd, write_fd = os.pipe()
+    try:
+        os.write(write_fd, b"{}\n")
+        os.close(write_fd)
+        write_fd = -1
+        with pytest.raises(SeatLauncherError, match="private VM process was not reported"):
+            _private_qemu_pid(read_fd)
+    finally:
+        os.close(read_fd)
+        if write_fd >= 0:
+            os.close(write_fd)
+
+
+def test_private_vm_starts_outbound_nat_before_reporting_ready(tmp_path: Path) -> None:
+    overlay = tmp_path / "seat.qcow2"
+    vm_process = MagicMock(pid=5150)
+    network_process = MagicMock(pid=5152)
+    vm_process.poll.return_value = None
+    network_process.poll.return_value = None
+    observed = []
+
+    def start(argv, **kwargs):
+        observed.append((argv, kwargs))
+        if argv[0] == "bwrap":
+            resolver = Path(argv[argv.index("--ro-bind") + 1])
+            assert resolver.read_text() == "nameserver 10.0.3.3\n"
+            return vm_process
+        assert argv[0] == "slirp4netns"
+        assert "--configure" in argv
+        assert "--cidr=10.0.3.0/24" in argv
+        assert argv[-2:] == ["5151", "tap0"]
+        ready_fd = int(next(arg.split("=", 1)[1] for arg in argv if arg.startswith("--ready-fd=")))
+        os.write(ready_fd, b"1")
+        return network_process
+
+    with (
+        patch("aptl.appliance.seat.vm.subprocess.Popen", side_effect=start),
+        patch("aptl.appliance.seat.vm._private_qemu_pid", return_value=5151),
+    ):
+        assert _start_private_vm(["qemu-system-x86_64"], overlay) == (vm_process, 5151)
+
+    assert [args[0][0] for args in observed] == ["bwrap", "slirp4netns"]
+    assert not list(tmp_path.glob(".seat-resolv-*"))
+
+
+def test_private_vm_cleans_up_when_outbound_nat_is_not_ready(tmp_path: Path) -> None:
+    vm_process = MagicMock(pid=5150)
+    network_process = MagicMock(pid=5152)
+    vm_process.poll.return_value = None
+    network_process.poll.return_value = None
+
+    def start(argv, **_kwargs):
+        if argv[0] == "bwrap":
+            return vm_process
+        ready_fd = int(next(arg.split("=", 1)[1] for arg in argv if arg.startswith("--ready-fd=")))
+        os.write(ready_fd, b"0")
+        return network_process
+
+    with (
+        patch("aptl.appliance.seat.vm.subprocess.Popen", side_effect=start),
+        patch("aptl.appliance.seat.vm._private_qemu_pid", return_value=5151),
+        patch("aptl.appliance.seat.vm.os.killpg") as terminate_vm,
+        pytest.raises(SeatLauncherError, match="private VM network did not start"),
+    ):
+        _start_private_vm(["qemu-system-x86_64"], tmp_path / "seat.qcow2")
+
+    network_process.terminate.assert_called_once_with()
+    terminate_vm.assert_called_once_with(5150, signal.SIGTERM)
+    assert not list(tmp_path.glob(".seat-resolv-*"))
 
 
 def test_write_and_read_vm_pid_roundtrip(tmp_path: Path) -> None:

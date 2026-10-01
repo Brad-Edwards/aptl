@@ -7,6 +7,8 @@ import socket
 import subprocess
 import sys
 import time
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -22,6 +24,26 @@ def test_only_single_new_desktop_publication_gets_private_network() -> None:
     assert private_desktop((desktop,))
     assert not private_desktop((desktop, desktop))
     assert not private_desktop((desktop.model_copy(update={"guest_port": 443}),))
+
+
+def test_namespace_entry_requires_same_host_account() -> None:
+    with (
+        patch("aptl.appliance.seat.namespace.in_private_network", return_value=True),
+        patch("aptl.appliance.seat.namespace.Path.stat", return_value=SimpleNamespace(st_uid=1000)),
+        patch("aptl.appliance.seat.namespace.os.getuid", return_value=1000),
+    ):
+        assert enter_private_network(5151) == (
+            "nsenter", "--target", "5151", "--user", "--net",
+            "--preserve-credentials", "--",
+        )
+
+    with (
+        patch("aptl.appliance.seat.namespace.in_private_network", return_value=True),
+        patch("aptl.appliance.seat.namespace.Path.stat", return_value=SimpleNamespace(st_uid=2000)),
+        patch("aptl.appliance.seat.namespace.os.getuid", return_value=1000),
+        pytest.raises(ValueError, match="another host account"),
+    ):
+        enter_private_network(5151)
 
 
 def test_prompt_free_desktop_port_is_unreachable_outside_user_namespace() -> None:

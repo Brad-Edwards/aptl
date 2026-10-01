@@ -1860,3 +1860,5 @@ tests/test_appliance_seat_namespace.py	tests-follow-owner	Retain VM seat regress
 tests/test_seat_desktop.py	tests-follow-owner	Retain VM seat regression coverage with the appliance owner
 tests/test_seat_launch_descriptor.py	tests-follow-owner	Retain VM seat regression coverage with the appliance owner
 src/aptl/appliance/seat/private_vm.py	optional-delivery	Keep rootless VM network startup with the appliance owner
+src/aptl_techvault/database.py	scenario-integration	Keep TechVault database realization with the scenario adapter
+tests/test_techvault_database.py	tests-follow-owner	Retain TechVault database regression coverage with the scenario owner

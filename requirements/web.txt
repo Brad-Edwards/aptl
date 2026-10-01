@@ -959,9 +959,9 @@ univers==32.0.1 \
     --hash=sha256:50a574ff2321e31e1eba7aa586bf63a9558d91c69c70316bf26c75e1b122499b \
     --hash=sha256:fae187245f72bee1581f29b0b0b6e907049b2ea136e3e52bf8d8edbfef10e7f0
     # via raes
-urllib3==2.7.0 \
-    --hash=sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c \
-    --hash=sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897
+urllib3==2.8.0 \
+    --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3 \
+    --hash=sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63
     # via requests
 uvicorn==0.51.0 \
     --hash=sha256:5d38af6cd620f2ae3849fb44fd4879e0890aa1febe8d47eb355fb45d93fe6a5b \

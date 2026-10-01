@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import os
-import pwd
 import re
 import ipaddress
 import shutil
@@ -14,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from pwd import getpwnam
 
 
 ROLES = {
@@ -323,7 +323,7 @@ def handoff(
 
 
 if __name__ == "__main__":
-    account = pwd.getpwnam("aptl")
+    account = getpwnam("aptl")
     handoff(
         Path(sys.argv[1]),
         Path(account.pw_dir),

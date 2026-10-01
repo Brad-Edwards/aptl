@@ -1844,3 +1844,18 @@ src/aptl_techvault/study_capture_registrations.py	scenario-integration	Keep part
 docs/architecture/issue-958-execution-boundary-preflight.md	architecture-history	Preserve issue 958 execution-boundary ownership decisions and guardrails
 src/aptl/core/execution_boundary.py	core-candidate	Keep selected-daemon observation and disclosure with the lab lifecycle owner
 tests/test_execution_boundary.py	tests-follow-owner	Retain selected-daemon boundary regression coverage with the lab lifecycle owner
+appliance/guest/claude/package-lock.json	optional-delivery	Keep VM seat delivery with the appliance owner
+appliance/guest/claude/package.json	optional-delivery	Keep VM seat delivery with the appliance owner
+appliance/guest/desktop-compose.yml	optional-delivery	Keep VM seat delivery with the appliance owner
+appliance/guest/desktop-handoff.py	optional-delivery	Keep VM seat delivery with the appliance owner
+appliance/guest/desktop-mcp-smoke.py	optional-delivery	Keep VM seat delivery with the appliance owner
+appliance/guest/desktop-nginx.conf	optional-delivery	Keep VM seat delivery with the appliance owner
+appliance/guest/desktop-session.sh	optional-delivery	Keep VM seat delivery with the appliance owner
+appliance/guest/seat-desktop.py	optional-delivery	Keep VM seat delivery with the appliance owner
+docs/adrs/adr-061-gateless-vm-seat-access.md	architecture-history	Preserve VM seat decision and review evidence
+docs/reviews/1178-seat-desktop-diagnostic.md	architecture-history	Preserve VM seat decision and review evidence
+docs/specs/1178-vm-seat-access-preflight.md	docs-follow-owner	Keep VM seat implementation guidance with the appliance owner
+src/aptl/appliance/seat/namespace.py	optional-delivery	Keep VM seat delivery with the appliance owner
+tests/test_appliance_seat_namespace.py	tests-follow-owner	Retain VM seat regression coverage with the appliance owner
+tests/test_seat_desktop.py	tests-follow-owner	Retain VM seat regression coverage with the appliance owner
+tests/test_seat_launch_descriptor.py	tests-follow-owner	Retain VM seat regression coverage with the appliance owner

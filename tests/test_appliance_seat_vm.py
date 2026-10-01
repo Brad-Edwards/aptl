@@ -175,6 +175,8 @@ def test_desktop_vm_runs_in_private_network_and_tracks_guest_pid(tmp_path: Path)
 
     with (
         patch("aptl.appliance.seat.vm._start_private_vm") as launch,
+        patch("aptl.appliance.seat.vm.shutil.which", return_value="/usr/bin/tool"),
+        patch("aptl.appliance.seat.vm.os.access", return_value=True),
     ):
         process = MagicMock(pid=5150)
         process.poll.return_value = None

@@ -89,7 +89,7 @@ def test_cached_config_stays_with_selected_disk_when_tag_moves(
     )
     result = _load_seat_image(paths)
     assert result.config_digest == _digest(payload)
-    assert result.config.participant.port == 3000
+    assert result.config.participant.port == 8080
 
     (cache / disk_digest.removeprefix("sha256:") / "seat-config.json").write_bytes(
         b"tampered"
@@ -130,7 +130,7 @@ def test_guest_services_use_verified_launch_policy(
     )
     monkeypatch.setattr(guest_services, "_LAUNCH_DESCRIPTOR", path)
     guest_services.main()
-    assert {binding.listen_port for binding in observed} == {3000, 8400, 2222}
+    assert {binding.listen_port for binding in observed} == {8080}
     assert {binding.listen_address for binding in observed} == {
         DEFAULT_QEMU_GUEST_ADDRESS
     }

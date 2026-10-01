@@ -501,10 +501,10 @@ def _stop_lab_owned(
     capture_failure = _finalize_required_transcript_capture(search_dir, backend)
     stop_result = backend.stop(profiles, remove_volumes=remove_volumes)
     result = stop_result
-    if remove_volumes and stop_result.success:
-        reset_failure = _reset_selected_scenario_state(search_dir, backend)
-        if reset_failure is not None:
-            result = reset_failure
+    if remove_volumes:
+        cleanup_failure = _run_pending_host_cleanup(search_dir, backend, stop_result)
+        if cleanup_failure is not None:
+            result = cleanup_failure
     if result is stop_result and capture_failure is not None:
         result = capture_failure
     return result
@@ -554,43 +554,34 @@ def _stop_recovery_configuration(
     return config, profiles, failure
 
 
-def _reset_selected_scenario_state(
+def _run_pending_host_cleanup(
     project_dir: Path,
     backend: object,
+    stop_result: LabResult,
 ) -> LabResult | None:
-    """Run reset hooks from immutable admission receipts after volume removal."""
+    """Finish pending host cleanup once Docker volume removal is verified.
 
-    from aptl.backends.scenario_startup import (
-        ScenarioStartupProviderError,
-        StartupHookContext,
-        StartupProviderProvenance,
-        run_persisted_startup_reset,
-    )
-    from aptl.core.scenario_bundle import PackIdentity
-    from aptl.core.startup_reset_state import (
-        complete_startup_reset_authority,
-        load_startup_reset_authorities,
+    A Docker failure leaves host state untouched, because it still describes
+    retained volumes, and says what remains pending. After verified teardown
+    every pending action runs, including on a repeat reset whose Docker
+    resources were already gone.
+    """
+
+    from aptl.core.lifecycle_cleanup import (
+        docker_teardown_failed_message,
+        pending_cleanup_message,
+        run_pending_cleanup,
     )
 
-    try:
-        for authority in load_startup_reset_authorities(project_dir):
-            run_persisted_startup_reset(
-                PackIdentity(
-                    authority.pack_id,
-                    authority.pack_version,
-                    authority.pack_set_digest,
-                ),
-                StartupProviderProvenance(
-                    authority.distribution,
-                    authority.distribution_version,
-                    authority.entry_point,
-                ),
-                StartupHookContext(backend),
-            )
-            complete_startup_reset_authority(project_dir, authority)
-    except (OSError, ValueError, ScenarioStartupProviderError):
-        return LabResult(success=False, error="Scenario adapter reset failed.")
-    return None
+    if not stop_result.success:
+        return LabResult(
+            success=False,
+            error=docker_teardown_failed_message(project_dir, stop_result.error),
+        )
+    report = run_pending_cleanup(project_dir, backend)
+    if report.ok:
+        return None
+    return LabResult(success=False, error=pending_cleanup_message(report))
 
 
 def _finalize_required_transcript_capture(
@@ -2376,43 +2367,64 @@ def _persist_start_recovery(ctx: _LabStartContext) -> LabResult | None:
             error="Could not persist admitted operator groups for recovery.",
         )
     try:
-        from aptl.backends.scenario_startup import StartupHook
-        from aptl.core.startup_reset_state import (
-            StartupResetAuthority,
-            persist_startup_reset_authority,
-        )
-
-        selection = (
-            ctx.start_selection.provider_selection if ctx.start_selection else None
-        )
-        if (
-            selection is not None
-            and selection.plan is not None
-            and StartupHook.RESET in selection.plan.startup_hooks
-        ):
-            if selection.identity is None or selection.provenance is None:
-                raise ValueError("missing reset authority provenance")
-            admission_id = ctx.run_id or ctx.reset_admission_id
-            persist_startup_reset_authority(
-                ctx.project_dir,
-                StartupResetAuthority(
-                    pack_id=selection.identity.pack_id,
-                    pack_version=selection.identity.pack_version,
-                    pack_set_digest=selection.identity.set_digest,
-                    distribution=selection.provenance.distribution,
-                    distribution_version=selection.provenance.distribution_version,
-                    entry_point=selection.provenance.entry_point,
-                    admission_id=hashlib.sha256(
-                        admission_id.encode("utf-8")
-                    ).hexdigest(),
-                ),
-            )
+        _persist_cleanup_actions(ctx)
     except (OSError, ValueError):
         return LabResult(
             success=False,
-            error="Could not persist scenario reset authority for recovery.",
+            error="Could not persist pending lab cleanup records for recovery.",
         )
     return None
+
+
+def _persist_cleanup_actions(ctx: _LabStartContext) -> None:
+    """Record the host cleanup a later volume reset must finish.
+
+    The APTL-owned enrollment baseline is recorded for every admission; a
+    pack's own reset only when its admitted plan declares the reset hook. Pack
+    and provider provenance is kept on both for audit.
+    """
+
+    from aptl.backends.scenario_startup import StartupHook
+    from aptl.core.startup_reset_state import (
+        ACTION_CLEAR_WAZUH_ENROLLMENT_BASELINE,
+        ACTION_PACK_RESET,
+        ACTION_VERSION,
+        CleanupAction,
+        persist_cleanup_action,
+    )
+
+    selection = ctx.start_selection.provider_selection if ctx.start_selection else None
+    admission_id = hashlib.sha256(
+        (ctx.run_id or ctx.reset_admission_id).encode("utf-8")
+    ).hexdigest()
+    pack_reset = (
+        selection is not None
+        and selection.plan is not None
+        and StartupHook.RESET in selection.plan.startup_hooks
+    )
+    provenance: dict[str, str] = {}
+    if selection is not None and selection.identity is not None:
+        provenance = {
+            "pack_id": selection.identity.pack_id,
+            "pack_version": selection.identity.pack_version,
+            "pack_set_digest": selection.identity.set_digest,
+        }
+        if selection.provenance is not None:
+            provenance.update(
+                distribution=selection.provenance.distribution,
+                distribution_version=selection.provenance.distribution_version,
+                entry_point=selection.provenance.entry_point,
+            )
+    if pack_reset and "entry_point" not in provenance:
+        raise ValueError("missing reset authority provenance")
+    actions = [ACTION_CLEAR_WAZUH_ENROLLMENT_BASELINE]
+    if pack_reset:
+        actions.append(ACTION_PACK_RESET)
+    for action in actions:
+        persist_cleanup_action(
+            ctx.project_dir,
+            CleanupAction(action, ACTION_VERSION, admission_id, **provenance),
+        )
 
 
 def _interpret_start_outcome(
@@ -3656,6 +3668,21 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
                 "Inspect .mcp.json env blocks against .env after a fresh lab start"
             ),
         )
+    if os.environ.get("APTL_SEAT_DESKTOP_HANDOFF") == "1":
+        try:
+            subprocess.run(
+                ["/usr/bin/python3", "/opt/aptl/desktop/desktop-handoff.py",
+                 str(ctx.project_dir), str(ctx.run_id or "")],
+                check=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except (OSError, subprocess.CalledProcessError):
+            return LabResult(
+                success=False,
+                error="Seat desktop MCP handoff failed.",
+            )
     return None
 
 
@@ -4227,9 +4254,6 @@ def _publish_appliance_guest_readiness(
     if realization is None or not callable(observe):
         return LabResult(success=False, error="Appliance readiness is unavailable.")
     try:
-        from aptl.appliance.guest_web import start_guest_web
-
-        start_guest_web(ctx.backend, ctx.project_dir)
         deployment = realization.deployment_spec(sorted(ctx.selected_profiles))
         observation = observe(deployment)
         from aptl.appliance.seat.readiness import publish_guest_readiness

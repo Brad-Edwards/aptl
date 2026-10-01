@@ -28,7 +28,13 @@ docker run --rm \
       docker-buildx=0.30.1-0ubuntu1 \
       docker-compose-v2=2.40.3+ds1-0ubuntu1 \
       nodejs=22.22.1+dfsg+~cs22.19.15-1ubuntu1 \
-      openssh-server=1:10.2p1-2ubuntu3.6 >/dev/null
+      xrdp=0.10.1-4.1 \
+      xorgxrdp=1:0.10.2-1build1 \
+      xfce4=4.20.1 \
+      xfce4-terminal=1.1.5-1 \
+      dbus-x11=1.16.2-2ubuntu4 \
+      epiphany-browser=49.2-3ubuntu1 \
+      tmux=3.6a-2ubuntu0.1 >/dev/null
     chmod 0644 /output/*.deb
     find /output/partial -depth -delete
     find /output/lock -delete

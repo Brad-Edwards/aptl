@@ -45,6 +45,8 @@ def _add_compose_images(project: Path, save_tags: dict[str, str]) -> None:
     """Include Compose services outside the scenario's service matrix."""
     compose = yaml.safe_load((project / "docker-compose.yml").read_text())
     for service in compose["services"].values():
+        if "web" in service.get("profiles", []):
+            continue
         tag = service.get("image")
         if not isinstance(tag, str) or tag in save_tags:
             continue
@@ -190,12 +192,18 @@ def main() -> int:
     parser.add_argument("--tags-output", type=Path, required=True)
     parser.add_argument("--tag-ids-output", type=Path, required=True)
     parser.add_argument("--verify-archive", type=Path)
+    parser.add_argument("--extra-image-tag", action="append", default=[])
     args = parser.parse_args()
     if args.verify_archive is not None:
+        tag_ids = json.loads(args.tag_ids_output.read_text())
+        for tag in args.extra_image_tag:
+            if tag in tag_ids:
+                raise ValueError(f"extra image tag duplicates TechVault lock: {tag}")
+            tag_ids[tag] = _docker("image", "inspect", "--format", "{{.Id}}", tag)
         saved_roles = verify_archive(
             args.verify_archive,
             json.loads(args.roles_output.read_text()),
-            json.loads(args.tag_ids_output.read_text()),
+            tag_ids,
         )
         bundle = env_pack_bundle(args.work / "profile-packs")
         matrix = expected_bundle_matrix(args.project, AptlConfig(), bundle)

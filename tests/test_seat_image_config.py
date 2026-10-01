@@ -51,15 +51,11 @@ def test_declares_resources_and_carries_the_boundary_policy() -> None:
     config = parse_seat_image_config(_config())
 
     assert config.resources.vcpus == 8
-    assert config.participant.port == 3000
-    assert {item.audience for item in config.publications} == {
-        "participant",
-        "recovery",
-        "host-mcp",
-    }
+    assert config.participant.port == 8080
+    assert {item.audience for item in config.publications} == {"participant"}
     # The boundary contract stays the existing platform model, enforced by its
     # own rules rather than a parallel one.
-    assert config.boundary.host_mcp_contract == "aptl.restricted-ssh-mcp/v1"
+    assert config.boundary.host_mcp_contract is None
     assert config.boundary.docker_authority.require_guest_daemon is True
 
 
@@ -122,6 +118,14 @@ def test_malformed_declarations_are_refused(overrides) -> None:
 @pytest.mark.parametrize("payload", [b"", b"not json", b"[]", b"null", b'"text"'])
 def test_non_object_payloads_are_refused(payload: bytes) -> None:
     with pytest.raises(SeatImageConfigError):
+        parse_seat_image_config(payload)
+
+
+def test_duplicate_signed_config_key_is_refused() -> None:
+    payload = _config().replace(
+        b'"schema_version":', b'"schema_version":"aptl.seat-image/v1","schema_version":', 1
+    )
+    with pytest.raises(SeatImageConfigError, match="duplicate"):
         parse_seat_image_config(payload)
 
 

@@ -50,13 +50,17 @@ from aptl.appliance.seat.retained_image import cache_for_seat, retain_image
 from aptl.appliance.seat.observation import (
     HostObservationBundle,
     build_host_observation,
+    collect_loopback_listeners,
     host_boundary_findings,
     map_publications_to_listeners,
     probe_forbidden_host_reachability,
     wait_for_loopback_listeners,
+    wait_for_desktop_publication,
+    probe_desktop_publication,
     wait_for_web_publications,
 )
 from aptl.appliance.seat.overlay_cleanup import remove_overlay_artifacts
+from aptl.appliance.seat.namespace import private_desktop
 from aptl.appliance.seat.paths import contained_path, validate_seat_id
 from aptl.appliance.seat.persistence import load_seat_record, persist_seat_record
 from aptl.appliance.seat.prereqs import require_host_prerequisites
@@ -643,24 +647,56 @@ def _fail_closed_start(seat_root: Path, paths: SeatPaths, starting: SeatRecord) 
     )
 
 
-def _require_guest_web(
+def _require_guest_publication(
     seat_root: Path, record: SeatRecord, options: StartSeatOptions, tracked_pid: int,
 ) -> None:
-    """Require the generation login and real web endpoints before readiness."""
+    """Check the access path declared by this generation's signed image."""
 
     if options.guest_readiness_probe is None:
-        token_file = (
-            seat_root / "access" / f"generation-{record.generation}"
-            / "web-launch-token"
+        participant = next(
+            (item for item in record.mappings if item.audience == "participant"), None
         )
-        if not token_file.is_file() or token_file.is_symlink():
-            raise SeatLauncherError(
-                "missing-web-login", "guest browser login was not delivered"
+        if participant is not None and participant.guest_port == 8080:
+            wait_for_desktop_publication(
+                record.mappings,
+                process_alive=lambda: read_vm_pid(seat_root) == tracked_pid,
+                namespace_pid=tracked_pid,
             )
-        wait_for_web_publications(
-            record.mappings,
-            process_alive=lambda: read_vm_pid(seat_root) == tracked_pid,
-        )
+        else:
+            token_file = (
+                seat_root / "access" / f"generation-{record.generation}"
+                / "web-launch-token"
+            )
+            if not token_file.is_file() or token_file.is_symlink():
+                raise SeatLauncherError(
+                    "missing-web-login", "guest browser login was not delivered"
+                )
+            wait_for_web_publications(
+                record.mappings,
+                process_alive=lambda: read_vm_pid(seat_root) == tracked_pid,
+            )
+
+
+def _forbidden_reachability_passed(
+    record: SeatRecord, options: StartSeatOptions, *, private_network: bool,
+) -> bool:
+    """Keep the existing boundary probe and verify the private port is hidden."""
+
+    if options.forbidden_reachability_probe is not None:
+        return options.forbidden_reachability_probe()
+    passed = probe_forbidden_host_reachability(record.mappings)
+    if private_network:
+        import socket
+
+        try:
+            with socket.create_connection(
+                (record.mappings[0].address, record.mappings[0].port),
+                timeout=0.5,
+            ):
+                return False
+        except OSError:
+            pass
+    return passed
 
 
 @serialized_seat_mutation
@@ -770,8 +806,10 @@ def start_seat(
             disk_reservation_bytes=image.runtime_disk_bytes,
             readiness_socket=readiness_socket,
             access_socket=access_socket,
+            include_access_channel=policy.host_mcp_contract is not None,
             mappings=record.mappings,
         )
+        private_network = private_desktop(record.mappings)
         argv = build_qemu_argv(spec)
         require_host_exposure(
             vm_argv=argv, docker_daemon_running=launch_options.docker_daemon_running
@@ -780,7 +818,7 @@ def start_seat(
             if launch_options.reserve_outer_mappings:
                 vm = launch_with_reserved_mappings(
                     record.mappings,
-                    lambda: start_vm(spec),
+                    lambda: start_vm(spec, private_network=private_network),
                     resources=(
                         image.config.resources.vcpus,
                         image.config.resources.memory_bytes,
@@ -792,9 +830,20 @@ def start_seat(
                         if paths.overlay_path.exists()
                         else 0
                     ),
+                    occupied_probe=(
+                        lambda handle, mapping: any(
+                            observed.address == mapping.address
+                            and observed.port == mapping.port
+                            and observed.protocol == mapping.protocol
+                            for observed in collect_loopback_listeners(
+                                owner_pid=handle.pid
+                            )
+                        )
+                        if private_network else None
+                    ),
                 )
             else:
-                vm = start_vm(spec)
+                vm = start_vm(spec, private_network=private_network)
             write_vm_pid(seat_root, vm.pid)
         tracked_pid = read_vm_pid(seat_root)
         if tracked_pid is None:
@@ -815,10 +864,8 @@ def start_seat(
         binding = _image_binding(image, boot_id=host_boot_id).model_copy(
             update={"host_boot_id": host_boot_id}
         )
-        forbidden_passed = (
-            launch_options.forbidden_reachability_probe()
-            if launch_options.forbidden_reachability_probe is not None
-            else probe_forbidden_host_reachability(record.mappings)
+        forbidden_passed = _forbidden_reachability_passed(
+            record, launch_options, private_network=private_network,
         )
         bundle = build_host_observation(
             binding=binding,
@@ -891,7 +938,7 @@ def start_seat(
             access_socket=access_socket,
             options=launch_options,
         )
-        _require_guest_web(seat_root, record, launch_options, tracked_pid)
+        _require_guest_publication(seat_root, record, launch_options, tracked_pid)
         ready = SeatRecord(
             schema_version=SEAT_RECORD_SCHEMA,
             seat_id=seat_id,
@@ -1074,8 +1121,19 @@ def status_seat(seat_root: Path) -> SeatStatusProjection:
             diagnostics=("seat-not-staged",),
         )
     diagnostics: list[str] = []
-    if read_vm_pid(seat_root) is None and record.lifecycle_state == "ready":
-        diagnostics.append("vm-not-running")
+    if record.lifecycle_state == "ready":
+        if read_vm_pid(seat_root) is None:
+            diagnostics.append("vm-not-running")
+        else:
+            desktop = next(
+                (mapping for mapping in record.mappings
+                 if mapping.audience == "participant" and mapping.guest_port == 8080),
+                None,
+            )
+            if desktop is not None and not probe_desktop_publication(
+                desktop, namespace_pid=read_vm_pid(seat_root)
+            ):
+                diagnostics.append("desktop-unavailable")
     return SeatStatusProjection(
         seat_id=record.seat_id,
         lifecycle_state=record.lifecycle_state,

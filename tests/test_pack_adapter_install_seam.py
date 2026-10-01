@@ -344,15 +344,28 @@ def test_admitted_pack_groups_drive_production_profile_selection(
     assert provisioner.selected_profiles(realization) == ["blue-team"]
 
 
+def _pack_reset_action(version: str, admission_id: str = "a" * 64) -> object:
+    from aptl.core.startup_reset_state import ACTION_PACK_RESET, CleanupAction
+
+    return CleanupAction(
+        ACTION_PACK_RESET,
+        "1",
+        admission_id,
+        PACK.pack_id,
+        PACK.pack_version,
+        PACK.set_digest,
+        "otherpack-adapter",
+        version,
+        "otherpack",
+    )
+
+
 def test_reset_uses_persisted_adapter_when_current_config_is_absent(
     tmp_path: Path, monkeypatch
 ) -> None:
     from aptl.backends import scenario_startup
-    from aptl.core.lab import _reset_selected_scenario_state
-    from aptl.core.startup_reset_state import (
-        StartupResetAuthority,
-        persist_startup_reset_authority,
-    )
+    from aptl.core.lifecycle_cleanup import run_pending_cleanup
+    from aptl.core.startup_reset_state import persist_cleanup_action
 
     resets: list[object] = []
     provider = SimpleNamespace(
@@ -369,20 +382,10 @@ def test_reset_uses_persisted_adapter_when_current_config_is_absent(
         load=lambda: provider,
     )
     monkeypatch.setattr(scenario_startup, "_entry_points", lambda: [startup_entry])
-    persist_startup_reset_authority(
-        tmp_path,
-        StartupResetAuthority(
-            PACK.pack_id,
-            PACK.pack_version,
-            PACK.set_digest,
-            "otherpack-adapter",
-            "1.0.0",
-            "otherpack",
-        ),
-    )
+    persist_cleanup_action(tmp_path, _pack_reset_action("1.0.0"))
     backend = object()
 
-    assert _reset_selected_scenario_state(tmp_path, backend) is None
+    assert run_pending_cleanup(tmp_path, backend).ok
     assert resets == [backend]
 
     upgraded_entry = SimpleNamespace(
@@ -392,33 +395,19 @@ def test_reset_uses_persisted_adapter_when_current_config_is_absent(
     )
     monkeypatch.setattr(scenario_startup, "_entry_points", lambda: [upgraded_entry])
 
-    # The retired 1.0.0 receipt must not select the obsolete adapter again.
-    assert _reset_selected_scenario_state(tmp_path, backend) is None
+    # The retired 1.0.0 record must not select the obsolete adapter again.
+    assert run_pending_cleanup(tmp_path, backend).ok
     assert resets == [backend]
 
-    persist_startup_reset_authority(
-        tmp_path,
-        StartupResetAuthority(
-            PACK.pack_id,
-            PACK.pack_version,
-            PACK.set_digest,
-            "otherpack-adapter",
-            "2.0.0",
-            "otherpack",
-            admission_id="new-run",
-        ),
-    )
-    assert _reset_selected_scenario_state(tmp_path, backend) is None
+    persist_cleanup_action(tmp_path, _pack_reset_action("2.0.0", "b" * 64))
+    assert run_pending_cleanup(tmp_path, backend).ok
     assert resets == [backend, backend]
 
 
 def test_failed_reset_authority_remains_retryable(tmp_path: Path, monkeypatch) -> None:
     from aptl.backends import scenario_startup
-    from aptl.core.lab import _reset_selected_scenario_state
-    from aptl.core.startup_reset_state import (
-        StartupResetAuthority,
-        persist_startup_reset_authority,
-    )
+    from aptl.core.lifecycle_cleanup import run_pending_cleanup
+    from aptl.core.startup_reset_state import persist_cleanup_action
 
     attempts = 0
 
@@ -442,20 +431,10 @@ def test_failed_reset_authority_remains_retryable(tmp_path: Path, monkeypatch) -
         load=lambda: provider,
     )
     monkeypatch.setattr(scenario_startup, "_entry_points", lambda: [startup_entry])
-    persist_startup_reset_authority(
-        tmp_path,
-        StartupResetAuthority(
-            PACK.pack_id,
-            PACK.pack_version,
-            PACK.set_digest,
-            "otherpack-adapter",
-            "1.0.0",
-            "otherpack",
-        ),
-    )
+    persist_cleanup_action(tmp_path, _pack_reset_action("1.0.0"))
 
-    assert _reset_selected_scenario_state(tmp_path, object()) is not None
-    assert _reset_selected_scenario_state(tmp_path, object()) is None
+    assert not run_pending_cleanup(tmp_path, object()).ok
+    assert run_pending_cleanup(tmp_path, object()).ok
     assert attempts == 2
 
 

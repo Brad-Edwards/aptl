@@ -52,26 +52,51 @@ def _runtime_provider(identity: PackIdentity | None) -> object | None:
     return compatible[0] if compatible else None
 
 
+def _declares_reset_action(provider: object, action_version: str) -> bool:
+    """Return whether a handler explicitly supports a recorded reset version."""
+
+    declared = getattr(provider, "supported_reset_action_versions", ())
+    return isinstance(declared, tuple) and action_version in declared
+
+
 def run_persisted_startup_reset(
     identity: PackIdentity,
     provenance: StartupProviderProvenance,
     context: StartupHookContext,
+    *,
+    action_version: str = "1",
 ) -> None:
-    """Invoke the exact installed reset provider recorded by a prior start."""
+    """Invoke the one installed handler authorized for a recorded pack reset.
+
+    A handler must be registered under the recorded entry-point name and accept
+    the exact admitted pack identity, including its set digest. It is then
+    authorized either as the unchanged installation that admitted the pack or
+    because it explicitly declares the recorded reset action version, so an
+    upgraded adapter can finish its older pending cleanup without the old
+    distribution version being installed.
+    """
 
     from aptl.backends import scenario_startup as contract
 
     compatible: list[object] = []
     for entry in contract._entry_points():
-        if (
-            entry.name != provenance.entry_point
-            or contract._provenance(entry) != provenance
-        ):
+        if entry.name != provenance.entry_point:
             continue
         provider = contract._load(entry)
-        if contract._compatible_identity(provider, identity):
+        if (
+            contract._compatible_identity(provider, identity)
+            and callable(getattr(provider, "reset", None))
+            and (
+                contract._provenance(entry) == provenance
+                or _declares_reset_action(provider, action_version)
+            )
+        ):
             compatible.append(provider)
-    if len(compatible) != 1 or not callable(getattr(compatible[0], "reset", None)):
+    if len(compatible) > 1:
+        raise contract.ScenarioStartupProviderError(
+            "provider-reset-authority-ambiguous"
+        )
+    if not compatible:
         raise contract.ScenarioStartupProviderError(
             "provider-reset-authority-unavailable"
         )

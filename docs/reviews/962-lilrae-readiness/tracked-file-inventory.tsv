@@ -265,6 +265,7 @@ docs/architecture/issue-1002-wazuh-api-tls-warmup-preflight.md	docs-follow-owner
 docs/architecture/issue-1006-container-base-images-preflight.md	architecture-history	Preserve base-image migration boundaries and SSH policy rationale
 docs/architecture/issue-1022-appliance-seat-delivery-preflight.md	architecture-history	Preserve appliance delivery boundaries and implementation rationale
 docs/architecture/issue-1022-historical-branch-audit.md	architecture-history	Preserve audited branch comparison and scoped repair decisions
+docs/architecture/issue-1179-pending-lab-cleanup-preflight.md	architecture-history	Preserve issue 1179 upgrade-safe pending cleanup decisions and guardrails
 docs/architecture/issue-550-soc-selected-profile-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-557-participant-implementation-binding-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-589-scenario-pack-capture-ownership-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
@@ -1171,6 +1172,7 @@ src/aptl/core/hostenv.py	core-candidate	Migrate only after public-import, histor
 src/aptl/core/kill.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/lab.py	mixed-lifecycle-policy	Separate scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
 src/aptl/core/lab_types.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/lifecycle_cleanup.py	core-candidate	Retain APTL-owned host cleanup and pack cleanup dispatch after volume reset
 src/aptl/core/lifecycle_enforce.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/lifecycle_guard.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/lifecycle_policy.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1208,7 +1210,7 @@ src/aptl/core/snapshot.py	mixed-lifecycle-policy	Separate scenario/provider poli
 src/aptl/core/snapshot_models.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/soc_ca.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/ssh.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
-src/aptl/core/startup_reset_state.py	core-candidate	Retain exact admitted startup reset authority for safe recovery
+src/aptl/core/startup_reset_state.py	core-candidate	Retain versioned pending-cleanup records and legacy reset receipts for safe recovery
 src/aptl/core/suricata_seed.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/sysreqs.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/telemetry.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1482,6 +1484,7 @@ tests/test_lab_core_only_artifact.py	tests-follow-owner	Installed wheel smoke pr
 tests/test_lab_fresh_start.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_lab_init_cli.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_lab_lifecycle_selection.py	tests-follow-owner	Generic lifecycle selection and bounded adapter regression tests
+tests/test_lifecycle_cleanup.py	tests-follow-owner	Retain upgrade-safe pending cleanup regression coverage
 tests/test_lifecycle_guard.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_lifecycle_policy.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_lilrae_rename_boundary.py	tests-follow-owner	Structural gate for #934 identity, inventory, wording, and retirement invariants
@@ -1841,3 +1844,21 @@ src/aptl_techvault/study_capture_registrations.py	scenario-integration	Keep part
 docs/architecture/issue-958-execution-boundary-preflight.md	architecture-history	Preserve issue 958 execution-boundary ownership decisions and guardrails
 src/aptl/core/execution_boundary.py	core-candidate	Keep selected-daemon observation and disclosure with the lab lifecycle owner
 tests/test_execution_boundary.py	tests-follow-owner	Retain selected-daemon boundary regression coverage with the lab lifecycle owner
+appliance/guest/claude/package-lock.json	optional-delivery	Keep VM seat delivery with the appliance owner
+appliance/guest/claude/package.json	optional-delivery	Keep VM seat delivery with the appliance owner
+appliance/guest/desktop-compose.yml	optional-delivery	Keep VM seat delivery with the appliance owner
+appliance/guest/desktop-handoff.py	optional-delivery	Keep VM seat delivery with the appliance owner
+appliance/guest/desktop-mcp-smoke.py	optional-delivery	Keep VM seat delivery with the appliance owner
+appliance/guest/desktop-nginx.conf	optional-delivery	Keep VM seat delivery with the appliance owner
+appliance/guest/desktop-session.sh	optional-delivery	Keep VM seat delivery with the appliance owner
+appliance/guest/seat-desktop.py	optional-delivery	Keep VM seat delivery with the appliance owner
+docs/adrs/adr-061-gateless-vm-seat-access.md	architecture-history	Preserve VM seat decision and review evidence
+docs/reviews/1178-seat-desktop-diagnostic.md	architecture-history	Preserve VM seat decision and review evidence
+docs/specs/1178-vm-seat-access-preflight.md	docs-follow-owner	Keep VM seat implementation guidance with the appliance owner
+src/aptl/appliance/seat/namespace.py	optional-delivery	Keep VM seat delivery with the appliance owner
+tests/test_appliance_seat_namespace.py	tests-follow-owner	Retain VM seat regression coverage with the appliance owner
+tests/test_seat_desktop.py	tests-follow-owner	Retain VM seat regression coverage with the appliance owner
+tests/test_seat_launch_descriptor.py	tests-follow-owner	Retain VM seat regression coverage with the appliance owner
+src/aptl/appliance/seat/private_vm.py	optional-delivery	Keep rootless VM network startup with the appliance owner
+src/aptl_techvault/database.py	scenario-integration	Keep TechVault database realization with the scenario adapter
+tests/test_techvault_database.py	tests-follow-owner	Retain TechVault database regression coverage with the scenario owner

@@ -26,6 +26,7 @@ from aptl.backends.scenario_service_policy import (
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 from aptl.core.scenario_bundle import ScenarioBundle
 from aptl_techvault.log_sources import realize_log_sources
+from aptl_techvault.database import realize_database
 from aptl_techvault.redis_acl_observation import observe_redis_app_authorizations
 from aptl_techvault.runtime_parameters import TECHVAULT_PACK_SET_DIGEST
 from aptl_techvault.wazuh_credentials import techvault_wazuh_environment
@@ -235,9 +236,12 @@ class TechVaultStartupProvider:
 
     @staticmethod
     def realize_runtime(backend: object, nodes: tuple[object, ...]) -> list[str]:
-        """Produce the pack's declared native logs before agent readback."""
+        """Realize pack-declared native producers and the customer database."""
 
-        return realize_log_sources(backend, nodes)
+        failures = realize_log_sources(backend, nodes)
+        if failures:
+            return failures
+        return realize_database(backend, nodes)
 
     @staticmethod
     def observe_runtime(backend: object, node: object) -> dict[tuple[str, ...], object]:

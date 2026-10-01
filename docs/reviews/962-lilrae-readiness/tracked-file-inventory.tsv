@@ -1844,3 +1844,5 @@ src/aptl_techvault/study_capture_registrations.py	scenario-integration	Keep part
 docs/architecture/issue-958-execution-boundary-preflight.md	architecture-history	Preserve issue 958 execution-boundary ownership decisions and guardrails
 src/aptl/core/execution_boundary.py	core-candidate	Keep selected-daemon observation and disclosure with the lab lifecycle owner
 tests/test_execution_boundary.py	tests-follow-owner	Retain selected-daemon boundary regression coverage with the lab lifecycle owner
+src/aptl_techvault/database.py	scenario-integration	Keep TechVault database realization with the scenario adapter
+tests/test_techvault_database.py	tests-follow-owner	Retain TechVault database regression coverage with the scenario owner

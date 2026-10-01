@@ -233,6 +233,18 @@ def test_release_smoke_uses_the_same_home_as_first_boot() -> None:
     assert "Environment=HOME=/var/lib/aptl" in release_smoke.splitlines()
 
 
+def test_first_boot_can_install_scenario_browser_ca_certificates() -> None:
+    guest = Path(__file__).resolve().parents[1] / "appliance/guest"
+    first_boot = (guest / "aptl-appliance-first-boot.service").read_text()
+    writable = next(
+        line.removeprefix("ReadWritePaths=").split()
+        for line in first_boot.splitlines()
+        if line.startswith("ReadWritePaths=")
+    )
+    assert "/usr/local/share/ca-certificates" in writable
+    assert "/etc" in writable
+
+
 def test_archive_rejects_tracked_credential_alias(tmp_path):
     from aptl.utils.pathsafe import PathContainmentError
     project = tmp_path / "project"

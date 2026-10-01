@@ -17,7 +17,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=false
 ProtectSystem=strict
-ReadWritePaths=/var/lib/aptl /opt/aptl/project /home/aptl /etc
+ReadWritePaths=/var/lib/aptl /opt/aptl/project /home/aptl /etc /usr/local/share/ca-certificates
 
 [Install]
 WantedBy=multi-user.target

@@ -13,8 +13,9 @@ from pathlib import Path
 
 from aptl.appliance.seat.errors import SeatLauncherError
 
-PRIVATE_NETWORK_SUBNET = "10.0.3.0/24"
-PRIVATE_NETWORK_DNS = "10.0.3.3"
+# Fixed guest-only addresses for the rootless slirp adapter, never host targets.
+PRIVATE_NETWORK_SUBNET = "10.0.3.0/24"  # NOSONAR
+PRIVATE_NETWORK_DNS = "10.0.3.3"  # NOSONAR
 
 
 def _sandbox_pid(info_fd: int, deadline: float) -> int:

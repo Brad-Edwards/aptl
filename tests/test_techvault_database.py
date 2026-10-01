@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from raes.parser import parse_sdl_file
 
 from aptl_techvault.database import _declared_database, realize_database
+from aptl_techvault.startup import TechVaultStartupProvider
 from tests.helpers import techvault_scenario_path
 
 
@@ -121,3 +122,33 @@ def test_database_realization_rejects_missing_client_declaration(tmp_path):
         "TechVault database declaration or internal client is unavailable"
     ]
     assert backend.commands == []
+
+
+def test_pack_runtime_realizes_database_only_after_log_sources(monkeypatch):
+    backend = object()
+    nodes = (object(),)
+    calls = []
+
+    def logs(actual_backend, actual_nodes):
+        calls.append(("logs", actual_backend, actual_nodes))
+        return []
+
+    def database(actual_backend, actual_nodes):
+        calls.append(("database", actual_backend, actual_nodes))
+        return []
+
+    monkeypatch.setattr("aptl_techvault.startup.realize_log_sources", logs)
+    monkeypatch.setattr("aptl_techvault.startup.realize_database", database)
+
+    assert TechVaultStartupProvider.realize_runtime(backend, nodes) == []
+    assert calls == [("logs", backend, nodes), ("database", backend, nodes)]
+
+    calls.clear()
+    monkeypatch.setattr(
+        "aptl_techvault.startup.realize_log_sources",
+        lambda *_args: ["log source unavailable"],
+    )
+    assert TechVaultStartupProvider.realize_runtime(backend, nodes) == [
+        "log source unavailable"
+    ]
+    assert calls == []

@@ -213,6 +213,14 @@ reach it. `aptl seat start` reports the selected mapping without a credential.
 The participant signs in
 to Claude inside the guest if that provider requires it. Wazuh and other
 scenario applications continue to show their own sign-in where applicable.
+Inside the desktop, `aptl lab info` reports the live scenario ports and
+credential-file locations. The customer portal is
+`http://172.20.1.20:8080/login`; MISP uses its authored browser origin
+`https://misp.techvault.local/`. The seat resolves that origin to the live
+scenario container and trusts the generated scenario certificate authorities.
+Wazuh uses `https://wazuh.dashboard:<port-from-lab-info>` so its certificate
+hostname remains valid. These are scenario surfaces, with no additional APTL
+sign-in.
 
 Inspect coarse health (no credentials):
 

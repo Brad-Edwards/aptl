@@ -7,6 +7,7 @@ import json
 import os
 import stat
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -40,6 +41,13 @@ def test_desktop_handoff_delivers_live_red_and_blue_mcp_inputs(tmp_path: Path) -
         json.dumps({"run_storage": {"local_path": "./runs"}})
     )
     (project / "runs" / "run-1" / "mcp-side").mkdir(parents=True)
+    lifecycle = project / ".aptl" / "lifecycle" / "resource-receipts-v1"
+    lifecycle.mkdir(parents=True)
+    ownership = lifecycle.parent / "workspace-ownership-v1.json"
+    ownership.write_text('{"schema":1,"workspace_id":"' + "a" * 32 + '"}\n')
+    for directory in (project / ".aptl", lifecycle.parent, lifecycle):
+        directory.chmod(0o700)
+    ownership.chmod(0o600)
     (project / ".env").write_text("INDEXER_PASSWORD=guest-only\n")
     os.chmod(project / ".env", 0o600)
     servers = {}
@@ -61,7 +69,8 @@ def test_desktop_handoff_delivers_live_red_and_blue_mcp_inputs(tmp_path: Path) -
     home.mkdir()
     (home / "red.mcp.json").write_text("stale\n")
 
-    handoff.handoff(project, home, supervisor, os.getuid(), os.getgid(), "run-1")
+    with patch.object(handoff, "_configure_browser_access"):
+        handoff.handoff(project, home, supervisor, os.getuid(), os.getgid(), "run-1")
 
     red = json.loads((home / "red.mcp.json").read_text())["mcpServers"]
     blue = json.loads((home / "blue.mcp.json").read_text())["mcpServers"]
@@ -77,7 +86,41 @@ def test_desktop_handoff_delivers_live_red_and_blue_mcp_inputs(tmp_path: Path) -
     assert (home / ".ssh" / "aptl_lab_key").read_text() == "private-guest-key\n"
     assert stat.S_IMODE((home / ".ssh" / "aptl_lab_key").stat().st_mode) == 0o600
     assert stat.S_IMODE((project / ".env").stat().st_mode) == 0o640
+    assert stat.S_IMODE(ownership.stat().st_mode) == 0o640
+    assert stat.S_IMODE(lifecycle.stat().st_mode) == 0o750
     assert (home / ".config" / "aptl" / "run-ready").is_file()
+
+
+def test_desktop_browser_hosts_are_live_and_idempotent(tmp_path: Path) -> None:
+    handoff = _handoff_module()
+    hosts = tmp_path / "hosts"
+    hosts.write_text("127.0.0.1 localhost\n")
+
+    handoff._browser_hosts(hosts, "172.20.0.16")
+    handoff._browser_hosts(hosts, "172.20.0.17")
+
+    assert hosts.read_text().count("misp.techvault.local") == 1
+    assert "172.20.0.17 misp.techvault.local" in hosts.read_text()
+    assert "127.0.0.1 wazuh.dashboard" in hosts.read_text()
+    assert "172.20.0.16" not in hosts.read_text()
+
+
+def test_desktop_browser_uses_misp_security_address(monkeypatch) -> None:
+    handoff = _handoff_module()
+
+    def run(argv, **_kwargs):
+        if argv[:2] == ["docker", "ps"]:
+            return SimpleNamespace(stdout="aptl-w123-misp\naptl-w123-misp-db\n")
+        return SimpleNamespace(
+            stdout=json.dumps(
+                {
+                    "aptl-w123_aptl-security": {"IPAddress": "172.20.0.16"},
+                }
+            )
+        )
+
+    monkeypatch.setattr(handoff.subprocess, "run", run)
+    assert handoff._misp_security_ip() == "172.20.0.16"
 
 
 def test_desktop_handoff_refuses_missing_mcp_before_ready(tmp_path: Path) -> None:
@@ -126,7 +169,8 @@ def test_desktop_uses_direct_network_without_an_outbound_proxy() -> None:
 
 
 def test_desktop_prepare_creates_private_stable_overlay_credentials(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     desktop = _desktop_module()
     source = tmp_path / "source"
@@ -136,7 +180,10 @@ def test_desktop_prepare_creates_private_stable_overlay_credentials(
     monkeypatch.setattr(desktop, "SOURCE", source)
     monkeypatch.setattr(desktop, "RUNTIME", tmp_path / "overlay" / "desktop")
 
-    with patch.object(desktop.os, "chown"), patch.object(desktop.subprocess, "run") as run:
+    with (
+        patch.object(desktop.os, "chown"),
+        patch.object(desktop.subprocess, "run") as run,
+    ):
         first = desktop.prepare()
         second = desktop.prepare()
 
@@ -145,11 +192,15 @@ def test_desktop_prepare_creates_private_stable_overlay_credentials(
     assert first["rdp"] not in (source / "guac-schema.sql").read_text()
     assert json.loads((desktop.RUNTIME / "credentials.json").read_text()) == first
     assert stat.S_IMODE((desktop.RUNTIME / "credentials.json").stat().st_mode) == 0o600
-    assert stat.S_IMODE((desktop.RUNTIME / "initdb/002-seat.sql").stat().st_mode) == 0o600
+    assert (
+        stat.S_IMODE((desktop.RUNTIME / "initdb/002-seat.sql").stat().st_mode) == 0o600
+    )
     assert all(call.args[0] == ["chpasswd"] for call in run.call_args_list)
 
 
-def test_desktop_prepare_refuses_symlinked_credentials(tmp_path: Path, monkeypatch) -> None:
+def test_desktop_prepare_refuses_symlinked_credentials(
+    tmp_path: Path, monkeypatch
+) -> None:
     desktop = _desktop_module()
     runtime = tmp_path / "desktop"
     runtime.mkdir()

@@ -130,6 +130,12 @@ if ! getent passwd aptl >/dev/null; then
     useradd --create-home --home-dir /home/aptl --shell /bin/bash aptl
 fi
 usermod --append --groups docker aptl
+# The desktop participant already controls this guest's Docker daemon. Let
+# them administer this disposable VM without its generated xrdp password.
+install -d -m 0755 /etc/sudoers.d
+printf 'aptl ALL=(ALL:ALL) NOPASSWD:ALL\n' >/etc/sudoers.d/90-aptl-desktop
+chmod 0440 /etc/sudoers.d/90-aptl-desktop
+visudo -cf /etc/sudoers >/dev/null
 printf 'xfce4-session\n' >/home/aptl/.xsession
 install -d -m 0755 /home/aptl/.config/autostart \
     /home/aptl/.config/xfce4/xfconf/xfce-perchannel-xml

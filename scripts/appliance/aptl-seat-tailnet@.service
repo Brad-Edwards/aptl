@@ -1,0 +1,18 @@
+[Unit]
+Description=Tailnet Guacamole relay for APTL seat owner %i
+After=network-online.target tailscaled.service
+Wants=network-online.target tailscaled.service
+
+[Service]
+Type=simple
+RuntimeDirectory=aptl-seat-tailnet-%i
+RuntimeDirectoryMode=0700
+ExecStart=/usr/local/libexec/aptl-seat-tailnet-relay %i /run/aptl-seat-tailnet-%i/desktop.sock
+Restart=always
+RestartSec=3
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=/run/aptl-seat-tailnet-%i
+
+[Install]
+WantedBy=multi-user.target

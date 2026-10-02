@@ -5,6 +5,8 @@ using [VM-only containment](../adrs/adr-060-vm-only-seat-containment.md).
 New images open an XFCE desktop in the browser through Guacamole. The desktop
 has a browser and red/blue Claude terminals; APTL adds no participant login or
 host MCP grant. Scenario services keep their own authentication.
+The guest `aptl` desktop account has passwordless sudo inside its own VM. This
+does not grant sudo to the host Unix account that launched the seat.
 Additional isolation and controlled egress between workloads inside a guest are
 not promised; that work is tracked in #1127. The signed boundary policy the image
 carries identifies this contract explicitly.
@@ -221,6 +223,43 @@ scenario container and trusts the generated scenario certificate authorities.
 Wazuh uses `https://wazuh.dashboard:<port-from-lab-info>` so its certificate
 hostname remains valid. These are scenario surfaces, with no additional APTL
 sign-in.
+
+### Access a hosted desktop through Tailscale
+
+Tailscale access is an operator choice. The seat still publishes Guacamole only
+inside its host user's private network namespace. To reach it from a tailnet,
+install the bounded relay and its systemd template on the physical host:
+
+```bash
+sudo install -m 0755 scripts/appliance/seat-tailnet-relay.py \
+  /usr/local/libexec/aptl-seat-tailnet-relay
+sudo install -m 0644 scripts/appliance/aptl-seat-tailnet@.service \
+  /etc/systemd/system/aptl-seat-tailnet@.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now aptl-seat-tailnet@heron1.service
+sudo systemctl enable --now aptl-seat-tailnet@heron2.service
+```
+
+The template reads each owner's current ready seat mapping and QEMU process
+identity, so a restarted seat can select a new inner port without editing the
+unit. Each relay exposes a root-only Unix socket, with no host TCP listener.
+For this host's two seats, explicitly publish those sockets with Tailscale
+Serve on different HTTPS ports:
+
+```bash
+sudo tailscale serve --bg --https=8443 --yes \
+  unix:/run/aptl-seat-tailnet-heron1/desktop.sock
+sudo tailscale serve --bg --https=10000 --yes \
+  unix:/run/aptl-seat-tailnet-heron2/desktop.sock
+```
+
+The tailnet's existing membership and access policy control who can reach
+those URLs. Guacamole adds no separate participant login. A relay refuses
+connections while its seat is stopped, unready, tainted, or no longer matches
+the tracked QEMU process. Check the mapping with `sudo tailscale serve status`.
+To remove access, run `sudo tailscale serve --https=8443 off` (and similarly
+for port `10000`), then disable the corresponding systemd relay unit. Use
+different systemd instances and HTTPS ports for other seat owners.
 
 Inspect coarse health (no credentials):
 

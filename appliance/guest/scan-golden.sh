@@ -27,6 +27,10 @@ then
 fi
 test -z "$(awk -F: '$2 == "" { print $1 }' /etc/shadow)"
 getent passwd aptl >/dev/null
+command -v sudo >/dev/null
+test "$(stat -c '%u:%g %a' /etc/sudoers.d/90-aptl-desktop)" = '0:0 440'
+test "$(cat /etc/sudoers.d/90-aptl-desktop)" = 'aptl ALL=(ALL:ALL) NOPASSWD:ALL'
+visudo -cf /etc/sudoers >/dev/null
 
 for executable in docker node python3 systemctl xrdp startxfce4 \
     xfce4-terminal epiphany tmux

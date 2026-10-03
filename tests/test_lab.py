@@ -4606,7 +4606,7 @@ class TestLabOrchestrationContracts:
         backend.container_restart.assert_not_called()
 
     def test_start_containers_repairs_missing_wazuh_api_in_place(
-        self, mocker, tmp_path
+        self, mocker, tmp_path, caplog
     ):
         """A partial manager failure gets one API start before the sole retry.
 
@@ -4619,17 +4619,29 @@ class TestLabOrchestrationContracts:
         ctx.config = self._full_config(soc=True)
         backend = MagicMock()
         backend.container_inspect.return_value = {
-            "State": {"Status": "running"},
+            "State": {"Status": "running", "OOMKilled": False},
+            "RestartCount": 2,
         }
         backend.container_exec.side_effect = [
             MagicMock(returncode=0, stdout="8\n"),
             MagicMock(
-                returncode=0,
+                returncode=1,
                 stdout=(
                     "wazuh-analysisd is running...\n"
+                    "wazuh-maild not running...\n"
                     "wazuh-apid not running...\n"
                 ),
             ),
+            MagicMock(returncode=0, stdout="5000\n"),
+            MagicMock(
+                returncode=0,
+                stdout=(
+                    "RBAC database integrity check finished successfully\n"
+                    "ERROR: password=do-not-log-this\n"
+                    "PermissionError: password=do-not-log-this\n"
+                ),
+            ),
+            MagicMock(returncode=0, stdout="oom 1\noom_kill 0\n"),
             MagicMock(returncode=0, stdout="Completed.\n"),
         ]
         ctx.backend = backend
@@ -4639,9 +4651,23 @@ class TestLabOrchestrationContracts:
         )
         mocker.patch("time.sleep")
 
-        assert _step_start_containers(ctx) is None
+        with caplog.at_level("WARNING", logger="aptl"):
+            assert _step_start_containers(ctx) is None
 
         start_raes.assert_called_once()
+        assert [call.args[1] for call in backend.container_exec.call_args_list[2:6]] == [
+            ["stat", "-c", "%s", "/var/ossec/logs/api.log"],
+            ["tail", "-c", "4096", "/var/ossec/logs/api.log"],
+            ["head", "-c", "512", "/sys/fs/cgroup/memory.events"],
+            ["/var/ossec/bin/wazuh-control", "start"],
+        ]
+        assert "'api_phase': 'rbac_complete'" in caplog.text
+        assert "'cgroup_oom': 1" in caplog.text
+        assert "'api_log_offset': 904" in caplog.text
+        assert "'exception_class': 'PermissionError'" in caplog.text
+        assert "'unclassified_fatal': True" in caplog.text
+        assert "do-not-log-this" not in caplog.text
+        assert "password=" not in caplog.text
         assert backend.container_exec.call_args_list[-1] == call(
             "aptl-wazuh-manager",
             ["/var/ossec/bin/wazuh-control", "start"],
@@ -4663,7 +4689,10 @@ class TestLabOrchestrationContracts:
         backend.container_inspect.return_value = {"State": {"Status": "running"}}
         backend.container_exec.side_effect = [
             MagicMock(returncode=0, stdout="8\n"),
-            MagicMock(returncode=0, stdout="wazuh-apid not running...\n"),
+            MagicMock(returncode=1, stdout="wazuh-apid not running...\n"),
+            OSError("sensitive diagnostic failure"),
+            OSError("sensitive diagnostic failure"),
+            OSError("sensitive diagnostic failure"),
             MagicMock(returncode=1, stdout="sensitive-output", stderr="sensitive-error"),
         ]
         ctx.backend = backend
@@ -4679,6 +4708,8 @@ class TestLabOrchestrationContracts:
         assert "Wazuh manager API recovery failed" in caplog.text
         assert "sensitive-output" not in caplog.text
         assert "sensitive-error" not in caplog.text
+        assert "sensitive diagnostic failure" not in caplog.text
+        assert "'api_phase': 'unknown'" in caplog.text
         backend.container_restart.assert_not_called()
 
     def test_start_containers_does_not_restart_on_empty_daemon_probe(
@@ -4708,14 +4739,22 @@ class TestLabOrchestrationContracts:
         ("status_code", "status_text"),
         [
             (0, "wazuh-apid is running...\n"),
+            (0, "wazuh-apid not running...\n"),
+            (1, "wazuh-maild not running...\nwazuh-apid is running...\n"),
+            (
+                1,
+                "wazuh-apid not running...\nwazuh-apid is running...\n",
+            ),
+            (1, " wazuh-apid not running...\n"),
+            (1, "wazuh-apid not running... \n"),
             (0, "unrecognized API state\n"),
-            (1, "wazuh-apid not running...\n"),
+            (2, "wazuh-apid not running...\n"),
         ],
     )
     def test_start_containers_does_not_guess_api_repair(
         self, mocker, tmp_path, status_code, status_text
     ):
-        """Only a successful, exact missing-API status authorizes repair."""
+        """Only an exact, noncontradictory API status authorizes repair."""
         from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)

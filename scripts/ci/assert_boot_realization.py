@@ -41,6 +41,7 @@ from pathlib import Path
 
 from aptl.core.config import find_config, load_config
 from aptl.core.deployment import get_backend
+from aptl.core.deployment._compose_realization_networks import _match_managed_network
 from aptl.core.deployment._compose_resource_ownership import (
     OwnershipConflictError,
     WorkspaceOwnership,
@@ -80,6 +81,8 @@ class BootExpectation:
     # only that the connection is accepted. It is a bounded identity, never a
     # credential or a protocol exchange.
     endpoint_banner_prefix: str = ""
+    network_name: str = ""
+    network_alias: str = ""
 
 
 @dataclass(frozen=True)
@@ -104,6 +107,7 @@ class BootObservation:
     endpoint_banner: str
     workflow: Mapping[str, object] | None
     workflow_history: tuple[Mapping[str, object], ...] = field(default=())
+    network_attachment: Mapping[str, object] | None = None
 
 
 def _container_failures(
@@ -120,7 +124,29 @@ def _container_failures(
     ]
 
 
-def _content_failures(expected: BootExpectation, observed: BootObservation) -> list[str]:
+def _network_failures(
+    expected: BootExpectation, observed: BootObservation
+) -> list[str]:
+    """Require a declared endpoint even when a bootstrap bridge is retained."""
+
+    if not expected.network_name:
+        return []
+    endpoint = observed.network_attachment
+    if (
+        not endpoint
+        or not endpoint.get("ipv4")
+        or expected.network_alias not in (endpoint.get("aliases") or ())
+    ):
+        return [
+            f"node {expected.node_address}: declared network {expected.network_name} "
+            "endpoint, IPv4 address and DNS alias were not observed"
+        ]
+    return []
+
+
+def _content_failures(
+    expected: BootExpectation, observed: BootObservation
+) -> list[str]:
     """Require the declared content to be present with the authored bytes.
 
     The backend's own placement readback observes presence only, so the exact
@@ -181,7 +207,9 @@ def _listener_failures(
     ]
 
 
-def _binding_failures(expected: BootExpectation, observed: BootObservation) -> list[str]:
+def _binding_failures(
+    expected: BootExpectation, observed: BootObservation
+) -> list[str]:
     """Require the exact declared host publication and no wider one.
 
     An extra binding is a failure even when the declared one is present: a
@@ -308,6 +336,7 @@ def boot_realization_failures(
     failures: list[str] = []
     for check in (
         _container_failures,
+        _network_failures,
         _content_failures,
         _unit_failures,
         _listener_failures,
@@ -480,9 +509,7 @@ def _observe_listeners(
     listeners = backend.observe_container_listeners(container_name)
     if listeners is None:
         return frozenset()
-    return frozenset(
-        (protocol, port) for protocol, _address, port in listeners.sockets
-    )
+    return frozenset((protocol, port) for protocol, _address, port in listeners.sockets)
 
 
 def published_bindings(ports: object) -> frozenset[tuple[str, int, int, str]]:
@@ -520,6 +547,26 @@ def published_bindings(ports: object) -> frozenset[tuple[str, int, int, str]]:
                 )
             )
     return frozenset(bindings)
+
+
+def _observe_network(
+    backend: object, container_name: str, expected: BootExpectation
+) -> dict | None:
+    """Project only the declared endpoint from the ownership-bound daemon."""
+
+    if not expected.network_name:
+        return None
+    concrete = _match_managed_network(
+        expected.network_name,
+        set(backend.host_list_lab_networks(backend.project_name)),
+        backend.project_name,
+    )
+    inspected = backend.container_inspect(container_name)
+    networks = (inspected.get("NetworkSettings") or {}).get("Networks") or {}
+    endpoint = networks.get(concrete)
+    if not isinstance(endpoint, dict):
+        return None
+    return {"ipv4": endpoint.get("IPAddress"), "aliases": endpoint.get("Aliases")}
 
 
 def _observe_bindings(
@@ -565,12 +612,14 @@ def _observe(
     unit: dict[str, str] = {}
     listeners: frozenset[tuple[str, int]] = frozenset()
     bindings: frozenset[tuple[str, int, int, str]] = frozenset()
+    network_attachment = None
     if len(container_names) == 1:
         container_name = container_names[0]
         content = _observe_content(backend, container_name, expected.content_path)
         unit = _observe_unit(backend, container_name, expected.unit_name)
         listeners = _observe_listeners(backend, container_name)
         bindings = _observe_bindings(backend, container_name)
+        network_attachment = _observe_network(backend, container_name, expected)
     reachable, banner = _probe_endpoint(
         expected.host_ip, expected.host_port, expected.protocol
     )
@@ -587,6 +636,7 @@ def _observe(
         endpoint_banner=banner,
         workflow=workflow,
         workflow_history=history,
+        network_attachment=network_attachment,
     )
 
 
@@ -603,6 +653,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--host-port", required=True, type=int)
     parser.add_argument("--workflow-address", required=True)
     parser.add_argument("--endpoint-banner-prefix", default="")
+    parser.add_argument("--network-name", default="")
+    parser.add_argument("--network-alias", default="")
     return parser.parse_args(argv)
 
 
@@ -639,6 +691,8 @@ def main(argv: list[str]) -> int:
         host_port=args.host_port,
         workflow_address=args.workflow_address,
         endpoint_banner_prefix=args.endpoint_banner_prefix,
+        network_name=args.network_name,
+        network_alias=args.network_alias,
     )
     backend = get_backend(config, project_dir)
     try:

@@ -39,6 +39,7 @@ prose must not accidentally rename them.
 
 | Surface | Files | Disposition |
 | --- | --- | --- |
+| Shipped seat network investigation | `docs/architecture/issue-1194-shipped-seat-network-preflight.md` | Keep authored environment-pack topology distinct from APTL runtime attachment verification and shipped seat delivery evidence. |
 | Historical seat implementation audit | `docs/architecture/issue-1022-historical-branch-audit.md` | Distinguish historical pack inputs from current APTL guest realization and delivery policy. |
 | Wazuh API cold-boot recovery | `docs/architecture/issue-1188-wazuh-api-cold-boot-preflight.md` | Keep the exact-pack recovery boundary and observed process failure distinct from the pack's authored content and an unproven API exit trigger. |
 | Canonical participant delivery and host access | `docs/adrs/adr-059-canonical-techvault-delivery-and-host-mcp-access.md`, `docs/raes/issue-601-participant-demonstration.md`, `docs/reference/host-mcp-access.md`, `docs/reference/participant-profile.md` | Keep the TechVault pack identity distinct from the APTL-owned delivery, transport and qualification contracts. |

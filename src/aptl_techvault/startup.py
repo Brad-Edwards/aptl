@@ -157,37 +157,42 @@ class TechVaultStartupProvider:
             if count == 0:
                 context.backend.container_restart(container)
             elif count is not None and count > 0:
-                status = context.backend.container_exec(
-                    container,
-                    ["/var/ossec/bin/wazuh-control", "status"],
-                    timeout=10,
-                )
-                if status.returncode == 0 and any(
-                    line.strip() == "wazuh-apid not running..."
-                    for line in (status.stdout or "").splitlines()
-                ):
-                    repair = context.backend.container_exec(
-                        container,
-                        ["/var/ossec/bin/wazuh-control", "start"],
-                        timeout=30,
-                    )
-                    if repair.returncode != 0:
-                        log.warning(
-                            "Wazuh manager API recovery failed (exit %s); "
-                            "readiness remains authoritative",
-                            repair.returncode,
-                        )
-                    else:
-                        log.info(
-                            "Wazuh manager API recovery invoked; "
-                            "readiness remains authoritative"
-                        )
+                TechVaultStartupProvider._start_missing_wazuh_api(context, container)
         except Exception as exc:
             log.warning(
                 "Wazuh manager retry preparation failed (%s); "
                 "readiness remains authoritative",
                 type(exc).__name__,
             )
+
+    @staticmethod
+    def _start_missing_wazuh_api(context: StartupHookContext, container: str) -> None:
+        """Start only an API that Wazuh reports absent in a live manager."""
+
+        status = context.backend.container_exec(
+            container,
+            ["/var/ossec/bin/wazuh-control", "status"],
+            timeout=10,
+        )
+        if status.returncode != 0:
+            return
+        status_lines = {line.strip() for line in (status.stdout or "").splitlines()}
+        if "wazuh-apid not running..." not in status_lines:
+            return
+
+        repair = context.backend.container_exec(
+            container,
+            ["/var/ossec/bin/wazuh-control", "start"],
+            timeout=30,
+        )
+        if repair.returncode != 0:
+            log.warning(
+                "Wazuh manager API recovery failed (exit %s); "
+                "readiness remains authoritative",
+                repair.returncode,
+            )
+            return
+        log.info("Wazuh manager API recovery invoked; readiness remains authoritative")
 
     @staticmethod
     def compose_startup_policy() -> ScenarioComposeStartupPolicy:

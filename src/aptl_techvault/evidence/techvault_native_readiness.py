@@ -2,7 +2,7 @@
 
 Kept beside :mod:`techvault_native` rather than inside it so neither file grows
 past its size budget, and so the readiness contract released with
-``raes-env-packs`` 6.1.0 reads as one unit: what each demand asks for, and the
+``raes-env-packs`` 6.2.0 reads as one unit: what each demand asks for, and the
 admitted realization facts the probes are pointed at.
 
 Every expectation handed to a probe comes from the admitted realization -- the

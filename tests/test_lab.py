@@ -367,7 +367,7 @@ class TestLabStop:
             tmp_path,
             StartupResetAuthority(
                 "techvault",
-                "0.1.0",
+                "0.1.1",
                 TECHVAULT_PACK_SET_DIGEST,
                 "aptl-labs",
                 "6.0.0",

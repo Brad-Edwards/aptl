@@ -10,10 +10,11 @@ specifications, exact logical-time windows, and four delivery-evidence
 requirements. The scenario declares Claude Code through the realization
 profile `participant-implementation-manifest:claude-code`.
 
-The diagnostic run admitted pack set digest
+The diagnostic run admitted the earlier pack set digest
 `sha256:94dc0236f3e2d4c62db782040acd73b1739ba0bf12adec580289a916fbfcce5a`.
-The digest must be replaced with the released, regenerated study-pack digest
-before a clean qualification.
+The released 0.1.1 study pack now has set digest
+`sha256:fdde7b1a8b9377f7ddd473417de1f3fd3e24549e4560d8d6392f1727b3af5357`.
+Only a new run can qualify that released identity.
 The study pack remains `built`; that lifecycle state makes no claim that an
 attempt produced golden proof.
 
@@ -43,12 +44,30 @@ window, control transition, or evidence binding is missing or unsupported.
 
 ## Reproduce the run
 
-The published-component run is blocked by
-[env-packs #401](https://github.com/OpenRAE/env-packs/issues/401) and
-[RAES #1401](https://github.com/OpenRAE/rae/issues/1401). The merged
-participant work has not reached compatible releases; the APTL lockfile still
-pins RAES 5.0.0 and env-packs 6.1.0. The steps below are the intended
-qualification procedure once those dependencies are resolved.
+As of October 3, 2026, the upstream release candidates are available on PyPI:
+[RAES 6.0.1](https://pypi.org/project/raes/6.0.1/) and
+[env-packs 6.2.0](https://pypi.org/project/raes-env-packs/6.2.0/).
+The latter requires RAES 6.0.1 and includes the TechVault study correction from
+[env-packs PR #402](https://github.com/OpenRAE/env-packs/pull/402).
+[RAES #1401](https://github.com/OpenRAE/rae/issues/1401) is closed.
+The release-availability blocker described in the September 28 progress
+record has therefore cleared.
+
+This branch now pins RAES 6.0.1 and env-packs 6.2.0 and binds the regenerated
+0.1.1 pack identities. Dependency installation alone does not establish a
+clean lifecycle or a sealed demonstration. Those remain unverified until the
+qualification run below succeeds, and the earlier runs remain diagnostic.
+
+Parallel delivery work also affects reproducibility:
+[APTL #1186](https://github.com/Brad-Edwards/aptl/issues/1186) covers persistent
+guest sudo provisioning and the optional host tailnet relay;
+[APTL #1194](https://github.com/Brad-Edwards/aptl/issues/1194) investigates the
+shipped seat's need for manual Docker network correction. A future seat-based
+qualification must record the selected image digest, embedded software
+revision, Docker daemon/context, and observed network attachments. A source
+fix alone does not prove that an existing seat contains it. Preserve occupied
+seats and their sessions; the issue 601 status update does not alter either
+parallel branch, worktree, or live seat.
 
 1. Install pinned, published builds containing the corrected env pack, the
    matching APTL adapter, and a RAES runtime that accepts participant-inject

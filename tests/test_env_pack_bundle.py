@@ -79,8 +79,8 @@ def test_released_pack_owns_only_scenario_and_retains_its_evidence_contracts(
     from raes import parse_sdl
     from raes_processor.capture_admission import compile_scenario_capture_demands
 
-    assert version("raes-env-packs") == "6.1.0"
-    assert version("raes") == "5.0.0"
+    assert version("raes-env-packs") == "6.2.0"
+    assert version("raes") == "6.0.1"
     bundle = env_pack_bundle(tmp_path / "released", "techvault")
     scenario = parse_sdl(bundle.sdl_path.read_text())
     assert not {"aptl-otel-collector", "aptl-tempo", "aptl-grafana-otel"}.intersection(
@@ -119,9 +119,9 @@ def test_env_pack_bundle_stages_and_validates_the_bundled_techvault_pack(
     assert bundle.identity == "techvault"
     assert bundle.pack_identity == PackIdentity(
         pack_id="techvault",
-        pack_version="0.1.0",
+        pack_version="0.1.1",
         set_digest=(
-            "sha256:db98a9daa62a092a0c6b001217027d7f4ad489889e95d01050e77f148e8ef29b"
+            "sha256:df00ea2a2672864ad8c711a3eab3a8a7bffff4db058b4a9acde032a61b2a1504"
         ),
     )
     # The bundle roots at the staged copy, never at the installed package.

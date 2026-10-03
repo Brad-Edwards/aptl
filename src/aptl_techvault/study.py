@@ -21,7 +21,7 @@ from aptl_techvault.startup import TechVaultStartupProvider
 from aptl_techvault.verification import TechVaultVerifier, _qualified_backend
 
 PACK_ID = "techvault-participant-study"
-PACK_VERSION = "0.1.0"
+PACK_VERSION = "0.1.1"
 
 
 class StudyRuntimeParameters(TechVaultRuntimeParameterProvider):

@@ -20,7 +20,7 @@ class TechVaultPlanningCompatibilityProvider:
     provider_id = "techvault-aptl-planning-compatibility"
     extension_api_version = EXTENSION_API_VERSION
     supported_pack_id = "techvault"
-    supported_pack_versions = ("0.1.0",)
+    supported_pack_versions = ("0.1.1",)
     supported_pack_set_digests = (TECHVAULT_PACK_SET_DIGEST,)
     backend_target_name = "aptl"
     backend_target_versions = ("0.1.0",)

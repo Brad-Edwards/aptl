@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import pwd
 import shutil
 import stat
 import subprocess
@@ -18,6 +17,8 @@ from aptl.appliance.seat.vm import read_vm_pid
 
 def rescue_seat_overlay(seat_root: Path) -> None:
     """Open an offline guest-root shell without changing participant privileges."""
+
+    import pwd
 
     if os.geteuid() != 0:
         raise SeatLauncherError("host-admin-required", "seat rescue requires host root")

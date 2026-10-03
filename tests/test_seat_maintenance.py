@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+import subprocess
+import sys
 
 import pytest
 
@@ -72,3 +74,14 @@ def test_rescue_requires_host_root_and_stopped_vm(tmp_path: Path) -> None:
         with pytest.raises(SeatLauncherError, match="stop the seat"):
             rescue_seat_overlay(root)
     run.assert_not_called()
+
+
+def test_rescue_module_import_does_not_require_posix_pwd() -> None:
+    result = subprocess.run(
+        [sys.executable, "-c", (
+            "import sys; sys.modules['pwd'] = None; "
+            "import aptl.appliance.seat.maintenance"
+        )],
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr

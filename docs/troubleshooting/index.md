@@ -221,13 +221,23 @@ Read the phase first:
   container is listening yet. Docker accepts the connection on the host and
   then closes it. When this state lasts for the whole budget, the API never
   started. Inspect the container logs, and check that the container is not
-  restarting or running out of memory.
+  restarting or running out of memory. If the manager container and other
+  Wazuh daemons are running but `wazuh-apid` is absent, TechVault's single
+  backend retry starts the missing API daemon in that same container. On an
+  older running seat, use `docker exec` to run
+  `/var/ossec/bin/wazuh-control status` in the existing manager container,
+  then run `wazuh-control start` there if the API is absent. This preserves the
+  container and retained volumes. The normal authenticated readiness check
+  still decides whether the lab is ready. Establish the cause of an API exit
+  from its logs; certificate generation alone does not prove it.
 - **`authentication`**: the API answered but did not issue a session.
   `credentials_rejected` (HTTP 401 or 403) means the API rejected the
   `INDEXER_USERNAME`/`INDEXER_PASSWORD` or `API_USERNAME`/`API_PASSWORD`
   values from `.env`. For the indexer, a retained `wazuh-indexer-data` volume
-  can still hold an earlier admin password: run `aptl lab stop -v`, then
-  `aptl lab start`, or restore the original `INDEXER_PASSWORD`.
+  can still hold an earlier admin password. Restore the original
+  `INDEXER_PASSWORD` if the data must be kept. `aptl lab stop -v` removes
+  retained lab volumes and is a destructive reset, so use it only after an
+  intentional backup and reset decision.
 - **`manager_status`**: the manager API authenticated but reported no running
   manager daemons. See the silent-daemon failure mode in the previous section.
 

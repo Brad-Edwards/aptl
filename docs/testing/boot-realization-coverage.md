@@ -32,7 +32,7 @@ checks observe an effect in the running lab rather than a declaration.
 | --- | --- |
 | `compute-substrate` | Boot gate (the node's container runs). Focused: `tests/test_compose_base_substrate.py`, `tests/test_raes_base_substrate.py` |
 | `operating-system` | Boot gate (the substrate is selected by declared family). Focused: `tests/test_raes_observation.py` |
-| `topology`, `network` | Boot gate (the scenario's isolated network). Focused: `tests/test_compose_boundary_realization.py`, `tests/test_network_boundary_helper.py` |
+| `topology`, `network` | Boot gate reads back the node's declared isolated-network endpoint, allocated IPv4 address and DNS alias; a container only on Docker's default bridge fails. Focused: `tests/test_compose_network_readback.py`, `tests/test_compose_boundary_realization.py`, `tests/test_network_boundary_helper.py` |
 | `content-placement` | Boot gate, live and causal (exact placed bytes, read inside the container). Focused: `tests/test_content_realization_source_policy.py`, `tests/test_raes_materializer.py`, `tests/test_raes_materializer_engine.py` |
 | `account-placement` | Boot gate observes the declared local user and group. Focused: `tests/test_deployment_backend.py`, `tests/test_account_provider.py`. Directory and domain account features stay outside the boot |
 | `service` | Boot gate, live (`UnitFileState`, `ActiveState`, `Result` read from the service manager) on the apt/Debian systemd substrate. Focused: `tests/test_raes_materializer.py` pins substrate selection per package family, `tests/test_raes_runtime_observation.py` the observation cases |

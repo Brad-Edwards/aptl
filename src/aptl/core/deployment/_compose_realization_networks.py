@@ -244,3 +244,46 @@ def _node_network_aliases(node: DeploymentNodeRealization) -> tuple[str, ...]:
     return tuple(
         dict.fromkeys(alias for alias in (node.service_name, node.name) if alias)
     )
+
+
+def _realized_attachment_failures(
+    node_name: str,
+    info: dict[str, Any],
+    desired: dict[str, DeploymentNetworkAttachment],
+    aliases: tuple[str, ...],
+    managed_networks: set[str],
+) -> list[str]:
+    """Require fresh endpoint readback before accepting reconciliation.
+
+    Command success is not a topology observation. Keep the default bridge
+    until every declared endpoint is observed, so failed attachment does
+    not also remove a materialized node's bootstrap connectivity.
+    """
+
+    if not info:
+        return [f"Node {node_name} was not inspectable after network reconciliation."]
+    settings = info.get("NetworkSettings")
+    networks = settings.get("Networks") if isinstance(settings, dict) else None
+    networks = networks if isinstance(networks, dict) else {}
+    failures: list[str] = []
+    for extra in sorted((set(networks) & managed_networks) - set(desired)):
+        failures.append(
+            f"Node {node_name}: extra project network {extra} remains attached."
+        )
+    for network_name, attachment in desired.items():
+        endpoint = networks.get(network_name)
+        prefix = f"Node {node_name} on {network_name} after network reconciliation"
+        if not isinstance(endpoint, dict):
+            failures.append(f"{prefix}: missing declared network attachment.")
+            continue
+        observed_ip = _container_network_ip(info, network_name)
+        if not observed_ip or (
+            attachment.ipv4_address and observed_ip != attachment.ipv4_address
+        ):
+            failures.append(f"{prefix}: required IPv4 address was not observed.")
+        observed_aliases = endpoint.get("Aliases")
+        if not isinstance(observed_aliases, list) or not set(aliases).issubset(
+            observed_aliases
+        ):
+            failures.append(f"{prefix}: declared DNS aliases were not observed.")
+    return failures

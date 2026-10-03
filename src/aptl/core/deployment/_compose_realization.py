@@ -44,9 +44,6 @@ from aptl.core.deployment._compose_image_realization import (
 from aptl.core.deployment._compose_network_realization import (
     ComposeRealizationNetworkMixin,
 )
-from aptl.core.deployment._compose_image_free_network_reconciliation import (
-    reconcile_image_free_networks,
-)
 from aptl.core.deployment._compose_image_free_realization import (
     _image_free_node_addresses,
     _image_free_service_names,
@@ -337,7 +334,7 @@ class ComposeRealizationMixin(
                 else None
             )
         if failure is None:
-            failure = reconcile_image_free_networks(self, realization)
+            failure = self._reconcile_declared_networks(realization)
         if failure is None:
             failure = self._realize_platform_boundary()
         return failure or node_result or LabResult(success=True)

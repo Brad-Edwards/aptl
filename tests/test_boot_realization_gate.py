@@ -19,6 +19,7 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -162,6 +163,54 @@ def test_a_fully_realized_boot_reports_no_failures():
     """The positive case must pass, or every negative below proves nothing."""
 
     assert boot_realization_failures(_EXPECTED, _observation()) == []
+
+
+@pytest.mark.parametrize(
+    "attachment",
+    [
+        None,
+        {},
+        {"ipv4": "", "aliases": ("smoke-box",)},
+        {"ipv4": "172.31.250.2", "aliases": ()},
+    ],
+)
+def test_boot_gate_rejects_missing_declared_network_endpoint(attachment):
+    expected = replace(_EXPECTED, network_name="smoke-net", network_alias="smoke-box")
+    observed = replace(_observation(), network_attachment=attachment)
+
+    failures = boot_realization_failures(expected, observed)
+
+    assert any("smoke-net" in failure for failure in failures)
+
+
+def test_boot_gate_accepts_an_observed_declared_network_endpoint():
+    expected = replace(_EXPECTED, network_name="smoke-net", network_alias="smoke-box")
+    observed = replace(
+        _observation(),
+        network_attachment={"ipv4": "172.31.250.2", "aliases": ("smoke-box",)},
+    )
+
+    assert boot_realization_failures(expected, observed) == []
+
+
+@pytest.mark.parametrize("attached", ["bridge", "other_aptl-smoke", "owned_aptl-smoke"])
+def test_boot_network_observation_requires_the_owned_declared_endpoint(attached):
+    expected = replace(_EXPECTED, network_name="smoke-net", network_alias="smoke-box")
+    backend = SimpleNamespace(
+        project_name="owned",
+        host_list_lab_networks=lambda project: [f"{project}_aptl-smoke"],
+        container_inspect=lambda _: {
+            "NetworkSettings": {
+                "Networks": {
+                    attached: {"IPAddress": "172.31.250.2", "Aliases": ["smoke-box"]}
+                }
+            }
+        },
+    )
+
+    endpoint = _GATE._observe_network(backend, "owned-container", expected)
+
+    assert (endpoint is not None) == (attached == "owned_aptl-smoke")
 
 
 class TestContainerResolution:
@@ -401,8 +450,7 @@ class TestListenerAndPortReadback:
         expected = replace(_EXPECTED, endpoint_banner_prefix="")
 
         assert (
-            boot_realization_failures(expected, _observation(endpoint_banner=""))
-            == []
+            boot_realization_failures(expected, _observation(endpoint_banner="")) == []
         )
 
 
@@ -459,9 +507,7 @@ class TestRunArchiveDiscovery:
         # A run directory carries the run record at its root; the gate uses
         # that marker to tell a run from the store's own infrastructure.
         (runs / run_id / "manifest.json").write_text("{}", encoding="utf-8")
-        (directory / "result.json").write_text(
-            json.dumps(payload), encoding="utf-8"
-        )
+        (directory / "result.json").write_text(json.dumps(payload), encoding="utf-8")
         (directory / "history.jsonl").write_text(
             json.dumps({"event_type": "workflow_completed"}) + "\n", encoding="utf-8"
         )

@@ -87,6 +87,24 @@ def _network_inspect_payload(
     )
 
 
+def _apply_network_command(payload: str, command: list[str]) -> str:
+    """A fake daemon that records successful endpoint mutations for readback."""
+    data = json.loads(payload)
+    networks = data[0]["NetworkSettings"]["Networks"]
+    network = command[-2]
+    if command[2] == "disconnect":
+        networks.pop(network, None)
+    else:
+        aliases = [
+            value for flag, value in zip(command, command[1:]) if flag == "--alias"
+        ]
+        address = (
+            command[command.index("--ip") + 1] if "--ip" in command else "172.20.4.2"
+        )
+        networks[network] = {"IPAddress": address, "Aliases": aliases}
+    return json.dumps(data)
+
+
 class TestSelectShell:
     """Pure-logic tests for the bash/sh selection table.
 
@@ -493,7 +511,14 @@ services:
         )
 
         def fake_run(cmd, **kwargs):
+            nonlocal inspect_payload
             del kwargs
+            if cmd[:3] in (
+                ["docker", "network", "connect"],
+                ["docker", "network", "disconnect"],
+            ):
+                inspect_payload = _apply_network_command(inspect_payload, cmd)
+                return MagicMock(returncode=0, stdout="", stderr="")
             if cmd[:4] == ["docker", "compose", "-p", "test"]:
                 return MagicMock(returncode=0, stdout="", stderr="")
             if cmd[:3] == ["docker", "network", "ls"]:
@@ -603,7 +628,14 @@ services:
         )
 
         def fake_run(cmd, **kwargs):
+            nonlocal inspect_payload
             del kwargs
+            if cmd[:3] in (
+                ["docker", "network", "connect"],
+                ["docker", "network", "disconnect"],
+            ):
+                inspect_payload = _apply_network_command(inspect_payload, cmd)
+                return MagicMock(returncode=0, stdout="", stderr="")
             if cmd[:4] == ["docker", "compose", "-p", "test"]:
                 return MagicMock(returncode=0, stdout="", stderr="")
             if cmd[:3] == ["docker", "network", "ls"]:
@@ -658,7 +690,8 @@ services:
                     "NetworkSettings": {
                         "Networks": {
                             "test_aptl-redteam": {
-                                "Aliases": ["kali", "red-workbench"]
+                                "IPAddress": "172.20.4.2",
+                                "Aliases": ["kali", "red-workbench"],
                             }
                         }
                     },
@@ -725,8 +758,14 @@ services:
         network_ls_calls = 0
 
         def fake_run(cmd, **kwargs):
-            nonlocal network_ls_calls
+            nonlocal network_ls_calls, inspect_payload
             del kwargs
+            if cmd[:3] in (
+                ["docker", "network", "connect"],
+                ["docker", "network", "disconnect"],
+            ):
+                inspect_payload = _apply_network_command(inspect_payload, cmd)
+                return MagicMock(returncode=0, stdout="", stderr="")
             if cmd[:3] == ["docker", "network", "ls"]:
                 network_ls_calls += 1
                 stdout = "" if network_ls_calls == 1 else "test_aptl-dmz\n"
@@ -884,7 +923,14 @@ services:
         )
 
         def fake_run(cmd, **kwargs):
+            nonlocal inspect_payload
             del kwargs
+            if cmd[:3] in (
+                ["docker", "network", "connect"],
+                ["docker", "network", "disconnect"],
+            ):
+                inspect_payload = _apply_network_command(inspect_payload, cmd)
+                return MagicMock(returncode=0, stdout="", stderr="")
             if cmd[:4] == ["docker", "compose", "-p", "test"]:
                 return MagicMock(returncode=0, stdout="", stderr="")
             if cmd[:3] == ["docker", "network", "ls"]:

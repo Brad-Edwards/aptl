@@ -101,6 +101,30 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
     try:
         result = backend.realize(spec, scenario_root=bundle.root)
         assert result.success, result.error
+        # Observe actual endpoints independently of the reconcile return code.
+        from aptl.core.deployment._compose_realization_networks import (
+            _node_network_attachments,
+            _node_network_aliases,
+            _resolve_realization_network_attachments,
+        )
+
+        managed = set(backend.host_list_lab_networks(backend.project_name))
+        for node in spec.nodes:
+            desired, missing = _resolve_realization_network_attachments(
+                _node_network_attachments(node), managed, backend.project_name
+            )
+            assert not missing
+            endpoints = backend.container_inspect(node.container_name)[
+                "NetworkSettings"
+            ]["Networks"]
+            assert set(desired).issubset(endpoints)
+            for name, attachment in desired.items():
+                assert endpoints[name]["IPAddress"]
+                if attachment.ipv4_address:
+                    assert endpoints[name]["IPAddress"] == attachment.ipv4_address
+                assert set(_node_network_aliases(node)).issubset(
+                    endpoints[name]["Aliases"]
+                )
         assert (
             "curl"
             in backend.container_exec(

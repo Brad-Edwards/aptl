@@ -22,6 +22,7 @@ from aptl.core.deployment._compose_realization_networks import (
     _node_network_aliases,
     _node_network_attachments,
     _resolve_realization_network_attachments,
+    _realized_attachment_failures,
 )
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment._compose_resource_ownership import (
@@ -47,6 +48,20 @@ _DEFAULT_BRIDGE_NETWORK = "bridge"
 
 class ComposeRealizationNetworkMixin:
     """Realize typed scenario networks through Docker Compose."""
+
+    def _reconcile_declared_networks(
+        self, realization: DeploymentRealizationSpec
+    ) -> LabResult | None:
+        """Require the same topology readback for every SDL startup route."""
+
+        if not realization.networks:
+            return None
+        failures = self._reconcile_realization_networks(realization)
+        return (
+            LabResult(success=False, error="; ".join(failures[:5]))
+            if failures
+            else None
+        )
 
     def _ensure_realization_networks(
         self,
@@ -187,10 +202,11 @@ class ComposeRealizationNetworkMixin:
 
         failures: list[str] = []
         for node in realization.nodes:
-            if not node.container_name or not node.networks:
+            attachments = _node_network_attachments(node)
+            if not node.container_name or not attachments:
                 continue
             desired, missing = _resolve_realization_network_attachments(
-                _node_network_attachments(node),
+                attachments,
                 managed_networks,
                 self._project_name,
             )
@@ -215,16 +231,16 @@ class ComposeRealizationNetworkMixin:
                 desired,
                 aliases=aliases,
             )
-            failures.extend(reattach_failures)
+            node_failures = list(reattach_failures)
             current = current - set(reattach)
-            failures.extend(
+            node_failures.extend(
                 self._disconnect_extra_networks(
                     node.container_name,
                     current,
                     set(desired),
                 )
             )
-            failures.extend(
+            node_failures.extend(
                 self._connect_missing_networks(
                     node.container_name,
                     current,
@@ -232,6 +248,17 @@ class ComposeRealizationNetworkMixin:
                     aliases,
                 )
             )
+            if not node_failures:
+                node_failures = _realized_attachment_failures(
+                    node.name,
+                    self.container_inspect(node.container_name),
+                    desired,
+                    aliases,
+                    managed_networks,
+                )
+            if node_failures:
+                failures.extend(node_failures)
+                continue
             failures.extend(
                 self._disconnect_default_bridge(
                     node.container_name,
@@ -273,6 +300,12 @@ class ComposeRealizationNetworkMixin:
                 or f"Failed to disconnect {container_name} from "
                 f"{_DEFAULT_BRIDGE_NETWORK}."
             ]
+        observed = self.container_inspect(container_name)
+        if not observed or _DEFAULT_BRIDGE_NETWORK in _container_networks(observed):
+            return [
+                f"Container {container_name}: removal of the default bridge "
+                "was not observed."
+            ]
         return []
 
     def _reconnect_static_ip_drifts(
@@ -295,9 +328,7 @@ class ComposeRealizationNetworkMixin:
                 continue
             current_ip = _container_network_ip(info, network_name)
             ip_drift = bool(
-                attachment.ipv4_address
-                and current_ip
-                and current_ip != attachment.ipv4_address
+                attachment.ipv4_address and current_ip != attachment.ipv4_address
             )
             alias_drift = not set(aliases).issubset(endpoint.get("Aliases") or ())
             if ip_drift or alias_drift:

@@ -21,6 +21,11 @@ After ADR-035 and SCN-010, ACES SDL owns scenario authoring and topology declara
 
 ## Traceability
 
+- IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/_compose_network_realization.py` (Shared declared-network reconciliation and fresh endpoint readback across startup routes)
+- IMPLEMENTS → CODE_FILE `src/aptl/core/deployment/_compose_realization_networks.py` (Typed attachment resolution and required address/alias observation)
+- TESTS → TEST `tests/test_compose_network_readback.py` (Endpoint drift, both startup routes and real default/bounded/curated SDL lowering)
+- TESTS → TEST `scripts/ci/assert_boot_realization.py` (Independent installed-wheel declared-network endpoint observation)
+- TESTS → TEST `tests/test_boot_realization_gate.py` (Missing endpoint, IPv4 and alias rejection in the installed-wheel gate)
 - DOCUMENTS → GITHUB_ISSUE `#422` (DSL-008: Infrastructure Topology Declaration in Scenario DSL)
 - IMPLEMENTS → CODE_FILE `src/aptl/validation/techvault_live_gate.py` (Live conformance gate: validate the running lab satisfies ACES declarations)
 - IMPLEMENTS → CODE_FILE `src/aptl/validation/_live_gate_readiness.py` (Node-readiness / declared-health conformance comparison against the running range)

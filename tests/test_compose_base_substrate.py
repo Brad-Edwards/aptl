@@ -400,10 +400,14 @@ def test_start_base_container_with_init_still_carries_the_label(tmp_path):
     assert "writable-cgroups=true" in argv
 
 
-def test_declared_network_is_attached_before_image_free_node_starts(tmp_path):
+@pytest.mark.parametrize("boundary", ["raes", "appliance"])
+def test_declared_network_is_attached_before_image_free_node_starts(tmp_path, boundary):
     backend = _backend(tmp_path)
     backend._ensure_resource_ownership(attempt_id="run-a")
-    backend._appliance_boundary = (MagicMock(), MagicMock())
+    if boundary == "appliance":
+        backend._appliance_boundary = (MagicMock(), MagicMock())
+    elif boundary == "raes":
+        backend._boundary_receipts = {"raes": {}}
     node = MagicMock(
         address="provision.node.kali",
         network_attachments=(

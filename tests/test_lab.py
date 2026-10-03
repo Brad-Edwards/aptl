@@ -4605,6 +4605,178 @@ class TestLabOrchestrationContracts:
         start_raes.assert_called_once()
         backend.container_restart.assert_not_called()
 
+    def test_start_containers_repairs_missing_wazuh_api_in_place(
+        self, mocker, tmp_path, caplog
+    ):
+        """A partial manager failure gets one API start before the sole retry.
+
+        Other Wazuh daemons and the existing container stay running, so a
+        container restart or volume reset would discard useful live state.
+        """
+        from aptl.core.lab import _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {
+            "State": {"Status": "running", "OOMKilled": False},
+            "RestartCount": 2,
+        }
+        backend.container_exec.side_effect = [
+            MagicMock(returncode=0, stdout="8\n"),
+            MagicMock(
+                returncode=1,
+                stdout=(
+                    "wazuh-analysisd is running...\n"
+                    "wazuh-maild not running...\n"
+                    "wazuh-apid not running...\n"
+                ),
+            ),
+            MagicMock(returncode=0, stdout="5000\n"),
+            MagicMock(
+                returncode=0,
+                stdout=(
+                    "RBAC database integrity check finished successfully\n"
+                    "ERROR: password=do-not-log-this\n"
+                    "PermissionError: password=do-not-log-this\n"
+                ),
+            ),
+            MagicMock(returncode=0, stdout="oom 1\noom_kill 0\n"),
+            MagicMock(returncode=0, stdout="Completed.\n"),
+        ]
+        ctx.backend = backend
+        start_raes = mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            side_effect=_raes_start_after_backend_retry,
+        )
+        mocker.patch("time.sleep")
+
+        with caplog.at_level("WARNING", logger="aptl"):
+            assert _step_start_containers(ctx) is None
+
+        start_raes.assert_called_once()
+        assert [call.args[1] for call in backend.container_exec.call_args_list[2:6]] == [
+            ["stat", "-c", "%s", "/var/ossec/logs/api.log"],
+            ["tail", "-c", "4096", "/var/ossec/logs/api.log"],
+            ["head", "-c", "512", "/sys/fs/cgroup/memory.events"],
+            ["/var/ossec/bin/wazuh-control", "start"],
+        ]
+        assert "'api_phase': 'rbac_complete'" in caplog.text
+        assert "'cgroup_oom': 1" in caplog.text
+        assert "'api_log_offset': 904" in caplog.text
+        assert "'exception_class': 'PermissionError'" in caplog.text
+        assert "'unclassified_fatal': True" in caplog.text
+        assert "do-not-log-this" not in caplog.text
+        assert "password=" not in caplog.text
+        assert backend.container_exec.call_args_list[-1] == call(
+            "aptl-wazuh-manager",
+            ["/var/ossec/bin/wazuh-control", "start"],
+            timeout=30,
+        )
+        backend.container_restart.assert_not_called()
+        backend.compose_down.assert_not_called()
+        backend.volume_remove.assert_not_called()
+
+    def test_start_containers_reports_failed_api_repair_without_exec_output(
+        self, mocker, tmp_path, caplog
+    ):
+        """A failed start remains subject to readiness and leaks no exec text."""
+        from aptl.core.lab import _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {"State": {"Status": "running"}}
+        backend.container_exec.side_effect = [
+            MagicMock(returncode=0, stdout="8\n"),
+            MagicMock(returncode=1, stdout="wazuh-apid not running...\n"),
+            OSError("sensitive diagnostic failure"),
+            OSError("sensitive diagnostic failure"),
+            OSError("sensitive diagnostic failure"),
+            MagicMock(returncode=1, stdout="sensitive-output", stderr="sensitive-error"),
+        ]
+        ctx.backend = backend
+        mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            side_effect=_raes_start_after_backend_retry,
+        )
+        mocker.patch("time.sleep")
+
+        with caplog.at_level("WARNING", logger="aptl"):
+            assert _step_start_containers(ctx) is None
+
+        assert "Wazuh manager API recovery failed" in caplog.text
+        assert "sensitive-output" not in caplog.text
+        assert "sensitive-error" not in caplog.text
+        assert "sensitive diagnostic failure" not in caplog.text
+        assert "'api_phase': 'unknown'" in caplog.text
+        backend.container_restart.assert_not_called()
+
+    def test_start_containers_does_not_restart_on_empty_daemon_probe(
+        self, mocker, tmp_path
+    ):
+        """An empty read is unknown process state, not proof of zero daemons."""
+        from aptl.core.lab import _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {"State": {"Status": "running"}}
+        backend.container_exec.return_value = MagicMock(returncode=0, stdout="")
+        ctx.backend = backend
+        mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            side_effect=_raes_start_after_backend_retry,
+        )
+        mocker.patch("time.sleep")
+
+        assert _step_start_containers(ctx) is None
+
+        backend.container_restart.assert_not_called()
+        assert backend.container_exec.call_count == 1
+
+    @pytest.mark.parametrize(
+        ("status_code", "status_text"),
+        [
+            (0, "wazuh-apid is running...\n"),
+            (0, "wazuh-apid not running...\n"),
+            (1, "wazuh-maild not running...\nwazuh-apid is running...\n"),
+            (
+                1,
+                "wazuh-apid not running...\nwazuh-apid is running...\n",
+            ),
+            (1, " wazuh-apid not running...\n"),
+            (1, "wazuh-apid not running... \n"),
+            (0, "unrecognized API state\n"),
+            (2, "wazuh-apid not running...\n"),
+        ],
+    )
+    def test_start_containers_does_not_guess_api_repair(
+        self, mocker, tmp_path, status_code, status_text
+    ):
+        """Only an exact, noncontradictory API status authorizes repair."""
+        from aptl.core.lab import _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {"State": {"Status": "running"}}
+        backend.container_exec.side_effect = [
+            MagicMock(returncode=0, stdout="8\n"),
+            MagicMock(returncode=status_code, stdout=status_text),
+        ]
+        ctx.backend = backend
+        mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            side_effect=_raes_start_after_backend_retry,
+        )
+        mocker.patch("time.sleep")
+
+        assert _step_start_containers(ctx) is None
+
+        assert backend.container_exec.call_count == 2
+        backend.container_restart.assert_not_called()
+
     def test_start_containers_skips_restart_when_wazuh_manager_not_running(
         self, mocker, tmp_path
     ):
@@ -4634,7 +4806,7 @@ class TestLabOrchestrationContracts:
         backend.container_exec.assert_not_called()
 
     def test_start_containers_watchdog_swallows_probe_exceptions(
-        self, mocker, tmp_path
+        self, mocker, tmp_path, caplog
     ):
         """The watchdog is best-effort: exceptions from container_inspect
         or container_exec must not abort the retry. Also covers the
@@ -4658,6 +4830,8 @@ class TestLabOrchestrationContracts:
         assert result is None
         start_raes.assert_called_once()
         backend.container_restart.assert_not_called()
+        assert "Wazuh manager retry preparation failed (RuntimeError)" in caplog.text
+        assert "boom" not in caplog.text
 
     def test_start_containers_watchdog_swallows_exec_failures(self, mocker, tmp_path):
         """A nonzero exec probe (or non-int stdout) blocks the restart —

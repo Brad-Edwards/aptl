@@ -266,6 +266,8 @@ docs/architecture/issue-1006-container-base-images-preflight.md	architecture-his
 docs/architecture/issue-1022-appliance-seat-delivery-preflight.md	architecture-history	Preserve appliance delivery boundaries and implementation rationale
 docs/architecture/issue-1022-historical-branch-audit.md	architecture-history	Preserve audited branch comparison and scoped repair decisions
 docs/architecture/issue-1179-pending-lab-cleanup-preflight.md	architecture-history	Preserve issue 1179 upgrade-safe pending cleanup decisions and guardrails
+docs/architecture/issue-1188-wazuh-api-cold-boot-preflight.md	architecture-history	Preserve issue 1188 Wazuh API recovery boundary and causal limits
+docs/architecture/issue-1191-wazuh-api-cold-boot-rca-preflight.md	architecture-history	Preserve issue 1191 Wazuh status-contract and bounded RCA capture guardrails
 docs/architecture/issue-550-soc-selected-profile-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-557-participant-implementation-binding-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-589-scenario-pack-capture-ownership-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs

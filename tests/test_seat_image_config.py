@@ -59,6 +59,22 @@ def test_declares_resources_and_carries_the_boundary_policy() -> None:
     assert config.boundary.docker_authority.require_guest_daemon is True
 
 
+def test_new_signed_image_declares_launch_selected_privileges() -> None:
+    config = parse_seat_image_config(_config(
+        schema_version="aptl.seat-image/v2",
+        desktop_privilege_contract="aptl.desktop-privileges/v1",
+    ))
+    assert config.desktop_privilege_contract == "aptl.desktop-privileges/v1"
+    missing_capability = _config(schema_version="aptl.seat-image/v2")
+    unsupported_capability = _config(
+        desktop_privilege_contract="aptl.desktop-privileges/v1",
+    )
+    with pytest.raises(SeatImageConfigError):
+        parse_seat_image_config(missing_capability)
+    with pytest.raises(SeatImageConfigError):
+        parse_seat_image_config(unsupported_capability)
+
+
 def test_a_seat_that_publishes_nothing_is_refused() -> None:
     payload = _config(boundary=_boundary(guest_publications=[]))
     with pytest.raises(SeatImageConfigError):

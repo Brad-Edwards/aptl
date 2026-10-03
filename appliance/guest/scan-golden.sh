@@ -27,6 +27,15 @@ then
 fi
 test -z "$(awk -F: '$2 == "" { print $1 }' /etc/shadow)"
 getent passwd aptl >/dev/null
+command -v sudo >/dev/null
+test ! -e /etc/sudoers.d/90-aptl-desktop
+! id -nG aptl | tr ' ' '\n' | grep -Eq '^(docker|sudo)$'
+if sudo -l -U aptl >/dev/null 2>&1; then
+    echo 'guest desktop account has inherited sudo authorization' >&2
+    exit 1
+fi
+test "$(systemctl is-enabled xrdp.service)" = disabled
+visudo -cf /etc/sudoers >/dev/null
 
 for executable in docker node python3 systemctl xrdp startxfce4 \
     xfce4-terminal epiphany tmux

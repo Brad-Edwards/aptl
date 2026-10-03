@@ -31,6 +31,16 @@ The bake reuses the canonical offline package and OCI image closures, golden-sta
 
 ## Consequences
 
+Issue #1186 narrows the guest-account privilege decision for future signed
+images to an operator-selected administrative or event mode. Its
+[privilege preflight](../architecture/issue-1186-seat-privilege-preflight.md)
+defines the launch binding, password/xrdp identity, secret handling and
+qualification guardrails. The historical Docker-authority statement below
+describes the earlier image contract; existing selected digests and overlays
+retain it until explicit update/reset. This amendment is design guidance,
+not evidence that the new modes have shipped. Desktop delivery and the
+physical-host boundary remain in force.
+
 The participant has one browser path into the VM desktop and can reopen it without an APTL token or expiring grant. The guest account is a deliberate local authority inside the disposable VM, including its guest Docker daemon. The physical host contributes no Docker socket or writable share. The network namespace separates local Unix accounts without adding participant authentication; processes running as the same Unix account can open that account's seat. A remote participant first enters their assigned host account, then runs `aptl seat open-kiosk` there.
 
 The Guacamole stack requires a generated, overlay-private database and xrdp secret even though no participant credential is entered at the gateway. The older APTL web control path no longer starts in new seat guests and is not their participant interface.

@@ -77,4 +77,5 @@ class SeatStatusProjection(BaseModel):
     image_digest: str
     launch_descriptor_digest: str
     host_observation_id: str
+    desktop_mode: Literal["administrative", "event"] | None = None
     diagnostics: tuple[str, ...] = ()

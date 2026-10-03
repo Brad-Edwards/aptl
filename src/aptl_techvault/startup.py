@@ -98,7 +98,70 @@ def _api_exception_class(tail: str) -> str | None:
     return None
 
 
-def _log_missing_api_evidence(context: StartupHookContext, container: str, info: dict) -> None:
+def _oom_counters(events: str | None) -> dict[str, int]:
+    """Parse only the two OOM counters from a bounded cgroup read."""
+
+    counters: dict[str, int] = {}
+    for line in (events or "").splitlines():
+        fields = line.split()
+        if len(fields) == 2 and fields[0] in {"oom", "oom_kill"}:
+            count = _bounded_count(fields[1])
+            if count is not None:
+                counters[fields[0]] = count
+    return counters
+
+
+def _container_evidence(info: dict[str, object]) -> dict[str, object]:
+    """Select scalar Docker facts without logging inspect output."""
+
+    state = info.get("State")
+    state = state if isinstance(state, dict) else {}
+    oom = state.get("OOMKilled")
+    return {
+        "container_running": state.get("Status") == "running",
+        "container_oom": oom if isinstance(oom, bool) else None,
+        "restart_count": _bounded_count(info.get("RestartCount")),
+    }
+
+
+def _api_log_evidence(tail: str | None, log_bytes: int | None) -> dict[str, object]:
+    """Reduce the raw tail to allowlisted facts before it reaches logging."""
+
+    if tail is None:
+        return {
+            "api_log_bytes": log_bytes,
+            "api_log_offset": None,
+            "api_phase": "unknown",
+            "warnings": None,
+            "errors": None,
+            "tracebacks": None,
+            "critical": None,
+            "exception_class": None,
+            "unclassified_fatal": None,
+        }
+    errors = tail.count("ERROR:")
+    critical = tail.count("CRITICAL:")
+    tracebacks = tail.count("Traceback")
+    return {
+        "api_log_bytes": log_bytes,
+        "api_log_offset": (
+            max(0, log_bytes - _API_LOG_TAIL_BYTES)
+            if log_bytes is not None
+            else None
+        ),
+        "api_phase": _api_log_phase(tail),
+        "warnings": tail.count("WARNING:"),
+        "errors": errors,
+        "tracebacks": tracebacks,
+        "critical": critical,
+        "exception_class": _api_exception_class(tail),
+        "unclassified_fatal": bool(errors or critical or tracebacks),
+    }
+
+
+def _log_missing_api_evidence(
+    context: StartupHookContext, container: str, info: dict[str, object]
+) -> None:
     """Emit one allowlisted snapshot before an in-place API repair changes it."""
 
     size_text = _diagnostic_text(
@@ -117,47 +180,16 @@ def _log_missing_api_evidence(context: StartupHookContext, container: str, info:
         512,
     )
     log_bytes = _bounded_count(size_text.strip()) if size_text is not None else None
-    counters: dict[str, int] = {}
-    for line in (events or "").splitlines():
-        fields = line.split()
-        if len(fields) == 2 and fields[0] in {"oom", "oom_kill"}:
-            count = _bounded_count(fields[1])
-            if count is not None:
-                counters[fields[0]] = count
-    state = info.get("State")
-    state = state if isinstance(state, dict) else {}
-    exception_class = _api_exception_class(tail) if tail is not None else None
-    fatal_count = tail.count("CRITICAL:") if tail is not None else None
-    error_count = tail.count("ERROR:") if tail is not None else None
+    counters = _oom_counters(events)
     facts = {
         "status": "partial",
         "status_exit": 1,
         "api": "absent",
         "other_daemons": True,
-        "container_running": state.get("Status") == "running",
-        "container_oom": (
-            state.get("OOMKilled") if isinstance(state.get("OOMKilled"), bool) else None
-        ),
-        "restart_count": _bounded_count(info.get("RestartCount")),
         "cgroup_oom": counters.get("oom"),
         "cgroup_oom_kill": counters.get("oom_kill"),
-        "api_log_bytes": log_bytes,
-        "api_log_offset": (
-            max(0, log_bytes - _API_LOG_TAIL_BYTES)
-            if log_bytes is not None and tail is not None
-            else None
-        ),
-        "api_phase": _api_log_phase(tail) if tail is not None else "unknown",
-        "warnings": tail.count("WARNING:") if tail is not None else None,
-        "errors": error_count,
-        "tracebacks": tail.count("Traceback") if tail is not None else None,
-        "critical": fatal_count,
-        "exception_class": exception_class,
-        "unclassified_fatal": (
-            bool(fatal_count or error_count or "Traceback" in tail)
-            if tail is not None
-            else None
-        ),
+        **_container_evidence(info),
+        **_api_log_evidence(tail, log_bytes),
     }
     log.warning("Wazuh manager API absent before recovery: %s", redact(facts))
 
@@ -296,7 +328,7 @@ class TechVaultStartupProvider:
 
     @staticmethod
     def _start_missing_wazuh_api(
-        context: StartupHookContext, container: str, info: dict
+        context: StartupHookContext, container: str, info: dict[str, object]
     ) -> None:
         """Start only an API that Wazuh reports absent in a live manager."""
 

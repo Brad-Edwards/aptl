@@ -116,7 +116,7 @@ shell or overlay. No rootless guest daemon was observed.
 
 | Controlled case | Result | Observed topology |
 | --- | --- | --- |
-| Baked backend, historical reconciliation call suppressed | Success | All six nodes only on `bridge`, `172.17.0.2`–`172.17.0.7`, no aliases |
+| Baked backend, historical reconciliation call suppressed | Success | All six nodes only on `bridge`, `172.17.0.2` through `172.17.0.7`, no aliases |
 | Same backend and containers, #1170 call restored | Success | Every declared address above, required aliases present, no default bridge |
 | Current network methods on the same guest | Success | Every declared address and alias required by fresh endpoint readback |
 
